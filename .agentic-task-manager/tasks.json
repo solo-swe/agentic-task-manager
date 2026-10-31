@@ -632,6 +632,14 @@
             "T-322"
           ]
         }
+      },
+      {
+        "id": "Sprints on the dashboard",
+        "state": "active",
+        "goal": "The dashboard fits the sprint model: the active sprint, the backlog, planned and closed sprints, and sprint metrics",
+        "release": "0.25.0",
+        "due": "2026-11-01",
+        "start": "2026-10-31T09:01:12Z"
       }
     ],
     "releases": [
@@ -773,6 +781,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/28"
         },
         "released_at": "2026-10-30T22:54:23Z"
+      },
+      {
+        "id": "0.25.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -15643,15 +15655,22 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-10-31T08:58:00Z",
+      "updated_at": "2026-10-31T09:00:29Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "with": "user",
       "related": [
         "T-295",
         "T-296",
         "T-297"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-10-31T09:00:29Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard"
     }
   ]
 }
