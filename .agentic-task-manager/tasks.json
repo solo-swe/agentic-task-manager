@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 323,
+    "next_id": 324,
     "labels": [
       {
         "id": "dashboard",
@@ -581,11 +581,57 @@
       },
       {
         "id": "Sprints and releases",
-        "state": "active",
+        "state": "closed",
         "due": "2026-10-31",
         "goal": "Sprints, releases, components and review modes, released as 0.24.0",
         "release": "0.24.0",
-        "start": "2026-10-31T06:11:23Z"
+        "start": "2026-10-31T06:11:23Z",
+        "end": "2026-10-31T08:57:38Z",
+        "report": {
+          "done": [
+            "T-287",
+            "T-288",
+            "T-289",
+            "T-290",
+            "T-291",
+            "T-292",
+            "T-293",
+            "T-294",
+            "T-295",
+            "T-296",
+            "T-297",
+            "T-298",
+            "T-299",
+            "T-300",
+            "T-301",
+            "T-302",
+            "T-303",
+            "T-304",
+            "T-305",
+            "T-306",
+            "T-307",
+            "T-308",
+            "T-309",
+            "T-310",
+            "T-311",
+            "T-312",
+            "T-313",
+            "T-314",
+            "T-315",
+            "T-316",
+            "T-317",
+            "T-318",
+            "T-319",
+            "T-320",
+            "T-321",
+            "T-322"
+          ],
+          "carried": [],
+          "added": [
+            "T-321",
+            "T-322"
+          ]
+        }
       }
     ],
     "releases": [
@@ -15575,6 +15621,37 @@
         }
       ],
       "merged_at": "2026-10-31T08:51:31Z"
+    },
+    {
+      "id": "T-323",
+      "name": "Walk through the dashboard's sprint views together, and align them live",
+      "type": "polish",
+      "priority": "P1",
+      "labels": [
+        "sprints",
+        "dashboard"
+      ],
+      "description": "Follow-up of the sprint *Sprints and releases*. A live session with Hakan: go through the dashboard with the new sprint model (`/atm:serve`, this repository's own data, or `npm run dev` in `dashboard/` for hot reload) and change it as we go, so it fits how sprints are used.\n\n## Walk through\n- **The active sprint:** where you see it (sprint header, Kanban, List, Graph), and what's missing.\n- **The backlog:** how you see what's in no sprint, and how it relates to the active sprint.\n- **Planned and closed sprints:** how you find them, their goals, dates and reports.\n- **Starting and closing a sprint, moving tasks** between sprints and the backlog.\n- **Sprint metrics:** progress, burndown, velocity across sprints, tasks carried over and added mid-sprint.\n\n## Settle first\nThe dashboard only reads today: `atm serve` has no write routes (`docs/security-architecture.md`). Whether and how it shows actions such as start, close and move (for example the `atm` command or the skill to run, to copy) is a design question to decide with Hakan before building anything; adding write routes would change the threat model and needs its own design.\n\n## Each change\nThe usual way: unit and e2e tests, `npm run verify`, screenshots updated on purpose, CHANGELOG. Findings that are bigger than the session become their own tasks through `/atm:create-tasks`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/SprintHeader.svelte",
+        "dashboard/src/components/SprintTable.svelte",
+        "dashboard/src/components/KanbanBoard.svelte",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-10-31T08:58:00Z",
+      "updated_at": "2026-10-31T08:58:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "with": "user",
+      "related": [
+        "T-295",
+        "T-296",
+        "T-297"
+      ]
     }
   ]
 }
