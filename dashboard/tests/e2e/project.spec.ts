@@ -101,11 +101,14 @@ test.describe('Project tab', () => {
     await expect(page.locator('#project-agents')).toHaveText('2 sessions · started 2 · completed 1 · 1 h agent time');
   });
 
-  test('the vocabulary with counts; finished phases folded (T-252)', async ({ page, tasksServer }) => {
+  test('the vocabulary with counts; closed sprints folded (T-252, T-323)', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, shop(), { tab: 'project' });
-    await expect(items(page, 'phases')).toHaveText(['1 Checkout 2']);
-    await page.locator('#project-finished-toggle').click();
-    await expect(items(page, 'phases')).toHaveText(['✓ 0 Foundations 2', '1 Checkout 2']);
+    // Not migrated yet: its phases read as sprints, the finished one closed
+    await expect(items(page, 'sprints')).toHaveText(['Checkout 2', 'Backlog 0']);
+    await page.locator('#project-closed-toggle').click();
+    await expect(items(page, 'sprints')).toHaveText(['Checkout 2', 'Backlog 0', 'Foundations 2']);
+    await expect(page.locator('#project-sprints [data-sprint="Foundations"] .sprint-marker.closed')).toBeVisible();
+    await expect(page.locator('#project-components')).toHaveText('None: atm components add');
     await expect(items(page, 'labels')).toHaveText(['UX 1', 'extra 1']);
     await expect(page.locator('#project-types [data-type="feature"]')).toHaveText('Feature 3');
     await expect(page.locator('#project-types [data-type="bugfix"]')).toHaveText('Bugfix 1');
@@ -133,7 +136,7 @@ test.describe('Project tab', () => {
     await expect(stat('duration')).toHaveText('2 h so far');
     await expect(stat('tasks')).toHaveText('4 tasks');
     await expect(stat('tasks')).toHaveAttribute('title', /^2 done, 2 open, 0 skipped/);
-    await expect(stat('phases')).toHaveText('2 phases · 1 finished');
+    await expect(stat('sprints')).toHaveText('2 sprints · 1 closed');
     await expect(stat('commits')).toHaveText('1 task commits');
     await expect(stat('prs')).toHaveText('1 pull requests');
     // s1 08:00–08:30 and s2 08:10–08:40 (to its review); Bo's own work isn't agent time

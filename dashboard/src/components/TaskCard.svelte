@@ -8,8 +8,10 @@
   import { kindOf, statusLabel, typeLabel } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
   import BranchChip from './BranchChip.svelte';
+  import ComponentChips from './ComponentChips.svelte';
   import LabelChips from './LabelChips.svelte';
   import PriorityBadge from './PriorityBadge.svelte';
+  import SprintMarker from './SprintMarker.svelte';
   import StageChip from './StageChip.svelte';
 
   // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
@@ -20,6 +22,8 @@
   const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
   const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
   const ts = $derived(typeStyle(task.type));
+  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
+  const stranded = $derived(dashboard.leftovers.includes(task));
   const kind = $derived(kindOf(dashboard.vocab, task.status));
   const ss = $derived(kindStyle(kind));
   const deps = $derived(task.dependencies ?? []);
@@ -38,7 +42,10 @@
         <span
           class="badge task-card-sprint"
           data-sprint={sprint ?? 'backlog'}
-          style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}">{sprint ?? 'Backlog'}</span
+          class:leftover={stranded}
+          title={stranded ? `${sprint} is closed: no loop takes this task until it is moved` : undefined}
+          style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}"
+          >{#if stranded}<SprintMarker state="closed" />{/if}{sprint ?? 'Backlog'}</span
         >
       {/if}
       <span class="badge" style="background:{ts.bg};color:{ts.color}" title={typeLabel(dashboard.vocab, task.type)}
@@ -48,6 +55,7 @@
       <PriorityBadge {task} />
       <StageChip {task} />
       <BranchChip {task} />
+      <ComponentChips {task} />
       <LabelChips {task} />
       {#if deps.length}
         <span class="deps-label">needs:</span>

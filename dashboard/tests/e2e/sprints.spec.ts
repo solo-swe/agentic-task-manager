@@ -80,6 +80,29 @@ test.describe('scope bar (T-323)', () => {
     await expect(bar.locator('#scope-trigger')).toHaveText('Ada Lovelace');
   });
 
+  test('the sprint is in the URL: a link opens on it, a pick writes it, Back returns to the previous one', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.use('sprints');
+    await page.goto('tasks-dashboard.html#view=kanban&sprint=foundations');
+    const trigger = page.locator('#scope-trigger');
+    await expect(trigger).toHaveText('Foundations');
+    // A closed sprint's board: its empty columns fold, Done takes the width
+    await expect(page.locator('.kanban-column.folded')).toHaveCount(4);
+    await expect(page.locator('.kanban-column[data-status="done"]')).toHaveClass(/wide/);
+
+    await trigger.click();
+    await page.locator('.scope-choice[data-scope=":backlog"]').click();
+    await expect(page).toHaveURL(/sprint=backlog/);
+    await page.goBack();
+    await expect(trigger).toHaveText('Foundations');
+
+    // An unknown name (a renamed sprint in an old link) is dropped: all tasks
+    await page.goto('tasks-dashboard.html#view=kanban&sprint=Renamed');
+    await expect(trigger).toHaveText('All tasks');
+  });
+
   test('other filters narrow the board within the sprint: "showing N, filtered", and ✕ keeps the sprint', async ({
     page,
     tasksServer,

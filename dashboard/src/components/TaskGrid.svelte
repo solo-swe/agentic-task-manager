@@ -13,13 +13,18 @@
   // applies where it shows more than one sprint; one sprint's tasks are listed as they are.
   const groupBy = $derived(dashboard.listGroups);
   const groups = $derived(
-    groupList(dashboard.filtered, groupBy, dashboard.sprints, dashboard.vocab).map((g) => ({
+    groupList(dashboard.filtered, groupBy, dashboard.sprints, dashboard.vocab, dashboard.components).map((g) => ({
       ...g,
       tasks: sortTasks(g.tasks, dashboard.listSort, dashboard.vocab),
     })),
   );
-  const open = $derived(groups.filter((g) => g.sprint?.state !== 'closed'));
-  const closed = $derived(groups.filter((g) => g.sprint?.state === 'closed'));
+  // A closed sprint still holding open tasks (reopened after it closed) doesn't fold away with the others (T-323)
+  const leftover = (g: ListGroup) => {
+    const c = countKinds(g.tasks, dashboard.vocab);
+    return c.total > c.done;
+  };
+  const open = $derived(groups.filter((g) => g.sprint?.state !== 'closed' || leftover(g)));
+  const closed = $derived(groups.filter((g) => g.sprint?.state === 'closed' && !leftover(g)));
   // Cards name their sprint when the list shows several and doesn't group by them
   const showSprint = $derived(
     groupBy !== 'sprint' && new Set(dashboard.filtered.map((t) => dashboard.sprints.sprintOf(t) ?? BACKLOG)).size > 1,
@@ -37,6 +42,11 @@
         {#if g.sprint?.state === 'planned'}<span class="sprint-state">planned</span>{/if}
         <span class="list-group-count">{tasksText(g.tasks.length)} · {counts.done} of {counts.total} done</span>
         {#if g.sprint?.goal}<span class="list-group-goal" title={g.sprint.goal}>{g.sprint.goal}</span>{/if}
+        {#if g.sprint?.state === 'closed' && counts.total > counts.done}
+          <span class="scope-leftovers list-group-leftovers"
+            >{counts.total - counts.done} open after closing · move them with <code>/atm:plan-sprint</code></span
+          >
+        {/if}
         {#if groupBy === 'sprint' && g.key === BACKLOG}
           <span class="list-group-hint">plan them into a sprint with <code>/atm:plan-sprint</code></span>
         {/if}

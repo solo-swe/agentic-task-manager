@@ -1,6 +1,7 @@
 // The List tab's groups (T-323): by sprint, the planning view (the active sprint, the planned ones in order, the
 // backlog, then the closed ones, most recent first), by label or by component, the way /atm:plan-sprint groups the
 // backlog, or none.
+import { componentLabel, componentOrder, taskComponents, type Component } from './components';
 import { BACKLOG } from './filters';
 import type { Sprint, SprintModel } from './sprints';
 import type { Task } from './types';
@@ -53,7 +54,13 @@ function byValues(tasks: Task[], valuesOf: (t: Task) => string[], order: (a: str
     .map((key) => ({ key, tasks: of.get(key)! }));
 }
 
-export function groupList(tasks: Task[], by: ListGroupBy, model: SprintModel, vocab: Vocabulary): ListGroup[] {
+export function groupList(
+  tasks: Task[],
+  by: ListGroupBy,
+  model: SprintModel,
+  vocab: Vocabulary,
+  projectComponents: readonly Component[] = [],
+): ListGroup[] {
   if (by === 'sprint') return bySprint(tasks, model);
   if (by === 'label') {
     return byValues(tasks, (t) => labelsOf(vocab, t), labelOrder(vocab)).map((g) => ({
@@ -62,11 +69,10 @@ export function groupList(tasks: Task[], by: ListGroupBy, model: SprintModel, vo
     }));
   }
   if (by === 'component') {
-    const components = (t: Task) =>
-      Array.isArray(t.components) ? t.components.filter((c): c is string => typeof c === 'string') : [];
-    return byValues(tasks, components, (a, b) => a.localeCompare(b)).map((g) => ({
+    // In the project's order (meta.components), by their labels; IDs it doesn't define after them, alphabetically
+    return byValues(tasks, (t) => taskComponents(t, projectComponents), componentOrder(projectComponents)).map((g) => ({
       ...g,
-      label: g.key === NONE ? 'No component' : g.key,
+      label: g.key === NONE ? 'No component' : componentLabel(projectComponents, g.key),
     }));
   }
   return [{ key: 'all', label: 'All', tasks }];

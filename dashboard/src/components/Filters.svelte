@@ -32,7 +32,7 @@
   };
   /** Values a group shows before its "+N": the rest open on demand, and a selected one always shows */
   const SHOWN = 10;
-  const options = $derived(filterOptions(dashboard.base, dashboard.vocab, dashboard.sprints));
+  const options = $derived(filterOptions(dashboard.base, dashboard.vocab, dashboard.sprints, dashboard.components));
   // Sprint, Release, Component and Labels only when some task has one; Stage only when some task is in a PR or
   // merged; Started by only when more than one actor started tasks
   const anyStage = $derived(dashboard.base.some(hasStage));

@@ -262,6 +262,14 @@ component's `review` mode is the guard described above (T-317), set only by this
 an agent uses it when the user asks for components. No new entry point, and no live sandbox run (as above): this
 review takes its place.
 
+**The dashboard's sprint views (T-323).** The page reads one new input, the `sprint` parameter of its URL hash
+(`#sprint=active`, `#sprint=Foundations,backlog`), alongside `view`: a link opens the board on those sprints. It is
+matched against the project's sprint names (case-insensitively; anything else is dropped), never fetched, evaluated
+or written into the page as markup, so a crafted link can only choose which of the project's own sprints are shown.
+Component labels and sprint names are shown as text (Svelte escapes them, I15). The page still reads only what
+atm serve serves and changes nothing (I11, I17): its hints name the skill to run (`/atm:plan-sprint`,
+`/atm:close-sprint`) rather than doing anything.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

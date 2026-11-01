@@ -72,6 +72,20 @@ export function scopeOf(model: SprintModel, selected: ReadonlySet<string>): Scop
   };
 }
 
+/**
+ * Open tasks in closed sprints (T-323): closing carries every unfinished task on, but a task reopened afterwards (atm
+ * reopen), or a merge of a branch that closed the sprint with one that reopened a task in it, leaves one behind. The
+ * loop never takes them (it works on the active sprint), so they are shown until they are moved.
+ */
+export function leftovers(tasks: Task[], model: SprintModel, vocab: Vocabulary): Task[] {
+  const closed = new Set(model.sprints.filter((s) => s.state === 'closed').map((s) => s.id));
+  return tasks.filter((t) => {
+    const sprint = model.sprintOf(t);
+    const kind = kindOf(vocab, t.status);
+    return sprint !== undefined && closed.has(sprint) && kind !== 'done' && kind !== 'skipped';
+  });
+}
+
 /** The scope's own tasks, before the other filters and the search */
 export function scopeTasks(tasks: Task[], model: SprintModel, selected: ReadonlySet<string>): Task[] {
   if (selected.size === 0) return tasks;

@@ -78,6 +78,26 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 - **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and
   its options (*Group by sprint*, only when the board shows more than one sprint, and *Show skipped*) moved to the
   scope bar's end. A project without sprints keeps *Show skipped* above the board.
+- **The sprint is in the URL** (T-323): `#sprint=active`, `#sprint=Foundations,backlog` or `#sprint=all` opens the
+  board on those sprints (names in any case; unknown ones, like a renamed sprint in an old link, are dropped). Picking
+  a sprint in the scope bar or the filters writes it, so the address shares what is shown and Back returns to the
+  previous sprint; a link with it wins over the saved Sprint filter, and opening another project drops it.
+- **Components by their labels** (T-323): cards (now List cards too), the detail panel, the Component filter and the
+  List's groups show a component's label ("REST API") rather than its ID, in the project's order. The Progress tab
+  has a **By component** table (`#component-table`) for the focused sprint, or all: done, progress and what is left
+  per component, tasks in none last; a row filters by its component. The Project tab lists the components with their
+  task counts and globs.
+- **The Project tab shows sprints, not phases**: its Vocabulary has *Sprints* (the active one ▶, the planned ones,
+  the backlog, the closed ones folded) and its Stats *N sprints · M closed*.
+- **Planned and closed sprints** (T-323): a planned sprint's hint says it starts once the active one is closed
+  (`/atm:close-sprint`, then `/atm:plan-sprint`); a closed sprint's board folds its empty columns into slim strips so
+  Done gets the width, its cards in a grid, and its release reads "released" once shipped.
+- **Open tasks left in closed sprints** (T-323): a task reopened after its sprint closed (or merged back open) is
+  work no loop takes. The scope bar warns on All tasks and Backlog ("N tasks open in closed sprints", a link to those
+  sprints) and on the closed sprint itself; the List keeps such a sprint unfolded; their cards' sprint badge is marked
+  ✓ with a dashed outline. atm's side is T-330.
+- **The title bar**: the pills on the right line up with the title, and a hairline separates the title row from the
+  line under it.
 
 ## [0.24.0] - 2026-10-31
 

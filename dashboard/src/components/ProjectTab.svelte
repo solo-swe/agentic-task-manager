@@ -6,6 +6,7 @@
   import { dashboard } from '../lib/state.svelte';
   import InfoTip from './InfoTip.svelte';
   import ProjectLogo from './ProjectLogo.svelte';
+  import SprintMarker from './SprintMarker.svelte';
   import TaskTimeHistogram from './TaskTimeHistogram.svelte';
 
   // The project as a whole (docs/project-stats-proposal.md, T-252): who worked on it, how it pushes, and its
@@ -30,16 +31,30 @@
   const repository = $derived(repositoryOf(dashboard.meta));
   const workflow = $derived(workflowOf(dashboard.meta));
   const who = $derived(actors(tasks, now, vocab));
-  const counts = $derived(vocabCounts(tasks, vocab));
-  // Finished phases fold away, like on the Progress tab
-  let showFinished = $state(false);
-  const finished = $derived(counts.phases.filter((p) => p.state === 'done'));
-  const phases = $derived(showFinished ? counts.phases : counts.phases.filter((p) => p.state !== 'done'));
+  const counts = $derived(vocabCounts(tasks, vocab, dashboard.sprints));
+  // Each component with how many tasks (archived ones too) are in it
+  const componentCounts = $derived(
+    dashboard.components.map((c) => ({
+      ...c,
+      count: tasks.filter((t) => Array.isArray(t.components) && t.components.includes(c.id)).length,
+    })),
+  );
+  // Closed sprints fold away, like on the Progress tab
+  let showClosed = $state(false);
+  const open = $derived(counts.sprints.filter((s) => s.state !== 'closed'));
+  const closed = $derived(counts.sprints.filter((s) => s.state === 'closed'));
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
   // Stats (T-253): archived tasks not loaded yet count from meta.archived
   const stats = $derived(
-    projectStats(tasks, dashboard.meta, now, vocab, dashboard.archiveLoaded ? 0 : dashboard.archivedCount),
+    projectStats(
+      tasks,
+      dashboard.meta,
+      now,
+      vocab,
+      dashboard.archiveLoaded ? 0 : dashboard.archivedCount,
+      dashboard.sprints,
+    ),
   );
   const hours = (msValue: number) => (msValue ? formatMinutes(msValue / 60_000) : '0 m');
   const day = (t: number) =>
@@ -70,10 +85,10 @@
       title: `${stats.tasks.done} done, ${stats.tasks.open} open, ${stats.tasks.skipped} skipped (archived tasks count as done)`,
     },
     {
-      key: 'phases',
-      value: String(stats.phases.total),
-      label: `phases · ${stats.phases.finished} finished`,
-      title: 'Phases with tasks, and how many of them are finished',
+      key: 'sprints',
+      value: String(stats.sprints.total),
+      label: `sprints · ${stats.sprints.closed} closed`,
+      title: 'The project’s sprints, and how many of them are closed',
     },
     {
       key: 'commits',
@@ -168,19 +183,43 @@
 
       <h4 class="menu-label">Vocabulary</h4>
       <dl class="project-facts project-vocab" id="project-vocab">
-        <dt>Phases</dt>
-        <dd id="project-phases">
-          {#each phases as p (p.phase)}
-            <span class="vocab-item" data-phase={p.phase} data-state={p.state}
-              >{p.state === 'done' ? '✓ ' : ''}{p.name ? `${p.phase} ${p.name}` : `Phase ${p.phase}`}
-              <strong>{p.count}</strong></span
+        <!-- The sprints in the planning order, the backlog, then the closed ones, folded (T-323) -->
+        <dt>Sprints</dt>
+        <dd id="project-sprints">
+          {#each open as s (s.id)}
+            <span class="vocab-item" data-sprint={s.id} data-state={s.state}
+              ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
             >
           {/each}
-          {#if finished.length}
-            <button class="link-button" id="project-finished-toggle" onclick={() => (showFinished = !showFinished)}
-              >{showFinished ? 'Hide finished' : `▸ ${finished.length} finished`}</button
+          {#if counts.backlog || counts.sprints.length}
+            <span class="vocab-item" data-sprint="backlog">Backlog <strong>{counts.backlog}</strong></span>
+          {/if}
+          {#if showClosed}
+            {#each closed as s (s.id)}
+              <span class="vocab-item" data-sprint={s.id} data-state={s.state}
+                ><SprintMarker state={s.state} />{s.id} <strong>{s.count}</strong></span
+              >
+            {/each}
+          {/if}
+          {#if closed.length}
+            <button class="link-button" id="project-closed-toggle" onclick={() => (showClosed = !showClosed)}
+              >{showClosed ? 'Hide closed' : `▸ ${closed.length} closed`}</button
             >
           {/if}
+        </dd>
+        <!-- The parts of the project (atm components), with their files' globs on hover (T-323) -->
+        <dt>Components</dt>
+        <dd id="project-components">
+          {#each componentCounts as c (c.id)}
+            <span
+              class="vocab-item"
+              data-component={c.id}
+              title={c.paths.length ? `${c.id}: ${c.paths.join(', ')}` : `${c.id}: no files yet`}
+              >{c.label} <strong>{c.count}</strong></span
+            >
+          {:else}
+            <span class="muted">None: <code>atm components add</code></span>
+          {/each}
         </dd>
         <dt>Labels</dt>
         <dd id="project-labels">

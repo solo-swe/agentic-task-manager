@@ -2,6 +2,7 @@
   import { tick } from 'svelte';
   import { ACTIVE, BACKLOG, FILTER_GROUPS, FILTER_LABELS, filterOptions } from '../lib/filters';
   import { formatWhen } from '../lib/format';
+  import { readReleases } from '../lib/releases';
   import { countKinds, scopeTasks } from '../lib/scope';
   import { backlog, dueText, sprintSummary, sprintTasks, type Sprint } from '../lib/sprints';
   import { dashboard } from '../lib/state.svelte';
@@ -38,7 +39,7 @@
   );
   const tasks = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
   // What narrows the board within its sprints (T-323): the other filters, by group, and the search
-  const options = $derived(filterOptions(dashboard.base, dashboard.vocab, model));
+  const options = $derived(filterOptions(dashboard.base, dashboard.vocab, model, dashboard.components));
   const narrowing = $derived(
     [
       ...FILTER_GROUPS.filter((g) => g !== 'sprint' && dashboard.filters[g].size > 0).map(
@@ -50,6 +51,19 @@
       ),
       ...(dashboard.query.trim() ? [`“${dashboard.query.trim()}”`] : []),
     ].join(' · '),
+  );
+  // The closed sprints holding open tasks, in the sprints' order (T-323)
+  const leftoverSprints = $derived([
+    ...new Set(dashboard.leftovers.map((t) => model.sprintOf(t)).filter((s): s is string => s !== undefined)),
+  ]);
+  const them = $derived(dashboard.leftovers.length === 1 ? 'it' : 'them');
+  // Releases already shipped: a closed sprint's says "released" (T-323)
+  const releasedIds = $derived(
+    new Set(
+      readReleases(dashboard.meta)
+        .filter((r) => r.state !== 'planned')
+        .map((r) => r.id),
+    ),
   );
   const dateOf = (iso: string | undefined) =>
     iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : undefined;
@@ -146,6 +160,18 @@
   {/if}
 {/snippet}
 
+<!-- Open tasks left in closed sprints (T-323): the link shows those sprints, where they are the only open cards -->
+{#snippet leftoverNote()}
+  {#if dashboard.leftovers.length}
+    <span class="scope-leftovers" id="scope-leftovers"
+      ><Icon name="info" size={13} />
+      <button class="link-button" id="scope-show-leftovers" onclick={() => dashboard.setSprintScope(leftoverSprints)}
+        >{tasks(dashboard.leftovers.length)} open in closed sprints</button
+      >&nbsp;· no loop takes {them} · move {them} with <code>/atm:plan-sprint</code></span
+    >
+  {/if}
+{/snippet}
+
 {#if scope.kind !== 'none'}
   <section
     class="scope-bar"
@@ -236,8 +262,17 @@
         {@const s = scope.sprint}
         {#if s.state === 'closed'}
           {#if s.start || s.end}<span class="sprint-dates">{dateOf(s.start) ?? '…'} – {dateOf(s.end) ?? '…'}</span>{/if}
-          {#if s.release}<span class="sprint-release">release {s.release}</span>{/if}
+          {#if s.release}<span class="sprint-release"
+              >{releasedIds.has(s.release) ? 'released' : 'release'} {s.release}</span
+            >{/if}
           {@render progress()}
+          {#if counts.total - counts.done}<span class="scope-leftovers" id="scope-leftovers"
+              ><Icon name="info" size={13} />
+              {counts.total - counts.done} open after closing · no loop takes {counts.total - counts.done === 1
+                ? 'it'
+                : 'them'} · move {counts.total - counts.done === 1 ? 'it' : 'them'} with
+              <code>/atm:plan-sprint</code></span
+            >{/if}
           {#if s.report?.carried?.length}<span class="sprint-carried"
               >{s.report.carried.length} carried to {s.report.to === BACKLOG || !s.report.to
                 ? 'the backlog'
@@ -250,7 +285,12 @@
           {#if s.due}<span class="sprint-due-date">due {dateOf(s.due + 'T12:00:00')}</span>{/if}
           <!-- A project not migrated yet reads its phases as planned sprints, some of them under way -->
           {#if counts.done + counts.active + counts.review + counts.blocked}{@render progress()}{/if}
-          {#if !model.derived}<span class="scope-hint" id="scope-hint">start it with <code>/atm:plan-sprint</code></span
+          <!-- atm starts no sprint while another is active: that one closes first -->
+          {#if !model.derived && active}<span class="scope-hint" id="scope-hint"
+              >starts once {active.id} is closed · <code>/atm:close-sprint</code> then
+              <code>/atm:plan-sprint</code></span
+            >{:else if !model.derived}<span class="scope-hint" id="scope-hint"
+              >start it with <code>/atm:plan-sprint</code></span
             >{/if}
         {:else if counts.total === 0}
           <span class="scope-hint" id="scope-hint"
@@ -295,10 +335,12 @@
         <span class="sprint-size">{tasks(counts.total)} in no sprint</span>
         {@render progress()}
         <span class="scope-hint" id="scope-hint">plan them into a sprint with <code>/atm:plan-sprint</code></span>
+        {@render leftoverNote()}
       {:else if scope.kind === 'several'}
         {@render progress()}
       {:else if scope.kind === 'all'}
         {@render progress()}
+        {@render leftoverNote()}
         {#if scope.active}
           <span class="scope-hint" id="scope-hint"
             ><SprintMarker state="active" />

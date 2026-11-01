@@ -86,13 +86,54 @@ describe('ScopeBar (T-323)', () => {
     );
   });
 
-  it('a planned sprint: its size, and how to start it', async () => {
+  it('a planned sprint: its size, and how to start it: once the active one is closed', async () => {
     dashboard.setSprintScope(['Alan Turing']);
     const { container } = render(ScopeBar);
     await tick();
     expect(text(container, '.sprint-state')).toBe('planned');
     expect(text(container, '.sprint-size')).toBe('0 tasks');
+    expect(text(container, '#scope-hint')).toBe(
+      'starts once Ada Lovelace is closed · /atm:close-sprint then /atm:plan-sprint',
+    );
+    const meta = {
+      ...file.meta,
+      sprints: (file.meta!.sprints as { id: string; state: string }[]).map((s) =>
+        s.id === 'Ada Lovelace' ? { ...s, state: 'closed' } : s,
+      ),
+    };
+    load(undefined, meta);
+    dashboard.setSprintScope(['Alan Turing']);
+    await tick();
     expect(text(container, '#scope-hint')).toBe('start it with /atm:plan-sprint');
+  });
+
+  it('open tasks left in a closed sprint: noted on it, and on All tasks with a link to those sprints', async () => {
+    load((t) => (t.id === 'T-001' ? { status: 'todo' } : {}));
+    dashboard.setSprintScope(['Foundations']);
+    const { container } = render(ScopeBar);
+    await tick();
+    expect(text(container, '#scope-leftovers')).toBe(
+      '1 open after closing · no loop takes it · move it with /atm:plan-sprint',
+    );
+    dashboard.setSprintScope([]);
+    await tick();
+    expect(text(container, '#scope-leftovers')).toBe(
+      '1 task open in closed sprints · no loop takes it · move it with /atm:plan-sprint',
+    );
+    await fireEvent.click(container.querySelector('#scope-show-leftovers')!);
+    expect([...dashboard.filters.sprint]).toEqual(['Foundations']);
+  });
+
+  it("a closed sprint's release: released once it shipped", async () => {
+    const meta = { ...file.meta, releases: [{ id: '0.9', state: 'released' }] };
+    const sprints = (meta.sprints as { id: string }[]).map((s) =>
+      s.id === 'Foundations' ? { ...s, release: '0.9' } : s,
+    );
+    load(undefined, { ...meta, sprints });
+    dashboard.setSprintScope(['Foundations']);
+    const { container } = render(ScopeBar);
+    await tick();
+    expect(text(container, '.sprint-release')).toBe('released 0.9');
   });
 
   it('a closed sprint: marked ✓, its dates, progress and where its unfinished tasks went', async () => {

@@ -8,8 +8,10 @@
   import { kindOf, priorityOf } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
   import BranchChip from './BranchChip.svelte';
+  import ComponentChips from './ComponentChips.svelte';
   import LabelChips from './LabelChips.svelte';
   import PriorityBadge from './PriorityBadge.svelte';
+  import SprintMarker from './SprintMarker.svelte';
   import StageChip from './StageChip.svelte';
 
   // `showSprint`: the board shows tasks of more than one sprint, so the card names its own (SR-7.3)
@@ -20,6 +22,8 @@
   const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
   const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
   const ts = $derived(typeStyle(task.type));
+  // Open in a closed sprint (reopened after it closed, T-323): the badge says so
+  const stranded = $derived(dashboard.leftovers.includes(task));
   const kind = $derived(kindOf(dashboard.vocab, task.status));
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
   const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
@@ -50,7 +54,10 @@
       <span
         class="badge kanban-card-sprint"
         data-sprint={sprint ?? 'backlog'}
-        style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}">{sprint ?? 'Backlog'}</span
+        class:leftover={stranded}
+        title={stranded ? `${sprint} is closed: no loop takes this task until it is moved` : undefined}
+        style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}"
+        >{#if stranded}<SprintMarker state="closed" />{/if}{sprint ?? 'Backlog'}</span
       >
     {/if}
     <span class="badge" style="background:{ts.bg};color:{ts.color}">{task.type}</span>
@@ -62,7 +69,7 @@
       >
     {/if}
     {#if task.with === 'user'}<span class="badge with-user-chip" title="Done together with you">with you</span>{/if}
-    {#each task.components ?? [] as component (component)}<span class="badge component-chip">{component}</span>{/each}
+    <ComponentChips {task} />
     <BranchChip {task} />
     <LabelChips {task} compact />
     {#if card.nextUp}<span class="kanban-next-up">Next up</span>{/if}

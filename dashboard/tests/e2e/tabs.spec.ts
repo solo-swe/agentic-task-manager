@@ -48,10 +48,12 @@ test.describe('view tabs', () => {
     await openDashboard(page, tasksServer, 'standard');
     await tab(page, 'graph').click();
     await expectSelected(page, 'graph');
-    expect(new URL(page.url()).hash).toBe('#view=graph');
+    // The hash also holds the Sprint filter (#sprint=, T-323)
+    const view = () => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view');
+    expect(view()).toBe('graph');
     await tab(page, 'progress').click();
     await expectSelected(page, 'progress');
-    expect(new URL(page.url()).hash).toBe('#view=progress');
+    expect(view()).toBe('progress');
   });
 
   test('arrow keys move between tabs and wrap', async ({ page, tasksServer }) => {

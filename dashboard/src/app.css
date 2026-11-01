@@ -63,7 +63,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 4px;
+  /* Room for the hairline under the title row (.topbar::before) */
+  margin-bottom: 13px;
 }
 .title-row h1 {
   margin-bottom: 0;
@@ -448,7 +449,8 @@ h1 {
 .topbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  /* Top-aligned: the pills on the right line up with the title row, not with the title and subtitle together */
+  align-items: flex-start;
   gap: 14px 20px;
   /* Pinned at the top, edge to edge (cancelling the body padding), over the page background */
   position: sticky;
@@ -460,6 +462,21 @@ h1 {
   transition:
     padding 0.2s ease,
     box-shadow 0.2s ease;
+}
+/* A hairline under the title row, edge to edge (T-323): the title and the pills share the band above it, the
+   subtitle sits below. 24px padding + the 36px title row + 6px */
+.topbar::before {
+  content: '';
+  position: absolute;
+  top: 66px;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.topbar.scrolled::before {
+  display: none;
 }
 .topbar.scrolled {
   padding-top: 10px;
@@ -485,6 +502,9 @@ h1 {
 }
 .topbar-charts {
   display: flex;
+  align-items: center;
+  /* The title row's height (.title-row h1), so the pills centre on the title */
+  height: 36px;
   gap: 12px;
   flex: 1;
   justify-content: flex-end;
@@ -1089,6 +1109,8 @@ button.menu-trigger:hover,
 }
 .topbar-controls {
   display: flex;
+  align-items: center;
+  height: 36px;
   gap: 8px;
   flex-shrink: 0;
   /* At the right edge on every page, with or without the charts before them */
@@ -1582,6 +1604,13 @@ button.menu-trigger:hover,
 /* Velocity (VelocityChart.svelte, T-323): a bar per closed sprint, anchored to the baseline, the average dashed */
 .velocity {
   margin-top: 24px;
+}
+/* The Progress tab's By component table (T-323) */
+.component-progress {
+  margin-top: 24px;
+}
+.component-table .progress-fill {
+  background: var(--accent);
 }
 .velocity-sub {
   margin-left: 6px;
@@ -2490,6 +2519,34 @@ button.repo-ref {
   align-items: center;
   gap: 0 4px;
 }
+/* Open tasks left in closed sprints (T-323): in orange, as work nothing will pick up */
+.scope-leftovers {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+  color: var(--orange);
+}
+.badge.leftover {
+  outline: 1px dashed var(--orange);
+}
+.scope-leftovers .link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.scope-leftovers code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+}
 .scope-hint .link-button {
   padding: 0;
   border: none;
@@ -2851,6 +2908,42 @@ svg.graph-minimap.hidden {
   display: none;
 }
 /* A column's cards (KanbanScroll.svelte) */
+/* A closed sprint's board (T-323): empty columns fold into slim strips with their title upright, and Done takes the
+   width, its cards in a grid */
+.kanban-column.folded {
+  flex: 0 0 40px;
+  min-width: 40px;
+  align-self: stretch;
+}
+.kanban-column.folded .kanban-column-header {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: none;
+}
+.kanban-column.folded .kanban-column-title {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+}
+.kanban-column.wide {
+  flex: 1 1 auto;
+}
+.kanban-column.wide .kanban-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-content: start;
+}
+.kanban-column.wide .kanban-section {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+.kanban-column.wide .kanban-section-header,
+.kanban-column.wide .kanban-show-all,
+.kanban-column.wide .kanban-empty {
+  grid-column: 1 / -1;
+}
 .kanban-scroll {
   position: relative;
   display: flex;

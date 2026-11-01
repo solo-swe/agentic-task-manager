@@ -136,7 +136,7 @@ test.describe('projects', () => {
     await page.keyboard.type('thi');
     await expect(page.locator('#project-options [role=option]')).toHaveText(['Third Project']);
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/#project=third$/);
+    await expect(page).toHaveURL(/#project=third(&sprint=[^&]+)?$/);
 
     await page.locator('#project-selector').click();
     await page.keyboard.press('Home');

@@ -21,6 +21,25 @@ const staged = (workflow?: string) => {
   return render(KanbanColumns, { columns: board, showAllDone: false, onshowall: () => {} }).container;
 };
 
+describe('KanbanColumns: a closed sprint’s board (T-323)', () => {
+  it('foldEmpty folds the empty columns, not Done, and widens Done', () => {
+    loadIntoDashboard({ ...standard, meta: {}, tasks: (standard.tasks as Task[]).filter((t) => t.status === 'done') });
+    const board = buildBoard(dashboard.tasks, dashboard.tasks, { showSkipped: false, statusFilter: new Set() });
+    const { container } = render(KanbanColumns, {
+      columns: board,
+      showAllDone: false,
+      foldEmpty: true,
+      onshowall: () => {},
+    });
+    const folded = [...container.querySelectorAll('.kanban-column.folded')].map(
+      (c) => (c as HTMLElement).dataset.status,
+    );
+    expect(folded).toEqual(['todo', 'in_progress', 'in_review', 'blocked']);
+    expect(container.querySelector('.kanban-column.folded .kanban-empty')).toBeNull();
+    expect(container.querySelector('.kanban-column[data-status="done"]')).toHaveClass('wide');
+  });
+});
+
 describe('KanbanColumns: stages of Done', () => {
   it('in a pull-request project, Done has sections In PR (per PR), Done and Merged, with counts', () => {
     const container = staged('pull-request');

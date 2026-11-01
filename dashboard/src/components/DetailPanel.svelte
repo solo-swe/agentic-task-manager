@@ -15,6 +15,7 @@
   import { cutOff } from '../lib/scroll';
   import RepoRef from './RepoRef.svelte';
   import BranchChip from './BranchChip.svelte';
+  import ComponentChips from './ComponentChips.svelte';
   import LabelChips from './LabelChips.svelte';
   import Markdown from './Markdown.svelte';
   import PriorityBadge from './PriorityBadge.svelte';
@@ -210,8 +211,7 @@
             data-resolution={resolution}
             title="How it ended">{RESOLUTION_LABELS[resolution] ?? resolution}</span
           >{/if}
-        {#each task.components ?? [] as component (component)}<span class="badge component-chip">{component}</span
-          >{/each}
+        <ComponentChips {task} />
         <PriorityBadge {task} />
         <StageChip {task} />
         <BranchChip {task} />

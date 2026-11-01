@@ -64,8 +64,9 @@ describe('DetailPanel', () => {
     expect(container.querySelector('#detail-with-user')).toHaveTextContent('with you');
     expect([...container.querySelectorAll('.task-meta .component-chip')].map((c) => c.textContent)).toEqual([
       'review: blocker',
-      'ui',
+      // Components the project doesn't define, alphabetically (T-323)
       'api',
+      'ui',
     ]);
     const plain = open({});
     expect(plain.querySelector('#detail-review-mode')).toBeNull();

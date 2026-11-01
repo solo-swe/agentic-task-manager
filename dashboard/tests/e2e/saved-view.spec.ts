@@ -36,7 +36,8 @@ test.describe('saved view', () => {
     await expect(page.locator('#task-search')).toHaveValue('user');
     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
     await expect(page.locator('#tab-graph')).toHaveAttribute('aria-selected', 'true');
-    await expect(page).toHaveURL(/#view=graph$/);
+    // The saved Sprint filter goes into the hash too (#sprint=, T-323)
+    await expect(page).toHaveURL(/#view=graph&sprint=Phase%201$/);
     await page.locator('#tab-kanban').click();
     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
     await openFilters(page);
@@ -83,11 +84,12 @@ test.describe('saved view', () => {
     await openDashboard(page, tasksServer, project('p1'));
     await openFilters(page);
     await filterButton(page, 'sprint', 'Phase 2').click();
+    // Opened fresh (no #sprint= from the other project's address, T-323)
     tasksServer.use(project('p2'));
-    await page.reload();
+    await page.goto('tasks-dashboard.html');
     await expect(page.locator('.filter-chip')).toHaveCount(0);
     tasksServer.use(project('p1'));
-    await page.reload();
+    await page.goto('tasks-dashboard.html');
     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 2']);
   });
 

@@ -17,6 +17,8 @@
   const showSprint = $derived(
     !groupBySprint && new Set(dashboard.filtered.map((t) => dashboard.sprints.sprintOf(t) ?? BACKLOG)).size > 1,
   );
+  // A closed sprint's board is mostly Done (T-323): its empty columns fold so the cards get the width
+  const foldEmpty = $derived(dashboard.scope.kind === 'sprint' && dashboard.scope.sprint.state === 'closed');
   const laneColor = (index: number) => (index < 0 ? 'var(--text-muted)' : phaseColor(index));
 
   const options = $derived({
@@ -65,6 +67,7 @@
       columns={board}
       {showAllDone}
       {showSprint}
+      {foldEmpty}
       onshowall={(all) => (dashboard.kanbanShowAllDone = all)}
     />
   {/if}

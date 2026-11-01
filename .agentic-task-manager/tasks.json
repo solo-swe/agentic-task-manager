@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 330,
+    "next_id": 339,
     "labels": [
       {
         "id": "architecture",
@@ -13636,14 +13636,14 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-10-27T16:04:11Z",
+      "updated_at": "2026-11-01T08:35:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Testing together",
+      "updated_by": "claude:9fec227a",
       "sprint_history": [
         {
           "sprint": "Testing together",
-          "from": "2026-10-27T09:19:02Z"
+          "from": "2026-10-27T09:19:02Z",
+          "to": "2026-11-01T08:35:03Z"
         }
       ],
       "with": "user"
@@ -13726,14 +13726,14 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-10-27T16:41:57Z",
+      "updated_at": "2026-11-01T08:35:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
-      "sprint": "Testing together",
+      "updated_by": "claude:9fec227a",
       "sprint_history": [
         {
           "sprint": "Testing together",
-          "from": "2026-10-27T16:41:57Z"
+          "from": "2026-10-27T16:41:57Z",
+          "to": "2026-11-01T08:35:03Z"
         }
       ],
       "with": "user",
@@ -16193,7 +16193,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T07:24:16Z",
+      "updated_at": "2026-11-01T07:51:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -16209,7 +16209,7 @@
         }
       ],
       "sprint": "Sprints on the dashboard",
-      "commit": "31068de015c6ddc8dc9f43dcf2d8dad94f1b0c43",
+      "commit": "111a639f720c1dfc02a4beb3d19e2e91f48509dc",
       "notes": [
         {
           "at": "2026-11-01T06:51:25Z",
@@ -16468,6 +16468,270 @@
         "dashboard",
         "cli"
       ]
+    },
+    {
+      "id": "T-330",
+      "name": "atm surfaces open tasks left in closed sprints",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sprints"
+      ],
+      "description": "Closing a sprint carries every unfinished task on, but a task can still end up open in a closed sprint: `atm reopen` of a task in it, a git merge of a branch that closed the sprint with one that reopened or rejected a task in it, or a hand edit. The default loop works on the active sprint, so it never takes such a task (only `--all` does, before the backlog).\n\n## Change\n- `atm status`: list them under a warning (\"N open tasks in closed sprints\"), with their IDs and sprints; `--json` gets them too.\n- `atm check`: a warning for each.\n- `atm reopen` on a task in a closed sprint: after reopening, say the sprint is closed and suggest `atm move <id> --to backlog` or `--to <the active sprint>`. A suggestion only: the task is not moved.\n- `/atm:plan-sprint` Step 2: show them first as candidates, next to the last closed sprint's carried tasks.\n\nThe dashboard part is done in T-323 (the scope bar's warning, the closed sprint's note, List groups, card badges).\n\n## Tests\nScenarios in `tests/scripts/scenarios/` for `status`, `check` and `reopen` with a task open in a closed sprint.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "atm-cli/atm/claims.py",
+        "plugin/skills/plan-sprint/SKILL.md",
+        "tests/scripts/scenarios/sprints.json",
+        "docs/v4/atm-cli.md"
+      ],
+      "created_at": "2026-11-01T08:21:22Z",
+      "updated_at": "2026-11-01T08:21:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "skills"
+      ],
+      "related": [
+        "T-323"
+      ]
+    },
+    {
+      "id": "T-331",
+      "name": "Release v0.25.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "sprints"
+      ],
+      "description": "Ship the sprint *Sprints on the dashboard* as 0.25.0, the way CLAUDE.md's *Versions* and *CI* sections describe.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.25.0` (they must match).\n- Turn `plugin/CHANGELOG.md`'s `[Unreleased]` into `[0.25.0]` with today's date; merge repeated `### Changed` / `### Added` sections into one of each.\n- Write the `plugin/WHATS-NEW.md` entry from the changelog: 3–6 short plain-language bullets about what a user notices (the board opens on the active sprint, the backlog and grouped List, velocity, components, search and filters in the title bar), no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills and atm output changed in this release keep their written review in §3.3 (no live sandbox run, no API key); check every new entry point (`atm components`, the `#sprint=` URL parameter) is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens (or updates) the release PR to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-323"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-01T08:24:38Z",
+      "updated_at": "2026-11-01T08:24:38Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-11-01T08:24:38Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard"
+    },
+    {
+      "id": "T-332",
+      "name": "Projects Overview: the needs-you popup on a project card opens off screen",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "overview"
+      ],
+      "description": "On the All projects page, clicking a project card's \"N need you\" chip opens its popup (`NeedsYouMenu.svelte`) so that its left part is outside the window, for a card near the left edge.\n\n## Change\nKeep the popup inside the viewport: anchor it to the chip's left edge when there is no room to its left (or clamp its position), as the title bar's menus do. Check the cards in the first column and the last, and a narrow window.\n\n## Tests\nAn e2e test that opens the popup on the first card of the overview and checks its bounding box is within the viewport; the needs-you screenshot updated if it changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/NeedsYouMenu.svelte",
+        "dashboard/src/components/ProjectCard.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/overview.spec.ts"
+      ],
+      "created_at": "2026-11-01T08:24:38Z",
+      "updated_at": "2026-11-01T08:24:38Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-333",
+      "name": "Projects Overview: a combined Agents tab",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "overview"
+      ],
+      "description": "The All projects page has Projects and Board tabs; add an **Agents** tab that shows every listed project's agents together, like a project's Agents tab (`AgentsTab.svelte`): their timeline and who works on what, each lane or row naming its project.\n\n## Change\n- A third overview tab (`#view=agents` on the overview), remembered like the others (`overviewTab`).\n- Its data from what the overview already loads per project; no new server route unless one is needed (then `docs/multi-project-api.md` and `docs/security-architecture.md` updated).\n- Clicking an agent's task opens it in its project.\n\nRelated: T-328 and T-329 (Activity and Progress on the overview).\n\n## Tests\nUnit tests for any new lib; an e2e test with two projects; a screenshot in `visual.spec.ts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/ProjectsOverview.svelte",
+        "dashboard/src/components/AgentsTab.svelte",
+        "dashboard/src/lib/routes.ts",
+        "dashboard/tests/e2e/overview.spec.ts"
+      ],
+      "created_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T08:33:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-328",
+        "T-329"
+      ]
+    },
+    {
+      "id": "T-334",
+      "name": "Projects Overview: less white space under the title bar",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "ux"
+      ],
+      "description": "On the All projects page there is too much empty space between the title bar and the tabs and cards. Tighten it to match a project's page (where the tabs sit right under the title bar), keeping whole-pixel heights (the sticky footer test).\n\n## Tests\nThe projects overview screenshots updated (dark, light, narrow); the footer test still passes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/ProjectsOverview.svelte",
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T08:33:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-335",
+      "name": "Projects Overview: a more appealing project card",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "ux"
+      ],
+      "description": "The project card on the All projects page still looks off. Give it a clearer typographic hierarchy: a larger project name, the key figure (progress, what needs you) prominent, secondary lines smaller and muted, consistent spacing. Try a couple of variants on the dev server and choose with Hakan (with: user).\n\n## Tests\nProjectCard component tests still pass; the overview screenshots updated.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/ProjectCard.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/ProjectCard.component.test.ts"
+      ],
+      "created_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T08:33:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user"
+    },
+    {
+      "id": "T-336",
+      "name": "Design: open referenced documents in a CompMD viewer",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-284"
+      ],
+      "files": [
+        "docs/compmd-viewer-design.md"
+      ],
+      "created_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-01T08:41:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "docs",
+        "compmd"
+      ],
+      "with": "user",
+      "related": [
+        "T-284"
+      ]
+    },
+    {
+      "id": "T-337",
+      "name": "Design: built-in code reviews recorded in the project (to replace Crit)",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "code-review"
+      ],
+      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today (I11: nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in `docs/security-architecture.md` change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text (I1), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/code-review-design.md"
+      ],
+      "created_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-01T08:41:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "docs",
+        "dashboard",
+        "cli",
+        "skills"
+      ],
+      "with": "user"
+    },
+    {
+      "id": "T-338",
+      "name": "Task List: richer cards that use the row's width",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "ux"
+      ],
+      "description": "The Task List is one card per row, so most of each row is empty. Show more of the task there (`TaskCard.svelte`), choosing with Hakan on the dev server.\n\n## Candidates\n- the first line or two of the description (plain text, `markdownPlainText`);\n- who created it, who works or worked on it, and when (created, started, done, relative times as elsewhere);\n- how long it took (work time) or how long it has waited (in review, blocked);\n- its stage with the commit or PR link, its dependencies and what waits for it;\n- the latest note (outcome, handoff) in one line.\n\n## Layout\nA right-hand column for the facts (people, times, stage) and the left for the name, chips and description, collapsing to today's single column on narrow windows. Cards stay quick to scan; no new data loads.\n\n## Tests\nTaskCard component tests for the new fields; the List screenshots updated; the performance budget still holds (`tests/e2e/performance.spec.ts`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/TaskCard.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/TaskCard.component.test.ts"
+      ],
+      "created_at": "2026-11-01T08:42:49Z",
+      "updated_at": "2026-11-01T08:42:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user"
     }
   ]
 }

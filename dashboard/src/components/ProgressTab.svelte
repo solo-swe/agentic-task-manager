@@ -5,6 +5,7 @@
   import { dashboard } from '../lib/state.svelte';
   import { timeUse } from '../lib/timeuse';
   import BurndownChart from './BurndownChart.svelte';
+  import ComponentTable from './ComponentTable.svelte';
   import InfoTip from './InfoTip.svelte';
   import ReleaseView from './ReleaseView.svelte';
   import SprintTable from './SprintTable.svelte';
@@ -67,6 +68,15 @@
   // Activity popup, timeuse.ts)
   const use = $derived(
     timeUse(tasks, from === undefined ? null : { start: from, end: chart.end ?? now }, now, dashboard.vocab),
+  );
+
+  // The By component table: the focused sprint's tasks, else all of them (T-323)
+  const focusTasks = $derived(
+    focus === undefined ? tasks : tasks.filter((t) => (model.sprintOf(t) ?? BACKLOG) === focus),
+  );
+  const focusLabel = $derived(
+    (focus === undefined ? 'All sprints' : focus === BACKLOG ? 'Backlog' : focus) +
+      (filtered ? ' · matching tasks' : ''),
   );
 
   const toggle = (key: string) => (dashboard.progressSprint = focus === key ? null : key);
@@ -143,6 +153,7 @@
       <BurndownChart data={chart} {now} />
     {/if}
     <SprintTable {forecast} {now} selected={focus} onselect={toggle} />
+    <ComponentTable tasks={focusTasks} scope={focusLabel} />
     <VelocityChart />
     <ReleaseView />
     {#if use}

@@ -1,4 +1,5 @@
 import { shortAgent } from './claims';
+import { componentLabel, componentOrder, type Component } from './components';
 import { activeSprint, effectiveRelease, NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
 import { STAGE_LABELS, STAGES, stageOf, type Stage } from './stages';
 import type { Task } from './types';
@@ -189,7 +190,8 @@ function sprintOptions(tasks: Task[], model: SprintModel): FilterOption[] {
 }
 
 /**
- * Filter buttons for the values in the data: sprints (sprintOptions), releases and components alphabetically, types,
+ * Filter buttons for the values in the data: sprints (sprintOptions), releases alphabetically, components in the
+ * project's order with their labels, types,
  * statuses and priorities in the vocabulary's order and with its labels. Statuses list the whole vocabulary, so a
  * status no task has yet (To Do once everything is done) can still be chosen.
  */
@@ -197,6 +199,7 @@ export function filterOptions(
   tasks: Task[],
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   model: SprintModel = NO_SPRINTS,
+  components: readonly Component[] = [],
 ): Record<FilterGroup, FilterOption[]> {
   const values = (group: FilterGroup) =>
     [...new Set(tasks.flatMap((t) => valuesOf(group, t, vocab, model)))].sort((a, b) => a.localeCompare(b));
@@ -214,7 +217,9 @@ export function filterOptions(
   return {
     sprint: sprintOptions(tasks, model),
     release: values('release').map((r) => ({ value: r, label: r })),
-    component: values('component').map((c) => ({ value: c, label: c })),
+    component: values('component')
+      .sort(componentOrder(components))
+      .map((c) => ({ value: c, label: componentLabel(components, c) })),
     type: types.map((t) => ({ value: t, label: typeLabel(vocab, t) })),
     status: statuses.map((s) => ({ value: s, label: statusLabel(vocab, s) })),
     priority: priorities.map((p) => ({ value: p, label: `${p} ${priorityLabel(vocab, p)}` })),
