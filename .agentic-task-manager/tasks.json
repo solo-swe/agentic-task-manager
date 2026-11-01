@@ -549,7 +549,19 @@
       },
       {
         "id": "Testing together",
-        "state": "planned"
+        "state": "closed",
+        "start": "2026-11-01T09:08:13Z",
+        "end": "2026-11-01T09:08:14Z",
+        "report": {
+          "done": [
+            "T-278",
+            "T-280",
+            "T-281",
+            "T-282"
+          ],
+          "carried": [],
+          "added": []
+        }
       },
       {
         "id": "Themes",
@@ -623,11 +635,30 @@
       },
       {
         "id": "Sprints on the dashboard",
-        "state": "active",
+        "state": "closed",
         "goal": "The dashboard fits the sprint model: the active sprint, the backlog, planned and closed sprints, and sprint metrics",
         "release": "0.25.0",
         "due": "2026-11-01",
-        "start": "2026-10-31T09:01:12Z"
+        "start": "2026-10-31T09:01:12Z",
+        "end": "2026-11-01T09:08:09Z",
+        "report": {
+          "done": [
+            "T-323",
+            "T-324",
+            "T-325",
+            "T-326",
+            "T-327",
+            "T-331"
+          ],
+          "carried": [],
+          "added": [
+            "T-324",
+            "T-325",
+            "T-326",
+            "T-327",
+            "T-331"
+          ]
+        }
       }
     ],
     "releases": [
