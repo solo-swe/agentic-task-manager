@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 326,
+    "next_id": 328,
     "labels": [
       {
         "id": "architecture",
@@ -16166,7 +16166,7 @@
       "description": "With `atm components add` (the task this depends on), turn the labels that name parts of this repository into components, and add the REST API by its files. Components may overlap (decided in T-323): `api` sits inside `cli`.\n\n- **dashboard** (label *Dashboard*): `dashboard/**`, `plugin/templates/**`; from the label `dashboard`, and `--assign`\n- **cli** (*CLI*): `atm-cli/**`, `plugin/scripts/**`, `tests/scripts/**`; from the label `cli`, and `--assign`\n- **skills** (*Skills*): `plugin/skills/**`, `plugin/CLAUDE.md`; from the label `skills`, and `--assign`\n- **compmd** (*CompMD*): no globs yet (its files don't exist); from the label `compmd`\n- **api** (*REST API*): `atm-cli/atm/server.py`, `docs/multi-project-api.md`, `tests/scripts/serve.test.mjs`; by files only (`--assign`)\n\n`architecture` stays a label. Check the result with `atm components` and `atm check`, then commit `tasks.json` (and `tasks-archive.json` if it changed) on their own: `chore: this repository's components`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-324"
       ],
@@ -16174,7 +16174,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T07:05:38Z",
+      "updated_at": "2026-11-01T07:06:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16188,7 +16188,87 @@
         "T-323"
       ],
       "started_at": "2026-11-01T07:05:38Z",
-      "started_by": "claude:9fec227a"
+      "started_by": "claude:9fec227a",
+      "commit": "b146456f4d0c9934abd80d90eec5c0ee5387acc3",
+      "completed_at": "2026-11-01T07:06:04Z",
+      "completed_by": "claude:9fec227a",
+      "notes": [
+        {
+          "at": "2026-11-01T07:06:04Z",
+          "kind": "outcome",
+          "text": "Components dashboard (207 tasks), cli (91), skills (53), compmd (3), api (25); labels moved; 31 tasks (docs, CI, releases) match none",
+          "by": "claude:9fec227a"
+        }
+      ]
+    },
+    {
+      "id": "T-326",
+      "name": "atm components edit: change a component, move a label onto it",
+      "type": "feature",
+      "priority": "P1",
+      "description": "`atm components add` (T-324) refuses a component already there, so a second label can't be moved onto an existing component. Add `atm components edit <id>` with the same options, for an existing one, in one locked write:\n- `--label TEXT` sets the name shown (empty: remove it); `--review MODE` its review mode (empty: remove it);\n- `--add-path GLOB` (repeatable) adds globs (one already there is kept once);\n- `--from-label LABEL` moves the label onto it on every task, `tasks.json` and `tasks-archive.json`, and drops it from `meta.labels` (as `add` does);\n- `--assign` gives it to every task whose `files` its globs match, the new ones included.\n\nIt refuses an unknown component (naming the components), a bad glob or mode, and a label no task has (a typo), writing nothing; it prints what changed, e.g. `cli: 6 tasks from the label atm-cli, 2 more by their files`. Share the label-moving and assigning code with `components_add` rather than copying it.\n\n## Tests\nScenarios in `tests/scripts/scenarios/components.json`: edit with each option, the archive too, the refusals.\n\n## Docs\n`docs/v4/atm-cli.md`, the usage text, `plugin/CLAUDE.md`'s *Define* line if it names the subcommands, `plugin/CHANGELOG.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/components.py",
+        "atm-cli/atm/cli.py",
+        "tests/scripts/scenarios/components.json",
+        "docs/v4/atm-cli.md",
+        "plugin/CLAUDE.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-01T07:15:37Z",
+      "updated_at": "2026-11-01T07:15:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-11-01T07:15:37Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard",
+      "components": [
+        "cli",
+        "skills"
+      ],
+      "related": [
+        "T-324",
+        "T-323"
+      ]
+    },
+    {
+      "id": "T-327",
+      "name": "This repository's remaining components: ci, branding, docs; atm-cli and server labels moved",
+      "type": "infra",
+      "priority": "P1",
+      "description": "Finish what T-325 started, with `atm components add` and `edit` (run from this checkout, `plugin/scripts/atm`, until 0.25.0 is installed):\n- **cli**: `edit` with `--from-label atm-cli`;\n- **api**: `edit` with `--from-label server`;\n- **ci** (*CI*): `add` with `.github/**`, `.githooks/**`, `--from-label ci`, `--assign`;\n- **branding** (*Branding*): `add` with `branding/**`, `dashboard/src/assets/**`, `--from-label branding`, `--assign`;\n- **docs** (*Docs*): `add` with `docs/**`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `--assign` (not `plugin/CHANGELOG.md` or `plugin/WHATS-NEW.md`: every release task touches them; decided with Hakan).\n\nThe other labels (features, topics, kinds of work) stay labels. Check with `atm components` and `atm check`, then commit `tasks.json` (and the archive if it changed) on its own: `chore: this repository's remaining components`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-326"
+      ],
+      "files": [
+        ".agentic-task-manager/tasks.json"
+      ],
+      "created_at": "2026-11-01T07:15:37Z",
+      "updated_at": "2026-11-01T07:15:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-11-01T07:15:37Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard",
+      "related": [
+        "T-325",
+        "T-323"
+      ]
     }
   ]
 }
