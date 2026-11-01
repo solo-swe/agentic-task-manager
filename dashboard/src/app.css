@@ -67,6 +67,8 @@ body {
 }
 .title-row h1 {
   margin-bottom: 0;
+  /* Whole pixels: the title block alone sets the title bar's height (T-323), so a fraction would offset the page */
+  line-height: 36px;
 }
 /* The ATM logo (Logo.svelte): in the accent colour, next to the title and in About */
 .atm-logo {
@@ -379,9 +381,7 @@ h1 {
 
 .filters {
   display: flex;
-  gap: 0;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
 }
 
@@ -476,13 +476,9 @@ h1 {
 .topbar.scrolled .subtitle {
   display: none;
 }
-/* The filters take the whole second row of the title bar */
-.topbar .filters {
-  flex-basis: 100%;
-  margin-bottom: 0;
-}
 .topbar .subtitle {
   margin-bottom: 0;
+  line-height: 22px;
 }
 .title-block {
   flex-shrink: 0;
@@ -897,28 +893,18 @@ h1 {
   font-size: 12px;
 }
 button.menu-trigger:hover,
-.menu-trigger.split > button:hover {
+.menu-trigger[aria-expanded='true'] {
   color: var(--text);
 }
-.menu-trigger.split {
+/* The reload button and the ⋯ menu (T-323): the same height as the title bar's other pills */
+.reload-btn,
+.settings-btn {
+  height: 32px;
+}
+.settings-btn {
+  width: 32px;
+  justify-content: center;
   padding: 0;
-  gap: 0;
-  overflow: hidden;
-}
-.menu-trigger.split > button {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 8px 5px 10px;
-  font-size: 12px;
-}
-.menu-trigger.split > .menu-chevron {
-  padding: 5px 8px;
-  border-left: 1px solid var(--border);
 }
 .icon {
   display: block;
@@ -954,8 +940,18 @@ button.menu-trigger:hover,
   flex-direction: column;
   gap: 8px;
 }
-.appearance .menu {
+.settings .menu {
   right: 0;
+  min-width: 260px;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.settings-menu .menu-label:not(:first-child) {
+  margin-top: 6px;
 }
 
 /* The project selector next to the title (ProjectSelector.svelte) */
@@ -1091,9 +1087,6 @@ button.menu-trigger:hover,
   height: 100%;
   background: var(--green);
 }
-.refresh .menu {
-  right: 0;
-}
 .topbar-controls {
   display: flex;
   gap: 8px;
@@ -1212,57 +1205,85 @@ button.menu-trigger:hover,
   color: var(--text-muted);
 }
 
-/* Filters: one compact line (search + what is selected), the full set below it on demand */
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 42px;
-  padding: 4px 6px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-/* Open: the panel hangs off the bar's bottom edge, so the two read as one control */
-.filter-bar.open {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
+/* Filters (T-323): in the title bar, a compact search and a Filters button; the groups in a popup under it */
 .filters-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
   padding: 0 10px;
-  background: var(--surface2);
-  border: none;
-  border-radius: 8px;
-  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
-.filters-toggle:hover {
-  background: color-mix(in srgb, var(--text) 12%, var(--surface2));
+.filters-toggle:hover,
+.filters-toggle[aria-expanded='true'] {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.filters-toggle.filtered {
+  color: var(--text);
+}
+.filters-badge {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 .task-search {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   height: 32px;
-  width: 240px;
-  padding: 0 10px;
-  border-radius: 8px;
+  /* A magnifier until used: a click, "/", or a search it holds opens it */
+  width: 34px;
+  padding: 0 9px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
   color: var(--text-muted);
-  border: 1px solid transparent;
+  cursor: text;
+  transition: width 0.2s ease;
 }
-.task-search:focus-within {
+.task-search:hover {
+  color: var(--text);
   border-color: var(--accent);
+}
+.task-search:focus-within,
+.task-search:has(input:not(:placeholder-shown)) {
+  width: 240px;
+  border-color: var(--accent);
+}
+.task-search:not(:focus-within):has(input:placeholder-shown) .search-key {
+  display: none;
+}
+/* Folded, the few pixels the input keeps (to stay focusable) show none of its placeholder */
+.task-search:not(:focus-within) input:placeholder-shown::placeholder {
+  color: transparent;
+}
+.search-key {
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-muted);
 }
 .task-search input {
   flex: 1;
-  min-width: 0;
+  /* Never quite zero wide, even folded: it stays focusable */
+  min-width: 4px;
   background: none;
   border: none;
   outline: none;
@@ -1315,34 +1336,152 @@ button.menu-trigger:hover,
   color: var(--text-muted);
 }
 .filter-panel {
-  width: 100%;
-  padding: 14px 16px;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(70vh, 640px);
+  overflow-y: auto;
+  padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-top: 1px dashed var(--border);
-  border-radius: 0 0 12px 12px;
-  margin-top: -1px;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  text-align: left;
+}
+.filter-panel[hidden] {
+  display: none;
+}
+.filter-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.filter-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.filter-panel-foot .include-archived {
+  margin-right: auto;
 }
 .filter-group {
   display: flex;
   align-items: baseline;
   gap: 12px;
 }
+/* The group's name, and "clear" once something in it is selected */
 .filter-group-label {
-  width: 56px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: 104px;
   flex-shrink: 0;
   font-size: 12px;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 .filter-group-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  gap: 2px 4px;
+  min-width: 0;
+}
+/* Quiet chips, like the menus' rows: text until hovered or selected, a muted count after the name */
+.filter-panel .filter-btn {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+.filter-panel .filter-btn:hover {
+  background: var(--surface2);
+}
+.filter-panel .filter-btn.active {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--text);
+  font-weight: 600;
+}
+.filter-panel .filter-count,
+.filter-panel .filter-btn.active .filter-count {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: inherit;
+}
+/* A value no task has under the other filters: still clickable, its name muted */
+.filter-panel .filter-btn.empty {
+  opacity: 1;
+  color: var(--text-muted);
+}
+.filter-panel .filter-btn.filter-all {
+  padding: 0;
+  font-size: 11px;
+  color: var(--accent);
+}
+.filter-panel .filter-btn.filter-all:hover {
+  background: none;
+  text-decoration: underline;
+}
+.filter-panel .filter-more {
+  padding: 3px 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.filter-panel .filter-more:hover {
+  background: var(--surface2);
+}
+/* The foot's buttons: small and bordered, like the title bar's triggers */
+.panel-button {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.panel-button:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.panel-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.filter-find {
+  width: 120px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
 }
 
 .match-count {
@@ -1351,18 +1490,6 @@ button.menu-trigger:hover,
   white-space: nowrap;
 }
 .match-count strong {
-  color: var(--text);
-}
-.reset-view-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  margin-left: 8px;
-  text-decoration: underline dotted;
-}
-.reset-view-btn:hover {
   color: var(--text);
 }
 
@@ -2135,6 +2262,8 @@ button.repo-ref {
   padding: 8px 14px 9px;
   font: inherit;
   font-size: 14px;
+  /* Whole pixels, so the page's height is (the footer sits exactly at the window's bottom) */
+  line-height: 18px;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
@@ -2247,6 +2376,7 @@ button.repo-ref {
   padding: 6px 16px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  line-height: 20px;
 }
 .scope-head,
 .scope-facts {
@@ -2266,15 +2396,19 @@ button.repo-ref {
 .scope-options {
   order: 1;
   display: flex;
+  align-items: center;
   gap: 16px;
   margin-left: auto;
+  /* Whole pixels (as the trigger): the bar's height adds to the page's, and the footer sits at its very bottom */
+  height: 28px;
 }
 .scope-trigger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  height: 28px;
   margin-left: -8px;
-  padding: 3px 8px;
+  padding: 0 8px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: none;

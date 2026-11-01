@@ -123,6 +123,8 @@ test('visual: top bar with the filter panel open', async ({ page, tasksServer })
   await expect(page.locator('header.topbar')).toHaveScreenshot('standard-topbar-filters.png', {
     mask: [page.locator('#version-chip')],
   });
+  // The popup itself (T-323), which hangs below the title bar
+  await expect(page.locator('#filter-panel')).toHaveScreenshot('standard-filter-panel.png');
 });
 
 // FR-2.6: the main views in light mode (the OS setting is light; Playwright emulates it).
@@ -246,16 +248,19 @@ for (const mode of ['dark', 'light'] as const) {
   });
 }
 
-// The Appearance menu: the mode switch and the theme combo box with the current theme's swatch
+// The ⋯ settings menu (T-323): auto-refresh, the mode switch, the theme combo box with the current theme's swatch,
+// and resetting the project's view
 for (const mode of ['dark', 'light'] as const) {
-  test(`visual: appearance menu (${mode})`, async ({ page, tasksServer }) => {
+  test(`visual: settings menu (${mode})`, async ({ page, tasksServer }) => {
     await page.addInitScript(
       (m) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'gruvbox', mode: m, autoRefresh: false })),
       mode,
     );
     await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#appearance-btn').click();
-    await expect(page.locator('#appearance-menu')).toHaveScreenshot(`appearance-menu-${mode}.png`);
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#settings-menu')).toHaveScreenshot(`settings-menu-${mode}.png`, {
+      mask: [page.locator('#last-loaded')],
+    });
   });
 }
 

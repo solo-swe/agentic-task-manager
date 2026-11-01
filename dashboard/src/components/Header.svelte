@@ -56,15 +56,13 @@
     {/snippet}
     {#snippet charts()}
       {#if dashboard.loaded}
+        <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
         <div class="topbar-charts">
+          <Filters />
           <ProgressWidget />
           <ActivityWidget />
         </div>
       {/if}
-    {/snippet}
-    {#snippet below()}
-      <!-- Second row of the title bar: search and filters -->
-      <Filters />
     {/snippet}
   </TitleBar>
 {:else}

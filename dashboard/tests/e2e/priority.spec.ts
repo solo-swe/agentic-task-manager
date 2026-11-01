@@ -41,7 +41,6 @@ test.describe('priority', () => {
     await openDashboard(page, tasksServer, withPriorities(), { tab: 'list' });
     await openFilters(page);
     await expect(page.locator('.filter-btn[data-filter="priority"] .filter-label')).toHaveText([
-      'All',
       'P0 Critical',
       'P1 High',
       'P2 Medium',

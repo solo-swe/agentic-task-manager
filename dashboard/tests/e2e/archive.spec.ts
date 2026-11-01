@@ -1,5 +1,14 @@
 // The archive (D-5.2 to D-5.4): tasks-archive.json is loaded only when a view needs history.
-import { expect, loadFixture, matchCount, openDashboard, test, type TasksData } from './helpers';
+import {
+  closeFilters,
+  expect,
+  loadFixture,
+  matchCount,
+  openDashboard,
+  openFilters,
+  test,
+  type TasksData,
+} from './helpers';
 
 /** standard.json after `atm archive` moved three tasks: meta.archived says so, and T-001 depends on one of them */
 function archivedProject(): TasksData {
@@ -27,7 +36,10 @@ test.describe('archive', () => {
   }) => {
     tasksServer.archive('archive');
     await openDashboard(page, tasksServer, archivedProject(), { tab: 'list' });
+    // At the foot of the filter popup (T-323)
+    await openFilters(page);
     await page.locator('#include-archived').check();
+    await closeFilters(page);
     await expect(page.locator('.task-card')).toHaveCount(15);
     await expect(matchCount(page)).toHaveText('15 of 15 tasks');
     expect(tasksServer.archiveRequests).toBe(1);

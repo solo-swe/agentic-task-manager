@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import { ACTIVE, BACKLOG } from '../lib/filters';
+  import { ACTIVE, BACKLOG, FILTER_GROUPS, FILTER_LABELS, filterOptions } from '../lib/filters';
   import { formatWhen } from '../lib/format';
   import { countKinds, scopeTasks } from '../lib/scope';
   import { backlog, dueText, sprintSummary, sprintTasks, type Sprint } from '../lib/sprints';
@@ -37,6 +37,20 @@
       counts.active === 0,
   );
   const tasks = (n: number) => `${n} ${n === 1 ? 'task' : 'tasks'}`;
+  // What narrows the board within its sprints (T-323): the other filters, by group, and the search
+  const options = $derived(filterOptions(dashboard.base, dashboard.vocab, model));
+  const narrowing = $derived(
+    [
+      ...FILTER_GROUPS.filter((g) => g !== 'sprint' && dashboard.filters[g].size > 0).map(
+        (g) =>
+          `${FILTER_LABELS[g]} ${options[g]
+            .filter((o) => dashboard.filters[g].has(o.value))
+            .map((o) => o.label)
+            .join(', ')}`,
+      ),
+      ...(dashboard.query.trim() ? [`“${dashboard.query.trim()}”`] : []),
+    ].join(' · '),
+  );
   const dateOf = (iso: string | undefined) =>
     iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : undefined;
 
@@ -121,8 +135,8 @@
     {counts.done} of {counts.total} done
   </span>
   {#if dashboard.narrowed}
-    <span class="scope-filtered" id="scope-filtered"
-      >showing {dashboard.filtered.length}, filtered<button
+    <span class="scope-filtered" id="scope-filtered" title="Filtered by {narrowing}"
+      >showing {dashboard.filtered.length}, filtered: <span class="scope-filters">{narrowing}</span><button
         class="chip-clear"
         aria-label="Clear the other filters and the search"
         title="Clear the other filters and the search"

@@ -86,7 +86,7 @@ test.describe('scope bar (T-323)', () => {
   }) => {
     await openDashboard(page, tasksServer, 'sprints');
     await page.locator('#task-search').fill('Sessions');
-    await expect(page.locator('#scope-filtered')).toHaveText('showing 1, filtered');
+    await expect(page.locator('#scope-filtered')).toHaveText('showing 1, filtered: “Sessions”');
     await expect(page.locator('#scope-bar .sprint-progress')).toHaveText('0 of 3 done');
     await page.locator('#scope-filtered button').click();
     await expect(page.locator('#task-search')).toHaveValue('');

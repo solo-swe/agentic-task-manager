@@ -30,6 +30,18 @@ export const FILTER_GROUPS: FilterGroup[] = [
   'label',
   'agent',
 ];
+/** Each group's name, as the filter popup and the scope bar's "filtered" note show it */
+export const FILTER_LABELS: Record<FilterGroup, string> = {
+  sprint: 'Sprint',
+  release: 'Release',
+  component: 'Component',
+  type: 'Type',
+  status: 'Status',
+  priority: 'Priority',
+  stage: 'Stage',
+  label: 'Labels',
+  agent: 'Started by',
+};
 /** The Sprint filter's value for the tasks with no sprint (a colon keeps it apart from any sprint's name) */
 export const BACKLOG = ':backlog';
 /** The Sprint filter's value for the active sprint, whichever it is: the selection follows when the next one starts */

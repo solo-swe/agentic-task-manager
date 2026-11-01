@@ -60,6 +60,21 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   tasks (recovered from git history) shows its name, date and PR only, no empty counts or notes draft.
 - **List cards name their sprint**, instead of the phase badge left from before sprints, when the list shows several
   sprints and doesn't group by them (`.task-card-sprint`, as on the Kanban).
+- **Search and filters move into the title bar** (T-323): the filter row under the title is gone. A compact search
+  box (`#task-search`; `/` focuses it, and it widens while in use) and a **Filters** button (`#filters-toggle`) sit
+  with the charts; the button's badge (`#filters-badge`) counts the groups that narrow the board. It opens a popup
+  (`#filter-panel`): how many tasks match (`#match-count`) and what is selected (`.filter-chip`), one line per group
+  with its most used values first and the rest behind "+N" (Labels with a find box once there are more than ten), and
+  *Clear filters* at its top (`#clear-filters`: the other filters and the search; the sprint stays, it is the scope
+  bar's), and Include archived at its foot. *Reset view* (`#reset-view`), which forgets the whole saved view (filters,
+  tab, each tab's options and zoom), moved to the settings menu as *Reset this project's view*. Values are quiet text
+  chips with a muted count, a selected one tinted; there
+  is no "All" chip any more: nothing selected is all, and a group with a selection has *clear* by its name. The search
+  is a magnifier until used. Escape or a click outside closes it. The scope bar's note names what narrows
+  the board: "showing 12, filtered: Type Feature · Labels ux ✕".
+- **A ⋮ settings menu** (T-323, `#settings-btn`, `#settings-menu`) at the title bar's right end holds auto-refresh
+  (on/off, the interval, when it last loaded), mode, theme and, on a project's page, *Reset this project's view*. The
+  reload button stays beside it, showing the auto-refresh state; the separate refresh and appearance menus are gone.
 - **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and
   its options (*Group by sprint*, only when the board shows more than one sprint, and *Show skipped*) moved to the
   scope bar's end. A project without sprints keeps *Show skipped* above the board.

@@ -389,7 +389,15 @@ export async function openFilters(page: Page) {
   await expect(page.locator('#filter-panel')).toBeVisible();
 }
 
-/** "N of M tasks": how many tasks the search and filters leave, next to the search box. */
+/** Close the filter popup (Escape), as a click outside it would, so what's under it can be clicked. */
+export async function closeFilters(page: Page) {
+  // A click outside it, on the title; not Escape, which in the search box also clears the search
+  if ((await page.locator('#filters-toggle').getAttribute('aria-expanded')) === 'true')
+    await page.locator('#dashboard-title').click();
+  await expect(page.locator('#filter-panel')).toBeHidden();
+}
+
+/** "N of M tasks": how many tasks the search and filters leave, at the top of the filter popup (T-323). */
 export function matchCount(page: Page) {
   return page.locator('#match-count');
 }

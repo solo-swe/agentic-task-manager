@@ -1,4 +1,13 @@
-import { expect, filterButton, matchCount, openDashboard, openFilters, test, visibleCardIds } from './helpers';
+import {
+  closeFilters,
+  expect,
+  filterButton,
+  matchCount,
+  openDashboard,
+  openFilters,
+  test,
+  visibleCardIds,
+} from './helpers';
 
 test.describe('filters', () => {
   test.beforeEach(async ({ page, tasksServer }) => {
@@ -10,11 +19,13 @@ test.describe('filters', () => {
     const labels = (group: string) =>
       page.locator(`.filter-btn[data-filter="${group}"] .filter-label`).allTextContents();
     // The project's phases, read as sprints (not migrated yet): the open ones, then the closed one (all done)
-    expect(await labels('sprint')).toEqual(['All', 'Phase 1', 'Phase 2', 'Phase 0']);
-    expect(await labels('type')).toEqual(['All', 'Feature', 'Bugfix', 'Test', 'Infra', 'Docs', 'Refactor', 'Polish']);
-    expect(await labels('status')).toEqual(['All', 'To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped']);
-    expect(await labels('priority')).toEqual(['All', 'P2 Medium']);
-    await expect(page.locator('.filter-btn.active')).toHaveCount(4);
+    // No "All" chip (T-323): nothing selected is all; a group with a selection gets "clear"
+    expect(await labels('sprint')).toEqual(['Phase 1', 'Phase 2', 'Phase 0']);
+    expect(await labels('type')).toEqual(['Feature', 'Bugfix', 'Test', 'Infra', 'Docs', 'Refactor', 'Polish']);
+    expect(await labels('status')).toEqual(['To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped']);
+    expect(await labels('priority')).toEqual(['P2 Medium']);
+    await expect(page.locator('.filter-btn.active')).toHaveCount(0);
+    await expect(page.locator('.filter-all')).toHaveCount(0);
   });
 
   test('selecting a value filters cards and updates the count', async ({ page }) => {
@@ -36,7 +47,7 @@ test.describe('filters', () => {
     expect(await visibleCardIds(page)).toEqual(['T-009']);
   });
 
-  test('"All" clears only its own group', async ({ page }) => {
+  test('"clear" clears only its own group', async ({ page }) => {
     await filterButton(page, 'sprint', 'Phase 2').click();
     await filterButton(page, 'type', 'test').click();
     await filterButton(page, 'sprint', 'all').click();
@@ -49,23 +60,24 @@ test.describe('filters', () => {
     await expect(matchCount(page)).toHaveText('5 of 12 tasks');
     await filterButton(page, 'status', 'done').click();
     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
-    await expect(filterButton(page, 'status', 'all')).toHaveClass(/active/);
+    await expect(filterButton(page, 'status', 'all')).toHaveCount(0);
   });
 
-  test('active state stays in sync', async ({ page }) => {
-    const all = filterButton(page, 'type', 'all');
+  test('active state stays in sync; "clear" shows only while the group has a selection', async ({ page }) => {
+    const clear = filterButton(page, 'type', 'all');
     const feature = filterButton(page, 'type', 'feature');
-    await expect(all).toHaveClass(/active/);
+    await expect(clear).toHaveCount(0);
     await feature.click();
     await expect(feature).toHaveClass(/active/);
-    await expect(all).not.toHaveClass(/active/);
-    await all.click();
-    await expect(all).toHaveClass(/active/);
+    await expect(clear).toHaveText('clear');
+    await clear.click();
+    await expect(clear).toHaveCount(0);
     await expect(feature).not.toHaveClass(/active/);
   });
 
   test('filters also apply to the dependency graph', async ({ page }) => {
     await filterButton(page, 'sprint', 'Phase 0').click();
+    await closeFilters(page);
     await page.locator('#tab-graph').click();
     await expect(page.locator('#dep-graph g.graph-node')).toHaveCount(4);
   });
@@ -84,7 +96,7 @@ test('unknown statuses sort after the known ones', async ({ page, tasksServer })
   await openDashboard(page, tasksServer, 'edge-cases');
   await openFilters(page);
   const labels = await page.locator('.filter-btn[data-filter="status"] .filter-label').allTextContents();
-  expect(labels).toEqual(['All', 'To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped', 'Review']);
+  expect(labels).toEqual(['To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped', 'Review']);
 });
 
 test('the Status filter offers every status of the project, also when all tasks are done', async ({
@@ -95,7 +107,7 @@ test('the Status filter offers every status of the project, also when all tasks 
   await openDashboard(page, tasksServer, { meta: { project: 'Finished' }, tasks: [task('T-1'), task('T-2')] });
   await openFilters(page);
   const labels = await page.locator('.filter-btn[data-filter="status"] .filter-label').allTextContents();
-  expect(labels).toEqual(['All', 'To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped']);
+  expect(labels).toEqual(['To Do', 'In Progress', 'In Review', 'Blocked', 'Done', 'Skipped']);
   await filterButton(page, 'status', 'todo').click();
   await expect(matchCount(page)).toHaveText('0 of 2 tasks');
 });
@@ -118,16 +130,16 @@ test('with many sprints, the Sprint filter lists the open ones; a toggle shows t
   await openFilters(page);
   const sprints = page.locator('.filter-btn[data-filter="sprint"]');
   const toggle = page.locator('#filter-closed-sprints');
-  await expect(sprints).toHaveCount(3); // All, Phase 8, Phase 9
+  await expect(sprints).toHaveCount(2); // Phase 8, Phase 9
   await expect(toggle).toHaveText('+ 8 closed');
 
   await toggle.click();
-  await expect(sprints).toHaveCount(11);
+  await expect(sprints).toHaveCount(10);
   await expect(toggle).toHaveText('Hide closed');
   await filterButton(page, 'sprint', 'Phase 2').click();
   await expect(matchCount(page)).toHaveText('1 of 10 tasks');
 
-  // Collapsed again, the selected closed sprint stays; the choice is remembered
+  // Collapsed again, the selected closed sprint stays (with the group's "clear"); the choice is remembered
   await toggle.click();
   await expect(sprints).toHaveCount(4);
   await expect(toggle).toHaveText('+ 7 closed');
@@ -147,7 +159,6 @@ test.describe('filter counts', () => {
     filterButton(page, group, value).locator('.filter-count');
 
   test('every button shows how many tasks it would show', async ({ page }) => {
-    await expect(count(page, 'sprint', 'all')).toHaveText('12');
     await expect(count(page, 'sprint', 'Phase 1')).toHaveText('4');
     await expect(count(page, 'type', 'feature')).toHaveText('3');
     await expect(count(page, 'status', 'done')).toHaveText('5');
@@ -156,7 +167,6 @@ test.describe('filter counts', () => {
   test('counts follow the selections in the other groups, not their own', async ({ page }) => {
     await filterButton(page, 'sprint', 'Phase 1').click();
     await expect(count(page, 'sprint', 'Phase 2')).toHaveText('4'); // its own group: unchanged
-    await expect(count(page, 'type', 'all')).toHaveText('4');
     await expect(count(page, 'type', 'feature')).toHaveText('2');
     await expect(count(page, 'status', 'todo')).toHaveText('1');
   });
@@ -175,8 +185,10 @@ test.describe('filter counts', () => {
   test('screen readers hear the count', async ({ page }) => {
     await expect(filterButton(page, 'type', 'feature')).toHaveAccessibleName('Feature, 3 tasks');
     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveAccessibleName('Phase 1, 4 tasks');
-    await expect(filterButton(page, 'status', 'all')).toHaveAccessibleName('All statuses, 12 tasks');
     await expect(filterButton(page, 'status', 'blocked')).toHaveAccessibleName('Blocked, 1 task');
+    // "clear" says what it brings back
+    await filterButton(page, 'status', 'blocked').click();
+    await expect(filterButton(page, 'status', 'all')).toHaveAccessibleName('All statuses, 12 tasks');
     await expect(filterButton(page, 'type', 'feature')).toHaveAttribute('aria-pressed', 'false');
   });
 
@@ -186,36 +198,61 @@ test.describe('filter counts', () => {
     tasksServer.use(data);
     await page.locator('#reload-btn').click();
     await expect(count(page, 'type', 'feature')).toHaveText('4');
-    await expect(count(page, 'sprint', 'all')).toHaveText('13');
+    await expect(count(page, 'sprint', 'Phase 0')).toHaveText('5');
   });
 });
 
-test.describe('compact filter line', () => {
+test.describe('search and Filters in the title bar (T-323)', () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
   });
 
-  test('shows only what is selected; the toggle opens and closes the panel', async ({ page }) => {
+  test('the Filters button opens a popup: what matches and what is selected, a line per group; a badge counts them', async ({
+    page,
+  }) => {
     const toggle = page.locator('#filters-toggle');
-    await expect(page.locator('#filter-panel')).toHaveCount(0);
+    await expect(page.locator('#filter-panel')).toBeHidden();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.locator('#active-filters')).toHaveText('No filters');
+    await expect(page.locator('#filters-badge')).toHaveCount(0);
+    // No filter row: search and the button sit in the title bar
+    await expect(page.locator('.topbar #task-search')).toBeVisible();
+    await expect(page.locator('.topbar #filters-toggle')).toBeVisible();
 
     await openFilters(page);
     await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.locator('#active-filters')).toHaveText('No filters');
     await expect(page.locator('.filter-group')).toHaveText([/^Sprint/, /^Type/, /^Status/, /^Priority/]);
     await filterButton(page, 'sprint', 'Phase 1').click();
     await filterButton(page, 'sprint', 'Phase 2').click();
     await filterButton(page, 'type', 'test').click();
-    await toggle.click();
-    await expect(page.locator('#filter-panel')).toHaveCount(0);
-
     const chips = page.locator('.filter-chip');
     await expect(chips).toHaveText(['Sprint: Phase 1, Phase 2', 'Type: Test']);
     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
+    // The badge counts what narrows the board within its sprints: the Sprint choice is the scope bar's
+    await expect(page.locator('#filters-badge')).toHaveText('1');
     await chips.filter({ hasText: 'Sprint' }).getByRole('button', { name: 'Clear Sprint filter' }).click();
     await expect(chips).toHaveText(['Type: Test']);
     await expect(matchCount(page)).toHaveText('2 of 12 tasks');
+
+    // Escape closes it, and so does a click outside
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#filter-panel')).toBeHidden();
+    await toggle.click();
+    await page.locator('#dashboard-title').click();
+    await expect(page.locator('#filter-panel')).toBeHidden();
+  });
+
+  test('"/" focuses the search; Clear filters keeps the sprint', async ({ page }) => {
+    await page.keyboard.press('/');
+    await expect(page.locator('#task-search')).toBeFocused();
+    await page.keyboard.type('editor');
+    await openFilters(page);
+    await filterButton(page, 'sprint', 'Phase 2').click();
+    await filterButton(page, 'type', 'feature').click();
+    await page.locator('#clear-filters').click();
+    await expect(page.locator('#task-search')).toHaveValue('');
+    await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 2']);
+    await expect(page.locator('#clear-filters')).toBeDisabled();
   });
 
   test('the keyword search narrows every view and the filter counts', async ({ page }) => {

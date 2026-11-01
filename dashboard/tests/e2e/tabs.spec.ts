@@ -96,12 +96,17 @@ test.describe('view tabs', () => {
     await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', viewBox!);
   });
 
-  test('the count of matching tasks stays next to the search on every tab', async ({ page, tasksServer }) => {
+  test('search and Filters stay in the title bar on every tab, with the count of matching tasks', async ({
+    page,
+    tasksServer,
+  }) => {
     await openDashboard(page, tasksServer, 'standard');
     await openFilters(page);
     await filterButton(page, 'sprint', 'Phase 1').click();
+    await page.keyboard.press('Escape');
     for (const id of ['graph', 'kanban', 'list', 'agents', 'progress']) {
       await tab(page, id).click();
+      await expect(page.locator('.topbar #filters-toggle')).toBeVisible();
       await expect(matchCount(page)).toHaveText('4 of 12 tasks');
     }
   });

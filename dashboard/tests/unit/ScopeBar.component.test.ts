@@ -46,7 +46,8 @@ describe('ScopeBar (T-323)', () => {
     const { container } = render(ScopeBar);
     await tick();
     expect(text(container, '.sprint-progress')).toBe('0 of 3 done');
-    expect(text(container, '#scope-filtered')).toBe('showing 2, filtered');
+    // It names what narrows the board (T-323)
+    expect(text(container, '#scope-filtered')).toBe('showing 2, filtered: Status To Do');
     await fireEvent.click(container.querySelector('#scope-filtered button')!);
     expect(dashboard.filters.status.size).toBe(0);
     expect([...dashboard.filters.sprint]).toEqual([ACTIVE]);

@@ -1,4 +1,13 @@
-import { expect, filterButton, loadFixture, matchCount, openDashboard, openFilters, test } from './helpers';
+import {
+  closeFilters,
+  expect,
+  filterButton,
+  loadFixture,
+  matchCount,
+  openDashboard,
+  openFilters,
+  test,
+} from './helpers';
 
 // FR-5: the dashboard remembers each project's view (filters, search, tab, the options in each tab and the zoom of
 // the graph and the Agents timeline) and
@@ -19,6 +28,7 @@ test.describe('saved view', () => {
     await filterButton(page, 'sprint', 'Phase 1').click();
     await filterButton(page, 'type', 'feature').click();
     await page.locator('#task-search').fill('user');
+    await closeFilters(page);
     await page.locator('#tab-graph').click();
 
     await page.goto('tasks-dashboard.html'); // no #view=: the saved tab applies, the graph (not the default Kanban)
@@ -32,6 +42,7 @@ test.describe('saved view', () => {
     await openFilters(page);
     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveClass(/\bactive\b/);
     await filterButton(page, 'sprint', 'all').click();
+    await closeFilters(page);
     await expect(page.locator('#kanban-group-by-sprint')).toBeChecked();
   });
 
@@ -106,9 +117,13 @@ test.describe('saved view', () => {
     await openFilters(page);
     await filterButton(page, 'status', 'todo').click();
     await page.locator('#task-search').fill('editor');
+    await closeFilters(page);
     await page.locator('#tab-progress').click();
+    // In the ⋯ settings menu, apart from Clear filters (T-323)
+    await page.locator('#settings-btn').click();
     await page.locator('#reset-view').click();
-    await expect(page.locator('.filter-btn.active')).toHaveCount(4);
+    await expect(page.locator('#settings-menu')).toHaveCount(0);
+    await expect(page.locator('.filter-btn.active')).toHaveCount(0);
     await expect(page.locator('#task-search')).toHaveValue('');
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
     await page.goto('tasks-dashboard.html');

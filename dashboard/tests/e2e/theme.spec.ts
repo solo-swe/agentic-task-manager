@@ -4,8 +4,8 @@ import { expect, openDashboard, openMenu, test } from './helpers';
 // FR-2: light and dark modes. The dashboard follows the OS (prefers-color-scheme) until a mode is chosen; the
 // choice is remembered per browser and applied before the first paint.
 const html = (page: Page) => page.locator('html');
-/** Mode and theme are in the menu behind the palette button, top right */
-const menu = (page: Page) => openMenu(page, '#appearance-btn');
+/** Mode and theme are in the ⋯ settings menu, top right (T-323) */
+const menu = (page: Page) => openMenu(page, '#settings-btn');
 const themeSelect = (page: Page) => page.locator('#theme-select');
 const bodyBackground = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 const DARK_BG = 'rgb(13, 17, 23)';
@@ -120,8 +120,9 @@ test.describe('themes', () => {
     await menu(page);
     await expect(page.getByLabel('Theme', { exact: true })).toHaveValue('noctis');
     await expect(page.locator('.theme-picker .theme-swatch span')).toHaveCount(4);
-    const height = (await page.locator('#appearance-menu').boundingBox())!.height;
-    expect(height).toBeLessThan(200);
+    // One line, not a list of every theme
+    const height = (await page.locator('.theme-picker').boundingBox())!.height;
+    expect(height).toBeLessThan(40);
   });
 
   test('a separator line sets the themes that draw the board apart, before Sticky notes', async ({
@@ -146,14 +147,14 @@ test.describe('themes', () => {
     await expect(themeSelect(page)).toHaveValue('gruvbox');
   });
 
-  test('the menu button previews the theme and closes the menu on Escape', async ({ page, tasksServer }) => {
+  test('the ⋯ button opens the menu and Escape closes it', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
-    const button = page.locator('#appearance-btn');
-    await expect(button.locator('.swatch-dots span')).toHaveCount(3); // the theme's accent, green and red
+    const button = page.locator('#settings-btn');
+    await expect(button).toHaveAccessibleName('Settings');
     await button.click();
     await expect(button).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.locator('#appearance-menu')).toBeVisible();
+    await expect(page.locator('#settings-menu')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#appearance-menu')).toHaveCount(0);
+    await expect(page.locator('#settings-menu')).toHaveCount(0);
   });
 });

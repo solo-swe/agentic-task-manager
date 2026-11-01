@@ -329,7 +329,7 @@ test.describe('Kanban board', () => {
     await filterButton(page, 'sprint', 'Phase 1').click();
     await expect(progress).toHaveText('8 of 20 done');
     await filterButton(page, 'status', 'done').click();
-    await expect(page.locator('#scope-filtered')).toHaveText('showing 8, filtered');
+    await expect(page.locator('#scope-filtered')).toHaveText('showing 8, filtered: Status Done');
   });
 });
 

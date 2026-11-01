@@ -1,14 +1,14 @@
 <script lang="ts">
   // The title bar every page shares: title, project selector and version chip, the subtitle under them, and the
-  // refresh and appearance controls pinned at the right. The project page adds its charts (before the controls) and
+  // reload button and the ⋯ settings menu pinned at the right. The project page adds its charts (before the controls) and
   // its filters (a second row) through snippets.
   import type { Snippet } from 'svelte';
   import { dashboardVersion } from '../lib/release-notes';
   import { dashboard } from '../lib/state.svelte';
-  import AppearanceMenu from './AppearanceMenu.svelte';
   import ProjectLogo from './ProjectLogo.svelte';
   import ProjectSelector from './ProjectSelector.svelte';
   import RefreshMenu from './RefreshMenu.svelte';
+  import SettingsMenu from './SettingsMenu.svelte';
 
   interface Props {
     title: string;
@@ -61,7 +61,7 @@
   {@render charts?.()}
   <div class="topbar-controls">
     <RefreshMenu />
-    <AppearanceMenu />
+    <SettingsMenu />
   </div>
   {@render below?.()}
 </header>
