@@ -16193,7 +16193,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T08:43:34Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -16229,7 +16229,11 @@
       "started_at": "2026-11-01T07:24:16Z",
       "started_by": "claude:9fec227a",
       "completed_at": "2026-11-01T08:43:34Z",
-      "completed_by": "claude:9fec227a"
+      "completed_by": "claude:9fec227a",
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-324",
@@ -16251,7 +16255,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T07:04:48Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16281,7 +16285,11 @@
         "cli",
         "skills",
         "docs"
-      ]
+      ],
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-325",
@@ -16299,7 +16307,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T07:06:04Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16324,7 +16332,11 @@
           "text": "Components dashboard (207 tasks), cli (91), skills (53), compmd (3), api (25); labels moved; 31 tasks (docs, CI, releases) match none",
           "by": "claude:9fec227a"
         }
-      ]
+      ],
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-326",
@@ -16345,7 +16357,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T07:23:28Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16376,7 +16388,11 @@
           "text": "Added `atm components edit` (label, review, add-path, from-label, assign), sharing the label move with add; 6 scenarios, docs",
           "by": "claude:9fec227a"
         }
-      ]
+      ],
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-327",
@@ -16394,7 +16410,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T07:23:48Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16420,7 +16436,11 @@
           "text": "cli +13 (atm-cli), api +6 (server); new ci (10), branding (6), docs (83); 4 tasks match no component",
           "by": "claude:9fec227a"
         }
-      ]
+      ],
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-328",
@@ -16532,7 +16552,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:43:39Z",
+      "updated_at": "2026-11-01T08:50:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16543,7 +16563,12 @@
       ],
       "sprint": "Sprints on the dashboard",
       "started_at": "2026-11-01T08:43:39Z",
-      "started_by": "claude:9fec227a"
+      "started_by": "claude:9fec227a",
+      "commit": "f92a94c0af6c9cf98f46da581c2acf7f1a0e255b",
+      "pr": {
+        "number": 30,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+      }
     },
     {
       "id": "T-332",
