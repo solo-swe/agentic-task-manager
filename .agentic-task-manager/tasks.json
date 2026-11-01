@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 328,
+    "next_id": 330,
     "labels": [
       {
         "id": "architecture",
@@ -16376,7 +16376,7 @@
       "description": "Finish what T-325 started, with `atm components add` and `edit` (run from this checkout, `plugin/scripts/atm`, until 0.25.0 is installed):\n- **cli**: `edit` with `--from-label atm-cli`;\n- **api**: `edit` with `--from-label server`;\n- **ci** (*CI*): `add` with `.github/**`, `.githooks/**`, `--from-label ci`, `--assign`;\n- **branding** (*Branding*): `add` with `branding/**`, `dashboard/src/assets/**`, `--from-label branding`, `--assign`;\n- **docs** (*Docs*): `add` with `docs/**`, `README.md`, `SECURITY.md`, `CLAUDE.md`, `--assign` (not `plugin/CHANGELOG.md` or `plugin/WHATS-NEW.md`: every release task touches them; decided with Hakan).\n\nThe other labels (features, topics, kinds of work) stay labels. Check with `atm components` and `atm check`, then commit `tasks.json` (and the archive if it changed) on its own: `chore: this repository's remaining components`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-326"
       ],
@@ -16384,7 +16384,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T07:23:38Z",
+      "updated_at": "2026-11-01T07:23:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16399,7 +16399,73 @@
         "T-323"
       ],
       "started_at": "2026-11-01T07:23:38Z",
-      "started_by": "claude:9fec227a"
+      "started_by": "claude:9fec227a",
+      "commit": "9f61df52d76988f11bda02aa041c15ea355a322b",
+      "completed_at": "2026-11-01T07:23:48Z",
+      "completed_by": "claude:9fec227a",
+      "notes": [
+        {
+          "at": "2026-11-01T07:23:48Z",
+          "kind": "outcome",
+          "text": "cli +13 (atm-cli), api +6 (server); new ci (10), branding (6), docs (83); 4 tasks match no component",
+          "by": "claude:9fec227a"
+        }
+      ]
+    },
+    {
+      "id": "T-328",
+      "name": "Projects Overview: the Activity popup across all projects",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "activity"
+      ],
+      "description": "The title bar's Activity chart and popup (completions over time, agents working, waiting on you, idle, time per task) show on the Projects Overview too, for every project the server lists, summed, with a breakdown by project (as the Omniboard combines boards).\n\n## Data\nFrom `api/projects`' summaries (`completions_14d`, `stats`, `needs_you`, ...). What's missing for the popup's charts is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/ActivityWidget.svelte",
+        "dashboard/src/components/ProjectsOverview.svelte",
+        "dashboard/src/lib/insights.ts"
+      ],
+      "created_at": "2026-11-01T07:24:01Z",
+      "updated_at": "2026-11-01T07:24:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-329",
+      "name": "Projects Overview: a Progress tab across all projects",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "progress"
+      ],
+      "description": "A Progress tab on the Projects Overview, next to Projects and Omniboard: every project's done of total and its active sprint (goal, due date, progress), a combined burndown and velocity, and each project's open releases. Clicking a project opens its own Progress tab.\n\n## Data\nFrom `api/projects`' summaries (`active_sprint`, `recent_sprints`, `stats`); what velocity or the burndown need beyond them (e.g. closed sprints' reports, completion times) is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/ProjectsOverview.svelte",
+        "dashboard/src/lib/projects.ts",
+        "atm-cli/atm/query.py"
+      ],
+      "created_at": "2026-11-01T07:24:01Z",
+      "updated_at": "2026-11-01T07:24:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
+      "components": [
+        "dashboard",
+        "cli"
+      ]
     }
   ]
 }
