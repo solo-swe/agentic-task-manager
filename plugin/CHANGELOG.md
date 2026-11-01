@@ -11,6 +11,16 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   one, the planned ones, the backlog), as the table says, not the order they were added in; a sprint started after
   others were planned was listed after them. The Progress panel's sprint rings follow the same order.
 
+### Added
+- **`atm components`** (T-324): lists the project's components (`meta.components`) with their label, globs, review
+  mode and how many tasks have them, archived ones too. **`atm components add <id> [--label T] [--path GLOB]...
+  [--review MODE] [--from-label L] [--assign]`** defines one in a single locked write: `--from-label` turns a label
+  into the component on every task, in `tasks.json` and `tasks-archive.json`, and drops it from `meta.labels` (its
+  text becomes the component's label); `--assign` also gives it to every task whose files its globs match. For
+  projects that marked their parts with labels before components existed. It refuses a component already there, a
+  bad ID or glob, and a label no task has (a typo), writing nothing. `plugin/CLAUDE.md` lists it among the *Define*
+  commands.
+
 ### Changed
 - **The scope bar replaces the sprint header** (T-323, SR-7.2): the Kanban, List and Graph open on the active sprint,
   and the bar above them (`#scope-bar`) says which tasks they show, kept in step with the Sprint filter. Its menu

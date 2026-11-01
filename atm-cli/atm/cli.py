@@ -8,6 +8,7 @@ import argparse
 import sys
 
 from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
+from .components import cmd_components
 from .core import AtmError, AtmExit, out, plugin_version, to_json
 from .model import REVIEW_MODES
 from .lock import cmd_lock_test
@@ -125,6 +126,10 @@ commands:
                  change one, archive it, or print a Markdown
                  draft of its changes (done tasks by type, with their outcome notes; what isn't done yet). A
                  sprint's or a task's release must be one of them
+  components | components add <id> [--label T] [--path GLOB]... [--review MODE] [--from-label L] [--assign]
+                 the components (meta.components) with their globs and task counts; add one: --from-label moves
+                 a label onto it on every task (archived ones too) and drops the label, --assign gives it to
+                 every task whose files its globs match
   move <id>... --to <sprint>|next|active|backlog
                  move to-do, blocked or in-review tasks into a sprint, the next planned one, the active one, or
                  the backlog (claimed and finished tasks stay where they are)
@@ -493,6 +498,20 @@ def build_parser():
     )
     releases.add_argument(
         "--released-at", metavar="TIME", help="add: it shipped already, at this time (e.g. its PR's merge)"
+    )
+    components = command("components", cmd_components, "the project's components; define one, from a label or by files")
+    components.add_argument("action", nargs="?", choices=["list", "add"], help="what to do")
+    components.add_argument("id", nargs="?", help="the component's ID (letters, digits, '.', '-', '_')")
+    components.add_argument("--label", help="add: the name shown (default: the label's own text, with --from-label)")
+    components.add_argument(
+        "--path", action="append", metavar="GLOB", help="add: a glob over its files, e.g. 'dashboard/**' (repeatable)"
+    )
+    components.add_argument("--review", help="add: how its tasks are reviewed (blocker, async, batch, none)")
+    components.add_argument(
+        "--from-label", metavar="LABEL", help="add: every task with this label gets the component instead"
+    )
+    components.add_argument(
+        "--assign", action="store_true", help="add: also give it to every task whose files its globs match"
     )
     projects = command("projects", cmd_projects, "the projects the dashboard shows: list, add, remove or prune them")
     projects.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "prune"])

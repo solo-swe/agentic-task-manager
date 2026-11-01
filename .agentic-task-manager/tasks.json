@@ -15647,7 +15647,7 @@
       "description": "Follow-up of the sprint *Sprints and releases*. A live session with Hakan: go through the dashboard with the new sprint model (`/atm:serve`, this repository's own data, or `npm run dev` in `dashboard/` for hot reload) and change it as we go, so it fits how sprints are used.\n\n## Walk through\n- **The active sprint:** where you see it (sprint header, Kanban, List, Graph), and what's missing.\n- **The backlog:** how you see what's in no sprint, and how it relates to the active sprint.\n- **Planned and closed sprints:** how you find them, their goals, dates and reports.\n- **Starting and closing a sprint, moving tasks** between sprints and the backlog.\n- **Sprint metrics:** progress, burndown, velocity across sprints, tasks carried over and added mid-sprint.\n- **Components:** how a project's components (`meta.components`) show, on cards, in the detail panel and on their own; **filtering by component** (the Component filter), and what a component's progress looks like.\n\n## Clean up the UI\n- **One progress, not several:** the sprint's progress, the shown tasks' progress and a group's (a lane's, a component's) progress appear in different places today; decide which to show where, and hide the duplicates (e.g. the sprint header's progress next to the Kanban's completion of the shown tasks).\n- **Rings or bars:** progress is drawn sometimes as a ring and sometimes as a bar; pick one per purpose and use it consistently.\n- Anything else that looks out of step with the sprint model as we go through it.\n\n## Settle first\nThe dashboard only reads today: `atm serve` has no write routes (`docs/security-architecture.md`). Whether and how it shows actions such as start, close and move (for example the `atm` command or the skill to run, to copy) is a design question to decide with Hakan before building anything; adding write routes would change the threat model and needs its own design.\n\n## Each change\nThe usual way: unit and e2e tests, `npm run verify`, screenshots updated on purpose, CHANGELOG. Findings that are bigger than the session become their own tasks through `/atm:create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "todo",
       "dependencies": [],
       "files": [
         "dashboard/src/components/SprintHeader.svelte",
@@ -15658,7 +15658,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T06:34:46Z",
+      "updated_at": "2026-11-01T06:51:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -15674,9 +15674,14 @@
         }
       ],
       "sprint": "Sprints on the dashboard",
-      "started_at": "2026-10-31T23:58:22Z",
-      "started_by": "claude:9fec227a",
-      "commit": "31068de015c6ddc8dc9f43dcf2d8dad94f1b0c43"
+      "commit": "31068de015c6ddc8dc9f43dcf2d8dad94f1b0c43",
+      "notes": [
+        {
+          "at": "2026-11-01T06:51:25Z",
+          "kind": "failure",
+          "text": "lease expired (claude:9fec227a)"
+        }
+      ]
     },
     {
       "id": "T-324",
@@ -15689,7 +15694,7 @@
       "description": "Projects that marked their parts with labels (before components existed) need a way to switch. Add two commands to atm-cli.\n\n## `atm components`\nLists `meta.components` in order: each one's ID, label, globs (`paths`), review mode, and how many tasks have it (archived ones too). `--json` prints them as data.\n\n## `atm components add <id>`\nOptions: `--label TEXT` (the name shown), `--path GLOB` (repeatable), `--review MODE`, `--from-label LABEL`, `--assign`. In one locked write:\n- adds the component to `meta.components` (refuses an ID already there, a bad ID or an empty glob, as `check_components` does);\n- `--from-label`: on every task, `tasks.json` and `tasks-archive.json`, the label becomes the component (added to `components`, removed from `labels`), and the label's entry leaves `meta.labels`;\n- `--assign`: also gives the component to every task whose `files` match its globs (`components.matches`).\n\nIt prints what changed, e.g. `dashboard: 181 tasks from the label dashboard, 12 more by their files`. Components may overlap: a task can have several.\n\n## Tests\nScenarios in `tests/scripts/scenarios/components.json`: add with and without `--from-label` and `--assign`, the archive moved too, the refusals, the listing.\n\n## Docs\n`docs/v4/atm-cli.md`; the *Define* line in `plugin/CLAUDE.md` (agents read it: record the review in `docs/security-architecture.md` §3.3, no sandbox run); `plugin/CHANGELOG.md`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/components.py",
@@ -15701,9 +15706,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T06:50:28Z",
+      "updated_at": "2026-11-01T06:51:25Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "sprint_history": [
         {
           "sprint": "Sprints on the dashboard",
@@ -15713,7 +15718,9 @@
       "sprint": "Sprints on the dashboard",
       "related": [
         "T-323"
-      ]
+      ],
+      "started_at": "2026-11-01T06:51:25Z",
+      "started_by": "claude:9fec227a"
     },
     {
       "id": "T-325",
