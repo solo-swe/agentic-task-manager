@@ -20,6 +20,7 @@ import {
   filtersFrom,
   filterTasks,
   searchTasks,
+  sprintSelection as appliedSprintSelection,
   toggleFilter,
   type FilterGroup,
   type Filters,
@@ -33,6 +34,7 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
+import { scopeOf } from './scope';
 import { sprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
@@ -129,14 +131,25 @@ export class DashboardState {
   base = $derived(this.includeArchived ? this.history : this.tasks);
   searched = $derived(searchTasks(this.base, this.query));
   filtered = $derived(filterTasks(this.searched, this.filters, this.vocab, this.sprints));
+  /** The Sprint filter as it applies: "the active sprint" selects nothing while no sprint is active */
+  sprintSelection = $derived(appliedSprintSelection(this.filters.sprint, this.sprints));
+  /** What the Kanban, List and Graph show, by sprint (the scope bar) */
+  scope = $derived(scopeOf(this.sprints, this.sprintSelection));
+  /** Filters other than Sprint, or a search, narrow the board within its sprints (the scope bar says "filtered") */
+  narrowed = $derived(
+    this.query.trim() !== '' || FILTER_GROUPS.some((g) => g !== 'sprint' && this.filters[g].size > 0),
+  );
+  /** The tasks matching the search and the filters but Sprint, which scopes only the Kanban, List and Graph (T-323) */
+  unscoped = $derived(filterTasks(this.searched, { ...this.filters, sprint: NO_VALUES }, this.vocab, this.sprints));
   /**
    * The Progress tab's tasks: the history (archived tasks too, once loaded) matching the search and filters, except
    * the status and stage filters. Progress *is* the split by status, so those would make it meaningless (T-239).
+   * Nor the Sprint filter: the tab shows every sprint and focuses one itself (T-323).
    */
   historyFiltered = $derived(
     filterTasks(
       searchTasks(this.history, this.query),
-      { ...this.filters, status: NO_VALUES, stage: NO_VALUES },
+      { ...this.filters, sprint: NO_VALUES, status: NO_VALUES, stage: NO_VALUES },
       this.vocab,
       this.sprints,
     ),
@@ -449,12 +462,27 @@ export class DashboardState {
   }
 
   toggleFilter(group: FilterGroup, value: string) {
-    this.filters = toggleFilter(this.filters, group, value);
+    // A Sprint pick replaces "the active sprint" kept while none is active: it isn't shown, so it isn't kept either
+    const filters = group === 'sprint' ? { ...this.filters, sprint: this.sprintSelection } : this.filters;
+    this.filters = toggleFilter(filters, group, value);
   }
 
   /** No filters and no search */
   clearFilters() {
     this.filters = emptyFilters();
+    this.query = '';
+  }
+
+  /** The scope bar's choice: exactly these sprints (ACTIVE, a sprint's ID, BACKLOG), or none for all tasks */
+  setSprintScope(values: string[]) {
+    // A fresh set replaces the old one (filters is $state.raw): nothing mutates it
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    this.filters = { ...this.filters, sprint: new Set(values) };
+  }
+
+  /** The other filters and the search cleared, the sprints kept (the scope bar's "filtered ✕") */
+  clearNarrowing() {
+    this.filters = { ...emptyFilters(), sprint: this.filters.sprint };
     this.query = '';
   }
 
@@ -499,6 +527,7 @@ export class DashboardState {
   currentView(): SavedView {
     return {
       filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, [...this.filters[g]]])) as SavedView['filters'],
+      version: defaultView().version,
       query: this.query,
       tab: this.tab,
       kanban: {

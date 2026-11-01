@@ -12,12 +12,13 @@ const project = (id: string) => {
 test.describe('saved view', () => {
   test('filters, search, tab and Kanban options come back after a reload', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, project('p1'));
+    // Grouping is offered while the board shows several sprints (T-323): all of them, before picking one
+    await page.locator('#kanban-group-by-sprint').check();
+    await page.locator('#kanban-show-skipped').check();
     await openFilters(page);
     await filterButton(page, 'sprint', 'Phase 1').click();
     await filterButton(page, 'type', 'feature').click();
     await page.locator('#task-search').fill('user');
-    await page.locator('#kanban-group-by-sprint').check();
-    await page.locator('#kanban-show-skipped').check();
     await page.locator('#tab-graph').click();
 
     await page.goto('tasks-dashboard.html'); // no #view=: the saved tab applies, the graph (not the default Kanban)
@@ -27,10 +28,11 @@ test.describe('saved view', () => {
     await expect(page.locator('#tab-graph')).toHaveAttribute('aria-selected', 'true');
     await expect(page).toHaveURL(/#view=graph$/);
     await page.locator('#tab-kanban').click();
-    await expect(page.locator('#kanban-group-by-sprint')).toBeChecked();
     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
     await openFilters(page);
     await expect(filterButton(page, 'sprint', 'Phase 1')).toHaveClass(/\bactive\b/);
+    await filterButton(page, 'sprint', 'all').click();
+    await expect(page.locator('#kanban-group-by-sprint')).toBeChecked();
   });
 
   test('"Show all" in the Kanban done column is remembered', async ({ page, tasksServer }) => {

@@ -21,14 +21,15 @@
   const now = $derived.by(() => (dashboard.history, tasks, Date.now()));
   // The search and filters pick a slice of the tasks (the status and stage filters don't apply here: T-239). The slice
   // gets its own counts and lines, but when a sprint finishes is the whole sprint's: the loop works through all of it.
+  // Nor the Sprint filter, which scopes the board views: this tab shows every sprint and focuses one itself (T-323)
+  const applies = (g: (typeof FILTER_GROUPS)[number]) => g !== 'sprint' && g !== 'status' && g !== 'stage';
   const filtered = $derived(
-    dashboard.query.trim() !== '' ||
-      FILTER_GROUPS.some((g) => g !== 'status' && g !== 'stage' && dashboard.filters[g].size > 0),
+    dashboard.query.trim() !== '' || FILTER_GROUPS.some((g) => applies(g) && dashboard.filters[g].size > 0),
   );
   const ignored = $derived((['status', 'stage'] as const).filter((g) => dashboard.filters[g].size > 0));
   const applied = $derived(
     [
-      ...FILTER_GROUPS.filter((g) => g !== 'status' && g !== 'stage' && dashboard.filters[g].size > 0).map(
+      ...FILTER_GROUPS.filter((g) => applies(g) && dashboard.filters[g].size > 0).map(
         (g) => `${g === 'agent' ? 'started by' : g} ${[...dashboard.filters[g]].join(', ')}`,
       ),
       ...(dashboard.query.trim() ? [`“${dashboard.query.trim()}”`] : []),

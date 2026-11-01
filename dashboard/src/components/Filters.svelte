@@ -10,6 +10,7 @@
   import { hasStage } from '../lib/stages';
   import { dashboard } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
+  import SprintMarker from './SprintMarker.svelte';
 
   // Compact: a search box and what is selected, as chips. The ⌄ opens every filter, one group per line.
   const LABELS: Record<FilterGroup, string> = {
@@ -59,10 +60,12 @@
   const counts = $derived(facetCounts(dashboard.searched, dashboard.filters, dashboard.vocab, dashboard.sprints));
   let open = $state(false);
 
+  // The Sprint filter as it applies: "the active sprint" while none is active selects nothing, so it shows no chip
+  const applied = $derived({ ...dashboard.filters, sprint: dashboard.sprintSelection });
   const selected = $derived(
-    FILTER_GROUPS.filter((g) => dashboard.filters[g].size > 0).map((g) => ({
+    FILTER_GROUPS.filter((g) => applied[g].size > 0).map((g) => ({
       group: g,
-      labels: options[g].filter((o) => dashboard.filters[g].has(o.value)).map((o) => o.label),
+      labels: options[g].filter((o) => applied[g].has(o.value)).map((o) => o.label),
     })),
   );
 
@@ -146,7 +149,7 @@
             <div class="filter-group-buttons">
               {#each [{ value: 'all', label: 'All' }, ...optionsOf(group)] as option (option.value)}
                 {@const n = countOf(group, option.value)}
-                {@const active = isActive(dashboard.filters, group, option.value)}
+                {@const active = isActive(applied, group, option.value)}
                 <button
                   class="filter-btn"
                   class:active
@@ -156,9 +159,9 @@
                   aria-label={ariaLabel(group, option.value, option.label, n)}
                   aria-pressed={active}
                   onclick={() => dashboard.toggleFilter(group, option.value)}
-                  ><span class="filter-label">{option.label}</span><span class="filter-count" aria-hidden="true"
-                    >{n}</span
-                  ></button
+                  >{#if 'state' in option}<SprintMarker state={option.state} />{/if}<span class="filter-label"
+                    >{option.label}</span
+                  ><span class="filter-count" aria-hidden="true">{n}</span></button
                 >
               {/each}
               {#if group === 'sprint' && (dashboard.filterClosedSprints ? sprintOptions.closed > 0 : sprintOptions.hidden > 0)}

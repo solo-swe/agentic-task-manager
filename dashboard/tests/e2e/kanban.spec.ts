@@ -314,19 +314,22 @@ test.describe('Kanban board', () => {
     await expect(column(page, 'in_review').locator('.kanban-empty')).toHaveText('No tasks');
   });
 
-  test('a ring shows the completion of the tasks shown, skipped ones apart', async ({ page, tasksServer }) => {
+  test("the scope bar has the board's one progress figure, skipped ones apart (T-323)", async ({
+    page,
+    tasksServer,
+  }) => {
     await openKanban(page, tasksServer, 'kanban');
-    const completion = page.locator('#kanban-completion');
-    // 24 done of 36 that count (6 + 3 + 2 + 24 + 1); the 2 skipped are apart
-    await expect(page.locator('#kanban-completion-text')).toHaveText('67% · 24 of 36 done · 2 skipped');
-    await expect(completion.locator('svg.ring')).toHaveAttribute('aria-label', 'Tasks shown 67% done');
-    await expect(completion).toHaveAttribute('title', 'Tasks shown: 24 of 36 done, 2 skipped');
+    const progress = page.locator('#scope-bar .sprint-progress');
+    // 24 done of 36 that count (6 + 3 + 2 + 24 + 1); the 2 skipped are apart. No ring of its own on the board
+    await expect(progress).toHaveText('24 of 36 done');
+    await expect(page.locator('#kanban-completion')).toHaveCount(0);
     await openFilters(page);
     await filterButton(page, 'sprint', 'Phase 2').click();
-    await expect(page.locator('#kanban-completion-text')).toHaveText(/^0% · 0 of 6 done/);
-    await expect(completion.locator('svg.ring')).toHaveAttribute('aria-label', 'Tasks shown 0% done');
+    await expect(page.locator('#scope-trigger')).toHaveText('Phase 2');
     await filterButton(page, 'sprint', 'Phase 1').click();
-    await expect(completion.locator('.kanban-completion-pct')).not.toHaveText('0%');
+    await expect(progress).toHaveText('8 of 20 done');
+    await filterButton(page, 'status', 'done').click();
+    await expect(page.locator('#scope-filtered')).toHaveText('showing 8, filtered');
   });
 });
 
@@ -371,13 +374,14 @@ test.describe('Kanban: group by sprint', () => {
     page,
     tasksServer,
   }) => {
+    // It opens on the active sprint: one sprint, so cards don't name it, and no grouping to offer (T-323)
     await openKanban(page, tasksServer, 'sprints');
+    await expect(page.locator('.kanban-card-sprint')).toHaveCount(0);
+    await expect(page.locator('#kanban-group-by-sprint')).toHaveCount(0);
+    await openFilters(page);
+    await filterButton(page, 'sprint', 'all').click();
     await expect(card(page, 'T-002').locator('.kanban-card-sprint')).toHaveText('Ada Lovelace');
     await expect(card(page, 'T-005').locator('.kanban-card-sprint')).toHaveText('Backlog');
-    await openFilters(page);
-    await filterButton(page, 'sprint', 'Ada Lovelace').click();
-    await expect(page.locator('.kanban-card-sprint')).toHaveCount(0);
-    await filterButton(page, 'sprint', 'all').click();
 
     await page.locator('#kanban-group-by-sprint').check();
     expect(await lanes(page).evaluateAll((all) => all.map((lane) => (lane as HTMLElement).dataset.sprint))).toEqual([

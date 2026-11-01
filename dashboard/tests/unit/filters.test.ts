@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTIVE,
   BACKLOG,
   emptyFilters,
   facetCounts,
@@ -9,6 +10,7 @@ import {
   searchTasks,
   shownSprintOptions,
   sortTasks,
+  sprintSelection,
   toggleFilter,
   type Filters,
 } from '../../src/lib/filters';
@@ -167,12 +169,26 @@ describe('sprints, releases and components (SR-7.1)', () => {
   const withComponents = tasks.map((t, i) => (i < 2 ? { ...t, components: ['api', 'ui'] } : t));
 
   it('the Sprint group: the active sprint, the planned ones, the backlog, then the closed ones', () => {
-    // Alan Turing (planned) has no task here: left out
+    // Alan Turing (planned) has no task here: left out. The active one is ACTIVE: whichever sprint is active (T-323)
     expect(filterOptions(tasks, undefined, m).sprint).toEqual([
-      { value: 'Ada Lovelace', label: 'Ada Lovelace' },
+      { value: ACTIVE, label: 'Ada Lovelace', state: 'active' },
       { value: BACKLOG, label: 'Backlog' },
-      { value: 'Foundations', label: 'Foundations' },
+      { value: 'Foundations', label: 'Foundations', state: 'closed' },
     ]);
+  });
+
+  it('ACTIVE selects the active sprint, and nothing while none is active (T-323)', () => {
+    expect(ids(filterTasks(tasks, filters({ sprint: [ACTIVE] }), undefined, m))).toEqual(['T-002', 'T-003', 'T-004']);
+    expect(facetCounts(tasks, filters({}), undefined, m).sprint.values.get(ACTIVE)).toBe(3);
+    const none = sprintModel(
+      { ...file.meta, sprints: (file.meta!.sprints as object[]).map((s) => ({ ...s, state: 'closed' })) },
+      tasks,
+      resolveVocabulary(file.meta),
+    );
+    expect(sprintSelection(new Set([ACTIVE, BACKLOG]), none)).toEqual(new Set([BACKLOG]));
+    expect(filterTasks(tasks, filters({ sprint: [ACTIVE] }), undefined, none)).toHaveLength(tasks.length);
+    const selected = new Set([ACTIVE]);
+    expect(sprintSelection(selected, m)).toBe(selected);
   });
 
   it('filters by sprint (a name in any case) and by the backlog', () => {

@@ -3,7 +3,7 @@
 // share localStorage, so each project's view lives under its own key. Theme, mode, auto-refresh and the last-seen
 // version stay per browser (prefs.ts).
 import { BURNDOWN_RANGES, type BurndownRange } from './burndown';
-import { FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';
+import { ACTIVE, FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';
 import { sprintKey } from './forecast';
 import { ACTIVITY_PRESETS, type ActivityRange } from './insights';
 import { getPref, readStored, writeStored } from './prefs';
@@ -14,9 +14,12 @@ import type { Task } from './types';
 import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
 
 export const VIEW_KEY_PREFIX = 'atm-dashboard:view:';
+/** 2: the view opens on the active sprint (T-323); before it, no Sprint filter was the default, not a choice */
+const VIEW_VERSION = 2;
 
 export interface SavedView {
   filters: Record<FilterGroup, string[]>;
+  version: number;
   /** The keyword search */
   query: string;
   tab: ViewId;
@@ -57,7 +60,11 @@ export function projectKey(meta: ProjectMeta | undefined): string {
 
 export function defaultView(): SavedView {
   return {
-    filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, []])) as unknown as SavedView['filters'],
+    // The active sprint first (T-323): with none active, the selection is there but selects nothing
+    filters: Object.fromEntries(
+      FILTER_GROUPS.map((g) => [g, g === 'sprint' ? [ACTIVE] : []]),
+    ) as unknown as SavedView['filters'],
+    version: VIEW_VERSION,
     query: '',
     tab: DEFAULT_VIEW,
     // Before 0.12.0 "group by phase" was remembered per browser; it still seeds projects without a saved view
@@ -110,9 +117,17 @@ export function readView(key: string): SavedView {
   const kanban = (stored.kanban ?? {}) as Record<string, unknown>;
   // Views saved before 0.20.0 also have progressActive ("Active phases only", replaced by folding finished phases,
   // T-241, T-243): ignored
+  const sprint = strings(filters.sprint);
   return {
-    // Views saved before sprints also have a phase filter: dropped (SR-7.1)
-    filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, strings(filters[g])])) as SavedView['filters'],
+    // Views saved before sprints also have a phase filter: dropped (SR-7.1). Views saved before version 2 without a
+    // Sprint filter open on the active sprint, as new ones do.
+    filters: Object.fromEntries(
+      FILTER_GROUPS.map((g) => [
+        g,
+        g === 'sprint' && stored.version !== VIEW_VERSION && !sprint.length ? [ACTIVE] : strings(filters[g]),
+      ]),
+    ) as SavedView['filters'],
+    version: VIEW_VERSION,
     query: typeof stored.query === 'string' ? stored.query : '',
     tab: (VIEWS as readonly unknown[]).includes(stored.tab) ? (stored.tab as ViewId) : view.tab,
     kanban: {
@@ -162,6 +177,8 @@ export function sanitizeView(
 ): SavedView {
   const keep = (group: FilterGroup) => {
     const present = new Set(tasks.flatMap((t) => filterValues(group, t, vocab, model)));
+    // The active sprint, whichever it is, stays selected while none is active: it applies again once one starts
+    if (group === 'sprint') present.add(ACTIVE);
     return view.filters[group].filter((v) => present.has(v));
   };
   const sprints = new Set(tasks.map((t) => sprintKey(model, t)));

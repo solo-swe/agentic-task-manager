@@ -4,6 +4,28 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [Unreleased]
+
+### Changed
+- **The scope bar replaces the sprint header** (T-323, SR-7.2): the Kanban, List and Graph open on the active sprint,
+  and the bar above them (`#scope-bar`) says which tasks they show, kept in step with the Sprint filter. Its menu
+  (`#scope-trigger`) picks one: the active sprint, a planned one, the backlog, all tasks, or one of the last five
+  closed; several, picked in the filters, show as *Filtered: N selected*. It carries the one progress figure for its
+  tasks, and *showing N, filtered* (with ✕ to clear the other filters and the search) when they narrow the board
+  further. Hints name the skill to run next: close the sprint (`/atm:close-sprint`) once its work is done, with its
+  release ready to ship and the backlog to pull from; settle what's in review or blocked first; start a planned
+  sprint, or one at all when none is active (`/atm:plan-sprint`). A project without sprints has no bar. The Sprint
+  filter now scopes only the Kanban, List and Graph: the Progress tab shows every sprint (it focuses one itself, by
+  its rows), and the Agents tab greys out by the other filters alone.
+- **The active sprint, whichever it is**: the Sprint filter's value for the active sprint is `:active`, so a saved
+  view follows the project to its next active sprint; while none is active it selects nothing. New views and views
+  saved before this version without a Sprint filter open on it (the saved view's `version` is 2).
+- **Markers for sprint states**: ▶ the active sprint, ✓ a closed one, in the scope bar and its menu, the Sprint
+  filter and the Kanban's sprint lanes.
+- **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and
+  its options (*Group by sprint*, only when the board shows more than one sprint, and *Show skipped*) moved to the
+  scope bar's end. A project without sprints keeps *Show skipped* above the board.
+
 ## [0.24.0] - 2026-10-31
 
 **Before the first run in a shared project, update every agent's plugin:** this version turns the project's phases

@@ -7,12 +7,10 @@ import {
   daysUntil,
   dueText,
   effectiveRelease,
-  headerSprint,
   sprintModel,
   sprintSummary,
   sprintTasks,
 } from '../../src/lib/sprints';
-import { BACKLOG } from '../../src/lib/filters';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { resolveVocabulary } from '../../src/lib/vocab';
 import fixture from '../fixtures/sprints.json';
@@ -69,15 +67,6 @@ describe('a migrated project', () => {
 describe('the sprint header', () => {
   const vocab = resolveVocabulary(file.meta);
   const noon = (date: string) => new Date(`${date}T12:00:00`).getTime();
-
-  it('shows the one sprint the Sprint filter selects, else the active one when it selects none', () => {
-    expect(headerSprint(model, new Set())?.id).toBe('Ada Lovelace');
-    expect(headerSprint(model, new Set(['foundations']))?.id).toBe('Foundations');
-    expect(headerSprint(model, new Set(['Foundations', 'Alan Turing']))).toBeUndefined();
-    expect(headerSprint(model, new Set([BACKLOG]))).toBeUndefined();
-    const planned = sprintModel({ sprints: [{ id: 'A' }] }, [], vocab);
-    expect(headerSprint(planned, new Set())).toBeUndefined();
-  });
 
   it('counts days to the due date from the local day', () => {
     expect(daysUntil('2026-04-12', noon('2026-04-09'))).toBe(3);

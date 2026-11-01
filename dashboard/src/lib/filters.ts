@@ -1,5 +1,5 @@
 import { shortAgent } from './claims';
-import { effectiveRelease, NO_SPRINTS, type SprintModel } from './sprints';
+import { activeSprint, effectiveRelease, NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
 import { STAGE_LABELS, STAGES, stageOf, type Stage } from './stages';
 import type { Task } from './types';
 import { startedBy } from './work';
@@ -32,6 +32,8 @@ export const FILTER_GROUPS: FilterGroup[] = [
 ];
 /** The Sprint filter's value for the tasks with no sprint (a colon keeps it apart from any sprint's name) */
 export const BACKLOG = ':backlog';
+/** The Sprint filter's value for the active sprint, whichever it is: the selection follows when the next one starts */
+export const ACTIVE = ':active';
 
 /** Selected values per group; an empty set means "All". */
 export type Filters = Record<FilterGroup, ReadonlySet<string>>;
@@ -39,6 +41,28 @@ export type Filters = Record<FilterGroup, ReadonlySet<string>>;
 export interface FilterOption {
   value: string;
   label: string;
+  /** A sprint's state, for the Sprint filter's markers (▶ active, ✓ closed) */
+  state?: SprintState;
+}
+
+// The active sprint's ID per model: valuesOf asks for it once per task
+const activeIds = new WeakMap<SprintModel, string | undefined>();
+function activeId(model: SprintModel): string | undefined {
+  if (!activeIds.has(model)) activeIds.set(model, activeSprint(model)?.id);
+  return activeIds.get(model);
+}
+
+/** The Sprint filter's selection as it applies: ACTIVE stays selected while no sprint is active, but selects nothing */
+export function sprintSelection(selected: ReadonlySet<string>, model: SprintModel): ReadonlySet<string> {
+  if (!selected.has(ACTIVE) || activeId(model) !== undefined) return selected;
+  const applied = new Set(selected);
+  applied.delete(ACTIVE);
+  return applied;
+}
+
+function applied(filters: Filters, model: SprintModel): Filters {
+  const sprint = sprintSelection(filters.sprint, model);
+  return sprint === filters.sprint ? filters : { ...filters, sprint };
 }
 
 /** Up to this many sprints, the Sprint filter lists them all, with no toggle for the closed ones */
@@ -105,7 +129,10 @@ export function filterValues(group: FilterGroup, t: Task, vocab: Vocabulary, mod
 }
 
 function valuesOf(group: FilterGroup, t: Task, vocab: Vocabulary, model: SprintModel): string[] {
-  if (group === 'sprint') return [model.sprintOf(t) ?? BACKLOG];
+  if (group === 'sprint') {
+    const sprint = model.sprintOf(t);
+    return sprint === undefined ? [BACKLOG] : sprint === activeId(model) ? [sprint, ACTIVE] : [sprint];
+  }
   if (group === 'release') {
     const release = effectiveRelease(model, t);
     return release ? [release] : [];
@@ -127,7 +154,8 @@ function valuesOf(group: FilterGroup, t: Task, vocab: Vocabulary, model: SprintM
 
 /**
  * The Sprint filter's options: the active sprint, the planned ones in order, the backlog, then the closed ones, most
- * recent first; only sprints that have tasks here, and the backlog when some task has no sprint.
+ * recent first; only sprints that have tasks here, and the backlog when some task has no sprint. The active one's
+ * value is ACTIVE, so selecting it follows the project to its next active sprint.
  */
 function sprintOptions(tasks: Task[], model: SprintModel): FilterOption[] {
   const used = new Set(tasks.map((t) => model.sprintOf(t) ?? BACKLOG));
@@ -136,7 +164,11 @@ function sprintOptions(tasks: Task[], model: SprintModel): FilterOption[] {
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => used.has(s.id))
     .sort((a, b) => rank[a.s.state] - rank[b.s.state] || (a.s.state === 'closed' ? b.i - a.i : a.i - b.i));
-  const options = sprints.map(({ s }) => ({ value: s.id, label: s.id }));
+  const options: FilterOption[] = sprints.map(({ s }) => ({
+    value: s.state === 'active' ? ACTIVE : s.id,
+    label: s.id,
+    state: s.state,
+  }));
   if (used.has(BACKLOG)) {
     const at = sprints.findIndex(({ s }) => s.state === 'closed');
     options.splice(at === -1 ? options.length : at, 0, { value: BACKLOG, label: 'Backlog' });
@@ -187,6 +219,7 @@ export function filterTasks(
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   model: SprintModel = NO_SPRINTS,
 ): Task[] {
+  filters = applied(filters, model);
   return tasks.filter((t) =>
     FILTER_GROUPS.every(
       (group) => filters[group].size === 0 || valuesOf(group, t, vocab, model).some((v) => filters[group].has(v)),
@@ -225,6 +258,7 @@ export function facetCounts(
   model: SprintModel = NO_SPRINTS,
 ): Record<FilterGroup, FacetCounts> {
   const result = {} as Record<FilterGroup, FacetCounts>;
+  filters = applied(filters, model);
   for (const group of FILTER_GROUPS) {
     const others = filterTasks(tasks, { ...filters, [group]: new Set<string>() }, vocab, model);
     const values = new Map<string, number>();

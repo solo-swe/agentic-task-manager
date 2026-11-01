@@ -43,6 +43,7 @@ describe('reading and writing', () => {
         label: ['ux'],
         agent: ['claude:a'],
       },
+      version: 2,
       query: 'login',
       tab: 'agents',
       kanban: { groupBySprint: true, showSkipped: true, showAllDone: true },
@@ -85,6 +86,17 @@ describe('reading and writing', () => {
     expect(view).not.toHaveProperty('progressPhase');
     expect(view.progressSprint).toBeNull();
     expect(view.progressRange).toBe('sprint');
+  });
+
+  it('opens on the active sprint: by default, and for a view saved before version 2 without a Sprint filter (T-323)', () => {
+    expect(defaultView().filters.sprint).toEqual([':active']);
+    localStorage.setItem(key, JSON.stringify({ filters: { sprint: [], type: ['test'] } }));
+    expect(readView(key).filters.sprint).toEqual([':active']);
+    localStorage.setItem(key, JSON.stringify({ filters: { sprint: ['Phase 1'] } }));
+    expect(readView(key).filters.sprint).toEqual(['Phase 1']);
+    // Since version 2, no Sprint filter is a choice: all tasks
+    localStorage.setItem(key, JSON.stringify({ version: 2, filters: { sprint: [] } }));
+    expect(readView(key).filters.sprint).toEqual([]);
   });
 
   it('a view saved before sprints keeps "group by phase" as "group by sprint" (SR-7.3)', () => {
@@ -190,5 +202,9 @@ describe('sanitizeView', () => {
       progressSprint: 'Phase 0',
     };
     expect(sanitizeView(view, tasks, vocab, model)).toEqual(view);
+  });
+
+  it('keeps "the active sprint" while none is active: it applies again once one starts (T-323)', () => {
+    expect(sanitizeView(defaultView(), tasks, vocab, model).filters.sprint).toEqual([':active']);
   });
 });

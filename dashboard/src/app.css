@@ -2113,30 +2113,155 @@ button.repo-ref {
   white-space: pre-wrap;
   font-size: 12px;
 }
-/* The sprint header (SR-7.2): at the top of the Kanban, List and Graph panels */
-.sprint-header {
+/* The scope bar (T-323, SR-7.2): at the top of the Kanban, List and Graph panels, which sprint they show */
+/* One row that wraps when it must: the sprint and its goal, its facts, then the board's options at the end */
+.scope-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px 24px;
-  padding: 10px 16px;
+  gap: 4px 12px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
-.sprint-title,
-.sprint-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
-  min-width: 0;
+.scope-head,
+.scope-facts {
+  display: contents;
 }
-.sprint-label {
-  font-size: 11px;
+.scope-facts > * {
+  color: var(--text-muted);
+}
+/* The goal takes the room left on the row, cut short (in full on hover), so the facts and options stay on it */
+.scope-bar .sprint-goal {
+  flex: 1 1 0;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-options {
+  order: 1;
+  display: flex;
+  gap: 16px;
+  margin-left: auto;
+}
+.scope-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: -8px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.scope-trigger:hover,
+.scope-trigger[aria-expanded='true'] {
+  border-color: var(--border);
+  background: var(--surface2);
+}
+.scope-menu {
+  left: 0;
+  min-width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  gap: 2px;
+}
+.scope-menu .menu-label {
+  margin-top: 6px;
+  padding: 0 8px;
+}
+.scope-choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.scope-choice:hover,
+.scope-choice:focus-visible {
+  background: var(--surface2);
+  outline: none;
+}
+.scope-choice[aria-checked='true'] {
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+}
+.scope-choice-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.scope-choice-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.scope-menu .menu-note {
+  margin-top: 6px;
+  padding: 0 8px;
+}
+.scope-filtered {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--accent);
+}
+.scope-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--green);
+  font-weight: 600;
+}
+.scope-hint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 4px;
+}
+.scope-hint .link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.scope-hint code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+}
+/* ▶ the active sprint, ✓ a closed one (SprintMarker.svelte): in the scope bar, its menu, the filters and lanes */
+.sprint-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-right: 2px;
+}
+.sprint-marker.active {
+  color: var(--green);
+}
+.sprint-marker.closed {
   color: var(--text-muted);
 }
 .sprint-name {
@@ -2373,18 +2498,6 @@ svg.graph-minimap.hidden {
   align-items: center;
   gap: 16px;
   margin-bottom: 8px;
-}
-/* The completion of the tasks shown (KanbanBoard.svelte), at the toolbar's start; the options stay at its end */
-.kanban-completion {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: auto;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.kanban-completion-pct {
-  color: var(--text);
 }
 .kanban-lane + .kanban-lane {
   margin-top: 16px;

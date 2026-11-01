@@ -124,15 +124,6 @@ export function addedMidSprint(task: Task, sprint: Sprint): boolean {
   return !!(entry && sprint.start && Date.parse(entry.from) > Date.parse(sprint.start));
 }
 
-/** The sprint the header shows (SR-7.2): the one sprint the Sprint filter selects, or the active one when it selects
- * none; undefined otherwise (several selected, or only the backlog). */
-export function headerSprint(model: SprintModel, selected: ReadonlySet<string>): Sprint | undefined {
-  if (selected.size === 0) return activeSprint(model);
-  if (selected.size !== 1) return undefined;
-  const [id] = selected;
-  return model.sprints.find((s) => s.id.toLowerCase() === id.toLowerCase());
-}
-
 const DAY = 86_400_000;
 
 /** Days from today (local) to a YYYY-MM-DD date: 0 today, negative once it has passed; undefined for a bad date */
@@ -168,7 +159,7 @@ export interface SprintSummary {
   reviewPending: number;
 }
 
-/** The figures the sprint header shows (SR-7.2), over `tasks` (the history, archived tasks too once loaded) */
+/** The figures the scope bar shows for one sprint (SR-7.2, T-323), over `tasks` (the history, archived tasks too once loaded) */
 export function sprintSummary(
   model: SprintModel,
   tasks: Task[],
