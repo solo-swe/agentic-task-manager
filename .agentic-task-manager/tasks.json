@@ -15694,7 +15694,7 @@
       "description": "Projects that marked their parts with labels (before components existed) need a way to switch. Add two commands to atm-cli.\n\n## `atm components`\nLists `meta.components` in order: each one's ID, label, globs (`paths`), review mode, and how many tasks have it (archived ones too). `--json` prints them as data.\n\n## `atm components add <id>`\nOptions: `--label TEXT` (the name shown), `--path GLOB` (repeatable), `--review MODE`, `--from-label LABEL`, `--assign`. In one locked write:\n- adds the component to `meta.components` (refuses an ID already there, a bad ID or an empty glob, as `check_components` does);\n- `--from-label`: on every task, `tasks.json` and `tasks-archive.json`, the label becomes the component (added to `components`, removed from `labels`), and the label's entry leaves `meta.labels`;\n- `--assign`: also gives the component to every task whose `files` match its globs (`components.matches`).\n\nIt prints what changed, e.g. `dashboard: 181 tasks from the label dashboard, 12 more by their files`. Components may overlap: a task can have several.\n\n## Tests\nScenarios in `tests/scripts/scenarios/components.json`: add with and without `--from-label` and `--assign`, the archive moved too, the refusals, the listing.\n\n## Docs\n`docs/v4/atm-cli.md`; the *Define* line in `plugin/CLAUDE.md` (agents read it: record the review in `docs/security-architecture.md` §3.3, no sandbox run); `plugin/CHANGELOG.md`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/components.py",
@@ -15706,7 +15706,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T06:51:25Z",
+      "updated_at": "2026-11-01T07:04:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -15720,7 +15720,18 @@
         "T-323"
       ],
       "started_at": "2026-11-01T06:51:25Z",
-      "started_by": "claude:9fec227a"
+      "started_by": "claude:9fec227a",
+      "commit": "57dbe283f2c274a6ebaa7450c19bd509d467cc04",
+      "completed_at": "2026-11-01T07:04:48Z",
+      "completed_by": "claude:9fec227a",
+      "notes": [
+        {
+          "at": "2026-11-01T07:04:48Z",
+          "kind": "outcome",
+          "text": "Added `atm components` (list) and `atm components add` with `--from-label` and `--assign`; 9 scenarios, docs, security §3.3 review",
+          "by": "claude:9fec227a"
+        }
+      ]
     },
     {
       "id": "T-325",
