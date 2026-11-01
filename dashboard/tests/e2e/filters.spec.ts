@@ -40,7 +40,8 @@ test.describe('filters', () => {
     await filterButton(page, 'sprint', 'Phase 2').click();
     await filterButton(page, 'type', 'test').click();
     await filterButton(page, 'sprint', 'all').click();
-    expect(await visibleCardIds(page)).toEqual(['T-003', 'T-009']);
+    // Grouped by sprint (T-323): the open phase 2 first, the finished phase 0 last
+    expect(await visibleCardIds(page)).toEqual(['T-009', 'T-003']);
   });
 
   test('clicking an active value deselects it', async ({ page }) => {

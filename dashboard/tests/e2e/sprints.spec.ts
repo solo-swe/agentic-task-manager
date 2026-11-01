@@ -133,6 +133,47 @@ test.describe('scope bar (T-323)', () => {
     expect(await cardIds(page)).toEqual(['T-005']);
   });
 
+  test('the List grouped by sprint is the planning view: the active sprint, planned, backlog, closed folded', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('sprints');
+    for (const task of data.tasks) if (task.id === 'T-005') task.labels = ['ux'];
+    await openDashboard(page, tasksServer, data, { tab: 'list' });
+    const groups = page.locator('.list-group');
+    // One sprint: listed as it is, with no headers; the options sit in the scope bar
+    await expect(page.locator('.list-group-header')).toHaveCount(0);
+    await expect(page.locator('#scope-bar #list-group')).toHaveValue('none');
+
+    await page.locator('#scope-trigger').click();
+    await page.locator('.scope-choice[data-scope="all"]').click();
+    await expect(page.locator('#list-group')).toHaveValue('sprint');
+    expect(await groups.evaluateAll((all) => all.map((g) => (g as HTMLElement).dataset.group))).toEqual([
+      'Ada Lovelace',
+      ':backlog',
+    ]);
+    await expect(page.locator('.list-group-header').first()).toContainText('Ada Lovelace');
+    await expect(page.locator('.list-group-header').first()).toContainText('3 tasks · 0 of 3 done');
+    await expect(page.locator('.list-group[data-group=":backlog"] .list-group-hint')).toHaveText(
+      'plan them into a sprint with /atm:plan-sprint',
+    );
+    // A group names the sprint, so its cards don't
+    await expect(page.locator('.task-card-sprint')).toHaveCount(0);
+
+    // The closed sprints fold into one row that opens them
+    const toggle = page.locator('#list-closed-toggle');
+    await expect(toggle).toContainText('Foundations · 1 task');
+    await toggle.click();
+    await expect(page.locator('.list-group[data-group="Foundations"]')).toBeVisible();
+
+    // By label: the label's group, the rest under "No label"; cards name their sprint again
+    await page.locator('#list-group').selectOption('label');
+    await expect(page.locator('.list-group-name')).toHaveText(['ux', 'No label']);
+    await expect(page.locator('.task-card[data-id="T-002"] .task-card-sprint')).toHaveText('Ada Lovelace');
+    await page.reload();
+    await expect(page.locator('#list-group')).toHaveValue('label');
+  });
+
   test('an overdue sprint says so, in red', async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
     await openDashboard(page, tasksServer, 'sprints');

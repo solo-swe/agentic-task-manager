@@ -474,6 +474,15 @@ for (const colorScheme of ['dark', 'light'] as const) {
       await expect(page.locator('#scope-bar')).toHaveScreenshot(`scope-bar-${colorScheme}.png`);
     });
 
+    test(`visual: list grouped by sprint (${colorScheme})`, async ({ page, tasksServer }) => {
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'list' });
+      await page.locator('#scope-trigger').click();
+      await page.locator('.scope-choice[data-scope="all"]').click();
+      await page.locator('#list-closed-toggle').click();
+      await expect(page.locator('#panel-list')).toHaveScreenshot(`list-by-sprint-${colorScheme}.png`);
+    });
+
     test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
       await openDashboard(page, tasksServer, 'sprints');

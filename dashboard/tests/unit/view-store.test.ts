@@ -48,6 +48,8 @@ describe('reading and writing', () => {
       tab: 'agents',
       kanban: { groupBySprint: true, showSkipped: true, showAllDone: true },
       listSort: 'priority',
+      listGroupBy: 'component',
+      listShowClosed: true,
       progressSprint: 'Phase 2',
       filterClosedSprints: true,
       progressRange: '14d',

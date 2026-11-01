@@ -24,8 +24,8 @@ describe('TaskCard', () => {
     expect(card).toHaveAttribute('data-id', 'T-004');
     expect(card).toHaveClass('status-done');
     expect(card).toHaveClass('kind-done');
+    // No phase badge (T-323): the sprint, only when the list shows several and doesn't group by them
     expect([...card.querySelectorAll('.task-meta .badge')].map((b) => b.textContent)).toEqual([
-      'Phase 1',
       'feature',
       'Done',
       'P2',
@@ -73,7 +73,15 @@ describe('TaskCard', () => {
     const { container } = render(TaskCard, { task: { ...task('T-001'), status: 'awaiting_user' } });
     const card = container.querySelector('.task-card')!;
     expect(card).toHaveClass('kind-review');
-    expect(card.querySelectorAll('.task-meta .badge')[2].textContent).toBe('Awaiting you');
+    expect(card.querySelectorAll('.task-meta .badge')[1].textContent).toBe('Awaiting you');
+  });
+
+  it('names its sprint when asked (showSprint), the backlog muted (T-323)', () => {
+    const { container } = render(TaskCard, { task: task('T-004'), showSprint: true });
+    expect(container.querySelector('.task-card-sprint')).toHaveTextContent('Phase 1');
+    const inBacklog = { ...task('T-004'), phase: undefined } as unknown as Task;
+    const { container: backlog } = render(TaskCard, { task: inBacklog, showSprint: true });
+    expect(backlog.querySelector('.task-card-sprint')).toHaveTextContent('Backlog');
   });
 
   it("shows the task's priority, or the default for a task without one", () => {

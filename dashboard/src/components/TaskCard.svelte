@@ -5,16 +5,20 @@
   import { kindStyle, phaseColor, typeStyle } from '../lib/theme';
   import type { Task } from '../lib/types';
   import { markdownPlainText } from '../lib/markdown';
-  import { kindOf, phaseLabel, statusLabel, typeLabel } from '../lib/vocab';
+  import { kindOf, statusLabel, typeLabel } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
   import BranchChip from './BranchChip.svelte';
   import LabelChips from './LabelChips.svelte';
   import PriorityBadge from './PriorityBadge.svelte';
   import StageChip from './StageChip.svelte';
 
-  let { task }: { task: Task } = $props();
+  // `showSprint`: the list shows tasks of more than one sprint and doesn't group by them, so the card names its own
+  let { task, showSprint = false }: { task: Task; showSprint?: boolean } = $props();
 
-  const pc = $derived(phaseColor(task.phase));
+  const sprint = $derived(dashboard.sprints.sprintOf(task));
+  // A sprint keeps its colour: by its place in the project's sprints; the backlog is muted (as on the Kanban)
+  const sprintIndex = $derived(dashboard.sprints.sprints.findIndex((s) => s.id === sprint));
+  const pc = $derived(sprintIndex < 0 ? 'var(--text-muted)' : phaseColor(sprintIndex));
   const ts = $derived(typeStyle(task.type));
   const kind = $derived(kindOf(dashboard.vocab, task.status));
   const ss = $derived(kindStyle(kind));
@@ -30,11 +34,13 @@
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</div>
     <div class="task-meta">
-      <span
-        class="badge"
-        style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}"
-        title={phaseLabel(dashboard.vocab, task.phase)}>Phase {task.phase}</span
-      >
+      {#if showSprint}
+        <span
+          class="badge task-card-sprint"
+          data-sprint={sprint ?? 'backlog'}
+          style="background:color-mix(in srgb, {pc} 12.5%, transparent);color:{pc}">{sprint ?? 'Backlog'}</span
+        >
+      {/if}
       <span class="badge" style="background:{ts.bg};color:{ts.color}" title={typeLabel(dashboard.vocab, task.type)}
         >{task.type}</span
       >

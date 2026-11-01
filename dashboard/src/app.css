@@ -1452,6 +1452,49 @@ button.menu-trigger:hover,
   display: grid;
   gap: 8px;
 }
+/* The List's groups (TaskGrid.svelte, T-323): a header line per sprint, label or component */
+.list-groups {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 18px;
+}
+.list-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.list-group-name {
+  font-size: 14px;
+}
+.list-group-count,
+.list-group-goal,
+.list-group-hint {
+  color: var(--text-muted);
+}
+.list-group-goal {
+  flex: 1 1 0;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.list-group-hint code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 12px;
+}
+.list-closed-toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 .task-card {
   background: var(--surface);

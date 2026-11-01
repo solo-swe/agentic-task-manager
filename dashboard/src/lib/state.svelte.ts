@@ -34,6 +34,7 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
+import type { ListGroupBy } from './list-groups';
 import { scopeOf } from './scope';
 import { sprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
@@ -167,6 +168,15 @@ export class DashboardState {
   kanbanShowAllDone = $state(false);
   /** The List tab's order: as in the file, or by priority */
   listSort = $state<ListSort>('file');
+  /** The List tab's groups, and whether its closed sprints are open (part of the saved view) */
+  listGroupBy = $state<ListGroupBy>('sprint');
+  listShowClosed = $state(false);
+  /** The List's groups as they apply: by sprint only where it shows more than one sprint */
+  listGroups = $derived<ListGroupBy>(
+    this.listGroupBy === 'sprint' && this.scope.kind !== 'all' && this.scope.kind !== 'several'
+      ? 'none'
+      : this.listGroupBy,
+  );
   /** The sprint the Progress tab focuses on (its ID, or BACKLOG); null for all of them */
   progressSprint = $state<string | null>(null);
   /** The filter panel's Sprint group lists the closed sprints too (part of the saved view) */
@@ -536,6 +546,8 @@ export class DashboardState {
         showAllDone: this.kanbanShowAllDone,
       },
       listSort: this.listSort,
+      listGroupBy: this.listGroupBy,
+      listShowClosed: this.listShowClosed,
       progressSprint: this.progressSprint,
       filterClosedSprints: this.filterClosedSprints,
       progressRange: this.progressRange,
@@ -576,6 +588,8 @@ export class DashboardState {
     this.kanbanShowSkipped = view.kanban.showSkipped;
     this.kanbanShowAllDone = view.kanban.showAllDone;
     this.listSort = view.listSort;
+    this.listGroupBy = view.listGroupBy;
+    this.listShowClosed = view.listShowClosed;
     this.progressSprint = view.progressSprint;
     this.filterClosedSprints = view.filterClosedSprints;
     this.progressRange = view.progressRange;

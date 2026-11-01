@@ -7,6 +7,7 @@
   import { dashboard } from '../lib/state.svelte';
   import { kindOf } from '../lib/vocab';
   import Icon from './Icon.svelte';
+  import ListOptions from './ListOptions.svelte';
   import SprintMarker from './SprintMarker.svelte';
 
   // Above the Kanban, List and Graph (T-323, SR-7.2): which tasks they show, by sprint, and that scope's progress. The
@@ -211,6 +212,8 @@
             /> Show skipped</label
           >
         </div>
+      {:else if dashboard.tab === 'list'}
+        <div class="scope-options"><ListOptions /></div>
       {/if}
     </div>
 

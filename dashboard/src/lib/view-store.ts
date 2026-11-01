@@ -6,6 +6,7 @@ import { BURNDOWN_RANGES, type BurndownRange } from './burndown';
 import { ACTIVE, FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';
 import { sprintKey } from './forecast';
 import { ACTIVITY_PRESETS, type ActivityRange } from './insights';
+import { LIST_GROUP_BYS, type ListGroupBy } from './list-groups';
 import { getPref, readStored, writeStored } from './prefs';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { DEFAULT_VIEW, VIEWS, type ViewId } from './tabs';
@@ -26,6 +27,10 @@ export interface SavedView {
   kanban: { groupBySprint: boolean; showSkipped: boolean; showAllDone: boolean };
   /** The List tab's order */
   listSort: ListSort;
+  /** The List tab's groups (T-323): by sprint (where it shows more than one), label, component, or none */
+  listGroupBy: ListGroupBy;
+  /** Grouped by sprint, the closed sprints are open, not folded into one row */
+  listShowClosed: boolean;
   /** The sprint the Progress tab focuses on (its ID, or BACKLOG), or null for all of them */
   progressSprint: string | null;
   /** The filter panel's Sprint group lists the closed sprints too, not just the open ones */
@@ -70,6 +75,8 @@ export function defaultView(): SavedView {
     // Before 0.12.0 "group by phase" was remembered per browser; it still seeds projects without a saved view
     kanban: { groupBySprint: getPref('kanbanGroupByPhase', false), showSkipped: false, showAllDone: false },
     listSort: 'file',
+    listGroupBy: 'sprint',
+    listShowClosed: false,
     progressSprint: null,
     filterClosedSprints: false,
     progressRange: 'sprint',
@@ -137,6 +144,10 @@ export function readView(key: string): SavedView {
       showAllDone: bool(kanban.showAllDone, view.kanban.showAllDone),
     },
     listSort: stored.listSort === 'priority' ? 'priority' : 'file',
+    listGroupBy: (LIST_GROUP_BYS as readonly unknown[]).includes(stored.listGroupBy)
+      ? (stored.listGroupBy as ListGroupBy)
+      : view.listGroupBy,
+    listShowClosed: stored.listShowClosed === true,
     // A focused phase (progressPhase, before sprints) is dropped: phases are no longer a unit of the Progress tab
     progressSprint: typeof stored.progressSprint === 'string' ? stored.progressSprint : null,
     // filterFinishedPhases, its name before sprints, meant the same

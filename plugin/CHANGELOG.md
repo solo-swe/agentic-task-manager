@@ -22,6 +22,16 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   saved before this version without a Sprint filter open on it (the saved view's `version` is 2).
 - **Markers for sprint states**: ▶ the active sprint, ✓ a closed one, in the scope bar and its menu, the Sprint
   filter and the Kanban's sprint lanes.
+- **The List groups by sprint: the planning view** (T-323): where it shows more than one sprint (All tasks, or
+  several picked in the filters), a section per sprint in the order of the work: the active sprint, the planned ones
+  in order, the backlog (with how to plan it, `/atm:plan-sprint`), then the closed ones folded into one row
+  (`#list-closed-toggle`; open while a search or filter narrows the list, and in a project not migrated yet, whose
+  finished phases are read as closed sprints). Each section's header has its tasks, how
+  many are done and the sprint's goal. *Group* (`#list-group`) also groups by label or by component, as
+  `/atm:plan-sprint` groups the backlog, or not at all; it is part of the saved view (`listGroupBy`,
+  `listShowClosed`). Group and Order sit at the scope bar's end, like the Kanban's options.
+- **List cards name their sprint**, instead of the phase badge left from before sprints, when the list shows several
+  sprints and doesn't group by them (`.task-card-sprint`, as on the Kanban).
 - **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and
   its options (*Group by sprint*, only when the board shows more than one sprint, and *Show skipped*) moved to the
   scope bar's end. A project without sprints keeps *Show skipped* above the board.
