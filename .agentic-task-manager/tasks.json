@@ -772,7 +772,12 @@
       },
       {
         "id": "0.25.0",
-        "state": "planned"
+        "state": "released",
+        "pr": {
+          "number": 30,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+        },
+        "released_at": "2026-11-01T09:07:00Z"
       }
     ],
     "migrations": [
@@ -16193,7 +16198,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -16233,7 +16238,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-324",
@@ -16255,7 +16261,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16289,7 +16295,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-325",
@@ -16307,7 +16314,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16336,7 +16343,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-326",
@@ -16357,7 +16365,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16392,7 +16400,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-327",
@@ -16410,7 +16419,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16440,7 +16449,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-328",
@@ -16540,7 +16550,7 @@
       "description": "Ship the sprint *Sprints on the dashboard* as 0.25.0, the way CLAUDE.md's *Versions* and *CI* sections describe.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.25.0` (they must match).\n- Turn `plugin/CHANGELOG.md`'s `[Unreleased]` into `[0.25.0]` with today's date; merge repeated `### Changed` / `### Added` sections into one of each.\n- Write the `plugin/WHATS-NEW.md` entry from the changelog: 3–6 short plain-language bullets about what a user notices (the board opens on the active sprint, the backlog and grouped List, velocity, components, search and filters in the title bar), no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills and atm output changed in this release keep their written review in §3.3 (no live sandbox run, no API key); check every new entry point (`atm components`, the `#sprint=` URL parameter) is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens (or updates) the release PR to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-323"
       ],
@@ -16552,7 +16562,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16564,11 +16574,22 @@
       "sprint": "Sprints on the dashboard",
       "started_at": "2026-11-01T08:43:39Z",
       "started_by": "claude:9fec227a",
-      "commit": "f92a94c0af6c9cf98f46da581c2acf7f1a0e255b",
+      "commit": "dbb5477faa4d712076e117c1da893705182fbc53",
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "completed_at": "2026-11-01T09:05:13Z",
+      "completed_by": "claude:9fec227a",
+      "notes": [
+        {
+          "at": "2026-11-01T09:05:13Z",
+          "kind": "outcome",
+          "text": "Release PR #30 to main, CI green after the Linux baselines and a test that pressed `/` before the page loaded. Merging is Hakan’s.",
+          "by": "claude:9fec227a"
+        }
+      ],
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-332",
