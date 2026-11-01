@@ -2,6 +2,15 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.25.0] - 2026-11-01
+
+- The board opens on the active sprint, with its goal, due date and progress, and hints for what to do next.
+- The task list groups tasks by sprint, label or component, so planning from the backlog is one view.
+- See each sprint's velocity, and how far each part of your project has come.
+- Search and filters now sit in the title bar, leaving more room for your tasks.
+- Share a link that opens the board on a sprint.
+- Tasks reopened after their sprint closed are flagged, so no work gets lost.
+
 ## [0.24.0] - 2026-10-31
 
 - Phases are now sprints: plan one with a goal and a due date, and agents work through it, then close it and carry what's left.

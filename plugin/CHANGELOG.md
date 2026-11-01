@@ -4,7 +4,7 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
-## [Unreleased]
+## [0.25.0] - 2026-11-01
 
 ### Fixed
 - **The sprint table lists the active sprint first** (T-323): the open sprints follow the loop's order (the active

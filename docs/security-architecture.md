@@ -270,6 +270,11 @@ Component labels and sprint names are shown as text (Svelte escapes them, I15). 
 atm serve serves and changes nothing (I11, I17): its hints name the skill to run (`/atm:plan-sprint`,
 `/atm:close-sprint`) rather than doing anything.
 
+**Release 0.25.0 (T-331).** Its agent-facing changes are `plugin/CLAUDE.md`'s *Define* line (`atm components`) and
+atm's `components` output, reviewed above (T-324); no skill changed. Its new entry points are the `#sprint=` URL
+parameter (above) and `atm components` (no path or URL read). As for 0.24.0, no API key is used for the sandbox, so no
+live run: this written review takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

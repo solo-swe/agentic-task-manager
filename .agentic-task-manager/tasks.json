@@ -16182,7 +16182,7 @@
       "description": "Follow-up of the sprint *Sprints and releases*. A live session with Hakan: go through the dashboard with the new sprint model (`/atm:serve`, this repository's own data, or `npm run dev` in `dashboard/` for hot reload) and change it as we go, so it fits how sprints are used.\n\n## Walk through\n- **The active sprint:** where you see it (sprint header, Kanban, List, Graph), and what's missing.\n- **The backlog:** how you see what's in no sprint, and how it relates to the active sprint.\n- **Planned and closed sprints:** how you find them, their goals, dates and reports.\n- **Starting and closing a sprint, moving tasks** between sprints and the backlog.\n- **Sprint metrics:** progress, burndown, velocity across sprints, tasks carried over and added mid-sprint.\n- **Components:** how a project's components (`meta.components`) show, on cards, in the detail panel and on their own; **filtering by component** (the Component filter), and what a component's progress looks like.\n\n## Clean up the UI\n- **One progress, not several:** the sprint's progress, the shown tasks' progress and a group's (a lane's, a component's) progress appear in different places today; decide which to show where, and hide the duplicates (e.g. the sprint header's progress next to the Kanban's completion of the shown tasks).\n- **Rings or bars:** progress is drawn sometimes as a ring and sometimes as a bar; pick one per purpose and use it consistently.\n- Anything else that looks out of step with the sprint model as we go through it.\n\n## Settle first\nThe dashboard only reads today: `atm serve` has no write routes (`docs/security-architecture.md`). Whether and how it shows actions such as start, close and move (for example the `atm` command or the skill to run, to copy) is a design question to decide with Hakan before building anything; adding write routes would change the threat model and needs its own design.\n\n## Each change\nThe usual way: unit and e2e tests, `npm run verify`, screenshots updated on purpose, CHANGELOG. Findings that are bigger than the session become their own tasks through `/atm:create-tasks`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/SprintHeader.svelte",
@@ -16193,7 +16193,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T07:51:08Z",
+      "updated_at": "2026-11-01T08:43:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -16209,19 +16209,27 @@
         }
       ],
       "sprint": "Sprints on the dashboard",
-      "commit": "111a639f720c1dfc02a4beb3d19e2e91f48509dc",
+      "commit": "a934e36733e57df83f696177505618c9aa300469",
       "notes": [
         {
           "at": "2026-11-01T06:51:25Z",
           "kind": "failure",
           "text": "lease expired (claude:9fec227a)"
+        },
+        {
+          "at": "2026-11-01T08:43:34Z",
+          "kind": "outcome",
+          "text": "Walked through the sprint views live with Hakan: scope bar in step with the Sprint filter (▶ active, ✓ closed), grouped List, burndown on the active sprint, velocity, folded releases, components by label (cards, filter, By component table, Project tab), search and filters in the title bar, ⋮ settings menu, `#sprint=` in the URL, planned and closed sprint views, open tasks left in closed sprints. atm side: T-330.",
+          "by": "claude:9fec227a"
         }
       ],
       "components": [
         "dashboard"
       ],
       "started_at": "2026-11-01T07:24:16Z",
-      "started_by": "claude:9fec227a"
+      "started_by": "claude:9fec227a",
+      "completed_at": "2026-11-01T08:43:34Z",
+      "completed_by": "claude:9fec227a"
     },
     {
       "id": "T-324",
@@ -16512,7 +16520,7 @@
       "description": "Ship the sprint *Sprints on the dashboard* as 0.25.0, the way CLAUDE.md's *Versions* and *CI* sections describe.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.25.0` (they must match).\n- Turn `plugin/CHANGELOG.md`'s `[Unreleased]` into `[0.25.0]` with today's date; merge repeated `### Changed` / `### Added` sections into one of each.\n- Write the `plugin/WHATS-NEW.md` entry from the changelog: 3–6 short plain-language bullets about what a user notices (the board opens on the active sprint, the backlog and grouped List, velocity, components, search and filters in the title bar), no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills and atm output changed in this release keep their written review in §3.3 (no live sandbox run, no API key); check every new entry point (`atm components`, the `#sprint=` URL parameter) is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens (or updates) the release PR to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-323"
       ],
@@ -16524,16 +16532,18 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:24:38Z",
+      "updated_at": "2026-11-01T08:43:39Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "sprint_history": [
         {
           "sprint": "Sprints on the dashboard",
           "from": "2026-11-01T08:24:38Z"
         }
       ],
-      "sprint": "Sprints on the dashboard"
+      "sprint": "Sprints on the dashboard",
+      "started_at": "2026-11-01T08:43:39Z",
+      "started_by": "claude:9fec227a"
     },
     {
       "id": "T-332",

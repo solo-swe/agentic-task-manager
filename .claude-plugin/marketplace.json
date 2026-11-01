@@ -11,7 +11,7 @@
     {
       "name": "atm",
       "description": "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard.",
-      "version": "0.24.0",
+      "version": "0.25.0",
       "source": "./plugin",
       "category": "project-management",
       "homepage": "https://github.com/solo-swe/agentic-task-manager"
