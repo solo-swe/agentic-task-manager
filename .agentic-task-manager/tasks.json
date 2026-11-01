@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 324,
+    "next_id": 326,
     "labels": [
       {
         "id": "dashboard",
@@ -15658,7 +15658,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T05:59:13Z",
+      "updated_at": "2026-11-01T06:34:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -15676,7 +15676,74 @@
       "sprint": "Sprints on the dashboard",
       "started_at": "2026-10-31T23:58:22Z",
       "started_by": "claude:9fec227a",
-      "commit": "c176e90aadc3a7d0045a79f421f72469662ff6ab"
+      "commit": "31068de015c6ddc8dc9f43dcf2d8dad94f1b0c43"
+    },
+    {
+      "id": "T-324",
+      "name": "atm components: define components and move labels onto them",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "cli"
+      ],
+      "description": "Projects that marked their parts with labels (before components existed) need a way to switch. Add two commands to atm-cli.\n\n## `atm components`\nLists `meta.components` in order: each one's ID, label, globs (`paths`), review mode, and how many tasks have it (archived ones too). `--json` prints them as data.\n\n## `atm components add <id>`\nOptions: `--label TEXT` (the name shown), `--path GLOB` (repeatable), `--review MODE`, `--from-label LABEL`, `--assign`. In one locked write:\n- adds the component to `meta.components` (refuses an ID already there, a bad ID or an empty glob, as `check_components` does);\n- `--from-label`: on every task, `tasks.json` and `tasks-archive.json`, the label becomes the component (added to `components`, removed from `labels`), and the label's entry leaves `meta.labels`;\n- `--assign`: also gives the component to every task whose `files` match its globs (`components.matches`).\n\nIt prints what changed, e.g. `dashboard: 181 tasks from the label dashboard, 12 more by their files`. Components may overlap: a task can have several.\n\n## Tests\nScenarios in `tests/scripts/scenarios/components.json`: add with and without `--from-label` and `--assign`, the archive moved too, the refusals, the listing.\n\n## Docs\n`docs/v4/atm-cli.md`; the *Define* line in `plugin/CLAUDE.md` (agents read it: record the review in `docs/security-architecture.md` §3.3, no sandbox run); `plugin/CHANGELOG.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/components.py",
+        "atm-cli/atm/cli.py",
+        "tests/scripts/scenarios/components.json",
+        "docs/v4/atm-cli.md",
+        "plugin/CLAUDE.md",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-01T06:50:28Z",
+      "updated_at": "2026-11-01T06:50:28Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-11-01T06:50:28Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard",
+      "related": [
+        "T-323"
+      ]
+    },
+    {
+      "id": "T-325",
+      "name": "Make this repository's components real",
+      "type": "infra",
+      "priority": "P1",
+      "description": "With `atm components add` (the task this depends on), turn the labels that name parts of this repository into components, and add the REST API by its files. Components may overlap (decided in T-323): `api` sits inside `cli`.\n\n- **dashboard** (label *Dashboard*): `dashboard/**`, `plugin/templates/**`; from the label `dashboard`, and `--assign`\n- **cli** (*CLI*): `atm-cli/**`, `plugin/scripts/**`, `tests/scripts/**`; from the label `cli`, and `--assign`\n- **skills** (*Skills*): `plugin/skills/**`, `plugin/CLAUDE.md`; from the label `skills`, and `--assign`\n- **compmd** (*CompMD*): no globs yet (its files don't exist); from the label `compmd`\n- **api** (*REST API*): `atm-cli/atm/server.py`, `docs/multi-project-api.md`, `tests/scripts/serve.test.mjs`; by files only (`--assign`)\n\n`architecture` stays a label. Check the result with `atm components` and `atm check`, then commit `tasks.json` (and `tasks-archive.json` if it changed) on their own: `chore: this repository's components`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-324"
+      ],
+      "files": [
+        ".agentic-task-manager/tasks.json"
+      ],
+      "created_at": "2026-11-01T06:50:28Z",
+      "updated_at": "2026-11-01T06:50:28Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Sprints on the dashboard",
+          "from": "2026-11-01T06:50:28Z"
+        }
+      ],
+      "sprint": "Sprints on the dashboard",
+      "related": [
+        "T-323"
+      ]
     }
   ]
 }
