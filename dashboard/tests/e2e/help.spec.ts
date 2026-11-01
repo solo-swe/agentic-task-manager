@@ -23,7 +23,8 @@ test.describe('Help', () => {
     await page.locator('#help-panel').getByRole('link', { name: 'priorities and labels' }).click();
     await expect(page.locator('#help-priorities-and-labels')).toBeInViewport();
     await expect(page.locator(overlay)).toBeVisible();
-    expect(new URL(page.url()).hash).toBe('#view=list&help');
+    // The Sprint filter follows in the hash (#sprint=, T-323)
+    expect(new URL(page.url()).hash).toMatch(/^#view=list&help(&sprint=[^&]+)?$/);
   });
 
   test('the only link off the page goes to the repository, in a new tab, and is never fetched', async ({

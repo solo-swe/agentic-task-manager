@@ -4,6 +4,101 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.25.0] - 2026-11-01
+
+### Fixed
+- **The sprint table lists the active sprint first** (T-323): the open sprints follow the loop's order (the active
+  one, the planned ones, the backlog), as the table says, not the order they were added in; a sprint started after
+  others were planned was listed after them. The Progress panel's sprint rings follow the same order.
+
+### Added
+- **`atm components`** (T-324): lists the project's components (`meta.components`) with their label, globs, review
+  mode and how many tasks have them, archived ones too. **`atm components add <id> [--label T] [--path GLOB]...
+  [--review MODE] [--from-label L] [--assign]`** defines one in a single locked write: `--from-label` turns a label
+  into the component on every task, in `tasks.json` and `tasks-archive.json`, and drops it from `meta.labels` (its
+  text becomes the component's label); `--assign` also gives it to every task whose files its globs match. For
+  projects that marked their parts with labels before components existed. It refuses a component already there, a
+  bad ID or glob, and a label no task has (a typo), writing nothing. `plugin/CLAUDE.md` lists it among the *Define*
+  commands.
+- **`atm components edit <id> [--label T] [--add-path GLOB]... [--review MODE] [--from-label L] [--assign]`**
+  (T-326): changes an existing component the same way, so a second label can move onto it (`--label` and `--review`
+  empty remove them); it refuses an unknown component, naming them.
+
+### Changed
+- **The scope bar replaces the sprint header** (T-323, SR-7.2): the Kanban, List and Graph open on the active sprint,
+  and the bar above them (`#scope-bar`) says which tasks they show, kept in step with the Sprint filter. Its menu
+  (`#scope-trigger`) picks one: the active sprint, a planned one, the backlog, all tasks, or one of the last five
+  closed; several, picked in the filters, show as *Filtered: N selected*. It carries the one progress figure for its
+  tasks, and *showing N, filtered* (with ✕ to clear the other filters and the search) when they narrow the board
+  further. Hints name the skill to run next: close the sprint (`/atm:close-sprint`) once its work is done, with its
+  release ready to ship and the backlog to pull from; settle what's in review or blocked first; start a planned
+  sprint, or one at all when none is active (`/atm:plan-sprint`). A project without sprints has no bar. The Sprint
+  filter now scopes only the Kanban, List and Graph: the Progress tab shows every sprint (it focuses one itself, by
+  its rows), and the Agents tab greys out by the other filters alone.
+- **The active sprint, whichever it is**: the Sprint filter's value for the active sprint is `:active`, so a saved
+  view follows the project to its next active sprint; while none is active it selects nothing. New views and views
+  saved before this version without a Sprint filter open on it (the saved view's `version` is 2).
+- **Markers for sprint states**: ▶ the active sprint, ✓ a closed one, in the scope bar and its menu, the Sprint
+  filter and the Kanban's sprint lanes.
+- **The List groups by sprint: the planning view** (T-323): where it shows more than one sprint (All tasks, or
+  several picked in the filters), a section per sprint in the order of the work: the active sprint, the planned ones
+  in order, the backlog (with how to plan it, `/atm:plan-sprint`), then the closed ones folded into one row
+  (`#list-closed-toggle`; open while a search or filter narrows the list, and in a project not migrated yet, whose
+  finished phases are read as closed sprints). Each section's header has its tasks, how
+  many are done and the sprint's goal. *Group* (`#list-group`) also groups by label or by component, as
+  `/atm:plan-sprint` groups the backlog, or not at all; it is part of the saved view (`listGroupBy`,
+  `listShowClosed`). Group and Order sit at the scope bar's end, like the Kanban's options.
+- **The Progress tab opens the burndown on the active sprint** (T-323): its tasks, since it started, its due date
+  marked; *Show all sprints* and the range buttons still widen it, and with no active sprint it shows them all. The
+  focus is `:active` in the saved view (`progressSprint`), so it follows the next sprint; views saved before this
+  version without a focus take it too.
+- **Velocity** (T-323, `#velocity`): under the sprint table, a bar per closed sprint, the last ten in order, with the
+  tasks it got done (from its report, else its tasks done), the average as a dashed line, and what it carried over or
+  had added mid-sprint on hover.
+- **Released releases fold into one row** (T-323, `#release-released-toggle`): the open releases first, then
+  "✓ 19 released · last 0.24.0", newest first when opened, each with its release date. A release recorded without
+  tasks (recovered from git history) shows its name, date and PR only, no empty counts or notes draft.
+- **List cards name their sprint**, instead of the phase badge left from before sprints, when the list shows several
+  sprints and doesn't group by them (`.task-card-sprint`, as on the Kanban).
+- **Search and filters move into the title bar** (T-323): the filter row under the title is gone. A compact search
+  box (`#task-search`; `/` focuses it, and it widens while in use) and a **Filters** button (`#filters-toggle`) sit
+  with the charts; the button's badge (`#filters-badge`) counts the groups that narrow the board. It opens a popup
+  (`#filter-panel`): how many tasks match (`#match-count`) and what is selected (`.filter-chip`), one line per group
+  with its most used values first and the rest behind "+N" (Labels with a find box once there are more than ten), and
+  *Clear filters* at its top (`#clear-filters`: the other filters and the search; the sprint stays, it is the scope
+  bar's), and Include archived at its foot. *Reset view* (`#reset-view`), which forgets the whole saved view (filters,
+  tab, each tab's options and zoom), moved to the settings menu as *Reset this project's view*. Values are quiet text
+  chips with a muted count, a selected one tinted; there
+  is no "All" chip any more: nothing selected is all, and a group with a selection has *clear* by its name. The search
+  is a magnifier until used. Escape or a click outside closes it. The scope bar's note names what narrows
+  the board: "showing 12, filtered: Type Feature · Labels ux ✕".
+- **A ⋮ settings menu** (T-323, `#settings-btn`, `#settings-menu`) at the title bar's right end holds auto-refresh
+  (on/off, the interval, when it last loaded), mode, theme and, on a project's page, *Reset this project's view*. The
+  reload button stays beside it, showing the auto-refresh state; the separate refresh and appearance menus are gone.
+- **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and
+  its options (*Group by sprint*, only when the board shows more than one sprint, and *Show skipped*) moved to the
+  scope bar's end. A project without sprints keeps *Show skipped* above the board.
+- **The sprint is in the URL** (T-323): `#sprint=active`, `#sprint=Foundations,backlog` or `#sprint=all` opens the
+  board on those sprints (names in any case; unknown ones, like a renamed sprint in an old link, are dropped). Picking
+  a sprint in the scope bar or the filters writes it, so the address shares what is shown and Back returns to the
+  previous sprint; a link with it wins over the saved Sprint filter, and opening another project drops it.
+- **Components by their labels** (T-323): cards (now List cards too), the detail panel, the Component filter and the
+  List's groups show a component's label ("REST API") rather than its ID, in the project's order. The Progress tab
+  has a **By component** table (`#component-table`) for the focused sprint, or all: done, progress and what is left
+  per component, tasks in none last; a row filters by its component. The Project tab lists the components with their
+  task counts and globs.
+- **The Project tab shows sprints, not phases**: its Vocabulary has *Sprints* (the active one ▶, the planned ones,
+  the backlog, the closed ones folded) and its Stats *N sprints · M closed*.
+- **Planned and closed sprints** (T-323): a planned sprint's hint says it starts once the active one is closed
+  (`/atm:close-sprint`, then `/atm:plan-sprint`); a closed sprint's board folds its empty columns into slim strips so
+  Done gets the width, its cards in a grid, and its release reads "released" once shipped.
+- **Open tasks left in closed sprints** (T-323): a task reopened after its sprint closed (or merged back open) is
+  work no loop takes. The scope bar warns on All tasks and Backlog ("N tasks open in closed sprints", a link to those
+  sprints) and on the closed sprint itself; the List keeps such a sprint unfolded; their cards' sprint badge is marked
+  ✓ with a dashed outline. atm's side is T-330.
+- **The title bar**: the pills on the right line up with the title, and a hairline separates the title row from the
+  line under it.
+
 ## [0.24.0] - 2026-10-31
 
 **Before the first run in a shared project, update every agent's plugin:** this version turns the project's phases

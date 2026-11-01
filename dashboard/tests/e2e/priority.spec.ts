@@ -41,7 +41,6 @@ test.describe('priority', () => {
     await openDashboard(page, tasksServer, withPriorities(), { tab: 'list' });
     await openFilters(page);
     await expect(page.locator('.filter-btn[data-filter="priority"] .filter-label')).toHaveText([
-      'All',
       'P0 Critical',
       'P1 High',
       'P2 Medium',
@@ -59,6 +58,8 @@ test.describe('priority', () => {
     tasksServer,
   }) => {
     await openDashboard(page, tasksServer, withPriorities(), { tab: 'list' });
+    // One list, not a group per sprint (T-323)
+    await page.locator('#list-group').selectOption('none');
     expect((await visibleCardIds(page)).slice(0, 3)).toEqual(['T-001', 'T-002', 'T-003']);
     await page.locator('#list-sort').selectOption('priority');
     // P0 (by phase), P1, then the P2s by phase and ID

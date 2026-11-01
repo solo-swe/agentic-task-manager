@@ -36,8 +36,8 @@ test.describe('reload', () => {
 
 test.describe('auto-refresh', () => {
   const requests = (tasksServer: { requests: number }) => expect.poll(() => tasksServer.requests);
-  // The settings are in the menu next to the Reload button
-  const menu = (page: Page) => openMenu(page, '#refresh-menu-btn');
+  // The settings are in the ⋯ menu next to the Reload button (T-323)
+  const menu = (page: Page) => openMenu(page, '#settings-btn');
   const toggle = (page: Page) => page.locator('.auto-refresh-toggle');
   const check = (page: Page) => page.locator('#auto-refresh-check');
   const interval = (page: Page) => page.locator('#auto-refresh-interval');
@@ -89,7 +89,7 @@ test.describe('auto-refresh', () => {
     tasksServer,
   }) => {
     // A marker on a rendered card survives only if the card isn't rendered again
-    await page.keyboard.press('Escape'); // the refresh menu
+    await page.keyboard.press('Escape'); // the settings menu
     await page.getByRole('tab', { name: 'Task List' }).click();
     await page.locator('.task-card[data-id="T-005"]').evaluate((el) => el.setAttribute('data-marker', '1'));
     await page.clock.runFor(10_000);
@@ -118,15 +118,20 @@ test.describe('auto-refresh', () => {
   });
 });
 
-test('the refresh menu closes on Escape and on a click outside', async ({ page, tasksServer }) => {
+test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and on a click outside (T-323)', async ({
+  page,
+  tasksServer,
+}) => {
   await openDashboard(page, tasksServer, 'standard');
-  const button = page.locator('#refresh-menu-btn');
+  const button = page.locator('#settings-btn');
   await button.click();
-  await expect(page.locator('#refresh-menu')).toBeVisible();
+  const settings = page.locator('#settings-menu');
+  await expect(settings).toBeVisible();
+  await expect(settings.locator('.menu-label')).toHaveText(['Auto-refresh', 'Mode', 'Theme', 'This project']);
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#refresh-menu')).toHaveCount(0);
+  await expect(settings).toHaveCount(0);
   await button.click();
   await page.locator('h1').click();
-  await expect(page.locator('#refresh-menu')).toHaveCount(0);
+  await expect(settings).toHaveCount(0);
 });

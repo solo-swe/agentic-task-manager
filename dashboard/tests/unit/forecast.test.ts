@@ -131,10 +131,11 @@ describe('forecastSprints', () => {
     ];
     const m = sprintModel(meta, work, resolveVocabulary(meta));
     const rows = forecastSprints(work, NOW, work, DEFAULT_VOCABULARY, m).sprints;
+    // Listed in that order too, the closed ones first (T-323): Now was started after Next was planned
     expect(rows.map((s) => [s.key, s.estimate?.minutes.likely])).toEqual([
       ['Old', undefined],
-      ['Next', 2 * 8.5],
       ['Now', 8.5],
+      ['Next', 2 * 8.5],
       [BACKLOG, 3 * 8.5],
     ]);
     expect(sprintKey(m, work.at(-1)!)).toBe(BACKLOG);

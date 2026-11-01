@@ -194,14 +194,17 @@ test.describe('Progress tab: sprint table', () => {
     page,
     tasksServer,
   }) => {
-    await openProgress(page, tasksServer, 'progress');
+    // Phase 2's tasks, by a label: the Sprint filter scopes the board views, not this tab (T-323)
+    const data = loadFixture('progress');
+    for (const task of data.tasks) if (task.phase === 2) task.labels = ['ui'];
+    await openProgress(page, tasksServer, data);
     await openFilters(page);
-    await filterButton(page, 'sprint', 'Phase 2').click();
+    await filterButton(page, 'label', 'ui').click();
     await expect(page.locator('#sprint-table tbody tr')).toHaveCount(1);
     await expect(page.locator('#progress-basis')).toContainText('last 8 tasks');
     // Not phase 2's 5 tasks alone (43 m): the loop finishes phase 1 first, so the whole project's 51 m
     await expect(cells(page, 2).nth(4)).toContainText('51 m of agent work');
-    await expect(page.locator('#progress-filter-banner')).toContainText('Showing 6 of 16 tasks: sprint Phase 2');
+    await expect(page.locator('#progress-filter-banner')).toContainText('Showing 6 of 16 tasks: label ui');
     await expect(page.locator('#burndown-focus')).toHaveText('All sprints · matching tasks');
     await page.locator('#progress-clear-filters').click();
     await expect(page.locator('#progress-filter-banner')).toHaveCount(0);
@@ -403,7 +406,11 @@ test.describe('Progress tab: focus a sprint', () => {
 
     await row(page, 2).click();
     await openFilters(page);
+    // The Sprint filter scopes the board views only (T-323): the focus stays
     await filterButton(page, 'sprint', 'Phase 1').click();
+    await expect(page.locator('#burndown-focus')).toHaveText('Phase 2');
+    // A search that leaves only phase 0's T-001 hides the focused sprint
+    await page.locator('#task-search').fill('Project skeleton');
     await expect(page.locator('#burndown-focus')).toHaveText('All sprints · matching tasks');
   });
 });

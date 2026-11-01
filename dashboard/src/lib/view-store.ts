@@ -3,9 +3,10 @@
 // share localStorage, so each project's view lives under its own key. Theme, mode, auto-refresh and the last-seen
 // version stay per browser (prefs.ts).
 import { BURNDOWN_RANGES, type BurndownRange } from './burndown';
-import { FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';
+import { ACTIVE, FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';
 import { sprintKey } from './forecast';
 import { ACTIVITY_PRESETS, type ActivityRange } from './insights';
+import { LIST_GROUP_BYS, type ListGroupBy } from './list-groups';
 import { getPref, readStored, writeStored } from './prefs';
 import { NO_SPRINTS, type SprintModel } from './sprints';
 import { DEFAULT_VIEW, VIEWS, type ViewId } from './tabs';
@@ -14,15 +15,22 @@ import type { Task } from './types';
 import { DEFAULT_VOCABULARY, type Vocabulary } from './vocab';
 
 export const VIEW_KEY_PREFIX = 'atm-dashboard:view:';
+/** 2: the view opens on the active sprint (T-323); before it, no Sprint filter was the default, not a choice */
+const VIEW_VERSION = 2;
 
 export interface SavedView {
   filters: Record<FilterGroup, string[]>;
+  version: number;
   /** The keyword search */
   query: string;
   tab: ViewId;
   kanban: { groupBySprint: boolean; showSkipped: boolean; showAllDone: boolean };
   /** The List tab's order */
   listSort: ListSort;
+  /** The List tab's groups (T-323): by sprint (where it shows more than one), label, component, or none */
+  listGroupBy: ListGroupBy;
+  /** Grouped by sprint, the closed sprints are open, not folded into one row */
+  listShowClosed: boolean;
   /** The sprint the Progress tab focuses on (its ID, or BACKLOG), or null for all of them */
   progressSprint: string | null;
   /** The filter panel's Sprint group lists the closed sprints too, not just the open ones */
@@ -57,13 +65,20 @@ export function projectKey(meta: ProjectMeta | undefined): string {
 
 export function defaultView(): SavedView {
   return {
-    filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, []])) as unknown as SavedView['filters'],
+    // The active sprint first (T-323): with none active, the selection is there but selects nothing
+    filters: Object.fromEntries(
+      FILTER_GROUPS.map((g) => [g, g === 'sprint' ? [ACTIVE] : []]),
+    ) as unknown as SavedView['filters'],
+    version: VIEW_VERSION,
     query: '',
     tab: DEFAULT_VIEW,
     // Before 0.12.0 "group by phase" was remembered per browser; it still seeds projects without a saved view
     kanban: { groupBySprint: getPref('kanbanGroupByPhase', false), showSkipped: false, showAllDone: false },
     listSort: 'file',
-    progressSprint: null,
+    listGroupBy: 'sprint',
+    listShowClosed: false,
+    // The burndown of the active sprint, whichever it is (T-323); all sprints while none is active
+    progressSprint: ACTIVE,
     filterClosedSprints: false,
     progressRange: 'sprint',
     graphFiltered: 'hide',
@@ -110,9 +125,17 @@ export function readView(key: string): SavedView {
   const kanban = (stored.kanban ?? {}) as Record<string, unknown>;
   // Views saved before 0.20.0 also have progressActive ("Active phases only", replaced by folding finished phases,
   // T-241, T-243): ignored
+  const sprint = strings(filters.sprint);
   return {
-    // Views saved before sprints also have a phase filter: dropped (SR-7.1)
-    filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, strings(filters[g])])) as SavedView['filters'],
+    // Views saved before sprints also have a phase filter: dropped (SR-7.1). Views saved before version 2 without a
+    // Sprint filter open on the active sprint, as new ones do.
+    filters: Object.fromEntries(
+      FILTER_GROUPS.map((g) => [
+        g,
+        g === 'sprint' && stored.version !== VIEW_VERSION && !sprint.length ? [ACTIVE] : strings(filters[g]),
+      ]),
+    ) as SavedView['filters'],
+    version: VIEW_VERSION,
     query: typeof stored.query === 'string' ? stored.query : '',
     tab: (VIEWS as readonly unknown[]).includes(stored.tab) ? (stored.tab as ViewId) : view.tab,
     kanban: {
@@ -122,8 +145,18 @@ export function readView(key: string): SavedView {
       showAllDone: bool(kanban.showAllDone, view.kanban.showAllDone),
     },
     listSort: stored.listSort === 'priority' ? 'priority' : 'file',
+    listGroupBy: (LIST_GROUP_BYS as readonly unknown[]).includes(stored.listGroupBy)
+      ? (stored.listGroupBy as ListGroupBy)
+      : view.listGroupBy,
+    listShowClosed: stored.listShowClosed === true,
     // A focused phase (progressPhase, before sprints) is dropped: phases are no longer a unit of the Progress tab
-    progressSprint: typeof stored.progressSprint === 'string' ? stored.progressSprint : null,
+    // Before version 2, all sprints was the default, not a choice: the active sprint now, as for new views
+    progressSprint:
+      typeof stored.progressSprint === 'string'
+        ? stored.progressSprint
+        : stored.version !== VIEW_VERSION
+          ? view.progressSprint
+          : null,
     // filterFinishedPhases, its name before sprints, meant the same
     filterClosedSprints: stored.filterClosedSprints === true || stored.filterFinishedPhases === true,
     // "phase", the range's name before sprints, is now "sprint"
@@ -162,12 +195,17 @@ export function sanitizeView(
 ): SavedView {
   const keep = (group: FilterGroup) => {
     const present = new Set(tasks.flatMap((t) => filterValues(group, t, vocab, model)));
+    // The active sprint, whichever it is, stays selected while none is active: it applies again once one starts
+    if (group === 'sprint') present.add(ACTIVE);
     return view.filters[group].filter((v) => present.has(v));
   };
   const sprints = new Set(tasks.map((t) => sprintKey(model, t)));
   return {
     ...view,
     filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, keep(g)])) as SavedView['filters'],
-    progressSprint: view.progressSprint !== null && sprints.has(view.progressSprint) ? view.progressSprint : null,
+    progressSprint:
+      view.progressSprint === ACTIVE || (view.progressSprint !== null && sprints.has(view.progressSprint))
+        ? view.progressSprint
+        : null,
   };
 }

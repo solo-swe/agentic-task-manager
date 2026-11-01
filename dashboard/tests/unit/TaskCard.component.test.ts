@@ -24,8 +24,8 @@ describe('TaskCard', () => {
     expect(card).toHaveAttribute('data-id', 'T-004');
     expect(card).toHaveClass('status-done');
     expect(card).toHaveClass('kind-done');
+    // No phase badge (T-323): the sprint, only when the list shows several and doesn't group by them
     expect([...card.querySelectorAll('.task-meta .badge')].map((b) => b.textContent)).toEqual([
-      'Phase 1',
       'feature',
       'Done',
       'P2',
@@ -73,7 +73,15 @@ describe('TaskCard', () => {
     const { container } = render(TaskCard, { task: { ...task('T-001'), status: 'awaiting_user' } });
     const card = container.querySelector('.task-card')!;
     expect(card).toHaveClass('kind-review');
-    expect(card.querySelectorAll('.task-meta .badge')[2].textContent).toBe('Awaiting you');
+    expect(card.querySelectorAll('.task-meta .badge')[1].textContent).toBe('Awaiting you');
+  });
+
+  it('names its sprint when asked (showSprint), the backlog muted (T-323)', () => {
+    const { container } = render(TaskCard, { task: task('T-004'), showSprint: true });
+    expect(container.querySelector('.task-card-sprint')).toHaveTextContent('Phase 1');
+    const inBacklog = { ...task('T-004'), phase: undefined } as unknown as Task;
+    const { container: backlog } = render(TaskCard, { task: inBacklog, showSprint: true });
+    expect(backlog.querySelector('.task-card-sprint')).toHaveTextContent('Backlog');
   });
 
   it("shows the task's priority, or the default for a task without one", () => {
@@ -122,6 +130,36 @@ describe('TaskCard', () => {
     const { container } = render(TaskCard, { task: { ...task('T-001'), labels: ['spike-2', 'ux'] } });
     expect([...container.querySelectorAll('.label-chip')].map((c) => c.textContent)).toEqual(['UX', 'spike-2']);
     expect(container.querySelector('.label-chip[data-label="ux"]')).toHaveAttribute('title', 'Label: ux');
+  });
+
+  it("shows the task's components by their labels, in the project's order (T-323)", () => {
+    loadIntoDashboard({
+      ...standard,
+      meta: {
+        components: [
+          { id: 'web', label: 'Web app', paths: [] },
+          { id: 'api', label: 'REST API', paths: [] },
+        ],
+      },
+    });
+    const { container } = render(TaskCard, { task: { ...task('T-001'), components: ['api', 'web', 'gone'] } });
+    expect([...container.querySelectorAll('.component-chip')].map((c) => c.textContent)).toEqual([
+      'Web app',
+      'REST API',
+      'gone',
+    ]);
+    expect(container.querySelector('.component-chip[data-component="api"]')).toHaveAttribute('title', 'Component: api');
+  });
+
+  it('a task open in a closed sprint: its sprint badge is marked (T-323)', () => {
+    loadIntoDashboard({
+      meta: { sprints: [{ id: 'Old', state: 'closed' }] },
+      tasks: [{ ...task('T-001'), phase: undefined, sprint: 'Old', status: 'todo' } as unknown as Task],
+    });
+    const { container } = render(TaskCard, { task: dashboard.taskMap.get('T-001')!, showSprint: true });
+    const badge = container.querySelector('.task-card-sprint')!;
+    expect(badge).toHaveClass('leftover');
+    expect(badge.querySelector('.sprint-marker.closed')).not.toBeNull();
   });
 
   it('has no dependency label, label chips or tags when there are none', () => {

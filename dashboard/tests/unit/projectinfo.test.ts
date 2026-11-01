@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { actors, vocabCounts, workflowOf } from '../../src/lib/projectinfo';
+import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { resolveVocabulary } from '../../src/lib/vocab';
 
@@ -101,13 +102,36 @@ describe('vocabCounts', () => {
   ];
   const v = vocabCounts(tasks, vocab);
 
-  it('phases: names, counts and state, also a named phase without tasks', () => {
-    expect(v.phases).toEqual([
-      { phase: 0, name: 'Foundations', count: 2, state: 'done' },
-      { phase: 1, name: undefined, count: 1, state: 'active' },
-      { phase: 2, name: undefined, count: 2, state: 'not_started' },
-      { phase: 3, name: 'Later', count: 0, state: 'not_started' },
+  it('sprints (T-323): the active, the planned in order, the closed most recent first, with counts; the backlog', () => {
+    const meta = {
+      sprints: [
+        { id: 'One', state: 'closed' },
+        { id: 'Two', state: 'closed' },
+        { id: 'Three', state: 'active' },
+        { id: 'Four', state: 'planned' },
+      ],
+    };
+    const inSprints = [
+      task('T-1', { sprint: 'One', status: 'done' }),
+      task('T-2', { sprint: 'Three' }),
+      task('T-3', { sprint: 'Three' }),
+      task('T-4', {}),
+    ];
+    const counted = vocabCounts(
+      inSprints,
+      resolveVocabulary(meta),
+      sprintModel(meta, inSprints, resolveVocabulary(meta)),
+    );
+    expect(counted.sprints).toEqual([
+      { id: 'Three', state: 'active', count: 2 },
+      { id: 'Four', state: 'planned', count: 0 },
+      { id: 'Two', state: 'closed', count: 0 },
+      { id: 'One', state: 'closed', count: 1 },
     ]);
+    expect(counted.backlog).toBe(1);
+    // Without sprints: none, everything in the backlog
+    expect(v.sprints).toEqual([]);
+    expect(v.backlog).toBe(5);
   });
 
   it("labels: meta.labels' order and text (unused ones too), then the others by name", () => {

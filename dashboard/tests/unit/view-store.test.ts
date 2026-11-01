@@ -43,10 +43,13 @@ describe('reading and writing', () => {
         label: ['ux'],
         agent: ['claude:a'],
       },
+      version: 2,
       query: 'login',
       tab: 'agents',
       kanban: { groupBySprint: true, showSkipped: true, showAllDone: true },
       listSort: 'priority',
+      listGroupBy: 'component',
+      listShowClosed: true,
       progressSprint: 'Phase 2',
       filterClosedSprints: true,
       progressRange: '14d',
@@ -83,8 +86,28 @@ describe('reading and writing', () => {
     expect(view.filters.type).toEqual(['test']);
     expect(view.filterClosedSprints).toBe(true);
     expect(view).not.toHaveProperty('progressPhase');
-    expect(view.progressSprint).toBeNull();
+    // No focused sprint saved: the default, the active one (T-323)
+    expect(view.progressSprint).toBe(':active');
     expect(view.progressRange).toBe('sprint');
+  });
+
+  it('opens on the active sprint: by default, and for a view saved before version 2 without a Sprint filter (T-323)', () => {
+    expect(defaultView().filters.sprint).toEqual([':active']);
+    localStorage.setItem(key, JSON.stringify({ filters: { sprint: [], type: ['test'] } }));
+    expect(readView(key).filters.sprint).toEqual([':active']);
+    localStorage.setItem(key, JSON.stringify({ filters: { sprint: ['Phase 1'] } }));
+    expect(readView(key).filters.sprint).toEqual(['Phase 1']);
+    // Since version 2, no Sprint filter is a choice: all tasks
+    localStorage.setItem(key, JSON.stringify({ version: 2, filters: { sprint: [] } }));
+    expect(readView(key).filters.sprint).toEqual([]);
+  });
+
+  it("the Progress tab's burndown: the active sprint by default and before version 2; all sprints a choice since", () => {
+    expect(defaultView().progressSprint).toBe(':active');
+    localStorage.setItem(key, JSON.stringify({ progressSprint: null }));
+    expect(readView(key).progressSprint).toBe(':active');
+    localStorage.setItem(key, JSON.stringify({ version: 2, progressSprint: null }));
+    expect(readView(key).progressSprint).toBeNull();
   });
 
   it('a view saved before sprints keeps "group by phase" as "group by sprint" (SR-7.3)', () => {
@@ -190,5 +213,9 @@ describe('sanitizeView', () => {
       progressSprint: 'Phase 0',
     };
     expect(sanitizeView(view, tasks, vocab, model)).toEqual(view);
+  });
+
+  it('keeps "the active sprint" while none is active: it applies again once one starts (T-323)', () => {
+    expect(sanitizeView(defaultView(), tasks, vocab, model).filters.sprint).toEqual([':active']);
   });
 });

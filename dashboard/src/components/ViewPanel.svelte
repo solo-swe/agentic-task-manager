@@ -7,7 +7,7 @@
   import KanbanBoard from './KanbanBoard.svelte';
   import ProgressTab from './ProgressTab.svelte';
   import ProjectTab from './ProjectTab.svelte';
-  import SprintHeader from './SprintHeader.svelte';
+  import ScopeBar from './ScopeBar.svelte';
   import TaskGrid from './TaskGrid.svelte';
 
   const view = $derived(dashboard.tab);
@@ -49,7 +49,7 @@
     </div>
   </div>
   <div class="view-panels">
-    {#if view === 'kanban' || view === 'list' || view === 'graph'}<SprintHeader />{/if}
+    {#if view === 'kanban' || view === 'list' || view === 'graph'}<ScopeBar />{/if}
     <!-- Inactive panels stay mounted (hidden) so each view keeps its state, e.g. the graph's pan/zoom (FR-2.4) -->
     <div class="view-panel" id="panel-graph" role="tabpanel" aria-labelledby="tab-graph" hidden={view !== 'graph'}>
       <DepGraph />

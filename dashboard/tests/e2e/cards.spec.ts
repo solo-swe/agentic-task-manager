@@ -6,6 +6,8 @@ const card = (page: import('@playwright/test').Page, id: string) => page.locator
 test.describe('task cards', () => {
   test('one card per task, in file order', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
+    // One list, not a group per sprint (T-323)
+    await page.locator('#list-group').selectOption('none');
     expect(await visibleCardIds(page)).toEqual([
       'T-001',
       'T-002',
@@ -30,7 +32,8 @@ test.describe('task cards', () => {
     await expect(c).toHaveClass(/status-done/);
     await expect(c.locator('.task-id')).toHaveText('T-004');
     await expect(c.locator('.task-name')).toHaveText('User login');
-    await expect(c.locator('.task-meta .badge')).toHaveText(['Phase 1', 'feature', 'Done', 'P2']);
+    // No phase badge (T-323): grouped by sprint, the group names it
+    await expect(c.locator('.task-meta .badge')).toHaveText(['feature', 'Done', 'P2']);
     await expect(c.locator('.deps-label')).toHaveText('needs:');
     await expect(c.locator('.dep-link')).toHaveText(['T-002', 'T-003']);
     await expect(c.locator('.dep-link').first()).toHaveAttribute('title', 'Write contributing guide');
@@ -48,7 +51,7 @@ test.describe('task cards', () => {
     };
     for (const [id, [status, kind, label]] of Object.entries(expected)) {
       await expect(card(page, id)).toHaveClass(new RegExp(`status-${status} kind-${kind}`));
-      await expect(card(page, id).locator('.task-meta .badge').nth(2)).toHaveText(label);
+      await expect(card(page, id).locator('.task-meta .badge').nth(1)).toHaveText(label);
     }
   });
 
@@ -66,8 +69,8 @@ test.describe('task cards', () => {
     data.tasks.find((t) => t.id === 'T-005')!.status = 'awaiting_user';
     await openDashboard(page, tasksServer, data, { tab: 'list' });
     await expect(card(page, 'T-005')).toHaveClass(/kind-review/);
-    await expect(card(page, 'T-005').locator('.task-meta .badge').nth(2)).toHaveText('Awaiting you');
-    await expect(card(page, 'T-004').locator('.task-meta .badge').nth(2)).toHaveText('Shipped');
+    await expect(card(page, 'T-005').locator('.task-meta .badge').nth(1)).toHaveText('Awaiting you');
+    await expect(card(page, 'T-004').locator('.task-meta .badge').nth(1)).toHaveText('Shipped');
   });
 
   test('tasks without dependencies have no "needs:" label', async ({ page, tasksServer }) => {

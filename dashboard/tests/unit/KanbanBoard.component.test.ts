@@ -2,43 +2,51 @@ import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import KanbanBoard from '../../src/components/KanbanBoard.svelte';
+import { ACTIVE } from '../../src/lib/filters';
 import { dashboard } from '../../src/lib/state.svelte';
-import standard from '../fixtures/standard.json';
+import type { TasksFile } from '../../src/lib/types';
+import sprints from '../fixtures/sprints.json';
 import { loadIntoDashboard } from './components.helpers';
 
-const completion = (c: HTMLElement) => c.querySelector('#kanban-completion')!;
-const ringLabel = (c: HTMLElement) => completion(c).querySelector('svg.ring')!.getAttribute('aria-label');
-
-describe('KanbanBoard completion ring', () => {
-  beforeEach(() => loadIntoDashboard(standard));
-
-  it('counts the tasks shown: done of those that count, skipped apart', () => {
+// The completion ring and the options moved to the scope bar (T-323): the board keeps a toolbar only without sprints
+describe('KanbanBoard toolbar', () => {
+  it('a project without sprints: the board holds Show skipped, and no completion ring', () => {
+    loadIntoDashboard({
+      meta: { project: 'Plain' },
+      tasks: [{ id: 'T-1', name: 'A', type: 'feature', status: 'todo' }],
+    } as TasksFile);
     const { container } = render(KanbanBoard);
-    const counted = standard.tasks.filter((t) => t.status !== 'skipped');
-    const done = counted.filter((t) => t.status === 'done').length;
-    const skipped = standard.tasks.length - counted.length;
-    expect(completion(container)).toHaveTextContent(
-      `${done} of ${counted.length} done` + (skipped ? ` · ${skipped} skipped` : ''),
-    );
-    const pct = Math.round((done / counted.length) * 100);
-    expect(completion(container)).toHaveTextContent(new RegExp(`^${pct}% · ${done} of`));
-    expect(ringLabel(container)).toBe(`Tasks shown ${pct}% done`);
+    expect(container.querySelector('#kanban-show-skipped')).not.toBeNull();
+    expect(container.querySelector('#kanban-group-by-sprint')).toBeNull();
+    expect(container.querySelector('#kanban-completion')).toBeNull();
   });
 
-  it('follows the filters and the search', async () => {
+  it('with sprints: no toolbar, the scope bar holds the options', () => {
+    loadIntoDashboard(sprints as TasksFile);
     const { container } = render(KanbanBoard);
-    dashboard.toggleFilter('sprint', 'Phase 1');
-    await tick();
-    const phase1 = standard.tasks.filter((t) => t.phase === 1 && t.status !== 'skipped');
-    const done = phase1.filter((t) => t.status === 'done').length;
-    expect(completion(container).querySelector('#kanban-completion-text')).toHaveTextContent(
-      new RegExp(`^\\d+% · ${done} of ${phase1.length} done`),
-    );
-    expect(completion(container).getAttribute('title')).toMatch(`Tasks shown: ${done} of ${phase1.length} done`);
+    expect(container.querySelector('.kanban-toolbar')).toBeNull();
+  });
+});
 
-    dashboard.query = 'no task has this name';
+describe('KanbanBoard grouping by sprint', () => {
+  beforeEach(() => loadIntoDashboard(sprints as TasksFile));
+
+  it('groups only where the board shows more than one sprint', async () => {
+    dashboard.kanbanGroupBySprint = true;
+    const { container } = render(KanbanBoard);
+    expect(container.querySelectorAll('.kanban-lane').length).toBeGreaterThan(1);
+    dashboard.setSprintScope([ACTIVE]);
     await tick();
-    expect(completion(container)).toHaveTextContent('0% · 0 of 0 done');
-    expect(ringLabel(container)).toBe('Tasks shown 0% done');
+    expect(container.querySelectorAll('.kanban-lane')).toHaveLength(0);
+    dashboard.kanbanGroupBySprint = false;
+  });
+
+  it('a lane marks the active sprint ▶ and a closed one ✓', () => {
+    dashboard.kanbanGroupBySprint = true;
+    const { container } = render(KanbanBoard);
+    const lane = (key: string) => container.querySelector(`.kanban-lane[data-sprint="${key}"]`)!;
+    expect(lane('Ada Lovelace').querySelector('.sprint-marker.active')).not.toBeNull();
+    expect(lane('Foundations').querySelector('.sprint-marker.closed')).not.toBeNull();
+    dashboard.kanbanGroupBySprint = false;
   });
 });

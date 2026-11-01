@@ -48,10 +48,12 @@ test.describe('view tabs', () => {
     await openDashboard(page, tasksServer, 'standard');
     await tab(page, 'graph').click();
     await expectSelected(page, 'graph');
-    expect(new URL(page.url()).hash).toBe('#view=graph');
+    // The hash also holds the Sprint filter (#sprint=, T-323)
+    const view = () => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view');
+    expect(view()).toBe('graph');
     await tab(page, 'progress').click();
     await expectSelected(page, 'progress');
-    expect(new URL(page.url()).hash).toBe('#view=progress');
+    expect(view()).toBe('progress');
   });
 
   test('arrow keys move between tabs and wrap', async ({ page, tasksServer }) => {
@@ -96,12 +98,17 @@ test.describe('view tabs', () => {
     await expect(page.locator('#dep-graph')).toHaveAttribute('viewBox', viewBox!);
   });
 
-  test('the count of matching tasks stays next to the search on every tab', async ({ page, tasksServer }) => {
+  test('search and Filters stay in the title bar on every tab, with the count of matching tasks', async ({
+    page,
+    tasksServer,
+  }) => {
     await openDashboard(page, tasksServer, 'standard');
     await openFilters(page);
     await filterButton(page, 'sprint', 'Phase 1').click();
+    await page.keyboard.press('Escape');
     for (const id of ['graph', 'kanban', 'list', 'agents', 'progress']) {
       await tab(page, id).click();
+      await expect(page.locator('.topbar #filters-toggle')).toBeVisible();
       await expect(matchCount(page)).toHaveText('4 of 12 tasks');
     }
   });

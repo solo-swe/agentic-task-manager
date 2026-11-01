@@ -12,7 +12,7 @@ test.describe('edge cases', () => {
   });
 
   test('unknown type uses the fallback style', async ({ page }) => {
-    const typeBadge = card(page, 'T-001').locator('.task-meta .badge').nth(1);
+    const typeBadge = card(page, 'T-001').locator('.task-meta .badge').nth(0);
     await expect(typeBadge).toHaveText('spike');
     await expect(typeBadge).toHaveCSS('color', MUTED);
     await openFilters(page);
@@ -20,12 +20,12 @@ test.describe('edge cases', () => {
   });
 
   test('"bug" is styled like "bugfix"', async ({ page }) => {
-    await expect(card(page, 'T-006').locator('.task-meta .badge').nth(1)).toHaveCSS('color', RED);
+    await expect(card(page, 'T-006').locator('.task-meta .badge').nth(0)).toHaveCSS('color', RED);
   });
 
   test('unknown status renders with the todo style but is not counted as todo', async ({ page }) => {
     await expect(card(page, 'T-002')).toHaveClass(/status-review kind-none/);
-    const statusBadge = card(page, 'T-002').locator('.task-meta .badge').nth(2);
+    const statusBadge = card(page, 'T-002').locator('.task-meta .badge').nth(1);
     await expect(statusBadge).toHaveText('Review');
     await expect(statusBadge).toHaveCSS('color', MUTED);
     await openFilters(page);

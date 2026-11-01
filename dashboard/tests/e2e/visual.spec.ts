@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { board, boardCard, expect, openDashboard, sprintNumbers, summary, test } from './helpers';
+import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test } from './helpers';
 
 /**
  * Screenshot of the view under the title bar (#graph-section). The section is scrolled into view first, and the
@@ -123,6 +123,8 @@ test('visual: top bar with the filter panel open', async ({ page, tasksServer })
   await expect(page.locator('header.topbar')).toHaveScreenshot('standard-topbar-filters.png', {
     mask: [page.locator('#version-chip')],
   });
+  // The popup itself (T-323), which hangs below the title bar
+  await expect(page.locator('#filter-panel')).toHaveScreenshot('standard-filter-panel.png');
 });
 
 // FR-2.6: the main views in light mode (the OS setting is light; Playwright emulates it).
@@ -246,16 +248,19 @@ for (const mode of ['dark', 'light'] as const) {
   });
 }
 
-// The Appearance menu: the mode switch and the theme combo box with the current theme's swatch
+// The ⋯ settings menu (T-323): auto-refresh, the mode switch, the theme combo box with the current theme's swatch,
+// and resetting the project's view
 for (const mode of ['dark', 'light'] as const) {
-  test(`visual: appearance menu (${mode})`, async ({ page, tasksServer }) => {
+  test(`visual: settings menu (${mode})`, async ({ page, tasksServer }) => {
     await page.addInitScript(
       (m) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'gruvbox', mode: m, autoRefresh: false })),
       mode,
     );
     await openDashboard(page, tasksServer, 'standard');
-    await page.locator('#appearance-btn').click();
-    await expect(page.locator('#appearance-menu')).toHaveScreenshot(`appearance-menu-${mode}.png`);
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#settings-menu')).toHaveScreenshot(`settings-menu-${mode}.png`, {
+      mask: [page.locator('#last-loaded')],
+    });
   });
 }
 
@@ -462,16 +467,46 @@ for (const theme of [
   }
 }
 
-// The sprint header and the release view (SR-7.2, SR-7.5), in fixtures/sprints.json: "Ada Lovelace" is active, due
-// 2026-04-12, so two days overdue here
+// The scope bar, its menu and the release view (T-323, SR-7.2, SR-7.5), in fixtures/sprints.json: "Ada Lovelace" is
+// active, due 2026-04-12, so two days overdue here
 for (const colorScheme of ['dark', 'light'] as const) {
   test.describe(colorScheme, () => {
     test.use({ colorScheme });
 
-    test(`visual: sprint header (${colorScheme})`, async ({ page, tasksServer }) => {
+    test(`visual: scope bar (${colorScheme})`, async ({ page, tasksServer }) => {
       await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
       await openDashboard(page, tasksServer, 'sprints');
-      await expect(page.locator('#sprint-header')).toHaveScreenshot(`sprint-header-${colorScheme}.png`);
+      await expect(page.locator('#scope-bar')).toHaveScreenshot(`scope-bar-${colorScheme}.png`);
+    });
+
+    test(`visual: list grouped by sprint (${colorScheme})`, async ({ page, tasksServer }) => {
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+      await openDashboard(page, tasksServer, 'sprints', { tab: 'list' });
+      await page.locator('#scope-trigger').click();
+      await page.locator('.scope-choice[data-scope="all"]').click();
+      await page.locator('#list-closed-toggle').click();
+      await expect(page.locator('#panel-list')).toHaveScreenshot(`list-by-sprint-${colorScheme}.png`);
+    });
+
+    test(`visual: velocity (${colorScheme})`, async ({ page, tasksServer }) => {
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+      const data = loadFixture('sprints');
+      const meta = data.meta as { sprints: object[] };
+      const closed = (id: string, done: number) => ({
+        id,
+        state: 'closed',
+        report: { done: Array.from({ length: done }, (_, i) => `${id}-${i}`), carried: done % 2 ? ['x'] : [] },
+      });
+      meta.sprints = [closed('Alpha', 6), closed('Beta', 9), closed('Gamma', 4), closed('Delta', 11), ...meta.sprints];
+      await openDashboard(page, tasksServer, data, { tab: 'progress' });
+      await expect(page.locator('#velocity')).toHaveScreenshot(`velocity-${colorScheme}.png`);
+    });
+
+    test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+      await openDashboard(page, tasksServer, 'sprints');
+      await page.locator('#scope-trigger').click();
+      await expect(page.locator('#scope-menu')).toHaveScreenshot(`scope-menu-${colorScheme}.png`);
     });
 
     test(`visual: release view (${colorScheme})`, async ({ page, tasksServer }) => {

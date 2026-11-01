@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { projectStats, timeHistogram } from '../../src/lib/projectstats';
+import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
+import { resolveVocabulary } from '../../src/lib/vocab';
 
 // Times in minutes from T0
 const T0 = Date.parse('2026-05-01T08:00:00Z');
@@ -44,9 +46,20 @@ describe('projectStats (T-253)', () => {
     expect(s.duration).toEqual({ from: t(0), to: NOW, ongoing: true });
   });
 
-  it('tasks and phases: archived tasks not loaded count as done', () => {
+  it('tasks: archived tasks not loaded count as done', () => {
     expect(s.tasks).toEqual({ total: 6, done: 4, open: 1, skipped: 1 });
-    expect(s.phases).toEqual({ total: 2, finished: 1 });
+  });
+
+  it('sprints (T-323): how many, and how many closed; none without sprints', () => {
+    expect(s.sprints).toEqual({ total: 0, closed: 0 });
+    const meta = {
+      sprints: [
+        { id: 'One', state: 'closed' },
+        { id: 'Two', state: 'active' },
+      ],
+    };
+    const model = sprintModel(meta, TASKS, resolveVocabulary(meta));
+    expect(projectStats(TASKS, {}, NOW, undefined, 0, model).sprints).toEqual({ total: 2, closed: 1 });
   });
 
   it('task commits and distinct pull requests', () => {

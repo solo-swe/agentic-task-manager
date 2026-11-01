@@ -72,6 +72,20 @@ export function releaseNotes(release: Release, tasks: Task[], vocab: Vocabulary)
   return lines.join('\n');
 }
 
+/**
+ * The release view's two parts (T-323): the releases still open (planned), in the project's order, and the released
+ * ones, newest first (by released_at; those without one after, the last listed first).
+ */
+export function splitReleases(summaries: ReleaseSummary[]): { open: ReleaseSummary[]; released: ReleaseSummary[] } {
+  const at = (s: ReleaseSummary) => Date.parse(s.release.released_at ?? '') || -Infinity;
+  const released = summaries
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => s.release.state === 'released')
+    .sort((a, b) => at(b.s) - at(a.s) || b.i - a.i)
+    .map(({ s }) => s);
+  return { open: summaries.filter((s) => s.release.state !== 'released'), released };
+}
+
 /** Each release not archived (all with `withArchived`), with its sprints, its tasks by stage and its notes draft */
 export function releaseSummaries(
   meta: TasksFile['meta'],

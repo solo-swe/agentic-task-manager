@@ -11,6 +11,7 @@ import {
   type Validators,
 } from './load';
 import { compareVersions } from './changelog';
+import { projectComponents } from './components';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
 import { isModePref, knownTheme, resolveMode, type Mode, type ModePref } from './appearance';
@@ -20,6 +21,7 @@ import {
   filtersFrom,
   filterTasks,
   searchTasks,
+  sprintSelection as appliedSprintSelection,
   toggleFilter,
   type FilterGroup,
   type Filters,
@@ -33,6 +35,9 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
+import type { ListGroupBy } from './list-groups';
+import { leftovers as leftoversOf, scopeOf } from './scope';
+import { parseSprintHash, withSprintHash } from './sprint-hash';
 import { sprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
@@ -45,6 +50,11 @@ const NO_VALUES = emptyFilters().status;
 function savedOverviewTab(): OverviewTab {
   const tab = getPref('overviewTab', 'projects');
   return isOverviewTab(tab) ? tab : 'projects';
+}
+
+/** Two Sprint filter selections hold the same values, in any order */
+function sameSelection(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((v) => b.includes(v));
 }
 
 function releaseNotesUnseen(): boolean {
@@ -113,6 +123,10 @@ export class DashboardState {
   );
   /** The project's sprints and which sprint each task is in (lib/sprints.ts); read from phases until it is migrated */
   sprints = $derived(sprintModel(this.meta, this.history, this.vocab));
+  /** The project's components (meta.components), in their order; tasks name them by ID (T-323) */
+  components = $derived(projectComponents(this.meta));
+  /** Open tasks left in closed sprints, which no loop takes until they are moved (lib/scope.ts, T-323) */
+  leftovers = $derived(leftoversOf(this.tasks, this.sprints, this.vocab));
   // Archived tasks by ID, for dependency stubs in the detail panel
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   archiveMap = $derived<ReadonlyMap<string, Task>>(new Map(this.archive.map((t) => [t.id, t])));
@@ -129,14 +143,25 @@ export class DashboardState {
   base = $derived(this.includeArchived ? this.history : this.tasks);
   searched = $derived(searchTasks(this.base, this.query));
   filtered = $derived(filterTasks(this.searched, this.filters, this.vocab, this.sprints));
+  /** The Sprint filter as it applies: "the active sprint" selects nothing while no sprint is active */
+  sprintSelection = $derived(appliedSprintSelection(this.filters.sprint, this.sprints));
+  /** What the Kanban, List and Graph show, by sprint (the scope bar) */
+  scope = $derived(scopeOf(this.sprints, this.sprintSelection));
+  /** Filters other than Sprint, or a search, narrow the board within its sprints (the scope bar says "filtered") */
+  narrowed = $derived(
+    this.query.trim() !== '' || FILTER_GROUPS.some((g) => g !== 'sprint' && this.filters[g].size > 0),
+  );
+  /** The tasks matching the search and the filters but Sprint, which scopes only the Kanban, List and Graph (T-323) */
+  unscoped = $derived(filterTasks(this.searched, { ...this.filters, sprint: NO_VALUES }, this.vocab, this.sprints));
   /**
    * The Progress tab's tasks: the history (archived tasks too, once loaded) matching the search and filters, except
    * the status and stage filters. Progress *is* the split by status, so those would make it meaningless (T-239).
+   * Nor the Sprint filter: the tab shows every sprint and focuses one itself (T-323).
    */
   historyFiltered = $derived(
     filterTasks(
       searchTasks(this.history, this.query),
-      { ...this.filters, status: NO_VALUES, stage: NO_VALUES },
+      { ...this.filters, sprint: NO_VALUES, status: NO_VALUES, stage: NO_VALUES },
       this.vocab,
       this.sprints,
     ),
@@ -154,8 +179,17 @@ export class DashboardState {
   kanbanShowAllDone = $state(false);
   /** The List tab's order: as in the file, or by priority */
   listSort = $state<ListSort>('file');
-  /** The sprint the Progress tab focuses on (its ID, or BACKLOG); null for all of them */
-  progressSprint = $state<string | null>(null);
+  /** The List tab's groups, and whether its closed sprints are open (part of the saved view) */
+  listGroupBy = $state<ListGroupBy>('sprint');
+  listShowClosed = $state(false);
+  /** The List's groups as they apply: by sprint only where it shows more than one sprint */
+  listGroups = $derived<ListGroupBy>(
+    this.listGroupBy === 'sprint' && this.scope.kind !== 'all' && this.scope.kind !== 'several'
+      ? 'none'
+      : this.listGroupBy,
+  );
+  /** The sprint the Progress tab focuses on (its ID, BACKLOG, or ACTIVE: the active one); null for all of them */
+  progressSprint = $state<string | null>(defaultView().progressSprint);
   /** The filter panel's Sprint group lists the closed sprints too (part of the saved view) */
   filterClosedSprints = $state(false);
   /** The Progress tab's burndown range (part of the saved view) */
@@ -198,6 +232,8 @@ export class DashboardState {
   #validators: Validators | undefined;
   #projectsValidators: Validators | undefined;
   #pendingNeedsYou = false;
+  /** #sprint= in the URL (syncSprintHash): not until the project's view is restored, then replaced once, then pushed */
+  #sprintHash: 'pending' | 'restored' | 'synced' = 'pending';
   #pendingTask: string | null = null;
   // The build the server last said it holds, and the one dismissed in this page (for when storage is unavailable)
   #serverBuild: string | null = null;
@@ -304,6 +340,7 @@ export class DashboardState {
     this.detailOpen = false;
     this.detailId = null;
     this.viewKey = null;
+    this.#sprintHash = 'pending';
   }
 
   /** Show project `id`, or the overview for null (a new history entry, so Back returns). With `needsYou`, the project
@@ -313,7 +350,8 @@ export class DashboardState {
     id: string | null,
     { needsYou = false, task, view }: { needsYou?: boolean; task?: string; view?: ViewId } = {},
   ) {
-    let hash = withProjectHash(location.hash, id);
+    // Another project's sprints are not this one's: its own saved Sprint filter applies
+    let hash = withSprintHash(withProjectHash(location.hash, id), null);
     if (id !== null && needsYou) {
       hash = withViewHash(hash, 'kanban');
       this.#pendingNeedsYou = true;
@@ -332,7 +370,13 @@ export class DashboardState {
       setPref('overviewTab', overviewTab);
     }
     const route = routeFor(this.projects, location.hash);
-    if (JSON.stringify(route) !== JSON.stringify(this.route)) void this.reload();
+    if (JSON.stringify(route) !== JSON.stringify(this.route)) {
+      void this.reload();
+      return;
+    }
+    // Back, or a link to another sprint of the project shown (T-323)
+    const linked = this.#sprintHash === 'pending' ? null : parseSprintHash(location.hash, this.sprints);
+    if (linked && !sameSelection(linked, [...this.filters.sprint])) this.setSprintScope(linked);
   }
 
   /** Whether the server now holds a newer dashboard than this page (the plugin was updated): offer a reload, unless
@@ -449,12 +493,27 @@ export class DashboardState {
   }
 
   toggleFilter(group: FilterGroup, value: string) {
-    this.filters = toggleFilter(this.filters, group, value);
+    // A Sprint pick replaces "the active sprint" kept while none is active: it isn't shown, so it isn't kept either
+    const filters = group === 'sprint' ? { ...this.filters, sprint: this.sprintSelection } : this.filters;
+    this.filters = toggleFilter(filters, group, value);
   }
 
   /** No filters and no search */
   clearFilters() {
     this.filters = emptyFilters();
+    this.query = '';
+  }
+
+  /** The scope bar's choice: exactly these sprints (ACTIVE, a sprint's ID, BACKLOG), or none for all tasks */
+  setSprintScope(values: string[]) {
+    // A fresh set replaces the old one (filters is $state.raw): nothing mutates it
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    this.filters = { ...this.filters, sprint: new Set(values) };
+  }
+
+  /** The other filters and the search cleared, the sprints kept (the scope bar's "filtered ✕") */
+  clearNarrowing() {
+    this.filters = { ...emptyFilters(), sprint: this.filters.sprint };
     this.query = '';
   }
 
@@ -499,6 +558,7 @@ export class DashboardState {
   currentView(): SavedView {
     return {
       filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, [...this.filters[g]]])) as SavedView['filters'],
+      version: defaultView().version,
       query: this.query,
       tab: this.tab,
       kanban: {
@@ -507,6 +567,8 @@ export class DashboardState {
         showAllDone: this.kanbanShowAllDone,
       },
       listSort: this.listSort,
+      listGroupBy: this.listGroupBy,
+      listShowClosed: this.listShowClosed,
       progressSprint: this.progressSprint,
       filterClosedSprints: this.filterClosedSprints,
       progressRange: this.progressRange,
@@ -538,6 +600,28 @@ export class DashboardState {
       sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints),
       !hasViewHash(location.hash),
     );
+    // A #sprint= in the link wins over the saved Sprint filter (T-323)
+    const linked = parseSprintHash(location.hash, this.sprints);
+    if (linked) this.setSprintScope(linked);
+    this.#sprintHash = 'restored';
+  }
+
+  /**
+   * The Sprint filter into the URL (#sprint=, T-323), so the address shares the sprint shown and Back returns to the
+   * previous one; App runs it on every change. The first write after a project's view is restored replaces the entry.
+   */
+  syncSprintHash() {
+    const selection = [...this.filters.sprint];
+    if (this.#sprintHash === 'pending' || this.route.page !== 'project' || !this.sprints.sprints.length) return;
+    const linked = parseSprintHash(location.hash, this.sprints);
+    if (linked && sameSelection(linked, selection)) {
+      this.#sprintHash = 'synced';
+      return;
+    }
+    const hash = withSprintHash(location.hash, selection);
+    if (this.#sprintHash === 'restored') history.replaceState(null, '', hash);
+    else location.hash = hash;
+    this.#sprintHash = 'synced';
   }
 
   private applyView(view: SavedView, includeTab: boolean) {
@@ -547,6 +631,8 @@ export class DashboardState {
     this.kanbanShowSkipped = view.kanban.showSkipped;
     this.kanbanShowAllDone = view.kanban.showAllDone;
     this.listSort = view.listSort;
+    this.listGroupBy = view.listGroupBy;
+    this.listShowClosed = view.listShowClosed;
     this.progressSprint = view.progressSprint;
     this.filterClosedSprints = view.filterClosedSprints;
     this.progressRange = view.progressRange;

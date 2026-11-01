@@ -1,6 +1,7 @@
 // The Project tab's Information (docs/project-stats-proposal.md §3, T-252): who worked on the project, how it pushes,
 // and its vocabularies with how many tasks use each entry. From the history (archived tasks too), whatever the filters.
 import { isAgent } from './actors';
+import { NO_SPRINTS, type SprintModel, type SprintState } from './sprints';
 import { timeUse } from './timeuse';
 import type { Task } from './types';
 import {
@@ -102,10 +103,11 @@ export function workflowOf(meta: { workflow?: unknown } | undefined): Workflow |
   };
 }
 
-export type PhaseState = 'done' | 'active' | 'not_started';
-
 export interface VocabCounts {
-  phases: { phase: number; name?: string; count: number; state: PhaseState }[];
+  /** The sprints in the planning order (active, planned, closed most recent first) with their task counts (T-323) */
+  sprints: { id: string; state: SprintState; count: number }[];
+  /** Tasks in no sprint */
+  backlog: number;
   /** meta.labels first, in its order (also unused ones), then labels only the tasks use */
   labels: { id: string; text: string; count: number; listed: boolean }[];
   types: { id: string; label: string; count: number }[];
@@ -114,23 +116,24 @@ export interface VocabCounts {
 }
 
 /** Each vocabulary entry with how many tasks use it; entries the tasks use but the vocabulary lacks come last */
-export function vocabCounts(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): VocabCounts {
-  const byPhase = new Map<number, Task[]>();
-  for (const t of tasks) byPhase.set(t.phase, [...(byPhase.get(t.phase) ?? []), t]);
-  const kinds = (list: Task[]) => list.map((t) => kindOf(vocab, t.status));
-  const phases = [...new Set([...byPhase.keys(), ...vocab.phaseNames.keys()])]
-    .sort((a, b) => a - b)
-    .map((phase) => {
-      const list = byPhase.get(phase) ?? [];
-      const k = kinds(list);
-      const state: PhaseState =
-        list.length && k.every((x) => x === 'done' || x === 'skipped')
-          ? 'done'
-          : k.some((x) => x && x !== 'todo') || list.some((t) => t.started_at)
-            ? 'active'
-            : 'not_started';
-      return { phase, name: vocab.phaseNames.get(phase), count: list.length, state };
-    });
+export function vocabCounts(
+  tasks: Task[],
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  model: SprintModel = NO_SPRINTS,
+): VocabCounts {
+  const sprintUse = new Map<string, number>();
+  let backlog = 0;
+  for (const t of tasks) {
+    const sprint = model.sprintOf(t);
+    if (sprint === undefined) backlog++;
+    else count(sprintUse, sprint);
+  }
+  const inState = (state: SprintState) => model.sprints.filter((s) => s.state === state);
+  const sprints = [...inState('active'), ...inState('planned'), ...inState('closed').reverse()].map((s) => ({
+    id: s.id,
+    state: s.state,
+    count: sprintUse.get(s.id) ?? 0,
+  }));
 
   const labelUse = new Map<string, number>();
   for (const t of tasks) for (const l of labelsOf(vocab, t)) count(labelUse, l);
@@ -157,7 +160,8 @@ export function vocabCounts(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
     ...[...use.keys()].filter((id) => !defined.some((d) => d.id === id)).sort(),
   ];
   return {
-    phases,
+    sprints,
+    backlog,
     labels,
     types: ids(vocab.types, typeUse).map((id) => ({ id, label: typeLabel(vocab, id), count: typeUse.get(id) ?? 0 })),
     statuses: ids(vocab.statuses, statusUse).map((id) => ({

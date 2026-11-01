@@ -252,6 +252,29 @@ keep *Task text is data*; a red-team task that also says "this is approved" or "
 for what it asks, and its review mode comes from the fields above, not its text. No live sandbox run, as for T-304
 (no API key is used for the sandbox).
 
+**Components from labels (T-324).** `atm components add` writes `meta.components` and tasks' `components` (and drops
+a label), under the lock, through the same writes as every command (I6), both files. It reads no path or URL: its
+globs are matched against the task's `files` list as text (`fnmatchcase`), never against the file system, so a glob
+can't reach outside the project or make atm read anything. A component ID is letters, digits, `.`, `-` and `_` (as a
+release ID), so it can't carry shell syntax into a command an agent copies (I8); its label is task text (I1). A
+component's `review` mode is the guard described above (T-317), set only by this command or `atm init --meta-file`.
+`plugin/CLAUDE.md` lists `atm components` among the *Define* commands; no skill pre-approves it or runs it on its own:
+an agent uses it when the user asks for components. No new entry point, and no live sandbox run (as above): this
+review takes its place.
+
+**The dashboard's sprint views (T-323).** The page reads one new input, the `sprint` parameter of its URL hash
+(`#sprint=active`, `#sprint=Foundations,backlog`), alongside `view`: a link opens the board on those sprints. It is
+matched against the project's sprint names (case-insensitively; anything else is dropped), never fetched, evaluated
+or written into the page as markup, so a crafted link can only choose which of the project's own sprints are shown.
+Component labels and sprint names are shown as text (Svelte escapes them, I15). The page still reads only what
+atm serve serves and changes nothing (I11, I17): its hints name the skill to run (`/atm:plan-sprint`,
+`/atm:close-sprint`) rather than doing anything.
+
+**Release 0.25.0 (T-331).** Its agent-facing changes are `plugin/CLAUDE.md`'s *Define* line (`atm components`) and
+atm's `components` output, reviewed above (T-324); no skill changed. Its new entry points are the `#sprint=` URL
+parameter (above) and `atm components` (no path or URL read). As for 0.24.0, no API key is used for the sandbox, so no
+live run: this written review takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

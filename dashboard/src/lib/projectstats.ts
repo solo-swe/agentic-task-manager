@@ -3,6 +3,7 @@
 import { INTERACTIVE_LABEL } from './forecast';
 import { median } from './insights';
 import { completions } from './timeline';
+import { NO_SPRINTS, type SprintModel } from './sprints';
 import { mergeIntervals, timeUse } from './timeuse';
 import type { Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
@@ -16,7 +17,8 @@ export interface ProjectStats {
   duration: { from: number; to: number; ongoing: boolean } | null;
   /** Archived tasks count as done: they are finished, and only finished tasks are archived */
   tasks: { total: number; done: number; open: number; skipped: number };
-  phases: { total: number; finished: number };
+  /** The project's sprints, and how many are closed (T-323) */
+  sprints: { total: number; closed: number };
   /** Tasks with a recorded commit: one per task, the commit atm made when finishing it */
   taskCommits: number;
   /** Distinct pull requests recorded on tasks; null for a project that pushes straight to its branch */
@@ -38,6 +40,7 @@ export function projectStats(
   vocab: Vocabulary = DEFAULT_VOCABULARY,
   /** Archived tasks not in `tasks` (the archive isn't loaded yet): meta.archived */
   unloadedArchived = 0,
+  model: SprintModel = NO_SPRINTS,
 ): ProjectStats {
   const kind = (t: Task) => kindOf(vocab, t.status);
   const min = (values: (number | null)[]) => {
@@ -56,12 +59,6 @@ export function projectStats(
       : open > 0
         ? { from: firstStart, to: now, ongoing: true }
         : { from: firstStart, to: Math.max(firstStart, lastDone ?? firstStart), ongoing: false };
-
-  const byPhase = new Map<number, Task[]>();
-  for (const t of tasks) byPhase.set(t.phase, [...(byPhase.get(t.phase) ?? []), t]);
-  const finished = [...byPhase.values()].filter((list) =>
-    list.every((t) => kind(t) === 'done' || kind(t) === 'skipped'),
-  ).length;
 
   const prs = new Set(tasks.map((t) => t.pr?.number).filter((n): n is number => typeof n === 'number'));
   const workflow = (meta?.workflow as { type?: unknown } | undefined)?.type;
@@ -91,7 +88,7 @@ export function projectStats(
       open,
       skipped: tasks.filter((t) => kind(t) === 'skipped').length,
     },
-    phases: { total: byPhase.size, finished },
+    sprints: { total: model.sprints.length, closed: model.sprints.filter((s) => s.state === 'closed').length },
     taskCommits: tasks.filter((t) => typeof t.commit === 'string' && t.commit).length,
     pullRequests: prs.size === 0 && workflow === 'direct' ? null : prs.size,
     agentMs: use?.agentMs ?? 0,
