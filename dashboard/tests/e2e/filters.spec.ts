@@ -243,6 +243,8 @@ test.describe('search and Filters in the title bar (T-323)', () => {
   });
 
   test('"/" focuses the search; Clear filters keeps the sprint', async ({ page }) => {
+    // Once the page has loaded: a key pressed before it mounts is lost (CI's runner is slower)
+    await expect(page.locator('.task-card').first()).toBeVisible();
     await page.keyboard.press('/');
     await expect(page.locator('#task-search')).toBeFocused();
     await page.keyboard.type('editor');
