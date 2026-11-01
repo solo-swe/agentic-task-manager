@@ -659,6 +659,13 @@
             "T-331"
           ]
         }
+      },
+      {
+        "id": "Overview and polish",
+        "state": "active",
+        "goal": "The Projects Overview catches up with a project’s page (Activity, Progress, Agents, a better card), with polish across the dashboard",
+        "release": "0.26.0",
+        "start": "2026-11-01T09:28:31Z"
       }
     ],
     "releases": [
@@ -809,6 +816,11 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
         },
         "released_at": "2026-11-01T09:07:00Z"
+      },
+      {
+        "id": "0.26.0",
+        "state": "planned",
+        "name": "Overview and polish"
       }
     ],
     "migrations": [
@@ -13672,7 +13684,7 @@
       "dependencies": [],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-11-01T08:35:03Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -13680,9 +13692,14 @@
           "sprint": "Testing together",
           "from": "2026-10-27T09:19:02Z",
           "to": "2026-11-01T08:35:03Z"
+        },
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "with": "user"
+      "with": "user",
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-278",
@@ -13762,7 +13779,7 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-01T08:35:03Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -13770,12 +13787,17 @@
           "sprint": "Testing together",
           "from": "2026-10-27T16:41:57Z",
           "to": "2026-11-01T08:35:03Z"
+        },
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
         }
       ],
       "with": "user",
       "components": [
         "branding"
-      ]
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-280",
@@ -16503,12 +16525,19 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-01T07:24:01Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-329",
@@ -16530,13 +16559,20 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-01T07:24:06Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "components": [
         "dashboard",
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-330",
@@ -16559,16 +16595,23 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-01T08:21:22Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "cli",
         "skills"
       ],
       "related": [
         "T-323"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-331",
@@ -16642,12 +16685,19 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:24:38Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-333",
@@ -16669,16 +16719,23 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-328",
         "T-329"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-334",
@@ -16699,12 +16756,19 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-335",
@@ -16726,13 +16790,20 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     },
     {
       "id": "T-336",
@@ -16812,13 +16883,20 @@
         "dashboard/tests/unit/TaskCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:42:49Z",
-      "updated_at": "2026-11-01T08:42:49Z",
+      "updated_at": "2026-11-01T09:28:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:9fec227a",
       "components": [
         "dashboard"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish"
     }
   ]
 }
