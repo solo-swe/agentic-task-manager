@@ -174,6 +174,64 @@ test.describe('scope bar (T-323)', () => {
     await expect(page.locator('#list-group')).toHaveValue('label');
   });
 
+  test('Progress: the burndown opens on the active sprint, listed first; velocity per closed sprint; releases folded', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('sprints');
+    const meta = data.meta as Record<string, unknown>;
+    // Ada Lovelace (active) is listed after Alan Turing (planned), as when a sprint is started after others were planned
+    const sprints = sprintsOf(data);
+    meta.sprints = [
+      { id: 'Zero', state: 'closed', end: '2026-03-30T18:00:00Z', report: { done: ['X-1', 'X-2'] } },
+      sprints[0],
+      sprints[2],
+      sprints[1],
+    ];
+    data.tasks.push({
+      id: 'T-006',
+      name: 'Logo',
+      phase: 0,
+      type: 'polish',
+      description: '',
+      status: 'todo',
+      sprint: 'Alan Turing',
+    });
+    meta.releases = [
+      ...(meta.releases as object[]),
+      { id: '0.7', state: 'released', released_at: '2026-03-01T00:00:00Z' },
+      { id: '0.8', state: 'released', released_at: '2026-03-20T00:00:00Z' },
+    ];
+    await openDashboard(page, tasksServer, data, { tab: 'progress' });
+    await expect(page.locator('#burndown-focus')).toHaveText('Ada Lovelace');
+    const open = page.locator('#sprint-table tbody tr:not(#sprint-closed):not([data-sprint-state="closed"])');
+    expect(await open.evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.sprint))).toEqual([
+      'Ada Lovelace',
+      'Alan Turing',
+      ':backlog',
+    ]);
+    await page.getByRole('button', { name: 'Show all sprints' }).click();
+    await expect(page.locator('#burndown-focus')).toHaveText('All sprints');
+
+    // Velocity: Zero's report (2), Foundations' (1), oldest first
+    await expect(page.locator('#velocity .velocity-column')).toHaveCount(2);
+    await expect(page.locator('#velocity .velocity-value')).toHaveText(['2', '1']);
+    await expect(page.locator('#velocity .velocity-sub')).toContainText('average 1.5');
+
+    // The open releases, then the released ones in one row
+    await expect(page.locator('.release-row').first()).toHaveAttribute('data-release', '1.0');
+    await expect(page.locator('#release-released-toggle')).toContainText('✓ 2 released · last 0.8');
+    await expect(page.locator('.release-row[data-state="released"]')).toHaveCount(0);
+    await page.locator('#release-released-toggle').click();
+    expect(
+      await page
+        .locator('.release-row[data-state="released"]')
+        .evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.release)),
+    ).toEqual(['0.8', '0.7']);
+    // Recorded without tasks: no counts, no notes draft
+    await expect(page.locator('.release-row[data-release="0.8"] .release-counts')).toHaveCount(0);
+  });
+
   test('an overdue sprint says so, in red', async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
     await openDashboard(page, tasksServer, 'sprints');

@@ -86,7 +86,8 @@ describe('reading and writing', () => {
     expect(view.filters.type).toEqual(['test']);
     expect(view.filterClosedSprints).toBe(true);
     expect(view).not.toHaveProperty('progressPhase');
-    expect(view.progressSprint).toBeNull();
+    // No focused sprint saved: the default, the active one (T-323)
+    expect(view.progressSprint).toBe(':active');
     expect(view.progressRange).toBe('sprint');
   });
 
@@ -99,6 +100,14 @@ describe('reading and writing', () => {
     // Since version 2, no Sprint filter is a choice: all tasks
     localStorage.setItem(key, JSON.stringify({ version: 2, filters: { sprint: [] } }));
     expect(readView(key).filters.sprint).toEqual([]);
+  });
+
+  it("the Progress tab's burndown: the active sprint by default and before version 2; all sprints a choice since", () => {
+    expect(defaultView().progressSprint).toBe(':active');
+    localStorage.setItem(key, JSON.stringify({ progressSprint: null }));
+    expect(readView(key).progressSprint).toBe(':active');
+    localStorage.setItem(key, JSON.stringify({ version: 2, progressSprint: null }));
+    expect(readView(key).progressSprint).toBeNull();
   });
 
   it('a view saved before sprints keeps "group by phase" as "group by sprint" (SR-7.3)', () => {

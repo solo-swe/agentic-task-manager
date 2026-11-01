@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BURNDOWN_RANGES, burndown, rangeSprint, rangeStart } from '../lib/burndown';
-  import { BACKLOG, FILTER_GROUPS } from '../lib/filters';
+  import { ACTIVE, BACKLOG, FILTER_GROUPS } from '../lib/filters';
   import { forecastSprints, withWholeSprintEstimates } from '../lib/forecast';
   import { dashboard } from '../lib/state.svelte';
   import { timeUse } from '../lib/timeuse';
@@ -9,6 +9,7 @@
   import ReleaseView from './ReleaseView.svelte';
   import SprintTable from './SprintTable.svelte';
   import TimeSplitBar from './TimeSplitBar.svelte';
+  import VelocityChart from './VelocityChart.svelte';
 
   // Progress is history: archived tasks count too, so the tab loads the archive once shown (D-5.2). It stays mounted
   // while hidden, so only when it is the selected tab.
@@ -44,7 +45,12 @@
   );
   // Clicking a sprint row focuses the burndown on that sprint (FR-4.6); a filter that hides it resets the focus
   // The focused sprint is part of the project's saved view (dashboard state)
-  const selected = $derived(dashboard.progressSprint);
+  // By default the active sprint, whichever it is (ACTIVE, T-323); all sprints while none is active
+  const selected = $derived(
+    dashboard.progressSprint === ACTIVE
+      ? (model.sprints.find((s) => s.state === 'active')?.id ?? null)
+      : dashboard.progressSprint,
+  );
   const focus = $derived(selected !== null && forecast.sprints.some((s) => s.key === selected) ? selected : undefined);
   const label = (key: string) => (key === BACKLOG ? 'the backlog' : key);
   // The time range (saved with the view): the focused sprint's, or the one the loop works on, by default (T-240)
@@ -137,6 +143,7 @@
       <BurndownChart data={chart} {now} />
     {/if}
     <SprintTable {forecast} {now} selected={focus} onselect={toggle} />
+    <VelocityChart />
     <ReleaseView />
     {#if use}
       <section class="progress-time-use" aria-label="Where the time went">

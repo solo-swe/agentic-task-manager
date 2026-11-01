@@ -66,7 +66,7 @@ export interface SprintForecast {
 
 export interface Forecast {
   pace: Pace | null;
-  /** The sprints with tasks, in the project's order, then the backlog */
+  /** The sprints with tasks: the closed ones in the project's order, then the active one, the planned ones, the backlog */
   sprints: SprintForecast[];
 }
 
@@ -153,7 +153,12 @@ export function forecastSprints(
     const key = sprintKey(model, t);
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }
-  const keys = [...model.sprints.map((s) => s.id), BACKLOG].filter((key) => groups.has(key));
+  // The closed sprints in the project's order, then the loop's: the active one, the planned ones, the backlog (T-323:
+  // a sprint started after others were planned is still first)
+  const ofState = (state: string) => model.sprints.filter((s) => s.state === state).map((s) => s.id);
+  const keys = [...ofState('closed'), ...ofState('active'), ...ofState('planned'), BACKLOG].filter((key) =>
+    groups.has(key),
+  );
 
   const rows = keys.map((key): SprintForecast => {
     const own = groups.get(key)!;

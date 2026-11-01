@@ -6,6 +6,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
 ## [Unreleased]
 
+### Fixed
+- **The sprint table lists the active sprint first** (T-323): the open sprints follow the loop's order (the active
+  one, the planned ones, the backlog), as the table says, not the order they were added in; a sprint started after
+  others were planned was listed after them. The Progress panel's sprint rings follow the same order.
+
 ### Changed
 - **The scope bar replaces the sprint header** (T-323, SR-7.2): the Kanban, List and Graph open on the active sprint,
   and the bar above them (`#scope-bar`) says which tasks they show, kept in step with the Sprint filter. Its menu
@@ -30,6 +35,16 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   many are done and the sprint's goal. *Group* (`#list-group`) also groups by label or by component, as
   `/atm:plan-sprint` groups the backlog, or not at all; it is part of the saved view (`listGroupBy`,
   `listShowClosed`). Group and Order sit at the scope bar's end, like the Kanban's options.
+- **The Progress tab opens the burndown on the active sprint** (T-323): its tasks, since it started, its due date
+  marked; *Show all sprints* and the range buttons still widen it, and with no active sprint it shows them all. The
+  focus is `:active` in the saved view (`progressSprint`), so it follows the next sprint; views saved before this
+  version without a focus take it too.
+- **Velocity** (T-323, `#velocity`): under the sprint table, a bar per closed sprint, the last ten in order, with the
+  tasks it got done (from its report, else its tasks done), the average as a dashed line, and what it carried over or
+  had added mid-sprint on hover.
+- **Released releases fold into one row** (T-323, `#release-released-toggle`): the open releases first, then
+  "✓ 19 released · last 0.24.0", newest first when opened, each with its release date. A release recorded without
+  tasks (recovered from git history) shows its name, date and PR only, no empty counts or notes draft.
 - **List cards name their sprint**, instead of the phase badge left from before sprints, when the list shows several
   sprints and doesn't group by them (`.task-card-sprint`, as on the Kanban).
 - **The Kanban's toolbar row is gone**: its completion ring of the tasks shown repeated the scope bar's progress, and

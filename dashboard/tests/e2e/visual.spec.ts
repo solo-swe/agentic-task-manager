@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { board, boardCard, expect, openDashboard, sprintNumbers, summary, test } from './helpers';
+import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test } from './helpers';
 
 /**
  * Screenshot of the view under the title bar (#graph-section). The section is scrolled into view first, and the
@@ -481,6 +481,20 @@ for (const colorScheme of ['dark', 'light'] as const) {
       await page.locator('.scope-choice[data-scope="all"]').click();
       await page.locator('#list-closed-toggle').click();
       await expect(page.locator('#panel-list')).toHaveScreenshot(`list-by-sprint-${colorScheme}.png`);
+    });
+
+    test(`visual: velocity (${colorScheme})`, async ({ page, tasksServer }) => {
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
+      const data = loadFixture('sprints');
+      const meta = data.meta as { sprints: object[] };
+      const closed = (id: string, done: number) => ({
+        id,
+        state: 'closed',
+        report: { done: Array.from({ length: done }, (_, i) => `${id}-${i}`), carried: done % 2 ? ['x'] : [] },
+      });
+      meta.sprints = [closed('Alpha', 6), closed('Beta', 9), closed('Gamma', 4), closed('Delta', 11), ...meta.sprints];
+      await openDashboard(page, tasksServer, data, { tab: 'progress' });
+      await expect(page.locator('#velocity')).toHaveScreenshot(`velocity-${colorScheme}.png`);
     });
 
     test(`visual: scope menu (${colorScheme})`, async ({ page, tasksServer }) => {

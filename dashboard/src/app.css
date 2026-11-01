@@ -1452,6 +1452,87 @@ button.menu-trigger:hover,
   display: grid;
   gap: 8px;
 }
+/* Velocity (VelocityChart.svelte, T-323): a bar per closed sprint, anchored to the baseline, the average dashed */
+.velocity {
+  margin-top: 24px;
+}
+.velocity-sub {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.velocity-plot {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  height: 110px;
+  margin-top: 26px;
+  /* A gutter on the right for the average's label, clear of the bars */
+  padding-right: 64px;
+  border-bottom: 1px solid var(--border);
+}
+.velocity-column {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.velocity-bar {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: min(60%, 36px);
+  transform: translateX(-50%);
+  border-radius: 4px 4px 0 0;
+  background: var(--accent);
+}
+.velocity-column:hover .velocity-bar {
+  filter: brightness(1.15);
+}
+.velocity-value {
+  position: absolute;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  margin-bottom: 2px;
+  padding: 0 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.velocity-average {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+.velocity-average span {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  padding-left: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.velocity-names {
+  display: flex;
+  gap: 2px;
+  margin-top: 4px;
+  padding-right: 64px;
+}
+.velocity-names span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  text-align: center;
+  color: var(--text-muted);
+}
 /* The List's groups (TaskGrid.svelte, T-323): a header line per sprint, label or component */
 .list-groups {
   display: flex;

@@ -77,7 +77,8 @@ export function defaultView(): SavedView {
     listSort: 'file',
     listGroupBy: 'sprint',
     listShowClosed: false,
-    progressSprint: null,
+    // The burndown of the active sprint, whichever it is (T-323); all sprints while none is active
+    progressSprint: ACTIVE,
     filterClosedSprints: false,
     progressRange: 'sprint',
     graphFiltered: 'hide',
@@ -149,7 +150,13 @@ export function readView(key: string): SavedView {
       : view.listGroupBy,
     listShowClosed: stored.listShowClosed === true,
     // A focused phase (progressPhase, before sprints) is dropped: phases are no longer a unit of the Progress tab
-    progressSprint: typeof stored.progressSprint === 'string' ? stored.progressSprint : null,
+    // Before version 2, all sprints was the default, not a choice: the active sprint now, as for new views
+    progressSprint:
+      typeof stored.progressSprint === 'string'
+        ? stored.progressSprint
+        : stored.version !== VIEW_VERSION
+          ? view.progressSprint
+          : null,
     // filterFinishedPhases, its name before sprints, meant the same
     filterClosedSprints: stored.filterClosedSprints === true || stored.filterFinishedPhases === true,
     // "phase", the range's name before sprints, is now "sprint"
@@ -196,6 +203,9 @@ export function sanitizeView(
   return {
     ...view,
     filters: Object.fromEntries(FILTER_GROUPS.map((g) => [g, keep(g)])) as SavedView['filters'],
-    progressSprint: view.progressSprint !== null && sprints.has(view.progressSprint) ? view.progressSprint : null,
+    progressSprint:
+      view.progressSprint === ACTIVE || (view.progressSprint !== null && sprints.has(view.progressSprint))
+        ? view.progressSprint
+        : null,
   };
 }

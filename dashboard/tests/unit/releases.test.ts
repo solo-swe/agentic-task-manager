@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readReleases, releaseNotes, releaseSummaries } from '../../src/lib/releases';
+import { readReleases, releaseNotes, releaseSummaries, splitReleases } from '../../src/lib/releases';
 import { sprintModel } from '../../src/lib/sprints';
 import type { Task, TasksFile } from '../../src/lib/types';
 import { resolveVocabulary } from '../../src/lib/vocab';
@@ -26,6 +26,22 @@ describe('releases', () => {
       ['1.1', [], 1, 0, 0, 0],
     ]);
     expect(releaseSummaries(file.meta, tasks, model, vocab, true).map((s) => s.release.id)).toContain('0.9');
+  });
+
+  it('splits the open releases, in order, from the released ones, newest first (T-323)', () => {
+    const meta = {
+      releases: [
+        { id: '0.1', state: 'released', released_at: '2026-01-01T00:00:00Z' },
+        { id: '0.3', state: 'released', released_at: '2026-03-01T00:00:00Z' },
+        { id: '0.4', state: 'planned' },
+        { id: '0.2', state: 'released' },
+        { id: '0.5', state: 'planned' },
+      ],
+    };
+    const { open, released } = splitReleases(releaseSummaries(meta, [], model, vocab));
+    expect(open.map((s) => s.release.id)).toEqual(['0.4', '0.5']);
+    // Without a date: after the dated ones
+    expect(released.map((s) => s.release.id)).toEqual(['0.3', '0.1', '0.2']);
   });
 
   it('drafts the notes as atm releases notes does: done by type with outcomes, then what is not done', () => {

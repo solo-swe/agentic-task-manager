@@ -177,8 +177,8 @@ export class DashboardState {
       ? 'none'
       : this.listGroupBy,
   );
-  /** The sprint the Progress tab focuses on (its ID, or BACKLOG); null for all of them */
-  progressSprint = $state<string | null>(null);
+  /** The sprint the Progress tab focuses on (its ID, BACKLOG, or ACTIVE: the active one); null for all of them */
+  progressSprint = $state<string | null>(defaultView().progressSprint);
   /** The filter panel's Sprint group lists the closed sprints too (part of the saved view) */
   filterClosedSprints = $state(false);
   /** The Progress tab's burndown range (part of the saved view) */
