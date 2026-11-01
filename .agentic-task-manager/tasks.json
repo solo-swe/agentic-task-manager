@@ -16209,7 +16209,7 @@
       "description": "`atm components add` (T-324) refuses a component already there, so a second label can't be moved onto an existing component. Add `atm components edit <id>` with the same options, for an existing one, in one locked write:\n- `--label TEXT` sets the name shown (empty: remove it); `--review MODE` its review mode (empty: remove it);\n- `--add-path GLOB` (repeatable) adds globs (one already there is kept once);\n- `--from-label LABEL` moves the label onto it on every task, `tasks.json` and `tasks-archive.json`, and drops it from `meta.labels` (as `add` does);\n- `--assign` gives it to every task whose `files` its globs match, the new ones included.\n\nIt refuses an unknown component (naming the components), a bad glob or mode, and a label no task has (a typo), writing nothing; it prints what changed, e.g. `cli: 6 tasks from the label atm-cli, 2 more by their files`. Share the label-moving and assigning code with `components_add` rather than copying it.\n\n## Tests\nScenarios in `tests/scripts/scenarios/components.json`: edit with each option, the archive too, the refusals.\n\n## Docs\n`docs/v4/atm-cli.md`, the usage text, `plugin/CLAUDE.md`'s *Define* line if it names the subcommands, `plugin/CHANGELOG.md`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/components.py",
@@ -16220,7 +16220,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T07:15:44Z",
+      "updated_at": "2026-11-01T07:15:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16237,7 +16237,9 @@
       "related": [
         "T-324",
         "T-323"
-      ]
+      ],
+      "started_at": "2026-11-01T07:15:49Z",
+      "started_by": "claude:9fec227a"
     },
     {
       "id": "T-327",

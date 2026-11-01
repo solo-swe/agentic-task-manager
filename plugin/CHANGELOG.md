@@ -20,6 +20,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   projects that marked their parts with labels before components existed. It refuses a component already there, a
   bad ID or glob, and a label no task has (a typo), writing nothing. `plugin/CLAUDE.md` lists it among the *Define*
   commands.
+- **`atm components edit <id> [--label T] [--add-path GLOB]... [--review MODE] [--from-label L] [--assign]`**
+  (T-326): changes an existing component the same way, so a second label can move onto it (`--label` and `--review`
+  empty remove them); it refuses an unknown component, naming them.
 
 ### Changed
 - **The scope bar replaces the sprint header** (T-323, SR-7.2): the Kanban, List and Graph open on the active sprint,

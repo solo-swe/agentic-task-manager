@@ -342,6 +342,126 @@
     }
   },
   {
+    "name": "components edit --from-label --add-path --assign: a second label onto an existing component, the archive too, the new globs assigned (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "labels": [{ "id": "atm-cli" }, { "id": "ux" }],
+            "components": [{ "id": "cli", "label": "CLI", "paths": ["atm-cli/**"] }]
+          },
+          "tasks": [
+            { "id": "T-1", "status": "done", "labels": ["atm-cli"], "components": ["cli"] },
+            { "id": "T-2", "status": "todo", "labels": ["atm-cli", "ux"] },
+            { "id": "T-3", "status": "todo", "files": ["plugin/scripts/atm"] },
+            { "id": "T-4", "status": "todo", "files": ["atm-cli/atm/x.py"], "components": ["cli"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-0", "status": "done", "labels": ["atm-cli"] }]
+        }
+      }
+    },
+    "args": [
+      "components",
+      "edit",
+      "cli",
+      "--add-path",
+      "plugin/scripts/**",
+      "--add-path",
+      "atm-cli/**",
+      "--from-label",
+      "atm-cli",
+      "--assign"
+    ],
+    "expect": {
+      "stdout": "cli: changed paths, 3 tasks from the label atm-cli, 1 more by their files\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "labels": [{ "id": "ux" }],
+            "components": [{ "id": "cli", "label": "CLI", "paths": ["atm-cli/**", "plugin/scripts/**"] }]
+          },
+          "tasks": [
+            { "id": "T-1", "status": "done", "components": ["cli"] },
+            { "id": "T-2", "status": "todo", "labels": ["ux"], "components": ["cli"] },
+            { "id": "T-3", "status": "todo", "files": ["plugin/scripts/atm"], "components": ["cli"] },
+            { "id": "T-4", "status": "todo", "files": ["atm-cli/atm/x.py"], "components": ["cli"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-0", "status": "done", "components": ["cli"] }]
+        }
+      }
+    }
+  },
+  {
+    "name": "components edit --label and --review set them; empty removes them; --json (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "components": [{ "id": "api", "label": "API", "paths": ["server.py"] }] },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["components", "edit", "api", "--label", "", "--review", "blocker", "--json"],
+    "expect": {
+      "json": {
+        "component": { "id": "api", "paths": ["server.py"], "review": "blocker" },
+        "changed": ["label", "review"],
+        "from_label": [],
+        "by_files": []
+      },
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "components": [{ "id": "api", "paths": ["server.py"], "review": "blocker" }] },
+          "tasks": []
+        }
+      }
+    }
+  },
+  {
+    "name": "components edit with nothing to change says so (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "api", "paths": ["a"] }] }, "tasks": [] }
+      }
+    },
+    "args": ["components", "edit", "api", "--add-path", "a"],
+    "expect": { "stdout": "api: nothing changed\n" }
+  },
+  {
+    "name": "components edit refuses an unknown component, naming them (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] }
+      }
+    },
+    "args": ["components", "edit", "api", "--from-label", "server"],
+    "expect": { "exit": 2, "stderrIncludes": ["no component 'api'; the components: cli"] }
+  },
+  {
+    "name": "components edit --assign on a component without globs is refused (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "compmd" }] }, "tasks": [] }
+      }
+    },
+    "args": ["components", "edit", "compmd", "--assign"],
+    "expect": { "exit": 2, "stderrIncludes": ["--assign gives compmd to the tasks its globs match, and it has none"] }
+  },
+  {
+    "name": "components: add takes --path, edit --add-path (T-326)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] }
+      }
+    },
+    "args": ["components", "edit", "cli", "--path", "x/**"],
+    "expect": { "exit": 2, "stderrIncludes": ["--path is for atm components add (edit takes --add-path)"] }
+  },
+  {
     "name": "components: add's options are refused when listing (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["components", "--from-label", "x"],

@@ -41,8 +41,8 @@ Every command takes `--json`; `atm help` lists them all.
 - Push: `/atm:push` records the PR with `atm pr <id>... --number N --url U` and merges with `atm merged --pr N`
 - Define: `atm init --meta-file F` (project, vocabularies), `atm repository [set URL]` (the repository's web address,
   for commit and PR links; `atm init` fills it from origin), `atm sprints` (the sprints; `/atm:plan-sprint` plans
-  one), `atm components [add <id> --path GLOB [--from-label L] [--assign]]` (the project's parts, by file globs; a
-  label can become one, when the user asks), `atm add` (`--json-file` for many), `atm edit <id>`, `atm check`,
+  one), `atm components [add|edit <id> --path GLOB [--from-label L] [--assign]]` (the project's parts, by file
+  globs; a label can become one, when the user asks), `atm add` (`--json-file` for many), `atm edit <id>`, `atm check`,
   `atm workflow set`
 - Archive: `atm archive` (when atm suggests it), `atm unarchive <id>...`
 - atm locks the file, writes timestamps and actors, and records claims (which agent works on which task, with a
