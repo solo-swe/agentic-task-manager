@@ -4407,9 +4407,10 @@ svg.graph-minimap.hidden {
 }
 
 /* Pages without a project: the overview, how to add a project, an unknown project (LandingPage.svelte). A column
-   taking the rest of the window, so the board can fill it (T-265) */
+   taking the rest of the window, so the board can fill it (T-265). No room above: the overview's tabs sit right
+   under the title bar, as a project's do (T-334) */
 .landing {
-  padding: 24px 0;
+  padding: 0 0 24px;
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;

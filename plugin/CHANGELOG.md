@@ -33,6 +33,8 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   hint hides and the toolbar wraps. e2e runs with `reducedMotion: 'reduce'`; `openDashboard(…, { graphAutoFit:
   false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 looks
   for what makes the file grow).
+- **Projects Overview: the tabs sit right under the title bar** (T-334), at the same height as on a project's page;
+  `.landing` lost its 24 px top padding.
 
 ### Fixed
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it

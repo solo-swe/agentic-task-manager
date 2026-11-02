@@ -84,6 +84,23 @@ test.describe('projects', () => {
     await footerAtBottom();
   });
 
+  test('the overview’s tabs sit right under the title bar, as on a project’s page (T-334)', async ({
+    page,
+    tasksServer,
+  }) => {
+    const tabsTop = async () => {
+      const main = (await page.locator('#app-main').boundingBox())!;
+      const tab = (await page.locator('.view-tab[aria-selected="true"]').first().boundingBox())!;
+      return tab.y - main.y;
+    };
+    await openDashboard(page, tasksServer, 'minimal');
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    const onProject = await tabsTop();
+    await page.goto('tasks-dashboard.html#overview');
+    await expect(page.locator('#projects-grid .project-card')).toHaveCount(1);
+    expect(await tabsTop()).toBe(onProject);
+  });
+
   test('with one project, the dashboard opens it right away', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
