@@ -19280,7 +19280,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:48:13Z",
+      "updated_at": "2026-11-02T22:02:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19320,7 +19320,8 @@
         }
       ],
       "started_at": "2026-11-02T21:48:13Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "5c2f666c2d719744e96d76e9d2265d07452671de"
     },
     {
       "id": "T-375",
@@ -19343,7 +19344,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:58Z",
+      "updated_at": "2026-11-02T22:21:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19360,7 +19361,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T22:21:37Z",
+          "kind": "note",
+          "text": "From T-374 (carried from T-366): give the worktree copies (`worktrees.json`, now `lib/worktrees.py`) atm’s derived values too, and drop the dashboard’s own fallbacks for tasks without `derived` (`kanban.ts` readiness, `waiting.ts` togetherNow). T-374 moved the copies into atm-lib but left their shape as it was.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-376",

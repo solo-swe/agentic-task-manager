@@ -14,8 +14,7 @@ import socket
 import sys
 import time
 
-from .common.core import AtmError, now_iso, parse_iso, pid_alive, read_json, write_json_atomic
-from .paths import find_paths
+from ...common.core import AtmError, now_iso, parse_iso, pid_alive, read_json, write_json_atomic
 
 LOCK_DIR = ".lock"
 LOCK_OWNER = "owner.json"
@@ -107,16 +106,3 @@ def locked(directory, timeout=None):
     finally:
         shutil.rmtree(lock, ignore_errors=True)
         signal.signal(signal.SIGTERM, previous)
-
-
-def cmd_lock_test(args):
-    """Test hook: hold the task folder's lock for `seconds`, logging to .lock-test.log, so tests can check exclusion."""
-    seconds = args.seconds
-    task_dir = find_paths(os.getcwd())["dir"]
-    log = os.path.join(task_dir, ".lock-test.log")
-    with locked(task_dir):
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"acquire {os.getpid()}\n")
-        time.sleep(seconds)
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"release {os.getpid()}\n")

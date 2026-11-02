@@ -4,6 +4,7 @@ the store's interface only: the contract tests (tests/lib/) run the same checks 
 import copy
 import json
 
+from ..common.errors import Conflict, Invalid
 from ..common.model import vocabulary
 from .working import Working
 
@@ -13,9 +14,12 @@ def empty_claims():
 
 
 class MemoryStore:
-    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None):
+    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None, created=True):
         """`problems`: what a tolerant read would have found ({"file": [...], "tasks": {id: [...]}}), for the tests of
-        what atm-lib makes of them; the memory holds data, not a file to read."""
+        what atm-lib makes of them; the memory holds data, not a file to read. `created` false: a project with no
+        task data yet (`atm init` creates it)."""
+        self.created = created
+        self.version = 0  # counts the changes: the stamp
         self.meta = dict(meta or {})
         self.tasks = list(tasks or [])
         self.archive = list(archive or [])
@@ -57,6 +61,30 @@ class MemoryStore:
     def files_for_commit(self):
         return []  # nothing of the memory travels with code commits
 
+    def exists(self):
+        return self.created
+
+    def create(self, document):
+        if self.created:
+            raise Conflict("the project has task data already")
+        self.meta, self.tasks, self.created = dict(document.get("meta") or {}), list(document["tasks"]), True
+        self.version += 1
+
+    def stamp(self):
+        return {"tasks": self.version, "archive": self.version, "claims": self.version, "head": None, "copies": []}
+
+    def logo(self, meta):
+        return None  # no files: a logo would be uploaded to a store like this one
+
+    def check_logo(self, relative):
+        raise Invalid(f"{relative}: this project keeps no files for a logo")
+
+    def working_copies(self):
+        return []
+
+    def copy_tasks(self, folder):
+        return []
+
     def raw(self):
         return {"document": self.document(), "archive": self.archive, "archive_error": None}
 
@@ -77,5 +105,6 @@ class MemoryStore:
         if work.archive_changed():
             self.archive = work.archive()["tasks"]
         self.changes = work.changes()  # what the last change did, for the tests
+        self.version += 1
         work.raise_deferred()
         return result

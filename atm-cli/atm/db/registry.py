@@ -1,4 +1,5 @@
-"""The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows.
+"""The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows (the `Registry` of
+docs/layered-architecture.md §3.2).
 
 One file per user, guarded by $ATM_HOME/.lock (not by any project's lock, and never taken while holding one), written
 atomically. A linked git worktree registers its repository's main worktree. Format: docs/multi-project-api.md, 5.1.
@@ -8,37 +9,15 @@ import hashlib
 import os
 import re
 
-from .db.jsongit.gitrun import git
-from .common.core import (
-    TASK_DIR,
-    TASKS_FILE,
-    AtmError,
-    now,
-    now_iso,
-    out,
-    parse_iso,
-    read_json,
-    to_json,
-    write_json_atomic,
-)
-from .lock import locked
-from .paths import find_paths
+from ..common.core import TASK_DIR, TASKS_FILE, AtmError, atm_home, ensure_home, now, now_iso, parse_iso, read_json
+from ..common.core import write_json_atomic
+from .jsongit.lock import locked
+from .jsongit.paths import find_paths
+from .jsongit.worktrees import main_worktree
 
 REGISTRY_FILE = "projects.json"
 REGISTRY_VERSION = 1
 SEEN_EVERY = 24 * 3600  # seconds between seen_at updates, so the registry isn't rewritten on every command
-
-
-def atm_home():
-    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager."""
-    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
-
-
-def ensure_home(home):
-    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
-    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
-    os.makedirs(home, mode=0o700, exist_ok=True)
-
 
 # A project id is a key in URLs (#project=<id>, p/<id>/...): letters, digits, '.', '_' and '-'
 PROJECT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
@@ -53,54 +32,6 @@ def unique_id(registry, path, wanted):
     suffix = hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
     base = wanted if PROJECT_ID.fullmatch(wanted) and len(wanted) <= 56 else "p"
     return f"{base}-{suffix}"
-
-
-def main_worktree(root):
-    """The main worktree's folder for a project root (itself unless it is a linked git worktree)."""
-    common = git(["rev-parse", "--git-common-dir"], root)
-    if common:
-        common = os.path.normpath(os.path.join(root, common))
-        if os.path.basename(common) == ".git":
-            return os.path.dirname(common)
-    return root
-
-
-def head_branch(git_dir):
-    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
-    try:
-        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
-            head = f.readline().strip()
-    except OSError:
-        return None
-    if head.startswith("ref: "):
-        ref = head[5:]
-        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-    return head[:7] or None
-
-
-def worktrees(root):
-    """The git worktrees of the project whose main worktree is `root`, main first, as `git worktree list` has them:
-    [{path, branch, main}]. Read from the git directory, without running git, so the server can ask on every poll.
-    Linked worktrees whose folder is gone are left out; outside git (or a bare repository) the list is empty."""
-    git_dir = os.path.join(root, ".git")
-    if not os.path.isdir(git_dir):
-        return []
-    found = [{"path": root, "branch": head_branch(git_dir), "main": True}]
-    linked = os.path.join(git_dir, "worktrees")
-    try:
-        names = sorted(os.listdir(linked))
-    except OSError:
-        names = []
-    for name in names:
-        admin = os.path.join(linked, name)
-        try:
-            with open(os.path.join(admin, "gitdir"), encoding="utf-8") as f:
-                path = os.path.dirname(f.readline().strip())  # the worktree's .git file
-        except OSError:
-            continue
-        if path and os.path.isdir(path):
-            found.append({"path": path, "branch": head_branch(admin), "main": False})
-    return found
 
 
 def project_meta(path):
@@ -235,6 +166,16 @@ def register_if_needed(paths):
     return register(paths, wait=False)
 
 
+def registered_id(paths):
+    """(id, listed) of the project at `paths` as the registry has it: the id it gave the project (meta.id, or another
+    when that one is taken, unique_id), and whether it is listed on the dashboard."""
+    path = main_worktree(paths["root"])
+    meta = project_meta(path) or project_meta(paths["root"]) or {}
+    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE)) or {}
+    entry = next((e for e in registry.get("projects", []) if isinstance(e, dict) and e.get("path") == path), None)
+    return (entry or {}).get("id") or project_id(meta, path), listed(meta)
+
+
 def resolve_project(target):
     """The main worktree folder of the project at `target` (a path), and its meta; refuses a folder without tasks."""
     folder = os.path.abspath(os.path.expanduser(target or os.getcwd()))
@@ -248,100 +189,78 @@ def resolve_project(target):
     return path, meta
 
 
-def describe_entry(entry):
-    return f"{entry['id']}  {entry['name']}  {entry['path']}"
+class FileRegistry:
+    """The registry in $ATM_HOME/projects.json. Each method holds the registry's lock while it reads and writes, and
+    returns `damaged`: where an unreadable projects.json was moved (read_registry), or None."""
 
+    def __init__(self, home=None):
+        self.home = home or atm_home()
 
-def damaged_notice(damaged):
-    return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
+    def _locked(self):
+        ensure_home(self.home)
+        return locked(self.home)
 
+    def file(self):
+        """The registry's file: the server re-reads it when it changes."""
+        return os.path.join(self.home, REGISTRY_FILE)
 
-def projects_list(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        if damaged:
-            write_registry(home, registry)
-    entries = [{**e, "missing": is_missing(e)} for e in registry["projects"]]
-    if as_json:
-        out(to_json({"projects": entries, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not entries:
-        out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
-    for e in entries:
-        out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
+    def list_projects(self):
+        """{projects: the entries, each with `missing` (no readable tasks.json there now), damaged}."""
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            if damaged:
+                write_registry(self.home, registry)
+        return {"projects": [{**e, "missing": is_missing(e)} for e in registry["projects"]], "damaged": damaged}
 
+    def add_project(self, target):
+        """Register the project at `target` (a folder in it). {result: update_entry's, project: its entry, damaged}."""
+        path, meta = resolve_project(target)
+        if not listed(meta):
+            raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            result = update_entry(registry, path, meta)
+            write_registry(self.home, registry)
+        return {"result": result, "project": find_entry(registry, path), "damaged": damaged}
 
-def projects_add(home, target, as_json):
-    path, meta = resolve_project(target)
-    if not listed(meta):
-        raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        result = update_entry(registry, path, meta)
-        write_registry(home, registry)
-    entry = find_entry(registry, path)
-    if as_json:
-        out(to_json({"result": result, "project": entry, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    out(f"{'Added' if result == 'added' else 'Already registered'}: {describe_entry(entry)}")
+    def remove_project(self, target):
+        """Unregister the project with the ID or path `target`. {removed: its entry, damaged}."""
+        if not target:
+            raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
+        candidates = {target, os.path.abspath(os.path.expanduser(target))}
+        if os.path.isdir(target):
+            candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
+            if entry:
+                registry["projects"].remove(entry)
+            if entry or damaged:
+                write_registry(self.home, registry)
+        if entry is None:
+            raise AtmError(f"no registered project {target} (see `atm projects`)")
+        return {"removed": entry, "damaged": damaged}
 
+    def prune(self):
+        """Unregister the projects whose task folder is gone. {removed: their entries, damaged}."""
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            gone = [e for e in registry["projects"] if is_missing(e)]
+            registry["projects"] = [e for e in registry["projects"] if e not in gone]
+            if gone or damaged:
+                write_registry(self.home, registry)
+        return {"removed": gone, "damaged": damaged}
 
-def projects_remove(home, target, as_json):
-    if not target:
-        raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
-    candidates = {target, os.path.abspath(os.path.expanduser(target))}
-    if os.path.isdir(target):
-        candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
-        if entry:
-            registry["projects"].remove(entry)
-        if entry or damaged:
-            write_registry(home, registry)
-    if entry is None:
-        raise AtmError(f"no registered project {target} (see `atm projects`)")
-    if as_json:
-        out(to_json({"removed": entry, "damaged": damaged}))
-        return
-    out(f"Removed: {describe_entry(entry)}")
+    def stamp(self):
+        """The file's size and mtime (None while there is none): it changes when the list does."""
+        try:
+            st = os.stat(self.file())
+        except OSError:
+            return None
+        return (st.st_size, st.st_mtime_ns)
 
-
-def projects_prune(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        gone = [e for e in registry["projects"] if is_missing(e)]
-        registry["projects"] = [e for e in registry["projects"] if e not in gone]
-        if gone or damaged:
-            write_registry(home, registry)
-    if as_json:
-        out(to_json({"removed": gone, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not gone:
-        out("Nothing to prune: every registered project is there.")
-    for e in gone:
-        out(f"Removed: {describe_entry(e)}")
-
-
-def cmd_projects(args):
-    home = atm_home()
-    if args.action == "add":
-        projects_add(home, args.target, args.json)
-    elif args.action == "remove":
-        projects_remove(home, args.target, args.json)
-    elif args.action == "prune":
-        projects_prune(home, args.json)
-    else:
-        if args.target:
-            raise AtmError(f"unexpected argument '{args.target}'", 2)
-        projects_list(home, args.json)
+    def entries(self):
+        """The entries as the file has them now, without the lock (the server reads them on every request)."""
+        data = read_json(self.file())
+        entries = data.get("projects") if isinstance(data, dict) else None
+        return [e for e in entries or [] if isinstance(e, dict) and isinstance(e.get("path"), str)]

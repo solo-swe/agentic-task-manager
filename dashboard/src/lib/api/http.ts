@@ -10,7 +10,8 @@ export type Fetch = typeof fetch;
 /** The browser's fetch, the default transport */
 export const browserFetch: Fetch = (input, init) => fetch(input, init);
 
-export type ProjectFile = 'tasks.json' | 'claims.json' | 'tasks-archive.json' | 'worktrees.json';
+/** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
+export type ProjectFile = 'claims.json' | 'worktrees.json';
 
 /** Where a project's file is served */
 export function projectFileUrl(project: string, file: ProjectFile): string {

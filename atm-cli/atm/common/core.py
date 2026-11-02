@@ -45,6 +45,17 @@ def rel(root, p):
     return os.path.relpath(p, root)
 
 
+def atm_home():
+    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager (the registry and the server's record)."""
+    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
+
+
+def ensure_home(home):
+    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
+    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
+    os.makedirs(home, mode=0o700, exist_ok=True)
+
+
 def plugin_version():
     with open(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
         return json.load(f)["version"]

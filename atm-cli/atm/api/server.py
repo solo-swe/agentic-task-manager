@@ -1,7 +1,8 @@
 """`atm serve`: one dashboard server per user, a detached process serving every registered project.
 
-The server holds the plugin's dashboard in memory and serves each registered project's task files under /p/<id>/.
-Its routes and record are described in docs/multi-project-api.md.
+The server holds the plugin's dashboard in memory and answers its requests through atm-lib: the projects, their
+tasks (v1), claims, worktrees and logos. It reads no task file itself (docs/layered-architecture.md §6); its routes
+and record are described in docs/multi-project-api.md.
 """
 
 import base64
@@ -18,11 +19,12 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
 
+from ..boot.open import dashboard_id, migrate_folder, open_registry, project_at, task_paths
 from ..common.core import (
     PLUGIN_ROOT,
-    TASK_DIR,
-    TASKS_FILE,
     WHOAMI,
+    atm_home,
+    ensure_home,
     format_duration,
     now,
     now_iso,
@@ -35,32 +37,20 @@ from ..common.core import (
     whoami,
     write_json_atomic,
 )
-from ..claims import claims_store_path
 from ..common.errors import AtmFailure
-from ..logo import find_logo
-from ..migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
-from ..paths import find_paths
-from ..boot.open import project_at
 from ..lib.archive import archive_hint_now
 from ..lib.query import Filters, list_claims, project_summary, read_problems, search_tasks, task_views
-from ..registry import (
-    REGISTRY_FILE,
-    atm_home,
-    ensure_home,
-    listed,
-    main_worktree,
-    project_id,
-    project_meta,
-    register,
-    worktrees,
-)
+from ..lib.settings import get_logo
+from ..lib.worktrees import worktree_copies
+from .dashboard import HEAD_BYTES, TEMPLATE, dashboard_head, page_tags
 
 SERVER_RECORD = "server.json"
 SERVER_LOG = "server.log"
 DEFAULT_PORT = 8765
 PORT_TRIES = 100
-PROJECT_FILES = ("tasks.json", "claims.json", "tasks-archive.json", "worktrees.json")
-# A task file the server will read into memory and send (a big project's archive is a few MB)
+# Computed from the project's data, under the paths the dashboard has always used (docs/multi-project-api.md)
+PROJECT_FILES = ("claims.json", "worktrees.json")
+# Task data the server will read into memory and send (a big project's archive is a few MB)
 MAX_SERVED_BYTES = 100_000_000
 PROJECT_FILE = re.compile(r"/p/([^/]+)/(" + "|".join(re.escape(f) for f in PROJECT_FILES + ("logo",)) + r")")
 # A logo is the project's own file, which could be an SVG with a script: it is shown as an image, never run
@@ -147,27 +137,17 @@ def ensure_server(home, port):
     raise AtmFailure(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
 
 
-def project_for(paths):
-    """(id, listed) of the project at `paths`, after registering it."""
-    register(paths)
-    path = main_worktree(paths["root"])
-    meta = project_meta(path) or project_meta(paths["root"]) or {}
-    # The id the registry gave it: meta.id, or another when that one is taken (registry.unique_id)
-    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE)) or {}
-    entry = next((e for e in registry.get("projects", []) if isinstance(e, dict) and e.get("path") == path), None)
-    return (entry or {}).get("id") or project_id(meta, path), listed(meta)
-
-
-def serve_start(paths, port, overview):
-    """Start (or reuse) the server; returns the URL to show: the project's, or the overview's."""
+def serve_start(cwd, port, overview):
+    """Start (or reuse) the server; returns the URL to show: the project's (at or above `cwd`), or the overview's."""
     project = None
     if not overview:
-        for line in describe_migration(migrate(paths), paths):
+        migration = migrate_folder(cwd, register_it=False)
+        for line in migration["lines"]:
             if line != "Nothing to migrate.":
                 out(line)
-        if not os.path.isfile(paths["tasks"]):
+        if not migration["tasks_exists"]:
             raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
-        project, shown = project_for(paths)
+        project, shown = dashboard_id(project_at(task_paths(cwd)))
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
             project = None
@@ -266,7 +246,7 @@ def cmd_serve(args):
         serve_refresh(home)
     elif args.action == "start":
         refresh_server(home)  # an outdated server is replaced before its URL is shown
-        url = serve_start(find_paths(cwd), args.port, args.all)
+        url = serve_start(cwd, args.port, args.all)
         if args.open:
             open_browser(url)
     elif args.action == "stop":
@@ -288,8 +268,8 @@ def port_in_use(port):
     return False
 
 
-def file_stamp(p):
-    """(size, nanosecond mtime) of a file, or None if it doesn't exist."""
+def logo_stamp(p):
+    """(size, nanosecond mtime) of the logo's file, or None if it doesn't exist."""
     try:
         st = os.stat(p)
     except OSError:
@@ -303,20 +283,18 @@ def file_etag(stamp):
     return f'"{stamp[0]:x}-{stamp[1]:x}"'
 
 
-class Registry:
-    """The registry as the server sees it, re-read when projects.json changes."""
+class ServedProjects:
+    """The registry as the server sees it, re-read when it changes."""
 
     def __init__(self, home):
-        self.path = os.path.join(home, REGISTRY_FILE)
+        self.registry = open_registry(home)
         self.stamp = None
         self.projects = []
 
     def entries(self):
-        stamp = file_stamp(self.path)
+        stamp = self.registry.stamp()
         if stamp != self.stamp:
-            data = read_json(self.path)
-            entries = data.get("projects") if isinstance(data, dict) else None
-            self.projects = [e for e in entries or [] if isinstance(e, dict) and isinstance(e.get("path"), str)]
+            self.projects = self.registry.entries()
             self.stamp = stamp
         return self.projects
 
@@ -324,51 +302,37 @@ class Registry:
         return next((e for e in self.entries() if e.get("id") == project), None)
 
 
-def task_file(entry, name):
-    return os.path.join(entry["path"], TASK_DIR, name)
-
-
-def served_file(entry, name):
-    """The project's task file `name` if it may be served: a regular file, not a symlink, in a task folder that isn't
-    one either (docs/security-review.md F8: a repository could otherwise link tasks-archive.json to ~/.ssh/id_rsa).
-    None otherwise."""
-    folder = os.path.join(entry["path"], TASK_DIR)
-    p = os.path.join(folder, name)
-    if os.path.islink(folder) or os.path.islink(p) or not os.path.isfile(p):
-        return None
-    real_folder = os.path.realpath(folder)
-    return p if os.path.dirname(os.path.realpath(p)) == real_folder else None
-
-
 class Summaries:
-    """Each project's summary (atm-lib's project_summary), computed again only when its tasks.json or claims store
-    changed, or the day did (the completions count by day)."""
+    """Each registered project, opened through boot, and its summary (atm-lib's project_summary), computed again only
+    when its task data or claims changed, or the day did (the completions count by day)."""
 
     def __init__(self):
-        self.paths = {}  # project folder -> (atm paths, claims store path): finding them runs git
+        self.paths = {}  # project folder -> where its data is (boot's task_paths): finding it runs git
         self.cache = {}  # project folder -> (stamp, summary or None)
 
-    def store(self, entry):
-        """The project's claims store, shared by all its worktrees."""
-        if entry["path"] not in self.paths:
-            paths = find_paths(entry["path"])
-            self.paths[entry["path"]] = (paths, claims_store_path(paths))
-        return self.paths[entry["path"]][1]
-
     def project(self, entry, tolerant=False):
-        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call. `tolerant`
-        reads a malformed task file as far as it can be read, for showing it (T-377)."""
-        self.store(entry)
-        return project_at(self.paths[entry["path"]][0], tolerant=tolerant)
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its data per call. `tolerant`
+        reads a malformed task file as far as it can be read, for showing it (T-377). A task folder atm refuses (a
+        symlink, docs/security-review.md F7, F8) raises AtmFailure."""
+        if entry["path"] not in self.paths:
+            self.paths[entry["path"]] = task_paths(entry["path"])
+        return project_at(self.paths[entry["path"]], tolerant=tolerant)
+
+    def data_stamp(self, entry):
+        """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""
+        try:
+            stamp = self.project(entry).store.stamp()
+        except AtmFailure:
+            return None
+        return stamp if stamp["tasks"] is not None else None
 
     def stamp(self, entry):
-        """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
-        and .git/HEAD (the branch on the card)."""
-        tasks = file_stamp(task_file(entry, TASKS_FILE))
-        if tasks is None:
+        """What the summary depends on, or None when the project is missing: its task data, claims, the day, and the
+        checked-out branch (on the card)."""
+        stamp = self.data_stamp(entry)
+        if stamp is None:
             return None
-        head = file_stamp(os.path.join(entry["path"], ".git", "HEAD"))
-        return (tasks, file_stamp(self.store(entry)), now().date().isoformat(), head)
+        return (stamp["tasks"], stamp["claims"], now().date().isoformat(), stamp["head"])
 
     def summary(self, entry, stamp):
         cached = self.cache.get(entry["path"])
@@ -382,10 +346,10 @@ class Summaries:
         return summary
 
 
-def project_logo(entry):
+def project_logo(summaries, entry):
     """(absolute path, content type) of a registered project's logo (meta.logo, or one found), or None."""
-    logo = find_logo(entry["path"], project_meta(entry["path"]) or {})
-    return (logo[1], logo[2]) if logo else None
+    logo = get_logo(summaries.project(entry, tolerant=True))["found"]
+    return (logo["file"], logo["type"]) if logo else None
 
 
 def quietly(fn, default):
@@ -401,9 +365,12 @@ def api_projects(registry, summaries):
     logo and the day. A project whose files can't be read is listed as missing; the others are unaffected."""
     entries = registry.entries()
     stamps = [quietly(lambda e=e: summaries.stamp(e), None) for e in entries]
-    trees = [quietly(lambda e=e: worktrees(e["path"]), []) if stamp else [] for e, stamp in zip(entries, stamps)]
-    logos = [quietly(lambda e=e: project_logo(e), None) if stamp else None for e, stamp in zip(entries, stamps)]
-    logo_stamps = [file_stamp(logo[0]) if logo else None for logo in logos]
+    trees = [
+        quietly(lambda e=e: summaries.project(e).store.working_copies(), []) if stamp else []
+        for e, stamp in zip(entries, stamps)
+    ]
+    logos = [quietly(lambda e=e: project_logo(summaries, e), None) if stamp else None for e, stamp in zip(entries, stamps)]
+    logo_stamps = [logo_stamp(logo[0]) if logo else None for logo in logos]
     etag = (
         '"'
         + hashlib.sha1(repr([registry.stamp] + stamps + trees + logo_stamps).encode("utf-8")).hexdigest()[:16]
@@ -446,9 +413,8 @@ def api_search(registry, summaries, query):
     for entry in registry.entries():
 
         def matches(entry=entry):
-            p = served_file(entry, TASKS_FILE)
-            stamp = file_stamp(p) if p else None
-            if stamp is None or stamp[0] > MAX_SERVED_BYTES:
+            stamp = summaries.data_stamp(entry)
+            if stamp is None or stamp["tasks"][0] > MAX_SERVED_BYTES:
                 return []
             return search_tasks(summaries.project(entry), query, also=str(entry.get("name") or ""))
 
@@ -458,18 +424,20 @@ def api_search(registry, summaries, query):
     return to_json(results).encode("utf-8")
 
 
-def api_claims(summaries, entry):
+def stamp_etag(*parts):
+    """A strong ETag from what a response depends on (store stamps, the query)."""
+    return '"' + hashlib.sha1(repr(list(parts)).encode("utf-8")).hexdigest()[:16] + '"'
+
+
+def api_claims(summaries, entry, stamp):
     """(body, ETag) of a project's claims.json: the claims of all its worktrees (atm-lib's list_claims, from the shared
-    claims store; each worktree's own snapshot has only the claims made there). None when there is no store yet."""
-    stamp = file_stamp(summaries.store(entry))
-    if stamp is None:
-        return None
+    claims store; each worktree's own snapshot has only the claims made there); none before the first claim."""
 
     def body():
         snapshot = {"generated_at": now_iso(), "claims": list_claims(summaries.project(entry))}
         return to_json(snapshot).encode("utf-8")
 
-    return body, file_etag(stamp)
+    return body, stamp_etag("claims", stamp["claims"])
 
 
 V1_TASKS = re.compile(r"/api/v1/projects/([^/]+)/tasks")
@@ -488,12 +456,11 @@ def task_filters(query):
     return Filters(**filters)
 
 
-def api_v1_tasks(summaries, entry, query):
+def api_v1_tasks(summaries, entry, query, stamp):
     """(body, ETag) of GET /api/v1/projects/<p>/tasks: the project's tasks the filters keep, each with its derived
     values (atm-lib's task_views), and in the same snapshot the project's meta and how big its task data is. The ETag
-    changes with tasks.json, the archive and the query."""
-    stamps = [file_stamp(task_file(entry, name)) for name in (TASKS_FILE, "tasks-archive.json")]
-    etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
+    changes with the task data, the archive and the query."""
+    etag = stamp_etag(stamp["tasks"], stamp["archive"], query)
 
     def body():
         # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
@@ -514,39 +481,16 @@ def api_v1_tasks(summaries, entry, query):
     return body, etag
 
 
-def api_worktrees(entry, store):
-    """(body, ETag) of a project's worktrees.json: its git worktrees, main first, and for each linked one the tasks
-    whose copy there differs from the main worktree's (or that only it has). The dashboard shows them all on one
-    board, each task from the worktree where it got furthest. A linked worktree's copy of a task decided in another
-    worktree (answered, reviewed: the claims store's `resolved`, T-204) is left out: it is stale until atm next runs
-    there, and would otherwise outrank the decision."""
-    trees = worktrees(entry["path"])
-    stamps = [file_stamp(os.path.join(t["path"], TASK_DIR, TASKS_FILE)) for t in trees]
-    etag = '"' + hashlib.sha1(repr([trees, stamps, file_stamp(store)]).encode("utf-8")).hexdigest()[:16] + '"'
-
-    def tasks_of(tree):
-        data = read_json(os.path.join(tree["path"], TASK_DIR, TASKS_FILE))
-        tasks = data.get("tasks") if isinstance(data, dict) else None
-        return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
-
+def api_worktrees(summaries, entry, stamp):
+    """(body, ETag) of a project's worktrees.json: its working copies, main first, and for each other one the tasks
+    whose copy there differs from the main one's (atm-lib's worktree_copies). The dashboard shows them all on one
+    board, each task from the working copy where it got furthest. The ETag changes with the copies and the claims
+    (a decision made in another worktree hides a stale copy)."""
     def body():
-        data = read_json(store)
-        resolved = data.get("resolved") if isinstance(data, dict) and isinstance(data.get("resolved"), dict) else {}
-        stale = {(r.get("worktree"), task_id) for task_id, r in resolved.items() if isinstance(r, dict)}
-        listed_trees = []
-        main = {}
-        for tree in trees:
-            if tree["main"]:
-                main = {t["id"]: t for t in tasks_of(tree)}
-                listed_trees.append(tree)
-            else:
-                differing = [
-                    t for t in tasks_of(tree) if main.get(t["id"]) != t and (tree["path"], t["id"]) not in stale
-                ]
-                listed_trees.append({**tree, "tasks": differing})
-        return to_json({"generated_at": now_iso(), "worktrees": listed_trees}).encode("utf-8")
+        copies = worktree_copies(summaries.project(entry))
+        return to_json({"generated_at": now_iso(), "worktrees": copies}).encode("utf-8")
 
-    return body, etag
+    return body, stamp_etag(stamp["copies"], stamp["claims"])
 
 
 def cmd_serve_child(args):
@@ -562,7 +506,7 @@ def cmd_serve_child(args):
     # report another build than the page has, and the page would offer a reload forever
     version, build = page_tags(page[:HEAD_BYTES].decode("utf-8", errors="replace"))
     page_headers = {"Content-Security-Policy": page_csp(page)}
-    registry = Registry(home)
+    registry = ServedProjects(home)
     summaries = Summaries()
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -631,15 +575,15 @@ def cmd_serve_child(args):
             if entry is None:
                 self.send_error_json(404, "unknown project")
                 return
-            p = served_file(entry, TASKS_FILE)
-            stamp = file_stamp(p) if p else None
+            stamp = summaries.data_stamp(entry)
             if stamp is None:
                 self.send_error_json(404, "not found")
                 return
-            if stamp[0] > MAX_SERVED_BYTES:
+            if stamp["tasks"][0] > MAX_SERVED_BYTES:
+                # Each request reads the whole task data into memory: a runaway file is refused, not served
                 self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
                 return
-            body, etag = api_v1_tasks(summaries, entry, query)
+            body, etag = api_v1_tasks(summaries, entry, query, stamp)
             if self.headers.get("If-None-Match") == etag:
                 self.send(304, etag=etag)
                 return
@@ -663,41 +607,22 @@ def cmd_serve_child(args):
                 self.send_error_json(404, "unknown project")
                 return
             name = match.group(2)
-            if served_file(entry, TASKS_FILE) is None:
+            stamp = summaries.data_stamp(entry)
+            if stamp is None:
                 self.send_error_json(404, "not found")
                 return
             if name == "logo":
                 self.serve_logo(entry)
-                return
-            computed = None
-            if name == "worktrees.json":
-                computed = api_worktrees(entry, summaries.store(entry))
-            elif name == "claims.json":
-                computed = api_claims(summaries, entry)
-            if computed:
-                self.send_conditional(*computed)
-                return
-            p = served_file(entry, name)
-            stamp = file_stamp(p) if p else None
-            if stamp is None:
-                self.send_error_json(404, "not found")
-                return
-            if stamp[0] > MAX_SERVED_BYTES:
-                # Each poll reads the whole file into memory: a runaway file is refused, not served
-                self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
-                return
-
-            def read():
-                with open(p, "rb") as f:
-                    return f.read()
-
-            self.send_conditional(read, file_etag(stamp))
+            elif name == "worktrees.json":
+                self.send_conditional(*api_worktrees(summaries, entry, stamp))
+            else:
+                self.send_conditional(*api_claims(summaries, entry, stamp))
 
         def serve_logo(self, entry):
-            """The project's logo (logo.find_logo checks it is inside the project and small enough). The browser
-            may keep it, asking again each time (no-cache) and getting a 304 while it is unchanged."""
-            logo = project_logo(entry)
-            stamp = file_stamp(logo[0]) if logo else None
+            """The project's logo (the store checks it is inside the project and small enough). The browser may keep
+            it, asking again each time (no-cache) and getting a 304 while it is unchanged."""
+            logo = project_logo(summaries, entry)
+            stamp = logo_stamp(logo[0]) if logo else None
             if stamp is None:
                 self.send_error_json(404, "no logo")
                 return

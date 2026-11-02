@@ -82,6 +82,13 @@ function project(tasks = TASKS, files = {}) {
 
 const atmIn = (atmHome) => (args, cwd) => runAtm(args, cwd, { ATM_HOME: atmHome });
 
+/** A project's task data as the v1 route serves it, in the task file's shape: {meta, tasks} (the raw task files
+ * aren't served since T-374). */
+async function v1Tasks(port, id) {
+  const body = await (await fetch(`http://localhost:${port}/api/v1/projects/${id}/tasks`)).json();
+  return { meta: body.meta, tasks: body.tasks.map((view) => view.task) };
+}
+
 /** A GET with a chosen Host header (fetch can't set it). */
 function rawGet(port, urlPath, host) {
   return new Promise((resolve, reject) => {
@@ -114,7 +121,7 @@ describe('serve', () => {
     assert.match(dashboard.headers.get('content-type'), /^text\/html/);
     assert.equal(dashboard.headers.get('cache-control'), 'no-store');
     assert.match(await dashboard.text(), /atm-dashboard-version/);
-    assert.deepEqual(await (await fetch(`http://localhost:${port}/p/abcd1234/tasks.json?ts=1`)).json(), TASKS);
+    assert.deepEqual(await v1Tasks(port, 'abcd1234'), TASKS);
     assert.deepEqual(await (await fetch(`http://localhost:${port}/__atm/whoami`)).json(), {
       atm: true,
       pid: r.pid,
@@ -158,8 +165,7 @@ describe('serve', () => {
         ['bbbb2222', 'Second', b, false, 0],
       ],
     );
-    const secondTasks = await (await fetch(`http://localhost:${port}/p/bbbb2222/tasks.json`)).json();
-    assert.equal(secondTasks.meta.project, 'Second');
+    assert.equal((await v1Tasks(port, 'bbbb2222')).meta.project, 'Second');
     atm(['serve', 'stop'], a);
   });
 
@@ -555,16 +561,16 @@ describe('serve', () => {
     atm(['serve', 'stop'], withLogo);
   });
 
-  test('files and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
+  test('tasks and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
-    const url = `http://localhost:${port}/p/abcd1234/tasks.json`;
+    const url = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
     const first = await fetch(url);
     const etag = first.headers.get('etag');
-    assert.match(etag, /^"[0-9a-f]+-[0-9a-f]+"$/);
+    assert.match(etag, /^"[0-9a-f]+"$/);
     const unchanged = await fetch(url, { headers: { 'If-None-Match': etag } });
     assert.equal(unchanged.status, 304);
     assert.equal(unchanged.headers.get('etag'), etag);
@@ -629,8 +635,7 @@ describe('serve', () => {
       claims.claims.map((c) => [c.task, c.agent, c.branch]),
       [['T-1', 'claude:tree', 'agent-2']],
     );
-    const mainTasks = await (await fetch(`${base}/p/abcd1234/tasks.json`)).json();
-    assert.equal(mainTasks.tasks[0].status, 'todo');
+    assert.equal((await v1Tasks(port, 'abcd1234')).tasks[0].status, 'todo');
 
     // T-1 is blocked in the linked worktree and answered in the main one (T-204): the linked worktree's blocked copy
     // is stale until atm runs there, so it isn't listed (it would outrank the answer on the board)
@@ -646,20 +651,28 @@ describe('serve', () => {
     atm(['serve', 'stop'], root);
   });
 
-  test('only the four files of registered projects are served; the rest is 404 or 405', async () => {
+  test('a registered project has its v1 tasks, claims.json and worktrees.json; no task file is served; the rest is 404 or 405', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
-    const root = project(TASKS, { '.agentic-task-manager/secret.json': { secret: true } });
+    const root = project(TASKS, {
+      '.agentic-task-manager/secret.json': { secret: true },
+      '.agentic-task-manager/tasks-archive.json': { meta: {}, tasks: [] },
+    });
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     const get = async (p, init) => {
       const r = await fetch(`http://localhost:${port}${p}`, init);
       return [r.status, (await r.json()).error];
     };
-    assert.deepEqual(await get('/p/ffff0000/tasks.json'), [404, 'unknown project']);
+    assert.deepEqual(await get('/api/v1/projects/ffff0000/tasks'), [404, 'unknown project']);
+    assert.deepEqual(await get('/p/ffff0000/claims.json'), [404, 'unknown project']);
     assert.deepEqual(await get('/p/abcd1234/secret.json'), [404, 'not found']);
-    assert.deepEqual(await get('/p/abcd1234/tasks-archive.json'), [404, 'not found']); // no archive yet
+    // The task files themselves only through atm-lib: the v1 route (T-374)
+    assert.deepEqual(await get('/p/abcd1234/tasks.json'), [404, 'not found']);
+    assert.deepEqual(await get('/p/abcd1234/tasks-archive.json'), [404, 'not found']);
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/abcd1234/tasks`)).status, 200);
     assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/claims.json`)).status, 200);
+    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/worktrees.json`)).status, 200);
     assert.deepEqual(await get('/p/abcd1234/tasks.json/x'), [404, 'not found']);
     assert.deepEqual(await get('/tasks.json'), [404, 'not found']);
     assert.deepEqual(await get('/tasks-dashboard.html'), [404, 'not found']);
@@ -677,7 +690,7 @@ describe('serve', () => {
     const body = Buffer.from(await page.arrayBuffer());
     assert.equal(page.headers.get('content-security-policy'), pageCsp(body));
     assert.match(page.headers.get('content-security-policy'), /script-src 'sha256-[^']+' 'sha256-[^']+';/);
-    for (const p of ['/', '/api/projects', '/p/abcd1234/tasks.json', '/nope']) {
+    for (const p of ['/', '/api/projects', '/api/v1/projects/abcd1234/tasks', '/p/abcd1234/claims.json', '/nope']) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
       assert.equal(r.headers.get('cross-origin-resource-policy'), 'same-origin', p);
@@ -762,25 +775,30 @@ describe('serve', () => {
     assert.ok(ids.includes('abcd1234'));
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], first).code, 0);
-    for (const id of ids) assert.equal((await fetch(`http://localhost:${port}/p/${id}/tasks.json`)).status, 200, id);
+    for (const id of ids) {
+      assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/${id}/tasks`)).status, 200, id);
+    }
     atm(['serve', 'stop'], first);
     removeDir(path.dirname(atmHome));
   });
 
-  test('a task file that is a symlink is never served, wherever it points (T-224, F8)', async () => {
+  test('a task file that is a symlink is never read, wherever it points: the project is refused (T-224, F8)', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const root = project(TASKS);
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const v1 = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
+    assert.equal((await fetch(v1)).status, 200);
     // Linked after the server started (atm itself refuses such a folder): an archive pointing at a private file
     const secret = path.join(atmHome, 'id_rsa.json');
     fs.writeFileSync(secret, '{"tasks": [], "secret": "PRIVATE KEY"}');
     fs.symlinkSync(secret, path.join(root, '.agentic-task-manager/tasks-archive.json'));
-    const r = await fetch(`http://localhost:${port}/p/abcd1234/tasks-archive.json`);
-    assert.equal(r.status, 404);
-    assert.doesNotMatch(await r.text(), /PRIVATE KEY/);
-    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/tasks.json`)).status, 200);
+    for (const url of [`${v1}?archived=true`, v1, `http://localhost:${port}/p/abcd1234/tasks-archive.json`]) {
+      const r = await fetch(url);
+      assert.equal(r.status, 404, url);
+      assert.doesNotMatch(await r.text(), /PRIVATE KEY/, url);
+    }
     atm(['serve', 'stop'], root);
   });
 
@@ -791,7 +809,7 @@ describe('serve', () => {
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     assert.equal((await rawGet(port, '/', `127.0.0.1:${port}`)).status, 200);
-    const refused = await rawGet(port, '/p/abcd1234/tasks.json', `evil.example:${port}`);
+    const refused = await rawGet(port, '/api/v1/projects/abcd1234/tasks', `evil.example:${port}`);
     assert.equal(refused.status, 403);
     assert.deepEqual(JSON.parse(refused.body), { error: 'unexpected Host header' });
     assert.equal((await rawGet(port, '/', `localhost:${port + 1}`)).status, 403);
@@ -976,7 +994,7 @@ describe('serve', () => {
     const port = ports();
     atm(['serve', '--port', String(port)], path.join(root, 'sub'));
     removeDir(path.join(root, 'sub'));
-    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/tasks.json`)).status, 200);
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/abcd1234/tasks`)).status, 200);
     atm(['serve', 'stop'], root);
   });
 

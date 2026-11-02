@@ -38,7 +38,7 @@ The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4
 
 Commands (run in `dashboard/`):
 - `npm run dev` — Vite dev server; like `atm serve`, it serves the API the dashboard loads (`api/projects`,
-  `p/<id>/tasks.json`, …; see `docs/multi-project-api.md`) for this repo's `.agentic-task-manager/`, or for other
+  `api/v1/projects/<id>/tasks`, …; see `docs/multi-project-api.md`) for this repo's `.agentic-task-manager/`, or for other
   folders with `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (`build/dev-data.ts`)
 - `npm run build` — single-file build
 - `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
@@ -61,11 +61,10 @@ one runtime requirement; why there is a single implementation is in `docs/helper
 earlier ones, and no two modules may define the same top-level name). The pre-commit hook rebuilds it when `atm-cli/`
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 
-**Layers** (`docs/layered-architecture.md`, being migrated): new code goes in a layer's folder (`common/`, `db/`,
-`vcs/`, `lib/`, `boot/`, `cli/`, `api/`), and the build refuses an import the layer rule forbids. The flat modules
-from before, and the imports that still break the rule, are listed in `atm-cli/layers.json`: fixing one removes its
-entry (the build refuses stale entries). atm-lib's unit tests are in `tests/lib/` (`unittest`, on the in-memory store;
-run by `npm run test:scripts`).
+**Layers** (`docs/layered-architecture.md`): every module is in a layer's folder (`common/`, `db/`, `vcs/`, `lib/`,
+`boot/`, `cli/`, `api/`, and `app/`, the `atm` command that puts the CLI and the REST API together), and the build
+refuses an import the layer rule forbids, with no exceptions. atm-lib's unit tests are in `tests/lib/` (`unittest`, on
+the in-memory store; run by `npm run test:scripts`).
 
 Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `npm run test:scripts`) drive the built atm-cli
 through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of

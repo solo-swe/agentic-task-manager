@@ -4,7 +4,7 @@ options name (--json-file, --description-file) are read here: atm-lib takes thei
 import os
 
 from ..boot.open import open_project
-from ..claims import agent_identity
+from ..boot.identity import agent_identity
 from ..common.errors import Invalid
 from ..common.components import suggest_components
 from ..common.core import AtmExit, out, read_json, to_json

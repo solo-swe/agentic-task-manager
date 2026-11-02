@@ -2,14 +2,13 @@
 backlog. Agents read tasks through these, never tasks.json itself (DM-1.1). They never write: the store reads the
 task files and the claims without the lock (both are replaced atomically).
 
-Much of it still takes the whole task document (`store.document()`) for the rules from before the layers it calls
-(`unfinished_dependencies`, `loop_order`, ...); those move into atm-lib with their own slices (§9).
+Much of it still takes the whole task document (`store.document()`) for the rules it calls on it
+(`unfinished_dependencies`, `loop_order`, ...).
 """
 
 import json
 import re
 
-from ..claims import Selection, loop_order, next_task
 from ..common.errors import AtmFailure, NotFound
 from ..common.fields import priority_of, started_by
 from ..common.core import now, parse_iso
@@ -27,6 +26,7 @@ from ..common.model import (
     unfinished_dependencies,
     vocabulary,
 )
+from .loop import Selection, loop_order, next_task
 
 
 class Filters:

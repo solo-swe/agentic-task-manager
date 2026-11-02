@@ -1,9 +1,9 @@
-"""Where a project's task files are: the project root, the task folder, legacy locations."""
+"""Where a project's task files are: the project root, the task folder, legacy locations (`atm paths` prints them)."""
 
 import os
 
-from .common.core import DASHBOARD_FILE, TASK_DIR, TASKS_FILE, AtmError, out, to_json
-from .db.jsongit.gitrun import git
+from ...common.core import DASHBOARD_FILE, TASK_DIR, TASKS_FILE, AtmError
+from .gitrun import git
 
 LEGACY_DIRS = ["docs", "."]
 # The files atm reads and writes in the task folder; a repository can commit any of them as a symlink
@@ -61,14 +61,3 @@ def find_paths(cwd):
         "dashboard": os.path.join(task_dir, DASHBOARD_FILE),
         "legacy": legacy,
     }
-
-
-def cmd_paths(args):
-    paths = find_paths(os.getcwd())
-    if args.json:
-        out(to_json(paths))
-        return
-    for key in ["root", "dir", "tasks", "dashboard"]:
-        out(f"{key}: {paths[key]}")
-    if paths["legacy"]:
-        out(f"legacy: {paths['legacy']['tasks']}")

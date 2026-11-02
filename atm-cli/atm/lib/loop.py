@@ -1,33 +1,12 @@
-"""Claims: which agent works on which task, until when (the lease); and `next`.
+"""atm-lib: the loop's rules (docs/parallel-agents-design.md; docs/sprints-and-releases-design.md §3): leases, who
+holds a claim, what was decided in another worktree, and which task the loop takes next (`next_task`, the same order
+the dashboard's Next up shows). They work on the task data and the claims store as the store hands them out
+(`work.document`, `work.claims_store`); keeping the claims is the store's (db/jsongit/claims.py)."""
 
-Claims live in the git common directory, so all worktrees of a clone see them; tasks.json itself is per worktree.
-Lock order: the task folder, then the claims store, so two commands can never wait on each other.
-"""
-
-import contextlib
-import json
-import os
-import socket
-import subprocess
-import sys
 from datetime import timedelta
 
-from .db.jsongit.gitrun import git
-from .common.core import (
-    AtmError,
-    AtmExit,
-    format_duration,
-    now,
-    now_iso,
-    out,
-    parse_iso,
-    read_json,
-    to_json,
-    write_json_atomic,
-)
-from .lock import locked
-from .db.jsongit.files import load_tasks
-from .common.model import (
+from ..common.core import AtmError, now, now_iso, parse_iso
+from ..common.model import (
     REWORK_STATES,
     add_note,
     back_to_todo,
@@ -39,92 +18,17 @@ from .common.model import (
     unfinished_dependencies,
     vocabulary,
 )
-from .paths import find_paths, project_root
-from .registry import main_worktree, register_if_needed
 
-CLAIMS_STORE = "claims.json"  # in <git common dir>/atm/, shared by all worktrees of a clone
-CLAIMS_STORE_NO_GIT = "claims-store.json"  # in the task folder, outside git
-CLAIMS_SNAPSHOT = "claims.json"  # in the task folder (gitignored): what the dashboard reads
 DEFAULT_LEASE_MINUTES = 30
 
 
-def session_identity(session_id, cwd):
-    """A Claude Code session's identity: "claude:" and 8 characters of its ID; in a linked git worktree, also
-    "@<worktree folder>". Subagents share their parent's session ID, so agents spawned in separate worktrees still get
-    identities of their own. The main worktree keeps the plain form, so its claims and history still match."""
-    identity = "claude:" + str(session_id)[:8]
-    root = project_root(cwd)
-    if main_worktree(root) != root:
-        identity += "@" + os.path.basename(root)
-    return identity
-
-
-def agent_identity(agent=None):
-    """Who runs the command (the actor, DM-4.5): --agent, else ATM_AGENT, else this Claude Code session (per linked
-    worktree, see session_identity), else the git user's name (a person in a terminal), else user@host."""
-    if agent:
-        return agent
-    if os.environ.get("ATM_AGENT"):
-        return os.environ["ATM_AGENT"]
-    if os.environ.get("CLAUDE_CODE_SESSION_ID"):
-        return session_identity(os.environ["CLAUDE_CODE_SESSION_ID"], os.getcwd())
-    name = git(["config", "user.name"], project_root(os.getcwd()))
-    if name:
-        return name
-    user = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
-    return f"{user}@{socket.gethostname()}"
-
-
-def claims_dir(paths):
-    common = git(["rev-parse", "--git-common-dir"], paths["root"])
-    if common:
-        return os.path.join(os.path.normpath(os.path.join(paths["root"], common)), "atm")
-    return paths["dir"]
-
-
-def claims_store_path(paths):
-    directory = claims_dir(paths)
-    return os.path.join(directory, CLAIMS_STORE if directory != paths["dir"] else CLAIMS_STORE_NO_GIT)
-
-
-@contextlib.contextmanager
-def locked_with_claims(paths):
-    """Hold the task folder's lock and, if it is elsewhere, the claims store's lock (always in this order)."""
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(locked(paths["dir"]))
-        if claims_dir(paths) != paths["dir"]:
-            stack.enter_context(locked(claims_dir(paths)))
-        yield
-
-
-def read_store(paths):
-    """The shared store: live `claims`, and `completed` tasks (done in some worktree; its tasks.json may be the only
-    one that says so until the branches merge, so `next` must not hand those tasks out again elsewhere); `waiting`
-    tasks (blocked or sent for review in some worktree, likewise); `resolved` ones (answered, passed, rejected or
-    skipped in another worktree than the one they wait in, to be applied there); and `hints`, when each hint was last
-    shown (so `done` repeats one at most once a day)."""
-    data = read_json(claims_store_path(paths))
-    data = data if isinstance(data, dict) else {}
-
-    def section(key):
-        return data.get(key) if isinstance(data.get(key), dict) else {}
-
-    return {
-        "claims": data.get("claims") or {},
-        "completed": data.get("completed") or {},
-        "waiting": section("waiting"),
-        "resolved": section("resolved"),
-        "hints": section("hints"),
-    }
-
-
-def apply_resolutions(paths, data, store):
+def apply_resolutions(worktree, data, store):
     """Apply what was decided in another worktree about a task waiting in this one (store["resolved"]): the answer,
-    the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. A task changed
-    here in the meantime is left as it is. Returns the IDs applied."""
+    the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. `worktree` is
+    this working copy's folder. A task changed here in the meantime is left as it is. Returns the IDs applied."""
     applied = []
     for task_id, record in list(store["resolved"].items()):
-        if not isinstance(record, dict) or record.get("worktree") != paths["root"]:
+        if not isinstance(record, dict) or record.get("worktree") != worktree:
             continue
         store["resolved"].pop(task_id)
         task = next((t for t in data["tasks"] if t.get("id") == task_id), None)
@@ -145,19 +49,6 @@ def apply_resolutions(paths, data, store):
     return applied
 
 
-def write_store(paths, store):
-    os.makedirs(claims_dir(paths), exist_ok=True)
-    write_json_atomic(claims_store_path(paths), store)
-    write_claims_snapshot(paths, store["claims"])
-
-
-def write_claims_snapshot(paths, claims):
-    """The gitignored copy the dashboard polls: live claims, as a list."""
-    if os.path.isdir(paths["dir"]):
-        snapshot = {"generated_at": now_iso(), "claims": sorted(claims.values(), key=lambda c: c["task"])}
-        write_json_atomic(os.path.join(paths["dir"], CLAIMS_SNAPSHOT), snapshot)
-
-
 def lease_minutes(data):
     try:
         minutes = float(data.get("meta", {}).get("lease_minutes", DEFAULT_LEASE_MINUTES))
@@ -170,7 +61,7 @@ def lease_until(data):
     return (now() + timedelta(minutes=lease_minutes(data))).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def expire_claims(paths, data, claims):
+def expire_claims(data, claims):
     """Drop claims whose lease ran out; their tasks in this worktree go back to todo. Returns the expired claims."""
     current = now()
     vocab = vocabulary(data)
@@ -218,11 +109,6 @@ def own_lease_expired(expired, data, task_id, agent, then):
         f"{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next_steps}",
         4,
     )
-
-
-def report_expired(expired):
-    for claim in expired:
-        sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
 
 
 def ready_in_order(data, store, candidates=None, rank=None):
@@ -379,5 +265,3 @@ def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False
     if waiting_elsewhere:
         reason += f"; blocked or in review in another worktree: {', '.join(waiting_elsewhere)}"
     return None, reason
-
-

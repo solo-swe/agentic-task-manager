@@ -1,10 +1,13 @@
 """atm-lib: claims and the loop's next task (docs/layered-architecture.md §5.1): `atm next` (with `--claim`, atomic),
 heartbeats, the live claims. Each runs as one change of the store (§3.3); the loop's rule itself (`next_task`,
-`Selection`) is still claims.py's, from before the layers, and moves with a later slice."""
+`Selection`) is lib/loop.py's."""
 
 from datetime import timedelta
 
-from ..claims import (
+from ..common.errors import Claimed
+from ..common.core import now, now_iso, parse_iso
+from ..common.model import change_status
+from .loop import (
     Selection,
     apply_resolutions,
     check_holder,
@@ -14,9 +17,6 @@ from ..claims import (
     next_task,
     own_lease_expired,
 )
-from ..common.errors import Claimed
-from ..common.core import now, now_iso, parse_iso
-from ..common.model import change_status
 from .status import claim_record
 
 # heartbeat --auto renews a claim once its last renewal is this old (CLI-6.2)
@@ -36,8 +36,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
     def change(work):
         data, store = work.document, work.claims()
-        expired = expire_claims(None, data, store["claims"])
-        apply_resolutions({"root": work.here()["worktree"]}, data, store)
+        expired = expire_claims(data, store["claims"])
+        apply_resolutions(work.here()["worktree"], data, store)
         task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user)
         new = None
         if task and claim:
@@ -68,7 +68,7 @@ def renew_lease(project, task_id, expire=True):
             claim["lease_expires_at"] = lease_until(data)
             claim["renewed_at"] = now_iso()
             return {"claim": claim, "minutes": lease_minutes(data), "expired": []}
-        expired = expire_claims(None, data, claims)
+        expired = expire_claims(data, claims)
         claim = claims.get(task_id)
         if not claim:
             own = own_lease_expired(expired, data, task_id, agent, None)
@@ -123,7 +123,7 @@ def live_claims(project):
 
     def change(work):
         claims = work.claims()["claims"]
-        expired = expire_claims(None, work.document, claims)
+        expired = expire_claims(work.document, claims)
         return {"claims": sorted(claims.values(), key=lambda c: c["task"]), "expired": expired}
 
     return project.store.change(change)

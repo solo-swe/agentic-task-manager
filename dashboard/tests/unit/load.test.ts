@@ -86,7 +86,7 @@ describe('searchProjects (T-261)', () => {
 
 describe('projectFileUrl', () => {
   it("is the file under the project's id, relative to the page", () => {
-    expect(projectFileUrl('abcd1234', 'tasks.json')).toBe('p/abcd1234/tasks.json');
+    expect(projectFileUrl('abcd1234', 'worktrees.json')).toBe('p/abcd1234/worktrees.json');
     expect(projectFileUrl('a b/c', 'claims.json')).toBe('p/a%20b%2Fc/claims.json');
   });
 });

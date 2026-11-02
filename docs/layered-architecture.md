@@ -95,7 +95,13 @@ flowchart TD
 - the db and vcs implementations depend on their interfaces;
 - every Python layer may use common.
 
-Nothing depends upward, and the CLI and REST API never call each other.
+Nothing depends upward, and the CLI and REST API never call each other. The `atm` command is both (`atm serve` starts
+the REST API's server; every command first restarts a server older than the plugin): **app** (`app/main.py`), on top,
+hands the API's server commands to the CLI's parser, so neither imports the other (T-374).
+
+What a store alone has (the JSON-in-git store's paths, lock, merge driver and migrations; the user's registry of
+projects) is reached through boot, by the commands about it (`atm paths`, `migrate`, `merge-driver`, `init`'s merge
+driver, the hook's registering).
 
 ## 2. Git's two roles
 
@@ -483,15 +489,15 @@ a route that writes is a new entry point, out of scope here (§8).
 | `GET /__atm/whoami` | the server's pid, port, version, build | — |
 | `GET /api/projects` | the projects with their summaries | `projects.list` |
 | `GET /api/search?q=` | matching task IDs per project | `tasks.search` per project |
-| `GET /p/<id>/tasks.json` | the file, as stored | (raw file; replaced by v1) |
-| `GET /p/<id>/tasks-archive.json` | the file, as stored | (raw file; replaced by v1) |
-| `GET /p/<id>/claims.json` | the live claims | `claims.list` |
-| `GET /p/<id>/worktrees.json` | the worktrees and their changed tasks | the JSON-in-git store (§3.2) |
-| `GET /p/<id>/logo` | the logo image | `settings.logo` |
+| `GET /p/<id>/tasks.json` | the file, as stored | gone (step 14): the v1 route |
+| `GET /p/<id>/tasks-archive.json` | the file, as stored | gone (step 14): the v1 route, `?archived=true` |
+| `GET /p/<id>/claims.json` | the live claims | `claims.list` (`lib/query.py` `list_claims`) |
+| `GET /p/<id>/worktrees.json` | the worktrees and their changed tasks | `lib/worktrees.py` `worktree_copies`, on the store's working copies |
+| `GET /p/<id>/logo` | the logo image | `settings.logo` (`lib/settings.py` `get_logo`) |
 
 ### 6.2 The v1 routes
 
-Beside today's, under `/api/v1/`; today's raw file routes go once the Dashboard no longer reads them (§9, step 9).
+Beside today's, under `/api/v1/`; today's raw file routes went once the Dashboard no longer read them (§9, step 14).
 Every answer is a type of `api.schema.json`; list routes take the same filters as `tasks.list` as query parameters.
 
 | Route | Parameters | Answer | atm-lib |
@@ -559,18 +565,24 @@ atm-cli/atm/
   db/            interface.py; jsongit/ (files, lock, merge driver, migrations, claims store); memory/
   vcs/           interface.py; git/
   lib/           atm-lib: tasks, claims, project, sprints, releases, components, archive, code, settings, projects
-  boot/          opening a project: picks the store and the vcs
+  boot/          opening a project: picks the store and the vcs; the actor; what is the JSON-in-git store's alone
   cli/           argparse, renderers (text, --json), exit codes
   api/           the REST API: routes, HTTP handling, the launcher
+  app/           the `atm` command: the CLI with the API's server commands handed to it
 ```
 
 - `atm-cli/build.py` already refuses an import from a module later in `MODULES`. It gets layers: each module's layer
   is its folder, and an import the rule doesn't allow fails the build (`api` → `lib` yes, `lib` → `db/jsongit` no,
   `lib` → `cli` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names stay unique.
-- **The ratchet** is `atm-cli/layers.json`: the flat modules from before the layers (`legacy`, which may import
-  anything until they move) and, per layered module, the imports that still break the rule (`exceptions`). The build
-  refuses a flat module or a forbidden import that isn't listed, and an entry that is no longer needed, so fixing a
-  violation removes its entry in the same change. Adding an entry is a visible edit in review.
+- **The ratchet** was `atm-cli/layers.json`: the flat modules from before the layers (`legacy`, which could import
+  anything until they moved) and, per layered module, the imports that still broke the rule (`exceptions`). The build
+  refused a flat module or a forbidden import that wasn't listed, and an entry that was no longer needed, so fixing a
+  violation removed its entry in the same change. Step 14 emptied it and removed it: the build now refuses every
+  module outside a layer's folder and every import the rule forbids.
+- **One global hook is left in common:** the rules look an archived task up (a dependency only in the archive, `show`
+  of an archived task) through `common/model.py`'s `archived_task`, which the store that loaded the task data sets
+  (`use_archive`). It keeps one process to one project, as before; passing the lookup to every rule that needs it
+  (atm-lib's own functions already take `archived_in(work)`) would remove it.
 - The Dashboard gets the same as an ESLint rule: only `src/lib/api/` may call `fetch`; generated types are imported,
   never edited.
 

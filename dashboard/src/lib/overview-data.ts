@@ -1,7 +1,8 @@
 // The overview's views across projects: Agents (T-333), Activity (T-328), Progress (T-329). Each project's tasks, its
-// archive (T-355) and claims come from the routes a project's page uses (p/<id>/tasks.json, tasks-archive.json,
-// claims.json), loaded while the overview is shown; a refresh asks conditionally, so an unchanged file costs a 304. The charts a project's page has then run
-// over every project's tasks (mergedTasks), or per project and combined (combinedTimeline).
+// archive (T-355) and claims come from the routes a project's page uses (api/v1/projects/<id>/tasks, with
+// ?archived=true for the archive, and p/<id>/claims.json), loaded while the overview is shown; a refresh asks
+// conditionally, so an unchanged answer costs a 304. The charts a project's page has then run over every project's
+// tasks (mergedTasks), or per project and combined (combinedTimeline).
 import { agentTimeline, UNATTRIBUTED, type AgentBar, type AgentLane, type AgentTimeline } from './agents';
 import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';

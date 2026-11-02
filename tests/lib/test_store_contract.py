@@ -9,9 +9,10 @@ import unittest
 
 from support import task
 
+from atm.common.errors import Conflict
 from atm.db.jsongit.store import JsonGitStore
 from atm.db.memory import MemoryStore
-from atm.paths import find_paths
+from atm.db.jsongit.paths import find_paths
 
 TASKS = [task("T-1", status="done"), task("T-2", dependencies=["T-1", "T-0"], priority="P1")]
 ARCHIVE = [task("T-0", status="done")]
@@ -93,6 +94,17 @@ class StoreContract:
 
     def test_the_files_for_commit_are_a_list_of_relative_paths(self):
         self.assertTrue(all(isinstance(f, str) and not os.path.isabs(f) for f in self.store.files_for_commit()))
+
+    def test_it_exists_and_refuses_to_be_created_again(self):
+        self.assertTrue(self.store.exists())
+        with self.assertRaises(Conflict):
+            self.store.create({"meta": {}, "tasks": []})
+
+    def test_the_stamp_changes_with_a_change(self):
+        before = self.store.stamp()
+        self.assertEqual(sorted(before), ["archive", "claims", "copies", "head", "tasks"])
+        self.store.change(lambda work: work.tasks()[0].update(name="Stamped"))
+        self.assertNotEqual(self.reopen().stamp()["tasks"], before["tasks"])
 
 
 class MemoryStoreContract(StoreContract, unittest.TestCase):

@@ -14,7 +14,7 @@ from atm.db.jsongit.store import JsonGitStore
 from atm.db.memory import MemoryStore
 from atm.lib.project import Project
 from atm.lib.query import Filters, read_problems, task_views
-from atm.paths import find_paths
+from atm.db.jsongit.paths import find_paths
 
 MALFORMED = {
     "meta": {"project": "Broken", "priorities": "not a list", "default_priority": "P9"},

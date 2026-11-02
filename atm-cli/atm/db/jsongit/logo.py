@@ -1,12 +1,9 @@
-"""`atm logo`: the project's logo for the dashboard, in meta.logo (a path relative to the project root), or else one
+"""The project's logo for the dashboard: the image meta.logo names (a path relative to the project root), or else one
 found in the usual places. atm serve serves it at /p/<id>/logo (docs/multi-project-api.md)."""
 
 import os
 
-from .common.core import AtmError, out, to_json, write_json_atomic
-from .lock import locked
-from .db.jsongit.files import load_tasks
-from .paths import find_paths
+from ...common.core import AtmError
 
 LOGO_TYPES = {
     ".svg": "image/svg+xml",
@@ -56,41 +53,3 @@ def find_logo(root, meta):
         except AtmError:
             continue
     return None
-
-
-def cmd_logo(args):
-    paths = find_paths(os.getcwd())
-    root = paths["root"]
-    if args.action is None:
-        if args.path is not None:
-            raise AtmError(f"unexpected argument '{args.path}' (atm logo set PATH)", 2)
-        meta = load_tasks(paths).get("meta", {})
-        logo = find_logo(root, meta)
-        if args.json:
-            found = {"logo": logo[0], "source": logo[3]} if logo else {"logo": None, "source": None}
-            out(to_json({**found, "set": meta.get("logo")}))
-        elif logo:
-            out(f"{logo[0]}" + (" (found; set one with `atm logo set <path>`)" if logo[3] == "found" else ""))
-        elif meta.get("logo"):
-            out(f"meta.logo is {meta['logo']}, which isn't a usable logo (missing, too large, or outside the project).")
-        else:
-            out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
-        return
-    if args.action == "unset":
-        with locked(paths["dir"]):
-            data = load_tasks(paths)
-            removed = data.get("meta", {}).pop("logo", None)
-            if removed is not None:
-                write_json_atomic(paths["tasks"], data)
-        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
-        return
-    if args.path is None:
-        raise AtmError("atm logo set needs a path", 2)
-    # The path is relative to where atm runs, like every path atm takes; it is kept relative to the project root
-    relative = os.path.relpath(os.path.abspath(args.path), os.path.realpath(root)).replace(os.sep, "/")
-    logo_file(root, relative)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        data.setdefault("meta", {})["logo"] = relative
-        write_json_atomic(paths["tasks"], data)
-    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")

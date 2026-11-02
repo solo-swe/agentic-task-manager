@@ -1,8 +1,16 @@
 """Text for people and agents: how the CLI shows atm-lib's results. Short and stable, for agents to read (CLI-3.3)."""
 
+import sys
+
 from ..common.fields import priority_of
 from ..lib.tasks import view_task
 from ..common.model import archived_task, vocabulary
+
+
+def report_expired(expired):
+    """On stderr, the claims a command found expired (their tasks went back to todo)."""
+    for claim in expired:
+        sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
 
 
 def list_lines(vocab, tasks):

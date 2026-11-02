@@ -1,21 +1,14 @@
-"""Merging tasks.json, and `atm init`.
+"""The JSON-in-git store's merge driver: merging the task files task by task.
 
 Registered as a git merge driver (`tasks.json merge=atm`), so branches that changed tasks.json merge task by task
 instead of line by line. Design: docs/parallel-agents-design.md, option E and layer L3.
 """
 
-import contextlib
 import os
-import sys
 
-from .common.core import SCRIPT_DIR, AtmError, AtmExit, now, out, read_json, rel, to_json, write_json_atomic
-from .db.jsongit.gitrun import git, in_git
-from .lock import locked
-from .common.model import kind_of, split_id, vocabulary
-from .db.jsongit.files import load_tasks
-from .paths import find_paths
-from .registry import register
-from .repository import ensure_repository
+from ...common.core import SCRIPT_DIR, AtmError, read_json, rel, write_json_atomic
+from ...common.model import kind_of, split_id, vocabulary
+from .gitrun import git, in_git
 
 # What `atm` means is not in this file: git config can't be committed, so each clone registers the driver in its own
 # .git/config (merge.atm.driver), which the atm skills do on every run. A clone without it merges tasks.json normally.
@@ -293,8 +286,9 @@ def merge_task_files(base, ours, theirs):
     return result, conflicts
 
 
-def cmd_merge_driver(args):
-    base_path, ours_path, theirs_path = args.base, args.ours, args.theirs
+def merge_files(base_path, ours_path, theirs_path):
+    """What git's merge driver does (`atm merge-driver %O %A %B`): merge the three versions task by task and write the
+    result over `ours_path`. Returns the conflicts (this branch's version was kept for each)."""
     versions = [read_json(p) for p in (base_path, ours_path, theirs_path)]
     if versions[0] is None and os.path.exists(base_path) and os.path.getsize(base_path) == 0:
         versions[0] = {"tasks": []}  # the file was added on both branches
@@ -302,13 +296,7 @@ def cmd_merge_driver(args):
         raise AtmError("tasks.json merge: one side is not valid JSON; resolve the conflict by hand")
     merged, conflicts = merge_task_files(*versions)
     write_json_atomic(ours_path, merged)
-    if args.json:
-        out(to_json({"conflicts": conflicts}))
-    if conflicts:
-        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
-        for conflict in conflicts:
-            sys.stderr.write(f"  {conflict}\n")
-        raise AtmExit(1)
+    return conflicts
 
 
 def launcher_command():
@@ -359,72 +347,3 @@ def ensure_archive_merge(paths):
         f.write(text + ("" if text.endswith("\n") else "\n") + ARCHIVE_ATTRIBUTES_LINE)
     git(["add", "--", rel(root, attributes)], root)
     return True
-
-
-def ensure_project_id(paths):
-    """Give tasks.json a meta.id if it has none: the dashboard keeps each project's saved view under it (projects
-    served from the same port share browser storage). Returns the new id, or None if there was one already."""
-    if not os.path.isfile(paths["tasks"]):
-        return None
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        meta = data.get("meta")
-        if not isinstance(meta, dict):
-            meta = data["meta"] = {}
-        if isinstance(meta.get("id"), str) and meta["id"]:
-            return None
-        meta["id"] = os.urandom(4).hex()
-        write_json_atomic(paths["tasks"], data)
-    return meta["id"]
-
-
-def apply_meta(paths, meta_file):
-    """`init --meta-file F`: merge F's keys into tasks.json's meta (project, description, phases, vocabularies),
-    creating tasks.json if there is none, so /atm:create-tasks never writes the file itself. The vocabularies are
-    checked before anything is written; meta.id is kept. Returns (created, keys)."""
-    new = read_json(meta_file)
-    if not isinstance(new, dict):
-        raise AtmError(f"{meta_file} must hold a JSON object: the meta keys to set", 2)
-    new.pop("id", None)
-    with locked(paths["dir"]) if os.path.isdir(paths["dir"]) else contextlib.nullcontext():
-        created = not os.path.isfile(paths["tasks"])
-        data = {"meta": {"created": now().strftime("%Y-%m-%d")}, "tasks": []} if created else load_tasks(paths)
-        if not isinstance(data.get("meta"), dict):
-            data["meta"] = {}
-        data["meta"].update(new)
-        vocabulary(data)  # raises, naming the problem, before anything is written
-        os.makedirs(paths["dir"], exist_ok=True)
-        write_json_atomic(paths["tasks"], data)
-    return created, sorted(new)
-
-
-def cmd_init(args):
-    paths = find_paths(os.getcwd())
-    if args.meta_file:
-        created, keys = apply_meta(paths, args.meta_file)
-        paths = find_paths(os.getcwd())
-        if not args.json:
-            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
-    project_id = ensure_project_id(paths)
-    repository = ensure_repository(paths)
-    register(paths)  # the dashboard lists every project atm runs in
-    git_repo = in_git(paths["root"])
-    changed = ensure_merge_driver(paths) if git_repo else False
-    if args.json:
-        out(
-            to_json(
-                {"project_id": project_id, "repository": repository, "git": git_repo, "gitattributes_added": changed}
-            )
-        )
-        return
-    if project_id:
-        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
-    if repository:
-        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
-    if not git_repo:
-        out("Not in a git repository: there is no merge driver to set up.")
-        return
-    out(
-        "Registered the tasks.json merge driver (git config merge.atm)"
-        + (" and added .agentic-task-manager/.gitattributes (staged)." if changed else "; .gitattributes already set.")
-    )

@@ -1,58 +1,24 @@
-"""`atm migrate`: move a legacy tasks.json into the task folder and set the folder up (.gitignore, merge driver), and
-clean up after per-project dashboards (0.10.0-0.14.0): the dashboard now comes from the plugin, served by
-`atm serve` for all projects."""
+"""`atm migrate`, the JSON-in-git store's migrations of old layouts: move a legacy tasks.json into the task folder and
+set the folder up (.gitignore, merge driver), clean up after per-project dashboards (0.10.0-0.14.0: the dashboard now
+comes from the plugin, served by `atm serve` for all projects), and bring old task data up to date (finish times,
+phases to sprints, `with: user`)."""
 
 import os
-import re
 import signal
 
+from ...common.core import DASHBOARD_FILE, AtmError, now_iso, read_json, rel, whoami, write_json_atomic
+from ...common.model import MAX_SPRINT_NAME, kind_of, vocabulary
 from .claims import CLAIMS_SNAPSHOT, read_store, write_claims_snapshot
-from .db.jsongit.gitrun import git, in_git, is_tracked
-from .common.core import (
-    DASHBOARD_FILE,
-    PLUGIN_ROOT,
-    AtmError,
-    now_iso,
-    out,
-    read_json,
-    rel,
-    to_json,
-    whoami,
-    write_json_atomic,
-)
+from .files import archive_hint, archive_path, load_archive, load_tasks
+from .gitrun import git, in_git, is_tracked
 from .lock import locked
 from .merge import ensure_merge_driver
-from .common.model import MAX_SPRINT_NAME, kind_of, vocabulary
-from .db.jsongit.files import archive_hint, archive_path, load_archive, load_tasks
-from .paths import find_paths
-from .registry import register
 
-TEMPLATE = os.path.join(PLUGIN_ROOT, "templates", DASHBOARD_FILE)
 # Runtime files in the task folder that must not be committed (the dashboard and server files are from before
 # 0.15.0; they stay listed so leftovers stay out of git)
 IGNORED = ["tasks-dashboard.html", ".server.json", ".server.log", "claims.json", "claims-store.json", ".lock/"]
 OLD_SERVER_RECORD = ".server.json"
 OLD_SERVER_LOG = ".server.log"
-VERSION_META = re.compile(r'<meta name="atm-dashboard-version" content="([^"]*)"')
-BUILD_META = re.compile(r'<meta name="atm-dashboard-build" content="([^"]*)"')
-# The tags sit at the top of the page; reading this much finds them without reading the whole (inlined) dashboard
-HEAD_BYTES = 16384
-
-
-def page_tags(head):
-    """(version, build ID) from the start of a dashboard page (text), "" for a missing tag."""
-    version, build = VERSION_META.search(head), BUILD_META.search(head)
-    return (version.group(1) if version else "", build.group(1) if build else "")
-
-
-def dashboard_head(p):
-    """(version, build ID) of a dashboard file, "" for a missing tag; None if there is no file."""
-    try:
-        with open(p, encoding="utf-8", errors="replace") as f:
-            head = f.read(HEAD_BYTES)
-    except OSError:
-        return None
-    return page_tags(head)
 
 
 def written_by_atm(path):
@@ -428,15 +394,3 @@ def describe_migration(r, paths):
     if r.get("suggest"):
         lines.append(r["suggest"]["archive"]["text"])
     return lines
-
-
-def cmd_migrate(args):
-    paths = find_paths(os.getcwd())
-    r = migrate(paths)
-    if os.path.isfile(paths["tasks"]):
-        register(paths)  # the dashboard lists every project atm runs in (every skill runs migrate first)
-    if args.json:
-        out(to_json(r))
-        return
-    for line in describe_migration(r, paths):
-        out(line)

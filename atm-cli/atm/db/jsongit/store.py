@@ -1,17 +1,31 @@
 """The JSON-in-git store (docs/layered-architecture.md §3): the project's task files, read and written as atm always
-has. For now it wraps the code from before the layers (`load_tasks`, the archive, the claims store); that code moves
-in here as the migration's slices do (§9)."""
+has: tasks.json and the archive (files.py), the claims store shared by a clone's worktrees (claims.py), under the
+task folder's lock (lock.py); its worktrees' copies (worktrees.py) and the project's logo (logo.py)."""
 
+import contextlib
 import json
 import os
 
-from ...claims import locked_with_claims, read_store, write_store
 from ...common.core import AtmError, read_json, to_json, write_json_atomic, write_text_atomic
-from .gitrun import git
-from ...merge import ensure_archive_merge
+from ...common.errors import Conflict
 from ...common.model import archived_task, vocabulary
-from .files import archive_path, load_archive, load_tasks, load_tasks_tolerant
 from ..working import Working
+from .claims import claims_store_path, locked_with_claims, read_store, write_store
+from .files import archive_path, load_archive, load_tasks, load_tasks_tolerant
+from .gitrun import git
+from .lock import locked
+from .logo import find_logo, logo_file
+from .merge import ensure_archive_merge
+from .worktrees import worktrees
+
+
+def file_stamp(p):
+    """(size, nanosecond mtime) of a file, or None if it doesn't exist."""
+    try:
+        st = os.stat(p)
+    except OSError:
+        return None
+    return (st.st_size, st.st_mtime_ns)
 
 
 class JsonGitStore:
@@ -75,6 +89,54 @@ class JsonGitStore:
     def files_for_commit(self):
         """tasks.json travels with the code: `atm commit` commits it with the task's files (relative to the root)."""
         return [os.path.relpath(self.paths["tasks"], self.paths["root"])]
+
+    def exists(self):
+        return os.path.isfile(self.paths["tasks"])
+
+    def create(self, document):
+        """Write the project's first task data (`atm init`); Conflict if it has some already."""
+        folder = self.paths["dir"]
+        with locked(folder) if os.path.isdir(folder) else contextlib.nullcontext():
+            if self.exists():
+                raise Conflict(f"{self.paths['tasks']} exists already")
+            os.makedirs(folder, exist_ok=True)
+            write_json_atomic(self.paths["tasks"], document)
+        self._data = None
+
+    def stamp(self):
+        """What changes when the data does, for the REST API's ETags: per part ({tasks, archive, claims, head, copies}),
+        a value that changes with it (here, each file's size and mtime; `head` the checked-out branch's; `copies` the
+        worktrees and their task files'), None for a part that isn't there."""
+        relative = os.path.relpath(self.paths["tasks"], self.paths["root"])
+        return {
+            "tasks": file_stamp(self.paths["tasks"]),
+            "archive": file_stamp(archive_path(self.paths)),
+            "claims": file_stamp(claims_store_path(self.paths)),
+            "head": file_stamp(os.path.join(self.paths["root"], ".git", "HEAD")),
+            "copies": [(t, file_stamp(os.path.join(t["path"], relative))) for t in worktrees(self.paths["root"])],
+        }
+
+    def logo(self, meta):
+        """The project's logo, a file in the working copy: {path (relative), file, type, source: "set" (meta.logo) or
+        "found" (in the usual places)}, or None."""
+        found = find_logo(self.paths["root"], meta)
+        return {"path": found[0], "file": found[1], "type": found[2], "source": found[3]} if found else None
+
+    def check_logo(self, relative):
+        """Refuse (AtmError, exit code 2) a logo the dashboard can't be given: not an image atm serves, outside the
+        project, missing or too large."""
+        logo_file(self.paths["root"], relative)
+
+    def working_copies(self):
+        """The project's working copies, main first: its git worktrees, [{path, branch, main}]; [] outside git."""
+        return worktrees(self.paths["root"])
+
+    def copy_tasks(self, folder):
+        """The tasks in the working copy at `folder` as its tasks.json has them (entries that aren't tasks left out),
+        for showing beside the main one's; [] when it has none."""
+        data = read_json(os.path.join(folder, os.path.relpath(self.paths["tasks"], self.paths["root"])))
+        tasks = data.get("tasks") if isinstance(data, dict) else None
+        return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
 
     def raw(self):
         """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when

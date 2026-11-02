@@ -64,6 +64,63 @@ class Store(Protocol):
         ...
 
     def document(self) -> dict:
-        """The whole task document (`meta` and `tasks`), for the code from before the layers that still takes it.
-        Transitional: it goes when the last of that code has moved (docs/layered-architecture.md §9, step 14)."""
+        """The whole task document (`meta` and `tasks`), for the rules that still take it whole."""
+        ...
+
+    def exists(self) -> bool:
+        """Whether the project has task data yet (`atm init` creates it)."""
+        ...
+
+    def create(self, document: dict) -> None:
+        """Store the project's first task data; Conflict if it has some already."""
+        ...
+
+    def stamp(self) -> dict:
+        """What changes when the data does, for the REST API's ETags: per part ({tasks, archive, claims, head, copies}),
+        a value that changes whenever that part does; None for a part that isn't there."""
+        ...
+
+    def logo(self, meta: dict) -> Optional[dict]:
+        """The project's logo for the dashboard: {path, file, type, source: "set" or "found"}, or None."""
+        ...
+
+    def check_logo(self, relative: str) -> None:
+        """Refuse (Invalid) a logo the dashboard can't be given."""
+        ...
+
+    def working_copies(self) -> List[dict]:
+        """The project's working copies, main first ([{path, branch, main}]); [] for a store without them."""
+        ...
+
+    def copy_tasks(self, folder: str) -> List[dict]:
+        """The tasks as the working copy at `folder` has them."""
+        ...
+
+
+class Registry(Protocol):
+    """The user's list of projects, the ones the dashboard shows (docs/layered-architecture.md §3.2). Each operation
+    also says where an unreadable list was moved (`damaged`), or None."""
+
+    def list_projects(self) -> dict:
+        """{projects: the entries ({id, name, path, added_at, seen_at, missing}), damaged}."""
+        ...
+
+    def add_project(self, target: Optional[str]) -> dict:
+        """Register the project in the folder `target`. {result, project, damaged}."""
+        ...
+
+    def remove_project(self, target: str) -> dict:
+        """Unregister the project with this ID or path. {removed, damaged}."""
+        ...
+
+    def prune(self) -> dict:
+        """Unregister the projects that are gone. {removed, damaged}."""
+        ...
+
+    def entries(self) -> List[dict]:
+        """The entries as they are now, read without waiting (atm serve, on every request)."""
+        ...
+
+    def stamp(self) -> Any:
+        """What changes when the list does."""
         ...

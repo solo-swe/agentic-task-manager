@@ -7,10 +7,8 @@ namespace. It refuses to build when two modules define the same top-level name (
 one), or when a module imports from a later module or a name another module doesn't define.
 
 It also holds the layer rule (docs/layered-architecture.md §1, §8): a module's layer is its folder (`db/jsongit/store.py`
-is `db.jsongit.store`, in the db layer), and an import the rule doesn't allow is refused. The modules from before the
-layers (flat, in atm-cli/atm/) and the imports that still break the rule are listed in atm-cli/layers.json, the
-ratchet: the build refuses a flat module or a forbidden import that isn't listed, and an entry that is no longer
-needed, so the list only shrinks as the migration goes on.
+is `db.jsongit.store`, in the db layer), and an import the rule doesn't allow is refused, as is a module outside the
+layers' folders. The rule has no exceptions (the migration's ratchet, atm-cli/layers.json, went with its last step).
 
 It generates the data model's types too (docs/layered-architecture.md §4): from the JSON Schemas in
 atm-cli/atm/common/schema/, the Python TypedDicts in atm-cli/atm/common/types.py and the TypeScript interfaces in
@@ -30,7 +28,6 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.join(HERE, "atm")
-LAYERS_FILE = os.path.join(HERE, "layers.json")
 TARGET = os.path.join(os.path.dirname(HERE), "plugin", "scripts", "atm.py")
 SCHEMA_DIR = os.path.join(PACKAGE, "common", "schema")
 PY_TYPES = os.path.join(PACKAGE, "common", "types.py")
@@ -45,22 +42,25 @@ MODULES = [
     "common.types",
     "common.components",
     "common.sprint_names",
+    "common.repository",
     "db.interface",
     "vcs.interface",
     "db.jsongit.gitrun",
     "db.jsongit.files",
-    "paths",
-    "lock",
-    "registry",
-    "repository",
-    "logo",
-    "merge",
-    "claims",
+    "db.jsongit.paths",
+    "db.jsongit.lock",
+    "db.jsongit.worktrees",
+    "db.jsongit.claims",
+    "db.jsongit.logo",
+    "db.jsongit.merge",
+    "db.jsongit.migrate",
+    "db.registry",
     "db.working",
     "db.jsongit.store",
     "db.memory",
     "vcs.git",
     "lib.project",
+    "lib.loop",
     "lib.tasks",
     "lib.query",
     "lib.status",
@@ -71,9 +71,13 @@ MODULES = [
     "lib.releases",
     "lib.archive",
     "lib.code",
+    "lib.projects",
+    "lib.settings",
+    "lib.worktrees",
+    "boot.identity",
     "boot.open",
     "cli.render",
-    "migrate",
+    "api.dashboard",
     "api.server",
     "cli.query",
     "cli.status",
@@ -85,11 +89,16 @@ MODULES = [
     "cli.archive",
     "cli.show",
     "cli.code",
+    "cli.projects",
+    "cli.settings",
+    "cli.store",
     "cli.main",
+    "app.main",
 ]
 
 # The layers a layer may import from (docs/layered-architecture.md §1). `boot` is where a project is opened: the one
-# place that picks the store and the version control, so atm-lib knows only their interfaces.
+# place that picks the store and the version control, so atm-lib knows only their interfaces. `app` is the `atm`
+# command itself, the one place that hands the REST API's server commands to the CLI (the two never import each other).
 ALLOWED = {
     "common": {"common"},
     "db-interface": {"common", "db-interface"},
@@ -100,18 +109,21 @@ ALLOWED = {
     "boot": {"common", "db-interface", "db", "vcs-interface", "vcs", "lib", "boot"},
     "cli": {"common", "lib", "boot", "cli"},
     "api": {"common", "lib", "boot", "api"},
+    "app": {"cli", "api", "app"},
 }
 
 
 def layer_of(module):
-    """The layer of a module: its folder, with the db and vcs interfaces apart from their implementations; `legacy`
-    for a flat module from before the layers."""
+    """The layer of a module: its folder, with the db and vcs interfaces apart from their implementations. A module
+    outside the layers' folders is refused."""
     parts = module.split(".")
     if len(parts) == 1:
-        return "legacy"
+        raise BuildError(
+            f"{module}.py is a module outside the layers: put it in a layer's folder (docs/layered-architecture.md §8)"
+        )
     if parts[0] in ("db", "vcs") and parts[1] == "interface":
         return parts[0] + "-interface"
-    if parts[0] not in {"common", "db", "vcs", "lib", "boot", "cli", "api"}:
+    if parts[0] not in ALLOWED:
         raise BuildError(f"{module}: {parts[0]}/ isn't a layer's folder")
     return parts[0]
 
@@ -131,41 +143,17 @@ def module_file(name):
     return name.replace(".", "/") + ".py"
 
 
-def load_layers():
-    with open(LAYERS_FILE, encoding="utf-8") as f:
-        layers = json.load(f)
-    return set(layers.get("legacy", [])), {k: set(v) for k, v in layers.get("exceptions", {}).items()}
-
-
 def check_layers(imports):
-    """The layer rule and the ratchet. `imports` maps each module to the modules it imports from."""
-    legacy, exceptions = load_layers()
-    flat = {m for m in MODULES if layer_of(m) == "legacy"}
-    for m in sorted(flat - legacy):
-        raise BuildError(f"{m}.py is a new module outside the layers: put it in a layer's folder (docs/layered-architecture.md §8)")
-    for m in sorted(legacy - flat):
-        raise BuildError(f"atm-cli/layers.json lists {m} as legacy, but there is no {m}.py any more: remove it")
-    used = set()
+    """The layer rule. `imports` maps each module to the modules it imports from."""
+    for module in MODULES:
+        layer_of(module)  # every module is in a layer's folder
     for importer, targets in imports.items():
         layer = layer_of(importer)
-        if layer == "legacy":
-            continue  # the old modules may use anything until they move
         for target in sorted(targets):
-            if layer_of(target) in ALLOWED[layer]:
-                continue
-            if target in exceptions.get(importer, set()):
-                used.add((importer, target))
-                continue
-            raise BuildError(
-                f"{module_file(importer)} imports from {target}, which the {layer} layer may not use "
-                f"(docs/layered-architecture.md §1)"
-            )
-    for importer, targets in sorted(exceptions.items()):
-        for target in sorted(targets):
-            if (importer, target) not in used:
+            if layer_of(target) not in ALLOWED[layer]:
                 raise BuildError(
-                    f"atm-cli/layers.json allows {importer} to import from {target}, which it no longer does (or "
-                    "may): remove the entry"
+                    f"{module_file(importer)} imports from {target}, which the {layer} layer may not use "
+                    f"(docs/layered-architecture.md §1)"
                 )
 HEADER = (
     "# Generated from atm-cli/atm/ by atm-cli/build.py. Don't edit this file: edit the modules and run\n"

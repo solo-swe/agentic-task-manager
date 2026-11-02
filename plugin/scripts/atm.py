@@ -197,6 +197,17 @@ def rel(root, p):
     return os.path.relpath(p, root)
 
 
+def atm_home():
+    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager (the registry and the server's record)."""
+    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
+
+
+def ensure_home(home):
+    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
+    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
+    os.makedirs(home, mode=0o700, exist_ok=True)
+
+
 def plugin_version():
     with open(os.path.join(PLUGIN_ROOT, ".claude-plugin", "plugin.json"), encoding="utf-8") as f:
         return json.load(f)["version"]
@@ -1674,6 +1685,47 @@ def generate_sprint_name(naming, taken):
     return (random.Random(seed) if seed else random.Random()).choice(free)
 
 
+# ==== common/repository.py ====
+# Repository web addresses (meta.repository, e.g. https://github.com/o/r), which the dashboard uses to link commits
+# and pull requests: a git remote turned into one, and PR links moved when the repository moves.
+
+SCP_REMOTE = re.compile(r"^(?:[\w.-]+@)?([\w.-]+):(?!//)(.+)$")  # git@github.com:o/r.git
+URL = re.compile(r"^(https?|ssh|git)://(?:[^@/]+@)?([^/:]+)(?::\d+)?(/.*)?$")
+
+
+def repository_url(text):
+    """The web address of a repository: an http(s) URL as given, or a git remote turned into one
+    (git@github.com:o/r.git, ssh://git@github.com/o/r.git, https://github.com/o/r.git -> https://github.com/o/r).
+    Credentials, a trailing .git and a trailing slash go. None if it isn't one."""
+    text = (text or "").strip()
+    m = URL.match(text)
+    if m:
+        scheme, host, path = m.group(1), m.group(2), (m.group(3) or "")
+        web = "https" if scheme in ("ssh", "git") else scheme
+    else:
+        m = SCP_REMOTE.match(text)
+        if not m or "/" in m.group(1):
+            return None
+        web, host, path = "https", m.group(1), "/" + m.group(2)
+    path = re.sub(r"\.git/?$", "", path.rstrip("/")).rstrip("/")
+    if not host or "." not in host and host != "localhost" or not path.strip("/"):
+        return None
+    return f"{web}://{host}{path}"
+
+
+def move_pr_links(tasks, old, new):
+    """Point the tasks' recorded PR links (pr.url) on the `old` address at the `new` one, after the repository moved.
+    Only the link changes: no timestamps or actors, so the history stays as it was. Returns how many moved."""
+    moved = 0
+    for task in tasks:
+        pr = task.get("pr") if isinstance(task, dict) else None
+        link = pr.get("url") if isinstance(pr, dict) else None
+        if isinstance(link, str) and (link == old or link.startswith(old + "/")):
+            pr["url"] = new + link[len(old) :]
+            moved += 1
+    return moved
+
+
 # ==== db/interface.py ====
 # The store: how atm-lib reads and writes a project's data, whatever keeps it (docs/layered-architecture.md §3).
 #
@@ -1737,8 +1789,65 @@ class Store(Protocol):
         ...
 
     def document(self) -> dict:
-        """The whole task document (`meta` and `tasks`), for the code from before the layers that still takes it.
-        Transitional: it goes when the last of that code has moved (docs/layered-architecture.md §9, step 14)."""
+        """The whole task document (`meta` and `tasks`), for the rules that still take it whole."""
+        ...
+
+    def exists(self) -> bool:
+        """Whether the project has task data yet (`atm init` creates it)."""
+        ...
+
+    def create(self, document: dict) -> None:
+        """Store the project's first task data; Conflict if it has some already."""
+        ...
+
+    def stamp(self) -> dict:
+        """What changes when the data does, for the REST API's ETags: per part ({tasks, archive, claims, head, copies}),
+        a value that changes whenever that part does; None for a part that isn't there."""
+        ...
+
+    def logo(self, meta: dict) -> Optional[dict]:
+        """The project's logo for the dashboard: {path, file, type, source: "set" or "found"}, or None."""
+        ...
+
+    def check_logo(self, relative: str) -> None:
+        """Refuse (Invalid) a logo the dashboard can't be given."""
+        ...
+
+    def working_copies(self) -> List[dict]:
+        """The project's working copies, main first ([{path, branch, main}]); [] for a store without them."""
+        ...
+
+    def copy_tasks(self, folder: str) -> List[dict]:
+        """The tasks as the working copy at `folder` has them."""
+        ...
+
+
+class Registry(Protocol):
+    """The user's list of projects, the ones the dashboard shows (docs/layered-architecture.md §3.2). Each operation
+    also says where an unreadable list was moved (`damaged`), or None."""
+
+    def list_projects(self) -> dict:
+        """{projects: the entries ({id, name, path, added_at, seen_at, missing}), damaged}."""
+        ...
+
+    def add_project(self, target: Optional[str]) -> dict:
+        """Register the project in the folder `target`. {result, project, damaged}."""
+        ...
+
+    def remove_project(self, target: str) -> dict:
+        """Unregister the project with this ID or path. {removed, damaged}."""
+        ...
+
+    def prune(self) -> dict:
+        """Unregister the projects that are gone. {removed, damaged}."""
+        ...
+
+    def entries(self) -> List[dict]:
+        """The entries as they are now, read without waiting (atm serve, on every request)."""
+        ...
+
+    def stamp(self) -> Any:
+        """What changes when the list does."""
         ...
 
 
@@ -1907,8 +2016,8 @@ def archive_hint(paths, data):
     return archive_hint_for(data, os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0)
 
 
-# ==== paths.py ====
-# Where a project's task files are: the project root, the task folder, legacy locations.
+# ==== db/jsongit/paths.py ====
+# Where a project's task files are: the project root, the task folder, legacy locations (`atm paths` prints them).
 
 LEGACY_DIRS = ["docs", "."]
 # The files atm reads and writes in the task folder; a repository can commit any of them as a symlink
@@ -1968,18 +2077,7 @@ def find_paths(cwd):
     }
 
 
-def cmd_paths(args):
-    paths = find_paths(os.getcwd())
-    if args.json:
-        out(to_json(paths))
-        return
-    for key in ["root", "dir", "tasks", "dashboard"]:
-        out(f"{key}: {paths[key]}")
-    if paths["legacy"]:
-        out(f"legacy: {paths['legacy']['tasks']}")
-
-
-# ==== lock.py ====
+# ==== db/jsongit/lock.py ====
 # The lock directory.
 #
 # A lock is a directory: mkdir succeeds for exactly one process, on every OS and file system. The holder writes
@@ -2079,55 +2177,10 @@ def locked(directory, timeout=None):
         signal.signal(signal.SIGTERM, previous)
 
 
-def cmd_lock_test(args):
-    """Test hook: hold the task folder's lock for `seconds`, logging to .lock-test.log, so tests can check exclusion."""
-    seconds = args.seconds
-    task_dir = find_paths(os.getcwd())["dir"]
-    log = os.path.join(task_dir, ".lock-test.log")
-    with locked(task_dir):
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"acquire {os.getpid()}\n")
-        time.sleep(seconds)
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"release {os.getpid()}\n")
-
-
-# ==== registry.py ====
-# The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows.
-#
-# One file per user, guarded by $ATM_HOME/.lock (not by any project's lock, and never taken while holding one), written
-# atomically. A linked git worktree registers its repository's main worktree. Format: docs/multi-project-api.md, 5.1.
-
-REGISTRY_FILE = "projects.json"
-REGISTRY_VERSION = 1
-SEEN_EVERY = 24 * 3600  # seconds between seen_at updates, so the registry isn't rewritten on every command
-
-
-def atm_home():
-    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager."""
-    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
-
-
-def ensure_home(home):
-    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
-    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
-    os.makedirs(home, mode=0o700, exist_ok=True)
-
-
-# A project id is a key in URLs (#project=<id>, p/<id>/...): letters, digits, '.', '_' and '-'
-PROJECT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
-
-
-def unique_id(registry, path, wanted):
-    """The id for the project at `path`: `wanted` unless another project already has it or it isn't a valid id; then
-    one made from the path, so two projects never shadow each other (F18)."""
-    taken = {e.get("id") for e in registry["projects"] if e.get("path") != path}
-    if PROJECT_ID.fullmatch(wanted) and wanted not in taken:
-        return wanted
-    suffix = hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
-    base = wanted if PROJECT_ID.fullmatch(wanted) and len(wanted) <= 56 else "p"
-    return f"{base}-{suffix}"
-
+# ==== db/jsongit/worktrees.py ====
+# The JSON-in-git store's working copies: a clone's git worktrees, each with its own tasks.json (the main worktree's
+# is the project's; the others show on the board as worktree copies, `worktrees.json`). Read from the git directory,
+# without running git where it can, so the server can ask on every poll.
 
 def main_worktree(root):
     """The main worktree's folder for a project root (itself unless it is a linked git worktree)."""
@@ -2154,8 +2207,8 @@ def head_branch(git_dir):
 
 def worktrees(root):
     """The git worktrees of the project whose main worktree is `root`, main first, as `git worktree list` has them:
-    [{path, branch, main}]. Read from the git directory, without running git, so the server can ask on every poll.
-    Linked worktrees whose folder is gone are left out; outside git (or a bare repository) the list is empty."""
+    [{path, branch, main}]. Linked worktrees whose folder is gone are left out; outside git (or a bare repository) the
+    list is empty."""
     git_dir = os.path.join(root, ".git")
     if not os.path.isdir(git_dir):
         return []
@@ -2177,358 +2230,82 @@ def worktrees(root):
     return found
 
 
-def project_meta(path):
-    """The meta of the project at `path`, or None without a readable tasks.json."""
-    data = read_json(os.path.join(path, TASK_DIR, TASKS_FILE))
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        return None
-    return data.get("meta") if isinstance(data.get("meta"), dict) else {}
+# ==== db/jsongit/claims.py ====
+# The JSON-in-git store's claims store: which agent works on which task until when, what was finished, waits or was
+# decided in another worktree, and when hints were last shown (docs/parallel-agents-design.md). It lives in the git
+# common directory, so all worktrees of a clone see it; tasks.json itself is per worktree. Lock order: the task folder,
+# then the claims store, so two commands can never wait on each other. The rules on it are atm-lib's (lib/loop.py).
+
+CLAIMS_STORE = "claims.json"  # in <git common dir>/atm/, shared by all worktrees of a clone
+CLAIMS_STORE_NO_GIT = "claims-store.json"  # in the task folder, outside git
+CLAIMS_SNAPSHOT = "claims.json"  # in the task folder (gitignored): what the dashboard reads
 
 
-def project_id(meta, path):
-    """meta.id, else "p" and 7 hex characters of the path's SHA-1 (stable until meta.id is set)."""
-    if isinstance(meta.get("id"), str) and meta["id"]:
-        return meta["id"]
-    return "p" + hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
+# The git common directory of each working copy, found once per process (it runs git; atm serve asks on every poll)
+_common_dirs = {}
 
 
-def project_name(meta, path):
-    return meta.get("project") if isinstance(meta.get("project"), str) and meta["project"] else os.path.basename(path)
+def claims_dir(paths):
+    root = paths["root"]
+    if root not in _common_dirs:
+        _common_dirs[root] = git(["rev-parse", "--git-common-dir"], root)
+    common = _common_dirs[root]
+    if common:
+        return os.path.join(os.path.normpath(os.path.join(root, common)), "atm")
+    return paths["dir"]
 
 
-def listed(meta):
-    dashboard = meta.get("dashboard")
-    return not (isinstance(dashboard, dict) and dashboard.get("listed") is False)
+def claims_store_path(paths):
+    directory = claims_dir(paths)
+    return os.path.join(directory, CLAIMS_STORE if directory != paths["dir"] else CLAIMS_STORE_NO_GIT)
 
 
-def is_missing(entry):
-    return project_meta(entry["path"]) is None
+@contextlib.contextmanager
+def locked_with_claims(paths):
+    """Hold the task folder's lock and, if it is elsewhere, the claims store's lock (always in this order)."""
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(locked(paths["dir"]))
+        if claims_dir(paths) != paths["dir"]:
+            stack.enter_context(locked(claims_dir(paths)))
+        yield
 
 
-def empty_registry():
-    return {"version": REGISTRY_VERSION, "projects": []}
+def read_store(paths):
+    """The shared store: live `claims`, and `completed` tasks (done in some worktree; its tasks.json may be the only
+    one that says so until the branches merge, so `next` must not hand those tasks out again elsewhere); `waiting`
+    tasks (blocked or sent for review in some worktree, likewise); `resolved` ones (answered, passed, rejected or
+    skipped in another worktree than the one they wait in, to be applied there); and `hints`, when each hint was last
+    shown (so `done` repeats one at most once a day)."""
+    data = read_json(claims_store_path(paths))
+    data = data if isinstance(data, dict) else {}
 
+    def section(key):
+        return data.get(key) if isinstance(data.get(key), dict) else {}
 
-def read_registry(home):
-    """(registry, damaged): an unreadable projects.json is moved aside to projects.json.damaged-<time> (its path is
-    returned as `damaged`) and replaced by an empty registry. Call it holding the registry lock."""
-    path = os.path.join(home, REGISTRY_FILE)
-    if not os.path.exists(path):
-        return empty_registry(), None
-    data = read_json(path)
-    entries = data.get("projects") if isinstance(data, dict) else None
-    if isinstance(entries, list) and all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in entries):
-        return data, None
-    damaged = f"{path}.damaged-{now().strftime('%Y%m%dT%H%M%SZ')}"
-    os.replace(path, damaged)
-    return empty_registry(), damaged
-
-
-def write_registry(home, registry):
-    write_json_atomic(os.path.join(home, REGISTRY_FILE), registry)
-
-
-def find_entry(registry, path):
-    return next((e for e in registry["projects"] if e["path"] == path), None)
-
-
-def entry_for(registry, path, meta, stamp):
     return {
-        "id": unique_id(registry, path, project_id(meta, path)),
-        "name": project_name(meta, path),
-        "path": path,
-        "added_at": stamp,
-        "seen_at": stamp,
+        "claims": data.get("claims") or {},
+        "completed": data.get("completed") or {},
+        "waiting": section("waiting"),
+        "resolved": section("resolved"),
+        "hints": section("hints"),
     }
 
 
-def seen_long_ago(entry):
-    """True when the entry's seen_at is a day old (or unreadable): time to refresh it."""
-    try:
-        return (now() - parse_iso(entry.get("seen_at"))).total_seconds() >= SEEN_EVERY
-    except (TypeError, ValueError):
-        return True
+def write_store(paths, store):
+    os.makedirs(claims_dir(paths), exist_ok=True)
+    write_json_atomic(claims_store_path(paths), store)
+    write_claims_snapshot(paths, store["claims"])
 
 
-def update_entry(registry, path, meta):
-    """Add, refresh or (when the project opted out) remove the entry for `path`. Returns what happened: "added",
-    "updated", "unchanged", "removed" or "unlisted"."""
-    entry = find_entry(registry, path)
-    if not listed(meta):
-        if entry:
-            registry["projects"].remove(entry)
-            return "removed"
-        return "unlisted"
-    stamp = now_iso()
-    if entry is None:
-        registry["projects"].append(entry_for(registry, path, meta, stamp))
-        return "added"
-    fresh = {"id": unique_id(registry, path, project_id(meta, path)), "name": project_name(meta, path)}
-    changed = any(entry.get(k) != v for k, v in fresh.items())
-    if not (changed or seen_long_ago(entry)):
-        return "unchanged"
-    entry.update(fresh)
-    entry["seen_at"] = stamp
-    return "updated"
+def write_claims_snapshot(paths, claims):
+    """The gitignored copy the dashboard polls: live claims, as a list."""
+    if os.path.isdir(paths["dir"]):
+        snapshot = {"generated_at": now_iso(), "claims": sorted(claims.values(), key=lambda c: c["task"])}
+        write_json_atomic(os.path.join(paths["dir"], CLAIMS_SNAPSHOT), snapshot)
 
 
-def register(paths, wait=True):
-    """Register the project of `paths` (its main worktree). With wait=False the registry lock is tried once and the
-    project is skipped if the lock is taken (the plugin's hook must never wait). Returns update_entry's result,
-    "busy" when skipped, or None when the project has no tasks.json."""
-    path = main_worktree(paths["root"])
-    meta = project_meta(path)
-    if meta is None:
-        meta = project_meta(paths["root"])
-    if meta is None:
-        return None
-    home = atm_home()
-    ensure_home(home)
-    try:
-        with locked(home, timeout=None if wait else 0):
-            registry, _ = read_registry(home)
-            result = update_entry(registry, path, meta)
-            if result not in ("unchanged", "unlisted"):
-                write_registry(home, registry)
-            return result
-    except AtmError:
-        if wait:
-            raise
-        return "busy"
-
-
-def register_if_needed(paths):
-    """The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
-    waiting for the lock) only when the project isn't listed yet or was last seen a day ago."""
-    path = main_worktree(paths["root"])
-    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE))
-    entries = registry.get("projects") if isinstance(registry, dict) else None
-    entry = next((e for e in entries or [] if isinstance(e, dict) and e.get("path") == path), None)
-    if entry is not None and not seen_long_ago(entry):
-        return "unchanged"
-    return register(paths, wait=False)
-
-
-def resolve_project(target):
-    """The main worktree folder of the project at `target` (a path), and its meta; refuses a folder without tasks."""
-    folder = os.path.abspath(os.path.expanduser(target or os.getcwd()))
-    if not os.path.isdir(folder):
-        raise AtmError(f"{target}: not a directory", 2)
-    paths = find_paths(folder)
-    path = main_worktree(paths["root"])
-    meta = project_meta(path) or project_meta(paths["root"])
-    if meta is None:
-        raise AtmError(f"no tasks.json in {os.path.join(path, TASK_DIR)}. Run /atm:create-tasks there first.")
-    return path, meta
-
-
-def describe_entry(entry):
-    return f"{entry['id']}  {entry['name']}  {entry['path']}"
-
-
-def damaged_notice(damaged):
-    return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
-
-
-def projects_list(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        if damaged:
-            write_registry(home, registry)
-    entries = [{**e, "missing": is_missing(e)} for e in registry["projects"]]
-    if as_json:
-        out(to_json({"projects": entries, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not entries:
-        out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
-    for e in entries:
-        out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
-
-
-def projects_add(home, target, as_json):
-    path, meta = resolve_project(target)
-    if not listed(meta):
-        raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        result = update_entry(registry, path, meta)
-        write_registry(home, registry)
-    entry = find_entry(registry, path)
-    if as_json:
-        out(to_json({"result": result, "project": entry, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    out(f"{'Added' if result == 'added' else 'Already registered'}: {describe_entry(entry)}")
-
-
-def projects_remove(home, target, as_json):
-    if not target:
-        raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
-    candidates = {target, os.path.abspath(os.path.expanduser(target))}
-    if os.path.isdir(target):
-        candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
-        if entry:
-            registry["projects"].remove(entry)
-        if entry or damaged:
-            write_registry(home, registry)
-    if entry is None:
-        raise AtmError(f"no registered project {target} (see `atm projects`)")
-    if as_json:
-        out(to_json({"removed": entry, "damaged": damaged}))
-        return
-    out(f"Removed: {describe_entry(entry)}")
-
-
-def projects_prune(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        gone = [e for e in registry["projects"] if is_missing(e)]
-        registry["projects"] = [e for e in registry["projects"] if e not in gone]
-        if gone or damaged:
-            write_registry(home, registry)
-    if as_json:
-        out(to_json({"removed": gone, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not gone:
-        out("Nothing to prune: every registered project is there.")
-    for e in gone:
-        out(f"Removed: {describe_entry(e)}")
-
-
-def cmd_projects(args):
-    home = atm_home()
-    if args.action == "add":
-        projects_add(home, args.target, args.json)
-    elif args.action == "remove":
-        projects_remove(home, args.target, args.json)
-    elif args.action == "prune":
-        projects_prune(home, args.json)
-    else:
-        if args.target:
-            raise AtmError(f"unexpected argument '{args.target}'", 2)
-        projects_list(home, args.json)
-
-
-# ==== repository.py ====
-# `atm repository`: the project's repository web address in meta.repository (e.g. https://github.com/o/r), which the
-# dashboard uses to link commits and pull requests. Git remotes are turned into that address.
-
-SCP_REMOTE = re.compile(r"^(?:[\w.-]+@)?([\w.-]+):(?!//)(.+)$")  # git@github.com:o/r.git
-URL = re.compile(r"^(https?|ssh|git)://(?:[^@/]+@)?([^/:]+)(?::\d+)?(/.*)?$")
-
-
-def repository_url(text):
-    """The web address of a repository: an http(s) URL as given, or a git remote turned into one
-    (git@github.com:o/r.git, ssh://git@github.com/o/r.git, https://github.com/o/r.git -> https://github.com/o/r).
-    Credentials, a trailing .git and a trailing slash go. None if it isn't one."""
-    text = (text or "").strip()
-    m = URL.match(text)
-    if m:
-        scheme, host, path = m.group(1), m.group(2), (m.group(3) or "")
-        web = "https" if scheme in ("ssh", "git") else scheme
-    else:
-        m = SCP_REMOTE.match(text)
-        if not m or "/" in m.group(1):
-            return None
-        web, host, path = "https", m.group(1), "/" + m.group(2)
-    path = re.sub(r"\.git/?$", "", path.rstrip("/")).rstrip("/")
-    if not host or "." not in host and host != "localhost" or not path.strip("/"):
-        return None
-    return f"{web}://{host}{path}"
-
-
-def origin_repository(root):
-    """The web address of the clone's origin remote, or None."""
-    return repository_url(git(["remote", "get-url", "origin"], root) or "")
-
-
-def ensure_repository(paths):
-    """Fill meta.repository from origin when tasks.json has none. Returns the address it set, or None."""
-    if not os.path.isfile(paths["tasks"]):
-        return None
-    url = origin_repository(paths["root"])
-    if not url:
-        return None
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        meta = data.setdefault("meta", {})
-        if meta.get("repository"):
-            return None
-        meta["repository"] = url
-        write_json_atomic(paths["tasks"], data)
-    return url
-
-
-def move_pr_links(tasks, old, new):
-    """Point the tasks' recorded PR links (pr.url) on the `old` address at the `new` one, after the repository moved.
-    Only the link changes: no timestamps or actors, so the history stays as it was. Returns how many moved."""
-    moved = 0
-    for task in tasks:
-        pr = task.get("pr") if isinstance(task, dict) else None
-        link = pr.get("url") if isinstance(pr, dict) else None
-        if isinstance(link, str) and (link == old or link.startswith(old + "/")):
-            pr["url"] = new + link[len(old) :]
-            moved += 1
-    return moved
-
-
-def cmd_repository(args):
-    paths = find_paths(os.getcwd())
-    if args.action is None:
-        if args.url is not None or args.old is not None:
-            raise AtmError(f"unexpected argument '{args.url or args.old}' (atm repository set URL)", 2)
-        current = load_tasks(paths).get("meta", {}).get("repository")
-        if args.json:
-            out(to_json({"repository": current or None}))
-        elif current:
-            out(current)
-        else:
-            out("No repository address yet. Set it with `atm repository set <url>` (a git remote works too).")
-        return
-    url = repository_url(args.url)
-    if not url:
-        raise AtmError(f"{args.url!r} is not a repository address: give an http(s) URL or a git remote", 2)
-    old = None
-    if args.old is not None:
-        old = repository_url(args.old)
-        if not old:
-            raise AtmError(f"--from {args.old!r} is not a repository address: give an http(s) URL or a git remote", 2)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        meta = data.setdefault("meta", {})
-        old = old or repository_url(meta.get("repository") or "")
-        meta["repository"] = url
-        moved = 0
-        if old and old != url:
-            # The repository moved: its PR links too, in tasks.json and the archive (T-273)
-            moved = move_pr_links(data.get("tasks") or [], old, url)
-            archive = load_archive(paths) if os.path.isfile(archive_path(paths)) else None
-            archived = move_pr_links(archive["tasks"], old, url) if archive else 0
-            if archived:
-                write_json_atomic(archive_path(paths), archive)
-            moved += archived
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json({"repository": url, "moved_links": moved}))
-    else:
-        links = f" ({moved} PR link{'' if moved == 1 else 's'} moved from {old})" if moved else ""
-        out(f"Repository address set: {url}{links}")
-
-
-# ==== logo.py ====
-# `atm logo`: the project's logo for the dashboard, in meta.logo (a path relative to the project root), or else one
+# ==== db/jsongit/logo.py ====
+# The project's logo for the dashboard: the image meta.logo names (a path relative to the project root), or else one
 # found in the usual places. atm serve serves it at /p/<id>/logo (docs/multi-project-api.md).
 
 LOGO_TYPES = {
@@ -2581,46 +2358,8 @@ def find_logo(root, meta):
     return None
 
 
-def cmd_logo(args):
-    paths = find_paths(os.getcwd())
-    root = paths["root"]
-    if args.action is None:
-        if args.path is not None:
-            raise AtmError(f"unexpected argument '{args.path}' (atm logo set PATH)", 2)
-        meta = load_tasks(paths).get("meta", {})
-        logo = find_logo(root, meta)
-        if args.json:
-            found = {"logo": logo[0], "source": logo[3]} if logo else {"logo": None, "source": None}
-            out(to_json({**found, "set": meta.get("logo")}))
-        elif logo:
-            out(f"{logo[0]}" + (" (found; set one with `atm logo set <path>`)" if logo[3] == "found" else ""))
-        elif meta.get("logo"):
-            out(f"meta.logo is {meta['logo']}, which isn't a usable logo (missing, too large, or outside the project).")
-        else:
-            out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
-        return
-    if args.action == "unset":
-        with locked(paths["dir"]):
-            data = load_tasks(paths)
-            removed = data.get("meta", {}).pop("logo", None)
-            if removed is not None:
-                write_json_atomic(paths["tasks"], data)
-        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
-        return
-    if args.path is None:
-        raise AtmError("atm logo set needs a path", 2)
-    # The path is relative to where atm runs, like every path atm takes; it is kept relative to the project root
-    relative = os.path.relpath(os.path.abspath(args.path), os.path.realpath(root)).replace(os.sep, "/")
-    logo_file(root, relative)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        data.setdefault("meta", {})["logo"] = relative
-        write_json_atomic(paths["tasks"], data)
-    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
-
-
-# ==== merge.py ====
-# Merging tasks.json, and `atm init`.
+# ==== db/jsongit/merge.py ====
+# The JSON-in-git store's merge driver: merging the task files task by task.
 #
 # Registered as a git merge driver (`tasks.json merge=atm`), so branches that changed tasks.json merge task by task
 # instead of line by line. Design: docs/parallel-agents-design.md, option E and layer L3.
@@ -2901,8 +2640,9 @@ def merge_task_files(base, ours, theirs):
     return result, conflicts
 
 
-def cmd_merge_driver(args):
-    base_path, ours_path, theirs_path = args.base, args.ours, args.theirs
+def merge_files(base_path, ours_path, theirs_path):
+    """What git's merge driver does (`atm merge-driver %O %A %B`): merge the three versions task by task and write the
+    result over `ours_path`. Returns the conflicts (this branch's version was kept for each)."""
     versions = [read_json(p) for p in (base_path, ours_path, theirs_path)]
     if versions[0] is None and os.path.exists(base_path) and os.path.getsize(base_path) == 0:
         versions[0] = {"tasks": []}  # the file was added on both branches
@@ -2910,13 +2650,7 @@ def cmd_merge_driver(args):
         raise AtmError("tasks.json merge: one side is not valid JSON; resolve the conflict by hand")
     merged, conflicts = merge_task_files(*versions)
     write_json_atomic(ours_path, merged)
-    if args.json:
-        out(to_json({"conflicts": conflicts}))
-    if conflicts:
-        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
-        for conflict in conflicts:
-            sys.stderr.write(f"  {conflict}\n")
-        raise AtmExit(1)
+    return conflicts
 
 
 def launcher_command():
@@ -2969,164 +2703,1176 @@ def ensure_archive_merge(paths):
     return True
 
 
-def ensure_project_id(paths):
-    """Give tasks.json a meta.id if it has none: the dashboard keeps each project's saved view under it (projects
-    served from the same port share browser storage). Returns the new id, or None if there was one already."""
-    if not os.path.isfile(paths["tasks"]):
+# ==== db/jsongit/migrate.py ====
+# `atm migrate`, the JSON-in-git store's migrations of old layouts: move a legacy tasks.json into the task folder and
+# set the folder up (.gitignore, merge driver), clean up after per-project dashboards (0.10.0-0.14.0: the dashboard now
+# comes from the plugin, served by `atm serve` for all projects), and bring old task data up to date (finish times,
+# phases to sprints, `with: user`).
+
+# Runtime files in the task folder that must not be committed (the dashboard and server files are from before
+# 0.15.0; they stay listed so leftovers stay out of git)
+IGNORED = ["tasks-dashboard.html", ".server.json", ".server.log", "claims.json", "claims-store.json", ".lock/"]
+OLD_SERVER_RECORD = ".server.json"
+OLD_SERVER_LOG = ".server.log"
+
+
+def written_by_atm(path):
+    """Whether an old server record is one atm wrote here: owned by this user and not tracked by git (atm always kept
+    it out of git). A record that came with the repository is only deleted: atm never contacts its port or signals its
+    pid (docs/security-review.md F14)."""
+    try:
+        if os.stat(path).st_uid != os.getuid():
+            return False
+    except (OSError, AttributeError):  # missing, or no uids (Windows)
+        return False
+    return not is_tracked(os.path.dirname(path), path)
+
+
+def clean_up_old_dashboard(task_dir):
+    """Per-project dashboards (0.10.0-0.14.0): delete the project's copy of the dashboard, stop its server if one still
+    runs (only when whoami confirms it serves this folder), and remove the server's record and log. Returns what was
+    done, or None when there was nothing left."""
+    removed = False
+    copy = os.path.join(task_dir, DASHBOARD_FILE)
+    if os.path.isfile(copy):
+        os.remove(copy)
+        removed = True
+    stopped = None
+    record_path = os.path.join(task_dir, OLD_SERVER_RECORD)
+    record = read_json(record_path) if written_by_atm(record_path) else None
+    if record is not None:
+        info = whoami(record.get("port")) if isinstance(record, dict) else None
+        if info and info.get("folder") == task_dir and info.get("pid") == record.get("pid"):
+            try:
+                os.kill(record["pid"], signal.SIGTERM)
+                stopped = record["pid"]
+            except OSError:
+                pass
+    had_files = False
+    for name in (OLD_SERVER_RECORD, OLD_SERVER_LOG):
+        p = os.path.join(task_dir, name)
+        if os.path.exists(p):
+            os.remove(p)
+            had_files = True
+    if not (removed or stopped or had_files):
         return None
+    return {"dashboard": removed, "server": stopped}
+
+
+FINISH_FIELDS = {"done": "completed_at", "skipped": "skipped_at"}
+
+
+def missing_finish_times(tasks, vocab):
+    """The finished tasks without their finish time (done ones from before completed_at existed; skipped ones from
+    before skipped_at existed), with the field each one needs."""
+    result = []
+    for task in tasks:
+        field = FINISH_FIELDS.get(kind_of(vocab, task.get("status"))) if isinstance(task, dict) else None
+        if field and not task.get(field) and task.get("updated_at"):
+            result.append((task, field))
+    return result
+
+
+def backfill_finish_times(paths):
+    """Give finished tasks without a finish time their updated_at, which is what the dashboard showed for them anyway,
+    so a later edit (which moves updated_at) doesn't move them in time. In tasks.json and the archive; once per task;
+    updated_at and updated_by stay. Returns how many tasks were filled in."""
+    archive = archive_path(paths)
+    try:
+        data = load_tasks(paths)
+        vocab = vocabulary(data)
+        if not missing_finish_times(data["tasks"], vocab) and not missing_finish_times(load_archive(paths)["tasks"], vocab):
+            return 0
+    except AtmError:
+        return 0  # an unreadable file: the command the skill runs next reports the problem
+    filled = 0
     with locked(paths["dir"]):
         data = load_tasks(paths)
-        meta = data.get("meta")
-        if not isinstance(meta, dict):
-            meta = data["meta"] = {}
-        if isinstance(meta.get("id"), str) and meta["id"]:
-            return None
-        meta["id"] = os.urandom(4).hex()
-        write_json_atomic(paths["tasks"], data)
-    return meta["id"]
+        files = [(paths["tasks"], data)] + ([(archive, load_archive(paths))] if os.path.isfile(archive) else [])
+        for path, contents in files:
+            missing = missing_finish_times(contents["tasks"], vocab)
+            for task, field in missing:
+                task[field] = task["updated_at"]
+            if missing:
+                write_json_atomic(path, contents)
+                filled += len(missing)
+    return filled
 
 
-def apply_meta(paths, meta_file):
-    """`init --meta-file F`: merge F's keys into tasks.json's meta (project, description, phases, vocabularies),
-    creating tasks.json if there is none, so /atm:create-tasks never writes the file itself. The vocabularies are
-    checked before anything is written; meta.id is kept. Returns (created, keys)."""
-    new = read_json(meta_file)
-    if not isinstance(new, dict):
-        raise AtmError(f"{meta_file} must hold a JSON object: the meta keys to set", 2)
-    new.pop("id", None)
-    with locked(paths["dir"]) if os.path.isdir(paths["dir"]) else contextlib.nullcontext():
-        created = not os.path.isfile(paths["tasks"])
-        data = {"meta": {"created": now().strftime("%Y-%m-%d")}, "tasks": []} if created else load_tasks(paths)
-        if not isinstance(data.get("meta"), dict):
-            data["meta"] = {}
-        data["meta"].update(new)
-        vocabulary(data)  # raises, naming the problem, before anything is written
-        os.makedirs(paths["dir"], exist_ok=True)
-        write_json_atomic(paths["tasks"], data)
-    return created, sorted(new)
+FINISHED_KINDS = ("done", "skipped")
 
 
-def cmd_init(args):
-    paths = find_paths(os.getcwd())
-    if args.meta_file:
-        created, keys = apply_meta(paths, args.meta_file)
-        paths = find_paths(os.getcwd())
-        if not args.json:
-            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
-    project_id = ensure_project_id(paths)
-    repository = ensure_repository(paths)
-    register(paths)  # the dashboard lists every project atm runs in
-    git_repo = in_git(paths["root"])
-    changed = ensure_merge_driver(paths) if git_repo else False
-    if args.json:
-        out(
-            to_json(
-                {"project_id": project_id, "repository": repository, "git": git_repo, "gitattributes_added": changed}
-            )
+def task_phase(task):
+    """The task's phase (a number), or None: a task without one goes to the backlog."""
+    phase = task.get("phase") if isinstance(task, dict) else None
+    if not isinstance(phase, (int, float)) or isinstance(phase, bool):
+        return None
+    return int(phase) if float(phase).is_integer() else phase
+
+
+def phase_sprint_names(meta, tasks):
+    """{phase: sprint name} for every phase with tasks or a name, in phase order: its name, or "Phase n" when
+    unnamed, with " (phase n)" added to a name already taken (the names the dashboard shows for unmigrated projects,
+    dashboard/src/lib/sprints.ts)."""
+    named = {}
+    for p in meta.get("phases") or []:
+        if isinstance(p, dict) and task_phase({"phase": p.get("id")}) is not None:
+            name = p.get("name").strip()[:MAX_SPRINT_NAME].rstrip() if isinstance(p.get("name"), str) else ""
+            if name:
+                named[task_phase({"phase": p["id"]})] = name
+    phases = set(named) | {task_phase(t) for t in tasks} - {None}
+    names, taken = {}, set()
+    for phase in sorted(phases):
+        name = named.get(phase) or f"Phase {phase}"
+        if name.casefold() in taken:
+            suffix = f" (phase {phase})"
+            name = name[: MAX_SPRINT_NAME - len(suffix)].rstrip() + suffix
+        taken.add(name.casefold())
+        names[phase] = name
+    return names
+
+
+def sprint_from_phase(name, tasks, vocab):
+    """The sprint a phase becomes: closed when all its tasks are finished (start, end and report from them), else
+    planned (SR-8.1)."""
+    finished = bool(tasks) and all(kind_of(vocab, t.get("status")) in FINISHED_KINDS for t in tasks)
+    if not finished:
+        return {"id": name, "state": "planned"}
+    sprint = {"id": name, "state": "closed"}
+    starts = [t["started_at"] for t in tasks if isinstance(t.get("started_at"), str)]
+    ends = [
+        t.get("completed_at") or t.get("skipped_at") or t.get("updated_at")
+        for t in tasks
+        if isinstance(t.get("completed_at") or t.get("skipped_at") or t.get("updated_at"), str)
+    ]
+    if starts:
+        sprint["start"] = min(starts)
+    if ends:
+        sprint["end"] = max(ends)
+    sprint["report"] = {
+        "done": [t["id"] for t in tasks if kind_of(vocab, t.get("status")) == "done" and "id" in t],
+        "carried": [],
+    }
+    return sprint
+
+
+def phases_to_sprints(data, archived, vocab, stamp):
+    """Turn phases into sprints in tasks.json's data and the archive's tasks, in place (SR-8.1). A project that already
+    has meta.sprints only gets its leftover phases converted (a task merged in from an unmigrated branch, SR-8.5).
+    Returns the sprints it added, or [] when there was nothing to convert."""
+    meta = data.setdefault("meta", {})
+    tasks = [t for t in list(data["tasks"]) + list(archived) if isinstance(t, dict)]
+    if not meta.get("phases") and not any("phase" in t for t in tasks):
+        return []
+    names = phase_sprint_names(meta, tasks)
+    sprints = meta.get("sprints") if isinstance(meta.get("sprints"), list) else []
+    existing = {s["id"].casefold() for s in sprints if isinstance(s, dict) and isinstance(s.get("id"), str)}
+    added = []
+    for phase, name in names.items():
+        if name.casefold() in existing:
+            continue
+        sprint = sprint_from_phase(name, [t for t in tasks if task_phase(t) == phase], vocab)
+        sprints.append(sprint)
+        added.append(sprint)
+    meta["sprints"] = sprints
+    meta.pop("phases", None)
+    by_name = {s["id"].casefold(): s["id"] for s in sprints if isinstance(s, dict) and isinstance(s.get("id"), str)}
+    for task in tasks:
+        phase = task_phase(task)
+        task.pop("phase", None)
+        if phase is None or task.get("sprint"):
+            continue
+        task["sprint"] = by_name[names[phase].casefold()]
+        task.setdefault("sprint_history", []).append(
+            {"sprint": task["sprint"], "from": task.get("created_at") if isinstance(task.get("created_at"), str) else stamp}
         )
-        return
-    if project_id:
-        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
-    if repository:
-        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
-    if not git_repo:
-        out("Not in a git repository: there is no merge driver to set up.")
-        return
-    out(
-        "Registered the tasks.json merge driver (git config merge.atm)"
-        + (" and added .agentic-task-manager/.gitattributes (staged)." if changed else "; .gitattributes already set.")
-    )
+    return added
 
 
-# ==== claims.py ====
-# Claims: which agent works on which task, until when (the lease); and `next`.
+def migrate_phases(paths):
+    """phases_to_sprints on the files under the lock, staging them in git (not committing). Returns the sprints it
+    added, or None when there was nothing to convert."""
+    archive = archive_path(paths)
+    try:
+        data = load_tasks(paths)
+        vocab = vocabulary(data)
+        archive_data = load_archive(paths)
+        if not data.get("meta", {}).get("phases") and not any(
+            isinstance(t, dict) and "phase" in t for t in list(data["tasks"]) + list(archive_data["tasks"])
+        ):
+            return None
+    except AtmError:
+        return None  # an unreadable file: the command the skill runs next reports the problem
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        archive_data = load_archive(paths)
+        added = phases_to_sprints(data, archive_data["tasks"], vocab, now_iso())
+        if isinstance(archive_data.get("meta"), dict):
+            archive_data["meta"].pop("phases", None)
+        vocabulary(data)
+        write_json_atomic(paths["tasks"], data)
+        written = [paths["tasks"]]
+        if os.path.isfile(archive):
+            write_json_atomic(archive, archive_data)
+            written.append(archive)
+    if in_git(paths["root"]):
+        git(["add", "--"] + [rel(paths["root"], p) for p in written], paths["root"])
+    return added
+
+
+WITH_USER_MIGRATION = "interactive-label"
+
+
+def migrate_interactive(paths):
+    """Tasks labelled `interactive` (work done with the user, T-240) get `with: user` (SR-6.5), once: the change is
+    recorded in meta.migrations, so a `with` taken off later isn't put back. The label stays. Only unfinished tasks in
+    tasks.json; nothing is written when none has the label. Returns how many tasks it changed."""
+    def todo(data):
+        meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
+        if WITH_USER_MIGRATION in (meta.get("migrations") or []):
+            return []
+        vocab = vocabulary(data)
+        return [
+            t
+            for t in data["tasks"]
+            if isinstance(t, dict)
+            and "interactive" in (t.get("labels") or [])
+            and not t.get("with")
+            and kind_of(vocab, t.get("status")) not in ("done", "skipped")
+        ]
+
+    try:
+        if not todo(load_tasks(paths)):
+            return 0
+    except AtmError:
+        return 0  # an unreadable file: the command the skill runs next reports the problem
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        tasks = todo(data)
+        for task in tasks:
+            task["with"] = "user"
+        meta = data.setdefault("meta", {})
+        meta["migrations"] = list(meta.get("migrations") or []) + [WITH_USER_MIGRATION]
+        write_json_atomic(paths["tasks"], data)
+    if in_git(paths["root"]):
+        git(["add", "--", rel(paths["root"], paths["tasks"])], paths["root"])
+    return len(tasks)
+
+
+def ensure_gitignore(task_dir):
+    """Add any missing runtime entries to the folder's .gitignore, keeping the user's lines. Returns True if changed."""
+    p = os.path.join(task_dir, ".gitignore")
+    try:
+        with open(p, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    lines = text.splitlines()
+    missing = [entry for entry in IGNORED if entry not in lines]
+    if not missing:
+        return False
+    if not text:
+        text = "# atm runtime files (managed by atm)\n"
+    elif not text.endswith("\n"):
+        text += "\n"
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(text + "".join(entry + "\n" for entry in missing))
+    return True
+
+
+def migrate(paths):
+    """Move a legacy tasks.json into the task folder, set the folder up, and turn phases into sprints. Never commits."""
+    root, task_dir, legacy = paths["root"], paths["dir"], paths["legacy"]
+    result = {
+        "moved": None,
+        "removed_dashboard": None,
+        "warning": None,
+        "gitignore_updated": False,
+        "merge_driver_updated": False,
+        "cleaned_up": None,
+        "finish_times_filled": 0,
+        "sprints_from_phases": None,
+        "with_user_from_label": 0,
+    }
+    if legacy and paths["tasks_exists"]:
+        result["warning"] = (
+            f"both {rel(root, legacy['tasks'])} and {rel(root, paths['tasks'])} exist; "
+            f"using {rel(root, paths['tasks'])}. Remove the old file when you no longer need it."
+        )
+    elif legacy:
+        os.makedirs(task_dir, exist_ok=True)
+        tracked = is_tracked(root, legacy["tasks"])
+        if tracked:
+            if git(["mv", "--", rel(root, legacy["tasks"]), rel(root, paths["tasks"])], root) is None:
+                raise AtmError(f"git mv {rel(root, legacy['tasks'])} failed")
+        else:
+            os.rename(legacy["tasks"], paths["tasks"])
+        result["moved"] = {"from": rel(root, legacy["tasks"]), "to": rel(root, paths["tasks"]), "git": tracked}
+        if legacy["dashboard"]:
+            if is_tracked(root, legacy["dashboard"]):
+                git(["rm", "--cached", "-q", "--", rel(root, legacy["dashboard"])], root)
+            os.remove(legacy["dashboard"])
+            result["removed_dashboard"] = rel(root, legacy["dashboard"])
+    if not os.path.isfile(paths["tasks"]):
+        return result
+    if ensure_gitignore(task_dir):
+        result["gitignore_updated"] = True
+        if in_git(root):
+            git(["add", "--", rel(root, os.path.join(task_dir, ".gitignore"))], root)
+    result["merge_driver_updated"] = ensure_merge_driver(paths)
+    if not os.path.exists(os.path.join(task_dir, CLAIMS_SNAPSHOT)):
+        # So the dashboard finds the file from the start instead of logging a 404 on every refresh
+        write_claims_snapshot(paths, read_store(paths)["claims"])
+    result["cleaned_up"] = clean_up_old_dashboard(task_dir)
+    result["finish_times_filled"] = backfill_finish_times(paths)
+    result["sprints_from_phases"] = migrate_phases(paths)
+    result["with_user_from_label"] = migrate_interactive(paths)
+    try:
+        hint = archive_hint(paths, load_tasks(paths))
+    except AtmError:
+        hint = None  # the command the skill runs next reports the problem
+    if hint:
+        result["suggest"] = {"archive": hint}
+    return result
+
+
+def describe_sprints_from_phases(sprints):
+    """What the phase migration did, said once (it doesn't run again)."""
+    if not sprints:
+        return ["Moved the tasks' phases to their sprints (staged, not committed)."]
+    closed = [s["id"] for s in sprints if s["state"] == "closed"]
+    planned = [s["id"] for s in sprints if s["state"] == "planned"]
+    count = "1 phase" if len(sprints) == 1 else f"{len(sprints)} phases"
+    lines = [f"Phases are now sprints: turned {count} into sprints (staged, not committed)."]
+    if closed:
+        lines.append(f"Closed (all their tasks finished): {', '.join(closed)}.")
+    if planned:
+        lines.append(f"Planned: {', '.join(planned)}.")
+        lines.append("None is active yet: plan one with /atm:plan-sprint.")
+    return lines
+
+
+def describe_migration(r, paths):
+    lines = []
+    if r["warning"]:
+        lines.append("warning: " + r["warning"])
+    if r["moved"]:
+        line = f"Moved {r['moved']['from']} to {r['moved']['to']}"
+        if r["moved"]["git"]:
+            line += " (staged with git mv, not committed)"
+        if r["removed_dashboard"]:
+            line += f"; removed {r['removed_dashboard']} (the dashboard now comes with the plugin: /atm:serve)"
+        lines.append(line + ".")
+    elif not os.path.isfile(paths["tasks"]):
+        lines.append("No tasks.json found. Run /atm:create-tasks to create one.")
+    cleaned = r["cleaned_up"]
+    if cleaned:
+        line = "Removed this project's old dashboard files"
+        if cleaned["server"]:
+            line += f" and stopped its old dashboard server (pid {cleaned['server']})"
+        lines.append(line + ": one dashboard for all your projects now comes with the plugin (/atm:serve).")
+    filled = r.get("finish_times_filled")
+    if filled:
+        tasks = "1 finished task" if filled == 1 else f"{filled} finished tasks"
+        lines.append(f"Filled in the finish time of {tasks} that had none, from the last update (completed_at/skipped_at).")
+    sprints = r.get("sprints_from_phases")
+    if sprints is not None:
+        lines.extend(describe_sprints_from_phases(sprints))
+    together = r.get("with_user_from_label")
+    if together:
+        tasks = "1 task" if together == 1 else f"{together} tasks"
+        lines.append(
+            f"Gave {tasks} labelled interactive `with: user` (done together with you; unattended loops skip them)."
+        )
+    if not lines:
+        lines.append("Nothing to migrate.")
+    if r.get("suggest"):
+        lines.append(r["suggest"]["archive"]["text"])
+    return lines
+
+
+# ==== db/registry.py ====
+# The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows (the `Registry` of
+# docs/layered-architecture.md §3.2).
 #
-# Claims live in the git common directory, so all worktrees of a clone see them; tasks.json itself is per worktree.
-# Lock order: the task folder, then the claims store, so two commands can never wait on each other.
+# One file per user, guarded by $ATM_HOME/.lock (not by any project's lock, and never taken while holding one), written
+# atomically. A linked git worktree registers its repository's main worktree. Format: docs/multi-project-api.md, 5.1.
 
-CLAIMS_STORE = "claims.json"  # in <git common dir>/atm/, shared by all worktrees of a clone
-CLAIMS_STORE_NO_GIT = "claims-store.json"  # in the task folder, outside git
-CLAIMS_SNAPSHOT = "claims.json"  # in the task folder (gitignored): what the dashboard reads
-DEFAULT_LEASE_MINUTES = 30
+REGISTRY_FILE = "projects.json"
+REGISTRY_VERSION = 1
+SEEN_EVERY = 24 * 3600  # seconds between seen_at updates, so the registry isn't rewritten on every command
 
-
-def session_identity(session_id, cwd):
-    """A Claude Code session's identity: "claude:" and 8 characters of its ID; in a linked git worktree, also
-    "@<worktree folder>". Subagents share their parent's session ID, so agents spawned in separate worktrees still get
-    identities of their own. The main worktree keeps the plain form, so its claims and history still match."""
-    identity = "claude:" + str(session_id)[:8]
-    root = project_root(cwd)
-    if main_worktree(root) != root:
-        identity += "@" + os.path.basename(root)
-    return identity
+# A project id is a key in URLs (#project=<id>, p/<id>/...): letters, digits, '.', '_' and '-'
+PROJECT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
-def agent_identity(agent=None):
-    """Who runs the command (the actor, DM-4.5): --agent, else ATM_AGENT, else this Claude Code session (per linked
-    worktree, see session_identity), else the git user's name (a person in a terminal), else user@host."""
-    if agent:
-        return agent
-    if os.environ.get("ATM_AGENT"):
-        return os.environ["ATM_AGENT"]
-    if os.environ.get("CLAUDE_CODE_SESSION_ID"):
-        return session_identity(os.environ["CLAUDE_CODE_SESSION_ID"], os.getcwd())
-    name = git(["config", "user.name"], project_root(os.getcwd()))
-    if name:
-        return name
-    user = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
-    return f"{user}@{socket.gethostname()}"
+def unique_id(registry, path, wanted):
+    """The id for the project at `path`: `wanted` unless another project already has it or it isn't a valid id; then
+    one made from the path, so two projects never shadow each other (F18)."""
+    taken = {e.get("id") for e in registry["projects"] if e.get("path") != path}
+    if PROJECT_ID.fullmatch(wanted) and wanted not in taken:
+        return wanted
+    suffix = hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
+    base = wanted if PROJECT_ID.fullmatch(wanted) and len(wanted) <= 56 else "p"
+    return f"{base}-{suffix}"
 
 
-def claims_dir(paths):
-    common = git(["rev-parse", "--git-common-dir"], paths["root"])
-    if common:
-        return os.path.join(os.path.normpath(os.path.join(paths["root"], common)), "atm")
-    return paths["dir"]
+def project_meta(path):
+    """The meta of the project at `path`, or None without a readable tasks.json."""
+    data = read_json(os.path.join(path, TASK_DIR, TASKS_FILE))
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        return None
+    return data.get("meta") if isinstance(data.get("meta"), dict) else {}
 
 
-def claims_store_path(paths):
-    directory = claims_dir(paths)
-    return os.path.join(directory, CLAIMS_STORE if directory != paths["dir"] else CLAIMS_STORE_NO_GIT)
+def project_id(meta, path):
+    """meta.id, else "p" and 7 hex characters of the path's SHA-1 (stable until meta.id is set)."""
+    if isinstance(meta.get("id"), str) and meta["id"]:
+        return meta["id"]
+    return "p" + hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
 
 
-@contextlib.contextmanager
-def locked_with_claims(paths):
-    """Hold the task folder's lock and, if it is elsewhere, the claims store's lock (always in this order)."""
-    with contextlib.ExitStack() as stack:
-        stack.enter_context(locked(paths["dir"]))
-        if claims_dir(paths) != paths["dir"]:
-            stack.enter_context(locked(claims_dir(paths)))
-        yield
+def project_name(meta, path):
+    return meta.get("project") if isinstance(meta.get("project"), str) and meta["project"] else os.path.basename(path)
 
 
-def read_store(paths):
-    """The shared store: live `claims`, and `completed` tasks (done in some worktree; its tasks.json may be the only
-    one that says so until the branches merge, so `next` must not hand those tasks out again elsewhere); `waiting`
-    tasks (blocked or sent for review in some worktree, likewise); `resolved` ones (answered, passed, rejected or
-    skipped in another worktree than the one they wait in, to be applied there); and `hints`, when each hint was last
-    shown (so `done` repeats one at most once a day)."""
-    data = read_json(claims_store_path(paths))
-    data = data if isinstance(data, dict) else {}
+def listed(meta):
+    dashboard = meta.get("dashboard")
+    return not (isinstance(dashboard, dict) and dashboard.get("listed") is False)
 
-    def section(key):
-        return data.get(key) if isinstance(data.get(key), dict) else {}
 
+def is_missing(entry):
+    return project_meta(entry["path"]) is None
+
+
+def empty_registry():
+    return {"version": REGISTRY_VERSION, "projects": []}
+
+
+def read_registry(home):
+    """(registry, damaged): an unreadable projects.json is moved aside to projects.json.damaged-<time> (its path is
+    returned as `damaged`) and replaced by an empty registry. Call it holding the registry lock."""
+    path = os.path.join(home, REGISTRY_FILE)
+    if not os.path.exists(path):
+        return empty_registry(), None
+    data = read_json(path)
+    entries = data.get("projects") if isinstance(data, dict) else None
+    if isinstance(entries, list) and all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in entries):
+        return data, None
+    damaged = f"{path}.damaged-{now().strftime('%Y%m%dT%H%M%SZ')}"
+    os.replace(path, damaged)
+    return empty_registry(), damaged
+
+
+def write_registry(home, registry):
+    write_json_atomic(os.path.join(home, REGISTRY_FILE), registry)
+
+
+def find_entry(registry, path):
+    return next((e for e in registry["projects"] if e["path"] == path), None)
+
+
+def entry_for(registry, path, meta, stamp):
     return {
-        "claims": data.get("claims") or {},
-        "completed": data.get("completed") or {},
-        "waiting": section("waiting"),
-        "resolved": section("resolved"),
-        "hints": section("hints"),
+        "id": unique_id(registry, path, project_id(meta, path)),
+        "name": project_name(meta, path),
+        "path": path,
+        "added_at": stamp,
+        "seen_at": stamp,
     }
 
 
-def apply_resolutions(paths, data, store):
+def seen_long_ago(entry):
+    """True when the entry's seen_at is a day old (or unreadable): time to refresh it."""
+    try:
+        return (now() - parse_iso(entry.get("seen_at"))).total_seconds() >= SEEN_EVERY
+    except (TypeError, ValueError):
+        return True
+
+
+def update_entry(registry, path, meta):
+    """Add, refresh or (when the project opted out) remove the entry for `path`. Returns what happened: "added",
+    "updated", "unchanged", "removed" or "unlisted"."""
+    entry = find_entry(registry, path)
+    if not listed(meta):
+        if entry:
+            registry["projects"].remove(entry)
+            return "removed"
+        return "unlisted"
+    stamp = now_iso()
+    if entry is None:
+        registry["projects"].append(entry_for(registry, path, meta, stamp))
+        return "added"
+    fresh = {"id": unique_id(registry, path, project_id(meta, path)), "name": project_name(meta, path)}
+    changed = any(entry.get(k) != v for k, v in fresh.items())
+    if not (changed or seen_long_ago(entry)):
+        return "unchanged"
+    entry.update(fresh)
+    entry["seen_at"] = stamp
+    return "updated"
+
+
+def register(paths, wait=True):
+    """Register the project of `paths` (its main worktree). With wait=False the registry lock is tried once and the
+    project is skipped if the lock is taken (the plugin's hook must never wait). Returns update_entry's result,
+    "busy" when skipped, or None when the project has no tasks.json."""
+    path = main_worktree(paths["root"])
+    meta = project_meta(path)
+    if meta is None:
+        meta = project_meta(paths["root"])
+    if meta is None:
+        return None
+    home = atm_home()
+    ensure_home(home)
+    try:
+        with locked(home, timeout=None if wait else 0):
+            registry, _ = read_registry(home)
+            result = update_entry(registry, path, meta)
+            if result not in ("unchanged", "unlisted"):
+                write_registry(home, registry)
+            return result
+    except AtmError:
+        if wait:
+            raise
+        return "busy"
+
+
+def register_if_needed(paths):
+    """The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
+    waiting for the lock) only when the project isn't listed yet or was last seen a day ago."""
+    path = main_worktree(paths["root"])
+    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE))
+    entries = registry.get("projects") if isinstance(registry, dict) else None
+    entry = next((e for e in entries or [] if isinstance(e, dict) and e.get("path") == path), None)
+    if entry is not None and not seen_long_ago(entry):
+        return "unchanged"
+    return register(paths, wait=False)
+
+
+def registered_id(paths):
+    """(id, listed) of the project at `paths` as the registry has it: the id it gave the project (meta.id, or another
+    when that one is taken, unique_id), and whether it is listed on the dashboard."""
+    path = main_worktree(paths["root"])
+    meta = project_meta(path) or project_meta(paths["root"]) or {}
+    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE)) or {}
+    entry = next((e for e in registry.get("projects", []) if isinstance(e, dict) and e.get("path") == path), None)
+    return (entry or {}).get("id") or project_id(meta, path), listed(meta)
+
+
+def resolve_project(target):
+    """The main worktree folder of the project at `target` (a path), and its meta; refuses a folder without tasks."""
+    folder = os.path.abspath(os.path.expanduser(target or os.getcwd()))
+    if not os.path.isdir(folder):
+        raise AtmError(f"{target}: not a directory", 2)
+    paths = find_paths(folder)
+    path = main_worktree(paths["root"])
+    meta = project_meta(path) or project_meta(paths["root"])
+    if meta is None:
+        raise AtmError(f"no tasks.json in {os.path.join(path, TASK_DIR)}. Run /atm:create-tasks there first.")
+    return path, meta
+
+
+class FileRegistry:
+    """The registry in $ATM_HOME/projects.json. Each method holds the registry's lock while it reads and writes, and
+    returns `damaged`: where an unreadable projects.json was moved (read_registry), or None."""
+
+    def __init__(self, home=None):
+        self.home = home or atm_home()
+
+    def _locked(self):
+        ensure_home(self.home)
+        return locked(self.home)
+
+    def file(self):
+        """The registry's file: the server re-reads it when it changes."""
+        return os.path.join(self.home, REGISTRY_FILE)
+
+    def list_projects(self):
+        """{projects: the entries, each with `missing` (no readable tasks.json there now), damaged}."""
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            if damaged:
+                write_registry(self.home, registry)
+        return {"projects": [{**e, "missing": is_missing(e)} for e in registry["projects"]], "damaged": damaged}
+
+    def add_project(self, target):
+        """Register the project at `target` (a folder in it). {result: update_entry's, project: its entry, damaged}."""
+        path, meta = resolve_project(target)
+        if not listed(meta):
+            raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            result = update_entry(registry, path, meta)
+            write_registry(self.home, registry)
+        return {"result": result, "project": find_entry(registry, path), "damaged": damaged}
+
+    def remove_project(self, target):
+        """Unregister the project with the ID or path `target`. {removed: its entry, damaged}."""
+        if not target:
+            raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
+        candidates = {target, os.path.abspath(os.path.expanduser(target))}
+        if os.path.isdir(target):
+            candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
+            if entry:
+                registry["projects"].remove(entry)
+            if entry or damaged:
+                write_registry(self.home, registry)
+        if entry is None:
+            raise AtmError(f"no registered project {target} (see `atm projects`)")
+        return {"removed": entry, "damaged": damaged}
+
+    def prune(self):
+        """Unregister the projects whose task folder is gone. {removed: their entries, damaged}."""
+        with self._locked():
+            registry, damaged = read_registry(self.home)
+            gone = [e for e in registry["projects"] if is_missing(e)]
+            registry["projects"] = [e for e in registry["projects"] if e not in gone]
+            if gone or damaged:
+                write_registry(self.home, registry)
+        return {"removed": gone, "damaged": damaged}
+
+    def stamp(self):
+        """The file's size and mtime (None while there is none): it changes when the list does."""
+        try:
+            st = os.stat(self.file())
+        except OSError:
+            return None
+        return (st.st_size, st.st_mtime_ns)
+
+    def entries(self):
+        """The entries as the file has them now, without the lock (the server reads them on every request)."""
+        data = read_json(self.file())
+        entries = data.get("projects") if isinstance(data, dict) else None
+        return [e for e in entries or [] if isinstance(e, dict) and isinstance(e.get("path"), str)]
+
+
+# ==== db/working.py ====
+# A store's working copy for one change (docs/layered-architecture.md §3.3): what atm-lib reads and changes inside a
+# store's `change(fn)`, and the record of what it changed.
+#
+# A store runs `fn(work)` under its own isolation (the JSON-in-git store: its lock), writes what changed and only that,
+# and raises what `fn` deferred after writing. `changes()` lists each task and claim `fn` changed, before and after: a
+# store that keeps entities apart (a database) can turn the list into conditional writes, without atm-lib's rules
+# changing. Until the last of the code from before the layers has moved, the copy is the whole task document.
+
+def _stamp(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+class Working:
+    def __init__(self, document, claims_store, here, size, before, archive=None):
+        """`here` and `size` may be callables (worked out when asked); `before()` gives the document and the claims
+        store as they were, from wherever the store keeps them (the JSON-in-git store: its files, not written until
+        the change ends), so recording what changed costs nothing unless `changes()` is asked for. `archive()` loads
+        the archive document, only when a change asks for it."""
+        self.document = document
+        self.claims_store = claims_store
+        self._here = here
+        self._size = size
+        self._before = before
+        self._load_archive = archive
+        self._archive = None
+        self._before_archive = None
+        self.archive_first = False
+        self._deferred = None
+        self._before_store = _stamp(claims_store)
+
+    def archive(self):
+        """The archive document ({"meta", "tasks"}), to read and change in place; loaded on first use."""
+        if self._archive is None:
+            self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
+            self._before_archive = _stamp(self._archive)
+        return self._archive
+
+    def moving_into_archive(self):
+        """This change moves tasks from the working tasks into the archive: a store that writes the two apart writes
+        the archive first, so a crash between leaves a task in both, never in neither (DM-5.2). Without it (a
+        restore), the working tasks go first."""
+        self.archive_first = True
+
+    def archive_changed(self):
+        """Whether the archive was asked for and changed: the store writes it then, and only then."""
+        return self._archive is not None and _stamp(self._archive) != self._before_archive
+
+    @staticmethod
+    def _entities(document, claims_store):
+        tasks = {t.get("id"): t for t in document["tasks"] if isinstance(t, dict)}
+        return {"task": tasks, "claim": dict(claims_store.get("claims") or {})}
+
+    def tasks(self):
+        """The working tasks, to read and change in place."""
+        return self.document["tasks"]
+
+    def claims(self):
+        """The claims store: `claims`, `completed`, `waiting`, `resolved`, `hints`, to read and change in place."""
+        return self.claims_store
+
+    def here(self):
+        """The working copy this change runs in: `worktree` (its folder, None for a store without them) and `branch`."""
+        if callable(self._here):
+            self._here = self._here()
+        return self._here
+
+    def size(self):
+        """How big the task data is, in bytes, as it was read for this change (the archive hint)."""
+        if callable(self._size):
+            self._size = self._size()
+        return self._size
+
+    def defer(self, error):
+        """Raise `error` once the change is written: a lease that expired is written as expired, then reported."""
+        self._deferred = error
+
+    def raise_deferred(self):
+        if self._deferred is not None:
+            raise self._deferred
+
+    def changes(self):
+        """What changed: [{"entity": "task" | "claim", "id", "before", "after"}], `before` or `after` None for an entity
+        created or removed. The rest of the claims store (completed, waiting, resolved, hints) is in `store_changed`."""
+        before = self._entities(*self._before())
+        after = self._entities(self.document, self.claims_store)
+        found = []
+        for entity in ("task", "claim"):
+            old, new = before[entity], after[entity]
+            for key in list(old) + [k for k in new if k not in old]:
+                if old.get(key) != new.get(key):
+                    found.append({"entity": entity, "id": key, "before": old.get(key), "after": new.get(key)})
+        return found
+
+    def store_changed(self):
+        return _stamp(self.claims_store) != self._before_store
+
+
+# ==== db/jsongit/store.py ====
+# The JSON-in-git store (docs/layered-architecture.md §3): the project's task files, read and written as atm always
+# has: tasks.json and the archive (files.py), the claims store shared by a clone's worktrees (claims.py), under the
+# task folder's lock (lock.py); its worktrees' copies (worktrees.py) and the project's logo (logo.py).
+
+def file_stamp(p):
+    """(size, nanosecond mtime) of a file, or None if it doesn't exist."""
+    try:
+        st = os.stat(p)
+    except OSError:
+        return None
+    return (st.st_size, st.st_mtime_ns)
+
+
+class JsonGitStore:
+    def __init__(self, paths, tolerant=False):
+        """`tolerant`: read a malformed task file as far as it can be read, and say what is wrong (`problems()`),
+        instead of refusing it: for showing it (the REST API's reads, T-377). Writes are strict either way."""
+        self.paths = paths
+        self.tolerant = tolerant
+        self._data = None
+        self._problems = {"file": [], "tasks": {}}
+
+    def _loaded(self):
+        # Read once per store: one atm command works on one snapshot of the file
+        if self._data is None:
+            if self.tolerant:
+                self._data, self._problems = load_tasks_tolerant(self.paths)
+            else:
+                self._data = load_tasks(self.paths)
+        return self._data
+
+    def problems(self):
+        """What a tolerant read found wrong: {"file": [...], "tasks": {id: [...]}}; nothing for a strict one."""
+        self._loaded()
+        return self._problems
+
+    def get_vocabularies(self):
+        return vocabulary(self._loaded())
+
+    def list_tasks(self):
+        return self._loaded()["tasks"]
+
+    def get_task(self, task_id):
+        for task in self._loaded()["tasks"]:
+            if task.get("id") == task_id:
+                return task
+        return None
+
+    def get_archived_task(self, task_id):
+        self._loaded()  # the archive is looked up for the file it belongs to
+        return archived_task(task_id)
+
+    def list_archived(self):
+        return [t for t in load_archive(self.paths)["tasks"] if isinstance(t, dict)]
+
+    def read_claims(self):
+        return read_store(self.paths)
+
+    def document(self):
+        return self._loaded()
+
+    def sizes(self):
+        archive = archive_path(self.paths)
+        return {
+            "tasks": os.path.getsize(self.paths["tasks"]),
+            "archive": os.path.getsize(archive) if os.path.isfile(archive) else 0,
+        }
+
+    def working_copy(self):
+        return self.paths["root"]
+
+    def files_for_commit(self):
+        """tasks.json travels with the code: `atm commit` commits it with the task's files (relative to the root)."""
+        return [os.path.relpath(self.paths["tasks"], self.paths["root"])]
+
+    def exists(self):
+        return os.path.isfile(self.paths["tasks"])
+
+    def create(self, document):
+        """Write the project's first task data (`atm init`); Conflict if it has some already."""
+        folder = self.paths["dir"]
+        with locked(folder) if os.path.isdir(folder) else contextlib.nullcontext():
+            if self.exists():
+                raise Conflict(f"{self.paths['tasks']} exists already")
+            os.makedirs(folder, exist_ok=True)
+            write_json_atomic(self.paths["tasks"], document)
+        self._data = None
+
+    def stamp(self):
+        """What changes when the data does, for the REST API's ETags: per part ({tasks, archive, claims, head, copies}),
+        a value that changes with it (here, each file's size and mtime; `head` the checked-out branch's; `copies` the
+        worktrees and their task files'), None for a part that isn't there."""
+        relative = os.path.relpath(self.paths["tasks"], self.paths["root"])
+        return {
+            "tasks": file_stamp(self.paths["tasks"]),
+            "archive": file_stamp(archive_path(self.paths)),
+            "claims": file_stamp(claims_store_path(self.paths)),
+            "head": file_stamp(os.path.join(self.paths["root"], ".git", "HEAD")),
+            "copies": [(t, file_stamp(os.path.join(t["path"], relative))) for t in worktrees(self.paths["root"])],
+        }
+
+    def logo(self, meta):
+        """The project's logo, a file in the working copy: {path (relative), file, type, source: "set" (meta.logo) or
+        "found" (in the usual places)}, or None."""
+        found = find_logo(self.paths["root"], meta)
+        return {"path": found[0], "file": found[1], "type": found[2], "source": found[3]} if found else None
+
+    def check_logo(self, relative):
+        """Refuse (AtmError, exit code 2) a logo the dashboard can't be given: not an image atm serves, outside the
+        project, missing or too large."""
+        logo_file(self.paths["root"], relative)
+
+    def working_copies(self):
+        """The project's working copies, main first: its git worktrees, [{path, branch, main}]; [] outside git."""
+        return worktrees(self.paths["root"])
+
+    def copy_tasks(self, folder):
+        """The tasks in the working copy at `folder` as its tasks.json has them (entries that aren't tasks left out),
+        for showing beside the main one's; [] when it has none."""
+        data = read_json(os.path.join(folder, os.path.relpath(self.paths["tasks"], self.paths["root"])))
+        tasks = data.get("tasks") if isinstance(data, dict) else None
+        return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
+
+    def raw(self):
+        """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
+        it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
+        if not os.path.isfile(self.paths["tasks"]):
+            raise AtmError(f"no tasks.json in {self.paths['dir']}. Run /atm:create-tasks first.")
+        data = read_json(self.paths["tasks"])
+        if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+            data = None
+        try:
+            archive, error = load_archive(self.paths)["tasks"], None
+        except AtmError as e:
+            archive, error = [], str(e)
+        return {"document": data, "archive": archive, "archive_error": error}
+
+    def change(self, fn):
+        """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
+        tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
+        (docs/layered-architecture.md §3.3: the transitional form of `apply`.)"""
+        root, tasks_file = self.paths["root"], self.paths["tasks"]
+        with locked_with_claims(self.paths):
+            work = Working(
+                load_tasks(self.paths),
+                read_store(self.paths),
+                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
+                lambda: os.path.getsize(tasks_file),
+                # The files still hold what was read: nothing is written before fn returns
+                lambda: (read_json(tasks_file), read_store(self.paths)),
+                lambda: load_archive(self.paths),
+            )
+            result = fn(work)
+
+            def write_tasks():
+                # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and
+                # its mtime alone, so open dashboards don't reload for nothing
+                text = to_json(work.document) + "\n"
+                with open(tasks_file, encoding="utf-8") as f:
+                    stored = f.read()
+                # The same data in another layout (a file edited by hand) is unchanged too
+                if stored != text and json.loads(stored) != work.document:
+                    write_text_atomic(tasks_file, text)
+
+            def write_archive():
+                if work.archive_changed():
+                    write_json_atomic(archive_path(self.paths), work.archive())
+                    if work.archive_first:
+                        ensure_archive_merge(self.paths)  # tasks moved in: the archive merges task by task too
+
+            # A move into the archive writes it first; anything else writes tasks.json first (DM-5.2)
+            for write in (write_archive, write_tasks) if work.archive_first else (write_tasks, write_archive):
+                write()
+            if work.store_changed():
+                write_store(self.paths, work.claims_store)
+        self._data = None  # this store's snapshot is out of date now
+        work.raise_deferred()
+        return result
+
+
+# ==== db/memory.py ====
+# The in-memory store: a project's data in plain lists, for atm-lib's tests. It also shows that atm-lib depends on
+# the store's interface only: the contract tests (tests/lib/) run the same checks on it and on the JSON-in-git store.
+
+def empty_claims():
+    return {"claims": {}, "completed": {}, "waiting": {}, "resolved": {}, "hints": {}}
+
+
+class MemoryStore:
+    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None, created=True):
+        """`problems`: what a tolerant read would have found ({"file": [...], "tasks": {id: [...]}}), for the tests of
+        what atm-lib makes of them; the memory holds data, not a file to read. `created` false: a project with no
+        task data yet (`atm init` creates it)."""
+        self.created = created
+        self.version = 0  # counts the changes: the stamp
+        self.meta = dict(meta or {})
+        self.tasks = list(tasks or [])
+        self.archive = list(archive or [])
+        self.claims = {**empty_claims(), **(claims or {})}
+        self._problems = {"file": [], "tasks": {}, **(problems or {})}
+
+    def problems(self):
+        return self._problems
+
+    def get_vocabularies(self):
+        return vocabulary(self.document())
+
+    def list_tasks(self):
+        return self.tasks
+
+    def get_task(self, task_id):
+        return next((t for t in self.tasks if t.get("id") == task_id), None)
+
+    def get_archived_task(self, task_id):
+        return next((t for t in self.archive if t.get("id") == task_id), None)
+
+    def list_archived(self):
+        return self.archive
+
+    def read_claims(self):
+        return self.claims
+
+    def document(self):
+        return {"meta": self.meta, "tasks": self.tasks}
+
+    def sizes(self):
+        # What the task files would be: the same JSON, indented as atm writes it
+        size = lambda value: len(json.dumps(value, indent=2, ensure_ascii=False).encode("utf-8"))
+        return {"tasks": size(self.document()), "archive": size({"meta": {}, "tasks": self.archive}) if self.archive else 0}
+
+    def working_copy(self):
+        return None
+
+    def files_for_commit(self):
+        return []  # nothing of the memory travels with code commits
+
+    def exists(self):
+        return self.created
+
+    def create(self, document):
+        if self.created:
+            raise Conflict("the project has task data already")
+        self.meta, self.tasks, self.created = dict(document.get("meta") or {}), list(document["tasks"]), True
+        self.version += 1
+
+    def stamp(self):
+        return {"tasks": self.version, "archive": self.version, "claims": self.version, "head": None, "copies": []}
+
+    def logo(self, meta):
+        return None  # no files: a logo would be uploaded to a store like this one
+
+    def check_logo(self, relative):
+        raise Invalid(f"{relative}: this project keeps no files for a logo")
+
+    def working_copies(self):
+        return []
+
+    def copy_tasks(self, folder):
+        return []
+
+    def raw(self):
+        return {"document": self.document(), "archive": self.archive, "archive_error": None}
+
+    def change(self, fn):
+        """Run `fn(work)` on copies, and keep them only when it succeeds: a failed change leaves the store as it was."""
+        original, original_claims = self.document(), self.claims
+        document, claims = copy.deepcopy(original), copy.deepcopy(original_claims)
+        work = Working(
+            document,
+            claims,
+            {"worktree": None, "branch": None},
+            lambda: self.sizes()["tasks"],
+            lambda: (original, original_claims),  # replaced, not changed, when the change is kept
+            lambda: {"meta": {}, "tasks": copy.deepcopy(self.archive)},
+        )
+        result = fn(work)
+        self.meta, self.tasks, self.claims = document["meta"], document["tasks"], claims
+        if work.archive_changed():
+            self.archive = work.archive()["tasks"]
+        self.changes = work.changes()  # what the last change did, for the tests
+        self.version += 1
+        work.raise_deferred()
+        return result
+
+
+# ==== vcs/git.py ====
+# Git as the code's version control (docs/layered-architecture.md §2): committing exactly the files named, the
+# history, the base branch, the remote. Git's other role, carrying the task files, is the JSON-in-git store's.
+
+# Pathspecs that stage more than the files named: another agent's work can be in the same tree
+WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
+# git reads a path as a pattern (`*.env` is every .env file, `src/[id]` matches `src/i`); with this, a path names
+# exactly one file (docs/security-review.md F6)
+LITERAL = ["--literal-pathspecs"]
+
+
+def run_git(args, root):
+    """Run git; return stdout stripped, or raise with git's own message."""
+    result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).strip()
+        command = next((a for a in args if not a.startswith("-")), "")
+        raise AtmFailure(f"git {command} failed: {message}")
+    return result.stdout.strip()
+
+
+def ask_git(args, root):  # not `git`: the store has its own (db/jsongit/gitrun.py), and names are unique
+    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+class GitVcs:
+    def __init__(self, root):
+        self.root = root
+
+    def in_repository(self):
+        return ask_git(["rev-parse", "--git-dir"], self.root) is not None
+
+    def branch(self):
+        """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
+        git; None outside git."""
+        try:
+            with open(os.path.join(self.root, ".git", "HEAD"), encoding="utf-8") as f:
+                head = f.readline().strip()
+        except OSError:
+            return None
+        if head.startswith("ref: "):
+            ref = head[5:]
+            return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+        return head[:7] or None
+
+    def user_name(self):
+        """Who git says the user is (`user.name`), for naming the actor; None when it isn't set."""
+        return ask_git(["config", "user.name"], self.root)
+
+    def default_base(self):
+        """The remote's default branch (origin/HEAD), else main."""
+        ref = ask_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
+        return ref.split("/", 1)[1] if ref and "/" in ref else "main"
+
+    def remote_url(self):
+        """The origin remote's address, as git has it (atm repository turns it into a web address)."""
+        return ask_git(["remote", "get-url", "origin"], self.root)
+
+    def paths(self, files, cwd):
+        """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
+        would stage more than the files named, and a missing file git doesn't track."""
+        picked = []
+        for name in files:
+            if name in WHOLE_TREE or name.startswith(":"):
+                raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
+            full = os.path.realpath(os.path.join(cwd, name))
+            relative = os.path.relpath(full, self.root)
+            if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
+                raise Invalid(f"{name} is outside the repository")
+            if os.path.isdir(full):
+                raise Invalid(f"{name} is a directory: name the files in it")
+            # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
+            if (
+                not os.path.exists(full)
+                and ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
+                and ask_git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
+            ):
+                raise NotFound(f"{name}: no such file, and git doesn't track it")
+            if relative not in picked:
+                picked.append(relative)
+        return picked
+
+    def commit(self, files, message):
+        """Commit exactly `files` (relative to the repository); whatever else is staged stays staged and out of this
+        commit. Returns the new commit's SHA."""
+        # A deletion already staged with `git rm` is in neither the tree nor the index: there is nothing to add for it
+        to_add = [
+            f
+            for f in files
+            if ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
+            or os.path.lexists(os.path.join(self.root, f))
+        ]
+        if to_add:
+            run_git(LITERAL + ["add", "-A", "--"] + to_add, self.root)
+        run_git(LITERAL + ["commit", "-q", "-m", message, "--"] + list(files), self.root)
+        return run_git(["rev-parse", "HEAD"], self.root)
+
+    def resolve(self, rev):
+        """A revision's SHA, or None if there is no such commit."""
+        return ask_git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
+
+    def in_history(self, sha):
+        """Whether the commit is an ancestor of HEAD (on the current branch)."""
+        return ask_git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
+
+    def message(self, sha):
+        return run_git(["log", "-1", "--format=%B", sha], self.root)
+
+
+# ==== lib/project.py ====
+# A project as atm-lib sees it: where its data is kept, its code's version control, and who acts.
+
+class Project:
+    def __init__(self, store, vcs=None, actor=None):
+        self.store = store
+        self.vcs = vcs
+        self.actor = actor
+
+
+# ==== lib/loop.py ====
+# atm-lib: the loop's rules (docs/parallel-agents-design.md; docs/sprints-and-releases-design.md §3): leases, who
+# holds a claim, what was decided in another worktree, and which task the loop takes next (`next_task`, the same order
+# the dashboard's Next up shows). They work on the task data and the claims store as the store hands them out
+# (`work.document`, `work.claims_store`); keeping the claims is the store's (db/jsongit/claims.py).
+
+DEFAULT_LEASE_MINUTES = 30
+
+
+def apply_resolutions(worktree, data, store):
     """Apply what was decided in another worktree about a task waiting in this one (store["resolved"]): the answer,
-    the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. A task changed
-    here in the meantime is left as it is. Returns the IDs applied."""
+    the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. `worktree` is
+    this working copy's folder. A task changed here in the meantime is left as it is. Returns the IDs applied."""
     applied = []
     for task_id, record in list(store["resolved"].items()):
-        if not isinstance(record, dict) or record.get("worktree") != paths["root"]:
+        if not isinstance(record, dict) or record.get("worktree") != worktree:
             continue
         store["resolved"].pop(task_id)
         task = next((t for t in data["tasks"] if t.get("id") == task_id), None)
@@ -3147,19 +3893,6 @@ def apply_resolutions(paths, data, store):
     return applied
 
 
-def write_store(paths, store):
-    os.makedirs(claims_dir(paths), exist_ok=True)
-    write_json_atomic(claims_store_path(paths), store)
-    write_claims_snapshot(paths, store["claims"])
-
-
-def write_claims_snapshot(paths, claims):
-    """The gitignored copy the dashboard polls: live claims, as a list."""
-    if os.path.isdir(paths["dir"]):
-        snapshot = {"generated_at": now_iso(), "claims": sorted(claims.values(), key=lambda c: c["task"])}
-        write_json_atomic(os.path.join(paths["dir"], CLAIMS_SNAPSHOT), snapshot)
-
-
 def lease_minutes(data):
     try:
         minutes = float(data.get("meta", {}).get("lease_minutes", DEFAULT_LEASE_MINUTES))
@@ -3172,7 +3905,7 @@ def lease_until(data):
     return (now() + timedelta(minutes=lease_minutes(data))).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def expire_claims(paths, data, claims):
+def expire_claims(data, claims):
     """Drop claims whose lease ran out; their tasks in this worktree go back to todo. Returns the expired claims."""
     current = now()
     vocab = vocabulary(data)
@@ -3220,11 +3953,6 @@ def own_lease_expired(expired, data, task_id, agent, then):
         f"{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next_steps}",
         4,
     )
-
-
-def report_expired(expired):
-    for claim in expired:
-        sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
 
 
 def ready_in_order(data, store, candidates=None, rank=None):
@@ -3383,429 +4111,6 @@ def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False
     return None, reason
 
 
-# ==== db/working.py ====
-# A store's working copy for one change (docs/layered-architecture.md §3.3): what atm-lib reads and changes inside a
-# store's `change(fn)`, and the record of what it changed.
-#
-# A store runs `fn(work)` under its own isolation (the JSON-in-git store: its lock), writes what changed and only that,
-# and raises what `fn` deferred after writing. `changes()` lists each task and claim `fn` changed, before and after: a
-# store that keeps entities apart (a database) can turn the list into conditional writes, without atm-lib's rules
-# changing. Until the last of the code from before the layers has moved, the copy is the whole task document.
-
-def _stamp(value):
-    return json.dumps(value, sort_keys=True, ensure_ascii=False)
-
-
-class Working:
-    def __init__(self, document, claims_store, here, size, before, archive=None):
-        """`here` and `size` may be callables (worked out when asked); `before()` gives the document and the claims
-        store as they were, from wherever the store keeps them (the JSON-in-git store: its files, not written until
-        the change ends), so recording what changed costs nothing unless `changes()` is asked for. `archive()` loads
-        the archive document, only when a change asks for it."""
-        self.document = document
-        self.claims_store = claims_store
-        self._here = here
-        self._size = size
-        self._before = before
-        self._load_archive = archive
-        self._archive = None
-        self._before_archive = None
-        self.archive_first = False
-        self._deferred = None
-        self._before_store = _stamp(claims_store)
-
-    def archive(self):
-        """The archive document ({"meta", "tasks"}), to read and change in place; loaded on first use."""
-        if self._archive is None:
-            self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
-            self._before_archive = _stamp(self._archive)
-        return self._archive
-
-    def moving_into_archive(self):
-        """This change moves tasks from the working tasks into the archive: a store that writes the two apart writes
-        the archive first, so a crash between leaves a task in both, never in neither (DM-5.2). Without it (a
-        restore), the working tasks go first."""
-        self.archive_first = True
-
-    def archive_changed(self):
-        """Whether the archive was asked for and changed: the store writes it then, and only then."""
-        return self._archive is not None and _stamp(self._archive) != self._before_archive
-
-    @staticmethod
-    def _entities(document, claims_store):
-        tasks = {t.get("id"): t for t in document["tasks"] if isinstance(t, dict)}
-        return {"task": tasks, "claim": dict(claims_store.get("claims") or {})}
-
-    def tasks(self):
-        """The working tasks, to read and change in place."""
-        return self.document["tasks"]
-
-    def claims(self):
-        """The claims store: `claims`, `completed`, `waiting`, `resolved`, `hints`, to read and change in place."""
-        return self.claims_store
-
-    def here(self):
-        """The working copy this change runs in: `worktree` (its folder, None for a store without them) and `branch`."""
-        if callable(self._here):
-            self._here = self._here()
-        return self._here
-
-    def size(self):
-        """How big the task data is, in bytes, as it was read for this change (the archive hint)."""
-        if callable(self._size):
-            self._size = self._size()
-        return self._size
-
-    def defer(self, error):
-        """Raise `error` once the change is written: a lease that expired is written as expired, then reported."""
-        self._deferred = error
-
-    def raise_deferred(self):
-        if self._deferred is not None:
-            raise self._deferred
-
-    def changes(self):
-        """What changed: [{"entity": "task" | "claim", "id", "before", "after"}], `before` or `after` None for an entity
-        created or removed. The rest of the claims store (completed, waiting, resolved, hints) is in `store_changed`."""
-        before = self._entities(*self._before())
-        after = self._entities(self.document, self.claims_store)
-        found = []
-        for entity in ("task", "claim"):
-            old, new = before[entity], after[entity]
-            for key in list(old) + [k for k in new if k not in old]:
-                if old.get(key) != new.get(key):
-                    found.append({"entity": entity, "id": key, "before": old.get(key), "after": new.get(key)})
-        return found
-
-    def store_changed(self):
-        return _stamp(self.claims_store) != self._before_store
-
-
-# ==== db/jsongit/store.py ====
-# The JSON-in-git store (docs/layered-architecture.md §3): the project's task files, read and written as atm always
-# has. For now it wraps the code from before the layers (`load_tasks`, the archive, the claims store); that code moves
-# in here as the migration's slices do (§9).
-
-class JsonGitStore:
-    def __init__(self, paths, tolerant=False):
-        """`tolerant`: read a malformed task file as far as it can be read, and say what is wrong (`problems()`),
-        instead of refusing it: for showing it (the REST API's reads, T-377). Writes are strict either way."""
-        self.paths = paths
-        self.tolerant = tolerant
-        self._data = None
-        self._problems = {"file": [], "tasks": {}}
-
-    def _loaded(self):
-        # Read once per store: one atm command works on one snapshot of the file
-        if self._data is None:
-            if self.tolerant:
-                self._data, self._problems = load_tasks_tolerant(self.paths)
-            else:
-                self._data = load_tasks(self.paths)
-        return self._data
-
-    def problems(self):
-        """What a tolerant read found wrong: {"file": [...], "tasks": {id: [...]}}; nothing for a strict one."""
-        self._loaded()
-        return self._problems
-
-    def get_vocabularies(self):
-        return vocabulary(self._loaded())
-
-    def list_tasks(self):
-        return self._loaded()["tasks"]
-
-    def get_task(self, task_id):
-        for task in self._loaded()["tasks"]:
-            if task.get("id") == task_id:
-                return task
-        return None
-
-    def get_archived_task(self, task_id):
-        self._loaded()  # the archive is looked up for the file it belongs to
-        return archived_task(task_id)
-
-    def list_archived(self):
-        return [t for t in load_archive(self.paths)["tasks"] if isinstance(t, dict)]
-
-    def read_claims(self):
-        return read_store(self.paths)
-
-    def document(self):
-        return self._loaded()
-
-    def sizes(self):
-        archive = archive_path(self.paths)
-        return {
-            "tasks": os.path.getsize(self.paths["tasks"]),
-            "archive": os.path.getsize(archive) if os.path.isfile(archive) else 0,
-        }
-
-    def working_copy(self):
-        return self.paths["root"]
-
-    def files_for_commit(self):
-        """tasks.json travels with the code: `atm commit` commits it with the task's files (relative to the root)."""
-        return [os.path.relpath(self.paths["tasks"], self.paths["root"])]
-
-    def raw(self):
-        """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
-        it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
-        if not os.path.isfile(self.paths["tasks"]):
-            raise AtmError(f"no tasks.json in {self.paths['dir']}. Run /atm:create-tasks first.")
-        data = read_json(self.paths["tasks"])
-        if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-            data = None
-        try:
-            archive, error = load_archive(self.paths)["tasks"], None
-        except AtmError as e:
-            archive, error = [], str(e)
-        return {"document": data, "archive": archive, "archive_error": error}
-
-    def change(self, fn):
-        """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
-        tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
-        (docs/layered-architecture.md §3.3: the transitional form of `apply`.)"""
-        root, tasks_file = self.paths["root"], self.paths["tasks"]
-        with locked_with_claims(self.paths):
-            work = Working(
-                load_tasks(self.paths),
-                read_store(self.paths),
-                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
-                lambda: os.path.getsize(tasks_file),
-                # The files still hold what was read: nothing is written before fn returns
-                lambda: (read_json(tasks_file), read_store(self.paths)),
-                lambda: load_archive(self.paths),
-            )
-            result = fn(work)
-
-            def write_tasks():
-                # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and
-                # its mtime alone, so open dashboards don't reload for nothing
-                text = to_json(work.document) + "\n"
-                with open(tasks_file, encoding="utf-8") as f:
-                    stored = f.read()
-                # The same data in another layout (a file edited by hand) is unchanged too
-                if stored != text and json.loads(stored) != work.document:
-                    write_text_atomic(tasks_file, text)
-
-            def write_archive():
-                if work.archive_changed():
-                    write_json_atomic(archive_path(self.paths), work.archive())
-                    if work.archive_first:
-                        ensure_archive_merge(self.paths)  # tasks moved in: the archive merges task by task too
-
-            # A move into the archive writes it first; anything else writes tasks.json first (DM-5.2)
-            for write in (write_archive, write_tasks) if work.archive_first else (write_tasks, write_archive):
-                write()
-            if work.store_changed():
-                write_store(self.paths, work.claims_store)
-        self._data = None  # this store's snapshot is out of date now
-        work.raise_deferred()
-        return result
-
-
-# ==== db/memory.py ====
-# The in-memory store: a project's data in plain lists, for atm-lib's tests. It also shows that atm-lib depends on
-# the store's interface only: the contract tests (tests/lib/) run the same checks on it and on the JSON-in-git store.
-
-def empty_claims():
-    return {"claims": {}, "completed": {}, "waiting": {}, "resolved": {}, "hints": {}}
-
-
-class MemoryStore:
-    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None):
-        """`problems`: what a tolerant read would have found ({"file": [...], "tasks": {id: [...]}}), for the tests of
-        what atm-lib makes of them; the memory holds data, not a file to read."""
-        self.meta = dict(meta or {})
-        self.tasks = list(tasks or [])
-        self.archive = list(archive or [])
-        self.claims = {**empty_claims(), **(claims or {})}
-        self._problems = {"file": [], "tasks": {}, **(problems or {})}
-
-    def problems(self):
-        return self._problems
-
-    def get_vocabularies(self):
-        return vocabulary(self.document())
-
-    def list_tasks(self):
-        return self.tasks
-
-    def get_task(self, task_id):
-        return next((t for t in self.tasks if t.get("id") == task_id), None)
-
-    def get_archived_task(self, task_id):
-        return next((t for t in self.archive if t.get("id") == task_id), None)
-
-    def list_archived(self):
-        return self.archive
-
-    def read_claims(self):
-        return self.claims
-
-    def document(self):
-        return {"meta": self.meta, "tasks": self.tasks}
-
-    def sizes(self):
-        # What the task files would be: the same JSON, indented as atm writes it
-        size = lambda value: len(json.dumps(value, indent=2, ensure_ascii=False).encode("utf-8"))
-        return {"tasks": size(self.document()), "archive": size({"meta": {}, "tasks": self.archive}) if self.archive else 0}
-
-    def working_copy(self):
-        return None
-
-    def files_for_commit(self):
-        return []  # nothing of the memory travels with code commits
-
-    def raw(self):
-        return {"document": self.document(), "archive": self.archive, "archive_error": None}
-
-    def change(self, fn):
-        """Run `fn(work)` on copies, and keep them only when it succeeds: a failed change leaves the store as it was."""
-        original, original_claims = self.document(), self.claims
-        document, claims = copy.deepcopy(original), copy.deepcopy(original_claims)
-        work = Working(
-            document,
-            claims,
-            {"worktree": None, "branch": None},
-            lambda: self.sizes()["tasks"],
-            lambda: (original, original_claims),  # replaced, not changed, when the change is kept
-            lambda: {"meta": {}, "tasks": copy.deepcopy(self.archive)},
-        )
-        result = fn(work)
-        self.meta, self.tasks, self.claims = document["meta"], document["tasks"], claims
-        if work.archive_changed():
-            self.archive = work.archive()["tasks"]
-        self.changes = work.changes()  # what the last change did, for the tests
-        work.raise_deferred()
-        return result
-
-
-# ==== vcs/git.py ====
-# Git as the code's version control (docs/layered-architecture.md §2): committing exactly the files named, the
-# history, the base branch, the remote. Git's other role, carrying the task files, is the JSON-in-git store's.
-
-# Pathspecs that stage more than the files named: another agent's work can be in the same tree
-WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
-# git reads a path as a pattern (`*.env` is every .env file, `src/[id]` matches `src/i`); with this, a path names
-# exactly one file (docs/security-review.md F6)
-LITERAL = ["--literal-pathspecs"]
-
-
-def run_git(args, root):
-    """Run git; return stdout stripped, or raise with git's own message."""
-    result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
-    if result.returncode != 0:
-        message = (result.stderr or result.stdout).strip()
-        command = next((a for a in args if not a.startswith("-")), "")
-        raise AtmFailure(f"git {command} failed: {message}")
-    return result.stdout.strip()
-
-
-def ask_git(args, root):  # not `git`: the store has its own (db/jsongit/gitrun.py), and names are unique
-    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
-    try:
-        result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
-    except OSError:
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
-class GitVcs:
-    def __init__(self, root):
-        self.root = root
-
-    def in_repository(self):
-        return ask_git(["rev-parse", "--git-dir"], self.root) is not None
-
-    def branch(self):
-        """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
-        git; None outside git."""
-        try:
-            with open(os.path.join(self.root, ".git", "HEAD"), encoding="utf-8") as f:
-                head = f.readline().strip()
-        except OSError:
-            return None
-        if head.startswith("ref: "):
-            ref = head[5:]
-            return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-        return head[:7] or None
-
-    def user_name(self):
-        """Who git says the user is (`user.name`), for naming the actor; None when it isn't set."""
-        return ask_git(["config", "user.name"], self.root)
-
-    def default_base(self):
-        """The remote's default branch (origin/HEAD), else main."""
-        ref = ask_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
-        return ref.split("/", 1)[1] if ref and "/" in ref else "main"
-
-    def remote_url(self):
-        """The origin remote's address, as git has it (atm repository turns it into a web address)."""
-        return ask_git(["remote", "get-url", "origin"], self.root)
-
-    def paths(self, files, cwd):
-        """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
-        would stage more than the files named, and a missing file git doesn't track."""
-        picked = []
-        for name in files:
-            if name in WHOLE_TREE or name.startswith(":"):
-                raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
-            full = os.path.realpath(os.path.join(cwd, name))
-            relative = os.path.relpath(full, self.root)
-            if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
-                raise Invalid(f"{name} is outside the repository")
-            if os.path.isdir(full):
-                raise Invalid(f"{name} is a directory: name the files in it")
-            # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
-            if (
-                not os.path.exists(full)
-                and ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
-                and ask_git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
-            ):
-                raise NotFound(f"{name}: no such file, and git doesn't track it")
-            if relative not in picked:
-                picked.append(relative)
-        return picked
-
-    def commit(self, files, message):
-        """Commit exactly `files` (relative to the repository); whatever else is staged stays staged and out of this
-        commit. Returns the new commit's SHA."""
-        # A deletion already staged with `git rm` is in neither the tree nor the index: there is nothing to add for it
-        to_add = [
-            f
-            for f in files
-            if ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
-            or os.path.lexists(os.path.join(self.root, f))
-        ]
-        if to_add:
-            run_git(LITERAL + ["add", "-A", "--"] + to_add, self.root)
-        run_git(LITERAL + ["commit", "-q", "-m", message, "--"] + list(files), self.root)
-        return run_git(["rev-parse", "HEAD"], self.root)
-
-    def resolve(self, rev):
-        """A revision's SHA, or None if there is no such commit."""
-        return ask_git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
-
-    def in_history(self, sha):
-        """Whether the commit is an ancestor of HEAD (on the current branch)."""
-        return ask_git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
-
-    def message(self, sha):
-        return run_git(["log", "-1", "--format=%B", sha], self.root)
-
-
-# ==== lib/project.py ====
-# A project as atm-lib sees it: where its data is kept, its code's version control, and who acts.
-
-class Project:
-    def __init__(self, store, vcs=None, actor=None):
-        self.store = store
-        self.vcs = vcs
-        self.actor = actor
-
-
 # ==== lib/tasks.py ====
 # atm-lib: reading tasks (docs/layered-architecture.md §5.1).
 
@@ -3861,8 +4166,8 @@ def show_tasks(project, ids):
 # backlog. Agents read tasks through these, never tasks.json itself (DM-1.1). They never write: the store reads the
 # task files and the claims without the lock (both are replaced atomically).
 #
-# Much of it still takes the whole task document (`store.document()`) for the rules from before the layers it calls
-# (`unfinished_dependencies`, `loop_order`, ...); those move into atm-lib with their own slices (§9).
+# Much of it still takes the whole task document (`store.document()`) for the rules it calls on it
+# (`unfinished_dependencies`, `loop_order`, ...).
 
 class Filters:
     """What a read keeps (`atm list`'s and `atm status`'s options): any of `sprint` (a list of names), `backlog`,
@@ -4575,9 +4880,8 @@ def status_report(project, scope):
 # fail, release) and notes (docs/layered-architecture.md §5.1).
 #
 # Each runs as one change of the store (`store.change`, §3.3): the task's status, its claim, and the records shared by
-# a clone's worktrees (completed, waiting, resolved) change together or not at all. The rules themselves are still
-# those of the modules from before the layers (`change_status`, the lease and resolution helpers); they move into
-# atm-lib with their own slices (§9).
+# a clone's worktrees (completed, waiting, resolved) change together or not at all. The transitions themselves are
+# common's (`change_status`, common/model.py), the lease and resolution rules lib/loop.py's.
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
 OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
@@ -4659,9 +4963,8 @@ def change_task_status(project, command, task_id, **options):
         data, store = work.document, work.claims()
         claims = store["claims"]
         here = work.here()["worktree"]
-        expired = expire_claims(None, data, claims)
-        # apply_resolutions knows a working copy by its folder, as atm-cli's paths give it
-        apply_resolutions({"root": here}, data, store)
+        expired = expire_claims(data, claims)
+        apply_resolutions(here, data, store)
         task = find_task(data, task_id)
         if command in OWN_LEASE_COMMANDS:
             own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
@@ -4760,7 +5063,7 @@ def add_task_note(project, task_id, text):
 # ==== lib/claims.py ====
 # atm-lib: claims and the loop's next task (docs/layered-architecture.md §5.1): `atm next` (with `--claim`, atomic),
 # heartbeats, the live claims. Each runs as one change of the store (§3.3); the loop's rule itself (`next_task`,
-# `Selection`) is still claims.py's, from before the layers, and moves with a later slice.
+# `Selection`) is lib/loop.py's.
 
 # heartbeat --auto renews a claim once its last renewal is this old (CLI-6.2)
 AUTO_RENEW_AFTER = timedelta(minutes=10)
@@ -4779,8 +5082,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
     def change(work):
         data, store = work.document, work.claims()
-        expired = expire_claims(None, data, store["claims"])
-        apply_resolutions({"root": work.here()["worktree"]}, data, store)
+        expired = expire_claims(data, store["claims"])
+        apply_resolutions(work.here()["worktree"], data, store)
         task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user)
         new = None
         if task and claim:
@@ -4811,7 +5114,7 @@ def renew_lease(project, task_id, expire=True):
             claim["lease_expires_at"] = lease_until(data)
             claim["renewed_at"] = now_iso()
             return {"claim": claim, "minutes": lease_minutes(data), "expired": []}
-        expired = expire_claims(None, data, claims)
+        expired = expire_claims(data, claims)
         claim = claims.get(task_id)
         if not claim:
             own = own_lease_expired(expired, data, task_id, agent, None)
@@ -4866,7 +5169,7 @@ def live_claims(project):
 
     def change(work):
         claims = work.claims()["claims"]
-        expired = expire_claims(None, work.document, claims)
+        expired = expire_claims(work.document, claims)
         return {"claims": sorted(claims.values(), key=lambda c: c["task"]), "expired": expired}
 
     return project.store.change(change)
@@ -6391,8 +6694,210 @@ def record_merge(project, pr, at=None):
     return project.store.change(change)
 
 
+# ==== lib/projects.py ====
+# atm-lib: the user's projects, the ones the dashboard shows (`atm projects`; docs/layered-architecture.md §3.2, §5.1):
+# list, add, remove and prune them in the registry (`registry`, a db Registry: boot opens it).
+
+def list_projects(registry):
+    """{projects: the entries, each with `missing`, damaged: where an unreadable registry was moved, or None}."""
+    return registry.list_projects()
+
+
+def add_project(registry, target):
+    """Register the project in the folder `target` (the current one when None). {result, project, damaged}."""
+    return registry.add_project(target)
+
+
+def remove_project(registry, target):
+    """Unregister the project with this ID or path. {removed, damaged}."""
+    return registry.remove_project(target)
+
+
+def prune_projects(registry):
+    """Unregister the projects whose task folder is gone. {removed, damaged}."""
+    return registry.prune()
+
+
+# ==== lib/settings.py ====
+# atm-lib: the project's settings in meta (docs/layered-architecture.md §3.1, §5.1): the keys `init --meta-file`
+# sets, the project's id, the repository's web address and the logo. Each change is one change of the store (§3.3).
+
+def _meta(data):
+    if not isinstance(data.get("meta"), dict):
+        data["meta"] = {}
+    return data["meta"]
+
+
+def init_meta(project, new):
+    """`init --meta-file`: merge `new`'s keys into meta (project, description, vocabularies, ...), creating the task
+    data when there is none, so /atm:create-tasks never writes the file itself. The vocabularies are checked before
+    anything is written; meta.id is kept. Returns (created, the keys set)."""
+    new = {k: v for k, v in new.items() if k != "id"}
+    store = project.store
+    if not store.exists():
+        data = {"meta": {"created": now().strftime("%Y-%m-%d"), **new}, "tasks": []}
+        vocabulary(data)  # raises, naming the problem, before anything is written
+        store.create(data)
+        return True, sorted(new)
+
+    def change(work):
+        _meta(work.document).update(new)
+        vocabulary(work.document)
+
+    store.change(change)
+    return False, sorted(new)
+
+
+def ensure_project_id(project):
+    """Give the project a meta.id if it has none: the dashboard keeps each project's saved view under it (projects
+    served from the same port share browser storage). Returns the new id, or None if there was one already."""
+    if not project.store.exists():
+        return None
+
+    def change(work):
+        meta = _meta(work.document)
+        if isinstance(meta.get("id"), str) and meta["id"]:
+            return None
+        meta["id"] = os.urandom(4).hex()
+        return meta["id"]
+
+    return project.store.change(change)
+
+
+def ensure_repository(project):
+    """Fill meta.repository from the version control's remote when there is none. Returns the address set, or None."""
+    if not project.store.exists() or project.vcs is None:
+        return None
+    url = repository_url(project.vcs.remote_url() or "")
+    if not url:
+        return None
+
+    def change(work):
+        meta = _meta(work.document)
+        if meta.get("repository"):
+            return None
+        meta["repository"] = url
+        return url
+
+    return project.store.change(change)
+
+
+def get_repository(project):
+    """meta.repository, or None."""
+    return (project.store.document().get("meta") or {}).get("repository") or None
+
+
+def set_repository(project, url, previous=None):
+    """Set meta.repository to `url` (an http(s) URL or a git remote). When the repository moved (from `previous`, else
+    the address set before), the tasks' PR links move with it, in the working tasks and the archive (T-273). Returns
+    {repository, moved_links, previous}."""
+    address = repository_url(url)
+    if not address:
+        raise Invalid(f"{url!r} is not a repository address: give an http(s) URL or a git remote")
+    old = None
+    if previous is not None:
+        old = repository_url(previous)
+        if not old:
+            raise Invalid(f"--from {previous!r} is not a repository address: give an http(s) URL or a git remote")
+
+    def change(work):
+        meta = _meta(work.document)
+        before = old or repository_url(meta.get("repository") or "")
+        meta["repository"] = address
+        moved = 0
+        if before and before != address:
+            moved = move_pr_links(work.document.get("tasks") or [], before, address)
+            moved += move_pr_links(work.archive()["tasks"], before, address)
+        return {"repository": address, "moved_links": moved, "previous": before}
+
+    return project.store.change(change)
+
+
+def get_logo(project):
+    """The project's logo: {logo: its path in the project, source: "set" or "found", file, type} or None (store's
+    `logo`), and `set`, what meta.logo says."""
+    meta = project.store.document().get("meta") or {}
+    return {"found": project.store.logo(meta), "set": meta.get("logo")}
+
+
+def set_logo(project, relative):
+    """Set meta.logo to the image at `relative` (a path in the project); the store refuses one it can't serve."""
+    project.store.check_logo(relative)
+
+    def change(work):
+        _meta(work.document)["logo"] = relative
+
+    project.store.change(change)
+    return relative
+
+
+def unset_logo(project):
+    """Remove meta.logo. Returns what it was, or None when none was set."""
+    return project.store.change(lambda work: _meta(work.document).pop("logo", None))
+
+
+# ==== lib/worktrees.py ====
+# atm-lib: a project's working copies (git worktrees, for the JSON-in-git store; docs/layered-architecture.md §3.2):
+# the dashboard shows them on one board, each task from the working copy where it got furthest.
+
+def worktree_copies(project):
+    """The project's working copies, main first ([{path, branch, main}]), and for each other one the tasks whose copy
+    there differs from the main one's (or that only it has), under `tasks`. A copy of a task decided in another
+    working copy (answered, reviewed: the claims store's `resolved`, T-204) is left out: it is stale until atm next
+    runs there, and would otherwise outrank the decision. [] for a store without working copies."""
+    store = project.store
+    trees = store.working_copies()
+    resolved = store.read_claims()["resolved"]
+    stale = {(r.get("worktree"), task_id) for task_id, r in resolved.items() if isinstance(r, dict)}
+    listed, main = [], {}
+    for tree in trees:
+        tasks = store.copy_tasks(tree["path"])
+        if tree["main"]:
+            main = {t["id"]: t for t in tasks}
+            listed.append(tree)
+        else:
+            differing = [t for t in tasks if main.get(t["id"]) != t and (tree["path"], t["id"]) not in stale]
+            listed.append({**tree, "tasks": differing})
+    return listed
+
+
+# ==== boot/identity.py ====
+# Who runs a command (the actor, DM-4.5), from the environment: --agent, ATM_AGENT, the Claude Code session (per
+# linked git worktree), git's user name, or user@host. Boot's, because it asks the store (which worktree a folder is)
+# and the version control (the user's name).
+
+def session_identity(session_id, cwd):
+    """A Claude Code session's identity: "claude:" and 8 characters of its ID; in a linked git worktree, also
+    "@<worktree folder>". Subagents share their parent's session ID, so agents spawned in separate worktrees still get
+    identities of their own. The main worktree keeps the plain form, so its claims and history still match."""
+    identity = "claude:" + str(session_id)[:8]
+    root = project_root(cwd)
+    if main_worktree(root) != root:
+        identity += "@" + os.path.basename(root)
+    return identity
+
+
+def agent_identity(agent=None):
+    """Who runs the command (the actor, DM-4.5): --agent, else ATM_AGENT, else this Claude Code session (per linked
+    worktree, see session_identity), else the git user's name (a person in a terminal), else user@host."""
+    if agent:
+        return agent
+    if os.environ.get("ATM_AGENT"):
+        return os.environ["ATM_AGENT"]
+    if os.environ.get("CLAUDE_CODE_SESSION_ID"):
+        return session_identity(os.environ["CLAUDE_CODE_SESSION_ID"], os.getcwd())
+    name = GitVcs(project_root(os.getcwd())).user_name()
+    if name:
+        return name
+    user = os.environ.get("USER") or os.environ.get("USERNAME") or "user"
+    return f"{user}@{socket.gethostname()}"
+
+
 # ==== boot/open.py ====
-# Opening a project: its task files (the JSON-in-git store) and git.
+# Opening a project: its task files (the JSON-in-git store) and git; and the user's registry of projects. Boot is the
+# one place that knows which store and which version control atm runs on, so it is also where the commands that are
+# about the JSON-in-git store itself (`atm paths`, the lock test, the hook's registering) reach it
+# (docs/layered-architecture.md §3.2).
 
 def open_project(cwd, actor=None, tolerant=False):
     """The project at or above `cwd`. `tolerant`: read a malformed task file as far as it can be read (T-377)."""
@@ -6400,12 +6905,95 @@ def open_project(cwd, actor=None, tolerant=False):
 
 
 def project_at(paths, actor=None, tolerant=False):
-    """The project whose task files `paths` locates (atm serve opens each registered project this way)."""
+    """The project whose task files `paths` locates: atm serve finds them once per project (`task_paths`, which runs
+    git) and opens the project afresh for each request. The task folder's symlink checks run each time, so a file
+    linked after the paths were found is refused too (docs/security-review.md F7, F8)."""
+    check_task_folder(paths["root"], paths["dir"])
     return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
+
+
+def open_registry(home=None):
+    """The user's registry of projects (the dashboard's list)."""
+    return FileRegistry(home)
+
+
+def register_project(project, wait=True):
+    """List the project on the dashboard (every command that sets a project up does). Returns what the registry did."""
+    return register(project.store.paths, wait)
+
+
+def dashboard_id(project):
+    """(id, listed) of the project on the dashboard, after registering it: the id the registry gave it (meta.id, or
+    another when that one is taken) and whether it is listed (meta.dashboard.listed)."""
+    register(project.store.paths)
+    return registered_id(project.store.paths)
+
+
+def set_up_store(project):
+    """`atm init`: set the store up in its working copy: in git, the merge driver for the task files (registered in
+    the clone, `.gitattributes` staged). Returns {git, gitattributes_added}."""
+    paths = project.store.paths
+    in_repository = in_git(paths["root"])
+    return {"git": in_repository, "gitattributes_added": ensure_merge_driver(paths) if in_repository else False}
+
+
+def migrate_folder(cwd, register_it=True):
+    """`atm migrate` (and `atm serve`, before it shows a project): bring the task folder at or above `cwd` up to date
+    (docs/v4/atm-cli.md). Returns {result, lines: what it did, in words, tasks_exists}; with `register_it`, the
+    project is listed on the dashboard too (every skill runs migrate first)."""
+    paths = find_paths(cwd)
+    result = migrate(paths)
+    exists = os.path.isfile(paths["tasks"])
+    if register_it and exists:
+        register(paths)
+    return {"result": result, "lines": describe_migration(result, paths), "tasks_exists": exists}
+
+
+def merge_versions(base, ours, theirs):
+    """`atm merge-driver` (git runs it): merge the three versions of a task file task by task, writing the result
+    over `ours`. Returns the conflicts (this branch's version was kept for each)."""
+    return merge_files(base, ours, theirs)
+
+
+def task_paths(cwd):
+    """`atm paths`: where the project's task files are (the JSON-in-git store's own locations)."""
+    return find_paths(cwd)
+
+
+def hook_project(cwd, actor):
+    """The project the plugin's hook (`heartbeat --auto`) works on in `cwd`, after listing it on the dashboard (one
+    read of the registry when it is listed already); None when there are no task files there."""
+    paths = find_paths(cwd)
+    if not paths["tasks_exists"]:
+        return None
+    try:
+        register_if_needed(paths)
+    except Exception:  # noqa: BLE001 - the hook must never fail on the registry
+        pass
+    return project_at(paths, actor)
+
+
+def hold_lock_for_test(cwd, seconds):
+    """`atm _lock-test`: hold the task folder's lock for `seconds`, logging to .lock-test.log, so tests can check that
+    two processes never hold it at once."""
+    task_dir = find_paths(cwd)["dir"]
+    log = os.path.join(task_dir, ".lock-test.log")
+    with locked(task_dir):
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"acquire {os.getpid()}\n")
+        time.sleep(seconds)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"release {os.getpid()}\n")
 
 
 # ==== cli/render.py ====
 # Text for people and agents: how the CLI shows atm-lib's results. Short and stable, for agents to read (CLI-3.3).
+
+def report_expired(expired):
+    """On stderr, the claims a command found expired (their tasks went back to todo)."""
+    for claim in expired:
+        sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
+
 
 def list_lines(vocab, tasks):
     """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
@@ -6491,17 +7079,11 @@ def render_task(view):
     return "\n".join(lines)
 
 
-# ==== migrate.py ====
-# `atm migrate`: move a legacy tasks.json into the task folder and set the folder up (.gitignore, merge driver), and
-# clean up after per-project dashboards (0.10.0-0.14.0): the dashboard now comes from the plugin, served by
-# `atm serve` for all projects.
+# ==== api/dashboard.py ====
+# The plugin's dashboard file (plugin/templates/tasks-dashboard.html) and the version and build tags at its top: atm
+# serve serves it, and restarts on a newer one.
 
 TEMPLATE = os.path.join(PLUGIN_ROOT, "templates", DASHBOARD_FILE)
-# Runtime files in the task folder that must not be committed (the dashboard and server files are from before
-# 0.15.0; they stay listed so leftovers stay out of git)
-IGNORED = ["tasks-dashboard.html", ".server.json", ".server.log", "claims.json", "claims-store.json", ".lock/"]
-OLD_SERVER_RECORD = ".server.json"
-OLD_SERVER_LOG = ".server.log"
 VERSION_META = re.compile(r'<meta name="atm-dashboard-version" content="([^"]*)"')
 BUILD_META = re.compile(r'<meta name="atm-dashboard-build" content="([^"]*)"')
 # The tags sit at the top of the page; reading this much finds them without reading the whole (inlined) dashboard
@@ -6524,405 +7106,20 @@ def dashboard_head(p):
     return page_tags(head)
 
 
-def written_by_atm(path):
-    """Whether an old server record is one atm wrote here: owned by this user and not tracked by git (atm always kept
-    it out of git). A record that came with the repository is only deleted: atm never contacts its port or signals its
-    pid (docs/security-review.md F14)."""
-    try:
-        if os.stat(path).st_uid != os.getuid():
-            return False
-    except (OSError, AttributeError):  # missing, or no uids (Windows)
-        return False
-    return not is_tracked(os.path.dirname(path), path)
-
-
-def clean_up_old_dashboard(task_dir):
-    """Per-project dashboards (0.10.0-0.14.0): delete the project's copy of the dashboard, stop its server if one still
-    runs (only when whoami confirms it serves this folder), and remove the server's record and log. Returns what was
-    done, or None when there was nothing left."""
-    removed = False
-    copy = os.path.join(task_dir, DASHBOARD_FILE)
-    if os.path.isfile(copy):
-        os.remove(copy)
-        removed = True
-    stopped = None
-    record_path = os.path.join(task_dir, OLD_SERVER_RECORD)
-    record = read_json(record_path) if written_by_atm(record_path) else None
-    if record is not None:
-        info = whoami(record.get("port")) if isinstance(record, dict) else None
-        if info and info.get("folder") == task_dir and info.get("pid") == record.get("pid"):
-            try:
-                os.kill(record["pid"], signal.SIGTERM)
-                stopped = record["pid"]
-            except OSError:
-                pass
-    had_files = False
-    for name in (OLD_SERVER_RECORD, OLD_SERVER_LOG):
-        p = os.path.join(task_dir, name)
-        if os.path.exists(p):
-            os.remove(p)
-            had_files = True
-    if not (removed or stopped or had_files):
-        return None
-    return {"dashboard": removed, "server": stopped}
-
-
-FINISH_FIELDS = {"done": "completed_at", "skipped": "skipped_at"}
-
-
-def missing_finish_times(tasks, vocab):
-    """The finished tasks without their finish time (done ones from before completed_at existed; skipped ones from
-    before skipped_at existed), with the field each one needs."""
-    result = []
-    for task in tasks:
-        field = FINISH_FIELDS.get(kind_of(vocab, task.get("status"))) if isinstance(task, dict) else None
-        if field and not task.get(field) and task.get("updated_at"):
-            result.append((task, field))
-    return result
-
-
-def backfill_finish_times(paths):
-    """Give finished tasks without a finish time their updated_at, which is what the dashboard showed for them anyway,
-    so a later edit (which moves updated_at) doesn't move them in time. In tasks.json and the archive; once per task;
-    updated_at and updated_by stay. Returns how many tasks were filled in."""
-    archive = archive_path(paths)
-    try:
-        data = load_tasks(paths)
-        vocab = vocabulary(data)
-        if not missing_finish_times(data["tasks"], vocab) and not missing_finish_times(load_archive(paths)["tasks"], vocab):
-            return 0
-    except AtmError:
-        return 0  # an unreadable file: the command the skill runs next reports the problem
-    filled = 0
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        files = [(paths["tasks"], data)] + ([(archive, load_archive(paths))] if os.path.isfile(archive) else [])
-        for path, contents in files:
-            missing = missing_finish_times(contents["tasks"], vocab)
-            for task, field in missing:
-                task[field] = task["updated_at"]
-            if missing:
-                write_json_atomic(path, contents)
-                filled += len(missing)
-    return filled
-
-
-FINISHED_KINDS = ("done", "skipped")
-
-
-def task_phase(task):
-    """The task's phase (a number), or None: a task without one goes to the backlog."""
-    phase = task.get("phase") if isinstance(task, dict) else None
-    if not isinstance(phase, (int, float)) or isinstance(phase, bool):
-        return None
-    return int(phase) if float(phase).is_integer() else phase
-
-
-def phase_sprint_names(meta, tasks):
-    """{phase: sprint name} for every phase with tasks or a name, in phase order: its name, or "Phase n" when
-    unnamed, with " (phase n)" added to a name already taken (the names the dashboard shows for unmigrated projects,
-    dashboard/src/lib/sprints.ts)."""
-    named = {}
-    for p in meta.get("phases") or []:
-        if isinstance(p, dict) and task_phase({"phase": p.get("id")}) is not None:
-            name = p.get("name").strip()[:MAX_SPRINT_NAME].rstrip() if isinstance(p.get("name"), str) else ""
-            if name:
-                named[task_phase({"phase": p["id"]})] = name
-    phases = set(named) | {task_phase(t) for t in tasks} - {None}
-    names, taken = {}, set()
-    for phase in sorted(phases):
-        name = named.get(phase) or f"Phase {phase}"
-        if name.casefold() in taken:
-            suffix = f" (phase {phase})"
-            name = name[: MAX_SPRINT_NAME - len(suffix)].rstrip() + suffix
-        taken.add(name.casefold())
-        names[phase] = name
-    return names
-
-
-def sprint_from_phase(name, tasks, vocab):
-    """The sprint a phase becomes: closed when all its tasks are finished (start, end and report from them), else
-    planned (SR-8.1)."""
-    finished = bool(tasks) and all(kind_of(vocab, t.get("status")) in FINISHED_KINDS for t in tasks)
-    if not finished:
-        return {"id": name, "state": "planned"}
-    sprint = {"id": name, "state": "closed"}
-    starts = [t["started_at"] for t in tasks if isinstance(t.get("started_at"), str)]
-    ends = [
-        t.get("completed_at") or t.get("skipped_at") or t.get("updated_at")
-        for t in tasks
-        if isinstance(t.get("completed_at") or t.get("skipped_at") or t.get("updated_at"), str)
-    ]
-    if starts:
-        sprint["start"] = min(starts)
-    if ends:
-        sprint["end"] = max(ends)
-    sprint["report"] = {
-        "done": [t["id"] for t in tasks if kind_of(vocab, t.get("status")) == "done" and "id" in t],
-        "carried": [],
-    }
-    return sprint
-
-
-def phases_to_sprints(data, archived, vocab, stamp):
-    """Turn phases into sprints in tasks.json's data and the archive's tasks, in place (SR-8.1). A project that already
-    has meta.sprints only gets its leftover phases converted (a task merged in from an unmigrated branch, SR-8.5).
-    Returns the sprints it added, or [] when there was nothing to convert."""
-    meta = data.setdefault("meta", {})
-    tasks = [t for t in list(data["tasks"]) + list(archived) if isinstance(t, dict)]
-    if not meta.get("phases") and not any("phase" in t for t in tasks):
-        return []
-    names = phase_sprint_names(meta, tasks)
-    sprints = meta.get("sprints") if isinstance(meta.get("sprints"), list) else []
-    existing = {s["id"].casefold() for s in sprints if isinstance(s, dict) and isinstance(s.get("id"), str)}
-    added = []
-    for phase, name in names.items():
-        if name.casefold() in existing:
-            continue
-        sprint = sprint_from_phase(name, [t for t in tasks if task_phase(t) == phase], vocab)
-        sprints.append(sprint)
-        added.append(sprint)
-    meta["sprints"] = sprints
-    meta.pop("phases", None)
-    by_name = {s["id"].casefold(): s["id"] for s in sprints if isinstance(s, dict) and isinstance(s.get("id"), str)}
-    for task in tasks:
-        phase = task_phase(task)
-        task.pop("phase", None)
-        if phase is None or task.get("sprint"):
-            continue
-        task["sprint"] = by_name[names[phase].casefold()]
-        task.setdefault("sprint_history", []).append(
-            {"sprint": task["sprint"], "from": task.get("created_at") if isinstance(task.get("created_at"), str) else stamp}
-        )
-    return added
-
-
-def migrate_phases(paths):
-    """phases_to_sprints on the files under the lock, staging them in git (not committing). Returns the sprints it
-    added, or None when there was nothing to convert."""
-    archive = archive_path(paths)
-    try:
-        data = load_tasks(paths)
-        vocab = vocabulary(data)
-        archive_data = load_archive(paths)
-        if not data.get("meta", {}).get("phases") and not any(
-            isinstance(t, dict) and "phase" in t for t in list(data["tasks"]) + list(archive_data["tasks"])
-        ):
-            return None
-    except AtmError:
-        return None  # an unreadable file: the command the skill runs next reports the problem
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive_data = load_archive(paths)
-        added = phases_to_sprints(data, archive_data["tasks"], vocab, now_iso())
-        if isinstance(archive_data.get("meta"), dict):
-            archive_data["meta"].pop("phases", None)
-        vocabulary(data)
-        write_json_atomic(paths["tasks"], data)
-        written = [paths["tasks"]]
-        if os.path.isfile(archive):
-            write_json_atomic(archive, archive_data)
-            written.append(archive)
-    if in_git(paths["root"]):
-        git(["add", "--"] + [rel(paths["root"], p) for p in written], paths["root"])
-    return added
-
-
-WITH_USER_MIGRATION = "interactive-label"
-
-
-def migrate_interactive(paths):
-    """Tasks labelled `interactive` (work done with the user, T-240) get `with: user` (SR-6.5), once: the change is
-    recorded in meta.migrations, so a `with` taken off later isn't put back. The label stays. Only unfinished tasks in
-    tasks.json; nothing is written when none has the label. Returns how many tasks it changed."""
-    def todo(data):
-        meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
-        if WITH_USER_MIGRATION in (meta.get("migrations") or []):
-            return []
-        vocab = vocabulary(data)
-        return [
-            t
-            for t in data["tasks"]
-            if isinstance(t, dict)
-            and "interactive" in (t.get("labels") or [])
-            and not t.get("with")
-            and kind_of(vocab, t.get("status")) not in ("done", "skipped")
-        ]
-
-    try:
-        if not todo(load_tasks(paths)):
-            return 0
-    except AtmError:
-        return 0  # an unreadable file: the command the skill runs next reports the problem
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        tasks = todo(data)
-        for task in tasks:
-            task["with"] = "user"
-        meta = data.setdefault("meta", {})
-        meta["migrations"] = list(meta.get("migrations") or []) + [WITH_USER_MIGRATION]
-        write_json_atomic(paths["tasks"], data)
-    if in_git(paths["root"]):
-        git(["add", "--", rel(paths["root"], paths["tasks"])], paths["root"])
-    return len(tasks)
-
-
-def ensure_gitignore(task_dir):
-    """Add any missing runtime entries to the folder's .gitignore, keeping the user's lines. Returns True if changed."""
-    p = os.path.join(task_dir, ".gitignore")
-    try:
-        with open(p, encoding="utf-8") as f:
-            text = f.read()
-    except OSError:
-        text = ""
-    lines = text.splitlines()
-    missing = [entry for entry in IGNORED if entry not in lines]
-    if not missing:
-        return False
-    if not text:
-        text = "# atm runtime files (managed by atm)\n"
-    elif not text.endswith("\n"):
-        text += "\n"
-    with open(p, "w", encoding="utf-8") as f:
-        f.write(text + "".join(entry + "\n" for entry in missing))
-    return True
-
-
-def migrate(paths):
-    """Move a legacy tasks.json into the task folder, set the folder up, and turn phases into sprints. Never commits."""
-    root, task_dir, legacy = paths["root"], paths["dir"], paths["legacy"]
-    result = {
-        "moved": None,
-        "removed_dashboard": None,
-        "warning": None,
-        "gitignore_updated": False,
-        "merge_driver_updated": False,
-        "cleaned_up": None,
-        "finish_times_filled": 0,
-        "sprints_from_phases": None,
-        "with_user_from_label": 0,
-    }
-    if legacy and paths["tasks_exists"]:
-        result["warning"] = (
-            f"both {rel(root, legacy['tasks'])} and {rel(root, paths['tasks'])} exist; "
-            f"using {rel(root, paths['tasks'])}. Remove the old file when you no longer need it."
-        )
-    elif legacy:
-        os.makedirs(task_dir, exist_ok=True)
-        tracked = is_tracked(root, legacy["tasks"])
-        if tracked:
-            if git(["mv", "--", rel(root, legacy["tasks"]), rel(root, paths["tasks"])], root) is None:
-                raise AtmError(f"git mv {rel(root, legacy['tasks'])} failed")
-        else:
-            os.rename(legacy["tasks"], paths["tasks"])
-        result["moved"] = {"from": rel(root, legacy["tasks"]), "to": rel(root, paths["tasks"]), "git": tracked}
-        if legacy["dashboard"]:
-            if is_tracked(root, legacy["dashboard"]):
-                git(["rm", "--cached", "-q", "--", rel(root, legacy["dashboard"])], root)
-            os.remove(legacy["dashboard"])
-            result["removed_dashboard"] = rel(root, legacy["dashboard"])
-    if not os.path.isfile(paths["tasks"]):
-        return result
-    if ensure_gitignore(task_dir):
-        result["gitignore_updated"] = True
-        if in_git(root):
-            git(["add", "--", rel(root, os.path.join(task_dir, ".gitignore"))], root)
-    result["merge_driver_updated"] = ensure_merge_driver(paths)
-    if not os.path.exists(os.path.join(task_dir, CLAIMS_SNAPSHOT)):
-        # So the dashboard finds the file from the start instead of logging a 404 on every refresh
-        write_claims_snapshot(paths, read_store(paths)["claims"])
-    result["cleaned_up"] = clean_up_old_dashboard(task_dir)
-    result["finish_times_filled"] = backfill_finish_times(paths)
-    result["sprints_from_phases"] = migrate_phases(paths)
-    result["with_user_from_label"] = migrate_interactive(paths)
-    try:
-        hint = archive_hint(paths, load_tasks(paths))
-    except AtmError:
-        hint = None  # the command the skill runs next reports the problem
-    if hint:
-        result["suggest"] = {"archive": hint}
-    return result
-
-
-def describe_sprints_from_phases(sprints):
-    """What the phase migration did, said once (it doesn't run again)."""
-    if not sprints:
-        return ["Moved the tasks' phases to their sprints (staged, not committed)."]
-    closed = [s["id"] for s in sprints if s["state"] == "closed"]
-    planned = [s["id"] for s in sprints if s["state"] == "planned"]
-    count = "1 phase" if len(sprints) == 1 else f"{len(sprints)} phases"
-    lines = [f"Phases are now sprints: turned {count} into sprints (staged, not committed)."]
-    if closed:
-        lines.append(f"Closed (all their tasks finished): {', '.join(closed)}.")
-    if planned:
-        lines.append(f"Planned: {', '.join(planned)}.")
-        lines.append("None is active yet: plan one with /atm:plan-sprint.")
-    return lines
-
-
-def describe_migration(r, paths):
-    lines = []
-    if r["warning"]:
-        lines.append("warning: " + r["warning"])
-    if r["moved"]:
-        line = f"Moved {r['moved']['from']} to {r['moved']['to']}"
-        if r["moved"]["git"]:
-            line += " (staged with git mv, not committed)"
-        if r["removed_dashboard"]:
-            line += f"; removed {r['removed_dashboard']} (the dashboard now comes with the plugin: /atm:serve)"
-        lines.append(line + ".")
-    elif not os.path.isfile(paths["tasks"]):
-        lines.append("No tasks.json found. Run /atm:create-tasks to create one.")
-    cleaned = r["cleaned_up"]
-    if cleaned:
-        line = "Removed this project's old dashboard files"
-        if cleaned["server"]:
-            line += f" and stopped its old dashboard server (pid {cleaned['server']})"
-        lines.append(line + ": one dashboard for all your projects now comes with the plugin (/atm:serve).")
-    filled = r.get("finish_times_filled")
-    if filled:
-        tasks = "1 finished task" if filled == 1 else f"{filled} finished tasks"
-        lines.append(f"Filled in the finish time of {tasks} that had none, from the last update (completed_at/skipped_at).")
-    sprints = r.get("sprints_from_phases")
-    if sprints is not None:
-        lines.extend(describe_sprints_from_phases(sprints))
-    together = r.get("with_user_from_label")
-    if together:
-        tasks = "1 task" if together == 1 else f"{together} tasks"
-        lines.append(
-            f"Gave {tasks} labelled interactive `with: user` (done together with you; unattended loops skip them)."
-        )
-    if not lines:
-        lines.append("Nothing to migrate.")
-    if r.get("suggest"):
-        lines.append(r["suggest"]["archive"]["text"])
-    return lines
-
-
-def cmd_migrate(args):
-    paths = find_paths(os.getcwd())
-    r = migrate(paths)
-    if os.path.isfile(paths["tasks"]):
-        register(paths)  # the dashboard lists every project atm runs in (every skill runs migrate first)
-    if args.json:
-        out(to_json(r))
-        return
-    for line in describe_migration(r, paths):
-        out(line)
-
-
 # ==== api/server.py ====
 # `atm serve`: one dashboard server per user, a detached process serving every registered project.
 #
-# The server holds the plugin's dashboard in memory and serves each registered project's task files under /p/<id>/.
-# Its routes and record are described in docs/multi-project-api.md.
+# The server holds the plugin's dashboard in memory and answers its requests through atm-lib: the projects, their
+# tasks (v1), claims, worktrees and logos. It reads no task file itself (docs/layered-architecture.md §6); its routes
+# and record are described in docs/multi-project-api.md.
 
 SERVER_RECORD = "server.json"
 SERVER_LOG = "server.log"
 DEFAULT_PORT = 8765
 PORT_TRIES = 100
-PROJECT_FILES = ("tasks.json", "claims.json", "tasks-archive.json", "worktrees.json")
-# A task file the server will read into memory and send (a big project's archive is a few MB)
+# Computed from the project's data, under the paths the dashboard has always used (docs/multi-project-api.md)
+PROJECT_FILES = ("claims.json", "worktrees.json")
+# Task data the server will read into memory and send (a big project's archive is a few MB)
 MAX_SERVED_BYTES = 100_000_000
 PROJECT_FILE = re.compile(r"/p/([^/]+)/(" + "|".join(re.escape(f) for f in PROJECT_FILES + ("logo",)) + r")")
 # A logo is the project's own file, which could be an SVG with a script: it is shown as an image, never run
@@ -7009,27 +7206,17 @@ def ensure_server(home, port):
     raise AtmFailure(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
 
 
-def project_for(paths):
-    """(id, listed) of the project at `paths`, after registering it."""
-    register(paths)
-    path = main_worktree(paths["root"])
-    meta = project_meta(path) or project_meta(paths["root"]) or {}
-    # The id the registry gave it: meta.id, or another when that one is taken (registry.unique_id)
-    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE)) or {}
-    entry = next((e for e in registry.get("projects", []) if isinstance(e, dict) and e.get("path") == path), None)
-    return (entry or {}).get("id") or project_id(meta, path), listed(meta)
-
-
-def serve_start(paths, port, overview):
-    """Start (or reuse) the server; returns the URL to show: the project's, or the overview's."""
+def serve_start(cwd, port, overview):
+    """Start (or reuse) the server; returns the URL to show: the project's (at or above `cwd`), or the overview's."""
     project = None
     if not overview:
-        for line in describe_migration(migrate(paths), paths):
+        migration = migrate_folder(cwd, register_it=False)
+        for line in migration["lines"]:
             if line != "Nothing to migrate.":
                 out(line)
-        if not os.path.isfile(paths["tasks"]):
+        if not migration["tasks_exists"]:
             raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
-        project, shown = project_for(paths)
+        project, shown = dashboard_id(project_at(task_paths(cwd)))
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
             project = None
@@ -7128,7 +7315,7 @@ def cmd_serve(args):
         serve_refresh(home)
     elif args.action == "start":
         refresh_server(home)  # an outdated server is replaced before its URL is shown
-        url = serve_start(find_paths(cwd), args.port, args.all)
+        url = serve_start(cwd, args.port, args.all)
         if args.open:
             open_browser(url)
     elif args.action == "stop":
@@ -7150,8 +7337,8 @@ def port_in_use(port):
     return False
 
 
-def file_stamp(p):
-    """(size, nanosecond mtime) of a file, or None if it doesn't exist."""
+def logo_stamp(p):
+    """(size, nanosecond mtime) of the logo's file, or None if it doesn't exist."""
     try:
         st = os.stat(p)
     except OSError:
@@ -7165,20 +7352,18 @@ def file_etag(stamp):
     return f'"{stamp[0]:x}-{stamp[1]:x}"'
 
 
-class Registry:
-    """The registry as the server sees it, re-read when projects.json changes."""
+class ServedProjects:
+    """The registry as the server sees it, re-read when it changes."""
 
     def __init__(self, home):
-        self.path = os.path.join(home, REGISTRY_FILE)
+        self.registry = open_registry(home)
         self.stamp = None
         self.projects = []
 
     def entries(self):
-        stamp = file_stamp(self.path)
+        stamp = self.registry.stamp()
         if stamp != self.stamp:
-            data = read_json(self.path)
-            entries = data.get("projects") if isinstance(data, dict) else None
-            self.projects = [e for e in entries or [] if isinstance(e, dict) and isinstance(e.get("path"), str)]
+            self.projects = self.registry.entries()
             self.stamp = stamp
         return self.projects
 
@@ -7186,51 +7371,37 @@ class Registry:
         return next((e for e in self.entries() if e.get("id") == project), None)
 
 
-def task_file(entry, name):
-    return os.path.join(entry["path"], TASK_DIR, name)
-
-
-def served_file(entry, name):
-    """The project's task file `name` if it may be served: a regular file, not a symlink, in a task folder that isn't
-    one either (docs/security-review.md F8: a repository could otherwise link tasks-archive.json to ~/.ssh/id_rsa).
-    None otherwise."""
-    folder = os.path.join(entry["path"], TASK_DIR)
-    p = os.path.join(folder, name)
-    if os.path.islink(folder) or os.path.islink(p) or not os.path.isfile(p):
-        return None
-    real_folder = os.path.realpath(folder)
-    return p if os.path.dirname(os.path.realpath(p)) == real_folder else None
-
-
 class Summaries:
-    """Each project's summary (atm-lib's project_summary), computed again only when its tasks.json or claims store
-    changed, or the day did (the completions count by day)."""
+    """Each registered project, opened through boot, and its summary (atm-lib's project_summary), computed again only
+    when its task data or claims changed, or the day did (the completions count by day)."""
 
     def __init__(self):
-        self.paths = {}  # project folder -> (atm paths, claims store path): finding them runs git
+        self.paths = {}  # project folder -> where its data is (boot's task_paths): finding it runs git
         self.cache = {}  # project folder -> (stamp, summary or None)
 
-    def store(self, entry):
-        """The project's claims store, shared by all its worktrees."""
-        if entry["path"] not in self.paths:
-            paths = find_paths(entry["path"])
-            self.paths[entry["path"]] = (paths, claims_store_path(paths))
-        return self.paths[entry["path"]][1]
-
     def project(self, entry, tolerant=False):
-        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call. `tolerant`
-        reads a malformed task file as far as it can be read, for showing it (T-377)."""
-        self.store(entry)
-        return project_at(self.paths[entry["path"]][0], tolerant=tolerant)
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its data per call. `tolerant`
+        reads a malformed task file as far as it can be read, for showing it (T-377). A task folder atm refuses (a
+        symlink, docs/security-review.md F7, F8) raises AtmFailure."""
+        if entry["path"] not in self.paths:
+            self.paths[entry["path"]] = task_paths(entry["path"])
+        return project_at(self.paths[entry["path"]], tolerant=tolerant)
+
+    def data_stamp(self, entry):
+        """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""
+        try:
+            stamp = self.project(entry).store.stamp()
+        except AtmFailure:
+            return None
+        return stamp if stamp["tasks"] is not None else None
 
     def stamp(self, entry):
-        """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
-        and .git/HEAD (the branch on the card)."""
-        tasks = file_stamp(task_file(entry, TASKS_FILE))
-        if tasks is None:
+        """What the summary depends on, or None when the project is missing: its task data, claims, the day, and the
+        checked-out branch (on the card)."""
+        stamp = self.data_stamp(entry)
+        if stamp is None:
             return None
-        head = file_stamp(os.path.join(entry["path"], ".git", "HEAD"))
-        return (tasks, file_stamp(self.store(entry)), now().date().isoformat(), head)
+        return (stamp["tasks"], stamp["claims"], now().date().isoformat(), stamp["head"])
 
     def summary(self, entry, stamp):
         cached = self.cache.get(entry["path"])
@@ -7244,10 +7415,10 @@ class Summaries:
         return summary
 
 
-def project_logo(entry):
+def project_logo(summaries, entry):
     """(absolute path, content type) of a registered project's logo (meta.logo, or one found), or None."""
-    logo = find_logo(entry["path"], project_meta(entry["path"]) or {})
-    return (logo[1], logo[2]) if logo else None
+    logo = get_logo(summaries.project(entry, tolerant=True))["found"]
+    return (logo["file"], logo["type"]) if logo else None
 
 
 def quietly(fn, default):
@@ -7263,9 +7434,12 @@ def api_projects(registry, summaries):
     logo and the day. A project whose files can't be read is listed as missing; the others are unaffected."""
     entries = registry.entries()
     stamps = [quietly(lambda e=e: summaries.stamp(e), None) for e in entries]
-    trees = [quietly(lambda e=e: worktrees(e["path"]), []) if stamp else [] for e, stamp in zip(entries, stamps)]
-    logos = [quietly(lambda e=e: project_logo(e), None) if stamp else None for e, stamp in zip(entries, stamps)]
-    logo_stamps = [file_stamp(logo[0]) if logo else None for logo in logos]
+    trees = [
+        quietly(lambda e=e: summaries.project(e).store.working_copies(), []) if stamp else []
+        for e, stamp in zip(entries, stamps)
+    ]
+    logos = [quietly(lambda e=e: project_logo(summaries, e), None) if stamp else None for e, stamp in zip(entries, stamps)]
+    logo_stamps = [logo_stamp(logo[0]) if logo else None for logo in logos]
     etag = (
         '"'
         + hashlib.sha1(repr([registry.stamp] + stamps + trees + logo_stamps).encode("utf-8")).hexdigest()[:16]
@@ -7308,9 +7482,8 @@ def api_search(registry, summaries, query):
     for entry in registry.entries():
 
         def matches(entry=entry):
-            p = served_file(entry, TASKS_FILE)
-            stamp = file_stamp(p) if p else None
-            if stamp is None or stamp[0] > MAX_SERVED_BYTES:
+            stamp = summaries.data_stamp(entry)
+            if stamp is None or stamp["tasks"][0] > MAX_SERVED_BYTES:
                 return []
             return search_tasks(summaries.project(entry), query, also=str(entry.get("name") or ""))
 
@@ -7320,18 +7493,20 @@ def api_search(registry, summaries, query):
     return to_json(results).encode("utf-8")
 
 
-def api_claims(summaries, entry):
+def stamp_etag(*parts):
+    """A strong ETag from what a response depends on (store stamps, the query)."""
+    return '"' + hashlib.sha1(repr(list(parts)).encode("utf-8")).hexdigest()[:16] + '"'
+
+
+def api_claims(summaries, entry, stamp):
     """(body, ETag) of a project's claims.json: the claims of all its worktrees (atm-lib's list_claims, from the shared
-    claims store; each worktree's own snapshot has only the claims made there). None when there is no store yet."""
-    stamp = file_stamp(summaries.store(entry))
-    if stamp is None:
-        return None
+    claims store; each worktree's own snapshot has only the claims made there); none before the first claim."""
 
     def body():
         snapshot = {"generated_at": now_iso(), "claims": list_claims(summaries.project(entry))}
         return to_json(snapshot).encode("utf-8")
 
-    return body, file_etag(stamp)
+    return body, stamp_etag("claims", stamp["claims"])
 
 
 V1_TASKS = re.compile(r"/api/v1/projects/([^/]+)/tasks")
@@ -7350,12 +7525,11 @@ def task_filters(query):
     return Filters(**filters)
 
 
-def api_v1_tasks(summaries, entry, query):
+def api_v1_tasks(summaries, entry, query, stamp):
     """(body, ETag) of GET /api/v1/projects/<p>/tasks: the project's tasks the filters keep, each with its derived
     values (atm-lib's task_views), and in the same snapshot the project's meta and how big its task data is. The ETag
-    changes with tasks.json, the archive and the query."""
-    stamps = [file_stamp(task_file(entry, name)) for name in (TASKS_FILE, "tasks-archive.json")]
-    etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
+    changes with the task data, the archive and the query."""
+    etag = stamp_etag(stamp["tasks"], stamp["archive"], query)
 
     def body():
         # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
@@ -7376,39 +7550,16 @@ def api_v1_tasks(summaries, entry, query):
     return body, etag
 
 
-def api_worktrees(entry, store):
-    """(body, ETag) of a project's worktrees.json: its git worktrees, main first, and for each linked one the tasks
-    whose copy there differs from the main worktree's (or that only it has). The dashboard shows them all on one
-    board, each task from the worktree where it got furthest. A linked worktree's copy of a task decided in another
-    worktree (answered, reviewed: the claims store's `resolved`, T-204) is left out: it is stale until atm next runs
-    there, and would otherwise outrank the decision."""
-    trees = worktrees(entry["path"])
-    stamps = [file_stamp(os.path.join(t["path"], TASK_DIR, TASKS_FILE)) for t in trees]
-    etag = '"' + hashlib.sha1(repr([trees, stamps, file_stamp(store)]).encode("utf-8")).hexdigest()[:16] + '"'
-
-    def tasks_of(tree):
-        data = read_json(os.path.join(tree["path"], TASK_DIR, TASKS_FILE))
-        tasks = data.get("tasks") if isinstance(data, dict) else None
-        return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
-
+def api_worktrees(summaries, entry, stamp):
+    """(body, ETag) of a project's worktrees.json: its working copies, main first, and for each other one the tasks
+    whose copy there differs from the main one's (atm-lib's worktree_copies). The dashboard shows them all on one
+    board, each task from the working copy where it got furthest. The ETag changes with the copies and the claims
+    (a decision made in another worktree hides a stale copy)."""
     def body():
-        data = read_json(store)
-        resolved = data.get("resolved") if isinstance(data, dict) and isinstance(data.get("resolved"), dict) else {}
-        stale = {(r.get("worktree"), task_id) for task_id, r in resolved.items() if isinstance(r, dict)}
-        listed_trees = []
-        main = {}
-        for tree in trees:
-            if tree["main"]:
-                main = {t["id"]: t for t in tasks_of(tree)}
-                listed_trees.append(tree)
-            else:
-                differing = [
-                    t for t in tasks_of(tree) if main.get(t["id"]) != t and (tree["path"], t["id"]) not in stale
-                ]
-                listed_trees.append({**tree, "tasks": differing})
-        return to_json({"generated_at": now_iso(), "worktrees": listed_trees}).encode("utf-8")
+        copies = worktree_copies(summaries.project(entry))
+        return to_json({"generated_at": now_iso(), "worktrees": copies}).encode("utf-8")
 
-    return body, etag
+    return body, stamp_etag(stamp["copies"], stamp["claims"])
 
 
 def cmd_serve_child(args):
@@ -7424,7 +7575,7 @@ def cmd_serve_child(args):
     # report another build than the page has, and the page would offer a reload forever
     version, build = page_tags(page[:HEAD_BYTES].decode("utf-8", errors="replace"))
     page_headers = {"Content-Security-Policy": page_csp(page)}
-    registry = Registry(home)
+    registry = ServedProjects(home)
     summaries = Summaries()
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -7493,15 +7644,15 @@ def cmd_serve_child(args):
             if entry is None:
                 self.send_error_json(404, "unknown project")
                 return
-            p = served_file(entry, TASKS_FILE)
-            stamp = file_stamp(p) if p else None
+            stamp = summaries.data_stamp(entry)
             if stamp is None:
                 self.send_error_json(404, "not found")
                 return
-            if stamp[0] > MAX_SERVED_BYTES:
+            if stamp["tasks"][0] > MAX_SERVED_BYTES:
+                # Each request reads the whole task data into memory: a runaway file is refused, not served
                 self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
                 return
-            body, etag = api_v1_tasks(summaries, entry, query)
+            body, etag = api_v1_tasks(summaries, entry, query, stamp)
             if self.headers.get("If-None-Match") == etag:
                 self.send(304, etag=etag)
                 return
@@ -7525,41 +7676,22 @@ def cmd_serve_child(args):
                 self.send_error_json(404, "unknown project")
                 return
             name = match.group(2)
-            if served_file(entry, TASKS_FILE) is None:
+            stamp = summaries.data_stamp(entry)
+            if stamp is None:
                 self.send_error_json(404, "not found")
                 return
             if name == "logo":
                 self.serve_logo(entry)
-                return
-            computed = None
-            if name == "worktrees.json":
-                computed = api_worktrees(entry, summaries.store(entry))
-            elif name == "claims.json":
-                computed = api_claims(summaries, entry)
-            if computed:
-                self.send_conditional(*computed)
-                return
-            p = served_file(entry, name)
-            stamp = file_stamp(p) if p else None
-            if stamp is None:
-                self.send_error_json(404, "not found")
-                return
-            if stamp[0] > MAX_SERVED_BYTES:
-                # Each poll reads the whole file into memory: a runaway file is refused, not served
-                self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
-                return
-
-            def read():
-                with open(p, "rb") as f:
-                    return f.read()
-
-            self.send_conditional(read, file_etag(stamp))
+            elif name == "worktrees.json":
+                self.send_conditional(*api_worktrees(summaries, entry, stamp))
+            else:
+                self.send_conditional(*api_claims(summaries, entry, stamp))
 
         def serve_logo(self, entry):
-            """The project's logo (logo.find_logo checks it is inside the project and small enough). The browser
-            may keep it, asking again each time (no-cache) and getting a 304 while it is unchanged."""
-            logo = project_logo(entry)
-            stamp = file_stamp(logo[0]) if logo else None
+            """The project's logo (the store checks it is inside the project and small enough). The browser may keep
+            it, asking again each time (no-cache) and getting a 304 while it is unchanged."""
+            logo = project_logo(summaries, entry)
+            stamp = logo_stamp(logo[0]) if logo else None
             if stamp is None:
                 self.send_error_json(404, "no logo")
                 return
@@ -7834,14 +7966,9 @@ def auto_heartbeat(args):
             agent = session_identity(payload["session_id"], cwd)
         else:
             agent = agent_identity(args.agent)
-        paths = find_paths(cwd)
-        if not paths["tasks_exists"]:
-            return
-        try:
-            register_if_needed(paths)  # list the project on the dashboard (one read of the registry when it is)
-        except Exception:
-            pass
-        renew_due_claims(open_project(cwd, agent))
+        project = hook_project(cwd, agent)  # also lists the project on the dashboard
+        if project is not None:
+            renew_due_claims(project)
     except Exception:  # a hook must never break the tool call it follows
         return
 
@@ -8430,6 +8557,198 @@ def cmd_merged(args):
         out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{args.pr}.")
 
 
+# ==== cli/projects.py ====
+# `atm projects`: list, add, remove or prune the projects the dashboard shows, through atm-lib.
+
+def describe_entry(entry):
+    return f"{entry['id']}  {entry['name']}  {entry['path']}"
+
+
+def damaged_notice(damaged):
+    return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
+
+
+def cmd_projects(args):
+    registry = open_registry()
+    if args.action == "add":
+        result = add_project(registry, args.target)
+        if args.json:
+            out(to_json(result))
+            return
+        if result["damaged"]:
+            out(damaged_notice(result["damaged"]))
+        out(f"{'Added' if result['result'] == 'added' else 'Already registered'}: {describe_entry(result['project'])}")
+    elif args.action == "remove":
+        result = remove_project(registry, args.target)
+        if args.json:
+            out(to_json(result))
+            return
+        out(f"Removed: {describe_entry(result['removed'])}")
+    elif args.action == "prune":
+        result = prune_projects(registry)
+        if args.json:
+            out(to_json(result))
+            return
+        if result["damaged"]:
+            out(damaged_notice(result["damaged"]))
+        if not result["removed"]:
+            out("Nothing to prune: every registered project is there.")
+        for e in result["removed"]:
+            out(f"Removed: {describe_entry(e)}")
+    else:
+        if args.target:
+            raise Invalid(f"unexpected argument '{args.target}'")
+        result = list_projects(registry)
+        if args.json:
+            out(to_json(result))
+            return
+        if result["damaged"]:
+            out(damaged_notice(result["damaged"]))
+        if not result["projects"]:
+            out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
+        for e in result["projects"]:
+            out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
+
+
+# ==== cli/settings.py ====
+# `atm init`, `atm repository` and `atm logo`: the project's settings, through atm-lib. Setting the store itself up
+# (the merge driver, the dashboard's list) is boot's, the one place that knows the store.
+
+def cmd_init(args):
+    project = open_project(os.getcwd())
+    if args.meta_file:
+        new = read_json(args.meta_file)
+        if not isinstance(new, dict):
+            raise Invalid(f"{args.meta_file} must hold a JSON object: the meta keys to set")
+        created, keys = init_meta(project, new)
+        project = open_project(os.getcwd())  # the task data as it is now
+        if not args.json:
+            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
+    project_id = ensure_project_id(project)
+    repository = ensure_repository(project)
+    register_project(project)  # the dashboard lists every project atm runs in
+    setup = set_up_store(project)
+    if args.json:
+        out(
+            to_json(
+                {
+                    "project_id": project_id,
+                    "repository": repository,
+                    "git": setup["git"],
+                    "gitattributes_added": setup["gitattributes_added"],
+                }
+            )
+        )
+        return
+    if project_id:
+        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
+    if repository:
+        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
+    if not setup["git"]:
+        out("Not in a git repository: there is no merge driver to set up.")
+        return
+    out(
+        "Registered the tasks.json merge driver (git config merge.atm)"
+        + (
+            " and added .agentic-task-manager/.gitattributes (staged)."
+            if setup["gitattributes_added"]
+            else "; .gitattributes already set."
+        )
+    )
+
+
+def cmd_repository(args):
+    project = open_project(os.getcwd())
+    if args.action is None:
+        if args.url is not None or args.old is not None:
+            raise Invalid(f"unexpected argument '{args.url or args.old}' (atm repository set URL)")
+        current = get_repository(project)
+        if args.json:
+            out(to_json({"repository": current}))
+        elif current:
+            out(current)
+        else:
+            out("No repository address yet. Set it with `atm repository set <url>` (a git remote works too).")
+        return
+    result = set_repository(project, args.url, args.old)
+    moved = result["moved_links"]
+    if args.json:
+        out(to_json({"repository": result["repository"], "moved_links": moved}))
+    else:
+        links = f" ({moved} PR link{'' if moved == 1 else 's'} moved from {result['previous']})" if moved else ""
+        out(f"Repository address set: {result['repository']}{links}")
+
+
+def cmd_logo(args):
+    project = open_project(os.getcwd())
+    if args.action is None:
+        if args.path is not None:
+            raise Invalid(f"unexpected argument '{args.path}' (atm logo set PATH)")
+        info = get_logo(project)
+        logo, chosen = info["found"], info["set"]
+        if args.json:
+            found = {"logo": logo["path"], "source": logo["source"]} if logo else {"logo": None, "source": None}
+            out(to_json({**found, "set": chosen}))
+        elif logo:
+            out(logo["path"] + (" (found; set one with `atm logo set <path>`)" if logo["source"] == "found" else ""))
+        elif chosen:
+            out(f"meta.logo is {chosen}, which isn't a usable logo (missing, too large, or outside the project).")
+        else:
+            out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
+        return
+    if args.action == "unset":
+        removed = unset_logo(project)
+        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
+        return
+    if args.path is None:
+        raise Invalid("atm logo set needs a path")
+    # The path is relative to where atm runs, like every path atm takes; it is kept relative to the project root
+    root = project.store.working_copy()
+    relative = os.path.relpath(os.path.abspath(args.path), os.path.realpath(root)).replace(os.sep, "/")
+    set_logo(project, relative)
+    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
+
+
+# ==== cli/store.py ====
+# The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2): `atm paths`, `migrate`,
+# `merge-driver` and the lock test. They reach the store through boot, the one place that knows it.
+
+def cmd_migrate(args):
+    migration = migrate_folder(os.getcwd())
+    if args.json:
+        out(to_json(migration["result"]))
+        return
+    for line in migration["lines"]:
+        out(line)
+
+
+def cmd_merge_driver(args):
+    conflicts = merge_versions(args.base, args.ours, args.theirs)
+    if args.json:
+        out(to_json({"conflicts": conflicts}))
+    if conflicts:
+        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
+        for conflict in conflicts:
+            sys.stderr.write(f"  {conflict}\n")
+        raise AtmExit(1)
+
+
+def cmd_paths(args):
+    paths = task_paths(os.getcwd())
+    if args.json:
+        out(to_json(paths))
+        return
+    for key in ["root", "dir", "tasks", "dashboard"]:
+        out(f"{key}: {paths[key]}")
+    if paths["legacy"]:
+        out(f"legacy: {paths['legacy']['tasks']}")
+
+
+def cmd_lock_test(args):
+    """Test hook: hold the task folder's lock for `seconds`, so tests can check exclusion."""
+    hold_lock_for_test(os.getcwd(), args.seconds)
+
+
 # ==== cli/main.py ====
 # The command line: one argparse parser, a subparser per command, and main().
 #
@@ -8564,6 +8883,15 @@ Every command takes --json, and `atm <command> --help` describes it.
 NO_REFRESH = ("serve", "_serve-child", "merge-driver", "_lock-test", "help", "version")
 
 
+class Serving:
+    """The REST API's server commands, which the CLI runs but doesn't import (the two are siblings on atm-lib,
+    docs/layered-architecture.md §1): `atm serve`, the server process itself, and the refresh of a server whose
+    dashboard is older than this plugin's. app/main.py hands them over."""
+
+    def __init__(self, serve, serve_child, refresh, default_port):
+        self.serve, self.serve_child, self.refresh, self.default_port = serve, serve_child, refresh, default_port
+
+
 class Parser(argparse.ArgumentParser):
     """Usage errors as AtmError (exit code 2), so they are reported like every other error."""
 
@@ -8582,7 +8910,7 @@ def cmd_help(args):
         sys.stdout.write(USAGE)
 
 
-def build_parser():
+def build_parser(serving):
     parser = Parser(prog="atm", add_help=False)
     commands = parser.add_subparsers(dest="command", parser_class=Parser)
 
@@ -8607,7 +8935,7 @@ def build_parser():
     command("paths", cmd_paths, "print where this project's task files are")
     command("migrate", cmd_migrate, "move an old tasks.json into .agentic-task-manager/ and set the folder up")
 
-    serve = command("serve", cmd_serve, "run the dashboard server, one for all your projects, in the background")
+    serve = command("serve", serving.serve, "run the dashboard server, one for all your projects, in the background")
     serve.add_argument("action", nargs="?", default="start", choices=["start", "stop", "status"])
     serve.add_argument("--open", action="store_true", help="also open the dashboard in the browser")
     serve.add_argument("--all", action="store_true", help="show the overview of all projects, not this project")
@@ -8616,7 +8944,7 @@ def build_parser():
         action="store_true",
         help="only restart a running server that has an older dashboard than this plugin (the SessionStart hook)",
     )
-    serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="the port to try first")
+    serve.add_argument("--port", type=int, default=serving.default_port, help="the port to try first")
     serve.add_argument("--dir", metavar="PATH", help="the project to show (default: the current directory's)")
 
     for name, description in (
@@ -8965,7 +9293,7 @@ def build_parser():
     projects.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "prune"])
     projects.add_argument("target", nargs="?", help="add: the project's folder (default: here); remove: its ID or path")
 
-    child = command("_serve-child", cmd_serve_child, "the detached server process", hidden=True)
+    child = command("_serve-child", serving.serve_child, "the detached server process", hidden=True)
     child.add_argument("home")
     child.add_argument("port", type=int)
     lock_test = command("_lock-test", cmd_lock_test, "test hook: hold the lock", hidden=True)
@@ -8990,7 +9318,7 @@ def leading_dir(argv):
     return None, argv
 
 
-def main(argv):
+def main(argv, serving):
     target, argv = leading_dir(argv)
     if target is not None:
         # As if started in that folder: the project is found from there, and relative paths count from there
@@ -9001,7 +9329,7 @@ def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         sys.stdout.write(USAGE)
         return 0
-    parser, commands = build_parser()
+    parser, commands = build_parser(serving)
     # `atm run <id> -- <command>`: what follows -- is the command to run, never atm's own options
     child = None
     if argv[0] == "run" and "--" in argv:
@@ -9022,7 +9350,7 @@ def main(argv):
             commands[argv[0]].error(f"unrecognized arguments: {' '.join(extra)}")
         if argv[0] not in NO_REFRESH:
             try:
-                refresh_server()  # after a plugin update, the first atm command brings the dashboard server along
+                serving.refresh()  # after a plugin update, the first atm command brings the dashboard server along
             except Exception:
                 pass  # never in the way of the command itself
         args.run(args)
@@ -9040,5 +9368,14 @@ def main(argv):
     return 0
 
 
+# ==== app/main.py ====
+# The `atm` command itself: the CLI, with the REST API's server commands (`atm serve`, the server process, the
+# refresh after a plugin update) handed to it. The CLI and the REST API are siblings on atm-lib and never import each
+# other (docs/layered-architecture.md §1); this is the one place that puts them together.
+
+def atm(argv):
+    return main(argv, Serving(cmd_serve, cmd_serve_child, refresh_server, DEFAULT_PORT))
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(atm(sys.argv[1:]))

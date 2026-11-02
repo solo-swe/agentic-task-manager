@@ -2,12 +2,10 @@
 fail, release) and notes (docs/layered-architecture.md §5.1).
 
 Each runs as one change of the store (`store.change`, §3.3): the task's status, its claim, and the records shared by
-a clone's worktrees (completed, waiting, resolved) change together or not at all. The rules themselves are still
-those of the modules from before the layers (`change_status`, the lease and resolution helpers); they move into
-atm-lib with their own slices (§9).
+a clone's worktrees (completed, waiting, resolved) change together or not at all. The transitions themselves are
+common's (`change_status`, common/model.py), the lease and resolution rules lib/loop.py's.
 """
 
-from ..claims import apply_resolutions, check_holder, expire_claims, lease_until, own_lease_expired
 from ..common.errors import Invalid
 from ..common.core import now_iso
 from ..common.model import (
@@ -22,6 +20,7 @@ from ..common.model import (
     touch,
     vocabulary,
 )
+from .loop import apply_resolutions, check_holder, expire_claims, lease_until, own_lease_expired
 from .query import ready_tasks
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
@@ -104,9 +103,8 @@ def change_task_status(project, command, task_id, **options):
         data, store = work.document, work.claims()
         claims = store["claims"]
         here = work.here()["worktree"]
-        expired = expire_claims(None, data, claims)
-        # apply_resolutions knows a working copy by its folder, as atm-cli's paths give it
-        apply_resolutions({"root": here}, data, store)
+        expired = expire_claims(data, claims)
+        apply_resolutions(here, data, store)
         task = find_task(data, task_id)
         if command in OWN_LEASE_COMMANDS:
             own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")

@@ -3,7 +3,7 @@
 import os
 
 from ..boot.open import open_project
-from ..claims import agent_identity
+from ..boot.identity import agent_identity
 from ..common.errors import Invalid
 from ..common.core import out, to_json
 from ..lib.query import summary

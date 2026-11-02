@@ -2,11 +2,11 @@
 
 import os
 
+from ..boot.identity import agent_identity
 from ..boot.open import open_project
-from ..claims import agent_identity, report_expired
 from ..common.core import out, to_json
 from ..lib.status import add_task_note, change_task_status
-from .render import describe_task
+from .render import describe_task, report_expired
 
 
 def cmd_status_change(command):

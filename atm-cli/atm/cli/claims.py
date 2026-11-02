@@ -5,13 +5,12 @@ import os
 import subprocess
 import sys
 
-from ..boot.open import open_project
-from ..claims import agent_identity, report_expired, session_identity
+from ..boot.identity import agent_identity, session_identity
+from ..boot.open import hook_project, open_project
 from ..common.errors import AtmFailure, Invalid
 from ..common.core import AtmExit, format_duration, now, out, parse_iso, to_json
 from ..lib.claims import live_claims, next_task_for, renew_due_claims, renew_lease, selection
-from ..paths import find_paths
-from ..registry import register_if_needed
+from .render import report_expired
 
 
 def cmd_next(args):
@@ -61,14 +60,9 @@ def auto_heartbeat(args):
             agent = session_identity(payload["session_id"], cwd)
         else:
             agent = agent_identity(args.agent)
-        paths = find_paths(cwd)
-        if not paths["tasks_exists"]:
-            return
-        try:
-            register_if_needed(paths)  # list the project on the dashboard (one read of the registry when it is)
-        except Exception:
-            pass
-        renew_due_claims(open_project(cwd, agent))
+        project = hook_project(cwd, agent)  # also lists the project on the dashboard
+        if project is not None:
+            renew_due_claims(project)
     except Exception:  # a hook must never break the tool call it follows
         return
 

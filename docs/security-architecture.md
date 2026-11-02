@@ -73,7 +73,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), the project files, `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `served_file` and `find_paths`; filters are query parameters, compared, never run or used as paths, T-364) and `whoami` | `serve.test.mjs` "only the four files…", "api/search", "api/v1/projects/<id>/tasks" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks" |
 | I12 | **Only the registered projects' task files are served**, regular files only, never through a symlink | `serve.test.mjs` (the four files; the symlink test) |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts` |
 
@@ -313,9 +313,9 @@ nothing; the commit's message is read only to say when it doesn't mention the ta
 
 **The Projects Overview reads every project's files (T-328, T-329, T-333, T-355).** Its Activity, Progress and
 Agents views fetch each listed project's `tasks.json`, `claims.json` and `tasks-archive.json` from the routes a
-project's own page already uses (`p/<id>/…`, `docs/multi-project-api.md`): no new route, nothing written, and the
-tasks' text is shown as text (Svelte escapes it, I15). The new `#overview&view=…` parameters choose a tab, as
-`#view=` does; they are kept in the browser and never sent.
+project's own page already uses (`docs/multi-project-api.md`; since T-374 the v1 route and `p/<id>/claims.json`):
+no new route, nothing written, and the tasks' text is shown as text (Svelte escapes it, I15). The new
+`#overview&view=…` parameters choose a tab, as `#view=` does; they are kept in the browser and never sent.
 
 **Release 0.26.0 (T-344).** Its agent-facing changes: `/atm:plan-sprint` (sprints left with open tasks, deleting a
 sprint) and atm's output for them, reviewed above (T-330, T-339); `atm commit --record` (above); and output that
