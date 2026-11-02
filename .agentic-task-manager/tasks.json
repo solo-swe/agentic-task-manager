@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 350,
+    "next_id": 351,
     "labels": [
       {
         "id": "architecture",
@@ -13769,7 +13769,7 @@
       "description": "Hakan finds the social preview (logo, name, one line) too simple. The card GitHub shows when the repository is linked should say what atm is at a glance.\n\n## Content (1280×640)\n- The logo and the name, *Agentic Task Manager*, with a short line on what it does (task management for Claude Code agents, with a live dashboard).\n- **A hint of the dashboard**: a real, recognisable piece of it (e.g. a Kanban with cards, the progress ring, an agent at work), not a mock-up drawn by hand. Render it from the built dashboard (`plugin/templates/tasks-dashboard.html`) with a fixture, the way the e2e tests do, so it stays true to the product and updates when the dashboard changes; crop or scale it into the card.\n- **How to install**: the two commands (`/plugin marketplace add solo-swe/agentic-task-manager`, `/plugin install atm@solo-swe-plugins`), readable at the card's size.\n- The dark theme, the accent blue; text large enough to read in a link preview.\n\n## Made by the script\n`npm run branding` (`branding/generate.mjs`, previous task) renders it: no hand-made image. Document its inputs (the fixture, the theme) in `branding/README.md`.\n\n## Review with Hakan\nTwo or three layouts first, shown to him (rendered PNGs) before settling one; put the task in review (`atm review`) before showing them. After he approves, Hakan uploads the PNG in Settings → General → Social preview.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "T-278"
       ],
@@ -13779,7 +13779,7 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-02T08:34:20Z",
+      "updated_at": "2026-11-02T08:36:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13799,7 +13799,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T08:34:20Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "71ecab5193d337afae80d99048d1c52aa926be79",
+      "review_requested_at": "2026-11-02T08:36:41Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-02T08:36:41Z",
+          "kind": "review",
+          "text": "Three layouts of the social preview, rendered from the built dashboard on a demo project (`branding/demo-tasks.json`): A words left / dashboard right, B title band / dashboard / install line, C dashboard faded behind centred words. Pick one; then it becomes `branding/social-preview.png`.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-280",
@@ -17367,7 +17378,8 @@
         "T-346",
         "T-347",
         "T-348",
-        "T-349"
+        "T-349",
+        "T-350"
       ],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -17377,7 +17389,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T07:50:54Z",
+      "updated_at": "2026-11-02T08:39:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17657,6 +17669,42 @@
           "by": "claude:b7be7288"
         }
       ]
+    },
+    {
+      "id": "T-350",
+      "name": "Activity popup: correct values per hour, day and week, and its hover inside the pane",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "activity"
+      ],
+      "description": "The Activity popup (a project's title bar, and the overview's, T-328) has UI issues, found by Hakan:\n\n- **Wrong values per period:** with *Hour*, *Day* or *Week* (and ‹ › to step back), the charts show values that don't match the period: completions, who was working, time per task. Find which (the buckets, the period window, the archive not loaded for an older period, the overview's project split) and fix it.\n- **The hover tooltip runs outside the pane:** its list of tasks goes past the popup's edge (and now the popup scrolls inside, T-328). Keep it inside: cap the list (\"+ N more\") and place it where it fits.\n\nReproduce both with Hakan on the dev server first.\n\n## Tests\nThe gaps that let these through: unit tests for `activitySeries` per preset and offset (the buckets' start, end and counts against a fixture with known times) in `insights.test.ts`; an e2e that steps through Hour, Day and Week and checks the charts' totals and the period label, and one that hovers a busy bucket and checks the tooltip stays inside `#activity-panel` (`widgets.spec.ts`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/insights.ts",
+        "dashboard/src/components/ActivityWidget.svelte",
+        "dashboard/src/components/ActivityDeepDive.svelte",
+        "dashboard/tests/unit/insights.test.ts",
+        "dashboard/tests/e2e/widgets.spec.ts"
+      ],
+      "created_at": "2026-11-02T08:39:41Z",
+      "updated_at": "2026-11-02T08:39:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T08:39:41Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user"
     }
   ]
 }
