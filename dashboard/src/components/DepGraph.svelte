@@ -5,7 +5,10 @@
     anyNodeVisible,
     autoFitView,
     clampView,
+    fitBox,
     fitView,
+    interpolateView,
+    nodesBox,
     isFullyVisible,
     panToContent,
     toViewBox,
@@ -21,6 +24,9 @@
   const DRAG_THRESHOLD = 4;
   const KEY_PAN = 60;
   const ZOOM_STEP = 1.25;
+  /** Room around the matching tasks when fitting them, in content units */
+  const MATCH_MARGIN = 20;
+  const ANIMATION_MS = 280;
 
   // "Dim": lay out every task and grey out the ones the search and filters exclude, so the shape stays put
   const dim = $derived(dashboard.graphFiltered === 'dim');
@@ -61,51 +67,123 @@
   let vw = $state(0);
   let vh = $state(0);
   const viewport = $derived({ w: vw, h: vh });
+  // `view` is where the graph goes; `shownView` is what is drawn, animated there for fits, zoom buttons and filter
+  // changes (T-341), at once for dragging, the wheel, resizing and with reduced motion. A few lines of
+  // requestAnimationFrame rather than svelte/motion's Tween: the shipped file has a size budget.
   let view = $state<View>({ k: 1, x: 0, y: 0 });
+  let shownView = $state<View>({ k: 1, x: 0, y: 0 });
+  let animateNext = false;
+  let frame = 0;
+  const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** Draw `target` at once, stopping any animation */
+  function jump(target: View) {
+    cancelAnimationFrame(frame);
+    shownView = target;
+  }
+  $effect(() => {
+    const target = view;
+    const animate = untrack(() => animateNext && !reducedMotion());
+    animateNext = false;
+    if (!animate) return jump(target);
+    cancelAnimationFrame(frame);
+    const at = interpolateView(
+      untrack(() => shownView),
+      target,
+      untrack(() => viewport),
+    );
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / ANIMATION_MS);
+      shownView = at(1 - (1 - t) ** 3); // ease out (cubic)
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  });
+  /** Move the view, animated */
+  function animateTo(v: View) {
+    animateNext = true;
+    view = v;
+  }
   const active = $derived(dashboard.loaded && !empty && vw > 0 && vh > 0);
 
-  // Only the first layout is fitted automatically (FR-6.3). While the view is still that automatic fit, resizing
-  // or expanding the panel re-fits it. Once the user pans/zooms or the visible tasks change (filters, reloads), the
-  // zoom level is kept; the view only pans when no task would be left on screen (FR-6.4).
   const nodeSize = { w: NODE_W, h: NODE_H };
+  // The tasks the search and filters leave in (in "Dim", the others are laid out too, greyed out)
+  const matchBox = $derived(
+    nodesBox(
+      layout.nodes.filter((n) => matching.has(n.task.id)),
+      nodeSize,
+      MATCH_MARGIN,
+    ),
+  );
+  // Fitting the matches differs from fitting everything only when greyed-out tasks are laid out too
+  const canFitMatches = $derived(dim && narrowed && matchBox !== null);
+  const matchesView = () => (matchBox ? fitBox(matchBox, viewport) : fitView(content, viewport));
+  // What auto-fit keeps fitted: the last fit button pressed ("All" in Hide mode is the matches anyway)
+  const targetView = () =>
+    dashboard.graphFitTarget === 'all' || !canFitMatches ? fitView(content, viewport) : matchesView();
+
+  // Auto-fit on (T-341, the default): every change of the matching tasks, the data, the mode or the panel's size
+  // fits the target again (the last fit button pressed, saved with the view); panning or zooming turns it off. Off,
+  // only the first layout is fitted automatically (FR-6.3); while the view is still that automatic fit, resizing
+  // re-fits it. Once the user pans/zooms or the visible tasks change, the zoom level is kept; the view only pans
+  // when no task would be left on screen (FR-6.4).
   let fitted = false;
-  let autoFit = true;
+  let untouched = true;
   let shownKey = '';
+  let lastSize = '';
 
   $effect(() => {
     const key = dashboard.filtered.map((t) => t.id).join(',');
+    const auto = dashboard.graphAutoFit;
     if (!active) return;
     const current = untrack(() => view);
-    if (!fitted) {
+    // Animated, except the first view and while the panel is being resized
+    const size = `${vw}x${vh}`;
+    animateNext = fitted && size === lastSize;
+    lastSize = size;
+    if (auto) {
+      view = targetView();
+    } else if (!fitted) {
       // A saved position (FR-5.7) is used if some task is still on screen there; otherwise the automatic view
       const saved = dashboard.graphView ? clampView(dashboard.graphView, content, viewport) : null;
       if (saved && anyNodeVisible(saved, layout.nodes, nodeSize, viewport)) {
         view = saved;
-        autoFit = false;
+        untouched = false;
       } else {
         view = autoFitView(content, viewport, focus);
       }
-      fitted = true;
     } else if (key !== shownKey) {
-      autoFit = false;
+      untouched = false;
       view = anyNodeVisible(current, layout.nodes, nodeSize, viewport)
         ? clampView(current, content, viewport)
         : panToContent(current, content, viewport, focus);
     } else {
-      view = autoFit ? autoFitView(content, viewport, focus) : clampView(current, content, viewport);
+      view = untouched ? autoFitView(content, viewport, focus) : clampView(current, content, viewport);
     }
+    fitted = true;
     shownKey = key;
   });
 
-  function setView(v: View) {
+  /** The user moved the view: auto-fit goes off. Animated for the zoom buttons and keys, not for dragging. */
+  function setView(v: View, animate = false) {
+    animateNext = animate;
     view = clampView(v, content, viewport);
-    autoFit = false;
+    untouched = false;
+    dashboard.graphAutoFit = false;
     dashboard.graphView = view; // saved with the project's view
   }
 
-  const zoomBy = (factor: number) => setView(zoomAt(view, view.k * factor, vw / 2, vh / 2));
-  const resetZoom = () => setView(zoomAt(view, 1, vw / 2, vh / 2));
-  const fitAll = () => setView(fitView(content, viewport));
+  const zoomBy = (factor: number) => setView(zoomAt(view, view.k * factor, vw / 2, vh / 2), true);
+  const resetZoom = () => setView(zoomAt(view, 1, vw / 2, vh / 2), true);
+  // The fit buttons leave auto-fit as it is; while it is on, they choose what it keeps fitted
+  const fitTo = (target: 'all' | 'matches') => {
+    dashboard.graphFitTarget = target;
+    animateTo(clampView(targetView(), content, viewport));
+    dashboard.graphView = view;
+  };
+  const fitAll = () => fitTo('all');
+  const fitMatches = () => fitTo('matches');
 
   // Drag to pan. Pointer capture starts only after a real drag, so plain clicks still open task details.
   let drag: { sx: number; sy: number; x: number; y: number; id: number; moved: boolean } | null = null;
@@ -114,6 +192,7 @@
 
   function onPointerDown(e: PointerEvent) {
     if (e.button !== 0 || !active) return;
+    jump(view); // a drag starts where the graph is going, not mid-animation
     drag = { sx: e.clientX, sy: e.clientY, x: view.x, y: view.y, id: e.pointerId, moved: false };
   }
 
@@ -167,7 +246,8 @@
       '-': () => zoomBy(1 / ZOOM_STEP),
       '0': resetZoom,
       f: fitAll,
-      F: fitAll,
+      // Shift+F: the matches, where they differ from everything
+      F: () => (canFitMatches ? fitMatches() : fitAll()),
       ArrowLeft: () => setView({ ...view, x: view.x + KEY_PAN }),
       ArrowRight: () => setView({ ...view, x: view.x - KEY_PAN }),
       ArrowUp: () => setView({ ...view, y: view.y + KEY_PAN }),
@@ -197,7 +277,7 @@
     class="dep-graph"
     class:panning
     role="presentation"
-    viewBox={active ? toViewBox(view, viewport) : undefined}
+    viewBox={active ? toViewBox(shownView, viewport) : undefined}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={endDrag}
@@ -272,12 +352,25 @@
     {/if}
   </svg>
   {#if dashboard.loaded && !empty}
-    <GraphControls k={view.k} onzoom={zoomBy} onfit={fitAll} onreset={resetZoom} {narrowed} />
+    <GraphControls
+      k={view.k}
+      onzoom={zoomBy}
+      onfit={fitAll}
+      onfitmatches={canFitMatches ? fitMatches : undefined}
+      fitted={dashboard.graphAutoFit
+        ? dashboard.graphFitTarget === 'all' || !canFitMatches
+          ? 'all'
+          : 'matches'
+        : null}
+      onreset={resetZoom}
+      {narrowed}
+    />
+    <!-- The zoom label (above) and whether the minimap shows follow where the view goes; its frame, the view drawn -->
     <Minimap
       nodes={layout.nodes}
       {nodeSize}
       {content}
-      {view}
+      view={shownView}
       {viewport}
       hidden={!active || isFullyVisible(view, content, viewport)}
       oncenter={(x, y) => setView({ k: view.k, x: vw / 2 - x * view.k, y: vh / 2 - y * view.k })}

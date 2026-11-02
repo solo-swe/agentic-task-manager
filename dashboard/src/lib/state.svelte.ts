@@ -198,6 +198,10 @@ export class DashboardState {
   graphFiltered = $state<'hide' | 'dim'>('hide');
   /** The graph greys out done tasks, whatever the filters (part of the saved view) */
   graphDimDone = $state(false);
+  /** The graph keeps the matching tasks fitted; panning or zooming turns it off (part of the saved view) */
+  graphAutoFit = $state(true);
+  /** What auto-fit keeps fitted, set by the fit buttons (part of the saved view) */
+  graphFitTarget = $state<'all' | 'matches'>('matches');
   /** The graph's zoom and position once the user moved it; null while it is the automatic view */
   graphView = $state.raw<{ k: number; x: number; y: number } | null>(null);
   /** The Agents tab's zoomed time range; null shows everything */
@@ -574,6 +578,8 @@ export class DashboardState {
       progressRange: this.progressRange,
       graphFiltered: this.graphFiltered,
       graphDimDone: this.graphDimDone,
+      graphAutoFit: this.graphAutoFit,
+      graphFitTarget: this.graphFitTarget,
       graph: this.graphView,
       agents: this.agentsWindow,
       agentsLive: this.agentsLive,
@@ -638,6 +644,8 @@ export class DashboardState {
     this.progressRange = view.progressRange;
     this.graphFiltered = view.graphFiltered;
     this.graphDimDone = view.graphDimDone;
+    this.graphAutoFit = view.graphAutoFit;
+    this.graphFitTarget = view.graphFitTarget;
     this.graphView = view.graph;
     this.agentsWindow = view.agents;
     this.agentsLive = view.agentsLive;

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 339,
+    "next_id": 343,
     "labels": [
       {
         "id": "architecture",
@@ -16897,6 +16897,165 @@
         }
       ],
       "sprint": "Overview and polish"
+    },
+    {
+      "id": "T-339",
+      "name": "atm sprints delete: remove a sprint created by mistake",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sprints"
+      ],
+      "description": "Sprints are sometimes created by mistake and then stay around as garbage, even after they are closed. Add a `delete` action to `atm sprints` that removes a sprint from `meta.sprints`.\n\n## Command\n`atm sprints delete <name> [--move-to <sprint>|backlog] [--force]` in `atm-cli/atm/sprints.py` and `atm-cli/atm/cli.py`. Names match regardless of case, as elsewhere.\n\n## Rules\n- **Empty sprint** (no task is in it now and no task's `sprint_history` mentions it): deleted straight away, whatever its state, **including a closed one** (earlier trash).\n- **Planned or active sprint with tasks**: the tasks move to the backlog (default) or to the sprint named by `--move-to`, and the output says how many moved. A sprint that tasks were once in (`sprint_history`) needs `--force`.\n- **Closed sprint that ever had tasks**: refused (its history and report stay), and the error explains why.\n- An unknown name is an error that lists the sprints.\n\n## Merging\nCheck how `atm-cli/atm/merge.py` merges `meta.sprints` item by item: a sprint deleted on one branch must stay deleted when the other branch did not touch it. Fix it if needed (same approach as deleted tasks).\n\n## Tests\n- A scenario file `tests/scripts/scenarios/sprints-delete.json`: deleting an empty planned sprint and an empty closed one; a refused closed sprint with history; tasks moved to the backlog and to another sprint; `--force`; an unknown name; a name with different case.\n- A git-merge test in a `*.test.mjs` file (with `helpers.mjs`) if `merge.py` changes.\n\n## Docs\n- `docs/security-architecture.md`: the new CLI command.\n- Mention `atm sprints delete` in `plugin/skills/plan-sprint/SKILL.md` (and `close-sprint` if it fits).\n- Entries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.\n\nThe dashboard is out of scope here.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/sprints.py",
+        "atm-cli/atm/cli.py",
+        "atm-cli/atm/merge.py",
+        "tests/scripts/scenarios/sprints-delete.json",
+        "docs/security-architecture.md",
+        "plugin/skills/plan-sprint/SKILL.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T09:50:16Z",
+      "updated_at": "2026-11-01T09:59:42Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:50:16Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-340",
+      "name": "All Projects Board: show only the active sprints by default",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "sprints"
+      ],
+      "description": "The All Projects Board (`dashboard/src/components/AllProjectsBoard.svelte`, `dashboard/src/lib/allboard.ts`) shows, per project, the ready tasks of the loop's selection, everything in progress, in review and blocked, and what was finished in the last 24 hours, whatever sprint those tasks are in. Make **Active sprints** the default: every column shows only tasks in the project's active sprint. Today's rules stay available as an option (e.g. a toggle *Active sprints* / *All tasks* in the board's toolbar), remembered like the board's other view settings.\n\n## Server\nCounts and caps are computed per project by `board()` in `atm-cli/atm/query.py`, so filtering the capped cards in the browser would make the totals and \"+ N more\" wrong. Have the board summary carry the active-sprint view as well (the same five columns limited to tasks whose `sprint` is the project's active sprint, with their own counts), or another way that keeps counts right; document the shape in `docs/multi-project-api.md`.\n\n## Rules\n- A project with no active sprint shows nothing in the Active sprints view; the board says so (e.g. in its lane or as a note: \"N projects have no active sprint\"), so the board isn't mysteriously empty.\n- Search, grouping by project and the \"N of M\" totals work in both views.\n\n## Tests\n- atm-cli: a scenario in `tests/scripts/scenarios/` for the board summary's active-sprint columns (tasks in the active sprint, in a planned sprint, in the backlog; a project without an active sprint).\n- Unit tests in `dashboard/tests/unit/allboard.test.ts` for both views.\n- An e2e spec for the toggle and its default; update the visual baselines if the toolbar changes.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "dashboard/src/lib/allboard.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "dashboard/tests/unit/allboard.test.ts",
+        "docs/multi-project-api.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T09:59:28Z",
+      "updated_at": "2026-11-01T09:59:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:59:28Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-341",
+      "name": "Dependency Graph: a more usable fit (auto-fit toggle, fit all vs the filtered tasks)",
+      "type": "polish",
+      "priority": "P1",
+      "labels": [
+        "interactive",
+        "ux"
+      ],
+      "description": "A live session with the user on the dev server (`npm run dev` in `dashboard/`): small changes that make the Dependency Graph tab easier to use, decided as we go.\n\n## Starting points\n- **Auto-fit toggle:** today only the first layout is fitted automatically (`DepGraph.svelte`, `autoFit`); once the filters or the data change, the view stays where it was. A toggle in `GraphControls.svelte` that keeps the graph fitted while it is on (filters, reloads, resizes), and switches off when the user pans or zooms.\n- **Fit everything vs the filtered tasks:** with filters or a search in *Dim* mode, \"Fit everything\" (F) fits all tasks; offer fitting only the tasks that match (e.g. a second button or the fit following the filters), keeping a way to fit everything.\n- Whatever else comes up in the session, kept small.\n\n## Tests\nUnit tests for the view logic in `dashboard/src/lib/` (fit to a subset of nodes), and e2e checks for the new controls; update the visual baselines if the controls change.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/DepGraph.svelte",
+        "dashboard/src/components/GraphControls.svelte",
+        "dashboard/src/lib/state.svelte.ts",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T22:36:01Z",
+      "updated_at": "2026-11-02T01:30:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T22:36:01Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "with": "user",
+      "components": [
+        "dashboard"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-02T00:24:07Z",
+          "kind": "failure",
+          "text": "lease expired (claude:b7be7288)"
+        },
+        {
+          "at": "2026-11-02T01:30:09Z",
+          "kind": "failure",
+          "text": "lease expired (claude:b7be7288)"
+        }
+      ],
+      "started_at": "2026-11-02T01:30:09Z",
+      "started_by": "claude:b7be7288"
+    },
+    {
+      "id": "T-342",
+      "name": "Dashboard: embed only the recent changelog releases",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "ux"
+      ],
+      "description": "The dashboard embeds the whole `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` (`dashboard/build/changelog.ts`, `dashboard/vite.config.ts`), so the shipped single-file page grows by a few KB with every release; in 0.26.0 the size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`) had to go from 500 to 525 KiB (T-341).\n\n## Change\n- Find every place the embedded changelog and What's new are shown (What's new, About, the update notice, …) and how far back each one needs to go.\n- Embed only what they need (e.g. the last few releases), with a link to the full `CHANGELOG.md` on the repository for the rest.\n- Measure the saving and lower `MAX_BYTES` in the guardrail back accordingly, updating its comment.\n\n## Tests\nUpdate the unit tests that read the embedded changelog (`tests/unit/changelog.test.ts`, `tests/unit/release-notes.test.ts`) and the e2e specs of the views that show it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/build/changelog.ts",
+        "dashboard/vite.config.ts",
+        "dashboard/tests/e2e/guardrails.spec.ts"
+      ],
+      "created_at": "2026-11-02T01:29:52Z",
+      "updated_at": "2026-11-02T01:29:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }

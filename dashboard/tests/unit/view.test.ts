@@ -4,8 +4,11 @@ import {
   AUTO_FIT_MIN_K,
   autoFitView,
   clampView,
+  fitBox,
   fitView,
+  interpolateView,
   isFullyVisible,
+  nodesBox,
   MAX_K,
   MIN_K,
   panToContent,
@@ -37,6 +40,57 @@ describe('fitView', () => {
 
   it('clamps to the global zoom range', () => {
     expect(fitView({ w: 1e6, h: 10 }, viewport).k).toBe(MIN_K);
+  });
+});
+
+describe('fitBox (T-341)', () => {
+  it('fits and centers one part of the content', () => {
+    // A 400×200 box at (1000, 300): 100%, its center on the viewport's center
+    expect(fitBox({ x: 1000, y: 300, w: 400, h: 200 }, viewport)).toEqual({ k: 1, x: -700, y: -150 });
+  });
+
+  it('shrinks a large box like fitView, offset by its position', () => {
+    const v = fitBox({ x: 100, y: 0, w: 1904, h: 200 }, viewport);
+    expect(v.k).toBeCloseTo(0.5);
+    expect(v.x).toBeCloseTo(24 - 100 * v.k);
+  });
+});
+
+describe('nodesBox (T-341)', () => {
+  const size = { w: 100, h: 40 };
+
+  it('is the smallest box around the nodes, with the margin around it', () => {
+    const nodes = [
+      { x: 50, y: 10 },
+      { x: 300, y: 200 },
+      { x: 120, y: 90 },
+    ];
+    expect(nodesBox(nodes, size)).toEqual({ x: 50, y: 10, w: 350, h: 230 });
+    expect(nodesBox(nodes, size, 20)).toEqual({ x: 30, y: -10, w: 390, h: 270 });
+  });
+
+  it('is null without nodes', () => {
+    expect(nodesBox([], size)).toBeNull();
+  });
+});
+
+describe('interpolateView (T-341)', () => {
+  const a: View = { k: 1, x: 0, y: 0 };
+  const b: View = { k: 0.25, x: 400, y: 100 };
+  const center = (v: View) => ({ x: (viewport.w / 2 - v.x) / v.k, y: (viewport.h / 2 - v.y) / v.k });
+
+  it('starts at a and ends at b', () => {
+    const at = interpolateView(a, b, viewport);
+    expect(at(0)).toEqual(a);
+    expect(at(1)).toEqual(b);
+  });
+
+  it('zooms geometrically and moves the centered content point in a straight line', () => {
+    const mid = interpolateView(a, b, viewport)(0.5);
+    expect(mid.k).toBeCloseTo(0.5);
+    const [ca, cb, cm] = [center(a), center(b), center(mid)];
+    expect(cm.x).toBeCloseTo((ca.x + cb.x) / 2);
+    expect(cm.y).toBeCloseTo((ca.y + cb.y) / 2);
   });
 });
 

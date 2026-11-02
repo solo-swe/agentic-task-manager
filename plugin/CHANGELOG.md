@@ -4,6 +4,22 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.26.0] - 2026-11-01
+
+### Added
+- **Graph auto-fit** (T-341): *Auto* (`#graph-auto-fit`, on by default, saved as `graphAutoFit`) refits the graph
+  when the filters, data, Hide/Dim or panel size change; panning or zooming turns it off.
+- **Fit All or Matches** (T-341): `#graph-fit-all` (F) and `#graph-fit-matches` (Shift+F, without the greyed-out
+  tasks; disabled when the same). The last one pressed is what auto-fit fits (`graphFitTarget`). `fitBox`, `nodesBox`.
+- **Animated fits** (T-341): fits, zoom buttons and filter changes glide (280 ms, `interpolateView`); not with
+  reduced motion.
+
+### Changed
+- **Graph toolbar** (T-341, `.graph-toolbar`): grouped, with segmented switches and a compact zoom; under 920 px the
+  hint hides and the toolbar wraps. e2e runs with `reducedMotion: 'reduce'`; `openDashboard(…, { graphAutoFit:
+  false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 will
+  embed only recent changelog releases).
+
 ## [0.25.0] - 2026-11-01
 
 ### Fixed

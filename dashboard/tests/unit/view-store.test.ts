@@ -55,6 +55,8 @@ describe('reading and writing', () => {
       progressRange: '14d',
       graphFiltered: 'dim',
       graphDimDone: true,
+      graphAutoFit: false,
+      graphFitTarget: 'all',
       graph: { k: 1.5, x: -120, y: 40 },
       agents: { start: 1000, end: 61_000, followEnd: true },
       agentsLive: true,
@@ -62,6 +64,16 @@ describe('reading and writing', () => {
     };
     writeView(key, view);
     expect(readView(key)).toEqual(view);
+  });
+
+  it('the graph auto-fits the matches by default; a view saved before T-341 auto-fits unless the graph was moved', () => {
+    expect([readView(key).graphAutoFit, readView(key).graphFitTarget]).toEqual([true, 'matches']);
+    localStorage.setItem(key, JSON.stringify({ graph: { k: 1, x: 5, y: 5 }, graphFitTarget: 'bogus' }));
+    expect([readView(key).graphAutoFit, readView(key).graphFitTarget]).toEqual([false, 'matches']);
+    localStorage.setItem(key, JSON.stringify({ graph: { k: 1, x: 5, y: 5 }, graphAutoFit: true }));
+    expect(readView(key).graphAutoFit).toBe(true);
+    localStorage.setItem(key, JSON.stringify({ graph: null }));
+    expect(readView(key).graphAutoFit).toBe(true);
   });
 
   it('an old view\'s "Active phases only" is dropped quietly; the burndown range defaults to the sprint (T-240, T-243)', () => {

@@ -2,6 +2,13 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.26.0] - 2026-11-01
+
+- The dependency graph keeps itself fitted as you filter, so the tasks you're looking at stay in view.
+- Fit the whole graph or only the tasks that match your filters.
+- The graph glides smoothly to its new view instead of jumping.
+- A tidier graph toolbar, with a compact zoom control.
+
 ## [0.25.0] - 2026-11-01
 
 - The board opens on the active sprint, with its goal, due date and progress, and hints for what to do next.

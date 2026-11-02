@@ -41,6 +41,10 @@ export interface SavedView {
   graphFiltered: 'hide' | 'dim';
   /** The graph greys out done tasks, whatever the filters */
   graphDimDone: boolean;
+  /** The graph keeps the matching tasks fitted as the filters, the data or the panel's size change (T-341) */
+  graphAutoFit: boolean;
+  /** What auto-fit keeps fitted: everything laid out, or only the matching tasks (the last fit button pressed) */
+  graphFitTarget: 'all' | 'matches';
   /** The dependency graph's zoom and position, or null for the automatic initial view (FR-5.7) */
   graph: { k: number; x: number; y: number } | null;
   /** The Agents tab's zoomed time range, or null to show everything */
@@ -83,6 +87,8 @@ export function defaultView(): SavedView {
     progressRange: 'sprint',
     graphFiltered: 'hide',
     graphDimDone: false,
+    graphAutoFit: true,
+    graphFitTarget: 'matches',
     graph: null,
     agents: null,
     agentsLive: false,
@@ -168,6 +174,9 @@ export function readView(key: string): SavedView {
           : view.progressRange,
     graphFiltered: stored.graphFiltered === 'dim' ? 'dim' : 'hide',
     graphDimDone: stored.graphDimDone === true,
+    // Views saved before T-341 have no auto-fit: on, unless the user had moved the graph
+    graphAutoFit: typeof stored.graphAutoFit === 'boolean' ? stored.graphAutoFit : graphView(stored.graph) === null,
+    graphFitTarget: stored.graphFitTarget === 'all' ? 'all' : 'matches',
     graph: graphView(stored.graph),
     agents: agentsWindow(stored.agents),
     agentsLive: stored.agentsLive === true,

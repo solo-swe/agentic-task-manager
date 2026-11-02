@@ -22,6 +22,9 @@ export default defineConfig({
     viewport: { width: 1280, height: 900 },
     // The dashboard follows the OS color scheme; tests run in dark (the original look) unless they switch it
     colorScheme: 'dark',
+    // The graph animates its fits (T-341) unless the OS asks for reduced motion: tests read the view at once
+    // (graph-zoom.spec.ts turns motion on to test the animation)
+    reducedMotion: 'reduce',
     // Dates are rendered with toLocale*String: pin them so text and screenshots are stable
     locale: 'en-US',
     timezoneId: 'UTC',
