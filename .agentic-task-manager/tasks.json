@@ -17301,13 +17301,13 @@
       "description": "The Projects Overview's tabs (Projects | Omniboard) sit on a plain line, while a project's view tabs (Kanban Board, Task List, …) have a bordered, filled tab joined to the view's panel. Make them look the same.\n\nLive with the user on the dev server:\n1. Try the overview's simpler look on a project's tabs.\n2. Then the other way around: the project's look on the overview's tabs.\n3. The user picks one; keep whole-pixel heights (the footer test).\n\nScreenshot baselines are left for T-345.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-02T05:50:04Z",
-      "updated_at": "2026-11-02T05:50:05Z",
+      "updated_at": "2026-11-02T05:53:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17322,7 +17322,18 @@
       ],
       "with": "user",
       "started_at": "2026-11-02T05:50:05Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "19b9313b0021f7e2036e4dbb2f3307d01165a9f0",
+      "completed_at": "2026-11-02T05:53:42Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T05:53:42Z",
+          "kind": "outcome",
+          "text": "A project’s tabs now look like the overview’s: on a line, no framed panel; one `.view-tabs` rule for both. Baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
