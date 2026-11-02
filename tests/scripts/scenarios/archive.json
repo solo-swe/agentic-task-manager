@@ -1,5 +1,54 @@
 [
   {
+    "name": "archive --dry-run --json: what would move, and what stays with why (T-352)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "One" }, { "id": "Two" }] },
+          "tasks": [
+            { "id": "T-001", "status": "done", "sprint": "One", "completed_at": "2026-04-01T00:00:00Z" },
+            { "id": "T-002", "status": "done", "sprint": "Two", "completed_at": "2026-04-01T00:00:00Z" },
+            { "id": "T-003", "status": "done", "sprint": "One", "completed_at": "2026-04-30T00:00:00Z" },
+            { "id": "T-004", "status": "todo", "sprint": "One" }
+          ]
+        }
+      }
+    },
+    "args": ["archive", "--dry-run", "--sprint", "One", "--json"],
+    "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
+    "expect": {
+      "json": {
+        "moved": ["T-001"],
+        "dry_run": true,
+        "tasks_kb": 0,
+        "archive_kb": 0,
+        "duplicates_dropped": [],
+        "kept": [
+          { "id": "T-002", "reason": "not in the sprints chosen" },
+          { "id": "T-003", "reason": "finished in the last 14 days" }
+        ]
+      }
+    }
+  },
+  {
+    "name": "archive --before: a task finished later stays, saying so (T-352)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-001", "status": "done", "completed_at": "2026-03-01T00:00:00Z" },
+            { "id": "T-002", "status": "done", "completed_at": "2026-04-01T00:00:00Z" }
+          ]
+        }
+      }
+    },
+    "args": ["archive", "--dry-run", "--before", "2026-03-15"],
+    "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
+    "expect": {
+      "stdout": "Would archive 1 task(s): T-001.\nWould keep 1 finished: T-002 (finished on or after 2026-03-15).\n"
+    }
+  },
+  {
     "name": "archive moves finished tasks out of tasks.json; recent ones and open PRs stay; next_id is kept",
     "setup": {
       "files": {
@@ -22,7 +71,10 @@
     "args": ["archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
-      "stdoutIncludes": ["Archived 2 task(s): T-001, T-002. tasks.json is now"],
+      "stdoutIncludes": [
+        "Archived 2 task(s): T-001, T-002. tasks.json is now",
+        "Kept 2 finished: T-003 (finished in the last 14 days); T-004 (in open PR #7)."
+      ],
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
@@ -84,7 +136,17 @@
     "args": ["archive", "--before", "2026-04-01", "--keep-days", "0", "--json"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
-      "json": { "moved": ["T-1"], "dry_run": false, "tasks_kb": 0, "archive_kb": 0, "duplicates_dropped": [] }
+      "json": {
+        "moved": ["T-1"],
+        "dry_run": false,
+        "tasks_kb": 0,
+        "archive_kb": 0,
+        "duplicates_dropped": [],
+        "kept": [
+          { "id": "T-2", "reason": "finished on or after 2026-04-01" },
+          { "id": "T-3", "reason": "finished on or after 2026-04-01" }
+        ]
+      }
     }
   },
   {

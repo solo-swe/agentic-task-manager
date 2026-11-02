@@ -7,12 +7,23 @@ no task is ever lost.
 """
 
 import os
+from datetime import timedelta
 
-from .core import AtmError, now_iso, out, parse_iso, to_json, write_json_atomic
+from .core import AtmError, now, now_iso, out, parse_iso, to_json, write_json_atomic
 from .edit import next_number
 from .lock import locked
 from .merge import ensure_archive_merge
-from .model import archivable, archive_path, find_sprint, load_archive, load_tasks, vocabulary
+from .model import (
+    archivable,
+    archive_path,
+    archive_settings,
+    find_sprint,
+    finished_at,
+    kind_of,
+    load_archive,
+    load_tasks,
+    vocabulary,
+)
 from .paths import find_paths
 
 
@@ -32,6 +43,42 @@ def describe_ids(ids, limit=12):
     return ", ".join(ids[:limit]) + (f" and {len(ids) - limit} more" if len(ids) > limit else "")
 
 
+def kept_finished(data, moving, before, keep, sprints):
+    """The finished tasks that stay in tasks.json, and why (T-352), as archivable() decides: in an open PR, finished
+    in the last keep days, not before --before, not in the --sprint chosen. [{id, reason}], in file order."""
+    vocab = vocabulary(data)
+    days = archive_settings(data)["keep_days"] if keep is None else keep
+    recent = now() - timedelta(days=days)
+    moved = {t.get("id") for t in moving}
+    kept = []
+    for t in data["tasks"]:
+        if not isinstance(t, dict) or t.get("id") in moved:
+            continue
+        if kind_of(vocab, t.get("status")) not in ("done", "skipped"):
+            continue
+        finished = finished_at(t)
+        if isinstance(t.get("pr"), dict) and not t.get("merged_at"):
+            reason = f"in open PR #{t['pr'].get('number')}"
+        elif finished is not None and finished > recent:
+            reason = f"finished in the last {days} days"
+        elif before is not None and (finished is None or finished >= before):
+            reason = f"finished on or after {before.date().isoformat()}"
+        elif sprints is not None:
+            reason = "not in the sprints chosen"
+        else:
+            continue
+        kept.append({"id": t.get("id"), "reason": reason})
+    return kept
+
+
+def describe_kept(kept):
+    """ "T-010 (in open PR #1); T-011, T-012 (finished in the last 14 days)": grouped by reason, in first-seen order"""
+    groups = {}
+    for k in kept:
+        groups.setdefault(k["reason"], []).append(k["id"])
+    return "; ".join(f"{describe_ids(ids)} ({reason})" for reason, ids in groups.items())
+
+
 def cmd_archive(args):
     before = None
     if args.before:
@@ -45,6 +92,7 @@ def cmd_archive(args):
         archive = load_archive(paths)
         dropped = drop_duplicates(data, archive)
         moving = archivable(data, before, args.keep_days)
+        names = None
         if args.sprint:
             vocab = vocabulary(data)
             names = set()
@@ -55,6 +103,7 @@ def cmd_archive(args):
                 names.add(sprint["id"])
             moving = [t for t in moving if (find_sprint(vocab, t.get("sprint")) or {}).get("id") in names]
         ids = [t.get("id") for t in moving]
+        kept = kept_finished(data, moving, before, args.keep_days, names)
         if not args.dry_run and (moving or dropped):
             # New IDs must never come back to an archived ID (DM-2.3)
             if not isinstance(data.get("meta"), dict):
@@ -75,6 +124,7 @@ def cmd_archive(args):
         "tasks_kb": size_kb(paths["tasks"]),
         "archive_kb": size_kb(archive_path(paths)),
         "duplicates_dropped": dropped,
+        "kept": kept,
     }
     if args.json:
         out(to_json(result))
@@ -90,6 +140,9 @@ def cmd_archive(args):
             f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
             f"tasks.json is now {result['tasks_kb']} KB, tasks-archive.json {result['archive_kb']} KB."
         )
+    # What stays, and why (T-352)
+    if kept:
+        out(f"{'Would keep' if args.dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}.")
 
 
 def cmd_unarchive(args):

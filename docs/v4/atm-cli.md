@@ -142,7 +142,7 @@ left on a task is kept but ignored.
 
 | Command | Does |
 |---|---|
-| `atm archive [--sprint S]... [--before DATE] [--keep-days N] [--dry-run]` | moves finished tasks to the archive (DM-5); prints what it moved and the new sizes |
+| `atm archive [--sprint S]... [--before DATE] [--keep-days N] [--dry-run]` | moves finished tasks to the archive (DM-5); prints what it moved and the new sizes, then the finished tasks it kept and why (in an open PR, recent, after `--before`, another sprint; T-352) |
 | `atm unarchive <id>...` | brings tasks back, for example to reopen one |
 
 ### 4.5 Git and workflow

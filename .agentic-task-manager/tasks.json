@@ -17829,16 +17829,16 @@
       "description": "Found in T-277: `atm archive --dry-run` lists only what would move. Also list the finished tasks that stay and why: in an open PR (`#N`), or finished in the last `keep_days` days. Text and `--json` (`kept: [{id, reason}]`); the real `atm archive` says it too, in one line.\n\n## Tests\nScenarios in `archive.json`: an open-PR task and a recent one kept, with their reasons.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/archive.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:47:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -17848,7 +17848,9 @@
       "sprint": "Overview and polish",
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-02T09:47:03Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-353",
@@ -17935,7 +17937,7 @@
         "dashboard/tests/unit/overview-data.test.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T09:45:35Z",
+      "updated_at": "2026-11-02T09:47:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17949,7 +17951,8 @@
         "dashboard"
       ],
       "started_at": "2026-11-02T09:45:35Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "7f5fb716e8a128fb0effca7d51b33fa4814040d6"
     }
   ]
 }

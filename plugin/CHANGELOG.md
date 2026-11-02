@@ -7,6 +7,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 ## [0.26.0] - 2026-11-01
 
 ### Added
+- **`atm archive` says what stays, and why** (T-352, found in T-277): after what moves (or would, with `--dry-run`),
+  a line on the finished tasks kept in `tasks.json`, grouped by reason: in an open PR, finished in the last
+  `keep_days` days, finished on or after `--before`, not in the `--sprint` chosen (`kept: [{id, reason}]` in
+  `--json`).
 - **`atm --dir PATH <command>`** (T-351, or `--dir=PATH`): runs any command on the project at PATH, as if started
   there (relative paths in the command count from PATH), without changing directory first; a missing folder is an
   error. `atm serve --dir` keeps its own meaning.
