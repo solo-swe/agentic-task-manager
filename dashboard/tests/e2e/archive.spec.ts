@@ -36,23 +36,28 @@ test.describe('archive', () => {
   }) => {
     tasksServer.archive('archive');
     await openDashboard(page, tasksServer, archivedProject(), { tab: 'list' });
+    const count = page.locator('#archived-count');
+    // The subtitle's count turns it on, and off again. Clicked first, before anything scrolls: scrolled down, the
+    // title bar collapses and hides the subtitle (a click there raced the collapse on CI)
+    await count.click();
+    await expect(page.locator('.task-card')).toHaveCount(15);
+    await expect(count).toHaveText('showing 3 archived');
+    await expect(count).toHaveAttribute('aria-pressed', 'true');
+    await openFilters(page);
+    await expect(page.locator('#include-archived')).toBeChecked();
+    await closeFilters(page);
+    await count.click();
+    await expect(page.locator('.task-card')).toHaveCount(12);
+    await expect(count).toHaveText('3 archived');
     // At the end of the List: how many are hidden, and a way to show them
     const note = page.locator('#list-archived-toggle');
     await expect(note).toHaveText('3 archived tasks hidden · show');
     await note.click();
     await expect(page.locator('.task-card')).toHaveCount(15);
     await expect(note).toHaveCount(0);
-    await expect(page.locator('#archived-count')).toHaveText('showing 3 archived');
-    await expect(page.locator('#archived-count')).toHaveAttribute('aria-pressed', 'true');
-    // The subtitle's count turns it off, and on again (at the top: scrolled down, the title bar hides the subtitle)
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await page.locator('#archived-count').click();
-    await expect(page.locator('.task-card')).toHaveCount(12);
-    await expect(page.locator('#archived-count')).toHaveText('3 archived');
-    await page.locator('#archived-count').click();
-    await expect(page.locator('.task-card')).toHaveCount(15);
-    await openFilters(page);
-    await expect(page.locator('#include-archived')).toBeChecked();
+    // Text and state only from here: the subtitle may be hidden now
+    await expect(count).toHaveText('showing 3 archived');
+    await expect(count).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('"Include archived" loads it: search, lists and the graph show archived tasks', async ({
