@@ -13769,7 +13769,7 @@
       "description": "Hakan finds the social preview (logo, name, one line) too simple. The card GitHub shows when the repository is linked should say what atm is at a glance.\n\n## Content (1280×640)\n- The logo and the name, *Agentic Task Manager*, with a short line on what it does (task management for Claude Code agents, with a live dashboard).\n- **A hint of the dashboard**: a real, recognisable piece of it (e.g. a Kanban with cards, the progress ring, an agent at work), not a mock-up drawn by hand. Render it from the built dashboard (`plugin/templates/tasks-dashboard.html`) with a fixture, the way the e2e tests do, so it stays true to the product and updates when the dashboard changes; crop or scale it into the card.\n- **How to install**: the two commands (`/plugin marketplace add solo-swe/agentic-task-manager`, `/plugin install atm@solo-swe-plugins`), readable at the card's size.\n- The dark theme, the accent blue; text large enough to read in a link preview.\n\n## Made by the script\n`npm run branding` (`branding/generate.mjs`, previous task) renders it: no hand-made image. Document its inputs (the fixture, the theme) in `branding/README.md`.\n\n## Review with Hakan\nTwo or three layouts first, shown to him (rendered PNGs) before settling one; put the task in review (`atm review`) before showing them. After he approves, Hakan uploads the PNG in Settings → General → Social preview.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "T-278"
       ],
@@ -13779,7 +13779,7 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-02T08:36:41Z",
+      "updated_at": "2026-11-02T08:50:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13800,17 +13800,30 @@
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T08:34:20Z",
       "started_by": "claude:b7be7288",
-      "commit": "71ecab5193d337afae80d99048d1c52aa926be79",
+      "commit": "db0ae476f60e2c1d1bcccc8e6d9d9c5e25f881c4",
       "review_requested_at": "2026-11-02T08:36:41Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-02T08:36:41Z",
           "kind": "review",
           "text": "Three layouts of the social preview, rendered from the built dashboard on a demo project (`branding/demo-tasks.json`): A words left / dashboard right, B title band / dashboard / install line, C dashboard faded behind centred words. Pick one; then it becomes `branding/social-preview.png`.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T08:50:51Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: layout A, tagline without Claude Code; `branding/social-preview-dark.png` and `-light.png` made by `npm run branding` from the built dashboard on a demo project; Hakan uploads one",
+          "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T08:36:41Z",
+          "to": "2026-11-02T08:50:51Z"
+        }
+      ],
+      "completed_at": "2026-11-02T08:50:51Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-280",
