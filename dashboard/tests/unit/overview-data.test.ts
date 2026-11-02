@@ -3,7 +3,6 @@ import type { Claim } from '../../src/lib/claims';
 import type { ProjectEntry } from '../../src/lib/load';
 import {
   combinedTimeline,
-  completionsByProject,
   loadProjectSources,
   mergedTasks,
   projectOfWorker,
@@ -132,30 +131,6 @@ describe('mergedTasks (T-328)', () => {
     ]);
     expect(tasks.map((t) => projectOfWorker(t.started_by!))).toEqual(['A', 'B']);
     expect(projectOfWorker('no separator')).toBe('no separator');
-  });
-
-  it('completionsByProject: done in the period (all time without one), most first, none left out', () => {
-    const sources = [
-      source(project('a'), [task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z')]),
-      source(project('b'), [
-        task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'),
-        task('T-2', 'Bo', '2026-01-02T09:00:00Z', '2026-01-02T10:00:00Z'),
-        task('T-3', 'Bo', '2026-01-02T11:00:00Z', null),
-      ]),
-      source(project('c'), []),
-    ];
-    const count = (period: { start: number; end: number } | null) =>
-      completionsByProject(sources, period).map((p) => [p.project.id, p.completed]);
-    expect(count(null)).toEqual([
-      ['b', 2],
-      ['a', 1],
-      ['c', 0],
-    ]);
-    expect(count({ start: Date.parse('2026-01-02T00:00:00Z'), end: NOW })).toEqual([
-      ['b', 2],
-      ['a', 0],
-      ['c', 0],
-    ]);
   });
 });
 

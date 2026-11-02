@@ -16517,7 +16517,7 @@
       "description": "The title bar's Activity chart and popup (completions over time, agents working, waiting on you, idle, time per task) show on the Projects Overview too, for every project the server lists, summed, with a breakdown by project (as the Omniboard combines boards).\n\n## Data\nFrom `api/projects`' summaries (`completions_14d`, `stats`, `needs_you`, ...). What's missing for the popup's charts is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ActivityWidget.svelte",
@@ -16525,7 +16525,7 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T07:27:47Z",
+      "updated_at": "2026-11-02T07:32:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16538,7 +16538,7 @@
         }
       ],
       "sprint": "Overview and polish",
-      "started_at": "2026-11-02T07:21:31Z",
+      "started_at": "2026-11-02T07:32:31Z",
       "started_by": "claude:b7be7288",
       "commit": "862c3343ef89955026bf5493575970d158da4293",
       "notes": [
@@ -16559,6 +16559,12 @@
           "kind": "review",
           "text": "Changes done: coloured by project (Progress tab colours) with a *Colour by: Project / Type* switch, for the pill, completions, who was working and the dots; a row per project under the charts (done, where its time went, agent time, waiting on you). Popups now scroll inside the window.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:32:31Z",
+          "kind": "rejection",
+          "text": "Drop the Colour by switch (by project only) and the by-project rows under the charts",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -16566,10 +16572,13 @@
           "from": "2026-11-02T06:50:51Z",
           "to": "2026-11-02T07:21:30Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T07:27:47Z",
+          "to": "2026-11-02T07:32:31Z",
+          "outcome": "changes_requested"
         }
-      ],
-      "review_requested_at": "2026-11-02T07:27:47Z",
-      "review_state": "waiting"
+      ]
     },
     {
       "id": "T-329",

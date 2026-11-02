@@ -1,11 +1,10 @@
 <script lang="ts">
   // The overview's Activity chart and popup (T-328): every shown project's tasks together, as one project's would be,
-  // with each project's count for the chosen period; a task opens in its project
-  import { completionsByProject, mergedTasks, projectOfWorker, projectTasks } from '../lib/overview-data';
+  // stacked and coloured by project; a task opens in its project
+  import { mergedTasks, projectOfWorker, projectTasks } from '../lib/overview-data';
   import { isActive } from '../lib/projects';
   import { dashboard } from '../lib/state.svelte';
   import { phaseColor } from '../lib/theme';
-  import { timeUse } from '../lib/timeuse';
   import ActivityWidget from './ActivityWidget.svelte';
 
   // The projects the overview shows ("Hide inactive projects" applies here too)
@@ -34,20 +33,5 @@
 </script>
 
 {#if sources.length}
-  <ActivityWidget
-    {source}
-    view={dashboard.overviewActivity}
-    onopen={open}
-    byProject={(period) =>
-      completionsByProject(sources, period).map(({ project, completed }) => {
-        const own = sources.find((s) => s.project.id === project.id)!;
-        return {
-          label: project.name,
-          color: colorOf.get(project.id)!,
-          count: completed,
-          use: timeUse(own.tasks, period, dashboard.loadedAt, own.vocab),
-          open: () => dashboard.openProject(project.id),
-        };
-      })}
-  />
+  <ActivityWidget {source} view={dashboard.overviewActivity} onopen={open} />
 {/if}

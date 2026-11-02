@@ -175,23 +175,6 @@ export function projectOfWorker(worker: string): string {
   return at < 0 ? worker : worker.slice(0, at);
 }
 
-/** How many tasks each source finished in `period` (all time without one), most first; none left out */
-export function completionsByProject(
-  sources: readonly ProjectSource[],
-  period: { start: number; end: number } | null,
-): { project: ProjectEntry; completed: number }[] {
-  return sources
-    .map(({ project, tasks, vocab }) => ({
-      project,
-      completed: tasks.filter((t) => {
-        if (kindOf(vocab, t.status) !== 'done') return false;
-        const at = Date.parse(t.completed_at ?? '');
-        return !Number.isNaN(at) && (!period || (at >= period.start && at <= period.end));
-      }).length,
-    }))
-    .sort((a, b) => b.completed - a.completed || a.project.name.localeCompare(b.project.name));
-}
-
 /** One timeline of every source's agents: a lane per agent across projects, most recently active first */
 export function combinedTimeline(sources: readonly ProjectSource[], now: number): AgentTimeline | null {
   const lanes = new Map<string, AgentLane & { names: Set<string> }>();

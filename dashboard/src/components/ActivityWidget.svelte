@@ -14,9 +14,8 @@
     type ActivityRange,
   } from '../lib/insights';
   import type { ClaimMap } from '../lib/claims';
-  import { formatMinutes } from '../lib/format';
   import { dashboard } from '../lib/state.svelte';
-  import { timeUse, type TimeUse } from '../lib/timeuse';
+  import { timeUse } from '../lib/timeuse';
   import type { Task } from '../lib/types';
   import { DEFAULT_VOCABULARY } from '../lib/vocab';
   import ActivityDeepDive from './ActivityDeepDive.svelte';
@@ -24,13 +23,12 @@
   import InfoTip from './InfoTip.svelte';
 
   // A project's Activity by default. The overview's (T-328) gives every project's tasks and claims (`source`, with
-  // the default vocabulary's statuses, and the same tasks by project with the projects' colours), its own period and
-  // colouring (`view`), how to open a task (`onopen`) and a row per project (`byProject`, for the chosen period)
+  // the default vocabulary's statuses, and the same tasks by project with the projects' colours), its own period
+  // (`view`) and how to open a task (`onopen`)
   let {
     source = undefined,
     view = dashboard,
     onopen = undefined,
-    byProject = undefined,
   }: {
     source?: {
       tasks: Task[];
@@ -39,25 +37,21 @@
       projects: { name: string; color: string }[];
       of: (worker: string) => string;
     };
-    view?: { activityRange: ActivityRange; colorBy?: 'project' | 'type' };
+    view?: { activityRange: ActivityRange };
     onopen?: (id: string) => void;
-    byProject?: (period: { start: number; end: number } | null) => ProjectRow[];
   } = $props();
-  /** `use` is null for a project with no work in the period */
-  type ProjectRow = { label: string; color: string; count: number; use: TimeUse | null; open: () => void };
   const tasks = $derived(source ? source.tasks : dashboard.history);
   const vocab = $derived(source ? DEFAULT_VOCABULARY : dashboard.vocab);
   const claims = $derived(source ? source.claims : dashboard.claims);
-  // The overview's charts by project (the default) or by type (T-328 review)
-  const grouped = $derived(!!source && view.colorBy !== 'type');
-  const charted = $derived(grouped ? source!.byProject : tasks);
+  // The overview's charts are by project, in the projects' colours (T-328 review)
+  const charted = $derived(source ? source.byProject : tasks);
   const colors = $derived(new Map(source?.projects.map((p) => [p.name, p.color]) ?? []));
   const group = $derived(
-    grouped
+    source
       ? {
           color: (p: string) => colors.get(p) ?? 'var(--text-muted)',
-          of: source!.of,
-          order: source!.projects.map((p) => p.name),
+          of: source.of,
+          order: source.projects.map((p) => p.name),
         }
       : undefined,
   );
@@ -83,7 +77,6 @@
   const workingNow = $derived(
     !period || period.end >= dashboard.loadedAt ? new Set([...claims.values()].map((c) => c.agent)).size : null,
   );
-  const projects = $derived(open && byProject ? byProject(period) : []);
 
   // A period reaching back before tasks.json's oldest completion needs the archive (D-5.2); a project's only
   const oldest = $derived(
@@ -196,8 +189,8 @@
             <InfoTip label="activity">
               <p>
                 {#if source}
-                  Every project shown, together (their archives left out), with each project's count below. All times
-                  are for the chosen period.
+                  Every project shown, together (their archives left out), in a colour each. All times are for the
+                  chosen period.
                 {:else}
                   The whole project, archived tasks included: the search and filters don't apply here. All times are for
                   the chosen period.
@@ -272,56 +265,8 @@
             >
           </div>
         {/if}
-        {#if source}
-          <!-- The overview colours its charts by project, or by type as a project's do (T-328 review) -->
-          <div class="activity-color-by">
-            <span>Colour by</span>
-            <span class="activity-range" role="group" aria-label="Colour by" id="activity-color-by">
-              {#each [['project', 'Project'], ['type', 'Type']] as const as [key, label] (key)}
-                <button
-                  class:active={(view.colorBy ?? 'project') === key}
-                  aria-pressed={(view.colorBy ?? 'project') === key}
-                  data-color-by={key}
-                  onclick={() => (view.colorBy = key)}>{label}</button
-                >
-              {/each}
-            </span>
-          </div>
-        {/if}
         {#if detail}
           <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} {onopen} {group} />
-        {/if}
-        {#if projects.length}
-          <!-- Each project's part (T-328): done in the period and where its time went; a row opens the project -->
-          <div class="activity-projects" id="activity-projects">
-            <span class="activity-projects-title">By project, {phrase}</span>
-            {#each projects as p (p.label)}
-              <button class="activity-project" onclick={p.open} title="Open {p.label}">
-                <span class="activity-project-name"
-                  ><span class="legend-swatch" style:background={p.color}></span>{p.label}</span
-                >
-                <span class="activity-project-count">{p.count} done</span>
-                <span class="status-bar activity-project-split" aria-hidden="true">
-                  {#if p.use}
-                    <span class="time-split-working" style:flex={p.use.workingMs}></span>
-                    <span class="time-split-waiting" style:flex={p.use.waitingMs}></span>
-                    <span class="time-split-idle" style:flex={p.use.idleMs}></span>
-                  {/if}
-                </span>
-                <span class="activity-project-times">
-                  {#if p.use}
-                    {formatMinutes(p.use.agentMs / 60_000)} agent time{#if p.use.waitingMs}<span
-                        class="activity-project-waiting"
-                      >
-                        · waiting on you {formatMinutes(p.use.waitingMs / 60_000)}</span
-                      >{/if}
-                  {:else}
-                    No work in this period
-                  {/if}
-                </span>
-              </button>
-            {/each}
-          </div>
         {/if}
       </div>
     {/if}

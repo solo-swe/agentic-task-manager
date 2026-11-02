@@ -32,10 +32,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   be hidden; the separate "N inactive projects hidden" note is gone.
 - **Activity on the Projects Overview** (T-328): the title bar's Activity chart and popup for every shown project
   together (statuses read by kind, task IDs as "Project: T-1"), its own period, and a task opening in its project.
-  Coloured by project (the Progress tab's colours), or by type with *Colour by*: the pill's bars, the completions,
-  who was working and the time-per-task dots (`projectTasks`). Under the charts, a row per project: done in the
-  period and where its time went (agents working, waiting on you, idle; agent time), opening the project. The
-  insights popups now scroll inside the window rather than run under the status bar. The overview now loads every project's
+  Stacked and coloured by project (the Progress tab's colours): the pill's bars, the completions, who was working
+  and the time-per-task dots (`projectTasks`). The insights popups now scroll inside the window rather than run under
+  the status bar. The overview now loads every project's
   `tasks.json` and `claims.json` while shown (`lib/overview-data.ts`, which `lib/overview-agents.ts` became), rather
   than the summary growing; `ActivityWidget` takes the tasks, period state, a click handler and the breakdown.
 - **A Progress tab on the Projects Overview** (T-329, `#overview&view=progress`): a row per shown project with its
