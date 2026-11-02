@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 343,
+    "next_id": 344,
     "labels": [
       {
         "id": "architecture",
@@ -17002,7 +17002,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T22:36:01Z",
-      "updated_at": "2026-11-02T01:37:04Z",
+      "updated_at": "2026-11-02T01:42:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17036,7 +17036,7 @@
       ],
       "started_at": "2026-11-02T01:30:09Z",
       "started_by": "claude:b7be7288",
-      "commit": "24319b08d45265c3d18a89cb1abd8f25c60c0039",
+      "commit": "8ab96f0b9863b6246961fa8eed19fd2595575a13",
       "completed_at": "2026-11-02T01:37:04Z",
       "completed_by": "claude:b7be7288"
     },
@@ -17065,6 +17065,46 @@
       "components": [
         "dashboard"
       ]
+    },
+    {
+      "id": "T-343",
+      "name": "atm commit --record: record an existing commit on a task (after a rebase)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "git"
+      ],
+      "description": "After a rebase or cherry-pick a task's recorded `commit` (written by `atm commit`) names a SHA that is no longer on the branch, and nothing can change it short of editing `tasks.json` (T-341's commit after moving it to `dev/0.26.0`). Add `atm commit <id> --record <rev>`: record an existing commit on the task, without committing.\n\n## Rules\n- `--record` and `--file`/`--message` exclude each other; `--file` is required only without `--record`.\n- The revision must not start with `-`, must resolve to a commit (`git rev-parse --verify <rev>^{commit}`), and must be on the current branch (reachable from HEAD); otherwise an error, nothing written. It is stored as the full SHA.\n- Any status (like `atm commit`); the change to `tasks.json` goes in with the next commit.\n- When the commit's message doesn't mention the task's ID, say so in a hint (still recorded).\n- `--json` prints `{task, commit, recorded: true}`.\n\n## Tests\nScenarios in `tests/scripts/` (a git repo is needed: a `*.test.mjs` with `helpers.mjs` if scenarios can't make commits): records a commit by SHA and by ref; refuses an unknown revision, one starting with `-`, a commit not on the branch, and `--record` with `--file`; the hint for a message without the ID; `--json`.\n\n## Docs\n`docs/v4/atm-cli.md` (the commit row), `plugin/CHANGELOG.md`, `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/git_ops.py",
+        "atm-cli/atm/cli.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/git.test.mjs",
+        "docs/v4/atm-cli.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-02T01:40:40Z",
+      "updated_at": "2026-11-02T01:40:43Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T01:40:40Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-02T01:40:43Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

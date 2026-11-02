@@ -398,9 +398,14 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", required=True, metavar="F", help="a file the task changed (repeat for each)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
+    commit.add_argument(
+        "--record",
+        metavar="REV",
+        help="record this existing commit on the current branch instead of committing (e.g. after a rebase)",
+    )
     agent_option(commit)
 
     pr = command("pr", cmd_pr, "record the PR that contains the tasks")

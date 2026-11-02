@@ -148,6 +148,7 @@ left on a task is kept but ignored.
 | Command | Does |
 |---|---|
 | `atm commit <id> --file F [--file F]... [--message T]` | stages exactly the files the agent names (`--file` is required; atm-cli never works them out, since another agent's work can be in the same tree) plus `tasks.json`, and commits them; refuses `-A`, `.` and paths outside the repository; the message comes from `meta.workflow.commit_template` (default `feat({id}): {name}`) and its trailer rule; records `commit` on the task (the SHA exists only after the commit, so that change to `tasks.json` goes in with the next commit) |
+| `atm commit <id> --record <rev>` | records an existing commit on the task without committing (T-343), e.g. the one a rebase or cherry-pick made of its commit: the revision must be a commit on the current branch (an ancestor of HEAD) and not start with `-`; stored as the full SHA; a hint when its message doesn't mention the task's ID |
 | `atm workflow [set <direct\|pull-request>] [--base B] [--verify true\|false] [--max-rounds N]` | prints or changes `meta.workflow` |
 | `atm pr <id>... --number N --url U` | records the PR on tasks |
 | `atm merged --pr N [--at TIME]` | records the merge on the PR's tasks; a planned release whose tasks in `tasks.json` (its own or their sprint's, skipped ones aside) are now all merged in that PR becomes `released`, with its `pr` and `released_at`; one with tasks outside it stays planned, and atm names them (SR-3.7) |

@@ -5210,6 +5210,37 @@ def commit_message(text, trailers):
     return text
 
 
+def record_commit(paths, args, agent):
+    """atm commit --record (T-343): record an existing commit on the current branch, e.g. the one a rebase or a
+    cherry-pick made of the task's commit, without committing anything."""
+    root, rev = paths["root"], args.record
+    if args.file or args.message is not None:
+        raise AtmError("--record records an existing commit: no --file or --message", 2)
+    if rev.startswith("-"):
+        raise AtmError(f"--record takes a revision, not an option: {rev!r}", 2)
+    sha = git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], root)
+    if not sha:
+        raise AtmError(f"no commit {rev} in this repository")
+    if git(["merge-base", "--is-ancestor", sha, "HEAD"], root) is None:
+        raise AtmError(f"{sha[:7]} is not on the current branch (an ancestor of HEAD)")
+    message = run_git(["log", "-1", "--format=%B", sha], root)
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        task = find_task(data, args.id)
+        task["commit"] = sha
+        touch(task, agent, now_iso())
+        write_json_atomic(paths["tasks"], data)
+    hint = None
+    if not re.search(rf"(?<![\w-]){re.escape(task['id'])}(?![\w-])", message):
+        hint = f"its message doesn't mention {task['id']}: is it the task's commit?"
+    if args.json:
+        out(to_json({"task": task["id"], "commit": sha, "recorded": True, **({"hint": hint} if hint else {})}))
+        return
+    out(f"{task['id']}: recorded {sha[:7]} {message.splitlines()[0] if message else ''}".rstrip())
+    if hint:
+        out(f"  {hint}")
+
+
 def cmd_commit(args):
     """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
     agent = agent_identity(args.agent)
@@ -5217,6 +5248,10 @@ def cmd_commit(args):
     root = paths["root"]
     if not in_git(root):
         raise AtmError("atm commit needs a git repository")
+    if args.record is not None:
+        return record_commit(paths, args, agent)
+    if not args.file:
+        raise AtmError("atm commit needs --file (once per file the task changed), or --record REV", 2)
     data = load_tasks(paths)
     task = find_task(data, args.id)
     workflow = workflow_of(data) or WORKFLOW_DEFAULTS
@@ -6827,9 +6862,14 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", required=True, metavar="F", help="a file the task changed (repeat for each)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
+    commit.add_argument(
+        "--record",
+        metavar="REV",
+        help="record this existing commit on the current branch instead of committing (e.g. after a rebase)",
+    )
     agent_option(commit)
 
     pr = command("pr", cmd_pr, "record the PR that contains the tasks")

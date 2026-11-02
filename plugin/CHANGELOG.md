@@ -11,6 +11,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   when the filters, data, Hide/Dim or panel size change; panning or zooming turns it off.
 - **Fit All or Matches** (T-341): `#graph-fit-all` (F) and `#graph-fit-matches` (Shift+F, without the greyed-out
   tasks; disabled when the same). The last one pressed is what auto-fit fits (`graphFitTarget`). `fitBox`, `nodesBox`.
+- **`atm commit <id> --record <rev>`** (T-343): records an existing commit on the task without committing, for a
+  task whose commit a rebase or cherry-pick replaced; the revision must be a commit on the current branch. A hint
+  when its message doesn't mention the task. `--file` is now checked by atm (needed unless `--record`).
 - **Animated fits** (T-341): fits, zoom buttons and filter changes glide (280 ms, `interpolateView`); not with
   reduced motion.
 
