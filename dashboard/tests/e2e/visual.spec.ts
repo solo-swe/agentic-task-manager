@@ -90,6 +90,8 @@ test('visual: progress tab', async ({ page, tasksServer }) => {
 });
 
 test('visual: list tab', async ({ page, tasksServer }) => {
+  // The cards say when (done 3 h ago, T-338): a fixed clock, so the text doesn't move with time
+  await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
   await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
   await sectionScreenshot(page, 'standard-list.png');
 });
@@ -220,6 +222,8 @@ for (const mode of ['dark', 'light'] as const) {
     });
 
     test('list: labels, priorities, stages', async ({ page, tasksServer }) => {
+      // The cards say when (T-338): a fixed clock
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
       await openDashboard(page, tasksServer, 'v4', { tab: 'list' });
       await sectionScreenshot(page, `v4-${mode}-list.png`);
     });

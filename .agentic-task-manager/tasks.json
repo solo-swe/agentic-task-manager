@@ -17410,7 +17410,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T07:50:06Z",
+      "updated_at": "2026-11-02T08:21:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17452,7 +17452,8 @@
         }
       ],
       "started_at": "2026-11-02T07:36:08Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "e909b1439424aad01312e36e4afe7475b93e93ff"
     },
     {
       "id": "T-346",
