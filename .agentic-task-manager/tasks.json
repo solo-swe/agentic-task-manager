@@ -18926,7 +18926,7 @@
       "description": "Step 8 of `docs/layered-architecture.md` §9: the first writes on the new path (§3.3).\n\n## Change\n- Conditional writes (`update_task(…, expect=version)`, `Conflict` on a stale version) and `apply(writes)` (all or nothing) in both stores; the JSON-in-git store's `apply` is today's lock, read, write.\n- `start`, `review`, `done`, `reject`, `approve`, `request-changes`, `block`, `unblock`, `reopen`, `skip`, `fail`, `release` and `note` as atm-lib functions (§5.1); the claim created or dropped in the same `apply`; atm-lib retries on `Conflict`.\n- `tasks.py`'s direct locking and writing goes; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests for each function, including a race (two starts of one task: one wins, the other gets `claimed`); contract tests for conditional writes and `apply` on both stores.\n- `npm run test:scripts` (the concurrency tests included) and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-367"
       ],
@@ -18936,7 +18936,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T20:15:41Z",
+      "updated_at": "2026-11-02T20:16:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18967,7 +18967,9 @@
           "text": "Status changes vs §3.3: (A) rework them into entity writes (task update + claim create/drop) with versions, `apply`, retry on `Conflict` — the design’s contract now, a bigger change; or (B) a transitional store operation running today’s locked read-modify-write (like `document()`), conditional writes in a later step — smaller, but the generic transaction the design rejected, for a while. Which? → B: a store `change(fn)` running the locked read-modify-write on a `Working` copy, which records what fn changed (before/after per task and claim) so a store can later turn it into conditional writes (`apply`); `work.defer(error)` for raise-after-write. Update §3.3 to say so.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T20:16:12Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-369",

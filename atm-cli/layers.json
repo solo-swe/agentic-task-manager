@@ -17,8 +17,7 @@
     "releases",
     "repository",
     "sprint_names",
-    "sprints",
-    "tasks"
+    "sprints"
   ],
   "exceptions": {
     "api.server": ["claims", "core", "logo", "migrate", "paths", "registry"],
@@ -40,15 +39,16 @@
       "registry",
       "releases",
       "repository",
-      "sprints",
-      "tasks"
+      "sprints"
     ],
     "cli.query": ["core"],
     "cli.render": ["model"],
     "cli.show": ["core"],
-    "db.jsongit.store": ["claims", "model"],
+    "cli.status": ["claims", "core"],
+    "db.jsongit.store": ["claims", "core", "model"],
     "db.memory": ["model"],
     "lib.query": ["claims", "core", "model"],
+    "lib.status": ["claims", "core", "model"],
     "vcs.git": ["registry"]
   }
 }

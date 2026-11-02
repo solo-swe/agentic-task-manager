@@ -67,10 +67,37 @@ class StoreContract:
         self.assertEqual(document["meta"]["project"], "Contract")
         self.assertEqual([t["id"] for t in document["tasks"]], ["T-1", "T-2"])
 
+    def test_a_change_is_kept_and_read_back(self):
+        def rename(work):
+            next(t for t in work.tasks() if t["id"] == "T-2")["name"] = "Renamed"
+            work.claims()["claims"]["T-2"] = {"task": "T-2", "agent": "a"}
+            return "returned"
+
+        self.assertEqual(self.store.change(rename), "returned")
+        again = self.reopen()
+        self.assertEqual(again.get_task("T-2")["name"], "Renamed")
+        self.assertEqual(again.read_claims()["claims"]["T-2"]["agent"], "a")
+
+    def test_a_change_that_raises_writes_nothing(self):
+        def broken(work):
+            work.tasks()[0]["name"] = "Half done"
+            raise ValueError("stop")
+
+        with self.assertRaises(ValueError):
+            self.store.change(broken)
+        self.assertEqual(self.reopen().get_task("T-1")["name"], "Task T-1")
+
+    def test_a_change_knows_where_it_runs(self):
+        here = self.store.change(lambda work: work.here())
+        self.assertEqual(sorted(here), ["branch", "worktree"])
+
 
 class MemoryStoreContract(StoreContract, unittest.TestCase):
     def make_store(self):
         return MemoryStore(tasks=json.loads(json.dumps(TASKS)), archive=json.loads(json.dumps(ARCHIVE)), meta=META)
+
+    def reopen(self):
+        return self.store  # the same memory
 
 
 class JsonGitStoreContract(StoreContract, unittest.TestCase):
@@ -83,6 +110,9 @@ class JsonGitStoreContract(StoreContract, unittest.TestCase):
             with open(os.path.join(folder, name), "w", encoding="utf-8") as f:
                 json.dump(data, f)
         return JsonGitStore(find_paths(self.root))
+
+    def reopen(self):
+        return JsonGitStore(find_paths(self.root))  # read from the files again
 
 
 if __name__ == "__main__":

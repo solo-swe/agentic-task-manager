@@ -9,6 +9,7 @@ with nothing to install.
 import argparse
 import base64
 import contextlib
+import copy
 import errno
 import hashlib
 import json
@@ -24,7 +25,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
-from typing import List, Literal, Optional, Protocol, TypedDict
+from typing import Any, Callable, List, Literal, Optional, Protocol, TypedDict
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -2114,6 +2115,12 @@ class Store(Protocol):
         """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
         ...
 
+    def change(self, fn: Callable[[Any], Any]) -> Any:
+        """Run `fn(work)` (a db.working.Working: the tasks and claims to change) under the store's isolation, and write
+        what it changed; nothing when it raises. Returns what `fn` returns, then raises what it deferred. The
+        transitional form of `apply` (docs/layered-architecture.md §3.3): `work.changes()` is the list of writes."""
+        ...
+
     def document(self) -> dict:
         """The whole task document (`meta` and `tasks`), for the code from before the layers that still takes it.
         Transitional: it goes when the last of that code has moved (docs/layered-architecture.md §9, step 14)."""
@@ -3278,6 +3285,82 @@ def cmd_claims(args):
         out(f"{c['task']}  {c.get('agent')}  {c.get('branch') or '-'}  {left} left  ({c.get('worktree')})")
 
 
+# ==== db/working.py ====
+# A store's working copy for one change (docs/layered-architecture.md §3.3): what atm-lib reads and changes inside a
+# store's `change(fn)`, and the record of what it changed.
+#
+# A store runs `fn(work)` under its own isolation (the JSON-in-git store: its lock), writes what changed and only that,
+# and raises what `fn` deferred after writing. `changes()` lists each task and claim `fn` changed, before and after: a
+# store that keeps entities apart (a database) can turn the list into conditional writes, without atm-lib's rules
+# changing. Until the last of the code from before the layers has moved, the copy is the whole task document.
+
+def _stamp(value):
+    return json.dumps(value, sort_keys=True, ensure_ascii=False)
+
+
+class Working:
+    def __init__(self, document, claims_store, here, size, before):
+        """`here` and `size` may be callables (worked out when asked); `before()` gives the document and the claims
+        store as they were, from wherever the store keeps them (the JSON-in-git store: its files, not written until
+        the change ends), so recording what changed costs nothing unless `changes()` is asked for."""
+        self.document = document
+        self.claims_store = claims_store
+        self._here = here
+        self._size = size
+        self._before = before
+        self._deferred = None
+        self._before_store = _stamp(claims_store)
+
+    @staticmethod
+    def _entities(document, claims_store):
+        tasks = {t.get("id"): t for t in document["tasks"] if isinstance(t, dict)}
+        return {"task": tasks, "claim": dict(claims_store.get("claims") or {})}
+
+    def tasks(self):
+        """The working tasks, to read and change in place."""
+        return self.document["tasks"]
+
+    def claims(self):
+        """The claims store: `claims`, `completed`, `waiting`, `resolved`, `hints`, to read and change in place."""
+        return self.claims_store
+
+    def here(self):
+        """The working copy this change runs in: `worktree` (its folder, None for a store without them) and `branch`."""
+        if callable(self._here):
+            self._here = self._here()
+        return self._here
+
+    def size(self):
+        """How big the task data is, in bytes, as it was read for this change (the archive hint)."""
+        if callable(self._size):
+            self._size = self._size()
+        return self._size
+
+    def defer(self, error):
+        """Raise `error` once the change is written: a lease that expired is written as expired, then reported."""
+        self._deferred = error
+
+    def raise_deferred(self):
+        if self._deferred is not None:
+            raise self._deferred
+
+    def changes(self):
+        """What changed: [{"entity": "task" | "claim", "id", "before", "after"}], `before` or `after` None for an entity
+        created or removed. The rest of the claims store (completed, waiting, resolved, hints) is in `store_changed`."""
+        before = self._entities(*self._before())
+        after = self._entities(self.document, self.claims_store)
+        found = []
+        for entity in ("task", "claim"):
+            old, new = before[entity], after[entity]
+            for key in list(old) + [k for k in new if k not in old]:
+                if old.get(key) != new.get(key):
+                    found.append({"entity": entity, "id": key, "before": old.get(key), "after": new.get(key)})
+        return found
+
+    def store_changed(self):
+        return _stamp(self.claims_store) != self._before_store
+
+
 # ==== db/jsongit/store.py ====
 # The JSON-in-git store (docs/layered-architecture.md §3): the project's task files, read and written as atm always
 # has. For now it wraps the code from before the layers (`load_tasks`, the archive, the claims store); that code moves
@@ -3329,6 +3412,29 @@ class JsonGitStore:
     def working_copy(self):
         return self.paths["root"]
 
+    def change(self, fn):
+        """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
+        tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
+        (docs/layered-architecture.md §3.3: the transitional form of `apply`.)"""
+        root, tasks_file = self.paths["root"], self.paths["tasks"]
+        with locked_with_claims(self.paths):
+            work = Working(
+                load_tasks(self.paths),
+                read_store(self.paths),
+                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
+                lambda: os.path.getsize(tasks_file),
+                # The files still hold what was read: nothing is written before fn returns
+                lambda: (read_json(tasks_file), read_store(self.paths)),
+            )
+            result = fn(work)
+            # tasks.json is written on every change, as atm always has (comparing first would cost more than writing)
+            write_json_atomic(self.paths["tasks"], work.document)
+            if work.store_changed():
+                write_store(self.paths, work.claims_store)
+        self._data = None  # this store's snapshot is out of date now
+        work.raise_deferred()
+        return result
+
 
 # ==== db/memory.py ====
 # The in-memory store: a project's data in plain lists, for atm-lib's tests. It also shows that atm-lib depends on
@@ -3373,6 +3479,23 @@ class MemoryStore:
 
     def working_copy(self):
         return None
+
+    def change(self, fn):
+        """Run `fn(work)` on copies, and keep them only when it succeeds: a failed change leaves the store as it was."""
+        original, original_claims = self.document(), self.claims
+        document, claims = copy.deepcopy(original), copy.deepcopy(original_claims)
+        work = Working(
+            document,
+            claims,
+            {"worktree": None, "branch": None},
+            lambda: self.sizes()["tasks"],
+            lambda: (original, original_claims),  # replaced, not changed, when the change is kept
+        )
+        result = fn(work)
+        self.meta, self.tasks, self.claims = document["meta"], document["tasks"], claims
+        self.changes = work.changes()  # what the last change did, for the tests
+        work.raise_deferred()
+        return result
 
 
 # ==== vcs/git.py ====
@@ -4154,6 +4277,193 @@ def status_report(project, scope):
     return {"report": result, "has_sprints": bool(vocab["sprints"])}
 
 
+# ==== lib/status.py ====
+# atm-lib: the status changes (start, review, done, reject, approve, request-changes, block, unblock, reopen, skip,
+# fail, release) and notes (docs/layered-architecture.md §5.1).
+#
+# Each runs as one change of the store (`store.change`, §3.3): the task's status, its claim, and the records shared by
+# a clone's worktrees (completed, waiting, resolved) change together or not at all. The rules themselves are still
+# those of the modules from before the layers (`change_status`, the lease and resolution helpers); they move into
+# atm-lib with their own slices (§9).
+
+# The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
+OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
+
+# Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
+# waiting task must have there
+REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
+
+
+def claim_record(work, data, task_id, agent):
+    """A new claim on the task, from this working copy (its worktree and branch, T-202)."""
+    here = work.here()
+    return {
+        "task": task_id,
+        "agent": agent,
+        "branch": here["branch"],
+        "worktree": here["worktree"],
+        "claimed_at": now_iso(),
+        "lease_expires_at": lease_until(data),
+    }
+
+
+def completion_record(work, task_id, agent):
+    """Done in this working copy: so `next` doesn't hand the task out again in another before the branches merge."""
+    here = work.here()
+    return {"task": task_id, "agent": agent, "branch": here["branch"], "worktree": here["worktree"], "completed_at": now_iso()}
+
+
+def waiting_entry(work, task):
+    """The shared record of a task blocked or sent for review in this working copy (T-204)."""
+    here = work.here()
+    return {
+        "task": task["id"],
+        "status": task.get("status"),
+        "waiting_on": task.get("waiting_on"),
+        "questions": list(task.get("questions") or []),
+        "worktree": here["worktree"],
+        "branch": here["branch"],
+        "at": now_iso(),
+    }
+
+
+def adopt_waiting(task, data, store, here, command):
+    """When `task` waits in another worktree (blocked or in review there, per the shared store) but not in this one,
+    and `command` decides it: give this copy the waiting state, so the command applies here as it would there. Returns
+    the worktree it waits in (where the decision is applied too, by apply_resolutions), or None."""
+    record = store["waiting"].get(task["id"])
+    if command not in REMOTE_DECISIONS or not isinstance(record, dict) or record.get("worktree") == here:
+        return None
+    vocab = vocabulary(data)
+    if kind_of(vocab, task.get("status")) in REMOTE_DECISIONS[command]:
+        return None  # it waits here too: decided here as usual
+    if kind_of(vocab, record.get("status")) not in REMOTE_DECISIONS[command]:
+        return None
+    task["status"] = record["status"]
+    if record.get("waiting_on"):
+        task["waiting_on"] = record["waiting_on"]
+    if record.get("questions"):
+        task["questions"] = list(record["questions"])
+    return record.get("worktree")
+
+
+def newly_ready(data, task_id):
+    """The to-do tasks waiting on `task_id` whose dependencies are now all done."""
+    ready = {t.get("id") for t in ready_tasks(data)}
+    return [t.get("id") for t in data["tasks"] if task_id in (t.get("dependencies") or []) and t.get("id") in ready]
+
+
+def change_task_status(project, command, task_id, **options):
+    """One status command on a task, as `project.actor`. `options` are the command's: status, note, reason, commit,
+    on, questions, answers, resolution, duplicate_of. Returns the task after the change and what goes with it:
+    `previous` (its status before), `claim` (its claim now), `unblocked` (after done), `hint` (the archive hint, at
+    most once a day), `stranded` (reopened in a closed sprint, T-330) and `expired` (the claims whose lease ran out)."""
+    agent = project.actor
+    status = options.get("status")
+    answers = list(options.get("answers") or [])
+
+    def change(work):
+        data, store = work.document, work.claims()
+        claims = store["claims"]
+        here = work.here()["worktree"]
+        expired = expire_claims(None, data, claims)
+        # apply_resolutions knows a working copy by its folder, as atm-cli's paths give it
+        apply_resolutions({"root": here}, data, store)
+        task = find_task(data, task_id)
+        if command in OWN_LEASE_COMMANDS:
+            own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
+            if own:
+                work.defer(own)  # the expiry is written first, so `atm show` agrees with the error
+                return {"task": task, "expired": expired}
+        check_holder(claims, task_id, agent, command)
+        duplicate_of = options.get("duplicate_of")
+        if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived_task(duplicate_of):
+            raise Invalid(f"{task_id} can't be a duplicate of {duplicate_of}, which doesn't exist")
+        waits_in = adopt_waiting(task, data, store, here, command)
+        previous = change_status(
+            task,
+            data,
+            command,
+            reason=options.get("reason"),
+            agent=agent,
+            status=status,
+            note=options.get("note"),
+            commit=options.get("commit"),
+            waiting_on=options.get("on"),
+            questions=list(options.get("questions") or []),
+            answers=answers,
+            resolution=options.get("resolution"),
+            duplicate_of=duplicate_of,
+        )
+        if command == "start":
+            claims[task_id] = claim_record(work, data, task_id, agent)
+            store["completed"].pop(task_id, None)  # starting a task again on purpose
+        elif command == "reopen":
+            claims.pop(task_id, None)
+            store["completed"].pop(task_id, None)  # not done any more, in any worktree
+        else:
+            claims.pop(task_id, None)
+        if command == "done":
+            store["completed"][task_id] = completion_record(work, task_id, agent)
+        # Blocked or in review: recorded for every worktree (T-204); any other change ends the wait
+        if command in ("block", "review"):
+            store["waiting"][task_id] = waiting_entry(work, task)
+        else:
+            store["waiting"].pop(task_id, None)
+            resolution = store["resolved"].pop(task_id, None)
+            if waits_in:
+                store["resolved"][task_id] = {
+                    "task": task_id,
+                    "command": command,
+                    "answers": answers,
+                    "reason": options.get("reason"),
+                    "by": agent,
+                    "at": now_iso(),
+                    "worktree": waits_in,
+                }
+            elif resolution and resolution.get("worktree") != here:
+                store["resolved"][task_id] = resolution  # still to be applied where it waits
+        unblocked = newly_ready(data, task_id) if command == "done" else []
+        # The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
+        hint = archive_hint_for(data, work.size()) if command == "done" else None
+        today = now_iso()[:10]
+        if hint and store["hints"].get("archive") == today:
+            hint = None
+        if hint:
+            store["hints"]["archive"] = today
+        # Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
+        stranded = None
+        if command == "reopen":
+            sprint = find_sprint(vocabulary(data), task.get("sprint"))
+            if sprint and sprint["state"] == "closed":
+                stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
+        return {
+            "task": task,
+            "previous": previous,
+            "claim": claims.get(task_id),
+            "unblocked": unblocked,
+            "hint": hint,
+            "stranded": stranded,
+            "expired": expired,
+            "document": data,
+        }
+
+    return project.store.change(change)
+
+
+def add_task_note(project, task_id, text):
+    """A note on a task, whatever its status (DM-4), at most 500 characters. Returns the task."""
+
+    def change(work):
+        task = find_task(work.document, task_id)
+        stamp = now_iso()
+        add_note(task, "note", text, project.actor, stamp)
+        touch(task, project.actor, stamp)
+        return task
+
+    return project.store.change(change)
+
+
 # ==== boot/open.py ====
 # Opening a project: its task files (the JSON-in-git store) and git.
 
@@ -4252,165 +4562,6 @@ def render_task(view):
         failure = task["last_failure"]
         lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
     return "\n".join(lines)
-
-
-# ==== tasks.py ====
-# The status commands (start, review, done, fail, release, reject) and notes.
-
-# The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
-OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
-
-# Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
-# waiting task must have there
-REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
-
-
-def adopt_waiting(task, data, store, paths, command):
-    """When `task` waits in another worktree (blocked or in review there, per the shared store) but not in this one,
-    and `command` decides it: give this copy the waiting state, so the command applies here as it would there. Returns
-    the worktree it waits in (where the decision is applied too, by apply_resolutions), or None."""
-    record = store["waiting"].get(task["id"])
-    if command not in REMOTE_DECISIONS or not isinstance(record, dict) or record.get("worktree") == paths["root"]:
-        return None
-    vocab = vocabulary(data)
-    if kind_of(vocab, task.get("status")) in REMOTE_DECISIONS[command]:
-        return None  # it waits here too: decided here as usual
-    if kind_of(vocab, record.get("status")) not in REMOTE_DECISIONS[command]:
-        return None
-    task["status"] = record["status"]
-    if record.get("waiting_on"):
-        task["waiting_on"] = record["waiting_on"]
-    if record.get("questions"):
-        task["questions"] = list(record["questions"])
-    return record.get("worktree")
-
-
-def cmd_status_change(command):
-    def run(args):
-        task_id, agent = args.id, agent_identity(args.agent)
-        paths = find_paths(os.getcwd())
-        with locked_with_claims(paths):
-            data = load_tasks(paths)
-            store = read_store(paths)
-            claims = store["claims"]
-            expired = expire_claims(paths, data, claims)
-            apply_resolutions(paths, data, store)
-            task = find_task(data, task_id)
-            if command in OWN_LEASE_COMMANDS:
-                own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
-                if own:
-                    # Write the expiry first, so `atm show` agrees with the error
-                    write_json_atomic(paths["tasks"], data)
-                    write_store(paths, store)
-                    raise own
-            check_holder(claims, task_id, agent, command)
-            duplicate_of = getattr(args, "duplicate_of", None)
-            if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived_task(duplicate_of):
-                raise AtmError(f"{task_id} can't be a duplicate of {duplicate_of}, which doesn't exist", 2)
-            waits_in = adopt_waiting(task, data, store, paths, command)
-            previous = change_status(
-                task,
-                data,
-                command,
-                reason=getattr(args, "reason", None),
-                agent=agent,
-                status=args.status,
-                note=getattr(args, "note", None),
-                commit=getattr(args, "commit", None),
-                waiting_on=getattr(args, "on", None),
-                questions=getattr(args, "question", None) or [],
-                answers=getattr(args, "answer", None) or [],
-                resolution=getattr(args, "resolution", None),
-                duplicate_of=duplicate_of,
-            )
-            if command == "start":
-                claims[task_id] = new_claim(paths, data, task_id, agent)
-                store["completed"].pop(task_id, None)  # starting a task again on purpose
-            elif command == "reopen":
-                claims.pop(task_id, None)
-                store["completed"].pop(task_id, None)  # not done any more, in any worktree
-            else:
-                claims.pop(task_id, None)
-            if command == "done":
-                store["completed"][task_id] = completion(paths, task_id, agent)
-            # Blocked or in review: recorded for every worktree (T-204); any other change ends the wait
-            if command in ("block", "review"):
-                store["waiting"][task_id] = waiting_record(paths, task)
-            else:
-                store["waiting"].pop(task_id, None)
-                resolution = store["resolved"].pop(task_id, None)
-                if waits_in:
-                    store["resolved"][task_id] = {
-                        "task": task_id,
-                        "command": command,
-                        "answers": list(getattr(args, "answer", None) or []),
-                        "reason": getattr(args, "reason", None),
-                        "by": agent,
-                        "at": now_iso(),
-                        "worktree": waits_in,
-                    }
-                elif resolution and resolution.get("worktree") != paths["root"]:
-                    store["resolved"][task_id] = resolution  # still to be applied where it waits
-            unblocked = newly_ready(data, task_id) if command == "done" else []
-            write_json_atomic(paths["tasks"], data)
-            # The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
-            hint = archive_hint(paths, data) if command == "done" else None
-            today = now_iso()[:10]
-            if hint and store["hints"].get("archive") == today:
-                hint = None
-            if hint:
-                store["hints"]["archive"] = today
-            write_store(paths, store)
-        report_expired(expired)
-        # Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
-        stranded = None
-        if command == "reopen":
-            sprint = find_sprint(vocabulary(data), task.get("sprint"))
-            if sprint and sprint["state"] == "closed":
-                stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
-        if args.json:
-            extra = {"unblocked": unblocked} if command == "done" else {}
-            if hint:
-                extra["suggest"] = {"archive": hint}
-            if stranded:
-                extra["hint"] = stranded
-            out(to_json({**task, "claim": claims.get(task_id), **extra}))
-            return
-        # New lines only after the existing one (CLI-3.2)
-        out(f"{task['id']}: {previous} -> {task['status']}")
-        if stranded:
-            out(f"  {stranded}")
-        if command == "start":
-            out(describe_task(data, task))
-        if unblocked:
-            out("Now ready: " + ", ".join(unblocked))
-        if hint:
-            out(hint["text"])
-
-    return run
-
-
-def newly_ready(data, task_id):
-    """The to-do tasks waiting on `task_id` whose dependencies are now all done."""
-    ready = {t.get("id") for t in ready_tasks(data)}
-    return [t.get("id") for t in data["tasks"] if task_id in (t.get("dependencies") or []) and t.get("id") in ready]
-
-
-def cmd_note(args):
-    """Add a note to a task, whatever its status (DM-4)."""
-    agent = agent_identity(args.agent)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        task = find_task(data, args.id)
-        stamp = now_iso()
-        add_note(task, "note", args.text, agent, stamp)
-        touch(task, agent, stamp)
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(task["notes"][-1]))
-    else:
-        out(f"{task['id']}: note added ({len(task['notes'])} in all)")
 
 
 # ==== edit.py ====
@@ -7720,6 +7871,59 @@ def cmd_status(args):
     hint = (result.get("suggest") or {}).get("archive")
     if hint:
         out(hint["text"])
+
+
+# ==== cli/status.py ====
+# The status commands and `atm note`, through atm-lib (docs/layered-architecture.md §9, step 8).
+
+def cmd_status_change(command):
+    def run(args):
+        project = open_project(os.getcwd(), agent_identity(args.agent))
+        result = change_task_status(
+            project,
+            command,
+            args.id,
+            status=args.status,
+            note=getattr(args, "note", None),
+            reason=getattr(args, "reason", None),
+            commit=getattr(args, "commit", None),
+            on=getattr(args, "on", None),
+            questions=getattr(args, "question", None) or [],
+            answers=getattr(args, "answer", None) or [],
+            resolution=getattr(args, "resolution", None),
+            duplicate_of=getattr(args, "duplicate_of", None),
+        )
+        report_expired(result["expired"])
+        task, hint, stranded = result["task"], result["hint"], result["stranded"]
+        if args.json:
+            extra = {"unblocked": result["unblocked"]} if command == "done" else {}
+            if hint:
+                extra["suggest"] = {"archive": hint}
+            if stranded:
+                extra["hint"] = stranded
+            out(to_json({**task, "claim": result["claim"], **extra}))
+            return
+        # New lines only after the existing one (CLI-3.2)
+        out(f"{task['id']}: {result['previous']} -> {task['status']}")
+        if stranded:
+            out(f"  {stranded}")
+        if command == "start":
+            out(describe_task(result["document"], task))
+        if result["unblocked"]:
+            out("Now ready: " + ", ".join(result["unblocked"]))
+        if hint:
+            out(hint["text"])
+
+    return run
+
+
+def cmd_note(args):
+    """Add a note to a task, whatever its status (DM-4)."""
+    task = add_task_note(open_project(os.getcwd(), agent_identity(args.agent)), args.id, args.text)
+    if args.json:
+        out(to_json(task["notes"][-1]))
+    else:
+        out(f"{task['id']}: note added ({len(task['notes'])} in all)")
 
 
 # ==== cli/show.py ====

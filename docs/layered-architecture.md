@@ -261,7 +261,16 @@ So instead of a transaction that callers open and hold, the interface has:
   a second check finds the task claimed and says so).
 
 This fits the JSON-in-git store (`apply` is today's lock-read-write) and a cloud database (conditional and batched
-writes are what they offer). The first draft's `Tx` handed atm-lib the whole document to change in place, which is
+writes are what they offer).
+
+**How it starts (decided with Hakan, T-368): `change(fn)`, then `apply`.** The status changes and their rules still
+work on the whole document in place, so the first form is a store operation that runs a change under the store's own
+isolation: `store.change(fn)` calls `fn(work)` with a working copy (`db/working.py`: `tasks()`, `claims()`, `here()`,
+`size()`, `defer(error)` for an error raised after writing) and writes what changed, nothing if `fn` raises. The
+JSON-in-git store runs it under its lock; a database with read-modify-write transactions (Firestore, Spanner) runs it
+as one, retried on contention. `work.changes()` records each task and claim the change touched, before and after:
+that list is the `apply(writes)` of a store with conditional writes only, so moving there changes the stores, not
+atm-lib's rules. The first draft's `Tx` handed atm-lib the whole document to change in place, which is
 today's code moved behind a name: it would have tied every future store to whole-document writes.
 
 ## 4. common and the generated types

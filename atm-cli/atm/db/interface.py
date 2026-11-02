@@ -5,7 +5,7 @@ dicts of the task file's format (docs/v4/data-model.md §4); a store may hand ou
 changes what a read returns.
 """
 
-from typing import List, Optional, Protocol
+from typing import Any, Callable, List, Optional, Protocol
 
 
 class Store(Protocol):
@@ -40,6 +40,12 @@ class Store(Protocol):
 
     def working_copy(self) -> Optional[str]:
         """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
+        ...
+
+    def change(self, fn: Callable[[Any], Any]) -> Any:
+        """Run `fn(work)` (a db.working.Working: the tasks and claims to change) under the store's isolation, and write
+        what it changed; nothing when it raises. Returns what `fn` returns, then raises what it deferred. The
+        transitional form of `apply` (docs/layered-architecture.md §3.3): `work.changes()` is the list of writes."""
         ...
 
     def document(self) -> dict:

@@ -4,8 +4,10 @@ in here as the migration's slices do (§9)."""
 
 import os
 
-from ...claims import read_store
+from ...claims import locked_with_claims, read_store, write_store
+from ...core import git, read_json, write_json_atomic
 from ...model import archive_path, archived_task, load_archive, load_tasks, vocabulary
+from ..working import Working
 
 
 class JsonGitStore:
@@ -53,3 +55,26 @@ class JsonGitStore:
 
     def working_copy(self):
         return self.paths["root"]
+
+    def change(self, fn):
+        """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
+        tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
+        (docs/layered-architecture.md §3.3: the transitional form of `apply`.)"""
+        root, tasks_file = self.paths["root"], self.paths["tasks"]
+        with locked_with_claims(self.paths):
+            work = Working(
+                load_tasks(self.paths),
+                read_store(self.paths),
+                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
+                lambda: os.path.getsize(tasks_file),
+                # The files still hold what was read: nothing is written before fn returns
+                lambda: (read_json(tasks_file), read_store(self.paths)),
+            )
+            result = fn(work)
+            # tasks.json is written on every change, as atm always has (comparing first would cost more than writing)
+            write_json_atomic(self.paths["tasks"], work.document)
+            if work.store_changed():
+                write_store(self.paths, work.claims_store)
+        self._data = None  # this store's snapshot is out of date now
+        work.raise_deferred()
+        return result
