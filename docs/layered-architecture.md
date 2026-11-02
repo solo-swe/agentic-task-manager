@@ -11,59 +11,88 @@ them apart:
 - **other users of atm's logic** (an MCP server, scripts, other tools) without going through the command line;
 - **a dashboard without its own copy of the rules**, so a rule changes in one place.
 
-This document defines the layers, what each one may depend on, where today's code goes, and the steps to get there.
-It moves no code: the steps at the end become tasks once it is approved.
+This document defines the layers, what each one may depend on, the interfaces between them, where today's code
+goes, and the steps to get there. It moves no code: the steps at the end become tasks once it is approved.
 
 ## 1. The layers
 
-```
-  ┌──────────────┐
-  │  Dashboard   │  Svelte, in the browser
-  └──────┬───────┘
-         │ HTTP only
-         ▼
-  ┌──────────────┐        ┌──────────────┐        ┌──────────────────────┐
-  │   REST API   │        │     CLI      │        │ other tools          │
-  │ (atm serve)  │        │  `atm …`     │        │ (MCP server, scripts)│
-  └──────┬───────┘        └──────┬───────┘        └──────────┬───────────┘
-         └───────────────────────┼───────────────────────────┘
-                                 ▼
-                    ┌─────────────────────────┐
-                    │         atm-lib         │  all business logic
-                    └─────┬──────────────┬────┘
-                          │              │
-                          ▼              ▼
-              ┌───────────────────┐  ┌──────────────────┐
-              │    db interface   │  │  vcs interface   │
-              ├───────────────────┤  ├──────────────────┤
-              │ JSON-in-git store │  │ git (code only)  │
-              │ Cloud DB (later)  │  │                  │
-              └───────────────────┘  └──────────────────┘
+**The layers and what they depend on:**
 
-  ┌──────────────────────────────────────────────────────────────────────────────┐
-  │ common: the JSON Schema of the data → the Python model and the generated TS  │
-  │ types; vocabularies, status kinds, errors, pure helpers. Every layer uses it. │
-  └──────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Dashboard["Dashboard<br/><i>Svelte, in the browser</i>"]
+    Tools["Other tools<br/><i>MCP server, scripts</i>"]
+
+    subgraph Python["atm (Python)"]
+        API["REST API<br/><i>atm serve</i>"]
+        CLI["CLI<br/><i>atm …</i>"]
+        Lib["atm-lib<br/><i>all business logic</i>"]
+        DbI["db interface"]
+        VcsI["vcs interface"]
+    end
+
+    subgraph Shared[" "]
+        direction LR
+        Common["common<br/><i>JSON Schema, Python model,<br/>vocabularies, errors, helpers</i>"]
+        TSTypes["Generated TS types<br/><i>dashboard/src/lib/generated/</i>"]
+    end
+
+    Dashboard -- "HTTP only" --> API
+    API --> Lib
+    CLI --> Lib
+    Tools --> Lib
+    Lib --> DbI
+    Lib --> VcsI
+    Python --> Common
+    Dashboard --> TSTypes
+    Common -. "generated at build time" .-> TSTypes
+
+    classDef generated stroke-dasharray: 5 5
+    class TSTypes generated
+    style Shared fill:none,stroke:none
+```
+
+Every layer inside *atm (Python)* may use common. The Dashboard uses only the types generated from it.
+
+**What implements the interfaces:**
+
+```mermaid
+flowchart TD
+    DbI["db interface"]
+    VcsI["vcs interface"]
+    JsonGit["JSON-in-git store<br/><i>today's files</i>"]
+    Memory["In-memory store<br/><i>atm-lib's tests</i>"]
+    Cloud["Cloud store<br/><i>later</i>"]
+    Git["git<br/><i>code only</i>"]
+
+    JsonGit -. implements .-> DbI
+    Memory -. implements .-> DbI
+    Cloud -. implements .-> DbI
+    Git -. implements .-> VcsI
+
+    classDef later stroke-dasharray: 5 5
+    class Cloud later
 ```
 
 | Layer | Does | Never |
 |---|---|---|
-| **Dashboard** | Shows projects; fetches from the REST API; computes what is purely presentation (chart series, groupings, layout) | Reads files; holds business rules (what is ready, archivable, waiting on whom) |
+| **Dashboard** | Shows projects; fetches from the REST API; computes what is presentation (charts, forecasts, velocity, burndown, groupings, layout) | Reads files; holds business rules (what is ready, archivable, waiting on whom) |
+| **Generated TS types** | The types of the API's responses, generated from common's schema; the Dashboard imports them | Is edited by hand |
 | **REST API** | Maps HTTP requests to atm-lib calls and results to JSON; the HTTP concerns (Host check, ETags, sizes, caching) | Holds logic; touches storage |
 | **CLI** | Maps arguments to atm-lib calls and results to text or `--json`; exit codes | Holds logic; touches storage |
-| **atm-lib** | Every business action and query: start, done, review, claims and leases, next, sprints, releases, archive, checks, summaries | Knows how or where data is kept; prints; reads `argparse` objects |
-| **db** | One interface for data access; its implementations know how and where data is kept, and how concurrent writers are kept apart | Business rules |
-| **vcs** | One interface to the code's version control: commit these files, the current commit, is a commit in the history, the base branch, the remote's address | Business rules; storing tasks |
-| **common** | The data model (from the schema), vocabularies and their defaults, status kinds, typed errors, pure helpers (time, IDs, names) | Depends on any other layer; does I/O |
+| **atm-lib** | Every business action and query (§5) | Knows how or where data is kept; prints; reads `argparse` objects |
+| **db** | One interface for data access (§3); its implementations know how and where data is kept, and keep concurrent writers apart | Business rules |
+| **vcs** | One interface to the code's version control (§2) | Business rules; storing tasks |
+| **common** | The JSON Schema and the Python model generated from it, vocabularies and their defaults, status kinds, typed errors, pure helpers (time, IDs, names) | Depends on any other layer; does I/O |
 
 **The dependency rule.** Dependencies run one way:
 
-- the Dashboard depends on the REST API, over HTTP only;
+- the Dashboard depends on the REST API, over HTTP only, and on the generated TS types;
 - the REST API, the CLI and other tools depend on atm-lib;
 - atm-lib depends on the db and vcs **interfaces**, never on an implementation; the implementation is chosen once,
   when atm starts (the CLI's and the REST API's entry points);
 - the db and vcs implementations depend on their interfaces;
-- every Python layer may use common; the Dashboard uses common's generated TypeScript types.
+- every Python layer may use common.
 
 Nothing depends upward, and the CLI and REST API never call each other.
 
@@ -78,13 +107,25 @@ atm runs `git` today for two different reasons, and the design keeps them apart.
 - `migrate` and `init` stage atm's files (`git add`, `git mv`, `git rm --cached`);
 - claims and the registry are shared by all worktrees of a clone through `git rev-parse --git-common-dir`
   (`claims.py:79`, `registry.py:60`);
-- the project card's branch comes from `.git/HEAD` (`query.py:351`).
+- the project card's branch comes from `.git/HEAD` (`query.py:351`), and the worktrees' own copies of `tasks.json`
+  show on the board (`worktrees.json`).
 
 **Git as the code's version control** (the vcs interface):
 
 - `atm commit`: commits exactly a task's files with `tasks.json`, and records the SHA on the task (`git_ops.py:172`);
 - `atm commit --record`: checks a commit is in the history (`merge-base --is-ancestor`);
 - `atm workflow`'s default base branch (`origin/HEAD`), `atm repository`'s remote address.
+
+```python
+class Vcs(Protocol):
+    def commit(self, files: list[str], message: str) -> str: ...     # exactly these files; returns the SHA
+    def resolve(self, rev: str) -> str | None: ...                    # a revision's SHA, None if unknown
+    def in_history(self, sha: str) -> bool: ...                       # reachable from the current commit
+    def message(self, sha: str) -> str: ...                           # a commit's message
+    def default_base(self) -> str | None: ...                         # the remote's default branch
+    def remote_url(self) -> str | None: ...                           # the remote's address
+    def branch(self) -> str | None: ...                               # the checked-out branch
+```
 
 **The code host is already outside atm.** `atm pr` and `atm merged` only record what they are given; the skills call
 `gh`. The dashboard already builds commit and PR links for GitHub, GitLab, Bitbucket and Gitea (`repo.ts:26`).
@@ -96,8 +137,9 @@ Supporting GitLab needs no change to these layers: it is a change in the skills.
   store. A cloud store replaces them with its own sync and locking, and atm-lib doesn't change. This is the main gain,
   and it needs those three to leave `core.py`, `merge.py`, `claims.py` and `registry.py`.
 - **Code in git, tasks elsewhere.** With a cloud store, `atm commit` still commits the code through vcs and records
-  the SHA in the cloud store, but no longer commits `tasks.json`. atm-lib asks the store whether task data travels
-  with code commits (`store.travels_with_code`), instead of assuming it.
+  the SHA in the store, but no longer commits `tasks.json`: atm-lib asks the store for the files that travel with
+  code commits (`Store.files_for_commit()`, `[".agentic-task-manager/tasks.json"]` for JSON-in-git, none for a cloud
+  store) instead of assuming them.
 - **Other version control** (Mercurial, Jujutsu, Sapling). The vcs interface is small (above). We define it and ship
   only git; another implementation is possible later, not planned.
 
@@ -106,71 +148,350 @@ them, not in common, since common does no I/O.
 
 ## 3. The db interface
 
-atm-lib reads and writes through a **store**, opened for one project. Its first shape follows today's data, whole
-documents in a transaction, so the move changes no behaviour:
+### 3.1 What atm stores today
+
+Every read or write loads and saves whole files, but what atm *does* is a short list of operations on a few
+entities. The interface models those, as they are used today, and nothing more.
+
+| Entity | Kept today in | Create | Read | Update | Delete |
+|---|---|---|---|---|---|
+| **Settings**: `project`, `description`, `id`, `repository`, `logo`, `workflow`, `review`, `sprint_names`, `archive` settings | `tasks.json` `meta` | `init` | every command | `init --meta-file`, `workflow set`, `repository set`, `logo set/unset` | — |
+| **Vocabularies**: statuses, types, priorities, `default_priority`, label descriptions | `tasks.json` `meta` | `init --meta-file` | every command | `init --meta-file` (a list is replaced whole) | — |
+| **Task** | `tasks.json` `tasks` | `add` (one or many; the ID is allocated then) | `show`, `list`, `status`, `deps`, `next`, … | `edit`, the status changes, `note`, `commit`, `pr`, `merged`, `move`, `components --assign/--from-label` | none: finished tasks are archived, unwanted ones skipped |
+| **Archived task** | `tasks-archive.json` | `archive` (moved from tasks) | `list --archived`, `show`, dependencies | `components --from-label` | `unarchive` (moved back) |
+| **Sprint** | `tasks.json` `meta.sprints`, in order | `sprints add [--after]`, `close --carry-to new` | `sprints`, `status` | `sprints edit`, `start`, `close` (with its report) | `sprints delete` |
+| **Release** | `tasks.json` `meta.releases`, in order | `releases add` | `releases`, `status` | `releases edit`, `archive` (a state), `merged` (released) | — |
+| **Component** | `tasks.json` `meta.components` | `components add` | `components`, `add`, `edit`, `check` | `components edit` | — |
+| **Claim** (a task's holder and lease) | the claims store, shared by a clone's worktrees | `start`, `next --claim` | `claims`, `status`, `next`, the dashboard | `heartbeat` (the lease) | `done`, `review`, `block`, `release`, `fail`; expiry |
+| **Resolution** (a review or block decided in another worktree) | the claims store | the decision | `status`, the worktrees' boards | — | when that worktree's copy catches up |
+| **Registered project** | `~/.agentic-task-manager/projects.json` | `projects add`, every atm run (registers) | `projects`, `atm serve` | `seen_at`, id and name follow `meta` | `projects remove`, `prune` |
+
+Two counters live with them: `meta.next_id` (the next task ID, so new IDs never need the archive) and
+`meta.archived` (the archive's size, for the dashboard). Both are the store's job, not atm-lib's.
+
+### 3.2 The interface
 
 ```python
 class Store(Protocol):
-    def read(self) -> Snapshot: ...                     # tasks, meta, without a lock (status, list, show, serve)
-    def transaction(self) -> ContextManager[Tx]: ...    # locked read-modify-write; commits on a clean exit
-    def archive(self) -> Archive: ...                   # the archived tasks, loaded only when asked
-    def claims(self) -> ClaimStore: ...                 # claims and leases, shared by the project's working copies
-    travels_with_code: bool                             # True for JSON-in-git: atm commit includes the task data
+    # Settings and vocabularies
+    def get_settings(self) -> Settings: ...
+    def update_settings(self, changes: SettingsChanges) -> Settings: ...
+    def get_vocabularies(self) -> Vocabularies: ...                    # with the defaults filled in
+    def set_vocabularies(self, lists: VocabularyLists) -> None: ...     # init --meta-file
 
-class Tx(Protocol):
-    data: TasksDocument                                 # the model from common
-    def archive(self) -> ArchiveDocument: ...           # the archive inside the same transaction (archive/unarchive)
+    # Tasks
+    def create_tasks(self, drafts: list[TaskDraft]) -> list[Task]: ...  # allocates the IDs (next_id)
+    def get_task(self, id: str) -> Task | None: ...                     # tasks.json, else the archive
+    def list_tasks(self, where: TaskFilter | None = None) -> list[Task]: ...
+    def update_task(self, id: str, changes: TaskChanges, expect: Version) -> Task: ...
+
+    # The archive
+    def list_archived(self, where: TaskFilter | None = None) -> list[Task]: ...
+    def archive_tasks(self, ids: list[str]) -> int: ...                 # moves them; returns the archive's size
+    def restore_tasks(self, ids: list[str]) -> list[Task]: ...          # unarchive
+
+    # Sprints, releases, components (meta lists, in order)
+    def list_sprints(self) -> list[Sprint]: ...
+    def create_sprint(self, sprint: Sprint, after: str | None = None) -> Sprint: ...
+    def update_sprint(self, name: str, changes: SprintChanges) -> Sprint: ...
+    def delete_sprint(self, name: str) -> None: ...
+    def list_releases(self) -> list[Release]: ...
+    def create_release(self, release: Release) -> Release: ...
+    def update_release(self, id: str, changes: ReleaseChanges) -> Release: ...
+    def list_components(self) -> list[Component]: ...
+    def create_component(self, component: Component) -> Component: ...
+    def update_component(self, id: str, changes: ComponentChanges) -> Component: ...
+
+    # Claims
+    def list_claims(self) -> list[Claim]: ...                          # live and expired: atm-lib decides
+    def create_claim(self, claim: Claim) -> Claim: ...                  # Conflict if the task is claimed
+    def renew_claim(self, task_id: str, holder: str, until: Time) -> Claim: ...
+    def delete_claim(self, task_id: str, holder: str | None = None) -> None: ...
+    def list_resolutions(self) -> list[Resolution]: ...
+
+    # Several writes that must happen together (3.3)
+    def apply(self, writes: list[Write]) -> None: ...                   # all or nothing; Conflict on a stale expect
+
+    # What the store needs from the code's version control
+    def files_for_commit(self) -> list[str]: ...                        # files atm commit adds; [] for a cloud store
+
+
+class Registry(Protocol):                                               # the user's list of projects
+    def list_projects(self) -> list[ProjectEntry]: ...
+    def add_project(self, path: str) -> ProjectEntry: ...
+    def update_project(self, id: str, changes: ProjectEntryChanges) -> ProjectEntry: ...
+    def remove_project(self, id: str) -> None: ...
+    def open(self, id: str) -> Store: ...
 ```
 
-Beside the project store, a **registry** (the user's list of projects, today `~/.atm/`) is a second interface: the
-REST API and `atm projects` use it.
+`TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
+`with`); what is derived (ready, waiting, effective review) is atm-lib's. The JSON-in-git store filters in memory.
 
-- **JSON-in-git** is today's behaviour: the files in `.agentic-task-manager/`, `lock.py`'s lock, atomic writes, the
-  merge driver, migrations of old layouts, claims in the clone's common git directory.
-- **In-memory** is a second implementation for atm-lib's unit tests. It is also the proof that atm-lib depends on the
-  interface only: a contract test suite runs against both.
-- **Cloud** comes later. Whole-document transactions are coarse for a database shared live; once atm-lib only talks to
-  the store, the interface can grow finer operations (one task, one claim) without touching the CLI or the API.
+Things only one store has stay out of the interface and are reached through that store directly by the code that
+needs them: the JSON-in-git store's merge driver (`atm merge-driver`, which git runs), its migrations of old layouts
+(`atm migrate`), its file locations (`atm paths`) and its worktrees' copies (`worktrees.json`). A cloud store has no
+such things; atm-lib never calls them.
 
-Open: whether `archived_task`'s lookup (today a module-level cache that `load_tasks` sets up, `model.py:501`) becomes
-part of the snapshot or a store call. Either way the global goes.
+### 3.3 Do we need transactions?
+
+Not a generic one, but atm does need some writes to happen together. Today every write is, in effect, a
+transaction: lock, read the whole file, change it, write it back, unlock. That is what keeps two agents from taking
+the same task. Most of today's writes touch one entity and need nothing more. A few touch several, and must happen
+all together or not at all:
+
+| Operation | Why it must be atomic |
+|---|---|
+| `start`, `next --claim` | read "to do, dependencies done, unclaimed", then set the status and create the claim: two agents racing must not both win |
+| `done`, `review`, `block`, `release`, `fail` | the status change and the claim's removal go together |
+| `add` (many) | all the tasks or none; the IDs allocated once |
+| `sprints close` | the sprint's state and report, every carried task's sprint, and a new sprint |
+| `sprints delete --move-to` | the sprint and its tasks' moves |
+| `archive`, `unarchive` | a move between two places; today a crash leaves a task in both, never in neither (DM-5.2) |
+| `merged` | the tasks' `merged_at` and the release becoming released |
+
+So instead of a transaction that callers open and hold, the interface has:
+
+- **conditional writes:** every entity has an opaque `version` (the JSON-in-git store hashes the entity's content);
+  `update_task(…, expect=version)` fails with `Conflict` if the task changed since it was read;
+- **`apply(writes)`:** a list of conditional writes, done all together or not at all (the archive moves are their
+  own store operations, since a store may move them differently);
+- **retry in atm-lib:** on `Conflict`, atm-lib reads again, checks its rules again, and writes again (for `start`,
+  a second check finds the task claimed and says so).
+
+This fits the JSON-in-git store (`apply` is today's lock-read-write) and a cloud database (conditional and batched
+writes are what they offer). The first draft's `Tx` handed atm-lib the whole document to change in place, which is
+today's code moved behind a name: it would have tied every future store to whole-document writes.
 
 ## 4. common and the generated types
 
 Today the model is written twice, by hand: in Python (`model.py`, `core.py`) and in TypeScript (`types.ts`,
-`vocab.ts`). common makes one source.
+`vocab.ts`). common makes one source: **JSON Schemas**, in `atm-cli/atm/common/schema/`.
 
-**Source: a JSON Schema** of `tasks.json`, `tasks-archive.json`, the claims and the REST API's responses, in
-`atm-cli/atm/common/schema/`. From it, at build time:
+### 4.1 The schemas
 
-- **TypeScript types** for the Dashboard (`dashboard/src/lib/generated/`), with a dev-only generator such as
+| Schema | Describes | Used by |
+|---|---|---|
+| `tasks.schema.json` | `tasks.json`: `meta` and `tasks` | the JSON-in-git store, `atm check`, the tests |
+| `archive.schema.json` | `tasks-archive.json` (`meta.archived_at`, `tasks`) | the JSON-in-git store |
+| `task.schema.json` | one task, every field of `docs/v4/data-model.md` §4 | all of the above, the API |
+| `meta.schema.json` | settings, vocabularies, sprints, releases, components, workflow, archive settings | as above |
+| `claims.schema.json` | the claims store: claims, resolutions, hint dates | the JSON-in-git store, the API |
+| `registry.schema.json` | `projects.json` | the registry |
+| `api.schema.json` | every REST API response (§6) and the error shape | the REST API, the Dashboard |
+
+### 4.2 The types
+
+Generated for both languages from the schemas (Python `TypedDict`s and `Literal`s; TypeScript `interface`s and
+unions):
+
+| Group | Types |
+|---|---|
+| Vocabularies | `Kind` (the six), `Status`, `TaskType`, `Priority`, `LabelInfo`, `Vocabularies`, `ReviewMode`, `SprintNames` |
+| Task | `Task`, `TaskDraft`, `TaskChanges`, `Note`, `NoteKind`, `Block`, `ReviewRound`, `SprintHistoryEntry`, `PullRequest`, `ReviewState`, `Resolution` (how it ended), `WithUser` |
+| Project | `Settings`, `Workflow`, `ArchiveSettings`, `Sprint`, `SprintState`, `SprintReport`, `Release`, `ReleaseState`, `Component` |
+| Documents | `TasksDocument`, `ArchiveDocument`, `ClaimsStore`, `RegistryDocument`, `ProjectEntry` |
+| Claims | `Claim`, `ClaimResolution`, `Actor` |
+| atm-lib results | `TaskView` (a task with its derived values: `kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`, `archived`), `StatusReport`, `NextResult`, `DepsResult`, `CheckReport`, `ArchiveReport`, `SprintCloseReport`, `ReleaseNotes` |
+| API | `ProjectList`, `ProjectInfo`, `ProjectSummary`, `SprintSummary`, `Board`, `BoardColumn`, `Card`, `Worktree`, `WorktreeList`, `ClaimList`, `SearchResult`, `WhoAmI`, `ApiError` |
+| Errors | `ErrorCode`: `not_found`, `invalid`, `conflict`, `claimed`, `lease_expired`, `not_allowed`, `nothing_to_do` |
+
+### 4.3 How they are made and checked
+
+- **TypeScript** for the Dashboard (`dashboard/src/lib/generated/`), with a dev-only generator such as
   `json-schema-to-typescript`;
-- **Python types** (`TypedDict`s) and the **vocabulary defaults** (statuses and kinds, types, priorities) for
-  common, generated by `atm-cli/build.py`, so `atm.py` stays standard-library only;
+- **Python** types and the **vocabulary defaults** (statuses and kinds, types, priorities), generated by
+  `atm-cli/build.py` into common, so `atm.py` stays standard-library only;
 - **checks:** the Python validators (`check_*` in `model.py`) stay hand-written (the standard library has no schema
-  validator); the test suite validates every fixture and every scenario's output against the schema, so code and
-  schema can't drift.
-
-CI fails when a generated file is stale, as it does for `atm.py` and the dashboard build. The schema is also the
-contract for other users of atm-lib and for a future store.
+  validator); the test suite validates every fixture, every scenario's output and every API response against the
+  schemas, so code and schemas can't drift;
+- CI fails when a generated file is stale, as it does for `atm.py` and the dashboard build.
 
 The alternative, Python `TypedDict`s as the source with a small generator for TypeScript, has fewer files but puts
-the contract in one of the two languages. We prefer the schema.
+the contract in one of the two languages. We prefer the schemas: they are also the contract for other users of
+atm-lib and for a future store.
 
-## 5. atm-lib as a library
+## 5. atm-lib
 
 atm-lib is usable by others, so it is an API with a version:
 
-- functions take plain values and return results (dataclasses or dicts of the schema's types); they never take an
-  `argparse.Namespace`, print or exit;
-- failures are typed errors from common (`NotFound`, `Conflict`, `ClaimedByOther`, `LeaseExpired`, `Invalid`, …),
-  which the CLI maps to its exit codes (today 1, 3 and 4) and the REST API to HTTP statuses;
-- no module-level state; the store and the vcs are passed in (a `Project` object holds them);
-- **delivery:** the plugin keeps the one-file `atm.py` (built from the same modules); others get a Python package
-  built from the same sources. Its public surface is listed in one module (`atm.lib`), with semantic versioning;
-  everything else is internal.
+- functions take plain values and return results of common's types; they never take an `argparse.Namespace`, print
+  or exit;
+- failures are typed errors (`ErrorCode`, §4.2), which the CLI maps to its exit codes (today 1, 2, 3 and 4) and the
+  REST API to HTTP statuses;
+- no module-level state (today's `archived_task` cache, `model.py:501`, goes); everything goes through a `Project`,
+  which holds the store, the vcs and the actor:
 
-## 6. Today's code, by layer
+```python
+project = atm.open_project(path, actor="claude:b7be7288")   # picks the store (JSON-in-git) and the vcs (git)
+atm.tasks.start(project, "T-360")
+```
+
+- **delivery:** the plugin keeps the one-file `atm.py`, built from the same modules. Other tools import atm-lib from
+  the repository's `atm-cli/` for now; a published package can come later. Its public surface is one module
+  (`atm.lib`), versioned with the plugin; everything else is internal.
+
+### 5.1 The functions
+
+Every function takes the `project` first; those that write record `project.actor`. `status` (where a function takes
+one) picks a status when the project has several of the target kind. The CLI command each one serves is in the last
+column.
+
+**Tasks: status changes**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `tasks.start` | `id`, `status?` | `TaskView` | to do → in progress, claimed; its dependencies must be done | `start` |
+| `tasks.review` | `id`, `note?`, `status?` | `TaskView` | asks for a review; the claim is released | `review` |
+| `tasks.done` | `id`, `note?`, `commit?`, `resolution?`, `status?` | `TaskView`, now ready | done (or waits for the sprint review, by its review mode); the claim dropped | `done` |
+| `tasks.reject` | `id`, `reason` | `TaskView` | a task in review back to to do | `reject` |
+| `tasks.approve` | `id`, `note?` | `TaskView` | approves a review; it stays in review until its agent takes it back | `approve` |
+| `tasks.request_changes` | `id`, `reason` | `TaskView` | asks for changes; its agent gets it back first | `request-changes` |
+| `tasks.block` | `id`, `on` (`user`/`agent`), `questions[]`, `reason?` | `TaskView` | blocked on a decision; the claim released | `block` |
+| `tasks.unblock` | `id`, `answers[]` | `TaskView` | back to to do with the answers as a note | `unblock` |
+| `tasks.reopen` | `id`, `reason` | `TaskView` | a done or skipped task back to to do | `reopen` |
+| `tasks.skip` | `id`, `reason`, `resolution?`, `duplicate_of?` | `TaskView` | not needed: skipped | `skip` |
+| `tasks.fail` | `id`, `reason?` | `TaskView` | in progress back to to do, with a failure note | `fail` |
+| `tasks.release` | `id`, `note?` | `TaskView` | in progress back to to do, with a handoff note | `release` |
+| `tasks.note` | `id`, `text` | `TaskView` | adds a note (at most 500 characters) | `note` |
+
+**Tasks: definitions and queries**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `tasks.add` | `drafts[]` (name, type, sprint, release, priority, labels, description, dependencies, files, requirements, components or `auto`, review, related, with; placeholder IDs) | `TaskView[]`, component hints | adds tasks with the next IDs, all or none | `add` |
+| `tasks.edit` | `id`, `changes` (name, description, sprint or backlog, type, priority, release, review, with; add/remove files, dependencies, labels, components, related; components `auto`) | `TaskView`, hints | changes a definition, never the status | `edit` |
+| `tasks.show` | `ids[]` | `TaskView[]` | tasks in full, archived ones too | `show` |
+| `tasks.list` | `filter` (statuses, type, priority, labels, agent, sprints or backlog, release, component, ready, blocked, in_pr, with_user, archived) | `TaskView[]` | the tasks that match | `list` |
+| `tasks.deps` | `id` | `DepsResult` | what it waits for, and what waits for it (archived ones too) | `deps` |
+| `tasks.search` | `query` | IDs | the tasks matching every word | (API: search) |
+| `tasks.check` | `files?` | `CheckReport` | the schema, vocabularies, dependencies; with `files`, missing files of finished tasks | `check` |
+
+**Claims and the loop**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `claims.next` | `selection` (sprints, tasks, all or backlog), `type?`, `with_user?`, `claim?`, `status?` | `NextResult` (the task, or why there is none) | the task the loop takes next; with `claim`, starts and claims it atomically | `next` |
+| `claims.heartbeat` | `id` | `Claim` | renews the actor's lease | `heartbeat` |
+| `claims.heartbeat_due` | — | `Claim[]` | renews the actor's claims whose last renewal is ten minutes old | `heartbeat --auto` |
+| `claims.list` | — | `Claim[]` | the live claims, from every working copy | `claims` |
+
+**Overview**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `project.status` | `scope?` (sprints, backlog, release, component) | `StatusReport` | counts, in progress, in review, blocked, next, hints | `status` |
+| `project.summary` | — | `ProjectSummary` | the numbers the dashboard's cards show | `summary` |
+| `project.backlog` | `all?` | `TaskView[]` | the tasks in no sprint | `backlog` |
+
+**Sprints, releases, components**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `sprints.list` | `all?` | `Sprint[]` with counts | the sprints in order | `sprints` |
+| `sprints.add` | `name?`, `goal?`, `release?`, `due?`, `after?` | `Sprint` | a planned sprint (a name generated without one) | `sprints add` |
+| `sprints.edit` | `name`, `goal?`, `release?`, `due?` (empty removes) | `Sprint` | changes a sprint | `sprints edit` |
+| `sprints.start` | `name` | `Sprint` | makes it the active one | `sprints start` |
+| `sprints.close` | `name`, `carry_to?` (a sprint, `new` or `backlog`), `new_name?`, `reviewed?` | `SprintCloseReport` | closes it; unfinished tasks carried | `sprints close` |
+| `sprints.delete` | `name`, `move_to?`, `force?` | — | deletes it; its tasks moved | `sprints delete` |
+| `sprints.move` | `ids[]`, `to` (a sprint, `next`, `active`, `backlog`) | `TaskView[]` | moves tasks between sprints | `move` |
+| `releases.list` | `all?` | `Release[]` with tasks by kind and stage | the releases in order | `releases` |
+| `releases.add` | `id`, `name?`, `target?`, `prs[]?`, `released_at?` | `Release` | a release (with the tasks of those PRs) | `releases add` |
+| `releases.edit` | `id`, `name?`, `target?` | `Release` | changes one | `releases edit` |
+| `releases.archive` | `id` | `Release` | archives it | `releases archive` |
+| `releases.notes` | `id` | `ReleaseNotes` (Markdown) | a draft of its changes | `releases notes` |
+| `components.list` | — | `Component[]` with counts | the components | `components` |
+| `components.add` | `id`, `label?`, `paths[]`, `review?`, `from_label?`, `assign?` | `Component` | a component; with `from_label` or `assign`, given to tasks | `components add` |
+| `components.edit` | `id`, `label?`, `add_paths[]?`, `review?`, `from_label?`, `assign?` | `Component` | changes one | `components edit` |
+
+**The archive**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `archive.archive` | `sprints[]?`, `before?`, `keep_days?`, `dry_run?` | `ArchiveReport` (moved, kept and why) | moves finished tasks to the archive | `archive` |
+| `archive.unarchive` | `ids[]` | `TaskView[]`, those the next archive moves back | brings tasks back | `unarchive` |
+| `archive.hint` | — | the hint, or none | whether archiving would help now | (in `status`, `done`) |
+
+**Code, PRs and the project's settings**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `code.commit` | `id`, `files[]`, `message?` | the SHA | commits exactly those files (plus the store's `files_for_commit`) and records it on the task | `commit` |
+| `code.record_commit` | `id`, `rev` | the SHA | records an existing commit in the history | `commit --record` |
+| `code.pr` | `ids[]`, `number`, `url` | `TaskView[]` | records the PR containing the tasks | `pr` |
+| `code.merged` | `pr`, `at?` | the tasks, the release released (or what keeps it planned) | records a merge | `merged` |
+| `settings.init` | `meta?` | `Settings` | gives the project an ID; sets settings and vocabularies | `init` |
+| `settings.workflow` / `set_workflow` | `type`, `base?`, `verify?`, `max_rounds?`, `commit_template?`, `trailers?`, `trailer[]?` | `Workflow` | reads or sets the workflow | `workflow` |
+| `settings.repository` / `set_repository` | `url`, `from?` | the address | reads or sets it (moving recorded PR links) | `repository` |
+| `settings.logo` / `set_logo` / `unset_logo` | `path` | the logo's path | reads, sets or removes the logo | `logo` |
+
+**Projects (the registry)**
+
+| Function | Parameters | Returns | Does | CLI |
+|---|---|---|---|---|
+| `projects.list` | — | `ProjectInfo[]` | the registered projects, with their summaries | `projects`, (API: projects) |
+| `projects.add` | `path` | `ProjectEntry` | registers a project | `projects add` |
+| `projects.remove` | `id` or `path` | — | unregisters one | `projects remove` |
+| `projects.prune` | — | the removed ones | drops projects whose folder is gone | `projects prune` |
+
+**Not in atm-lib** (they are about processes or one store, not business logic): `version` and `help` (CLI);
+`serve` and `_serve-child` (the REST API's launcher); `run` (the CLI keeps a claim alive around a child process with
+`claims.heartbeat`); `merge-driver`, `migrate` and `paths` (the JSON-in-git store, §3.2); `_lock-test` (a test hook
+of that store).
+
+## 6. The REST API
+
+**Today it is a file server.** `atm serve` sends `tasks.json`, `tasks-archive.json` and `claims.json` as they are on
+disk (`server.py:600`), plus a few computed answers. The Dashboard then applies the rules itself: which tasks are
+ready or waiting (`waiting.ts`, `work.ts`), status kinds and defaults (`vocab.ts`), effective review modes and
+releases (`review.ts`, `releases.ts`), the archive's threshold notice. Those are atm-lib's rules computed a second
+time, and they are what moves.
+
+**The rules for every request stay** (`docs/multi-project-api.md` §1): `127.0.0.1` only, the Host check, `GET` and
+`HEAD` only, `Cache-Control: no-store`, no CORS, JSON errors, ETags with `If-None-Match`. The API stays **read-only**:
+a route that writes is a new entry point, out of scope here (§8).
+
+### 6.1 Today's routes
+
+| Route | Answer | atm-lib behind it (target) |
+|---|---|---|
+| `GET /` | the dashboard | — (the launcher holds it) |
+| `GET /__atm/whoami` | the server's pid, port, version, build | — |
+| `GET /api/projects` | the projects with their summaries | `projects.list` |
+| `GET /api/search?q=` | matching task IDs per project | `tasks.search` per project |
+| `GET /p/<id>/tasks.json` | the file, as stored | (raw file; replaced by v1) |
+| `GET /p/<id>/tasks-archive.json` | the file, as stored | (raw file; replaced by v1) |
+| `GET /p/<id>/claims.json` | the live claims | `claims.list` |
+| `GET /p/<id>/worktrees.json` | the worktrees and their changed tasks | the JSON-in-git store (§3.2) |
+| `GET /p/<id>/logo` | the logo image | `settings.logo` |
+
+### 6.2 The v1 routes
+
+Beside today's, under `/api/v1/`; today's raw file routes go once the Dashboard no longer reads them (§9, step 9).
+Every answer is a type of `api.schema.json`; list routes take the same filters as `tasks.list` as query parameters.
+
+| Route | Parameters | Answer | atm-lib |
+|---|---|---|---|
+| `GET /api/v1/projects` | — | `ProjectList`: every project with its summary | `projects.list` |
+| `GET /api/v1/projects/<p>` | — | `ProjectInfo`: settings, vocabularies, summary | `project.summary` + settings |
+| `GET /api/v1/projects/<p>/status` | scope: `sprint`, `backlog`, `release`, `component` | `StatusReport` | `project.status` |
+| `GET /api/v1/projects/<p>/tasks` | `status`, `type`, `priority`, `label`, `agent`, `sprint`, `backlog`, `release`, `component`, `ready`, `blocked`, `in_pr`, `with_user`, `archived` | `TaskView[]`, with the derived values | `tasks.list` |
+| `GET /api/v1/projects/<p>/tasks/<t>` | — | `TaskView` | `tasks.show` |
+| `GET /api/v1/projects/<p>/tasks/<t>/deps` | — | `DepsResult` | `tasks.deps` |
+| `GET /api/v1/projects/<p>/next` | `sprint`, `backlog`, `all`, `type`, `with_user` | `NextResult` (never claims) | `claims.next` |
+| `GET /api/v1/projects/<p>/sprints` | `all` | `Sprint[]` with counts and reports | `sprints.list` |
+| `GET /api/v1/projects/<p>/releases` | `all` | `Release[]` with tasks by kind and stage | `releases.list` |
+| `GET /api/v1/projects/<p>/releases/<r>/notes` | — | `ReleaseNotes` | `releases.notes` |
+| `GET /api/v1/projects/<p>/components` | — | `Component[]` with counts | `components.list` |
+| `GET /api/v1/projects/<p>/claims` | — | `ClaimList` | `claims.list` |
+| `GET /api/v1/projects/<p>/worktrees` | — | `WorktreeList` (empty for a store without worktrees) | the store |
+| `GET /api/v1/projects/<p>/archive/hint` | — | the archive hint, or none | `archive.hint` |
+| `GET /api/v1/projects/<p>/logo` | — | the image | `settings.logo` |
+| `GET /api/v1/search` | `q` | `SearchResult` | `tasks.search` |
+
+Errors map from `ErrorCode`: `not_found` → 404, `invalid` → 400, anything else → 500; a body over the size limit
+→ 413, as today.
+
+## 7. Today's code, by layer
 
 atm-cli (7,670 lines in 21 modules). Every module with a `cmd_*` function is CLI and atm-lib at once (it parses,
 loads, decides, saves and prints), and most also do storage. `cli.py` imports a `cmd_*` from 17 modules.
@@ -199,44 +520,37 @@ loads, decides, saves and prints), and most also do storage. `cli.py` imports a 
 | `server.py` | 710 | REST API | serves the task files themselves, not atm-lib results |
 | `cli.py` | 622 | CLI | — (already only parsing and dispatch) |
 
-**The REST API today is a file server.** `atm serve` sends `tasks.json`, `tasks-archive.json` and `claims.json` as
-they are on disk (`server.py:600`), plus a few computed answers (`/api/projects`, `/api/search`, worktrees, claims).
-The Dashboard then applies the rules itself: which tasks are ready or waiting (`waiting.ts`, `work.ts`), status kinds
-and defaults (`vocab.ts`), effective review modes and releases (`review.ts`, `releases.ts`), the archive's
-threshold notice. Those are atm-lib's rules computed a second time, and they are what moves.
-
 **The Dashboard's requests** are spread over `load.ts`, `state.svelte.ts`, `claims.ts`, `worktrees.ts` and
 `overview-data.ts`: they become one client module (`dashboard/src/lib/api/`), the only one that calls `fetch`.
 
 **The dev server plays the API a second time** (`dashboard/build/dev-data.ts`, 152 lines), already calling
 `atm summary` for part of it. In the target it runs the real REST API, so there is one implementation.
 
-## 7. Layout and how the rule is checked
+## 8. Layout, the rule's check, and what stays
 
 ```
 atm-cli/atm/
   common/        model (generated types + rules), vocabularies, errors, helpers; schema/
   db/            interface.py; jsongit/ (files, lock, merge driver, migrations, claims store); memory/
   vcs/           interface.py; git/
-  lib/           atm-lib: tasks, claims, query, edit, sprints, releases, archive, components, project, commit
+  lib/           atm-lib: tasks, claims, project, sprints, releases, components, archive, code, settings, projects
   cli/           argparse, renderers (text, --json), exit codes
-  api/           the REST API: routes, HTTP handling
+  api/           the REST API: routes, HTTP handling, the launcher
 ```
 
 - `atm-cli/build.py` already refuses an import from a module later in `MODULES`. It gets layers: each module's layer
-  is its folder, and an import into a layer the rule doesn't allow fails the build (`api` → `lib` yes, `lib` →
-  `db/jsongit` no, `lib` → `cli` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names
-  stay unique.
-- The Dashboard gets the same as an ESLint rule (`no-restricted-imports` / `no-restricted-globals`): only
-  `src/lib/api/` may call `fetch`; generated types are imported, never edited.
+  is its folder, and an import the rule doesn't allow fails the build (`api` → `lib` yes, `lib` → `db/jsongit` no,
+  `lib` → `cli` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names stay unique.
+- The Dashboard gets the same as an ESLint rule: only `src/lib/api/` may call `fetch`; generated types are imported,
+  never edited.
 
-## 8. Constraints that stay
+**Constraints that stay:**
 
 - atm-cli is standard-library Python 3.9 and ships as one file; the plugin needs nothing installed but Python.
 - The Dashboard is one self-contained HTML file, served by `atm serve`.
-- The security invariants in `docs/security-architecture.md` hold at every step. The REST API stays read-only,
-  localhost-only, with its Host check; **a route that writes is a new entry point** and is out of scope here (when it
-  comes, it needs its own design: CSRF protection, a token, the security document updated in the same PR).
+- The security invariants in `docs/security-architecture.md` hold at every step. The REST API stays read-only and
+  localhost-only, with its Host check. A route that writes is a new entry point and needs its own design (CSRF
+  protection, a token, the security document updated in the same PR).
 - Users see no change: same commands, output, exit codes and files. `tests/scripts/` (530 tests through the built
   launcher) and the e2e suite pass at every step and are the safety net for the moves.
 
@@ -249,38 +563,37 @@ as tasks:
    unchanged where they already fit (`cli.py`, `sprint_names.py`), and list the current violations as allowed
    exceptions that later steps remove. A test fails on a new violation.
 2. **common.** Move the pure parts of `core.py` and `model.py` there; typed errors; drop the `archived_task` global.
-3. **The db interface and the JSON-in-git store.** Move `paths`, `lock`, loading and saving, the archive file, the
-   claims store, `registry`, the merge driver and `migrate`'s old layouts behind `Store`; add the in-memory store and
-   the contract tests. atm-lib modules open a store instead of files.
-4. **The vcs interface and git.** Move commit, ancestry, base branch and remote address out of `git_ops.py`,
-   `core.py` and `repository.py`; `travels_with_code` decides whether `atm commit` includes `tasks.json`.
-5. **atm-lib, one area per task.** Split each `cmd_*` into an atm-lib function (plain values in, result out, typed
-   errors) and a CLI renderer: tasks and status changes; claims and next; query; edit and check; sprints; releases;
-   archive; components; init, commit, pr and merged. Each comes with Python unit tests on the in-memory store (new:
-   `tests/lib/`, standard `unittest`).
-6. **The REST API on atm-lib.** `server.py`'s handlers call atm-lib; versioned routes (`/api/v1/…`) return the model
-   plus derived values (readiness, waiting on, effective review and release, archive hints). The raw file routes stay
-   until the Dashboard no longer needs them. `docs/multi-project-api.md` is updated.
-7. **The schema and the generators.** The JSON Schema in common; the TypeScript and Python generators in the build;
-   fixtures and outputs validated against it; CI's staleness check.
+3. **The db interface and the JSON-in-git store.** The entities and operations of §3 behind `Store` and `Registry`:
+   `paths`, `lock`, loading and saving, the archive file, the claims store, `registry`, the merge driver and
+   `migrate`'s old layouts move into the JSON-in-git store; conditional writes and `apply`; the in-memory store and
+   a contract test suite run against both.
+4. **The vcs interface and git.** Move commit, ancestry, base branch, branch and remote address out of `git_ops.py`,
+   `core.py`, `query.py` and `repository.py`; `files_for_commit` decides what `atm commit` adds.
+5. **atm-lib, one area per task** (§5.1): status changes; claims and next; queries and the overview; add, edit and
+   check; sprints; releases; components; the archive; code and PRs; settings; projects. Each splits its `cmd_*` into
+   an atm-lib function and a CLI renderer, with Python unit tests on the in-memory store (new: `tests/lib/`, standard
+   `unittest`).
+6. **The REST API on atm-lib.** `server.py`'s handlers call atm-lib; the v1 routes (§6.2) beside today's;
+   `docs/multi-project-api.md` updated.
+7. **The schemas and the generators.** The JSON Schemas (§4.1); the TypeScript and Python generators in the build;
+   fixtures, outputs and responses validated against them; CI's staleness check.
 8. **The Dashboard's client layer.** All requests in `src/lib/api/`, typed by the generated types; the ESLint rule.
-9. **The Dashboard without rules.** Replace each duplicated rule with the API's derived values, one area per task
-   (readiness and waiting, kinds and defaults, review and release, archive hints); then drop the raw file routes.
+9. **The Dashboard without rules.** Replace each duplicated rule with the v1 routes' derived values, one area per
+   task (readiness and waiting, kinds and defaults, review and release, archive hints); then drop the raw file
+   routes. Forecasts, velocity and burndown stay in the Dashboard.
 10. **One API implementation in development.** The dev server runs the real REST API instead of `dev-data.ts`.
-11. **atm-lib for others.** The public module and its documentation, a package built from the same sources, the
-    versioning policy.
+11. **atm-lib for others.** The public module (`atm.lib`) and its documentation; using it from the repository. No
+    published package yet.
 12. **Documentation.** `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout, `docs/security-architecture.md`'s components.
 
 Steps 1–2 come first; 3 and 4 can run in parallel; 5 needs 3 and 4; 6 needs 5; 7 can start after 2; 8 after 7;
 9 after 6 and 8; 10 after 6; 11 after 5; 12 at the end.
 
-## 10. Open questions
+## 10. Decisions
 
-1. **The store's grain:** whole documents in a transaction first (proposed), finer operations when a cloud store
-   comes; or design the finer operations now?
-2. **API versioning:** `/api/v1/` beside today's routes (proposed), or change the routes in place since the
-   Dashboard is served with the API and always matches it?
-3. **The package for others:** published (PyPI) or installed from the repository; its name.
-4. **Presentation vs rules in the Dashboard:** forecasts, velocity and burndown are computations on history. Proposed:
-   they stay in the Dashboard as presentation, and only rules that decide what atm *does* (ready, waiting, archivable,
-   effective modes) move behind the API.
+1. **The store's grain:** the entities and operations atm uses today (§3), with conditional writes and `apply` for
+   the few writes that go together; no generic transaction.
+2. **API versioning:** `/api/v1/` beside today's routes; the old ones go once the Dashboard has moved.
+3. **The package for others:** not published yet; used from the repository.
+4. **The Dashboard's computations:** forecasts, velocity and burndown stay in the Dashboard; the rules that decide
+   what atm does (ready, waiting, archivable, effective modes) move behind the API.
