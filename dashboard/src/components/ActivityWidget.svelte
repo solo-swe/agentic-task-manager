@@ -11,43 +11,64 @@
     sparklineTitle,
     STEPPED_PRESETS,
     type ActivityPreset,
+    type ActivityRange,
   } from '../lib/insights';
+  import type { ClaimMap } from '../lib/claims';
   import { dashboard } from '../lib/state.svelte';
   import { timeUse } from '../lib/timeuse';
+  import type { Task } from '../lib/types';
+  import { DEFAULT_VOCABULARY } from '../lib/vocab';
   import ActivityDeepDive from './ActivityDeepDive.svelte';
   import Icon from './Icon.svelte';
   import InfoTip from './InfoTip.svelte';
 
+  // A project's Activity by default. The overview's (T-328) gives every project's tasks and claims (`source`, with
+  // the default vocabulary's statuses), its own period (`view`), how to open a task (`onopen`) and a line per project
+  // (`byProject`, for the chosen period)
+  let {
+    source = undefined,
+    view = dashboard,
+    onopen = undefined,
+    byProject = undefined,
+  }: {
+    source?: { tasks: Task[]; claims: ClaimMap };
+    view?: { activityRange: ActivityRange };
+    onopen?: (id: string) => void;
+    byProject?: (period: { start: number; end: number } | null) => { label: string; count: number; open: () => void }[];
+  } = $props();
+  const tasks = $derived(source ? source.tasks : dashboard.history);
+  const vocab = $derived(source ? DEFAULT_VOCABULARY : dashboard.vocab);
+  const claims = $derived(source ? source.claims : dashboard.claims);
+
   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
   // Archived completions count too once the archive is loaded (dashboard.history)
-  const series = $derived(activitySeries(dashboard.history, null, dashboard.loadedAt, dashboard.vocab));
+  const series = $derived(activitySeries(tasks, null, dashboard.loadedAt, vocab));
   let open = $state(false);
 
   // The panel shows the chosen period (saved with the view); the pill always shows all time
-  const range = $derived(dashboard.activityRange);
+  const range = $derived(view.activityRange);
   const period = $derived(rangeWindow(range, dashboard.loadedAt));
   // Each stepped period in its natural bucket: a week per day, a day per hour (PRESET_BUCKET_MS)
   const detail = $derived(
     range.preset === 'all'
       ? series
-      : activitySeries(dashboard.history, period, dashboard.loadedAt, dashboard.vocab, PRESET_BUCKET_MS[range.preset]),
+      : activitySeries(tasks, period, dashboard.loadedAt, vocab, PRESET_BUCKET_MS[range.preset]),
   );
   const phrase = $derived(periodPhrase(range, dashboard.loadedAt));
   // Where the time went in the period (timeuse.ts, shared with the Progress tab), and who works now: from the live
   // claims, only for a period that runs up to now (T-246)
-  const use = $derived(open ? timeUse(dashboard.history, period, dashboard.loadedAt, dashboard.vocab) : null);
+  const use = $derived(open ? timeUse(tasks, period, dashboard.loadedAt, vocab) : null);
   const workingNow = $derived(
-    !period || period.end >= dashboard.loadedAt
-      ? new Set([...dashboard.claims.values()].map((c) => c.agent)).size
-      : null,
+    !period || period.end >= dashboard.loadedAt ? new Set([...claims.values()].map((c) => c.agent)).size : null,
   );
+  const projects = $derived(open && byProject ? byProject(period) : []);
 
-  // A period reaching back before tasks.json's oldest completion needs the archive (D-5.2)
+  // A period reaching back before tasks.json's oldest completion needs the archive (D-5.2); a project's only
   const oldest = $derived(
     Math.min(...dashboard.tasks.map((t) => Date.parse(t.completed_at ?? '')).filter((t) => !Number.isNaN(t))),
   );
   $effect(() => {
-    if (open && dashboard.archivedCount > 0 && (!period || period.start < oldest)) dashboard.wantArchive();
+    if (!source && open && dashboard.archivedCount > 0 && (!period || period.start < oldest)) dashboard.wantArchive();
   });
 
   // <input type="datetime-local"> works in local time without seconds
@@ -60,23 +81,22 @@
   const stepped = $derived(STEPPED_PRESETS.includes(range.preset));
   const offset = $derived(range.offset ?? 0);
   // ‹ › move a whole hour/day/week/month back or forward, never past now
-  const stepPeriod = (by: number) =>
-    (dashboard.activityRange = { preset: range.preset, offset: Math.min(0, offset + by) });
+  const stepPeriod = (by: number) => (view.activityRange = { preset: range.preset, offset: Math.min(0, offset + by) });
 
   function choose(preset: ActivityPreset) {
-    if (preset !== 'custom') return (dashboard.activityRange = { preset });
+    if (preset !== 'custom') return (view.activityRange = { preset });
     // Start a custom range from what is shown now
     const shown =
       period ?? (detail?.buckets.length ? { start: detail.buckets[0].start, end: dashboard.loadedAt } : null);
     const end = shown?.end ?? dashboard.loadedAt;
-    dashboard.activityRange = { preset, from: shown?.start ?? end - 24 * 3_600_000, to: end };
+    view.activityRange = { preset, from: shown?.start ?? end - 24 * 3_600_000, to: end };
   }
 
   function setCustom(which: 'from' | 'to', value: string) {
     const t = fromInput(value);
     if (Number.isNaN(t) || range.preset !== 'custom') return;
     const next = { ...range, [which]: t };
-    if (next.from! < next.to!) dashboard.activityRange = next;
+    if (next.from! < next.to!) view.activityRange = next;
   }
   let root = $state<HTMLElement>();
 
@@ -137,8 +157,13 @@
             >Activity
             <InfoTip label="activity">
               <p>
-                The whole project, archived tasks included: the search and filters don't apply here. All times are for
-                the chosen period.
+                {#if source}
+                  Every project shown, together (their archives left out), with each project's count below. All times
+                  are for the chosen period.
+                {:else}
+                  The whole project, archived tasks included: the search and filters don't apply here. All times are for
+                  the chosen period.
+                {/if}
               </p>
               <p>
                 <strong>Agents working</strong>: at least one agent at work on a task, from its start until it asked for
@@ -210,7 +235,20 @@
           </div>
         {/if}
         {#if detail}
-          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} />
+          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} {onopen} />
+        {/if}
+        {#if projects.length}
+          <!-- Each project's part (T-328): done in the period; a project opens on its own page -->
+          <div class="activity-projects" id="activity-projects">
+            <span class="activity-projects-title">Done {phrase}, by project</span>
+            {#each projects as p (p.label)}
+              <button class="activity-project" onclick={p.open}
+                ><span class="activity-project-name">{p.label}</span><span class="activity-project-count"
+                  >{p.count}</span
+                ></button
+              >
+            {/each}
+          </div>
         {/if}
       </div>
     {/if}

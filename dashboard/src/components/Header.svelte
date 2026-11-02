@@ -6,6 +6,7 @@
   import Filters from './Filters.svelte';
   import NeedsYouMenu from './NeedsYouMenu.svelte';
   import ActivityWidget from './ActivityWidget.svelte';
+  import OverviewActivity from './OverviewActivity.svelte';
   import ProgressWidget from './ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
 
@@ -72,6 +73,14 @@
         Loading projects…
       {:else}
         {present.length} project{present.length === 1 ? '' : 's'}
+      {/if}
+    {/snippet}
+    {#snippet charts()}
+      {#if dashboard.route.page === 'overview'}
+        <!-- Every project's activity together (T-328) -->
+        <div class="topbar-charts">
+          <OverviewActivity />
+        </div>
       {/if}
     {/snippet}
   </TitleBar>

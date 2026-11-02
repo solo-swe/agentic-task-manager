@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Claim } from '../../src/lib/claims';
 import type { ProjectEntry } from '../../src/lib/load';
-import { combinedTimeline, loadAgentSources, type AgentSource } from '../../src/lib/overview-agents';
+import {
+  combinedTimeline,
+  completionsByProject,
+  loadProjectSources,
+  mergedTasks,
+  type ProjectSource,
+} from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
-import { DEFAULT_VOCABULARY } from '../../src/lib/vocab';
+import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const project = (id: string, missing = false): ProjectEntry => ({
@@ -23,7 +29,7 @@ const task = (id: string, by: string, start: string, end: string | null, status 
     started_at: start,
     completed_at: end ?? undefined,
   }) as Task;
-const source = (p: ProjectEntry, tasks: Task[], claims = new Map<string, Claim>()): AgentSource => ({
+const source = (p: ProjectEntry, tasks: Task[], claims = new Map<string, Claim>()): ProjectSource => ({
   project: p,
   tasks,
   claims,
@@ -69,7 +75,73 @@ describe('combinedTimeline', () => {
   });
 });
 
-describe('loadAgentSources', () => {
+describe('mergedTasks (T-328)', () => {
+  it('every project’s tasks as one project’s: keyed by project, statuses by kind, claims re-keyed', () => {
+    // A project naming its own statuses: "shipped" is done
+    const vocab = resolveVocabulary({
+      statuses: [
+        { id: 'open', label: 'Open', kind: 'todo' },
+        { id: 'doing', label: 'Doing', kind: 'active' },
+        { id: 'shipped', label: 'Shipped', kind: 'done' },
+      ],
+    } as never);
+    const claim: Claim = {
+      task: 'T-2',
+      agent: 'claude:x',
+      branch: null,
+      claimed_at: '2026-01-02T11:00:00Z',
+      lease_expires_at: '2026-01-02T13:00:00Z',
+    };
+    const merged = mergedTasks([
+      source(project('a'), [task('T-1', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z')]),
+      {
+        ...source(
+          project('b'),
+          [
+            { ...task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), status: 'shipped' },
+            { ...task('T-2', 'claude:x', '2026-01-02T11:00:00Z', null), status: 'doing' },
+          ],
+          new Map([['T-2', claim]]),
+        ),
+        vocab,
+      },
+    ]);
+    expect(merged.tasks.map((t) => [t.id, t.status])).toEqual([
+      ['A: T-1', 'done'],
+      ['B: T-1', 'done'],
+      ['B: T-2', 'in_progress'],
+    ]);
+    expect([...merged.claims.keys()]).toEqual(['B: T-2']);
+    expect(merged.claims.get('B: T-2')?.task).toBe('B: T-2');
+    expect(merged.origin.get('B: T-1')).toEqual({ project: project('b'), id: 'T-1' });
+  });
+
+  it('completionsByProject: done in the period (all time without one), most first, none left out', () => {
+    const sources = [
+      source(project('a'), [task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z')]),
+      source(project('b'), [
+        task('T-1', 'Bo', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'),
+        task('T-2', 'Bo', '2026-01-02T09:00:00Z', '2026-01-02T10:00:00Z'),
+        task('T-3', 'Bo', '2026-01-02T11:00:00Z', null),
+      ]),
+      source(project('c'), []),
+    ];
+    const count = (period: { start: number; end: number } | null) =>
+      completionsByProject(sources, period).map((p) => [p.project.id, p.completed]);
+    expect(count(null)).toEqual([
+      ['b', 2],
+      ['a', 1],
+      ['c', 0],
+    ]);
+    expect(count({ start: Date.parse('2026-01-02T00:00:00Z'), end: NOW })).toEqual([
+      ['b', 2],
+      ['a', 0],
+      ['c', 0],
+    ]);
+  });
+});
+
+describe('loadProjectSources', () => {
   const json = (body: unknown, etag = '"1"') =>
     new Response(JSON.stringify(body), { status: 200, headers: { ETag: etag } });
 
@@ -81,7 +153,7 @@ describe('loadAgentSources', () => {
       if (u.startsWith('p/a/claims.json')) return json({ claims: [] });
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
-    const sources = await loadAgentSources([project('a'), project('gone', true)], [], fetchFn);
+    const sources = await loadProjectSources([project('a'), project('gone', true)], [], fetchFn);
     expect(sources.map((s) => s.project.id)).toEqual(['a']);
     expect(sources[0].tasks.map((t) => t.id)).toEqual(['T-1']);
     expect(sources[0].validators).toEqual({ etag: '"1"' });
@@ -102,11 +174,11 @@ describe('loadAgentSources', () => {
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const sources = await loadAgentSources([project('a'), project('b')], [before], fetchFn);
+    const sources = await loadProjectSources([project('a'), project('b')], [before], fetchFn);
     expect(sources.map((s) => s.project.id)).toEqual(['a']);
     expect(sources[0].tasks).toBe(before.tasks);
     // b failed and had nothing before; with something before, it keeps it
-    const kept = await loadAgentSources([project('b')], [{ ...before, project: project('b') }], fetchFn);
+    const kept = await loadProjectSources([project('b')], [{ ...before, project: project('b') }], fetchFn);
     expect(kept.map((s) => s.tasks[0].id)).toEqual(['T-1']);
     expect(error).toHaveBeenCalled();
     error.mockRestore();

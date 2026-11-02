@@ -13,12 +13,21 @@
   // working (agents busy, stacked per agent), and how long tasks took. One hover reads a period across all three.
   // `period` names the selected period for the headings: "this week", "today", "over all time" (periodPhrase).
   // `use` is where the period's time went; `workingNow` the agents working now, null for a period in the past.
+  // `onopen` opens a task (the overview's opens it in its project, T-328); a project's shows its details
   let {
     series,
     period,
     use = null,
     workingNow = null,
-  }: { series: ActivitySeries; period: string; use?: TimeUseWithSplit | null; workingNow?: number | null } = $props();
+    onopen = undefined,
+  }: {
+    series: ActivitySeries;
+    period: string;
+    use?: TimeUseWithSplit | null;
+    workingNow?: number | null;
+    onopen?: (id: string) => void;
+  } = $props();
+  const openTask = (id: string) => (onopen ? onopen(id) : dashboard.showDetail(id));
 
   const W = 640;
   const PAD_L = 34;
@@ -305,8 +314,8 @@
           role="button"
           tabindex="0"
           aria-label="{c.id} {c.name}: {formatMinutes(c.minutes)}"
-          onclick={() => dashboard.showDetail(c.id)}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && dashboard.showDetail(c.id)}
+          onclick={() => openTask(c.id)}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && openTask(c.id)}
         >
           <title>{c.id} {c.name}: {formatMinutes(c.minutes)}{c.withYou ? ' (with you)' : ''}</title>
           {#if over}

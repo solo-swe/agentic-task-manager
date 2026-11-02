@@ -30,6 +30,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   state and click handler. A project's own `#view=agents` no longer changes the overview's remembered tab.
   The overview's *Active only* is now *Hide inactive projects (N)*, the same setting, shown only when a project would
   be hidden; the separate "N inactive projects hidden" note is gone.
+- **Activity on the Projects Overview** (T-328): the title bar's Activity chart and popup for every shown project
+  together (statuses read by kind, task IDs as "Project: T-1"), with each project's count for the chosen period
+  (opening the project), its own period, and a task opening in its project. The overview now loads every project's
+  `tasks.json` and `claims.json` while shown (`lib/overview-data.ts`, which `lib/overview-agents.ts` became), rather
+  than the summary growing; `ActivityWidget` takes the tasks, period state, a click handler and the breakdown.
 
 ### Changed
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own

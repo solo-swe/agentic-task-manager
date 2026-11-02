@@ -4283,6 +4283,45 @@ svg.graph-minimap.hidden {
   font-weight: 600;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 15%, transparent);
 }
+/* The overview's Activity (T-328): each project's count for the period, under the charts */
+.activity-projects {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.activity-projects-title {
+  margin-right: 4px;
+  color: var(--text-muted);
+}
+.activity-project {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.activity-project:hover {
+  border-color: var(--accent);
+}
+.activity-project-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--surface2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
 .activity-custom {
   display: flex;
   gap: 14px;

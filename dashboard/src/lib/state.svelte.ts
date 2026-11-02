@@ -37,7 +37,7 @@ import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
 import type { ListGroupBy } from './list-groups';
-import { loadAgentSources, type AgentSource } from './overview-agents';
+import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
 import { parseSprintHash, withSprintHash } from './sprint-hash';
 import { sprintModel } from './sprints';
@@ -86,14 +86,17 @@ export class DashboardState {
   boardQuery = $state(getPref('boardQuery', ''));
   /** The All projects board: the active sprints' tasks (the default) or every task (T-340); remembered per browser */
   boardScope = $state<BoardScope>(getPref('boardScope', 'active') === 'all' ? 'all' : 'active');
-  /** The overview's Agents tab (T-333): every listed project's tasks and claims, loaded while the tab is shown */
-  agentSources = $state.raw<AgentSource[]>([]);
-  agentSourcesLoaded = $state(false);
-  /** Its timeline's zoomed range and Live, apart from a project's (not saved) */
+  /** Every listed project's tasks and claims, for the overview's views across projects (Agents T-333, Activity T-328,
+   * Progress T-329): loaded while the overview is shown, refreshed with it */
+  projectSources = $state.raw<ProjectSource[]>([]);
+  projectSourcesLoaded = $state(false);
+  /** The overview's Agents timeline: its zoomed range and Live, apart from a project's (not saved) */
   overviewAgents = $state<{ agentsWindow: ViewWindow | null; agentsLive: boolean }>({
     agentsWindow: null,
     agentsLive: false,
   });
+  /** The overview's Activity period, apart from a project's (not saved) */
+  overviewActivity = $state<{ activityRange: ActivityRange }>({ activityRange: { preset: 'all' } });
   tasks = $state.raw<Task[]>([]);
   // Never mutated, only replaced on (re)load, so a plain Map in $state.raw is reactive enough
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -384,7 +387,6 @@ export class DashboardState {
     if (overviewTab) {
       this.overviewTab = overviewTab;
       setPref('overviewTab', overviewTab);
-      if (overviewTab === 'agents' && !this.agentSourcesLoaded) void this.refreshAgentSources();
     }
     const route = routeFor(this.projects, location.hash);
     if (JSON.stringify(route) !== JSON.stringify(this.route)) {
@@ -419,7 +421,7 @@ export class DashboardState {
     const project = await this.refreshProjects();
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     if (project === null) {
-      if (this.route.page === 'overview' && this.overviewTab === 'agents') await this.refreshAgentSources();
+      if (this.route.page === 'overview') await this.refreshProjectSources();
       this.loadedAt = Date.now();
       return;
     }
@@ -473,14 +475,13 @@ export class DashboardState {
       location.hash = formatHash(params);
     }
     this.overviewTab = tab;
-    // The Agents tab needs every project's tasks: loaded when it is first shown, then on each refresh
-    if (tab === 'agents' && !this.agentSourcesLoaded) void this.refreshAgentSources();
   }
 
-  /** Every listed project's tasks and claims, for the overview's Agents tab; a failure keeps what was there */
-  private async refreshAgentSources() {
-    this.agentSources = await loadAgentSources(this.projects, this.agentSources);
-    this.agentSourcesLoaded = true;
+  /** Every listed project's tasks and claims, for the overview's views across projects; a failure keeps what was
+   * there */
+  private async refreshProjectSources() {
+    this.projectSources = await loadProjectSources(this.projects, this.projectSources);
+    this.projectSourcesLoaded = true;
   }
 
   setBoardGroupByProject(on: boolean) {
