@@ -1,0 +1,267 @@
+[
+  {
+    "name": "atm sprints delete: an empty planned sprint goes at once; the name matches in any case (T-339)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "A", "state": "active" },
+              { "id": "Oops", "state": "planned" }
+            ]
+          },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "oops"],
+    "expect": {
+      "stdout": "Deleted the sprint “Oops” (planned).\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprints delete: an empty closed sprint (earlier trash) goes too",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed", "end": "2026-01-01T00:00:00Z" }] },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["sprints", "delete", "Old", "--json"],
+    "expect": {
+      "json": { "deleted": "Old", "state": "closed", "moved": [], "to": "backlog" },
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [] }, "tasks": [] } }
+    }
+  },
+  {
+    "name": "atm sprints delete: a closed sprint that had tasks stays, with its record",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed" }] },
+          "tasks": [{ "id": "T-1", "status": "done", "sprint": "Old" }]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "Old", "--force"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["the sprint 'Old' is closed and had tasks (T-1): its record and report stay"]
+    }
+  },
+  {
+    "name": "atm sprints delete: an archived task counts as the sprint's history",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed" }] },
+          "tasks": []
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-9", "status": "done", "sprint": "Old" }] }
+      }
+    },
+    "args": ["sprints", "delete", "Old"],
+    "expect": { "exit": 2, "stderrIncludes": ["closed and had tasks (T-9)"] }
+  },
+  {
+    "name": "atm sprints delete: an active sprint's unfinished tasks go to the backlog",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "A", "state": "active" },
+              { "id": "B", "state": "planned" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-1", "status": "todo", "sprint": "A" },
+            { "id": "T-2", "status": "blocked", "sprint": "A" },
+            { "id": "T-3", "status": "todo", "sprint": "B" }
+          ]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
+    "args": ["sprints", "delete", "A"],
+    "expect": {
+      "stdout": "Deleted the sprint “A” (active): 2 tasks moved to the backlog (T-1, T-2).\nNo sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "B", "state": "planned" }] },
+          "tasks": [
+            { "id": "T-1", "status": "todo", "updated_at": "2026-05-01T12:00:00Z", "updated_by": "alice" },
+            { "id": "T-2", "status": "blocked", "updated_at": "2026-05-01T12:00:00Z", "updated_by": "alice" },
+            { "id": "T-3", "status": "todo", "sprint": "B" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprints delete --move-to: the tasks go to another sprint",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "A", "state": "planned" },
+              { "id": "B", "state": "planned" }
+            ]
+          },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
+    "args": ["sprints", "delete", "A", "--move-to", "b", "--json"],
+    "expect": {
+      "json": { "deleted": "A", "state": "planned", "moved": ["T-1"], "to": "B" },
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "B", "state": "planned" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "sprint": "B",
+              "sprint_history": [{ "sprint": "B", "from": "2026-05-01T12:00:00Z" }],
+              "updated_at": "2026-05-01T12:00:00Z",
+              "updated_by": "alice"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprints delete: tasks finished in an open sprint need --force",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }] },
+          "tasks": [
+            { "id": "T-1", "status": "todo", "sprint": "A" },
+            { "id": "T-2", "status": "done", "sprint": "A" }
+          ]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "A"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["tasks finished in the sprint 'A' or moved on from it (T-2): delete it with --force"]
+    }
+  },
+  {
+    "name": "atm sprints delete: a task that moved on from the sprint is history too",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "A", "state": "planned" },
+              { "id": "B", "state": "planned" }
+            ]
+          },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "sprint": "B",
+              "sprint_history": [
+                { "sprint": "A", "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z" },
+                { "sprint": "B", "from": "2026-01-02T00:00:00Z" }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "A"],
+    "expect": { "exit": 2, "stderrIncludes": ["moved on from it (T-1)"] }
+  },
+  {
+    "name": "atm sprints delete --force: every task still in it moves, finished ones too",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }] },
+          "tasks": [
+            { "id": "T-1", "status": "todo", "sprint": "A" },
+            { "id": "T-2", "status": "done", "sprint": "A" }
+          ]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
+    "args": ["sprints", "delete", "A", "--force", "--json"],
+    "expect": {
+      "json": { "deleted": "A", "state": "active", "moved": ["T-1", "T-2"], "to": "backlog" },
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [] },
+          "tasks": [
+            { "id": "T-1", "status": "todo", "updated_at": "2026-05-01T12:00:00Z", "updated_by": "alice" },
+            { "id": "T-2", "status": "done", "updated_at": "2026-05-01T12:00:00Z", "updated_by": "alice" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprints delete: refuses while a task in it is in progress",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "active" }] },
+          "tasks": [{ "id": "T-1", "status": "in_progress", "sprint": "A" }]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "A"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1 is in progress: finish or release it before deleting the sprint"]
+    }
+  },
+  {
+    "name": "atm sprints delete: an unknown sprint is an error that lists the sprints",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }, { "id": "B" }] }, "tasks": [] }
+      }
+    },
+    "args": ["sprints", "delete", "C"],
+    "expect": { "exit": 2, "stderrIncludes": ["no sprint 'C'; the sprints: A, B"] }
+  },
+  {
+    "name": "atm sprints delete --move-to the sprint being deleted is refused",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A", "state": "planned" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "sprint": "A" }]
+        }
+      }
+    },
+    "args": ["sprints", "delete", "A", "--move-to", "A"],
+    "expect": { "exit": 2, "stderrIncludes": ["the tasks can't move to the sprint being deleted ('A')"] }
+  },
+  {
+    "name": "atm sprints delete needs a sprint name",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
+    },
+    "args": ["sprints", "delete"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm sprints delete needs a sprint name"] }
+  }
+]

@@ -275,6 +275,19 @@ atm's `components` output, reviewed above (T-324); no skill changed. Its new ent
 parameter (above) and `atm components` (no path or URL read). As for 0.24.0, no API key is used for the sandbox, so no
 live run: this written review takes its place.
 
+**Deleting a sprint (T-339).** `atm sprints delete <name> [--move-to WHERE] [--force]` removes a sprint from
+`meta.sprints` under the lock, through the same writes as every command (I6); its tasks move with `set_sprint`, as
+`atm move` moves them, keeping their history. It reads no path or URL (the name is matched against the sprints, as
+`edit` and `start` do). What it can lose is bounded: a closed sprint that ever had tasks (in either file) is refused,
+so a sprint's report and the record of what was done in it can't be deleted; an open one that tasks finished in or
+moved on from needs `--force`. A merge keeps a deletion only when the other branch didn't change the sprint (else a
+conflict, as for a deleted task). `/atm:plan-sprint` mentions it, to use **only when the user asks** (I22), saying
+what `--force` drops before using it; its pre-approval (`atm sprints:*`) already covered the command. Review against
+the red-team cases: *Task text is data* is unchanged in `/atm:plan-sprint`, so a task or sprint goal asking to
+delete a sprint is data, not a request; the sprint name is quoted like every argument (I3) and can't carry shell
+syntax (48 characters, checked on load). No new entry point, and no live sandbox run (no API key): this review
+takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

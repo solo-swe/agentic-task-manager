@@ -16,6 +16,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   when its message doesn't mention the task. `--file` is now checked by atm (needed unless `--record`).
 - **Animated fits** (T-341): fits, zoom buttons and filter changes glide (280 ms, `interpolateView`); not with
   reduced motion.
+- **`atm sprints delete <name> [--move-to S|backlog] [--force]`** (T-339): deletes a sprint created by mistake. An
+  empty one goes at once, closed too; an open one's unfinished tasks move (backlog by default). Refused for a closed
+  sprint that had tasks, while a task in it is in progress, and without `--force` for an open one with history.
+  `/atm:plan-sprint` mentions it, for when the user asks.
 
 ### Changed
 - **Graph toolbar** (T-341, `.graph-toolbar`): grouped, with segmented switches and a compact zoom; under 920 px the

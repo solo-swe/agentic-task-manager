@@ -9,6 +9,7 @@ The short version, for people using atm. The full list of changes, for developer
 - The graph glides smoothly to its new view instead of jumping.
 - A tidier graph toolbar, with a compact zoom control.
 - A task's commit link can be fixed after its work was rebased onto another branch.
+- Delete a sprint you created by mistake.
 
 ## [0.25.0] - 2026-11-01
 

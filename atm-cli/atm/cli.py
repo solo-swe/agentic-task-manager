@@ -465,8 +465,10 @@ def build_parser():
     logo = command("logo", cmd_logo, "print, set or unset the project's logo for the dashboard (meta.logo)")
     logo.add_argument("action", nargs="?", choices=["set", "unset"], help="set or unset it")
     logo.add_argument("path", nargs="?", help="set: the image (SVG, PNG, WebP or ICO), relative to here")
-    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit or start one")
-    sprints.add_argument("action", nargs="?", choices=["list", "add", "edit", "start", "close"], help="what to do")
+    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit, start or delete one")
+    sprints.add_argument(
+        "action", nargs="?", choices=["list", "add", "edit", "start", "close", "delete"], help="what to do"
+    )
     sprints.add_argument("name", nargs="?", help="the sprint's name (add: generated when left out)")
     sprints.add_argument(
         "--carry-to", metavar="WHERE", help="close: where unfinished tasks go: a sprint's name, new, or backlog"
@@ -483,6 +485,12 @@ def build_parser():
     sprints.add_argument("--release", help="add, edit: the release it delivers to (empty: remove it)")
     sprints.add_argument("--due", metavar="DATE", help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)")
     sprints.add_argument("--after", metavar="NAME", help="add: put it after this sprint (default: last)")
+    sprints.add_argument(
+        "--move-to", metavar="WHERE", help="delete: where its tasks go: a sprint's name or backlog (default)"
+    )
+    sprints.add_argument(
+        "--force", action="store_true", help="delete: also a sprint tasks finished in or moved on from"
+    )
     move = command("move", cmd_move, "move tasks into a sprint, the next sprint, the active one, or the backlog")
     move.add_argument("ids", nargs="+", metavar="id", help="task IDs")
     move.add_argument(

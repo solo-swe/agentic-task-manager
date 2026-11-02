@@ -72,6 +72,11 @@ For a planned one, change only what the user agreed to change: `atm sprints edit
 removes a field). An active sprint is planned the same way: tasks can be pulled into it or pushed out of it at any
 time.
 
+A sprint created by mistake (an empty one, or a duplicate) can go, **only when the user asks**:
+`atm sprints delete '<name>'` deletes an empty sprint, closed ones too; its unfinished tasks go to the backlog, or
+`--move-to '<sprint>'`. atm refuses a closed sprint that had tasks, and an open one that tasks finished in or moved
+on from unless `--force` (say what that drops before using it).
+
 ## Step 4: Choose its tasks
 
 Go through the candidates with the user, in a few rounds rather than one long list:
