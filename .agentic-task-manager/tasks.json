@@ -16992,7 +16992,7 @@
       "description": "A live session with the user on the dev server (`npm run dev` in `dashboard/`): small changes that make the Dependency Graph tab easier to use, decided as we go.\n\n## Starting points\n- **Auto-fit toggle:** today only the first layout is fitted automatically (`DepGraph.svelte`, `autoFit`); once the filters or the data change, the view stays where it was. A toggle in `GraphControls.svelte` that keeps the graph fitted while it is on (filters, reloads, resizes), and switches off when the user pans or zooms.\n- **Fit everything vs the filtered tasks:** with filters or a search in *Dim* mode, \"Fit everything\" (F) fits all tasks; offer fitting only the tasks that match (e.g. a second button or the fit following the filters), keeping a way to fit everything.\n- Whatever else comes up in the session, kept small.\n\n## Tests\nUnit tests for the view logic in `dashboard/src/lib/` (fit to a subset of nodes), and e2e checks for the new controls; update the visual baselines if the controls change.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/DepGraph.svelte",
@@ -17002,7 +17002,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T22:36:01Z",
-      "updated_at": "2026-11-02T01:30:09Z",
+      "updated_at": "2026-11-02T01:37:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17026,10 +17026,19 @@
           "at": "2026-11-02T01:30:09Z",
           "kind": "failure",
           "text": "lease expired (claude:b7be7288)"
+        },
+        {
+          "at": "2026-11-02T01:37:04Z",
+          "kind": "outcome",
+          "text": "Graph auto-fit (on by default), Fit All/Matches (saved target), animated fits, regrouped toolbar; reviewed live with the user. Guardrail raised to 525 KiB with the user (T-342 follows up).",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T01:30:09Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "24319b08d45265c3d18a89cb1abd8f25c60c0039",
+      "completed_at": "2026-11-02T01:37:04Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-342",
