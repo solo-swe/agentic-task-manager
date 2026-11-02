@@ -1,7 +1,8 @@
 <script lang="ts">
   // All projects at a glance (docs/multi-project-dashboard-proposal.md 3.5): a card per project, those that need you
-  // first; or, on the Omniboard tab, every project's tasks in one board (T-259, T-266). "Active only" hides projects with no open
-  // work and nothing done lately, on both tabs.
+  // first; or, on the Omniboard tab, every project's tasks in one board (T-259, T-266); or every project's agents
+  // (T-333). "Hide inactive projects" leaves out projects with no open work and nothing done lately, on every tab; it
+  // shows only when there is such a project.
   import { BOARD_SCOPES, withoutActiveSprint } from '../lib/allboard';
   import { ACTIVE_DAYS, isActive, orderProjects } from '../lib/projects';
   import { OVERVIEW_TABS, type OverviewTab } from '../lib/routes';
@@ -13,10 +14,10 @@
   import ProjectCard from './ProjectCard.svelte';
 
   const ordered = $derived(orderProjects(dashboard.projects));
-  const shown = $derived(
-    dashboard.overviewActiveOnly ? ordered.filter((p) => isActive(p, dashboard.loadedAt)) : ordered,
-  );
-  const hidden = $derived(ordered.length - shown.length);
+  const active = $derived(ordered.filter((p) => isActive(p, dashboard.loadedAt)));
+  const shown = $derived(dashboard.overviewActiveOnly ? active : ordered);
+  // How many projects the option hides (or would): it shows only when there is one
+  const inactive = $derived(ordered.length - active.length);
   const tab = $derived(dashboard.overviewTab);
   const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
 
@@ -112,18 +113,16 @@
         /> Group by project</label
       >
     {/if}
-    <label
-      class="projects-active-only"
-      title="Hide projects with no open tasks and no activity in the last {ACTIVE_DAYS} days"
-      ><input
-        type="checkbox"
-        id="active-projects-only"
-        checked={dashboard.overviewActiveOnly}
-        onchange={(e) => dashboard.setOverviewActiveOnly(e.currentTarget.checked)}
-      /> Active only</label
-    >
-    {#if hidden}
-      <span class="projects-hidden" id="projects-hidden">{hidden} inactive project{hidden === 1 ? '' : 's'} hidden</span
+    {#if inactive}
+      <label
+        class="projects-active-only"
+        title="Hide the projects with no open tasks and no activity in the last {ACTIVE_DAYS} days"
+        ><input
+          type="checkbox"
+          id="active-projects-only"
+          checked={dashboard.overviewActiveOnly}
+          onchange={(e) => dashboard.setOverviewActiveOnly(e.currentTarget.checked)}
+        /> Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
       >
     {/if}
     {#if tab === 'board' && noSprint.length}

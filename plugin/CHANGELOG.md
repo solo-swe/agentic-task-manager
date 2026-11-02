@@ -28,6 +28,8 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   bar opening its task in its project. It reads each project's `tasks.json` and `claims.json` while shown
   (`lib/overview-agents.ts`; conditional on refresh), with its own zoom and Live. `AgentsTab` takes a timeline, view
   state and click handler. A project's own `#view=agents` no longer changes the overview's remembered tab.
+  The overview's *Active only* is now *Hide inactive projects (N)*, the same setting, shown only when a project would
+  be hidden; the separate "N inactive projects hidden" note is gone.
 
 ### Changed
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own

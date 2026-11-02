@@ -496,7 +496,7 @@ test.describe('projects', () => {
     });
   }
 
-  test('Active only hides projects with nothing open and nothing done lately; remembered', async ({
+  test('Hide inactive projects: projects with nothing open and nothing done lately; remembered', async ({
     page,
     tasksServer,
   }) => {
@@ -511,11 +511,20 @@ test.describe('projects', () => {
     await openDashboard(page, tasksServer, 'standard');
     await expect(page.locator('#active-projects-only')).toBeChecked();
     await expect(page.locator('.project-card[data-id="idle"]')).toHaveCount(0);
-    await expect(page.locator('#projects-hidden')).toHaveText('1 inactive project hidden');
+    // T-333 review: says what it does, and how many it hides (or would)
+    await expect(page.locator('label.projects-active-only')).toHaveText('Hide inactive projects (1)');
     await page.locator('#active-projects-only').uncheck();
     await expect(page.locator('.project-card[data-id="idle"]')).toHaveCount(1);
+    await expect(page.locator('#projects-hidden')).toHaveText('(1)');
     await page.reload();
     await expect(page.locator('#active-projects-only')).not.toBeChecked();
+  });
+
+  test('Hide inactive projects shows only when there is a project it would hide', async ({ page, tasksServer }) => {
+    tasksServer.addProject('open', 'minimal', 'Open', summary()).addProject('also', 'minimal', 'Also', summary());
+    await openDashboard(page, tasksServer, 'standard');
+    await expect(page.locator('.project-card')).toHaveCount(3);
+    await expect(page.locator('#active-projects-only')).toHaveCount(0);
   });
 
   test('overview cards: one line of stats; About links to the Project tab (T-255)', async ({ page, tasksServer }) => {

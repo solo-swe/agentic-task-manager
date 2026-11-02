@@ -6,8 +6,6 @@ test.describe('Projects Overview: the Agents tab', () => {
     tasksServer.use('agents');
     tasksServer.addProject('second', 'agents', 'Second Project');
     await page.goto('tasks-dashboard.html#overview');
-    // Projects without a summary count as inactive: show them all
-    await page.locator('#active-projects-only').uncheck();
   });
 
   test('a lane per agent across projects, naming them; a bar opens its task in its project', async ({ page }) => {
