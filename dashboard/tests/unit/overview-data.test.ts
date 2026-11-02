@@ -14,6 +14,7 @@ import {
 } from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
 import { DEFAULT_VOCABULARY, resolveVocabulary } from '../../src/lib/vocab';
+import { asTaskViews, v1Tasks } from './api.helpers';
 
 const NOW = Date.parse('2026-01-02T12:00:00Z');
 const project = (id: string, missing = false): ProjectEntry => ({
@@ -201,8 +202,8 @@ describe('loadProjectSources', () => {
   it('loads each present project’s tasks and claims; a missing one is left out', async () => {
     const fetchFn = vi.fn(async (url: string | URL | Request) => {
       const u = String(url);
-      if (u.startsWith('p/a/tasks.json'))
-        return json({ meta: { project: 'A' }, tasks: [task('T-1', 'Ada', '2026-01-02T08:00:00Z', null)] });
+      if (u.startsWith(v1Tasks('a')))
+        return json(asTaskViews({ meta: { project: 'A' }, tasks: [task('T-1', 'Ada', '2026-01-02T08:00:00Z', null)] }));
       if (u.startsWith('p/a/claims.json')) return json({ claims: [] });
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
@@ -219,11 +220,11 @@ describe('loadProjectSources', () => {
     };
     const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
-      if (u.startsWith('p/a/tasks.json')) {
+      if (u.startsWith(v1Tasks('a'))) {
         expect((init?.headers as Record<string, string>)['If-None-Match']).toBe('"1"');
         return new Response(null, { status: 304 });
       }
-      if (u.startsWith('p/b/tasks.json')) return new Response('', { status: 500 });
+      if (u.startsWith(v1Tasks('b'))) return new Response('', { status: 500 });
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -246,7 +247,7 @@ describe('loadProjectSources', () => {
     let archiveRequests = 0;
     const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
-      if (u.startsWith('p/a/tasks.json')) return json({ meta: { project: 'A' }, tasks: [live] }, '"t1"');
+      if (u.startsWith(v1Tasks('a'))) return json(asTaskViews({ meta: { project: 'A' }, tasks: [live] }), '"t1"');
       if (u.startsWith('p/a/tasks-archive.json')) {
         archiveRequests++;
         if ((init?.headers as Record<string, string>)['If-None-Match'] === '"a1"')

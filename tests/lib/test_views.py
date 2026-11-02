@@ -43,7 +43,7 @@ class TaskViews(unittest.TestCase):
         )
 
     def test_every_view_fits_the_schema(self):
-        self.assertEqual(problems({"generated_at": "now", "tasks": self.views}, API), [])
+        self.assertEqual(problems({"generated_at": "now", "meta": META, "bytes": 1, "tasks": self.views}, API), [])
 
     def test_kind_ready_and_what_it_waits_for(self):
         d = derived(self.views)

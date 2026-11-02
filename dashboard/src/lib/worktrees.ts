@@ -1,7 +1,7 @@
 // A project's git worktrees on one board (T-179). Each worktree has its branch's copy of tasks.json; atm serve's
 // p/<id>/worktrees.json lists the worktrees and, for each linked one, the tasks whose copy there differs from the main
 // worktree's. A task is shown from the worktree where it got furthest, with that worktree's branch on its card.
-import { fetchProjectFile, type Validators } from './load';
+import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
 import type { Task } from './types';
 import { kindOf, type StatusKind, type Vocabulary } from './vocab';
 
@@ -60,7 +60,7 @@ export type WorktreesResult = { unchanged: true } | { unchanged: false; worktree
  */
 export async function loadWorktrees(
   project: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<WorktreesResult> {
   const file = await fetchProjectFile(project, 'worktrees.json', fetchFn, since, '{"worktrees": []}');

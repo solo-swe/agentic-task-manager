@@ -863,6 +863,9 @@ describe('serve', () => {
     const response = await fetch(url());
     assert.equal(response.status, 200);
     const body = await response.json();
+    // The project's meta and its task data's size come in the same snapshot
+    assert.equal(body.meta.project, 'Shop');
+    assert.ok(body.bytes > 0);
     assert.deepEqual(
       body.tasks.map((v) => [v.task.id, v.derived.kind, v.derived.ready, v.derived.waiting_for, v.derived.stage]),
       [

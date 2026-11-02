@@ -124,6 +124,31 @@ export function devData(defaultDir: string): Plugin {
           );
           return;
         }
+        // atm serve's v1 tasks route (docs/multi-project-api.md §2.5): the tasks as views, with the project's meta and
+        // size. Without the derived values for now: the dashboard doesn't read them yet, and the dev server will run
+        // the real API instead (docs/layered-architecture.md §9, step 15)
+        const v1 = /^\/api\/v1\/projects\/([^/]+)\/tasks$/.exec(url);
+        if (v1) {
+          const project = (await devProjects(dirs)).find((p) => p.id === decodeURIComponent(v1[1]));
+          if (!project) return json(404, { error: 'unknown project' });
+          try {
+            const file = path.join(project.dir, 'tasks.json');
+            const { size, mtimeMs } = await stat(file);
+            const etag = `"v1-${size.toString(16)}-${Math.round(mtimeMs * 1e6).toString(16)}"`;
+            res.setHeader('ETag', etag);
+            if (req.headers['if-none-match'] === etag) {
+              res.statusCode = 304;
+              res.end();
+              return;
+            }
+            const data = JSON.parse(await readFile(file, 'utf8')) as { meta?: unknown; tasks?: unknown[] };
+            const tasks = (Array.isArray(data.tasks) ? data.tasks : []).map((task) => ({ task, derived: {} }));
+            json(200, { generated_at: new Date().toISOString(), meta: data.meta ?? {}, bytes: size, tasks });
+          } catch {
+            json(404, { error: 'not found' });
+          }
+          return;
+        }
         const match = /^\/p\/([^/]+)\/([^/]+)$/.exec(url);
         if (!match || !FILES.has(match[2])) return next();
         const project = (await devProjects(dirs)).find((p) => p.id === decodeURIComponent(match[1]));

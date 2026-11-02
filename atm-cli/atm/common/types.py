@@ -243,6 +243,10 @@ TaskViewList = TypedDict(
     {
         # required; ISO 8601 UTC
         "generated_at": str,
+        # required; The project's meta as stored (settings, vocabularies, sprints, releases, components), in the same snapshot
+        "meta": dict,
+        # required; How big the project's working task data is (tasks.json), for the archive notice
+        "bytes": int,
         # required
         "tasks": List["TaskView"],
     },

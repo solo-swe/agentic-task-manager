@@ -488,13 +488,21 @@ def task_filters(query):
 
 def api_v1_tasks(summaries, entry, query):
     """(body, ETag) of GET /api/v1/projects/<p>/tasks: the project's tasks the filters keep, each with its derived
-    values (atm-lib's task_views). The ETag changes with tasks.json, the archive and the query."""
+    values (atm-lib's task_views), and in the same snapshot the project's meta and how big its task data is. The ETag
+    changes with tasks.json, the archive and the query."""
     stamps = [file_stamp(task_file(entry, name)) for name in (TASKS_FILE, "tasks-archive.json")]
     etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
 
     def body():
-        views = task_views(summaries.project(entry), task_filters(query))
-        return to_json({"generated_at": now_iso(), "tasks": views}).encode("utf-8")
+        project = summaries.project(entry)
+        views = task_views(project, task_filters(query))
+        snapshot = {
+            "generated_at": now_iso(),
+            "meta": project.store.document().get("meta") or {},
+            "bytes": project.store.sizes()["tasks"],
+            "tasks": views,
+        }
+        return to_json(snapshot).encode("utf-8")
 
     return body, etag
 

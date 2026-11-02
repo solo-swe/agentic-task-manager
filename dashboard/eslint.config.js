@@ -18,6 +18,21 @@ export default ts.config(
     rules: { 'no-empty-pattern': 'off' },
   },
   {
+    // The client layer (docs/layered-architecture.md §1): only src/lib/api/ makes requests; everything else takes a
+    // Fetch from there
+    files: ['src/**'],
+    ignores: ['src/lib/api/**'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        { name: 'fetch', message: 'Requests go through the client layer, src/lib/api/http.ts (browserFetch).' },
+        { name: 'XMLHttpRequest', message: 'Requests go through the client layer, src/lib/api/http.ts.' },
+        { name: 'WebSocket', message: 'Requests go through the client layer, src/lib/api/http.ts.' },
+        { name: 'EventSource', message: 'Requests go through the client layer, src/lib/api/http.ts.' },
+      ],
+    },
+  },
+  {
     files: ['**/*.svelte', '**/*.svelte.ts'],
     languageOptions: {
       parserOptions: { projectService: true, extraFileExtensions: ['.svelte'], parser: ts.parser, svelteConfig },

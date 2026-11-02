@@ -75,7 +75,8 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
   `tasksServer` fixture (`openDashboard(page, tasksServer, 'standard')` or an inline object), which plays atm serve's
-  API: `api/projects` lists one project (`FIXTURE_PROJECT`) and its files are served under `p/<id>/`;
+  API: `api/projects` lists one project (`FIXTURE_PROJECT`), its tasks are served by the v1 route the dashboard loads
+  (`api/v1/projects/<id>/tasks`, the fixture's data as views) and its files under `p/<id>/`;
   `addProject(id, data)` adds more, `noProjects()` lists none. It can also swap the response or return an error. Any
   non-localhost request fails the test.
 - Fixtures live in `tests/fixtures/*.json`.

@@ -18677,7 +18677,7 @@
       "description": "Step 4 of `docs/layered-architecture.md` §9 (the API in §6).\n\n## Change\n- `server.py` moves to `api/`; `/api/projects`, `/api/search` and `claims.json` are answered through atm-lib instead of reading storage.\n- `GET /api/v1/projects/<p>/tasks`: the tasks as `TaskView`, with their derived values (`kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`), filters as query parameters (§6.2).\n- Every rule of `docs/multi-project-api.md` §1 kept (loopback, Host check, GET/HEAD only, ETags); the API stays read-only.\n- Update `docs/multi-project-api.md` with the v1 route.\n\n## Tests\n- The server's tests in `tests/scripts/` pass unchanged; new ones for the v1 route, its response validated against the schema.\n- The ratchet shrinks.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-363"
       ],
@@ -18689,7 +18689,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:08:46Z",
+      "updated_at": "2026-11-02T19:17:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18714,10 +18714,20 @@
           "kind": "note",
           "text": "From T-363: the read results’ types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`) aren’t in the schema yet; add them here with the API responses (`api.schema.json`).",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:17:34Z",
+          "kind": "review",
+          "text": "Check: `server.py` → `api/server.py`; `api/search` and `claims.json` via atm-lib (`search_tasks`, `list_claims`); new `GET /api/v1/projects/<p>/tasks` (`task_views`: kind, ready, waiting_for, effective review/release, stage), filters as query params, ETag, 400/404/413; `api.schema.json` + cross-file `$ref` in the generator (Python forward refs); API and security docs updated. 539 atm-cli, 48 `tests/lib`.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T19:08:46Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "f11219bb9eef21d75aa6a0ae0a6e83d6abdb5c23",
+      "completed_at": "2026-11-02T19:17:34Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-365",
@@ -18730,7 +18740,7 @@
       "description": "Step 5 of `docs/layered-architecture.md` §9.\n\n## Change\n- Every request the dashboard makes (today in `load.ts`, `state.svelte.ts`, `claims.ts`, `worktrees.ts`, `overview-data.ts`) moves into `dashboard/src/lib/api/`, typed by the generated types; polling and ETags unchanged.\n- An ESLint rule: only `src/lib/api/` may call `fetch`.\n- A project's tasks load from `/api/v1/projects/<p>/tasks`. The views don't change.\n- The e2e `tasksServer` fixture and the dev server answer the v1 route too.\n\n## Tests\n- Unit tests for the client module; `npm run check`, unit tests and `npm run test:e2e` pass; bundle size checked.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-364"
       ],
@@ -18746,7 +18756,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:44Z",
+      "updated_at": "2026-11-02T19:17:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18762,7 +18772,17 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:17:34Z",
+          "kind": "note",
+          "text": "From T-364: v1 has only `…/tasks` (`{task, derived}` per task); the dashboard also needs `meta` (vocabularies, sprints…): add `GET /api/v1/projects/<p>` (§6.2) here. `ProjectSummary`/`StatusReport` aren’t in `api.schema.json` yet: add them when the dashboard types `/api/projects`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:17:42Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-366",

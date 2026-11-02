@@ -325,6 +325,9 @@ def property_type(prop, where, ts):
     if kind == "array":
         item = property_type(prop.get("items", {}), where, ts)
         return (f"({item})[]" if " | " in item else f"{item}[]") if ts else f"List[{item}]"
+    if kind == "object" and "properties" not in prop:
+        # An object whose keys the schema leaves open (meta, which its own schema will describe)
+        return "Record<string, unknown>" if ts else "dict"
     raise BuildError(f"common/schema: {where} has a type the generator doesn't know (define objects in $defs)")
 
 

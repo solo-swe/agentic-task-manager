@@ -1,5 +1,8 @@
 import { expect, openDashboard, test } from './helpers';
 
+/** A project's tasks, as the dashboard loads them (docs/multi-project-api.md §2.5) */
+const V1_TASKS = /\/api\/v1\/projects\/[^/]+\/tasks(\?.*)?$/;
+
 test.describe('loading tasks.json', () => {
   test('uses meta.project for the page and heading titles', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
@@ -23,22 +26,22 @@ test.describe('loading tasks.json', () => {
     await expect(page.locator('#dashboard-title')).toHaveText('Task Dashboard');
   });
 
-  test('fetches tasks.json without a cache-buster, then asks whether it changed (If-None-Match)', async ({
+  test('fetches the tasks without a cache-buster, then asks whether they changed (If-None-Match)', async ({
     page,
     tasksServer,
   }) => {
-    const first = page.waitForRequest(/\/tasks\.json$/);
+    const first = page.waitForRequest(V1_TASKS);
     await openDashboard(page, tasksServer, 'minimal');
     expect((await first).headers()['if-none-match']).toBeUndefined();
-    const second = page.waitForRequest(/\/tasks\.json$/);
+    const second = page.waitForRequest(V1_TASKS);
     await page.locator('#reload-btn').click();
     expect((await second).headers()['if-none-match']).toBe('"v1"');
     await expect.poll(() => tasksServer.notModified).toBe(1);
   });
 
-  test('loads the project list, then the project’s files from p/<id>/', async ({ page, tasksServer }) => {
+  test('loads the project list, then the project’s tasks from the v1 route (T-365)', async ({ page, tasksServer }) => {
     const projects = page.waitForRequest(/\/api\/projects$/);
-    const tasks = page.waitForRequest(/\/p\/[^/]+\/tasks\.json$/);
+    const tasks = page.waitForRequest(V1_TASKS);
     await openDashboard(page, tasksServer, 'minimal');
     await projects;
     await tasks;
@@ -64,7 +67,7 @@ test.describe('loading tasks.json', () => {
 
   test('shows the error box for invalid JSON', async ({ page, tasksServer }) => {
     tasksServer.use('minimal');
-    await page.route(/\/tasks\.json(\?.*)?$/, (route) => route.fulfill({ body: '{ not json' }));
+    await page.route(V1_TASKS, (route) => route.fulfill({ body: '{ not json' }));
     await page.goto('tasks-dashboard.html');
     await expect(page.locator('#load-error')).toContainText('Failed to load tasks.json');
     await expect(page.locator('#load-error')).toContainText('JSON');

@@ -5,6 +5,7 @@
 import { agentTimeline, UNATTRIBUTED, type AgentBar, type AgentLane, type AgentTimeline } from './agents';
 import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';
+import { browserFetch, type Fetch } from './api/http';
 import { loadArchive, loadTasks, type ProjectEntry, type Validators } from './load';
 import { releaseSummaries, splitReleases } from './releases';
 import { activeSprint, sprintModel, sprintSummary, type SprintSummary } from './sprints';
@@ -42,7 +43,7 @@ export function withArchive(live: Task[], archived: Task[]): Task[] {
 export async function loadProjectSources(
   projects: readonly ProjectEntry[],
   previous: readonly ProjectSource[] = [],
-  fetchFn: typeof fetch = fetch,
+  fetchFn: Fetch = browserFetch,
 ): Promise<ProjectSource[]> {
   const before = new Map(previous.map((s) => [s.project.id, s]));
   const loaded = await Promise.all(

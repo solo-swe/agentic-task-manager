@@ -184,5 +184,9 @@ export interface DepsResult {
 export interface TaskViewList {
   /** ISO 8601 UTC */
   generated_at: string;
+  /** The project's meta as stored (settings, vocabularies, sprints, releases, components), in the same snapshot */
+  meta: Record<string, unknown>;
+  /** How big the project's working task data is (tasks.json), for the archive notice */
+  bytes: number;
   tasks: TaskView[];
 }

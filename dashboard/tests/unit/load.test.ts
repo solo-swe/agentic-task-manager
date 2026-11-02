@@ -13,6 +13,7 @@ import {
 import archive from '../fixtures/archive.json';
 import standard from '../fixtures/standard.json';
 import noMeta from '../fixtures/no-meta.json';
+import { asTaskViews, v1Tasks } from './api.helpers';
 
 const jsonResponse = (body: unknown, status = 200) =>
   new Response(typeof body === 'string' ? body : JSON.stringify(body), { status });
@@ -161,16 +162,18 @@ describe('loadProjects', () => {
 });
 
 describe('loadTasks', () => {
-  it("fetches the project's tasks.json past the browser cache, and keeps its validators", async () => {
-    const response = new Response(JSON.stringify(standard), {
+  it("fetches the project's tasks from the v1 route past the browser cache, and keeps its validators", async () => {
+    const response = new Response(JSON.stringify(asTaskViews(standard)), {
       headers: { ETag: '"abc"', 'Last-Modified': 'Sat, 24 Oct 2026 10:00:00 GMT' },
     });
     const fetchFn = vi.fn().mockResolvedValue(response);
     const result = await loadTasks('abcd1234', fetchFn);
-    expect(fetchFn).toHaveBeenCalledWith('p/abcd1234/tasks.json', { cache: 'no-store', headers: {} });
+    expect(fetchFn).toHaveBeenCalledWith(v1Tasks('abcd1234'), { cache: 'no-store', headers: {} });
     expect(result.unchanged).toBe(false);
     if (result.unchanged) return;
     expect(result.loaded.tasks).toHaveLength(12);
+    expect(result.loaded.tasks[0]).toEqual(standard.tasks[0]); // the task as stored, without the derived values
+    expect(result.loaded.projectName).toBe('Standard Project'); // its meta, in the same snapshot
     expect(result.validators).toEqual({ etag: '"abc"', lastModified: 'Sat, 24 Oct 2026 10:00:00 GMT' });
   });
 
@@ -178,16 +181,18 @@ describe('loadTasks', () => {
     const fetchFn = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
     const since = { etag: '"abc"', lastModified: 'Sat, 24 Oct 2026 10:00:00 GMT' };
     expect(await loadTasks('abcd1234', fetchFn, since)).toEqual({ unchanged: true });
-    expect(fetchFn).toHaveBeenCalledWith('p/abcd1234/tasks.json', {
+    expect(fetchFn).toHaveBeenCalledWith(v1Tasks('abcd1234'), {
       cache: 'no-store',
       headers: { 'If-None-Match': '"abc"', 'If-Modified-Since': 'Sat, 24 Oct 2026 10:00:00 GMT' },
     });
   });
 
-  it('measures the file, for the archive notice', async () => {
-    const body = JSON.stringify(standard);
-    const result = await loadTasks('p1', vi.fn().mockResolvedValue(new Response(body)));
-    expect(!result.unchanged && result.loaded.bytes).toBe(body.length);
+  it('takes the task data’s size from the server, for the archive notice', async () => {
+    const result = await loadTasks(
+      'p1',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify(asTaskViews(standard, 4321)))),
+    );
+    expect(!result.unchanged && result.loaded.bytes).toBe(4321);
   });
 
   it('a 304 without having asked is an error', async () => {

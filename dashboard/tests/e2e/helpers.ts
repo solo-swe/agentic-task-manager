@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type Route } from '@playwright/test';
 import type { FilterGroup } from '../../src/lib/filters';
 import { PREFS_KEY } from '../../src/lib/prefs';
 import type { ViewId } from '../../src/lib/tabs';
@@ -19,6 +19,23 @@ const ARCHIVE_JSON = /\/p\/([^/]+)\/tasks-archive\.json(\?.*)?$/;
 const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
+const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+
+/** GET api/v1/projects/<id>/tasks for a project holding `body` as its tasks.json (docs/multi-project-api.md §2.5): its
+ * meta and size, and each task as a view. The derived values are empty: the dashboard doesn't read them yet
+ * (docs/layered-architecture.md §9, step 6). A body that isn't a task file is served as it is, so the dashboard's
+ * error handling sees it. */
+function asTaskViews(body: string): string {
+  let data: TasksData;
+  try {
+    data = JSON.parse(body) as TasksData;
+  } catch {
+    return body;
+  }
+  if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) return body;
+  const tasks = data.tasks.map((task) => ({ task, derived: {} }));
+  return JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', meta: data.meta ?? {}, bytes: body.length, tasks });
+}
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
@@ -170,12 +187,14 @@ export class TasksServer {
         body: JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', projects: this.projectList() }),
       }),
     );
-    await this.page.route(TASKS_JSON, (route) => {
-      const id = decodeURIComponent(TASKS_JSON.exec(route.request().url())![1]);
+    // A project's tasks: tasks.json as stored, and the v1 route the dashboard loads (docs/multi-project-api.md §2.5),
+    // the same body as views, with the same ETag, status and counters
+    const answerTasks = (route: Route, pattern: RegExp, wrap: (body: string) => string) => {
+      const id = decodeURIComponent(pattern.exec(route.request().url())![1]);
       if (id !== this.projectId) {
         const other = this.others.get(id);
         return other
-          ? route.fulfill({ status: 200, contentType: 'application/json', body: other.body })
+          ? route.fulfill({ status: 200, contentType: 'application/json', body: wrap(other.body) })
           : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
       }
       this.requests++;
@@ -185,8 +204,11 @@ export class TasksServer {
         return route.fulfill({ status: 304, headers: { ETag: etag } });
       }
       const headers = this.status === 200 ? { ETag: etag } : undefined;
-      return route.fulfill({ status: this.status, contentType: 'application/json', body: this.body ?? '', headers });
-    });
+      const body = this.status === 200 ? wrap(this.body ?? '') : (this.body ?? '');
+      return route.fulfill({ status: this.status, contentType: 'application/json', body, headers });
+    };
+    await this.page.route(TASKS_JSON, (route) => answerTasks(route, TASKS_JSON, (body) => body));
+    await this.page.route(V1_TASKS, (route) => answerTasks(route, V1_TASKS, asTaskViews));
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
       const mine = isDefault(route.request().url(), ARCHIVE_JSON);
