@@ -4,7 +4,7 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
-## [0.26.0] - 2026-11-01
+## [0.26.0] - 2026-11-02
 
 ### Added
 - **`atm archive` says what stays, and why** (T-352, found in T-277): after what moves (or would, with `--dry-run`),

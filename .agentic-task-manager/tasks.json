@@ -13680,13 +13680,13 @@
       "description": "An interactive session with Hakan: walk through archiving (`atm archive`, `atm unarchive`) and everything the dashboard shows about archived tasks, on a throwaway project, and write down what is wrong or confusing. **Nothing is fixed during the session**: problems become follow-up tasks, and only those Hakan approves are added.\n\n## How archiving works (what to expect)\n- `atm archive` moves finished tasks (done- and skipped-kind) from `tasks.json` to `tasks-archive.json`, except those finished in the last `meta.archive.keep_days` days (default 14) and those still in an open PR (`pr` set, no `merged_at`). Options: `--phase N` (repeatable), `--before DATE`, `--keep-days N`, `--dry-run`. It prints what moved and both files' sizes; `meta.archived` counts the archive.\n- The hint (`atm status`, `atm done`): shown when `tasks.json` is over `meta.archive.threshold_kb` (1024) or has more archivable tasks than `threshold_tasks` (500), and something can move. `meta.archive.auto: false` makes the skills only relay it.\n- `atm unarchive <id>...` brings tasks back; `atm list --archived` and `atm show <id>` read the archive; an archived task counts as done for dependencies.\n- The dashboard loads the archive only when a view needs it (D-5.2): the subtitle says *N archived*; the filter bar has *Include archived* (search, List, Graph and the Agents timeline then include archived tasks); the detail panel marks an archived task *· archived* and shows an archived dependency as a stub; the Progress tab, the Project tab and the Activity popup count the history (archived tasks too); the status bar shows an archive notice past the threshold.\n\n## Set up (in a terminal next to Hakan)\n1. A git repository in a new temporary folder (`mktemp -d`), **outside this repository**: this repo's own task list is not the test subject.\n2. `atm init --meta-file <file>` with a project name (e.g. *Archive Test*), named phases 0–2, and `meta.archive.threshold_tasks: 5`, so the hint appears without 500 tasks. `atm init` lists the project on the dashboard.\n3. About 20 tasks (`atm add --json-file`), with dependencies across phases, then statuses through atm only (never by editing the file):\n   - phase 0: all done, finished about 30 days ago (`ATM_NOW=<date 30 days ago> atm start/done`), one skipped;\n   - phase 1: some done 20 days ago, two done today, one done 20 days ago but in an open PR (`atm pr <id> --number 1 --url https://example.com/pr/1`), one in a merged PR (`atm merged --pr 2 --at <date>`);\n   - phase 2: a few to do (one depending on a phase-0 task), one in progress, one in review.\n4. `/atm:serve`, and open the project on the dashboard.\n\n## Walk through, with Hakan watching the dashboard\n1. **The hint**: `atm status` shows it (with the numbers), `atm done` on a task too; the status bar's archive notice.\n2. **Dry run**: `atm archive --dry-run`: which tasks would move, and that the recent ones and the open-PR one stay.\n3. **Archive**: `atm archive`: its report (counts, sizes); then `atm list --archived`, `atm show` of an archived task, `atm status` (the hint is gone, the archived count).\n4. **Dashboard after archiving**:\n   - the subtitle's *N archived*; the Kanban, List and Graph without archived tasks;\n   - *Include archived*: search finds archived tasks; List and Graph show them, marked;\n   - the detail panel of an archived task (*· archived*), and of the phase-2 task whose dependency is archived (the stub);\n   - the Progress tab (burndown, phase table), the Project tab (stats, histogram, agents) and the Activity popup: do the numbers still include the archived work, and are they the same as before archiving?\n   - the Agents timeline with and without *Include archived*;\n   - the Projects Overview card (progress rings, counts, the stats line) and the Omniboard (done in the last 24 hours) for this project.\n5. **Unarchive**: `atm unarchive <id>` for one task: it is back in `tasks.json`, on the Kanban, and the counts change.\n6. **Edge cases if time allows**: `atm archive --phase 0`, `--before`, `--keep-days 0`; archiving with the dashboard open (does it update without a reload?); a dependency on a task that was archived and then unarchived.\n\n## Then\n- Write the findings into this task's outcome note (short), and propose a follow-up task per problem; add only those Hakan approves (`/atm:create-tasks`).\n- Clean up: `atm projects remove <the test project's id>`, and delete the temporary folder.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-351"
       ],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-11-02T09:23:03Z",
+      "updated_at": "2026-11-02T10:23:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13703,7 +13703,23 @@
       "with": "user",
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T09:21:07Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:22:12Z",
+          "kind": "note",
+          "text": "Walkthrough on a throwaway project: archive, dry-run, keep rules, open PR, unarchive, edge cases. Findings fixed in this sprint: T-351 (`atm --dir`), T-352 (what stays, and why), T-353 (show marks archived), T-354 (dashboard toggles), T-355 (Overview counts the archive), T-356 (deps on archived tasks), T-357 (unarchive messages), T-358 (deps lists archived dependents), T-359 (test gaps).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T10:23:15Z",
+          "kind": "outcome",
+          "text": "Walked through archiving and its dashboard views with Hakan on a throwaway project. 9 findings, all approved and fixed in this sprint: T-351–T-359. Test project removed and its folder deleted.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "completed_at": "2026-11-02T10:23:15Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-278",
@@ -17375,7 +17391,7 @@
       "description": "Ship the sprint *Overview and polish* as 0.26.0, the way CLAUDE.md's *Versions* and *CI* sections describe. Work is on `dev/0.26.0` (branched from `origin/main` after PR #30).\n\n## Change\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are already `0.26.0` (T-341): check they still match.\n- `plugin/CHANGELOG.md`'s `[0.26.0]` entry: set the date to the release day (in `plugin/WHATS-NEW.md` too); merge repeated `### Added` / `### Changed` / `### Fixed` sections into one of each.\n- `plugin/WHATS-NEW.md`: rewrite the 0.26.0 entry from the changelog as 3–6 short plain-language bullets about what a user notices across the sprint, no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills, `plugin/CLAUDE.md` and atm output changed in this release (e.g. T-339's `atm sprints delete` and its skill mention) get a written review in §3.3 (no live sandbox run, no API key); check every new entry point is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens the release PR from `dev/0.26.0` to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines (T-341 deleted the graph ones) are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-277",
         "T-279",
@@ -17414,7 +17430,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T10:11:22Z",
+      "updated_at": "2026-11-02T10:23:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17426,7 +17442,9 @@
       "sprint": "Overview and polish",
       "components": [
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-02T10:23:58Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-345",
@@ -18151,7 +18169,7 @@
       "description": "Gaps in the archive's tests, found while surveying them after T-277 (the findings' own tests are in T-356, T-357 and T-358).\n\n## atm-cli (`tests/scripts/scenarios/archive.json`)\n- Archiving twice: the second run appends to the existing archive (both runs' tasks in it, none lost) and `meta.archived` counts them all.\n- `atm archive` with nothing to move says so, and changes neither file.\n- `atm unarchive` of several tasks at once: all come back, the archive keeps the rest, `meta.archived` goes down by as many.\n- `atm list --archived --json`.\n\n## Dashboard unit tests\n- `tests/unit/Header.component.test.ts`: the subtitle's *N archived* is a button; a click turns Include archived on (`aria-pressed`, *showing N archived*), another turns it off; none without an archive.\n- A new `tests/unit/TaskGrid.component.test.ts`: *N archived tasks hidden · show* only with an archive and Include archived off, singular for one, and a click turns it on.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "tests/scripts/scenarios/archive.json",
@@ -18159,7 +18177,7 @@
         "dashboard/tests/unit/TaskGrid.component.test.ts"
       ],
       "created_at": "2026-11-02T10:11:16Z",
-      "updated_at": "2026-11-02T10:14:50Z",
+      "updated_at": "2026-11-02T10:22:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18174,7 +18192,18 @@
         "cli"
       ],
       "started_at": "2026-11-02T10:14:50Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "cdc288e4c0bf7f58c621bdbdea1eb52ee84200fd",
+      "completed_at": "2026-11-02T10:22:05Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:22:05Z",
+          "kind": "outcome",
+          "text": "Scenarios: archiving twice, nothing to move, unarchive of several, list --archived --json. Component tests: Header’s archived toggle, new TaskGrid.component.test.ts for the List’s note. Also formatted archive.json (T-356–T-358 had left it unformatted)",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

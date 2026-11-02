@@ -306,6 +306,27 @@ files, the same project rules (the project is still the folder with `.agentic-ta
 and the files atm reads and writes are still that project's). A missing folder is an error, nothing run. No skill
 uses it, and no output agents act on changed, so no live sandbox run is needed.
 
+**Recording an existing commit (T-343).** `atm commit <id> --record <rev>` takes a git revision: one starting with
+`-` is refused (no option injection into git, I3), it must name a commit (`rev-parse --verify`) on the current branch
+(an ancestor of HEAD), and only its SHA is written to the task, under the lock (I6). It commits nothing and pushes
+nothing; the commit's message is read only to say when it doesn't mention the task.
+
+**The Projects Overview reads every project's files (T-328, T-329, T-333, T-355).** Its Activity, Progress and
+Agents views fetch each listed project's `tasks.json`, `claims.json` and `tasks-archive.json` from the routes a
+project's own page already uses (`p/<id>/…`, `docs/multi-project-api.md`): no new route, nothing written, and the
+tasks' text is shown as text (Svelte escapes it, I15). The new `#overview&view=…` parameters choose a tab, as
+`#view=` does; they are kept in the browser and never sent.
+
+**Release 0.26.0 (T-344).** Its agent-facing changes: `/atm:plan-sprint` (sprints left with open tasks, deleting a
+sprint) and atm's output for them, reviewed above (T-330, T-339); `atm commit --record` (above); and output that
+adds facts about the archive (`atm archive`'s *kept* reasons, `atm unarchive`'s *moves back* line and its two kinds
+of wrong ID, `atm show`'s *archived*, archived dependents in `atm deps`), which carries task IDs, statuses and atm's
+own fixed wording, never a task's text; and `atm summary`'s board, whose To Do column is now ordered by `todo_order`
+with *With you* / *Waits on* facts (IDs only) on the same cards as before, and a narrower *needs you* (T-347, T-349).
+None of it tells agents anything new to do. New entry points: `atm --dir` and
+`--record` (above); no new route, task-folder file or CI permission. As for 0.24.0 and 0.25.0, no API key is used
+for the sandbox, so no live run: this written review takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
