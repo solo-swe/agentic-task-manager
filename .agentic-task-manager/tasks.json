@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 348,
+    "next_id": 350,
     "labels": [
       {
         "id": "architecture",
@@ -17363,7 +17363,9 @@
         "T-343",
         "T-345",
         "T-346",
-        "T-347"
+        "T-347",
+        "T-348",
+        "T-349"
       ],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -17373,7 +17375,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T06:55:58Z",
+      "updated_at": "2026-11-02T07:50:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17389,17 +17391,17 @@
     },
     {
       "id": "T-345",
-      "name": "Testing: make screenshots and e2e runs cheaper to keep up",
+      "name": "Testing: make screenshots and e2e tests cheaper to keep up",
       "type": "infra",
       "priority": "P1",
       "labels": [
         "interactive",
         "testing"
       ],
-      "description": "Screenshot baselines and the full e2e run make every UI change expensive. Discuss the options with the user, agree on a plan, implement it, and write the result into the testing conventions.\n\n## Pain points (this sprint)\n- **Too many baselines:** 176, per platform. Small UI changes rewrite many: T-334's spacing touched 8, T-341 and T-340 another 12.\n- **The Linux round trip:** Linux baselines need a CI run and an artifact download (or Docker), an extra push cycle per visual change.\n- **Flakes:** anti-aliasing differs by a few pixels between runs (the settings-menu screenshot).\n- **Slow wrap-ups:** the full e2e and visual run make finishing a task slow (T-341's wrap-up took hours).\n\n## Options to discuss\n- Fewer, smaller screenshots: per component instead of whole pages, a few page-level ones kept.\n- Masking what changes; a small pixel tolerance.\n- The visual suite apart from the functional e2e suite.\n- Visual run only at the end of a sprint, baselines updated once there (in the release task).\n- Agents run only the specs their change affects (tags, or a map from changed files to specs).\n- Linux baselines generated locally in Docker, or Linux-only baselines.\n\n## Then\nImplement what was agreed, update `CLAUDE.md` (Testing conventions, CI) and the agent's memory notes, and make sure `npm run verify` and CI still cover what matters.",
+      "description": "Screenshot baselines and the e2e suite make every UI change expensive. Discuss the options with the user, agree on a plan, implement it, and write the result into the testing conventions. The scope covers both the screenshots and the functional e2e tests (widened with the user).\n\n## Pain points (this sprint)\n- **Too many baselines:** 176, per platform. Small UI changes rewrite many: T-334's spacing touched 8, T-341 and T-340 another 12.\n- **The Linux round trip:** Linux baselines need a CI run and an artifact download (or Docker), an extra push cycle per visual change.\n- **Flakes:** anti-aliasing differs by a few pixels between runs (the settings-menu screenshot).\n- **Slow wrap-ups:** the full e2e and visual run make finishing a task slow (T-341's wrap-up took hours).\n\n## Screenshots: decided (see the note)\n- A. Fewer, smaller screenshots: themes as one compact sample each, a few whole pages, the rest per component.\n- B. Linux-only baselines, made locally in Docker (`npm run test:e2e:linux-snapshots`).\n- C. Screenshots out of the per-task checks: CI runs them on every push; regenerated once a sprint in the release task; `npm run verify` keeps all.\n- D. A small pixel tolerance (`maxDiffPixels`), the colour threshold kept strict.\n\n## Functional e2e: to discuss\nWhat takes the ~40 s (the slowest tests), and what to change: slow waits, redundant tests, fixtures, parallelism.\n\n## Then\nImplement what was agreed, regenerate the baselines left stale this sprint (T-334, T-346, T-335, T-338 …) and add T-333's overview Agents screenshot, update `CLAUDE.md` (Testing conventions, CI) and the agent's memory notes, and make sure `npm run verify` and CI still cover what matters.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/playwright.config.ts",
@@ -17408,7 +17410,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T06:37:50Z",
+      "updated_at": "2026-11-02T07:50:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17435,8 +17437,22 @@
           "kind": "note",
           "text": "T-333 asks for an overview Agents screenshot in `visual.spec.ts`; not added (no baselines during this sprint): add it with the regenerated baselines",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:40:29Z",
+          "kind": "note",
+          "text": "Decided with Hakan (screenshots): A fewer, smaller screenshots (themes as one compact sample, few whole pages); B Linux-only baselines made locally in Docker; C screenshots out of per-task checks (CI each push, regenerated once a sprint in the release task; `verify` keeps all); D a small pixel tolerance. Not E. Scope widened to the functional e2e suite too.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:50:06Z",
+          "kind": "note",
+          "text": "Decided with Hakan (e2e): 1 honour reduced motion in the smooth scrolls (detail rail, dependency links) and check the highlight is removed rather than wait for the fade; 2 lighter setup per test (smaller fixtures, related checks in one page); 3 conventions: area specs while working, full suite once at the end. More workers: no (5 is the limit here).",
+          "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T07:36:08Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-346",
@@ -17532,6 +17548,82 @@
           "by": "claude:b7be7288"
         }
       ]
+    },
+    {
+      "id": "T-348",
+      "name": "Project selector: an icon for Projects Overview",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "ux"
+      ],
+      "description": "In the project selector, each project shows its logo (or monogram) at 16px before its name; the Projects Overview entry has nothing. Give it Lucide's `layout-grid` icon (chosen with the user), added to `lib/icons.ts`, at the same size and place.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/icons.ts",
+        "dashboard/src/components/ProjectSelector.svelte"
+      ],
+      "created_at": "2026-11-02T07:45:42Z",
+      "updated_at": "2026-11-02T07:45:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T07:45:42Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user",
+      "started_at": "2026-11-02T07:45:51Z",
+      "started_by": "claude:b7be7288"
+    },
+    {
+      "id": "T-349",
+      "name": "Omniboard: the To Do column lists every to-do task, not only what the loop takes",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "overview"
+      ],
+      "description": "The Omniboard's To Do column is the loop's list (`loop_order`): the active sprint's tasks only (even in *All tasks*), without those done with the user, without those waiting on a dependency. So in this sprint T-277, T-279 (with you) and T-344 (waiting) are missing.\n\n## Change\n- `atm summary`'s boards: the To Do column has every to-do task in the board's scope (the active sprint's, or every task): first the ready ones in the loop's order, then ready ones done with the user, then those waiting on dependencies; still at most 10 cards, with *+ N more*.\n- A card says why it isn't plain ready: `with_user: true`, or `waiting_for: [ids]`; the dashboard shows it (a *with you* chip, *waits on T-…*).\n- The column is *To Do*, not *To Do · ready*. `docs/multi-project-api.md` §3.3.\n\n## Tests\n`summary.test.mjs`; the Omniboard e2e.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "dashboard/src/lib/allboard.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-02T07:50:39Z",
+      "updated_at": "2026-11-02T07:50:54Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T07:50:39Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "started_at": "2026-11-02T07:50:54Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

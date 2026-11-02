@@ -1060,6 +1060,14 @@ button.menu-trigger:hover,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Projects Overview's icon, in the box a project's logo takes (T-348) */
+.project-option-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
 /* A project's logo, or its monogram (ProjectLogo.svelte): a fixed box, so nothing moves while the image loads */
 .project-logo {
   display: inline-flex;
