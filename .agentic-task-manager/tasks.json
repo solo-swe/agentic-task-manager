@@ -16736,7 +16736,7 @@
       "description": "The All projects page has Projects and Board tabs; add an **Agents** tab that shows every listed project's agents together, like a project's Agents tab (`AgentsTab.svelte`): their timeline and who works on what, each lane or row naming its project.\n\n## Change\n- A third overview tab (`#view=agents` on the overview), remembered like the others (`overviewTab`).\n- Its data from what the overview already loads per project; no new server route unless one is needed (then `docs/multi-project-api.md` and `docs/security-architecture.md` updated).\n- Clicking an agent's task opens it in its project.\n\nRelated: T-328 and T-329 (Activity and Progress on the overview).\n\n## Tests\nUnit tests for any new lib; an e2e test with two projects; a screenshot in `visual.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16745,9 +16745,9 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T06:30:28Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
@@ -16761,7 +16761,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T06:30:28Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-334",

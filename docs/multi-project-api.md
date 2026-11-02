@@ -40,6 +40,8 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 - A missing project (§3.1 `missing: true`) answers `404` for its files.
 - The ETag of a project file is its size and nanosecond mtime, as today's `json_etag` (`"<size hex>-<mtime_ns hex>"`).
 - Query strings are ignored, except `q` on `api/search`.
+- The overview's Agents tab (T-333) reads every listed project's `tasks.json` and `claims.json` through these routes
+  while it is shown, conditionally on each refresh (an unchanged `tasks.json` answers `304`); there is no route for it.
 
 ### 2.1 `claims.json`: claims from every worktree
 

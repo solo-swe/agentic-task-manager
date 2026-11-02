@@ -1,12 +1,31 @@
 <script lang="ts">
-  import { agentTimeline, timeTicks, UNATTRIBUTED } from '../lib/agents';
+  import { agentTimeline, timeTicks, UNATTRIBUTED, type AgentBar, type AgentTimeline } from '../lib/agents';
   import { approvedBy, isAgent } from '../lib/actors';
   import { shortAgent } from '../lib/claims';
   import Icon from './Icon.svelte';
   import { formatMinutes, formatWhen } from '../lib/format';
   import { dashboard } from '../lib/state.svelte';
   import { typeStyle } from '../lib/theme';
-  import { keepWindow, panWindow, resolveWindow, zoomWindow, type TimeWindow } from '../lib/time-window';
+  import {
+    keepWindow,
+    panWindow,
+    resolveWindow,
+    zoomWindow,
+    type TimeWindow,
+    type ViewWindow,
+  } from '../lib/time-window';
+
+  // A project's Agents tab by default. The overview's (T-333) gives its own timeline (every project's agents), its own
+  // zoom and Live (`view`), and opens a bar's task in its project (`onopen`)
+  let {
+    timeline: given = undefined,
+    view = dashboard,
+    onopen = undefined,
+  }: {
+    timeline?: AgentTimeline | null;
+    view?: { agentsWindow: ViewWindow | null; agentsLive: boolean };
+    onopen?: (bar: AgentBar) => void;
+  } = $props();
 
   const ZOOM_STEP = 1.5;
   const DRAG_THRESHOLD = 4;
@@ -20,27 +39,30 @@
   const LIVE_TICK_MS = 5_000;
   let clock = $state(Date.now());
   $effect(() => {
-    if (!dashboard.agentsLive) return;
+    if (!view.agentsLive) return;
     clock = Date.now();
     const timer = setInterval(() => (clock = Date.now()), LIVE_TICK_MS);
     return () => clearInterval(timer);
   });
-  const now = $derived(dashboard.agentsLive ? Math.max(clock, dashboard.loadedAt) : dashboard.loadedAt);
+  const now = $derived(view.agentsLive ? Math.max(clock, dashboard.loadedAt) : dashboard.loadedAt);
 
   // One lane per agent: each task a bar from start to completion (or to now while in progress), in its type colour.
   // Tasks outside the search and filters stay, greyed out.
   // Archived work joins the timeline with "Include archived" (D-5.2), like the lists and the graph: a bar per task,
   // so thousands of archived tasks would make every visit slow (D-6.3). The Sprint filter scopes only the board views
-  const narrowed = $derived(dashboard.unscoped.length < dashboard.base.length);
+  // The overview has no search or filters to grey bars out by
+  const narrowed = $derived(given === undefined && dashboard.unscoped.length < dashboard.base.length);
   const matching = $derived(new Set(dashboard.unscoped.map((t) => t.id)));
   const timeline = $derived(
-    agentTimeline(dashboard.base, dashboard.claims, now, narrowed ? matching : undefined, dashboard.vocab),
+    given !== undefined
+      ? given
+      : agentTimeline(dashboard.base, dashboard.claims, now, narrowed ? matching : undefined, dashboard.vocab),
   );
   const bounds = $derived<TimeWindow>(
     timeline
       ? {
           start: timeline.start,
-          end: Math.max(timeline.end, timeline.start + 1, dashboard.agentsLive ? now : 0),
+          end: Math.max(timeline.end, timeline.start + 1, view.agentsLive ? now : 0),
         }
       : { start: 0, end: 1 },
   );
@@ -49,9 +71,7 @@
   // Saved with the project's view.
   // Live keeps a zoomed window at the newest end.
   const kept = $derived(
-    dashboard.agentsLive && dashboard.agentsWindow
-      ? { ...dashboard.agentsWindow, followEnd: true }
-      : dashboard.agentsWindow,
+    view.agentsLive && view.agentsWindow ? { ...view.agentsWindow, followEnd: true } : view.agentsWindow,
   );
   const win = $derived(resolveWindow(kept, bounds));
   const span = $derived(win.end - win.start);
@@ -63,8 +83,8 @@
   const ticks = $derived(timeline ? timeTicks(win.start, win.end) : []);
   const types = $derived([...new Set(timeline?.lanes.flatMap((l) => l.bars.map((b) => b.task.type)) ?? [])].sort());
   const working = $derived(!!timeline && timeline.lanes.some((l) => l.current.length > 0));
-  const atNow = $derived((working || dashboard.agentsLive) && win.end >= bounds.end);
-  const nowInRange = $derived((working || dashboard.agentsLive) && now <= win.end);
+  const atNow = $derived((working || view.agentsLive) && win.end >= bounds.end);
+  const nowInRange = $derived((working || view.agentsLive) && now <= win.end);
 
   /** A bar's visible part as left/width percentages, or null when it is outside the window */
   function segment(start: number, end: number) {
@@ -76,11 +96,11 @@
   // Moving the window into the past ends Live; zooming keeps it (anchored at now)
   function setWindow(w: TimeWindow) {
     const next = keepWindow(w, bounds);
-    if (next && !next.followEnd) dashboard.agentsLive = false;
-    dashboard.agentsWindow = next;
+    if (next && !next.followEnd) view.agentsLive = false;
+    view.agentsWindow = next;
   }
   const zoomBy = (factor: number, anchor = 0.5) =>
-    setWindow(zoomWindow(win, bounds, factor, dashboard.agentsLive ? 1 : anchor));
+    setWindow(zoomWindow(win, bounds, factor, view.agentsLive ? 1 : anchor));
   const showLast = (minutes: number) => setWindow({ start: bounds.end - minutes * 60_000, end: bounds.end });
 
   // The tracks' left edge and width, measured from the axis row they share a column with
@@ -194,7 +214,7 @@
       '+': () => zoomBy(ZOOM_STEP),
       '=': () => zoomBy(ZOOM_STEP),
       '-': () => zoomBy(1 / ZOOM_STEP),
-      '0': () => (dashboard.agentsWindow = null),
+      '0': () => (view.agentsWindow = null),
       ArrowLeft: () => setWindow(panWindow(win, bounds, -span / 5)),
       ArrowRight: () => setWindow(panWindow(win, bounds, span / 5)),
     };
@@ -207,8 +227,8 @@
 <div class="agents-view" id="agents">
   {#if !timeline}
     <div class="agents-empty">
-      No task has a start time yet. Agents appear here once tasks are started with <code>atm</code> (the
-      <code>/atm:do-task</code> and <code>/atm:loop-tasks</code> skills do this).
+      {given !== undefined ? 'No task in these projects' : 'No task'} has a start time yet. Agents appear here once tasks
+      are started with <code>atm</code> (the <code>/atm:do-task</code> and <code>/atm:loop-tasks</code> skills do this).
     </div>
   {:else}
     <div class="agents-toolbar">
@@ -225,7 +245,7 @@
           {formatWhen(win.start, now)} – {atNow ? 'now' : formatWhen(win.end, now)}
         </span>
         <label class="agents-live" title="Keep the timeline at the current time, moving with it">
-          <input type="checkbox" id="agents-live" bind:checked={dashboard.agentsLive} /><span class="live-dot"></span> Live
+          <input type="checkbox" id="agents-live" bind:checked={view.agentsLive} /><span class="live-dot"></span> Live
         </label>
         <span class="agents-presets" role="group" aria-label="Show the last">
           {#each PRESETS as [label, minutes] (label)}
@@ -242,7 +262,7 @@
             class:active={!zoomed}
             title="Everything (0)"
             data-preset="all"
-            onclick={() => (dashboard.agentsWindow = null)}>All</button
+            onclick={() => (view.agentsWindow = null)}>All</button
           >
         </span>
         <button title="Zoom out (-)" aria-label="Zoom out" disabled={!zoomed} onclick={() => zoomBy(1 / ZOOM_STEP)}
@@ -297,13 +317,16 @@
               .filter(Boolean)
               .join(' · ')}
           </div>
+          {#if lane.projects}
+            <div class="agent-projects" title={lane.projects.join(', ')}>{lane.projects.join(' · ')}</div>
+          {/if}
           {#if lane.current.length}
             <div class="agent-now">Now: {lane.current.map((t) => t.id).join(', ')}</div>
           {/if}
         </div>
         <div class="agent-track">
           {#each ticks as t (t)}<span class="agents-gridline" style="left:{pos(t)}%"></span>{/each}
-          {#each lane.bars as bar (bar.task.id)}
+          {#each lane.bars as bar (bar.key ?? bar.task.id)}
             {@const seg = segment(bar.start, bar.end)}
             {@const approver = approvedBy(bar.task)}
             {#if seg}
@@ -315,13 +338,15 @@
                 class:cut-start={bar.start < win.start}
                 class:cut-end={bar.end > win.end}
                 data-id={bar.task.id}
+                data-project={bar.project?.id}
                 style="left:{seg.left}%;width:max(4px, {seg.width}%);--bar:{typeStyle(bar.task.type).color}"
-                title="{bar.task.id} {bar.task.name}&#10;{formatWhen(bar.start, now)} → {bar.live
-                  ? 'now'
-                  : formatWhen(bar.end, now)} ({formatMinutes((bar.end - bar.start) / 60_000)}){approver
-                  ? `\napproved by ${approver}`
-                  : ''}"
-                onclick={() => dashboard.showDetail(bar.task.id)}
+                title="{bar.project ? `${bar.project.name}: ` : ''}{bar.task.id} {bar.task.name}&#10;{formatWhen(
+                  bar.start,
+                  now,
+                )} → {bar.live ? 'now' : formatWhen(bar.end, now)} ({formatMinutes(
+                  (bar.end - bar.start) / 60_000,
+                )}){approver ? `\napproved by ${approver}` : ''}"
+                onclick={() => (onopen ? onopen(bar) : dashboard.showDetail(bar.task.id))}
                 ><span class="agent-bar-label">{bar.task.id}</span>{#if approver}<span
                     class="agent-bar-approved"
                     data-by={approver}
@@ -351,7 +376,7 @@
         onpointercancel={onBrushUp}
       >
         {#each timeline.lanes as lane, i (lane.agent)}
-          {#each lane.bars as bar (bar.task.id)}
+          {#each lane.bars as bar (bar.key ?? bar.task.id)}
             <span
               class="overview-bar"
               class:graph-dimmed={narrowed && !matching.has(bar.task.id)}

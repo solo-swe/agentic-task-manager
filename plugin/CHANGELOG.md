@@ -23,6 +23,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 - **Open tasks left in closed sprints** (T-330): `atm status` warns about them (`open_in_closed_sprints` in
   `--json`), `atm check` warns about each, and `atm reopen` of a task in a closed sprint suggests `atm move <id> --to
   backlog` or `--to active` (`hint` in `--json`), moving nothing. `/atm:plan-sprint` shows them first as candidates.
+- **An Agents tab on the Projects Overview** (T-333, `#overview&view=agents`, remembered as `overviewTab`): every shown
+  project's agents on one timeline, a lane per agent or person across projects naming the projects it worked in, a
+  bar opening its task in its project. It reads each project's `tasks.json` and `claims.json` while shown
+  (`lib/overview-agents.ts`; conditional on refresh), with its own zoom and Live. `AgentsTab` takes a timeline, view
+  state and click handler. A project's own `#view=agents` no longer changes the overview's remembered tab.
 
 ### Changed
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own

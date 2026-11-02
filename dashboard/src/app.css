@@ -3839,6 +3839,19 @@ svg.graph-minimap.hidden {
 .agent-now {
   color: var(--accent);
 }
+/* On the overview's Agents tab (T-333): the projects the agent worked in */
+.agent-projects {
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  color: var(--text);
+}
+/* The overview's Agents tab fills the page's width, like the board */
+.overview-agents {
+  min-width: 0;
+}
 .agent-track {
   position: relative;
   border-bottom: 1px solid var(--border);

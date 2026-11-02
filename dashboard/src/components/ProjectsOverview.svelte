@@ -9,6 +9,7 @@
   import AllProjectsBoard from './AllProjectsBoard.svelte';
   import Icon from './Icon.svelte';
   import InfoTip from './InfoTip.svelte';
+  import OverviewAgents from './OverviewAgents.svelte';
   import ProjectCard from './ProjectCard.svelte';
 
   const ordered = $derived(orderProjects(dashboard.projects));
@@ -20,14 +21,16 @@
   const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
 
   // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
-  const LABELS: Record<OverviewTab, string> = { projects: 'Projects', board: 'Omniboard' };
-  const ICONS = { projects: 'folder', board: 'square-kanban' } as const;
+  const LABELS: Record<OverviewTab, string> = { projects: 'Projects', board: 'Omniboard', agents: 'Agents' };
+  const ICONS = { projects: 'folder', board: 'square-kanban', agents: 'bot' } as const;
   const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
 
   function onTabKeydown(e: KeyboardEvent) {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
     e.preventDefault();
-    const next = tab === 'projects' ? 'board' : 'projects';
+    const i = OVERVIEW_TABS.indexOf(tab);
+    const next = OVERVIEW_TABS[(i + step + OVERVIEW_TABS.length) % OVERVIEW_TABS.length];
     dashboard.selectOverviewTab(next);
     buttons[next]?.focus();
   }
@@ -133,6 +136,8 @@
   <div id="overview-panel" role="tabpanel" aria-labelledby="overview-tab-{tab}">
     {#if tab === 'board'}
       <AllProjectsBoard projects={shown} />
+    {:else if tab === 'agents'}
+      <OverviewAgents projects={shown} />
     {:else}
       <div class="projects-grid" id="projects-grid">
         {#each shown as project (project.id)}

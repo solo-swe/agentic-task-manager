@@ -37,6 +37,7 @@ import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
 import type { ListGroupBy } from './list-groups';
+import { loadAgentSources, type AgentSource } from './overview-agents';
 import { leftovers as leftoversOf, scopeOf } from './scope';
 import { parseSprintHash, withSprintHash } from './sprint-hash';
 import { sprintModel } from './sprints';
@@ -85,6 +86,14 @@ export class DashboardState {
   boardQuery = $state(getPref('boardQuery', ''));
   /** The All projects board: the active sprints' tasks (the default) or every task (T-340); remembered per browser */
   boardScope = $state<BoardScope>(getPref('boardScope', 'active') === 'all' ? 'all' : 'active');
+  /** The overview's Agents tab (T-333): every listed project's tasks and claims, loaded while the tab is shown */
+  agentSources = $state.raw<AgentSource[]>([]);
+  agentSourcesLoaded = $state(false);
+  /** Its timeline's zoomed range and Live, apart from a project's (not saved) */
+  overviewAgents = $state<{ agentsWindow: ViewWindow | null; agentsLive: boolean }>({
+    agentsWindow: null,
+    agentsLive: false,
+  });
   tasks = $state.raw<Task[]>([]);
   // Never mutated, only replaced on (re)load, so a plain Map in $state.raw is reactive enough
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -375,6 +384,7 @@ export class DashboardState {
     if (overviewTab) {
       this.overviewTab = overviewTab;
       setPref('overviewTab', overviewTab);
+      if (overviewTab === 'agents' && !this.agentSourcesLoaded) void this.refreshAgentSources();
     }
     const route = routeFor(this.projects, location.hash);
     if (JSON.stringify(route) !== JSON.stringify(this.route)) {
@@ -409,6 +419,7 @@ export class DashboardState {
     const project = await this.refreshProjects();
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     if (project === null) {
+      if (this.route.page === 'overview' && this.overviewTab === 'agents') await this.refreshAgentSources();
       this.loadedAt = Date.now();
       return;
     }
@@ -462,6 +473,14 @@ export class DashboardState {
       location.hash = formatHash(params);
     }
     this.overviewTab = tab;
+    // The Agents tab needs every project's tasks: loaded when it is first shown, then on each refresh
+    if (tab === 'agents' && !this.agentSourcesLoaded) void this.refreshAgentSources();
+  }
+
+  /** Every listed project's tasks and claims, for the overview's Agents tab; a failure keeps what was there */
+  private async refreshAgentSources() {
+    this.agentSources = await loadAgentSources(this.projects, this.agentSources);
+    this.agentSourcesLoaded = true;
   }
 
   setBoardGroupByProject(on: boolean) {
