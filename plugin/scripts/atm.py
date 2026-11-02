@@ -1358,6 +1358,65 @@ def load_tasks(paths):
     return data
 
 
+META_KEY = re.compile(r"meta\.(\w+)")
+
+
+def tolerant_vocabulary(meta):
+    """The vocabularies of `meta` as far as they work, and what doesn't: each list or setting `vocabulary` refuses is
+    left out (its default used instead), as the dashboard reads them. Returns (vocabulary, problems, the meta without
+    what was left out)."""
+    usable = dict(meta) if isinstance(meta, dict) else {}
+    problems = []
+    while True:
+        try:
+            return vocabulary({"meta": usable}), problems, usable
+        except AtmError as e:
+            problems.append(str(e))
+            key = META_KEY.match(str(e))
+            if key and key.group(1) in usable:
+                usable.pop(key.group(1))
+                if key.group(1) == "priorities":
+                    usable.pop("default_priority", None)  # it names one of them
+            else:
+                usable = {}  # nothing to narrow it to: the defaults
+
+
+def load_tasks_tolerant(paths):
+    """tasks.json read as far as it can be, for showing it (the dashboard): what `load_tasks` refuses is kept where it
+    can be, and said. Entries that aren't tasks (no string "id") are left out; a task with an ID atm doesn't allow is
+    kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task read fits
+    the task schema). The data is for reading only. Returns (data, problems): problems as {"file": [...],
+    "tasks": {id: [...]}}, in `atm check`'s words. A file that isn't a task file at all is still an error."""
+    if not os.path.isfile(paths["tasks"]):
+        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
+    data = read_json(paths["tasks"])
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
+    problems = {"file": [], "tasks": {}}
+    kept = []
+    for i, task in enumerate(data["tasks"]):
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            problems["file"].append(f"task #{i + 1} isn't a task (an object with an \"id\"): left out")
+            continue
+        own = []
+        if not valid_task_id(task["id"]):
+            own.append(f"the ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', '_' and '-')")
+        deps = task.get("dependencies", [])
+        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+            # Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
+            task["dependencies"] = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
+            own.append("its dependencies aren't a list of task IDs (shown with the IDs that can be read)")
+        if own:
+            problems["tasks"][task["id"]] = own
+        kept.append(task)
+    data["tasks"] = kept
+    # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
+    _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
+    problems["file"] += vocabulary_problems
+    _archive["paths"], _archive["data"] = paths, None
+    return data, problems
+
+
 def find_task(data, task_id, archived=False):
     """The task with this ID in tasks.json; with `archived`, also in the archive (for reading only)."""
     for task in data["tasks"]:
@@ -1374,9 +1433,12 @@ def unfinished_dependencies(data, task):
     dependency that is only in the archive is done (DM-3.1)."""
     vocab = vocabulary(data)
     status = {t.get("id"): t.get("status") for t in data["tasks"]}
+    deps = task.get("dependencies", [])
+    # A list of IDs, as load_tasks checks; a file read tolerantly (load_tasks_tolerant) may hold anything there
+    deps = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
     return [
         (dep, status.get(dep, "missing"))
-        for dep in task.get("dependencies", [])
+        for dep in deps
         if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived_task(dep))
     ]
 
@@ -2026,6 +2088,8 @@ TaskDerived = TypedDict(
         "stage": str,
         # required; From the archive
         "archived": bool,
+        # What atm finds wrong with the task (T-377); it isn't ready then
+        "problems": List[str],
     },
     total=False,
 )
@@ -2069,6 +2133,8 @@ TaskViewList = TypedDict(
         "bytes": int,
         # required
         "tasks": List["TaskView"],
+        # What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377)
+        "problems": List[str],
     },
     total=False,
 )
@@ -2109,6 +2175,11 @@ class Store(Protocol):
 
     def sizes(self) -> dict:
         """How big the project's data is, in bytes: `tasks` (the working tasks) and `archive`."""
+        ...
+
+    def problems(self) -> dict:
+        """What a tolerant read found wrong with the data (T-377): {"file": [...], "tasks": {id: [...]}}, in `atm
+        check`'s words; empty for a strict read, which refuses such data instead."""
         ...
 
     def working_copy(self) -> Optional[str]:
@@ -3367,15 +3438,27 @@ class Working:
 # in here as the migration's slices do (§9).
 
 class JsonGitStore:
-    def __init__(self, paths):
+    def __init__(self, paths, tolerant=False):
+        """`tolerant`: read a malformed task file as far as it can be read, and say what is wrong (`problems()`),
+        instead of refusing it: for showing it (the REST API's reads, T-377). Writes are strict either way."""
         self.paths = paths
+        self.tolerant = tolerant
         self._data = None
+        self._problems = {"file": [], "tasks": {}}
 
     def _loaded(self):
         # Read once per store: one atm command works on one snapshot of the file
         if self._data is None:
-            self._data = load_tasks(self.paths)
+            if self.tolerant:
+                self._data, self._problems = load_tasks_tolerant(self.paths)
+            else:
+                self._data = load_tasks(self.paths)
         return self._data
+
+    def problems(self):
+        """What a tolerant read found wrong: {"file": [...], "tasks": {id: [...]}}; nothing for a strict one."""
+        self._loaded()
+        return self._problems
 
     def get_vocabularies(self):
         return vocabulary(self._loaded())
@@ -3445,11 +3528,17 @@ def empty_claims():
 
 
 class MemoryStore:
-    def __init__(self, tasks=None, archive=None, meta=None, claims=None):
+    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None):
+        """`problems`: what a tolerant read would have found ({"file": [...], "tasks": {id: [...]}}), for the tests of
+        what atm-lib makes of them; the memory holds data, not a file to read."""
         self.meta = dict(meta or {})
         self.tasks = list(tasks or [])
         self.archive = list(archive or [])
         self.claims = {**empty_claims(), **(claims or {})}
+        self._problems = {"file": [], "tasks": {}, **(problems or {})}
+
+    def problems(self):
+        return self._problems
 
     def get_vocabularies(self):
         return vocabulary(self.document())
@@ -3704,13 +3793,17 @@ def task_views(project, filters):
     found = list_matching(project, filters)
     data, vocab = project.store.document(), found["vocab"]
     ready = {t.get("id") for t in ready_tasks(data)}
+    # A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
+    troubled = {} if filters.archived else project.store.problems()["tasks"]
     views = []
     for t in found["tasks"]:
         kind = kind_of(vocab, t.get("status"))
+        problems = troubled.get(t.get("id"))
         values = {
             "kind": kind,
-            "ready": t.get("id") in ready,
+            "ready": t.get("id") in ready and not problems,
             "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "problems": problems,
             "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
             "priority": priority_of(vocab, t),
             "effective_review": effective_review(vocab, t),
@@ -3721,6 +3814,12 @@ def task_views(project, filters):
         # What doesn't apply is left out, not null (api.schema.json's optional fields)
         views.append({"task": t, "derived": {k: v for k, v in values.items() if v is not None}})
     return views
+
+
+def read_problems(project):
+    """What a tolerant read found wrong with the project's task data as a whole (T-377): entries left out, the
+    vocabularies that fell back to their defaults. Empty for a strict read, which refuses such data instead."""
+    return list(project.store.problems()["file"])
 
 
 def search_text(task):
@@ -4467,14 +4566,14 @@ def add_task_note(project, task_id, text):
 # ==== boot/open.py ====
 # Opening a project: its task files (the JSON-in-git store) and git.
 
-def open_project(cwd, actor=None):
-    """The project at or above `cwd`."""
-    return project_at(find_paths(cwd), actor)
+def open_project(cwd, actor=None, tolerant=False):
+    """The project at or above `cwd`. `tolerant`: read a malformed task file as far as it can be read (T-377)."""
+    return project_at(find_paths(cwd), actor, tolerant)
 
 
-def project_at(paths, actor=None):
+def project_at(paths, actor=None, tolerant=False):
     """The project whose task files `paths` locates (atm serve opens each registered project this way)."""
-    return Project(JsonGitStore(paths), GitVcs(paths["root"]), actor)
+    return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
 
 
 # ==== cli/render.py ====
@@ -7375,10 +7474,11 @@ class Summaries:
             self.paths[entry["path"]] = (paths, claims_store_path(paths))
         return self.paths[entry["path"]][1]
 
-    def project(self, entry):
-        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call."""
+    def project(self, entry, tolerant=False):
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call. `tolerant`
+        reads a malformed task file as far as it can be read, for showing it (T-377)."""
         self.store(entry)
-        return project_at(self.paths[entry["path"]][0])
+        return project_at(self.paths[entry["path"]][0], tolerant=tolerant)
 
     def stamp(self, entry):
         """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
@@ -7515,13 +7615,15 @@ def api_v1_tasks(summaries, entry, query):
     etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
 
     def body():
-        project = summaries.project(entry)
+        # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
+        project = summaries.project(entry, tolerant=True)
         views = task_views(project, task_filters(query))
         snapshot = {
             "generated_at": now_iso(),
             "meta": project.store.document().get("meta") or {},
             "bytes": project.store.sizes()["tasks"],
             "tasks": views,
+            "problems": read_problems(project),
         }
         return to_json(snapshot).encode("utf-8")
 
@@ -7788,7 +7890,13 @@ def cmd_serve_child(args):
 def cmd_list(args):
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
-        out(to_json(task_views(open_project(os.getcwd()), args)))
+        if args.tolerant:
+            project = open_project(os.getcwd(), tolerant=True)
+            views = task_views(project, args)
+            meta = project.store.document().get("meta") or {}  # without what doesn't work, as atm serve sends it
+            out(to_json({"meta": meta, "tasks": views, "problems": read_problems(project)}))
+        else:
+            out(to_json(task_views(open_project(os.getcwd()), args)))
         return
     found = list_matching(open_project(os.getcwd()), args)
     vocab, tasks = found["vocab"], found["tasks"]
@@ -8210,6 +8318,12 @@ def build_parser():
         action="store_true",
         help="each task in full with what atm derives for it (kind, ready, waiting for, effective review and release, "
         "stage), as JSON: what atm serve's api/v1/projects/<id>/tasks gives the dashboard",
+    )
+    list_.add_argument(
+        "--tolerant",
+        action="store_true",
+        help="with --derived: read a malformed tasks.json as far as it can be read, as atm serve does for the "
+        "dashboard, and print {meta, tasks, problems}",
     )
     status = command(
         "status",

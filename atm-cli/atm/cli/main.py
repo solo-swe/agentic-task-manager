@@ -297,6 +297,12 @@ def build_parser():
         help="each task in full with what atm derives for it (kind, ready, waiting for, effective review and release, "
         "stage), as JSON: what atm serve's api/v1/projects/<id>/tasks gives the dashboard",
     )
+    list_.add_argument(
+        "--tolerant",
+        action="store_true",
+        help="with --derived: read a malformed tasks.json as far as it can be read, as atm serve does for the "
+        "dashboard, and print {meta, tasks, problems}",
+    )
     status = command(
         "status",
         cmd_status,

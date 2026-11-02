@@ -889,6 +889,34 @@ describe('serve', () => {
     atm(['serve', 'stop'], root);
   });
 
+  test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
+    const atm = atmIn(home());
+    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const root = project({
+      meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
+      tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
+    });
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    // Every atm command still refuses it
+    assert.notEqual(atm(['list'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const response = await fetch(`http://localhost:${port}/api/v1/projects/dddd4444/tasks`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(
+      body.tasks.map((v) => [v.task.id, v.derived.ready, v.derived.problems]),
+      [
+        ['T-1', true, undefined],
+        ['T-2', false, ["its dependencies aren't a list of task IDs (shown with the IDs that can be read)"]],
+      ],
+    );
+    assert.equal(body.problems.length, 2); // the entry left out, and the priorities
+    assert.match(body.problems.join('\n'), /isn't a task/);
+    assert.match(body.problems.join('\n'), /meta\.priorities/);
+    atm(['serve', 'stop'], root);
+  });
+
   test('a busy port moves the server to the next free one', async () => {
     const atm = atmIn(home());
     const root = project();

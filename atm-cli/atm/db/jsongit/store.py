@@ -6,20 +6,32 @@ import os
 
 from ...claims import locked_with_claims, read_store, write_store
 from ...core import git, read_json, write_json_atomic
-from ...model import archive_path, archived_task, load_archive, load_tasks, vocabulary
+from ...model import archive_path, archived_task, load_archive, load_tasks, load_tasks_tolerant, vocabulary
 from ..working import Working
 
 
 class JsonGitStore:
-    def __init__(self, paths):
+    def __init__(self, paths, tolerant=False):
+        """`tolerant`: read a malformed task file as far as it can be read, and say what is wrong (`problems()`),
+        instead of refusing it: for showing it (the REST API's reads, T-377). Writes are strict either way."""
         self.paths = paths
+        self.tolerant = tolerant
         self._data = None
+        self._problems = {"file": [], "tasks": {}}
 
     def _loaded(self):
         # Read once per store: one atm command works on one snapshot of the file
         if self._data is None:
-            self._data = load_tasks(self.paths)
+            if self.tolerant:
+                self._data, self._problems = load_tasks_tolerant(self.paths)
+            else:
+                self._data = load_tasks(self.paths)
         return self._data
+
+    def problems(self):
+        """What a tolerant read found wrong: {"file": [...], "tasks": {id: [...]}}; nothing for a strict one."""
+        self._loaded()
+        return self._problems
 
     def get_vocabularies(self):
         return vocabulary(self._loaded())

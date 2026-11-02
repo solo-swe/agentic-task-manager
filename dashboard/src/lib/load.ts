@@ -104,9 +104,11 @@ export interface LoadedTasks {
   meta: TasksFile['meta'];
   /** The file's size, in characters (≈ bytes: task files are mostly ASCII), for the archive notice (D-5.4) */
   bytes: number;
+  /** What atm finds wrong with the task file as a whole, when it reads a malformed one as far as it can (T-377) */
+  problems: string[];
 }
 
-export function parseTasksFile(data: TasksFile, bytes = 0): LoadedTasks {
+export function parseTasksFile(data: TasksFile, bytes = 0, problems: string[] = []): LoadedTasks {
   const tasks = data.tasks ?? [];
   return {
     tasks,
@@ -114,7 +116,13 @@ export function parseTasksFile(data: TasksFile, bytes = 0): LoadedTasks {
     projectName: data.meta?.project || DEFAULT_PROJECT_NAME,
     meta: data.meta,
     bytes,
+    problems,
   };
+}
+
+/** How many problems atm finds in the project's task file: the file's own and its tasks' (T-377) */
+export function problemCount(problems: readonly string[], tasks: readonly Task[]): number {
+  return problems.length + tasks.reduce((n, t) => n + (t.derived?.problems?.length ?? 0), 0);
 }
 
 /** A project's logo, as api/projects gives it: p/<id>/logo, relative to the dashboard */
@@ -201,6 +209,7 @@ interface TaskViewList {
   meta?: TasksFile['meta'];
   bytes?: number;
   tasks?: { task: Task; derived?: Task['derived'] }[];
+  problems?: unknown;
 }
 
 /**
@@ -220,9 +229,14 @@ export async function loadTasks(
   const tasks = Array.isArray(list.tasks)
     ? list.tasks.map((view) => (view.derived ? { ...view.task, derived: view.derived } : view.task))
     : [];
+  const problems = Array.isArray(list.problems) ? list.problems.filter((p): p is string => typeof p === 'string') : [];
   return {
     unchanged: false,
-    loaded: parseTasksFile({ meta: list.meta, tasks }, typeof list.bytes === 'number' ? list.bytes : file.text.length),
+    loaded: parseTasksFile(
+      { meta: list.meta, tasks },
+      typeof list.bytes === 'number' ? list.bytes : file.text.length,
+      problems,
+    ),
     validators: file.validators,
   };
 }

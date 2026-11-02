@@ -10,6 +10,7 @@ from ..lib.query import (
     Filters,
     list_matching,
     project_summary,
+    read_problems,
     status_report,
     summary,
     task_dependencies,
@@ -21,7 +22,13 @@ from .render import list_lines
 def cmd_list(args):
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
-        out(to_json(task_views(open_project(os.getcwd()), args)))
+        if args.tolerant:
+            project = open_project(os.getcwd(), tolerant=True)
+            views = task_views(project, args)
+            meta = project.store.document().get("meta") or {}  # without what doesn't work, as atm serve sends it
+            out(to_json({"meta": meta, "tasks": views, "problems": read_problems(project)}))
+        else:
+            out(to_json(task_views(open_project(os.getcwd()), args)))
         return
     found = list_matching(open_project(os.getcwd()), args)
     vocab, tasks = found["vocab"], found["tasks"]

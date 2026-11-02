@@ -229,6 +229,10 @@ class Registry(Protocol):                                               # the us
 `TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
 `with`); what is derived (ready, waiting, effective review) is atm-lib's. The JSON-in-git store filters in memory.
 
+**Tolerant reads** (T-377, decided with Hakan): a store opened `tolerant` reads malformed data as far as it can, for
+showing it (the REST API's reads for the dashboard), and says what is wrong (`problems()`: the file's, and each
+task's); every task it hands out fits the task schema. Writes are always strict, as are atm's commands.
+
 Things only one store has stay out of the interface and are reached through that store directly by the code that
 needs them: the JSON-in-git store's merge driver (`atm merge-driver`, which git runs), its migrations of old layouts
 (`atm migrate`), its file locations (`atm paths`) and its worktrees' copies (`worktrees.json`). A cloud store has no

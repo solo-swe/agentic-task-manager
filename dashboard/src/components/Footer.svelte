@@ -1,5 +1,6 @@
 <script lang="ts">
   import { archiveNotice } from '../lib/archive';
+  import { problemCount } from '../lib/load';
   import { copyright, pluginInfo } from '../lib/plugin-info';
   import { dashboard } from '../lib/state.svelte';
   import Logo from './Logo.svelte';
@@ -8,6 +9,9 @@
   const notice = $derived(
     archiveNotice(dashboard.tasks, dashboard.meta, dashboard.tasksBytes, dashboard.loadedAt, dashboard.vocab),
   );
+  // A malformed tasks.json, shown as far as atm could read it (T-377): how much is wrong, the file's own problems in
+  // the tooltip (each task's are in its details)
+  const problems = $derived(problemCount(dashboard.fileProblems, dashboard.tasks));
 </script>
 
 <footer class="site-footer" id="site-footer">
@@ -18,6 +22,12 @@
     <span class="footer-copyright">{copyright(pluginInfo)}</span>
   </span>
   {#if notice}<span class="archive-notice" id="archive-notice">{notice}</span>{/if}
+  {#if problems}<span
+      class="archive-notice"
+      id="problems-notice"
+      title={[...dashboard.fileProblems, 'Run `atm check` for the list.'].join('\n')}
+      >atm check finds {problems} problem{problems === 1 ? '' : 's'} in tasks.json</span
+    >{/if}
   <nav class="footer-links" aria-label="About this dashboard">
     <button class="footer-link" id="footer-version" title="What's new" onclick={() => dashboard.openWhatsNew()}
       >v{pluginInfo.version}</button

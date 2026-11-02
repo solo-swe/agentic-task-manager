@@ -117,6 +117,13 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **A malformed task file is shown, not refused** (T-377): the route reads it tolerantly, as far as it can be read,
+  where every `atm` command refuses it (`atm list --derived --tolerant` prints the same). An entry that isn't a task
+  is left out; a task with an ID atm doesn't allow is kept, one whose `dependencies` aren't a list of IDs with the IDs
+  that can be read; a vocabulary `meta` can't use falls back to its default (left out of the `meta` sent). Each
+  problem is said, in `atm check`'s words: a task's in its `derived.problems` (it isn't `ready` then), the file's in
+  the response's `problems`. The dashboard shows a notice and each task's problems in its details. A file that isn't
+  a task file at all still gets an error.
 - **Filters**, as `atm list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
   `type`, `priority`, `agent`, `release`, `component`; the flags `backlog`, `ready`, `blocked`, `in_pr`, `with_user`
   and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.

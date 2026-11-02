@@ -13,11 +13,17 @@ def empty_claims():
 
 
 class MemoryStore:
-    def __init__(self, tasks=None, archive=None, meta=None, claims=None):
+    def __init__(self, tasks=None, archive=None, meta=None, claims=None, problems=None):
+        """`problems`: what a tolerant read would have found ({"file": [...], "tasks": {id: [...]}}), for the tests of
+        what atm-lib makes of them; the memory holds data, not a file to read."""
         self.meta = dict(meta or {})
         self.tasks = list(tasks or [])
         self.archive = list(archive or [])
         self.claims = {**empty_claims(), **(claims or {})}
+        self._problems = {"file": [], "tasks": {}, **(problems or {})}
+
+    def problems(self):
+        return self._problems
 
     def get_vocabularies(self):
         return vocabulary(self.document())

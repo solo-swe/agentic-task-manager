@@ -152,13 +152,17 @@ def task_views(project, filters):
     found = list_matching(project, filters)
     data, vocab = project.store.document(), found["vocab"]
     ready = {t.get("id") for t in ready_tasks(data)}
+    # A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
+    troubled = {} if filters.archived else project.store.problems()["tasks"]
     views = []
     for t in found["tasks"]:
         kind = kind_of(vocab, t.get("status"))
+        problems = troubled.get(t.get("id"))
         values = {
             "kind": kind,
-            "ready": t.get("id") in ready,
+            "ready": t.get("id") in ready and not problems,
             "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "problems": problems,
             "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
             "priority": priority_of(vocab, t),
             "effective_review": effective_review(vocab, t),
@@ -169,6 +173,12 @@ def task_views(project, filters):
         # What doesn't apply is left out, not null (api.schema.json's optional fields)
         views.append({"task": t, "derived": {k: v for k, v in values.items() if v is not None}})
     return views
+
+
+def read_problems(project):
+    """What a tolerant read found wrong with the project's task data as a whole (T-377): entries left out, the
+    vocabularies that fell back to their defaults. Empty for a strict read, which refuses such data instead."""
+    return list(project.store.problems()["file"])
 
 
 def search_text(task):

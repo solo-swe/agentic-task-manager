@@ -41,7 +41,7 @@ from ..logo import find_logo
 from ..migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
 from ..paths import find_paths
 from ..boot.open import project_at
-from ..lib.query import Filters, list_claims, project_summary, search_tasks, task_views
+from ..lib.query import Filters, list_claims, project_summary, read_problems, search_tasks, task_views
 from ..registry import (
     REGISTRY_FILE,
     atm_home,
@@ -354,10 +354,11 @@ class Summaries:
             self.paths[entry["path"]] = (paths, claims_store_path(paths))
         return self.paths[entry["path"]][1]
 
-    def project(self, entry):
-        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call."""
+    def project(self, entry, tolerant=False):
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call. `tolerant`
+        reads a malformed task file as far as it can be read, for showing it (T-377)."""
         self.store(entry)
-        return project_at(self.paths[entry["path"]][0])
+        return project_at(self.paths[entry["path"]][0], tolerant=tolerant)
 
     def stamp(self, entry):
         """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
@@ -494,13 +495,15 @@ def api_v1_tasks(summaries, entry, query):
     etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
 
     def body():
-        project = summaries.project(entry)
+        # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
+        project = summaries.project(entry, tolerant=True)
         views = task_views(project, task_filters(query))
         snapshot = {
             "generated_at": now_iso(),
             "meta": project.store.document().get("meta") or {},
             "bytes": project.store.sizes()["tasks"],
             "tasks": views,
+            "problems": read_problems(project),
         }
         return to_json(snapshot).encode("utf-8")
 

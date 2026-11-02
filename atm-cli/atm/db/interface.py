@@ -38,6 +38,11 @@ class Store(Protocol):
         """How big the project's data is, in bytes: `tasks` (the working tasks) and `archive`."""
         ...
 
+    def problems(self) -> dict:
+        """What a tolerant read found wrong with the data (T-377): {"file": [...], "tasks": {id: [...]}}, in `atm
+        check`'s words; empty for a strict read, which refuses such data instead."""
+        ...
+
     def working_copy(self) -> Optional[str]:
         """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
         ...

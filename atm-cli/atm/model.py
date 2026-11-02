@@ -519,6 +519,65 @@ def load_tasks(paths):
     return data
 
 
+META_KEY = re.compile(r"meta\.(\w+)")
+
+
+def tolerant_vocabulary(meta):
+    """The vocabularies of `meta` as far as they work, and what doesn't: each list or setting `vocabulary` refuses is
+    left out (its default used instead), as the dashboard reads them. Returns (vocabulary, problems, the meta without
+    what was left out)."""
+    usable = dict(meta) if isinstance(meta, dict) else {}
+    problems = []
+    while True:
+        try:
+            return vocabulary({"meta": usable}), problems, usable
+        except AtmError as e:
+            problems.append(str(e))
+            key = META_KEY.match(str(e))
+            if key and key.group(1) in usable:
+                usable.pop(key.group(1))
+                if key.group(1) == "priorities":
+                    usable.pop("default_priority", None)  # it names one of them
+            else:
+                usable = {}  # nothing to narrow it to: the defaults
+
+
+def load_tasks_tolerant(paths):
+    """tasks.json read as far as it can be, for showing it (the dashboard): what `load_tasks` refuses is kept where it
+    can be, and said. Entries that aren't tasks (no string "id") are left out; a task with an ID atm doesn't allow is
+    kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task read fits
+    the task schema). The data is for reading only. Returns (data, problems): problems as {"file": [...],
+    "tasks": {id: [...]}}, in `atm check`'s words. A file that isn't a task file at all is still an error."""
+    if not os.path.isfile(paths["tasks"]):
+        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
+    data = read_json(paths["tasks"])
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
+    problems = {"file": [], "tasks": {}}
+    kept = []
+    for i, task in enumerate(data["tasks"]):
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            problems["file"].append(f"task #{i + 1} isn't a task (an object with an \"id\"): left out")
+            continue
+        own = []
+        if not valid_task_id(task["id"]):
+            own.append(f"the ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', '_' and '-')")
+        deps = task.get("dependencies", [])
+        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+            # Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
+            task["dependencies"] = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
+            own.append("its dependencies aren't a list of task IDs (shown with the IDs that can be read)")
+        if own:
+            problems["tasks"][task["id"]] = own
+        kept.append(task)
+    data["tasks"] = kept
+    # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
+    _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
+    problems["file"] += vocabulary_problems
+    _archive["paths"], _archive["data"] = paths, None
+    return data, problems
+
+
 def find_task(data, task_id, archived=False):
     """The task with this ID in tasks.json; with `archived`, also in the archive (for reading only)."""
     for task in data["tasks"]:
@@ -535,9 +594,12 @@ def unfinished_dependencies(data, task):
     dependency that is only in the archive is done (DM-3.1)."""
     vocab = vocabulary(data)
     status = {t.get("id"): t.get("status") for t in data["tasks"]}
+    deps = task.get("dependencies", [])
+    # A list of IDs, as load_tasks checks; a file read tolerantly (load_tasks_tolerant) may hold anything there
+    deps = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
     return [
         (dep, status.get(dep, "missing"))
-        for dep in task.get("dependencies", [])
+        for dep in deps
         if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived_task(dep))
     ]
 

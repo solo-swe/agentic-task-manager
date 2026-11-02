@@ -27,45 +27,35 @@ const viewCache = new Map<string, string>();
 /**
  * GET api/v1/projects/<id>/tasks for a project holding `body` as its tasks.json and `archive` as its archive
  * (docs/multi-project-api.md §2.5): its meta and size, and each task with what atm-cli itself derives for it
- * (`atm list --derived`), so the dashboard's readiness is tested against atm's rule, not a copy of it (T-366). A body
- * that isn't a task file is served as it is, so the dashboard's error handling sees it; a file atm refuses (the
- * fixtures of broken data) gets its tasks without derived values.
+ * (`atm list --derived --tolerant`, read as atm serve reads it), so the dashboard is tested against atm's rules, not
+ * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
+ * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
  */
 function asTaskViews(body: string, archive: string | null = null): string {
   const key = JSON.stringify([body, archive]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
-  let data: TasksData;
-  try {
-    data = JSON.parse(body) as TasksData;
-  } catch {
-    return body;
-  }
-  if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) return body;
-  const tasks = atmViews(body, archive) ?? data.tasks.map((task) => ({ task, derived: {} }));
-  const views = JSON.stringify({
-    generated_at: '2026-01-01T00:00:00Z',
-    meta: data.meta ?? {},
-    bytes: body.length,
-    tasks,
-  });
+  const read = atmViews(body, archive);
+  if (!read) return body;
+  const views = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', bytes: body.length, ...read });
   viewCache.set(key, views);
   return views;
 }
 
-/** atm's task views of the files (`atm list --derived`), or null when atm refuses them */
-function atmViews(body: string, archive: string | null): unknown[] | null {
+/** atm's tolerant read of the files (`atm list --derived --tolerant`: meta, tasks, problems), or null when even that
+ * refuses them (not a task file) */
+function atmViews(body: string, archive: string | null): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
-    const r = spawnSync('python3', [ATM, 'list', '--derived'], {
+    const r = spawnSync('python3', [ATM, 'list', '--derived', '--tolerant'], {
       cwd: dir,
       encoding: 'utf8',
       env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
-    return r.status === 0 ? (JSON.parse(r.stdout) as unknown[]) : null;
+    return r.status === 0 ? (JSON.parse(r.stdout) as Record<string, unknown>) : null;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

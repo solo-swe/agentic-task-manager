@@ -386,6 +386,8 @@ TaskDerived = TypedDict(
         "stage": str,
         # required; From the archive
         "archived": bool,
+        # What atm finds wrong with the task (T-377); it isn't ready then
+        "problems": List[str],
     },
     total=False,
 )
@@ -429,6 +431,8 @@ TaskViewList = TypedDict(
         "bytes": int,
         # required
         "tasks": List["TaskView"],
+        # What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377)
+        "problems": List[str],
     },
     total=False,
 )

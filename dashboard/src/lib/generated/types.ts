@@ -294,6 +294,8 @@ export interface TaskDerived {
   stage?: string;
   /** From the archive */
   archived: boolean;
+  /** What atm finds wrong with the task (T-377); it isn't ready then */
+  problems?: string[];
 }
 
 export interface DependencyItem {
@@ -318,4 +320,6 @@ export interface TaskViewList {
   /** How big the project's working task data is (tasks.json), for the archive notice */
   bytes: number;
   tasks: TaskView[];
+  /** What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377) */
+  problems?: string[];
 }

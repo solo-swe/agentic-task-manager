@@ -181,6 +181,12 @@
         </h3>
         <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeDetail()}>&times;</button>
       </div>
+      {#if task.derived?.problems?.length}
+        <!-- A malformed task, shown as far as atm could read it (T-377) -->
+        <ul class="archive-notice" id="detail-problems" aria-label="What atm check finds wrong with this task">
+          {#each task.derived.problems as problem (problem)}<li>{problem}</li>{/each}
+        </ul>
+      {/if}
       <div class="task-meta" style="margin-bottom:12px">
         <span class="badge" style="background:{ts.bg};color:{ts.color}">{task.type}</span>
         <span class="badge" style="background:{ss.bg};color:{ss.color}"

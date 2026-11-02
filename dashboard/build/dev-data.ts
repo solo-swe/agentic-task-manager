@@ -24,13 +24,13 @@ function summary(root: string): Promise<unknown> {
   });
 }
 
-/** The project's tasks with what atm derives for each (`atm list --derived`, as atm serve's v1 route gives them,
- * T-366); null when Python or the project can't give them */
-function taskViews(root: string): Promise<unknown[] | null> {
+/** The project's meta, tasks with what atm derives for each, and problems (`atm list --derived --tolerant`, read as
+ * atm serve's v1 route reads it, T-366, T-377); null when Python or the project can't give them */
+function taskViews(root: string): Promise<{ meta: unknown; tasks: unknown[]; problems: string[] } | null> {
   return new Promise((resolve) => {
     execFile(
       'python3',
-      [ATM, 'list', '--derived'],
+      [ATM, 'list', '--derived', '--tolerant'],
       { cwd: root, timeout: 10_000, maxBuffer: 64 << 20 },
       (error, stdout) => {
         try {
@@ -160,11 +160,9 @@ export function devData(defaultDir: string): Plugin {
               res.end();
               return;
             }
-            const data = JSON.parse(await readFile(file, 'utf8')) as { meta?: unknown; tasks?: unknown[] };
-            const tasks =
-              (await taskViews(path.dirname(project.dir))) ??
-              (Array.isArray(data.tasks) ? data.tasks : []).map((task) => ({ task, derived: {} }));
-            json(200, { generated_at: new Date().toISOString(), meta: data.meta ?? {}, bytes: size, tasks });
+            const read = await taskViews(path.dirname(project.dir));
+            if (!read) return json(500, { error: 'atm could not read the task file' });
+            json(200, { generated_at: new Date().toISOString(), bytes: size, ...read });
           } catch {
             json(404, { error: 'not found' });
           }
