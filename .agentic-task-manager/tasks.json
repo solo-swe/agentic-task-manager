@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 346,
+    "next_id": 347,
     "labels": [
       {
         "id": "architecture",
@@ -17219,7 +17219,8 @@
         "T-340",
         "T-341",
         "T-343",
-        "T-345"
+        "T-345",
+        "T-346"
       ],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -17229,7 +17230,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T05:44:13Z",
+      "updated_at": "2026-11-02T05:50:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17287,6 +17288,41 @@
           "by": "claude:b7be7288"
         }
       ]
+    },
+    {
+      "id": "T-346",
+      "name": "One look for the tabs on the overview and on a project's page",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "interactive",
+        "ux"
+      ],
+      "description": "The Projects Overview's tabs (Projects | Omniboard) sit on a plain line, while a project's view tabs (Kanban Board, Task List, …) have a bordered, filled tab joined to the view's panel. Make them look the same.\n\nLive with the user on the dev server:\n1. Try the overview's simpler look on a project's tabs.\n2. Then the other way around: the project's look on the overview's tabs.\n3. The user picks one; keep whole-pixel heights (the footer test).\n\nScreenshot baselines are left for T-345.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-02T05:50:04Z",
+      "updated_at": "2026-11-02T05:50:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T05:50:04Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user",
+      "started_at": "2026-11-02T05:50:05Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

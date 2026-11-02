@@ -2267,10 +2267,13 @@ button.repo-ref {
   flex-direction: column;
   min-height: 0;
 }
+/* One look for every tab strip, a project's and the overview's (T-346): tabs on a line, the selected one open onto
+   the page below */
 .view-tabs {
   display: flex;
   gap: 2px;
   padding-left: 8px;
+  border-bottom: 1px solid var(--border);
 }
 /* Between the task views and the project views (T-251) */
 .view-tab-divider {
@@ -2308,10 +2311,10 @@ button.repo-ref {
   color: var(--text);
   background: color-mix(in srgb, var(--surface) 60%, transparent);
 }
-/* The selected tab is part of the panel: same background, and it covers the panel's top border */
+/* The selected tab opens onto the page: its background, and it covers the line under the tabs */
 .view-tab[aria-selected='true'] {
   color: var(--text);
-  background: var(--surface);
+  background: var(--bg);
   border-color: var(--border);
   margin-bottom: -1px;
   z-index: 1;
@@ -2328,9 +2331,6 @@ button.repo-ref {
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
   min-height: 420px;
 }
 /* Review states, work together, components (SR-6.6, SR-7.6) */
@@ -2625,7 +2625,7 @@ button.repo-ref {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px;
+  padding: 16px 0;
   min-width: 0;
 }
 .view-panel > * {
@@ -4484,13 +4484,9 @@ svg.graph-minimap.hidden {
   color: var(--text);
   cursor: pointer;
 }
-/* Projects | Board (T-259): a project's tabs, on a line instead of a panel */
+/* Projects | Omniboard (T-259), looking like a project's tabs (T-346) */
 .overview-tabs {
-  border-bottom: 1px solid var(--border);
   margin-bottom: 12px;
-}
-.overview-tabs .view-tab[aria-selected='true'] {
-  background: var(--bg);
 }
 /* The All projects board (AllProjectsBoard.svelte), like a project's Kanban (T-262, T-265): the page doesn't
    scroll; the board takes the height down to the status bar (basis 0) and each column scrolls inside it. Grouped by

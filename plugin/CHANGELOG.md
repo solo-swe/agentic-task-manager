@@ -35,6 +35,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   for what makes the file grow).
 - **The tabs sit right under the title bar** (T-334), 12 px below the subtitle instead of 38 px (`.topbar`'s bottom
   padding and margin), on the overview and on a project's page alike; `.landing` lost its 24 px top padding.
+- **One look for the tabs** (T-346): a project's view tabs look like the overview's, on a line with the selected tab
+  open onto the page; the views no longer sit in a framed, filled panel (`.view-panels`), and their content lines up
+  with the page's edges.
 
 ### Fixed
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it
