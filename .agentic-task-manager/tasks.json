@@ -16689,7 +16689,7 @@
       "description": "On the All projects page, clicking a project card's \"N need you\" chip opens its popup (`NeedsYouMenu.svelte`) so that its left part is outside the window, for a card near the left edge.\n\n## Change\nKeep the popup inside the viewport: anchor it to the chip's left edge when there is no room to its left (or clamp its position), as the title bar's menus do. Check the cards in the first column and the last, and a narrow window.\n\n## Tests\nAn e2e test that opens the popup on the first card of the overview and checks its bounding box is within the viewport; the needs-you screenshot updated if it changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/NeedsYouMenu.svelte",
@@ -16698,7 +16698,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-02T02:14:32Z",
+      "updated_at": "2026-11-02T02:17:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16712,7 +16712,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T02:14:32Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "f28f28c6bf3ecabd4a2030b6fcbe2e1777d36bf7",
+      "completed_at": "2026-11-02T02:17:09Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:17:09Z",
+          "kind": "outcome",
+          "text": "NeedsYouMenu measures the list when it opens and shifts it back inside the window (8 px margin); e2e on the first and last card at 1280, 700 and 420 px.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-333",

@@ -27,8 +27,8 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 ### Changed
 - **Graph toolbar** (T-341, `.graph-toolbar`): grouped, with segmented switches and a compact zoom; under 920 px the
   hint hides and the toolbar wraps. e2e runs with `reducedMotion: 'reduce'`; `openDashboard(…, { graphAutoFit:
-  false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 will
-  embed only recent changelog releases).
+  false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 looks
+  for what makes the file grow).
 
 ### Fixed
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it
