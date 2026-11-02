@@ -255,6 +255,16 @@ def cmd_deps(args):
         for t in data["tasks"]
         if args.id in (t.get("dependencies") or [])
     ]
+    # Archived tasks that depended on it are history too, marked as the waits-for side marks them (T-358); a task in
+    # both files is the tasks.json one
+    waited_on_by += [
+        {"id": t.get("id"), "status": f"{t.get('status')}, archived", "name": t.get("name", "")}
+        for t in load_archive(paths)["tasks"]
+        if isinstance(t, dict)
+        and t.get("id") not in by_id
+        and isinstance(t.get("dependencies"), list)
+        and args.id in t["dependencies"]
+    ]
     if args.json:
         out(to_json({"id": args.id, "waits_for": waits_for, "waited_on_by": waited_on_by}))
         return

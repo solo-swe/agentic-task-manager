@@ -18061,14 +18061,14 @@
       "description": "Found in T-277, two things about `atm unarchive` (`atm-cli/atm/archive.py`):\n\n1. Its error lumps every wrong ID together (\"not in the archive: T-003, T-999, T-014\"). Say which are already in tasks.json and which don't exist at all.\n2. A task brought back that is still finished and old is moved straight back by the next `atm archive`, with no warning. After bringing back a finished task, say so in one line (e.g. that `atm reopen` keeps it out, or that the next archive moves it again).\n\n## Tests\nScenarios in `tests/scripts/scenarios/archive.json`: the two kinds of wrong ID, and the note after bringing back a finished task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/archive.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:12:56Z",
+      "updated_at": "2026-11-02T10:14:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18082,7 +18082,18 @@
         "cli"
       ],
       "started_at": "2026-11-02T10:12:56Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "e7c645f7b9567913ef6c007643591c5788240107",
+      "completed_at": "2026-11-02T10:14:08Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:14:08Z",
+          "kind": "outcome",
+          "text": "atm unarchive names wrong IDs as *already in tasks.json* or *no such task*, and says when the next archive moves a brought-back task back (`moves_back` in --json). Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-358",
@@ -18095,16 +18106,16 @@
       "description": "Found in T-277: `atm deps T-003` lists T-014 under \"is waited on by\" but not the archived T-004, which depends on T-003. Its \"waits for\" side already marks archived tasks (`(done, archived)`); list archived dependents too, marked the same way, in text and `--json` (`atm-cli/atm/query.py`).\n\n## Tests\nA scenario in `tests/scripts/scenarios/archive.json`: an archived task depending on a live one shows under \"is waited on by\".",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:10:38Z",
+      "updated_at": "2026-11-02T10:14:09Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -18114,7 +18125,9 @@
       "sprint": "Overview and polish",
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-02T10:14:09Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-359",
