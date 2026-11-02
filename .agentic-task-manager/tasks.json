@@ -16585,7 +16585,7 @@
       "description": "Closing a sprint carries every unfinished task on, but a task can still end up open in a closed sprint: `atm reopen` of a task in it, a git merge of a branch that closed the sprint with one that reopened or rejected a task in it, or a hand edit. The default loop works on the active sprint, so it never takes such a task (only `--all` does, before the backlog).\n\n## Change\n- `atm status`: list them under a warning (\"N open tasks in closed sprints\"), with their IDs and sprints; `--json` gets them too.\n- `atm check`: a warning for each.\n- `atm reopen` on a task in a closed sprint: after reopening, say the sprint is closed and suggest `atm move <id> --to backlog` or `--to <the active sprint>`. A suggestion only: the task is not moved.\n- `/atm:plan-sprint` Step 2: show them first as candidates, next to the last closed sprint's carried tasks.\n\nThe dashboard part is done in T-323 (the scope bar's warning, the closed sprint's note, List groups, card badges).\n\n## Tests\nScenarios in `tests/scripts/scenarios/` for `status`, `check` and `reopen` with a task open in a closed sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -16595,9 +16595,9 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T02:06:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "cli",
         "skills"
@@ -16611,7 +16611,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T02:06:14Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-331",
@@ -16909,7 +16911,7 @@
       "description": "Sprints are sometimes created by mistake and then stay around as garbage, even after they are closed. Add a `delete` action to `atm sprints` that removes a sprint from `meta.sprints`.\n\n## Command\n`atm sprints delete <name> [--move-to <sprint>|backlog] [--force]` in `atm-cli/atm/sprints.py` and `atm-cli/atm/cli.py`. Names match regardless of case, as elsewhere.\n\n## Rules\n- **Empty sprint** (no task is in it now and no task's `sprint_history` mentions it): deleted straight away, whatever its state, **including a closed one** (earlier trash).\n- **Planned or active sprint with tasks**: the tasks move to the backlog (default) or to the sprint named by `--move-to`, and the output says how many moved. A sprint that tasks were once in (`sprint_history`) needs `--force`.\n- **Closed sprint that ever had tasks**: refused (its history and report stay), and the error explains why.\n- An unknown name is an error that lists the sprints.\n\n## Merging\nCheck how `atm-cli/atm/merge.py` merges `meta.sprints` item by item: a sprint deleted on one branch must stay deleted when the other branch did not touch it. Fix it if needed (same approach as deleted tasks).\n\n## Tests\n- A scenario file `tests/scripts/scenarios/sprints-delete.json`: deleting an empty planned sprint and an empty closed one; a refused closed sprint with history; tasks moved to the backlog and to another sprint; `--force`; an unknown name; a name with different case.\n- A git-merge test in a `*.test.mjs` file (with `helpers.mjs`) if `merge.py` changes.\n\n## Docs\n- `docs/security-architecture.md`: the new CLI command.\n- Mention `atm sprints delete` in `plugin/skills/plan-sprint/SKILL.md` (and `close-sprint` if it fits).\n- Entries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.\n\nThe dashboard is out of scope here.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/sprints.py",
@@ -16922,7 +16924,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:50:16Z",
-      "updated_at": "2026-11-02T01:57:02Z",
+      "updated_at": "2026-11-02T02:06:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -16938,7 +16940,18 @@
         "docs"
       ],
       "started_at": "2026-11-02T01:57:02Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "44a651d90864463d343f0894901c9647b200b9d5",
+      "completed_at": "2026-11-02T02:06:13Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:06:13Z",
+          "kind": "outcome",
+          "text": "atm sprints delete <name> [--move-to S|backlog] [--force]: empty sprints (closed too) go at once; refuses closed with history, in-progress tasks, and open sprints with history unless --force. Merge already kept deletions (test added). plan-sprint mentions it; §3.3 review written.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-340",

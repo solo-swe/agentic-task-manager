@@ -224,5 +224,100 @@
         }
       ]
     }
+  },
+  {
+    "name": "atm status warns about open tasks left in closed sprints (T-330)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "Old", "state": "closed" },
+              { "id": "Now", "state": "active" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-1", "name": "Reopened", "type": "feature", "status": "todo", "sprint": "Old" },
+            { "id": "T-2", "name": "Finished", "type": "feature", "status": "done", "sprint": "Old" },
+            { "id": "T-3", "name": "Current", "type": "feature", "status": "todo", "sprint": "Now" }
+          ]
+        }
+      }
+    },
+    "args": ["status"],
+    "expect": {
+      "stdoutIncludes": [
+        "warning: 1 open task in closed sprints, which the loop won't take: T-1 (Old) (atm move <id> --to backlog or --to active)\n"
+      ]
+    }
+  },
+  {
+    "name": "atm status --json lists the open tasks in closed sprints; none, no key",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed" }] },
+          "tasks": [{ "id": "T-1", "name": "Stuck", "type": "feature", "status": "blocked", "sprint": "Old" }]
+        }
+      }
+    },
+    "args": ["status", "--json"],
+    "expect": {
+      "stdoutIncludes": [
+        "\"open_in_closed_sprints\": [\n    {\n      \"id\": \"T-1\",\n      \"name\": \"Stuck\",\n      \"status\": \"blocked\",\n      \"sprint\": \"Old\"\n    }\n  ]"
+      ]
+    }
+  },
+  {
+    "name": "atm check warns about each open task in a closed sprint",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed" }] },
+          "tasks": [
+            { "id": "T-1", "name": "a", "type": "feature", "status": "todo", "sprint": "Old" },
+            { "id": "T-2", "name": "b", "type": "feature", "status": "skipped", "sprint": "Old" }
+          ]
+        }
+      }
+    },
+    "args": ["check", "--json"],
+    "expect": {
+      "json": {
+        "errors": [],
+        "warnings": [
+          "T-1: todo in the closed sprint 'Old', where the loop won't take it: atm move T-1 --to backlog (or --to active)"
+        ]
+      }
+    }
+  },
+  {
+    "name": "atm reopen in a closed sprint suggests moving the task; it stays where it is",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old", "state": "closed" }] },
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "done", "sprint": "Old" }]
+        }
+      }
+    },
+    "args": ["reopen", "T-1", "--reason", "Not quite"],
+    "expect": {
+      "stdout": "T-1: done -> todo\n  T-1 is now open in the closed sprint 'Old', where the loop won't take it: atm move T-1 --to backlog (or --to active)\n",
+      "files": { ".agentic-task-manager/tasks.json": true }
+    }
+  },
+  {
+    "name": "atm reopen in an open sprint gives no such hint",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Now", "state": "active" }] },
+          "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "done", "sprint": "Now" }]
+        }
+      }
+    },
+    "args": ["reopen", "T-1", "--reason", "Not quite"],
+    "expect": { "stdout": "T-1: done -> todo\n" }
   }
 ]

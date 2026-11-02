@@ -54,6 +54,9 @@ Read:
 | a task in full, or its dependencies | `atm show <id>`, `atm deps <id>` |
 
 Then show the user, briefly:
+- first, any **open tasks left in closed sprints** (`atm status` warns about them; `open_in_closed_sprints` in its
+  `--json`): the loop doesn't take them where they are, so propose each as a candidate for this sprint or the
+  backlog (`atm move <id> --to '<sprint>'` or `--to backlog`, once the user agrees);
 - the **active sprint**, if there is one: its goal, due date and what's left in it (to do, blocked, in review);
 - the **planned sprints**, in order, with their sizes;
 - the **backlog**, grouped by label and by component (a line per group: how many tasks, the most urgent first);

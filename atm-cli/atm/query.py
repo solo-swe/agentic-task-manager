@@ -23,6 +23,7 @@ from .model import (
     load_archive,
     load_tasks,
     natural_key,
+    open_in_closed_sprints,
     priority_rank,
     unfinished_dependencies,
     vocabulary,
@@ -676,6 +677,10 @@ def cmd_status(args):
         "archived": len(load_archive(paths)["tasks"]),
         "archive_bytes": os.path.getsize(archive_path(paths)) if os.path.isfile(archive_path(paths)) else 0,
     }
+    # Open tasks left in closed sprints (T-330), whatever the scope: the loop's default selection never takes them
+    stranded = open_in_closed_sprints(vocab, data["tasks"])
+    if stranded:
+        result["open_in_closed_sprints"] = stranded
     hint = archive_hint(paths, data)
     if hint:
         result["suggest"] = {"archive": hint}
@@ -695,6 +700,13 @@ def cmd_status(args):
             out(f"  waiting for the sprint review: {', '.join(sprint['review_pending'])} (/atm:close-sprint)")
     elif vocab["sprints"]:
         out("sprint: none active (plan one with /atm:plan-sprint)")
+    if stranded:
+        n = len(stranded)
+        out(
+            f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
+            + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
+            + " (atm move <id> --to backlog or --to active)"
+        )
     out(f"{len(tasks)} tasks: {pairs(by_status)}")
     if vocab["sprints"]:
         out(f"by sprint: {pairs(result['by_sprint'])}")

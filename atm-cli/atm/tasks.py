@@ -23,9 +23,11 @@ from .model import (
     archive_hint,
     archived_task,
     change_status,
+    find_sprint,
     find_task,
     kind_of,
     load_tasks,
+    move_out_hint,
     touch,
     vocabulary,
 )
@@ -138,14 +140,24 @@ def cmd_status_change(command):
                 store["hints"]["archive"] = today
             write_store(paths, store)
         report_expired(expired)
+        # Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
+        stranded = None
+        if command == "reopen":
+            sprint = find_sprint(vocabulary(data), task.get("sprint"))
+            if sprint and sprint["state"] == "closed":
+                stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
         if args.json:
             extra = {"unblocked": unblocked} if command == "done" else {}
             if hint:
                 extra["suggest"] = {"archive": hint}
+            if stranded:
+                extra["hint"] = stranded
             out(to_json({**task, "claim": claims.get(task_id), **extra}))
             return
         # New lines only after the existing one (CLI-3.2)
         out(f"{task['id']}: {previous} -> {task['status']}")
+        if stranded:
+            out(f"  {stranded}")
         if command == "start":
             out(describe_task(data, task))
         if unblocked:

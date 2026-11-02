@@ -362,6 +362,23 @@ def kind_of(vocab, status):
     return None
 
 
+def open_in_closed_sprints(vocab, tasks):
+    """Unfinished tasks whose sprint is closed (T-330): reopened there, or left by a merge. The loop's default selection
+    (the active sprint) never takes them. [{id, name, status, sprint}]"""
+    found = []
+    for task in tasks:
+        sprint = find_sprint(vocab, task.get("sprint")) if isinstance(task, dict) else None
+        if sprint and sprint["state"] == "closed" and kind_of(vocab, task.get("status")) not in ("done", "skipped"):
+            found.append({"id": task.get("id"), "name": task.get("name", ""), "status": task.get("status"), "sprint": sprint["id"]})
+    return found
+
+
+def move_out_hint(task_id, sprint):
+    """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
+    nothing on its own."""
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+
+
 def priority_rank(vocab, priority):
     """0 for the most urgent priority. A missing or unknown priority ranks as the default priority."""
     ids = [p["id"] for p in vocab["priorities"]]

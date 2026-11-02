@@ -1070,6 +1070,23 @@ def kind_of(vocab, status):
     return None
 
 
+def open_in_closed_sprints(vocab, tasks):
+    """Unfinished tasks whose sprint is closed (T-330): reopened there, or left by a merge. The loop's default selection
+    (the active sprint) never takes them. [{id, name, status, sprint}]"""
+    found = []
+    for task in tasks:
+        sprint = find_sprint(vocab, task.get("sprint")) if isinstance(task, dict) else None
+        if sprint and sprint["state"] == "closed" and kind_of(vocab, task.get("status")) not in ("done", "skipped"):
+            found.append({"id": task.get("id"), "name": task.get("name", ""), "status": task.get("status"), "sprint": sprint["id"]})
+    return found
+
+
+def move_out_hint(task_id, sprint):
+    """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
+    nothing on its own."""
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+
+
 def priority_rank(vocab, priority):
     """0 for the most urgent priority. A missing or unknown priority ranks as the default priority."""
     ids = [p["id"] for p in vocab["priorities"]]
@@ -3264,6 +3281,10 @@ def cmd_status(args):
         "archived": len(load_archive(paths)["tasks"]),
         "archive_bytes": os.path.getsize(archive_path(paths)) if os.path.isfile(archive_path(paths)) else 0,
     }
+    # Open tasks left in closed sprints (T-330), whatever the scope: the loop's default selection never takes them
+    stranded = open_in_closed_sprints(vocab, data["tasks"])
+    if stranded:
+        result["open_in_closed_sprints"] = stranded
     hint = archive_hint(paths, data)
     if hint:
         result["suggest"] = {"archive": hint}
@@ -3283,6 +3304,13 @@ def cmd_status(args):
             out(f"  waiting for the sprint review: {', '.join(sprint['review_pending'])} (/atm:close-sprint)")
     elif vocab["sprints"]:
         out("sprint: none active (plan one with /atm:plan-sprint)")
+    if stranded:
+        n = len(stranded)
+        out(
+            f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
+            + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
+            + " (atm move <id> --to backlog or --to active)"
+        )
     out(f"{len(tasks)} tasks: {pairs(by_status)}")
     if vocab["sprints"]:
         out(f"by sprint: {pairs(result['by_sprint'])}")
@@ -3414,14 +3442,24 @@ def cmd_status_change(command):
                 store["hints"]["archive"] = today
             write_store(paths, store)
         report_expired(expired)
+        # Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
+        stranded = None
+        if command == "reopen":
+            sprint = find_sprint(vocabulary(data), task.get("sprint"))
+            if sprint and sprint["state"] == "closed":
+                stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
         if args.json:
             extra = {"unblocked": unblocked} if command == "done" else {}
             if hint:
                 extra["suggest"] = {"archive": hint}
+            if stranded:
+                extra["hint"] = stranded
             out(to_json({**task, "claim": claims.get(task_id), **extra}))
             return
         # New lines only after the existing one (CLI-3.2)
         out(f"{task['id']}: {previous} -> {task['status']}")
+        if stranded:
+            out(f"  {stranded}")
         if command == "start":
             out(describe_task(data, task))
         if unblocked:
@@ -3879,6 +3917,8 @@ def check_data(data, root, files=False, archived=()):
             for f in task.get("files") or []:
                 if isinstance(f, str) and not os.path.exists(os.path.join(root, f)):
                     warnings.append(f"{task_id}: the file {f} doesn't exist")
+    for t in open_in_closed_sprints(vocab, [t for t in tasks if isinstance(t, dict) and isinstance(t.get("id"), str)]):
+        warnings.append(f"{t['id']}: {t['status']} in {move_out_hint(t['id'], t['sprint'])}")
     for sprint in vocab["sprints"]:
         if sprint.get("release") and find_release(vocab, sprint["release"]) is None:
             errors.append(f"the sprint {sprint['id']!r}: the release {sprint['release']!r} is not one of meta.releases")

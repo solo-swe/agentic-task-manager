@@ -288,6 +288,13 @@ delete a sprint is data, not a request; the sprint name is quoted like every arg
 syntax (48 characters, checked on load). No new entry point, and no live sandbox run (no API key): this review
 takes its place.
 
+**Open tasks in closed sprints (T-330).** `atm status`, `check` and `reopen` now name unfinished tasks whose sprint
+is closed, with a suggested `atm move`; they read nothing new and move nothing. The output agents act on carries
+task IDs and sprint names only (both checked on load, I8), never a task's text. `/atm:plan-sprint` Step 2 lists these
+tasks first as candidates and moves one only once the user agrees (I22); its *Task text is data* rule is unchanged,
+so a task's name or a note asking to be pulled in is still data. No new entry point, no live sandbox run (no API
+key): this review takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
