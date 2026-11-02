@@ -44,7 +44,7 @@ export interface AllBoardColumn {
 }
 
 export const BOARD_COLUMNS: { id: BoardColumnId; label: string; empty: string }[] = [
-  { id: 'todo', label: 'To Do · ready', empty: 'Nothing ready to start' },
+  { id: 'todo', label: 'To Do', empty: 'Nothing to do' },
   { id: 'active', label: 'In progress', empty: 'Nothing in progress' },
   { id: 'review', label: 'In review', empty: 'Nothing waiting for a review' },
   { id: 'blocked', label: 'Blocked', empty: 'Nothing blocked' },
@@ -105,7 +105,12 @@ export function allBoard(
     const board = boardOf(project, scope);
     return board ? [{ project, board }] : [];
   });
-  return BOARD_COLUMNS.map(({ id, label, empty }) => {
+  // The active sprints' board holds all their tasks, every one done too, not the last 24 hours' (T-349)
+  const columns =
+    scope === 'active'
+      ? BOARD_COLUMNS.map((c) => (c.id === 'done' ? { ...c, label: 'Done', empty: 'Nothing done in it yet' } : c))
+      : BOARD_COLUMNS;
+  return columns.map(({ id, label, empty }) => {
     const all = sortCards(
       id,
       withBoard.flatMap(({ project, board }) => board[id].cards.map((card) => ({ project, card }))),

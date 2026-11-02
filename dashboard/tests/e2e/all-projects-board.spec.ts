@@ -86,7 +86,7 @@ test.describe('All projects board', () => {
     await expect(page).toHaveURL(/view=board/);
     await expect(page.locator('#projects-grid')).toHaveCount(0);
 
-    await expect(column(page, 'todo').locator('.kanban-column-title')).toHaveText('To Do · ready');
+    await expect(column(page, 'todo').locator('.kanban-column-title')).toHaveText('To Do');
     // To Do: the most recently active project first, then each project's (the loop's) order
     await expect(ids(page, 'todo')).toHaveText(['B-1', 'T-008', 'T-009']);
     // In progress: longest running first; blocked: on you first; done: newest first

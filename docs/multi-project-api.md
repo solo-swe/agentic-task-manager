@@ -207,7 +207,7 @@ many tasks follow the column's rule, `cards` the first of them (so the dashboard
 
 | Column | Rule | Order | At most |
 |---|---|---|---|
-| `todo` | ready to start (the tasks `next` takes from: to do, dependencies done, not claimed) in the loop's default selection: the active sprint's, or the backlog's in a project without sprints | the loop's | 10 |
+| `todo` | every to-do task in the board's scope (T-349; `board_active_sprint` holds the active sprint's tasks, no more, no less, its `done` every finished one, not the last 24 hours'); a card done with the user has `with_user: true`, one waiting on dependencies `waiting_for` (their IDs) | the ready ones the loop takes, in its order; then the ready ones done with the user; then those waiting on dependencies (each by priority, then ID) | 10 |
 | `active` | every active-kind task | longest running first (`started_at`) | 30 |
 | `review` | every review-kind task | longest waiting first | 30 |
 | `blocked` | every blocked-kind task | blocked on the user first, then longest waiting | 30 |

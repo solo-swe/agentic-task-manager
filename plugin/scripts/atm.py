@@ -2955,7 +2955,7 @@ def git_summary(paths, tasks):
 
 
 BOARD_CAP = 30  # cards per column of the All projects board (docs/all-projects-kanban-proposal.md, 3.1)
-BOARD_READY_CAP = 10  # ready tasks per project, so one project's new batch doesn't fill the To Do column
+BOARD_READY_CAP = 10  # to-do tasks per project, so one project's new batch doesn't fill the To Do column
 BOARD_DONE_HOURS = 24
 
 
@@ -2979,11 +2979,34 @@ def board_column(cards, cap=BOARD_CAP):
     return {"count": len(cards), "cards": cards[:cap]}
 
 
-def board(data, store, tasks, kinds, ready, vocab, current, live):
-    """The project's cards for the All projects board (T-257), one rule per column: the tasks ready to start in the
-    loop's default selection (`ready`, the active sprint's), in its order; everything in progress (longest running
-    first), in review (longest waiting first) and blocked (on the user first, then longest waiting); what was
-    finished in the last 24 hours, newest first."""
+def todo_order(data, tasks, kinds, loop_ready, vocab):
+    """Every to-do task, for the board's To Do column (T-349): first the ready ones, those the loop takes in its order
+    before the rest (other sprints', the backlog's), then the ready ones done with the user, then those waiting on
+    dependencies (each by priority, then ID). Each with why it isn't plain ready: done with the user, or the
+    dependencies it waits for."""
+    rank = {t.get("id"): i for i, t in enumerate(loop_ready)}
+
+    def entry(t):
+        waits = [dep for dep, _ in unfinished_dependencies(data, t)]
+        key = (
+            bool(waits),
+            t.get("with") == "user",
+            t.get("id") not in rank,
+            rank.get(t.get("id"), 0),
+            priority_rank(vocab, t.get("priority")),
+            natural_key(t.get("id")),
+        )
+        return key, t, waits
+
+    entries = sorted((entry(t) for t, k in zip(tasks, kinds) if k == "todo"), key=lambda e: e[0])
+    return [(t, waits) for _, t, waits in entries]
+
+
+def board(data, store, tasks, kinds, todo, vocab, current, live, recent_done=True):
+    """The project's cards for the All projects board (T-257), one rule per column: every to-do task (`todo`, as
+    todo_order gives it, T-349); everything in progress (longest running first), in review (longest waiting first)
+    and blocked (on the user first, then longest waiting); what was finished, newest first: in the last 24 hours, or
+    all of it without `recent_done` (a sprint's board shows all its tasks, T-349)."""
     of_kind = lambda kind: [t for t, k in zip(tasks, kinds) if k == kind]
     claimed_by = {c.get("task"): c.get("agent") for c in live}
     since = lambda t, field: t.get(field) or t.get("updated_at")
@@ -2995,10 +3018,23 @@ def board(data, store, tasks, kinds, ready, vocab, current, live):
     )
     cutoff = current.timestamp() - BOARD_DONE_HOURS * 3600
     finished_at = lambda t: parse_time(t.get("completed_at"))
-    done = [t for t in of_kind("done") if finished_at(t) and finished_at(t).timestamp() > cutoff]
+    done = [
+        t for t in of_kind("done") if not recent_done or (finished_at(t) and finished_at(t).timestamp() > cutoff)
+    ]
     done.sort(key=lambda t: str(t.get("completed_at")), reverse=True)
     return {
-        "todo": board_column([board_card(vocab, t) for t in ready], BOARD_READY_CAP),
+        "todo": board_column(
+            [
+                board_card(
+                    vocab,
+                    t,
+                    **({"with_user": True} if t.get("with") == "user" else {}),
+                    **({"waiting_for": waits} if waits else {}),
+                )
+                for t, waits in todo
+            ],
+            BOARD_READY_CAP,
+        ),
         "active": board_column(
             [
                 board_card(vocab, t, by=claimed_by.get(t.get("id")) or started_by(t), since=since(t, "started_at"))
@@ -3125,7 +3161,8 @@ def project_summary(paths):
     # by the very rule `atm next` follows: the dashboard's Next up shows the first (T-321)
     in_loop_order = loop_order(data, store, Selection())[0]
     next_up = [{"id": t.get("id"), "name": capped(t.get("name"))} for t in in_loop_order[:NEXT_TASKS]]
-    ready = [t for t in in_loop_order if kind_of(vocab, t.get("status")) == "todo"]
+    # The board's To Do column: every to-do task, the loop's first (T-349)
+    todo = todo_order(data, tasks, kinds, in_loop_order, vocab)
     finished = [(t.get("completed_at"), t) for t, k in zip(tasks, kinds) if k == "done" and parse_time(t.get("completed_at"))]
     last_task = max(finished, key=lambda f: f[0])[1] if finished else None
     last_done = (
@@ -3191,15 +3228,16 @@ def project_summary(paths):
         "description": description(data.get("meta")),
         "last_activity": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
         "completions_14d": completions,
-        "board": board(data, store, tasks, kinds, ready, vocab, current, live),
-        "board_active_sprint": active_sprint_board(data, store, tasks, kinds, ready, vocab, current, live),
+        "board": board(data, store, tasks, kinds, todo, vocab, current, live),
+        "board_active_sprint": active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live),
         "stats": project_stats(paths, data, vocab, tasks, current),
     }
 
 
-def active_sprint_board(data, store, tasks, kinds, ready, vocab, current, live):
-    """The All projects board's default view (T-340): the same columns, of the active sprint's tasks only, with their
-    own counts; None without an active sprint (the board says so)."""
+def active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live):
+    """The All projects board's default view (T-340): the same columns, of the active sprint's tasks only, no more, no
+    less (T-349: every one done too, not the last 24 hours'), with their own counts; None without an active sprint (the
+    board says so)."""
     active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
     if active is None:
         return None
@@ -3210,10 +3248,11 @@ def active_sprint_board(data, store, tasks, kinds, ready, vocab, current, live):
         store,
         [t for t, _ in pairs],
         [k for _, k in pairs],
-        [t for t in ready if in_sprint(t)],
+        [(t, waits) for t, waits in todo if in_sprint(t)],
         vocab,
         current,
         live,
+        recent_done=False,
     )
 
 

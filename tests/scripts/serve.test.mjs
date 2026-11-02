@@ -350,7 +350,7 @@ describe('serve', () => {
     atm(['serve', 'stop'], root);
   });
 
-  test('board: ready tasks in the loop’s order (10 at most), the longest running first, 30 done today at most (T-257)', async () => {
+  test('board: to-do tasks, the ready ones in the loop’s order (10 at most), the longest running first, 30 done today at most (T-257)', async () => {
     const atmHome = home();
     const env = { ATM_HOME: atmHome, ATM_NOW: '2026-03-15T12:00:00Z' };
     const atm = (args, cwd) => runAtm(args, cwd, env);
@@ -365,7 +365,7 @@ describe('serve', () => {
       meta: { id: 'bbbb2222', project: 'Board' },
       tasks: [
         ...ready,
-        // Waiting on a dependency: not ready, not on the board
+        // Waiting on a dependency: on the board after the ready ones (T-349), so not among the first 10
         task('T-20', 'todo', { dependencies: ['A'] }),
         task('A', 'in_progress', { started_by: 'claude:x', started_at: '2026-03-15T10:00:00Z' }),
         task('B', 'in_progress', { started_by: 'claude:y', started_at: '2026-03-15T09:00:00Z', labels: ['ux'] }),
@@ -378,7 +378,7 @@ describe('serve', () => {
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const { board } = api.projects.find((p) => p.id === 'bbbb2222').summary;
-    assert.equal(board.todo.count, 12);
+    assert.equal(board.todo.count, 13);
     assert.deepEqual(
       board.todo.cards.map((c) => c.id),
       ['T-01', 'T-02', 'T-03', 'T-04', 'T-05', 'T-06', 'T-07', 'T-08', 'T-09', 'T-10'],

@@ -69,6 +69,14 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **Projects Overview has an icon in the project selector** (T-348): a grid (`layout-grid`), where each project shows
+  its logo.
+- **The Omniboard's Active sprints shows the sprints' tasks, no more, no less** (T-349): its To Do column was the
+  loop's list, missing the tasks done with you and those waiting on dependencies (and, in *All tasks*, every other
+  sprint's), and Done held only the last 24 hours. Now To Do has every to-do task (`todo_order`: the ready ones in the
+  loop's order first, then with you, then waiting; a card says *With you* or *Waits on T-…*, from `with_user` and
+  `waiting_for`), and the active sprints' Done every finished task of them. *All tasks* keeps the last 24 hours'
+  Done. The column is *To Do*, not *To Do · ready*.
 - **“Needs you” counts only what you can take up now** (T-347): a to-do task to do with you (`with: user`) counts only
   when it is in the active sprint (any, without one) and its dependencies are done; before, every such task did, also
   in planned sprints and the backlog. Reviews and questions for you count as before. The same in `atm summary`

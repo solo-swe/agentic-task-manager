@@ -81,15 +81,14 @@
       </label>
       <InfoTip label="the Omniboard">
         <p>
-          What's happening now across your projects: the tasks <strong>ready to start</strong>,
+          What's happening now across your projects: the tasks <strong>to do</strong> (ready ones first),
           <strong>in progress</strong>,
-          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those
-          <strong>done in the last 24 hours</strong>. At most 30 cards per column; <em>+ N more</em> says how many a project
-          has beyond them.
+          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. At most 30
+          cards per column; <em>+ N more</em> says how many a project has beyond them.
         </p>
         <p>
-          <em>Active sprints</em> shows only the tasks in each project's active sprint; <em>All tasks</em>, every sprint
-          and the backlog.
+          <em>Active sprints</em> shows each project's active sprint, all of its tasks, done ones too;
+          <em>All tasks</em>, every sprint and the backlog, with what was done in the last 24 hours.
         </p>
         <p>
           Each project's full details are on its own Kanban board: a card opens its task there, the project chip or

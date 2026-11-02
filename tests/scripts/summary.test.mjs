@@ -45,11 +45,13 @@ test("next: back from review first, work together with the user skipped, then pr
       ['T-4', 'T-3'],
     );
     assert.equal(atmNext(root), s.next[0].id);
-    // The board's To Do column holds only to-do tasks, not the one back from review
+    // The board's To Do column holds only to-do tasks, not the one back from review; the loop's first, then the one
+    // done with the user (T-349)
     assert.deepEqual(
       s.board.todo.cards.map((c) => c.id),
-      ['T-3', 'T-2'],
+      ['T-3', 'T-2', 'T-1'],
     );
+    assert.equal(s.board.todo.cards[2].with_user, true);
   });
 });
 
@@ -75,6 +77,39 @@ test('next: the active sprint only, even before a more urgent backlog task; none
   withProject({ meta: { sprints: [{ id: 'Now' }, { id: 'Later' }] }, tasks }, (root) => {
     assert.deepEqual(summary(root).next, []);
     assert.equal(atmNext(root), null);
+  });
+});
+
+test('the board’s To Do: every to-do task, the loop’s first, then with you, then waiting (T-349)', () => {
+  const tasks = [
+    task('T-1', 'todo', { sprint: 'Now', dependencies: ['T-9'] }),
+    task('T-2', 'todo', { sprint: 'Now', with: 'user' }),
+    task('T-3', 'todo', { sprint: 'Now', priority: 'P3' }),
+    task('T-4', 'todo', { sprint: 'Later' }),
+    task('T-5', 'todo'),
+    task('T-9', 'in_progress', { sprint: 'Now' }),
+    // Done long ago, in the sprint and outside it
+    task('D-1', 'done', { sprint: 'Now', completed_at: '2020-01-01T00:00:00Z' }),
+    task('D-2', 'done', { completed_at: '2020-01-01T00:00:00Z' }),
+  ];
+  const sprints = [
+    { id: 'Now', state: 'active' },
+    { id: 'Later', state: 'planned' },
+  ];
+  withProject({ meta: { sprints }, tasks }, (root) => {
+    const s = summary(root);
+    const ids = (column) => column.cards.map((c) => c.id);
+    // The active sprint's board: every one of its tasks, no more, no less, done ones however long ago
+    assert.deepEqual(ids(s.board_active_sprint.done), ['D-1']);
+    // Every task: done in the last 24 hours only, as before
+    assert.deepEqual(ids(s.board.done), []);
+    // The active sprint's: the loop's T-3, then T-2 with you, then T-1 waiting on T-9
+    assert.deepEqual(ids(s.board_active_sprint.todo), ['T-3', 'T-2', 'T-1']);
+    assert.deepEqual(s.board_active_sprint.todo.cards[2].waiting_for, ['T-9']);
+    assert.equal(s.board_active_sprint.todo.cards[0].waiting_for, undefined);
+    // Every task: the other sprints' and the backlog's too, ready ones before the waiting one
+    assert.deepEqual(ids(s.board.todo), ['T-3', 'T-4', 'T-5', 'T-2', 'T-1']);
+    assert.equal(s.board.todo.count, 5);
   });
 });
 

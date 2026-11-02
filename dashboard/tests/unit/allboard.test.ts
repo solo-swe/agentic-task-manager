@@ -39,7 +39,7 @@ describe('allBoard', () => {
   it('has the five columns, empty ones saying why', () => {
     const columns = allBoard([]);
     expect(columns.map((c) => c.id)).toEqual(['todo', 'active', 'review', 'blocked', 'done']);
-    expect(columns[0]).toMatchObject({ cards: [], more: [], empty: 'Nothing ready to start' });
+    expect(columns[0]).toMatchObject({ cards: [], more: [], empty: 'Nothing to do' });
     expect(columns[4].empty).toBe('Nothing finished in the last 24 hours');
   });
 
@@ -152,6 +152,13 @@ describe('the active sprints or all tasks (T-340)', () => {
   it('grouped by project: no lane for a project without an active sprint', () => {
     expect(allBoardLanes([a, b], undefined, null, 'active').map((l) => l.project.id)).toEqual(['a']);
     expect(allBoardLanes([a, b], undefined, null, 'all').map((l) => l.project.id)).toEqual(['a', 'b']);
+  });
+
+  it('the active scope’s Done is every done task of the sprints, not the last 24 hours’ (T-349)', () => {
+    const done = (scope: 'active' | 'all') => allBoard([a, b], 30, null, scope).find((c) => c.id === 'done')!;
+    expect([done('active').label, done('active').empty]).toEqual(['Done', 'Nothing done in it yet']);
+    expect(done('all').label).toBe('Done · last 24 h');
+    expect(allBoard([a], 30, null, 'active')[0].label).toBe('To Do');
   });
 
   it('names the projects without an active sprint, only in the active scope', () => {

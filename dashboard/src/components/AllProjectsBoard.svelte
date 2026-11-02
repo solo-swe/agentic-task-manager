@@ -78,6 +78,9 @@
       return blockSummary({ on, minutes: minutesSince(card.since), questions });
     }
     if (column === 'done' && card.completed_at) return `Done ${formatAgo(card.completed_at, dashboard.loadedAt)}`;
+    // To do, but not for the loop now (T-349): waiting on dependencies, or done with you
+    if (column === 'todo' && card.waiting_for?.length) return `Waits on ${card.waiting_for.join(', ')}`;
+    if (column === 'todo' && card.with_user) return 'With you';
     return null;
   }
 
@@ -159,7 +162,8 @@
             {#if line}
               <div
                 class="kanban-waiting board-card-status"
-                class:on-user={column.id === 'blocked' && card.waiting_on === 'user'}
+                class:on-user={(column.id === 'blocked' && card.waiting_on === 'user') ||
+                  (column.id === 'todo' && card.with_user && !card.waiting_for?.length)}
               >
                 {line}
               </div>

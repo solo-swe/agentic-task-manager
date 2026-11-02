@@ -77,6 +77,9 @@ export interface BoardCard {
   questions?: number;
   /** Done: when */
   completed_at?: string | null;
+  /** To do (T-349): done with the user, or the dependencies it waits for */
+  with_user?: boolean;
+  waiting_for?: string[];
 }
 
 export type BoardColumnId = 'todo' | 'active' | 'review' | 'blocked' | 'done';

@@ -17561,14 +17561,14 @@
       "description": "In the project selector, each project shows its logo (or monogram) at 16px before its name; the Projects Overview entry has nothing. Give it Lucide's `layout-grid` icon (chosen with the user), added to `lib/icons.ts`, at the same size and place.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/icons.ts",
         "dashboard/src/components/ProjectSelector.svelte"
       ],
       "created_at": "2026-11-02T07:45:42Z",
-      "updated_at": "2026-11-02T07:45:51Z",
+      "updated_at": "2026-11-02T08:04:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17583,7 +17583,18 @@
       ],
       "with": "user",
       "started_at": "2026-11-02T07:45:51Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "9764162ffd64542da5460566ad919ce15515bcaa",
+      "completed_at": "2026-11-02T08:04:51Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T08:04:51Z",
+          "kind": "outcome",
+          "text": "Projects Overview has the `layout-grid` icon in the project selector (chosen with Hakan)",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-349",
