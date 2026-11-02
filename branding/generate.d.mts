@@ -12,3 +12,4 @@ export const INSTALL: string[];
 export const PREVIEW_LAYOUTS: Record<string, (svg: string, shot: string) => string>;
 export const PREVIEW_LAYOUT: string;
 export function socialPreviewPage(svg: string, shot: string, layout?: string, file?: string): Page;
+export function lightCard(html: string): string;

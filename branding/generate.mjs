@@ -69,14 +69,14 @@ export const INSTALL = ['/plugin marketplace add solo-swe/agentic-task-manager',
  * A screenshot of the built dashboard on the demo project (the Kanban board, dark theme), as a PNG data URL: served
  * from a page route the way the e2e tests serve it, so the card shows the real product and follows its changes.
  */
-async function dashboardShot(browser) {
+async function dashboardShot(browser, colorScheme = 'dark') {
   const html = readFileSync(DASHBOARD, 'utf8');
   const tasks = readFileSync(DEMO, 'utf8');
   const { meta } = JSON.parse(tasks);
   const tab = await browser.newPage({
     viewport: { width: 1280, height: 760 },
     deviceScaleFactor: 2,
-    colorScheme: 'dark',
+    colorScheme,
     reducedMotion: 'reduce',
     locale: 'en-US',
     timezoneId: 'UTC',
@@ -108,7 +108,7 @@ async function dashboardShot(browser) {
 
 const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 const MONO = "'SF Mono', Menlo, Consolas, monospace";
-const TAGLINE = 'Task management for Claude Code agents, with a live dashboard of every project.';
+const TAGLINE = 'Task management for agentic software development, with a live dashboard of every project.';
 const installBlock = (size) =>
   `<div class="install">${INSTALL.map((c) => `<code style="font-size:${size}px">${c}</code>`).join('')}</div>`;
 const CARD_STYLE = `
@@ -180,7 +180,18 @@ export const PREVIEW_LAYOUTS = {
 /** The layout the social preview uses */
 export const PREVIEW_LAYOUT = 'a';
 
-export const socialPreviewPage = (svg, shot, layout = PREVIEW_LAYOUT, file = 'social-preview.png') => ({
+/** A card on a light background (GitHub's light colours), around the dashboard in light mode: to compare */
+export const lightCard = (html) =>
+  html.replace(
+    '</style>',
+    `body { background: #ffffff !important; color: #1f2328 !important; }
+      p { color: #59636e !important; }
+      .install code { background: #f6f8fa !important; border-color: #d1d9e0 !important; color: #1f2328 !important; }
+      .shot { border-color: #d1d9e0 !important; box-shadow: 0 24px 60px rgba(31, 35, 40, 0.18) !important; }
+    </style>`,
+  );
+
+export const socialPreviewPage = (svg, shot, layout = PREVIEW_LAYOUT, file = 'social-preview-dark.png') => ({
   file,
   width: 1280,
   height: 640,
@@ -198,12 +209,25 @@ async function main() {
   const browser = await chromium.launch();
   try {
     const shot = await dashboardShot(browser);
-    // `--variants <dir>`: every layout, into <dir>, to choose from; otherwise the files in branding/
+    // `--variants <dir>`: every layout, dark and light, into <dir>, to choose from; otherwise the files in branding/
     const at = process.argv.indexOf('--variants');
     const outDir = at > 0 ? process.argv[at + 1] : null;
+    const light = await dashboardShot(browser, 'light');
+    // The social preview, dark and light: GitHub takes one, uploaded by hand (README.md)
+    const lightPreview = (layout, file) => {
+      const p = socialPreviewPage(logo, light, layout, file);
+      return { ...p, html: lightCard(p.html) };
+    };
     const pages = outDir
-      ? Object.keys(PREVIEW_LAYOUTS).map((l) => socialPreviewPage(logo, shot, l, `social-preview-${l}.png`))
-      : [logoPage(logo), socialPreviewPage(logo, shot)];
+      ? Object.keys(PREVIEW_LAYOUTS).flatMap((l) => [
+          socialPreviewPage(logo, shot, l, `social-preview-${l}-dark.png`),
+          lightPreview(l, `social-preview-${l}-light.png`),
+        ])
+      : [
+          logoPage(logo),
+          socialPreviewPage(logo, shot, PREVIEW_LAYOUT, 'social-preview-dark.png'),
+          lightPreview(PREVIEW_LAYOUT, 'social-preview-light.png'),
+        ];
     for (const { file, width, height, html } of pages) {
       const tab = await browser.newPage({ viewport: { width, height } });
       await tab.setContent(html, { waitUntil: 'load' });
