@@ -296,6 +296,8 @@ test.describe('projects', () => {
       )
       .addProject('empty', 'minimal', 'Empty', summary());
     await openDashboard(page, tasksServer, 'standard');
+    // Once both cards are there: measured at once, the page could still be empty
+    await expect(page.locator('.project-card[data-id="full"], .project-card[data-id="empty"]')).toHaveCount(2);
     const sections = [
       '.project-card-head',
       '.project-card-progress',

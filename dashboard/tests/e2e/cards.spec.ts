@@ -83,6 +83,8 @@ test.describe('task cards', () => {
     // Make the last card depend on the first so the link has to scroll the page
     const data = loadFixture('large-90');
     data.tasks[89].dependencies = ['T-001'];
+    // The page's clock, to skip the highlight's 2 s (T-345): the tests reduce motion, so the scroll is instant
+    await page.clock.install();
     await openDashboard(page, tasksServer, data, { tab: 'list' });
 
     const target = card(page, 'T-001');
@@ -91,8 +93,8 @@ test.describe('task cards', () => {
 
     await card(page, 'T-090').locator('.dep-link', { hasText: 'T-001' }).click();
     await expect(target).toBeInViewport();
-    await expect(target).toHaveCSS('border-top-color', 'rgb(210, 153, 34)');
-    // Real time on purpose: page.clock would also freeze the smooth scroll and the border-color transition
-    await expect(target).not.toHaveCSS('border-top-color', 'rgb(210, 153, 34)', { timeout: 4000 });
+    await expect(target).toHaveAttribute('style', /var\(--yellow\)/);
+    await page.clock.fastForward(2000);
+    await expect(target).not.toHaveAttribute('style', /var\(--yellow\)/);
   });
 });

@@ -276,6 +276,8 @@ test.describe('All projects board', () => {
     for (let i = 0; i < 12; i++) tasksServer.addProject(`p${i}`, 'minimal', `Project ${i}`, summary());
     await page.clock.setFixedTime(NOW);
     await openDashboard(page, tasksServer, 'standard');
+    // Once the cards are there: measured at once, the page could still be empty
+    await expect(page.locator('.project-card')).toHaveCount(13);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(720);
   });
 

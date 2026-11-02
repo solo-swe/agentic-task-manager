@@ -69,6 +69,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **Scrolling honours “reduce motion”** (T-345): the detail panel's paging and sections, dependency links, Markdown
+  anchors and scroll hints jump at once when the system asks to reduce motion (`scrollBehavior`), rather than glide.
+  For development: screenshots have Linux baselines only, made in Docker (`npm run test:e2e:visual[:update]`), of
+  parts rather than whole pages, with a small pixel tolerance; `npm run test:e2e` leaves them out; traces only on
+  CI's retry; three tests that read the page before it was drawn now wait for it.
 - **Projects Overview has an icon in the project selector** (T-348): a grid (`layout-grid`), where each project shows
   its logo.
 - **The Omniboard's Active sprints shows the sprints' tasks, no more, no less** (T-349): its To Do column was the

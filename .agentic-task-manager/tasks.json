@@ -17607,7 +17607,7 @@
       "description": "The Omniboard's To Do column is the loop's list (`loop_order`): the active sprint's tasks only (even in *All tasks*), without those done with the user, without those waiting on a dependency. So in this sprint T-277, T-279 (with you) and T-344 (waiting) are missing.\n\n## Change\n- `atm summary`'s boards: the To Do column has every to-do task in the board's scope (the active sprint's, or every task): first the ready ones in the loop's order, then ready ones done with the user, then those waiting on dependencies; still at most 10 cards, with *+ N more*.\n- A card says why it isn't plain ready: `with_user: true`, or `waiting_for: [ids]`; the dashboard shows it (a *with you* chip, *waits on T-…*).\n- The column is *To Do*, not *To Do · ready*. `docs/multi-project-api.md` §3.3.\n\n## Tests\n`summary.test.mjs`; the Omniboard e2e.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -17617,7 +17617,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T07:50:39Z",
-      "updated_at": "2026-11-02T07:50:54Z",
+      "updated_at": "2026-11-02T08:04:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17634,7 +17634,18 @@
         "docs"
       ],
       "started_at": "2026-11-02T07:50:54Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "854ca856819d2dcb32800ab977b9e0b5017550ba",
+      "completed_at": "2026-11-02T08:04:52Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T08:04:52Z",
+          "kind": "outcome",
+          "text": "Omniboard Active sprints: every task of the sprints (To Do all to-do tasks with why, Done all finished); All tasks keeps 24 h Done",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

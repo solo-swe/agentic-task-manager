@@ -21,6 +21,8 @@ test.describe('dependency graph', () => {
 
   test('every task is to the right of what it waits for', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard', { tab: 'graph' });
+    // Once laid out: read at once, the graph could still be empty
+    await expect(nodes(page)).toHaveCount(12);
     const x = await lefts(page);
     expect(x['T-004']).toBeGreaterThan(x['T-002']);
     expect(x['T-004']).toBeGreaterThan(x['T-003']);
