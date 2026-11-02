@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 361,
+    "next_id": 377,
     "labels": [
       {
         "id": "architecture",
@@ -18446,13 +18446,13 @@
       "description": "Write a design for splitting atm into clear layers, so each part has one job and dependencies run one way. Design only: no code moves in this task; it ends with the follow-up tasks that carry it out.\n\n## Layers (agreed with Hakan)\n- **Dashboard**: talks to the REST API only.\n- **REST API** and **CLI**: both thin, on top of **atm-lib**; other tools (an MCP server, scripts) may use atm-lib too.\n- **atm-lib**: all business logic; a library others can use.\n- **db**: one interface for data access, so the storage can move to another model later (e.g. a cloud DB); today's JSON files in git are its first implementation.\n- **vcs**: the code's version control (git), apart from git's role as the task store.\n- **common**: the data model and shared rules; the dashboard's TypeScript types are generated from it.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-02T18:29:37Z",
+      "updated_at": "2026-11-02T18:34:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18468,7 +18468,7 @@
       "sprint": "Layered Architecture",
       "started_at": "2026-11-02T18:29:37Z",
       "started_by": "claude:b7be7288",
-      "commit": "95f71209af18f66a7f7e466c6d16adc9181cc6b0",
+      "commit": "6623da09e625e5f195de2f24a2dec1de3d0ab479",
       "notes": [
         {
           "at": "2026-11-02T18:02:36Z",
@@ -18481,6 +18481,12 @@
           "kind": "note",
           "text": "Approved: Design approved in Crit (2 rounds, 11 comments). Left: the §9 migration steps as tasks, via `/atm:create-tasks`.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T18:34:56Z",
+          "kind": "review",
+          "text": "Nothing left: the design is approved, §9 is now 16 vertical slices (commit 6623da0), and T-361–T-376 are in this sprint. Pass it with `atm done T-360`.",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -18489,6 +18495,645 @@
           "to": "2026-11-02T18:29:34Z",
           "outcome": "approved"
         }
+      ],
+      "review_requested_at": "2026-11-02T18:34:56Z",
+      "review_state": "waiting"
+    },
+    {
+      "id": "T-361",
+      "name": "Layers step 1: the skeleton, the layer rule's ratchet, and `atm show` on the new path",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 1 of `docs/layered-architecture.md` §9. Read §1, §3, §5 and §8 first.\n\n## Change\n- Create the layer folders in `atm-cli/atm/` (`common/`, `db/`, `vcs/`, `lib/`, `cli/`, `api/`, §8).\n- Teach `atm-cli/build.py` the layers: a module's layer is its folder; an import the dependency rule (§1) doesn't allow fails the build. The output stays one file, `plugin/scripts/atm.py`, with unique top-level names.\n- **The ratchet:** record today's violations as an allowed list beside `build.py`; a test fails if the list grows or names a violation that no longer exists.\n- `Project` (store, vcs, actor), the `Store` and `Vcs` interfaces (§3.2, §2), with only what `show` needs for now.\n- The JSON-in-git store **wraps today's code** (`load_tasks`, `load_archive`, the lock); nothing is rewritten. An in-memory store, and a contract test harness run against both.\n- First slice: `atm show` goes CLI renderer → `atm-lib` `tasks.show` → store.\n\n## Tests\n- New `tests/lib/` (standard `unittest`) with `tasks.show` on the in-memory store; the contract tests; a test for the ratchet.\n- `npm run test:scripts` and `npm run test:e2e` pass unchanged: `atm show`'s output is identical.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/build.py",
+        "atm-cli/atm/",
+        "tests/lib/",
+        "tests/scripts/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-362",
+      "name": "Layers step 2: the schema's seed, generated Task types for Python and the dashboard",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 2 of `docs/layered-architecture.md` §9 (see §4).\n\n## Change\n- `atm-cli/atm/common/schema/task.schema.json`: one task, every field of `docs/v4/data-model.md` §4.\n- Generators: TypeScript into `dashboard/src/lib/generated/` (a dev-only generator such as `json-schema-to-typescript`, installed with `npm ci` like the other dev dependencies); Python `TypedDict`s into `common/` by `atm-cli/build.py` (standard library only in the output).\n- The dashboard imports the generated `Task` type instead of its hand-written one in `types.ts`.\n- CI fails when a generated file is stale, as it does for `atm.py` (through the existing build check; ask the user before changing a CI workflow file).\n\n## Tests\n- Every fixture in `dashboard/tests/fixtures/` and the task files the scenario tests produce validate against the schema.\n- `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet doesn't grow.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-361"
+      ],
+      "files": [
+        "atm-cli/atm/common/schema/task.schema.json",
+        "atm-cli/build.py",
+        "dashboard/src/lib/generated/",
+        "dashboard/src/lib/types.ts",
+        "dashboard/package.json"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-363",
+      "name": "Layers step 3: every read command through atm-lib, with typed errors",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 3 of `docs/layered-architecture.md` §9 (atm-lib functions in §5.1).\n\n## Change\n- `list`, `deps`, `status`, `backlog`, `summary` and `projects` (list, add, remove, prune; the `Registry` interface of §3.2) go CLI renderer → atm-lib → store.\n- Typed errors in common (`ErrorCode`, §4.2); the CLI maps them to today's exit codes and messages.\n- Their result types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`, …) in the schema, generated for both sides.\n- Remove the ratchet's entries for these commands.\n\n## Tests\n- `tests/lib/` tests for each function on the in-memory store; contract tests for the store reads added.\n- Output identical: `npm run test:scripts`, `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-362"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-364",
+      "name": "Layers step 4: the REST API on atm-lib, and the first v1 route",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 4 of `docs/layered-architecture.md` §9 (the API in §6).\n\n## Change\n- `server.py` moves to `api/`; `/api/projects`, `/api/search` and `claims.json` are answered through atm-lib instead of reading storage.\n- `GET /api/v1/projects/<p>/tasks`: the tasks as `TaskView`, with their derived values (`kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`), filters as query parameters (§6.2).\n- Every rule of `docs/multi-project-api.md` §1 kept (loopback, Host check, GET/HEAD only, ETags); the API stays read-only.\n- Update `docs/multi-project-api.md` with the v1 route.\n\n## Tests\n- The server's tests in `tests/scripts/` pass unchanged; new ones for the v1 route, its response validated against the schema.\n- The ratchet shrinks.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-363"
+      ],
+      "files": [
+        "atm-cli/atm/api/",
+        "atm-cli/atm/server.py",
+        "docs/multi-project-api.md",
+        "tests/scripts/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-365",
+      "name": "Layers step 5: the dashboard's client module, tasks loaded from v1",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 5 of `docs/layered-architecture.md` §9.\n\n## Change\n- Every request the dashboard makes (today in `load.ts`, `state.svelte.ts`, `claims.ts`, `worktrees.ts`, `overview-data.ts`) moves into `dashboard/src/lib/api/`, typed by the generated types; polling and ETags unchanged.\n- An ESLint rule: only `src/lib/api/` may call `fetch`.\n- A project's tasks load from `/api/v1/projects/<p>/tasks`. The views don't change.\n- The e2e `tasksServer` fixture and the dev server answer the v1 route too.\n\n## Tests\n- Unit tests for the client module; `npm run check`, unit tests and `npm run test:e2e` pass; bundle size checked.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-364"
+      ],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/claims.ts",
+        "dashboard/src/lib/worktrees.ts",
+        "dashboard/src/lib/overview-data.ts",
+        "dashboard/eslint.config.js",
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/build/dev-data.ts"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-366",
+      "name": "Layers step 6: the dashboard takes readiness and waiting from the API",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 6 of `docs/layered-architecture.md` §9: the first duplicated rule goes.\n\n## Change\n- The dashboard's own computation of which tasks are ready and what they wait for (`waiting.ts`, `work.ts`) is replaced by `TaskView`'s `ready`, `waiting_for` and `waiting_on`.\n- Remove the code that is no longer used, and its unit tests (replaced by tests on the API's values).\n\n## Tests\n- Unit and component tests updated; the Kanban, List and graph specs and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-365"
+      ],
+      "files": [
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/work.ts",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-367",
+      "name": "Layers step 7: vocabularies and kinds generated from common",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 7 of `docs/layered-architecture.md` §9: the second duplicated rule goes.\n\n## Change\n- `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive settings) and the vocabulary defaults (statuses and their kinds, types, priorities, the default priority) as data in common, generated for Python and TypeScript.\n- `model.py`'s defaults and the dashboard's `vocab.ts` both use the generated defaults; neither keeps its own copy.\n\n## Tests\n- The fixtures validate against the schema; `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet shrinks.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-366"
+      ],
+      "files": [
+        "atm-cli/atm/common/",
+        "atm-cli/atm/model.py",
+        "dashboard/src/lib/vocab.ts",
+        "dashboard/src/lib/generated/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-368",
+      "name": "Layers step 8: status changes through atm-lib, with conditional writes",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 8 of `docs/layered-architecture.md` §9: the first writes on the new path (§3.3).\n\n## Change\n- Conditional writes (`update_task(…, expect=version)`, `Conflict` on a stale version) and `apply(writes)` (all or nothing) in both stores; the JSON-in-git store's `apply` is today's lock, read, write.\n- `start`, `review`, `done`, `reject`, `approve`, `request-changes`, `block`, `unblock`, `reopen`, `skip`, `fail`, `release` and `note` as atm-lib functions (§5.1); the claim created or dropped in the same `apply`; atm-lib retries on `Conflict`.\n- `tasks.py`'s direct locking and writing goes; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests for each function, including a race (two starts of one task: one wins, the other gets `claimed`); contract tests for conditional writes and `apply` on both stores.\n- `npm run test:scripts` (the concurrency tests included) and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-367"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-369",
+      "name": "Layers step 9: claims and next through atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 9 of `docs/layered-architecture.md` §9.\n\n## Change\n- `claims.next` (with `claim`, atomic), `claims.heartbeat`, `claims.heartbeat_due` and `claims.list` (§5.1); the claims store and resolutions behind `Store` (§3.2).\n- `atm run` stays in the CLI, keeping the claim alive with `claims.heartbeat`.\n- `claims.py`'s storage code moves into the JSON-in-git store; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (selection order, `with_user`, back from review first, expiry); contract tests for claims on both stores; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-368"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-370",
+      "name": "Layers step 10: add, edit, check and components through atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 10 of `docs/layered-architecture.md` §9.\n\n## Change\n- `tasks.add` (IDs allocated by the store's `create_tasks`), `tasks.edit`, `tasks.check`, and `components.list/add/edit` (§5.1), on the store's task and component operations (§3.2).\n- `edit.py` and `components.py` split into atm-lib functions and CLI renderers; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (placeholders and dependencies, a dependency on an archived task, cycles, component hints, `--from-label` on archived tasks); contract tests for `create_tasks` and components; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-369"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-371",
+      "name": "Layers step 11: sprints and releases through atm-lib; the dashboard drops its review and release rules",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 11 of `docs/layered-architecture.md` §9: the third duplicated rule goes.\n\n## Change\n- `sprints.*` (list, add, edit, start, close, delete, move) and `releases.*` (list, add, edit, archive, notes) as atm-lib functions (§5.1); `sprints close` and `sprints delete --move-to` in one `apply`.\n- The v1 sprints and releases routes (§6.2).\n- The dashboard's effective review mode and release (`review.ts`, `releases.ts`) come from `TaskView`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; dashboard unit tests updated; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-370"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "dashboard/src/lib/review.ts",
+        "dashboard/src/lib/releases.ts",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-372",
+      "name": "Layers step 12: the archive through atm-lib; the dashboard stops reading the archive file",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 12 of `docs/layered-architecture.md` §9: the fourth duplicated rule goes.\n\n## Change\n- `archive.archive`, `archive.unarchive` and `archive.hint` (§5.1) on the store's `archive_tasks` and `restore_tasks`, keeping the crash-safe order of `docs/v4/data-model.md` DM-5.2.\n- `GET /api/v1/projects/<p>/tasks?archived=true` and `…/archive/hint`; the dashboard loads archived tasks and its archive notice from them, not from `tasks-archive.json`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; the archive scenarios in `tests/scripts/scenarios/archive.json` and `archive.spec.ts` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-371"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "dashboard/src/lib/archive.ts",
+        "dashboard/src/lib/api/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-373",
+      "name": "Layers step 13: code, PRs and settings through atm-lib; the vcs interface in full",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 13 of `docs/layered-architecture.md` §9 (§2).\n\n## Change\n- The `Vcs` interface in full, with git behind it; `code.commit` (adding the store's `files_for_commit`), `code.record_commit`, `code.pr`, `code.merged`; `settings.init`, `workflow`, `repository`, `logo` (§5.1).\n- `git_ops.py`, `repository.py` and the branch read in `query.py` split into vcs and atm-lib; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests with a fake vcs; the git scenarios and `tests/scripts/*.test.mjs` for commit and merge pass unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-372"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-374",
+      "name": "Layers step 14: the store owns its own parts; the layer rule without exceptions",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 14 of `docs/layered-architecture.md` §9.\n\n## Change\n- The merge driver (`merge.py`), the migrations of old layouts (`migrate.py`), `paths` and the worktrees' copies (`worktrees.json`) inside the JSON-in-git store (§3.2); `atm merge-driver`, `migrate` and `paths` reach that store directly.\n- The raw file routes (`/p/<id>/tasks.json`, `tasks-archive.json`) dropped once nothing reads them; `docs/multi-project-api.md` updated.\n- The ratchet's list is empty: remove its exception mechanism, so the rule holds with none.\n\n## Tests\n- The merge-driver and migrate tests pass; `npm run test:scripts`, `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-373"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "atm-cli/build.py",
+        "docs/multi-project-api.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-375",
+      "name": "Layers step 15: the dev server runs the real REST API",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 15 of `docs/layered-architecture.md` §9.\n\n## Change\n- `npm run dev` serves the API from this checkout's atm-cli (the REST API layer) instead of reimplementing it in `dashboard/build/dev-data.ts`; `ATM_DEV_DATA` keeps working.\n- `dev-data.ts` goes; `CLAUDE.md`'s description of `npm run dev` updated.\n\n## Tests\n- `npm run dev` shows this repository's project with live data; `npm run check` and unit tests pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-374"
+      ],
+      "files": [
+        "dashboard/build/dev-data.ts",
+        "dashboard/vite.config.ts",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ]
+    },
+    {
+      "id": "T-376",
+      "name": "Layers step 16: atm-lib's public module, and the docs",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 16 of `docs/layered-architecture.md` §9.\n\n## Change\n- The public module `atm.lib` (§5): what other tools may import, from the repository's `atm-cli/`; its documentation and how it is versioned. No published package.\n- Update `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout and atm-cli sections, and `docs/security-architecture.md`'s components; mark `docs/layered-architecture.md` as done.\n\n## Tests\n- A `tests/lib/` test that imports only `atm.lib` and runs a task from start to done on the in-memory store.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-375"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "docs/v4/atm-cli.md",
+        "CLAUDE.md",
+        "docs/security-architecture.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:34:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "related": [
+        "T-360"
       ]
     }
   ]
