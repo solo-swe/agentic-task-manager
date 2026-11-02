@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 377,
+    "next_id": 378,
     "labels": [
       {
         "id": "architecture",
@@ -18926,7 +18926,7 @@
       "description": "Step 8 of `docs/layered-architecture.md` §9: the first writes on the new path (§3.3).\n\n## Change\n- Conditional writes (`update_task(…, expect=version)`, `Conflict` on a stale version) and `apply(writes)` (all or nothing) in both stores; the JSON-in-git store's `apply` is today's lock, read, write.\n- `start`, `review`, `done`, `reject`, `approve`, `request-changes`, `block`, `unblock`, `reopen`, `skip`, `fail`, `release` and `note` as atm-lib functions (§5.1); the claim created or dropped in the same `apply`; atm-lib retries on `Conflict`.\n- `tasks.py`'s direct locking and writing goes; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests for each function, including a race (two starts of one task: one wins, the other gets `claimed`); contract tests for conditional writes and `apply` on both stores.\n- `npm run test:scripts` (the concurrency tests included) and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-367"
       ],
@@ -18936,7 +18936,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:53:43Z",
+      "updated_at": "2026-11-02T20:15:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18953,13 +18953,21 @@
         "T-360"
       ],
       "review": "batch",
-      "started_at": "2026-11-02T19:53:17Z",
-      "started_by": "claude:b7be7288",
-      "waiting_on": "user",
-      "questions": [
-        "Status changes vs §3.3: (A) rework them into entity writes (task update + claim create/drop) with versions, `apply`, retry on `Conflict` — the design’s contract now, a bigger change; or (B) a transitional store operation running today’s locked read-modify-write (like `document()`), conditional writes in a later step — smaller, but the generic transaction the design rejected, for a while. Which?"
+      "blocks": [
+        {
+          "from": "2026-11-02T19:53:43Z",
+          "to": "2026-11-02T20:15:41Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-02T19:53:43Z"
+      "notes": [
+        {
+          "at": "2026-11-02T20:15:41Z",
+          "kind": "answer",
+          "text": "Status changes vs §3.3: (A) rework them into entity writes (task update + claim create/drop) with versions, `apply`, retry on `Conflict` — the design’s contract now, a bigger change; or (B) a transitional store operation running today’s locked read-modify-write (like `document()`), conditional writes in a later step — smaller, but the generic transaction the design rejected, for a while. Which? → B: a store `change(fn)` running the locked read-modify-write on a `Working` copy, which records what fn changed (before/after per task and claim) so a store can later turn it into conditional writes (`apply`); `work.defer(error)` for raise-after-write. Update §3.3 to say so.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-369",
@@ -19314,6 +19322,54 @@
           "text": "Carried from T-367: `ProjectSummary` (api/projects) and `StatusReport` (atm status --json) aren’t in `api.schema.json` yet; the dashboard’s `ProjectSummary` in `load.ts` is hand-written. The generator needs nullable types (`[\"string\", \"null\"]`) for them.",
           "by": "claude:b7be7288"
         }
+      ]
+    },
+    {
+      "id": "T-377",
+      "name": "Tolerant reads: the dashboard keeps showing a malformed task file, with what atm finds wrong",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Since T-365 the dashboard loads tasks through atm-lib (`GET /api/v1/projects/<id>/tasks`), which refuses a task file every `atm` command refuses (`load_tasks` in `model.py`: an entry without a string `id`, an ID with characters atm doesn't allow, `dependencies` that aren't a list of IDs, an unusable vocabulary). The dashboard used to show such a file anyway. Keep that, as agreed with Hakan (option 1).\n\n## Change\n- A tolerant read mode in the store (`JsonGitStore`, and the in-memory store): writes stay strict, reads keep what they can. An entry that isn't a task (no string `id`) is left out; a task with a bad ID or bad `dependencies` is kept; an unusable vocabulary falls back to the defaults (as `dashboard/src/lib/vocab.ts` already does).\n- Each problem is reported: per task as `derived.problems` (a list of messages, the wording of `atm check`), and for the file as a top-level `problems` list in the v1 response (`api.schema.json`). The rules skip what they can't judge: a task with broken `dependencies` isn't `ready` and waits for nothing it can name.\n- The REST API's v1 tasks route reads tolerantly; every `atm` command stays strict.\n- The dashboard shows a notice when `problems` isn't empty (e.g. \"atm check finds 3 problems in tasks.json\"), and a task's problems in its detail panel.\n\n## Tests\n- `tests/lib/`: the tolerant read on both stores (contract tests), `task_views` with each kind of problem.\n- `tests/scripts/serve.test.mjs`: the v1 route serves a malformed file with `problems`, where `atm list` still refuses it.\n- The e2e fixture's fallback (`asTaskViews` in `tests/e2e/helpers.ts`, empty derived values when atm refuses a file) goes: it takes atm's tolerant views. Unit and e2e tests for the notice.\n- Update `docs/multi-project-api.md` §2.5 and `docs/layered-architecture.md` §3.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-368"
+      ],
+      "files": [
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/query.py",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "dashboard/src/lib/load.ts",
+        "dashboard/tests/e2e/helpers.ts",
+        "docs/multi-project-api.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-02T20:15:57Z",
+      "updated_at": "2026-11-02T20:15:57Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T20:15:57Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-360"
       ]
     }
   ]
