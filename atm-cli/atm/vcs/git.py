@@ -5,8 +5,6 @@ import os
 import subprocess
 
 from ..common.errors import AtmFailure, Invalid, NotFound
-from ..core import git
-from ..registry import head_branch
 
 # Pathspecs that stage more than the files named: another agent's work can be in the same tree
 WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
@@ -25,27 +23,47 @@ def run_git(args, root):
     return result.stdout.strip()
 
 
+def ask_git(args, root):  # not `git`: the store has its own (db/jsongit/gitrun.py), and names are unique
+    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 class GitVcs:
     def __init__(self, root):
         self.root = root
 
     def in_repository(self):
-        return git(["rev-parse", "--git-dir"], self.root) is not None
+        return ask_git(["rev-parse", "--git-dir"], self.root) is not None
 
     def branch(self):
         """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
         git; None outside git."""
-        git_dir = os.path.join(self.root, ".git")
-        return head_branch(git_dir) if os.path.isdir(git_dir) else None
+        try:
+            with open(os.path.join(self.root, ".git", "HEAD"), encoding="utf-8") as f:
+                head = f.readline().strip()
+        except OSError:
+            return None
+        if head.startswith("ref: "):
+            ref = head[5:]
+            return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+        return head[:7] or None
+
+    def user_name(self):
+        """Who git says the user is (`user.name`), for naming the actor; None when it isn't set."""
+        return ask_git(["config", "user.name"], self.root)
 
     def default_base(self):
         """The remote's default branch (origin/HEAD), else main."""
-        ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
+        ref = ask_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
         return ref.split("/", 1)[1] if ref and "/" in ref else "main"
 
     def remote_url(self):
         """The origin remote's address, as git has it (atm repository turns it into a web address)."""
-        return git(["remote", "get-url", "origin"], self.root)
+        return ask_git(["remote", "get-url", "origin"], self.root)
 
     def paths(self, files, cwd):
         """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
@@ -63,8 +81,8 @@ class GitVcs:
             # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
             if (
                 not os.path.exists(full)
-                and git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
-                and git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
+                and ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
+                and ask_git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
             ):
                 raise NotFound(f"{name}: no such file, and git doesn't track it")
             if relative not in picked:
@@ -78,7 +96,7 @@ class GitVcs:
         to_add = [
             f
             for f in files
-            if git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
+            if ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
             or os.path.lexists(os.path.join(self.root, f))
         ]
         if to_add:
@@ -88,11 +106,11 @@ class GitVcs:
 
     def resolve(self, rev):
         """A revision's SHA, or None if there is no such commit."""
-        return git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
+        return ask_git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
 
     def in_history(self, sha):
         """Whether the commit is an ancestor of HEAD (on the current branch)."""
-        return git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
+        return ask_git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
 
     def message(self, sha):
         return run_git(["log", "-1", "--format=%B", sha], self.root)

@@ -4,7 +4,7 @@ the store's interface only: the contract tests (tests/lib/) run the same checks 
 import copy
 import json
 
-from ..model import vocabulary
+from ..common.model import vocabulary
 from .working import Working
 
 

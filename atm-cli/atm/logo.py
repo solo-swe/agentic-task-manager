@@ -3,9 +3,9 @@ found in the usual places. atm serve serves it at /p/<id>/logo (docs/multi-proje
 
 import os
 
-from .core import AtmError, out, to_json, write_json_atomic
+from .common.core import AtmError, out, to_json, write_json_atomic
 from .lock import locked
-from .model import load_tasks
+from .db.jsongit.files import load_tasks
 from .paths import find_paths
 
 LOGO_TYPES = {

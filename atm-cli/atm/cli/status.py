@@ -4,7 +4,7 @@ import os
 
 from ..boot.open import open_project
 from ..claims import agent_identity, report_expired
-from ..core import out, to_json
+from ..common.core import out, to_json
 from ..lib.status import add_task_note, change_task_status
 from .render import describe_task
 

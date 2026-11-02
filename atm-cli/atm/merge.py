@@ -8,9 +8,11 @@ import contextlib
 import os
 import sys
 
-from .core import SCRIPT_DIR, AtmError, AtmExit, git, in_git, now, out, read_json, rel, to_json, write_json_atomic
+from .common.core import SCRIPT_DIR, AtmError, AtmExit, now, out, read_json, rel, to_json, write_json_atomic
+from .db.jsongit.gitrun import git, in_git
 from .lock import locked
-from .model import kind_of, load_tasks, split_id, vocabulary
+from .common.model import kind_of, split_id, vocabulary
+from .db.jsongit.files import load_tasks
 from .paths import find_paths
 from .registry import register
 from .repository import ensure_repository

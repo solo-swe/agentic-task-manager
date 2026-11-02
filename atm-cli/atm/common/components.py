@@ -1,6 +1,6 @@
-"""Components (docs/sprints-and-releases-design.md §2, SR-2.7): the parts of a project (meta.components, each with
-globs over its files), the components a task's files suggest, and the IDs a task may name. Listing, defining and
-changing them is atm-lib's (lib/components.py) since T-370; these rules move into atm-lib with a later slice."""
+"""The rules of components (docs/sprints-and-releases-design.md §2, SR-2.7): the parts of a project (meta.components,
+each with globs over its files), the components a task's files suggest, and the IDs a task may name. Listing,
+defining and changing them is atm-lib's (lib/components.py)."""
 
 from fnmatch import fnmatchcase
 
@@ -29,13 +29,3 @@ def component_ids(vocab, values):
         if known and value not in known:
             raise AtmError(f"no component {value!r}; the components: {', '.join(known)}", 2)
     return list(values)
-
-
-def suggestion_line(vocab, task):
-    """`atm add` / `edit --add-file` (SR-2.7): the components the task's files suggest that it doesn't have yet, as a
-    line with the command that sets them; None when there are none (or the project has no components)."""
-    missing = [c for c in suggest_components(vocab, task.get("files") or []) if c not in (task.get("components") or [])]
-    if not missing:
-        return None
-    adds = " ".join(f"--add-component {c}" for c in missing)
-    return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm edit {task['id']} {adds})"

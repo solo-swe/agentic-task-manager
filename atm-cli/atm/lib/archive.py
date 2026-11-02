@@ -10,8 +10,8 @@ that crashed halfway is complete, and no task is ever lost.
 from datetime import timedelta
 
 from ..common.errors import Invalid, NotFound
-from ..core import now, now_iso, parse_iso
-from ..model import archivable, archive_hint_for, archive_settings, find_sprint, finished_at, kind_of, vocabulary
+from ..common.core import now, now_iso, parse_iso
+from ..common.model import archivable, archive_hint_for, archive_settings, find_sprint, finished_at, kind_of, vocabulary
 from .edit import next_number
 
 

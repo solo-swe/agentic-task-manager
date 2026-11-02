@@ -12,8 +12,8 @@ import re
 from ..claims import Selection, loop_order, next_task
 from ..common.errors import AtmFailure, NotFound
 from ..common.fields import priority_of, started_by
-from ..core import now, parse_iso
-from ..model import (
+from ..common.core import now, parse_iso
+from ..common.model import (
     REWORK_STATES,
     archive_hint_for,
     effective_release,

@@ -15,8 +15,8 @@ from ..claims import (
     own_lease_expired,
 )
 from ..common.errors import Claimed
-from ..core import now, now_iso, parse_iso
-from ..model import change_status
+from ..common.core import now, now_iso, parse_iso
+from ..common.model import change_status
 from .status import claim_record
 
 # heartbeat --auto renews a claim once its last renewal is this old (CLI-6.2)

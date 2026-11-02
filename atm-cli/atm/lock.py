@@ -14,7 +14,7 @@ import socket
 import sys
 import time
 
-from .core import AtmError, now_iso, parse_iso, pid_alive, read_json, write_json_atomic
+from .common.core import AtmError, now_iso, parse_iso, pid_alive, read_json, write_json_atomic
 from .paths import find_paths
 
 LOCK_DIR = ".lock"

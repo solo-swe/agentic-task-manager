@@ -9,8 +9,8 @@ atm-lib with their own slices (§9).
 
 from ..claims import apply_resolutions, check_holder, expire_claims, lease_until, own_lease_expired
 from ..common.errors import Invalid
-from ..core import now_iso
-from ..model import (
+from ..common.core import now_iso
+from ..common.model import (
     add_note,
     archive_hint_for,
     archived_task,

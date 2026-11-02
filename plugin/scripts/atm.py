@@ -158,8 +158,9 @@ DEFAULT_PRIORITIES = [
 DEFAULT_PRIORITY = "P2"
 
 
-# ==== core.py ====
-# Constants, errors, output, git, time helpers and atomic writes.
+# ==== common/core.py ====
+# Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: the
+# store runs it for the task files (db/jsongit/gitrun.py), the vcs for the code (vcs/git.py).
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -192,25 +193,8 @@ def to_json(value):
     return json.dumps(value, indent=2, ensure_ascii=False)
 
 
-def git(args, cwd):
-    """Run git; return stdout stripped, or None if git fails or isn't installed."""
-    try:
-        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
-    except OSError:
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
 def rel(root, p):
     return os.path.relpath(p, root)
-
-
-def is_tracked(root, p):
-    return git(["ls-files", "--error-unmatch", "--", rel(root, p)], root) is not None
-
-
-def in_git(root):
-    return git(["rev-parse", "--git-dir"], root) is not None
 
 
 def plugin_version():
@@ -330,522 +314,9 @@ def whoami(port):
     return info if isinstance(info, dict) and info.get("atm") else None
 
 
-# ==== paths.py ====
-# Where a project's task files are: the project root, the task folder, legacy locations.
-
-LEGACY_DIRS = ["docs", "."]
-# The files atm reads and writes in the task folder; a repository can commit any of them as a symlink
-FOLDER_FILES = (TASKS_FILE, "tasks-archive.json", ".gitignore", ".gitattributes")
-
-
-def check_task_folder(root, task_dir):
-    """Refuse a task folder atm would read or write outside the project through (docs/security-review.md F7): a
-    cloned repository can commit `.agentic-task-manager` or its files as symlinks to anything the user can write,
-    such as ~/.zshrc."""
-    if os.path.islink(task_dir):
-        raise AtmError(f"{task_dir} is a symlink; atm works only on a real folder inside the project")
-    if not os.path.isdir(task_dir):
-        return
-    real_root = os.path.realpath(root)
-    if os.path.commonpath([os.path.realpath(task_dir), real_root]) != real_root:
-        raise AtmError(f"{task_dir} leads outside the project ({os.path.realpath(task_dir)})")
-    for name in FOLDER_FILES:
-        if os.path.islink(os.path.join(task_dir, name)):
-            raise AtmError(f"{os.path.join(task_dir, name)} is a symlink; atm reads and writes only regular files there")
-
-
-def project_root(cwd):
-    """The git top level; outside git, the nearest directory with a task folder or docs/tasks.json, else cwd."""
-    top = git(["rev-parse", "--show-toplevel"], cwd)
-    if top:
-        return top
-    d = cwd
-    while True:
-        if os.path.isdir(os.path.join(d, TASK_DIR)) or os.path.isfile(os.path.join(d, "docs", TASKS_FILE)):
-            return d
-        parent = os.path.dirname(d)
-        if parent == d:
-            return cwd
-        d = parent
-
-
-def find_paths(cwd):
-    root = project_root(cwd)
-    task_dir = os.path.join(root, TASK_DIR)
-    check_task_folder(root, task_dir)
-    legacy = None
-    for d in LEGACY_DIRS:
-        candidate = os.path.normpath(os.path.join(root, d, TASKS_FILE))
-        if os.path.isfile(candidate):
-            dashboard = os.path.join(os.path.dirname(candidate), DASHBOARD_FILE)
-            legacy = {"tasks": candidate, "dashboard": dashboard if os.path.isfile(dashboard) else None}
-            break
-    tasks = os.path.join(task_dir, TASKS_FILE)
-    return {
-        "root": root,
-        "dir": task_dir,
-        "tasks": tasks,
-        "tasks_exists": os.path.isfile(tasks),
-        "dashboard": os.path.join(task_dir, DASHBOARD_FILE),
-        "legacy": legacy,
-    }
-
-
-def cmd_paths(args):
-    paths = find_paths(os.getcwd())
-    if args.json:
-        out(to_json(paths))
-        return
-    for key in ["root", "dir", "tasks", "dashboard"]:
-        out(f"{key}: {paths[key]}")
-    if paths["legacy"]:
-        out(f"legacy: {paths['legacy']['tasks']}")
-
-
-# ==== lock.py ====
-# The lock directory.
-#
-# A lock is a directory: mkdir succeeds for exactly one process, on every OS and file system. The holder writes
-# owner.json inside it and removes the directory when done. A crashed holder leaves the directory behind, so a waiter
-# breaks the lock when its owner is provably gone (same host, pid not running) or it is older than LOCK_STALE. See
-# docs/parallel-agents-design.md, section 4.
-
-LOCK_DIR = ".lock"
-LOCK_OWNER = "owner.json"
-LOCK_TIMEOUT = 10.0  # seconds a command waits for the lock (ATM_LOCK_TIMEOUT overrides)
-LOCK_STALE = 60.0  # a lock older than this is abandoned: commands hold it for milliseconds
-LOCK_POLL = 0.05
-
-
-def lock_timeout():
-    try:
-        return float(os.environ.get("ATM_LOCK_TIMEOUT", LOCK_TIMEOUT))
-    except ValueError:
-        return LOCK_TIMEOUT
-
-
-def lock_owner(lock):
-    return read_json(os.path.join(lock, LOCK_OWNER))
-
-
-def lock_age(lock, owner):
-    """Seconds since the lock was taken: from owner.json, or the directory itself if owner.json isn't written yet."""
-    try:
-        since = parse_iso(owner["acquired_at"]).timestamp() if owner else os.stat(lock).st_mtime
-    except (OSError, KeyError, TypeError, ValueError):
-        return 0.0
-    return time.time() - since
-
-
-def lock_is_stale(lock, owner):
-    if owner and owner.get("host") == socket.gethostname() and isinstance(owner.get("pid"), int):
-        if not pid_alive(owner["pid"]):
-            return True
-    return lock_age(lock, owner) > LOCK_STALE
-
-
-def break_lock(lock, owner):
-    """Move a stale lock aside. Returns True if this process broke it.
-
-    Rename first, then check the owner inside the renamed directory (docs/security-review.md F13): checking first and
-    renaming after leaves a gap in which another waiter breaks the same stale lock and takes a fresh one, and this
-    process would then move the fresh lock aside, leaving two holders. If what was moved isn't the stale lock judged
-    here, it goes back."""
-    aside = f"{lock}.stale.{os.getpid()}.{os.urandom(4).hex()}"
-    try:
-        os.rename(lock, aside)
-    except OSError:
-        return False
-    if lock_owner(aside) != owner:
-        try:
-            os.rename(aside, lock)  # someone else's live lock: put it back
-        except OSError:
-            pass  # a newer lock is in place already; the moved one was broken by another waiter too
-        return False
-    shutil.rmtree(aside, ignore_errors=True)
-    return True
-
-
-def describe_owner(owner):
-    if not owner:
-        return "another process"
-    return f"pid {owner.get('pid')} on {owner.get('host')} since {owner.get('acquired_at')}"
-
-
-@contextlib.contextmanager
-def locked(directory, timeout=None):
-    """Hold the lock for `directory` (creating it if needed) for the duration of the block. `timeout` (seconds) replaces
-    the usual wait; 0 tries once."""
-    os.makedirs(directory, exist_ok=True)
-    lock = os.path.join(directory, LOCK_DIR)
-    deadline = time.time() + (lock_timeout() if timeout is None else timeout)
-    while True:
-        try:
-            os.mkdir(lock)
-            break
-        except FileExistsError:
-            owner = lock_owner(lock)
-            if lock_is_stale(lock, owner) and break_lock(lock, owner):
-                continue
-            if time.time() >= deadline:
-                raise AtmError(f"timed out waiting for the lock {lock} (held by {describe_owner(owner)})")
-            time.sleep(LOCK_POLL)
-    # SIGTERM would otherwise end the process without running the cleanup below
-    previous = signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
-    try:
-        write_json_atomic(
-            os.path.join(lock, LOCK_OWNER), {"host": socket.gethostname(), "pid": os.getpid(), "acquired_at": now_iso()}
-        )
-        yield
-    finally:
-        shutil.rmtree(lock, ignore_errors=True)
-        signal.signal(signal.SIGTERM, previous)
-
-
-def cmd_lock_test(args):
-    """Test hook: hold the task folder's lock for `seconds`, logging to .lock-test.log, so tests can check exclusion."""
-    seconds = args.seconds
-    task_dir = find_paths(os.getcwd())["dir"]
-    log = os.path.join(task_dir, ".lock-test.log")
-    with locked(task_dir):
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"acquire {os.getpid()}\n")
-        time.sleep(seconds)
-        with open(log, "a", encoding="utf-8") as f:
-            f.write(f"release {os.getpid()}\n")
-
-
-# ==== registry.py ====
-# The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows.
-#
-# One file per user, guarded by $ATM_HOME/.lock (not by any project's lock, and never taken while holding one), written
-# atomically. A linked git worktree registers its repository's main worktree. Format: docs/multi-project-api.md, 5.1.
-
-REGISTRY_FILE = "projects.json"
-REGISTRY_VERSION = 1
-SEEN_EVERY = 24 * 3600  # seconds between seen_at updates, so the registry isn't rewritten on every command
-
-
-def atm_home():
-    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager."""
-    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
-
-
-def ensure_home(home):
-    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
-    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
-    os.makedirs(home, mode=0o700, exist_ok=True)
-
-
-# A project id is a key in URLs (#project=<id>, p/<id>/...): letters, digits, '.', '_' and '-'
-PROJECT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
-
-
-def unique_id(registry, path, wanted):
-    """The id for the project at `path`: `wanted` unless another project already has it or it isn't a valid id; then
-    one made from the path, so two projects never shadow each other (F18)."""
-    taken = {e.get("id") for e in registry["projects"] if e.get("path") != path}
-    if PROJECT_ID.fullmatch(wanted) and wanted not in taken:
-        return wanted
-    suffix = hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
-    base = wanted if PROJECT_ID.fullmatch(wanted) and len(wanted) <= 56 else "p"
-    return f"{base}-{suffix}"
-
-
-def main_worktree(root):
-    """The main worktree's folder for a project root (itself unless it is a linked git worktree)."""
-    common = git(["rev-parse", "--git-common-dir"], root)
-    if common:
-        common = os.path.normpath(os.path.join(root, common))
-        if os.path.basename(common) == ".git":
-            return os.path.dirname(common)
-    return root
-
-
-def head_branch(git_dir):
-    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
-    try:
-        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
-            head = f.readline().strip()
-    except OSError:
-        return None
-    if head.startswith("ref: "):
-        ref = head[5:]
-        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-    return head[:7] or None
-
-
-def worktrees(root):
-    """The git worktrees of the project whose main worktree is `root`, main first, as `git worktree list` has them:
-    [{path, branch, main}]. Read from the git directory, without running git, so the server can ask on every poll.
-    Linked worktrees whose folder is gone are left out; outside git (or a bare repository) the list is empty."""
-    git_dir = os.path.join(root, ".git")
-    if not os.path.isdir(git_dir):
-        return []
-    found = [{"path": root, "branch": head_branch(git_dir), "main": True}]
-    linked = os.path.join(git_dir, "worktrees")
-    try:
-        names = sorted(os.listdir(linked))
-    except OSError:
-        names = []
-    for name in names:
-        admin = os.path.join(linked, name)
-        try:
-            with open(os.path.join(admin, "gitdir"), encoding="utf-8") as f:
-                path = os.path.dirname(f.readline().strip())  # the worktree's .git file
-        except OSError:
-            continue
-        if path and os.path.isdir(path):
-            found.append({"path": path, "branch": head_branch(admin), "main": False})
-    return found
-
-
-def project_meta(path):
-    """The meta of the project at `path`, or None without a readable tasks.json."""
-    data = read_json(os.path.join(path, TASK_DIR, TASKS_FILE))
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        return None
-    return data.get("meta") if isinstance(data.get("meta"), dict) else {}
-
-
-def project_id(meta, path):
-    """meta.id, else "p" and 7 hex characters of the path's SHA-1 (stable until meta.id is set)."""
-    if isinstance(meta.get("id"), str) and meta["id"]:
-        return meta["id"]
-    return "p" + hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
-
-
-def project_name(meta, path):
-    return meta.get("project") if isinstance(meta.get("project"), str) and meta["project"] else os.path.basename(path)
-
-
-def listed(meta):
-    dashboard = meta.get("dashboard")
-    return not (isinstance(dashboard, dict) and dashboard.get("listed") is False)
-
-
-def is_missing(entry):
-    return project_meta(entry["path"]) is None
-
-
-def empty_registry():
-    return {"version": REGISTRY_VERSION, "projects": []}
-
-
-def read_registry(home):
-    """(registry, damaged): an unreadable projects.json is moved aside to projects.json.damaged-<time> (its path is
-    returned as `damaged`) and replaced by an empty registry. Call it holding the registry lock."""
-    path = os.path.join(home, REGISTRY_FILE)
-    if not os.path.exists(path):
-        return empty_registry(), None
-    data = read_json(path)
-    entries = data.get("projects") if isinstance(data, dict) else None
-    if isinstance(entries, list) and all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in entries):
-        return data, None
-    damaged = f"{path}.damaged-{now().strftime('%Y%m%dT%H%M%SZ')}"
-    os.replace(path, damaged)
-    return empty_registry(), damaged
-
-
-def write_registry(home, registry):
-    write_json_atomic(os.path.join(home, REGISTRY_FILE), registry)
-
-
-def find_entry(registry, path):
-    return next((e for e in registry["projects"] if e["path"] == path), None)
-
-
-def entry_for(registry, path, meta, stamp):
-    return {
-        "id": unique_id(registry, path, project_id(meta, path)),
-        "name": project_name(meta, path),
-        "path": path,
-        "added_at": stamp,
-        "seen_at": stamp,
-    }
-
-
-def seen_long_ago(entry):
-    """True when the entry's seen_at is a day old (or unreadable): time to refresh it."""
-    try:
-        return (now() - parse_iso(entry.get("seen_at"))).total_seconds() >= SEEN_EVERY
-    except (TypeError, ValueError):
-        return True
-
-
-def update_entry(registry, path, meta):
-    """Add, refresh or (when the project opted out) remove the entry for `path`. Returns what happened: "added",
-    "updated", "unchanged", "removed" or "unlisted"."""
-    entry = find_entry(registry, path)
-    if not listed(meta):
-        if entry:
-            registry["projects"].remove(entry)
-            return "removed"
-        return "unlisted"
-    stamp = now_iso()
-    if entry is None:
-        registry["projects"].append(entry_for(registry, path, meta, stamp))
-        return "added"
-    fresh = {"id": unique_id(registry, path, project_id(meta, path)), "name": project_name(meta, path)}
-    changed = any(entry.get(k) != v for k, v in fresh.items())
-    if not (changed or seen_long_ago(entry)):
-        return "unchanged"
-    entry.update(fresh)
-    entry["seen_at"] = stamp
-    return "updated"
-
-
-def register(paths, wait=True):
-    """Register the project of `paths` (its main worktree). With wait=False the registry lock is tried once and the
-    project is skipped if the lock is taken (the plugin's hook must never wait). Returns update_entry's result,
-    "busy" when skipped, or None when the project has no tasks.json."""
-    path = main_worktree(paths["root"])
-    meta = project_meta(path)
-    if meta is None:
-        meta = project_meta(paths["root"])
-    if meta is None:
-        return None
-    home = atm_home()
-    ensure_home(home)
-    try:
-        with locked(home, timeout=None if wait else 0):
-            registry, _ = read_registry(home)
-            result = update_entry(registry, path, meta)
-            if result not in ("unchanged", "unlisted"):
-                write_registry(home, registry)
-            return result
-    except AtmError:
-        if wait:
-            raise
-        return "busy"
-
-
-def register_if_needed(paths):
-    """The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
-    waiting for the lock) only when the project isn't listed yet or was last seen a day ago."""
-    path = main_worktree(paths["root"])
-    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE))
-    entries = registry.get("projects") if isinstance(registry, dict) else None
-    entry = next((e for e in entries or [] if isinstance(e, dict) and e.get("path") == path), None)
-    if entry is not None and not seen_long_ago(entry):
-        return "unchanged"
-    return register(paths, wait=False)
-
-
-def resolve_project(target):
-    """The main worktree folder of the project at `target` (a path), and its meta; refuses a folder without tasks."""
-    folder = os.path.abspath(os.path.expanduser(target or os.getcwd()))
-    if not os.path.isdir(folder):
-        raise AtmError(f"{target}: not a directory", 2)
-    paths = find_paths(folder)
-    path = main_worktree(paths["root"])
-    meta = project_meta(path) or project_meta(paths["root"])
-    if meta is None:
-        raise AtmError(f"no tasks.json in {os.path.join(path, TASK_DIR)}. Run /atm:create-tasks there first.")
-    return path, meta
-
-
-def describe_entry(entry):
-    return f"{entry['id']}  {entry['name']}  {entry['path']}"
-
-
-def damaged_notice(damaged):
-    return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
-
-
-def projects_list(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        if damaged:
-            write_registry(home, registry)
-    entries = [{**e, "missing": is_missing(e)} for e in registry["projects"]]
-    if as_json:
-        out(to_json({"projects": entries, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not entries:
-        out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
-    for e in entries:
-        out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
-
-
-def projects_add(home, target, as_json):
-    path, meta = resolve_project(target)
-    if not listed(meta):
-        raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        result = update_entry(registry, path, meta)
-        write_registry(home, registry)
-    entry = find_entry(registry, path)
-    if as_json:
-        out(to_json({"result": result, "project": entry, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    out(f"{'Added' if result == 'added' else 'Already registered'}: {describe_entry(entry)}")
-
-
-def projects_remove(home, target, as_json):
-    if not target:
-        raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
-    candidates = {target, os.path.abspath(os.path.expanduser(target))}
-    if os.path.isdir(target):
-        candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
-        if entry:
-            registry["projects"].remove(entry)
-        if entry or damaged:
-            write_registry(home, registry)
-    if entry is None:
-        raise AtmError(f"no registered project {target} (see `atm projects`)")
-    if as_json:
-        out(to_json({"removed": entry, "damaged": damaged}))
-        return
-    out(f"Removed: {describe_entry(entry)}")
-
-
-def projects_prune(home, as_json):
-    ensure_home(home)
-    with locked(home):
-        registry, damaged = read_registry(home)
-        gone = [e for e in registry["projects"] if is_missing(e)]
-        registry["projects"] = [e for e in registry["projects"] if e not in gone]
-        if gone or damaged:
-            write_registry(home, registry)
-    if as_json:
-        out(to_json({"removed": gone, "damaged": damaged}))
-        return
-    if damaged:
-        out(damaged_notice(damaged))
-    if not gone:
-        out("Nothing to prune: every registered project is there.")
-    for e in gone:
-        out(f"Removed: {describe_entry(e)}")
-
-
-def cmd_projects(args):
-    home = atm_home()
-    if args.action == "add":
-        projects_add(home, args.target, args.json)
-    elif args.action == "remove":
-        projects_remove(home, args.target, args.json)
-    elif args.action == "prune":
-        projects_prune(home, args.json)
-    else:
-        if args.target:
-            raise AtmError(f"unexpected argument '{args.target}'", 2)
-        projects_list(home, args.json)
-
-
-# ==== model.py ====
-# Loading tasks.json, the project's vocabularies, looking tasks up, and the status transitions themselves.
+# ==== common/model.py ====
+# The rules of task data: the project's vocabularies, looking tasks up, and the status transitions themselves.
+# Reading and writing the files is the store's (db/jsongit/files.py).
 #
 # Every rule is written against a status's kind, never its name (docs/v4/data-model.md §3): a project may name its own
 # statuses in meta.statuses, each with one of the six kinds below.
@@ -1224,25 +695,19 @@ def status_for(vocab, kind, chosen=None):
     return chosen
 
 
-ARCHIVE_FILE = "tasks-archive.json"
-# The archive of the project this command works on, read only when needed (a dependency not in tasks.json, show of
-# an archived task): one atm process works on one project
-_archive = {"paths": None, "data": None}
+# Where the rules look up an archived task (a dependency not in tasks.json, show of an archived task): the store
+# that loaded the task data sets it (use_archive), read only when needed; one atm process works on one project
+_archive = {"lookup": None}
 
 
-def archive_path(paths):
-    return os.path.join(paths["dir"], ARCHIVE_FILE)
+def use_archive(lookup):
+    """Look archived tasks up with `lookup(task_id)` (task or None) from now on; None: there is no archive."""
+    _archive["lookup"] = lookup
 
 
-def load_archive(paths):
-    """tasks-archive.json, or an empty archive when there is none (DM-1.2)."""
-    p = archive_path(paths)
-    if not os.path.isfile(p):
-        return {"meta": {}, "tasks": []}
-    data = read_json(p)
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{p} is not a valid archive (expected an object with a 'tasks' list)")
-    return data
+def archived_task(task_id):
+    """The archived task with this ID, if the archive has it."""
+    return _archive["lookup"](task_id) if _archive["lookup"] else None
 
 
 ARCHIVE_DEFAULTS = {"threshold_kb": 1024, "threshold_tasks": 500, "keep_days": 14, "auto": True}
@@ -1298,14 +763,9 @@ def format_size(size):
     return f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{size // 1024} KB"
 
 
-def archive_hint(paths, data):
-    """The suggestion to archive (CLI-5.1), or None: when tasks.json is over meta.archive.threshold_kb, or has more
-    archivable tasks than threshold_tasks, and there is something to move."""
-    return archive_hint_for(data, os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0)
-
-
 def archive_hint_for(data, size):
-    """archive_hint, for task data `size` bytes big (atm-lib has the size from the store)."""
+    """The suggestion to archive (CLI-5.1), or None: when the task data (`size` bytes) is over
+    meta.archive.threshold_kb, or has more archivable tasks than threshold_tasks, and there is something to move."""
     settings = archive_settings(data)
     movable = len(archivable(data))
     if not movable or (size <= settings["threshold_kb"] * 1024 and movable <= settings["threshold_tasks"]):
@@ -1322,40 +782,6 @@ def archive_hint_for(data, size):
         "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm archive` would move "
         f"{movable} of them to tasks-archive.json.",
     }
-
-
-def archived_task(task_id):
-    """The archived task with this ID, if the archive has it (the archive is read on the first lookup)."""
-    if _archive["paths"] is None:
-        return None
-    if _archive["data"] is None:
-        _archive["data"] = {t.get("id"): t for t in load_archive(_archive["paths"])["tasks"]}
-    return _archive["data"].get(task_id)
-
-
-def load_tasks(paths):
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
-    vocabulary(data)  # an unusable vocabulary stops every command before anything is written
-    # Agents put task IDs into shell commands: an ID with shell characters stops every command (atm check lists them)
-    for i, task in enumerate(data["tasks"]):
-        # Every command looks tasks up by ID and follows dependencies: a malformed task stops them all with a clear
-        # message instead of a traceback halfway through (docs/security-review.md F12). atm check lists them all.
-        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm check")
-        if not valid_task_id(task["id"]):
-            raise AtmError(
-                f"{paths['tasks']}: the task ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', "
-                "'_' and '-' only): fix it in the file, then run atm check"
-            )
-        deps = task.get("dependencies", [])
-        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
-    _archive["paths"], _archive["data"] = paths, None
-    return data
 
 
 META_KEY = re.compile(r"meta\.(\w+)")
@@ -1379,42 +805,6 @@ def tolerant_vocabulary(meta):
                     usable.pop("default_priority", None)  # it names one of them
             else:
                 usable = {}  # nothing to narrow it to: the defaults
-
-
-def load_tasks_tolerant(paths):
-    """tasks.json read as far as it can be, for showing it (the dashboard): what `load_tasks` refuses is kept where it
-    can be, and said. Entries that aren't tasks (no string "id") are left out; a task with an ID atm doesn't allow is
-    kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task read fits
-    the task schema). The data is for reading only. Returns (data, problems): problems as {"file": [...],
-    "tasks": {id: [...]}}, in `atm check`'s words. A file that isn't a task file at all is still an error."""
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
-    problems = {"file": [], "tasks": {}}
-    kept = []
-    for i, task in enumerate(data["tasks"]):
-        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            problems["file"].append(f"task #{i + 1} isn't a task (an object with an \"id\"): left out")
-            continue
-        own = []
-        if not valid_task_id(task["id"]):
-            own.append(f"the ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', '_' and '-')")
-        deps = task.get("dependencies", [])
-        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            # Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
-            task["dependencies"] = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
-            own.append("its dependencies aren't a list of task IDs (shown with the IDs that can be read)")
-        if own:
-            problems["tasks"][task["id"]] = own
-        kept.append(task)
-    data["tasks"] = kept
-    # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
-    _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
-    problems["file"] += vocabulary_problems
-    _archive["paths"], _archive["data"] = paths, None
-    return data, problems
 
 
 def find_task(data, task_id, archived=False):
@@ -2159,6 +1549,131 @@ TaskViewList = TypedDict(
 )
 
 
+# ==== common/components.py ====
+# The rules of components (docs/sprints-and-releases-design.md §2, SR-2.7): the parts of a project (meta.components,
+# each with globs over its files), the components a task's files suggest, and the IDs a task may name. Listing,
+# defining and changing them is atm-lib's (lib/components.py).
+
+def matches(component, path):
+    """Whether `path` (a task's file, relative to the project) is in the component: one of its globs matches. `*`
+    and `**` both match across folders (`dashboard/**` is everything under dashboard/)."""
+    return any(fnmatchcase(path, glob) for glob in component.get("paths") or [])
+
+
+def suggest_components(vocab, files):
+    """The components the files are in, in the project's order."""
+    return [c["id"] for c in vocab["components"] if any(matches(c, f) for f in files if isinstance(f, str))]
+
+
+def component_ids(vocab, values):
+    """The component IDs a task may have: in a project with components, only theirs; otherwise any ID of letters,
+    digits, '.', '-' and '_' (agents put them in shell commands). Raises AtmError naming the first bad one."""
+    known = [c["id"] for c in vocab["components"]]
+    for value in values:
+        if not isinstance(value, str) or not RELEASE_ID.fullmatch(value):
+            raise AtmError(f"component {value!r}: use letters, digits, '.', '-' and '_' (at most 64)", 2)
+        if known and value not in known:
+            raise AtmError(f"no component {value!r}; the components: {', '.join(known)}", 2)
+    return list(values)
+
+
+# ==== common/sprint_names.py ====
+# Names for sprints created without one (docs/sprints-and-releases-design.md SR-2.9), by meta.sprint_names: a
+# historical person's name not yet used in the project (`people`), or the time it was created (`time`).
+#
+# The names are plain ASCII letters, spaces, hyphens and dots, without apostrophes: agents pass sprint names in shell
+# commands, inside single quotes.
+
+PEOPLE = (
+    # Scientists and mathematicians
+    "Ada Lovelace", "Alan Turing", "Albert Einstein", "Alfred Wegener", "Alexander Fleming", "Alexander von Humboldt",
+    "Alhazen", "Andre-Marie Ampere", "Antoine Lavoisier", "Archimedes", "Barbara McClintock",
+    "Benjamin Banneker", "Blaise Pascal", "Carl Friedrich Gauss", "Carl Linnaeus", "Caroline Herschel",
+    "Charles Babbage", "Charles Darwin", "Chien-Shiung Wu", "Claude Shannon", "Dmitri Mendeleev", "Dorothy Hodgkin",
+    "Edmond Halley", "Edwin Hubble", "Emmy Noether", "Enrico Fermi", "Ernest Rutherford", "Euclid", "Evariste Galois",
+    "Florence Nightingale", "Galileo Galilei", "George Washington Carver", "Gertrude Elion", "Grace Hopper",
+    "Gregor Mendel", "Hedy Lamarr", "Henrietta Leavitt", "Hypatia", "Ibn Sina", "Isaac Newton", "James Clerk Maxwell",
+    "Jagadish Chandra Bose", "Johannes Kepler", "John von Neumann", "Jonas Salk", "Katherine Johnson",
+    "Leonhard Euler", "Lise Meitner", "Louis Pasteur", "Mae Jemison", "Marie Curie", "Mary Anning",
+    "Mary Somerville", "Max Planck", "Michael Faraday", "Muhammad al-Khwarizmi", "Niels Bohr", "Nicolaus Copernicus",
+    "Nikola Tesla", "Omar Khayyam", "Pierre Curie", "Rachel Carson", "Richard Feynman", "Robert Hooke",
+    "Rosalind Franklin", "Santiago Ramon y Cajal", "Sophie Germain", "Srinivasa Ramanujan", "Stephen Hawking",
+    "Subrahmanyan Chandrasekhar", "Tu Youyou", "Tycho Brahe", "Vera Rubin", "Werner Heisenberg", "Zhang Heng",
+    "Alessandro Volta", "Anders Celsius", "Christiaan Huygens", "Daniel Bernoulli", "Erwin Schrodinger",
+    "Fibonacci", "Gottfried Leibniz", "Henri Poincare", "Hermann von Helmholtz", "Jean-Baptiste Lamarck",
+    "Joseph Fourier", "Kurt Godel", "Lord Kelvin", "Maria Goeppert Mayer", "Paul Dirac", "Pierre-Simon Laplace",
+    "Ronald Ross", "Seki Takakazu", "Wilhelm Rontgen", "William Harvey", "Annie Jump Cannon", "Cecilia Payne",
+    "Edward Jenner", "Hans Christian Orsted", "Joseph Lister", "Lev Landau", "Linus Pauling",
+    "Ludwig Boltzmann", "Robert Boyle", "Satyendra Nath Bose", "Wangari Maathai",
+    # Engineers and inventors
+    "Alexander Graham Bell", "Charles Kettering", "Edith Clarke", "Frank Whittle", "Granville Woods", "Gustave Eiffel",
+    "Isambard Brunel", "James Watt", "Johannes Gutenberg", "Karl Benz", "Lillian Gilbreth", "Margaret Hamilton",
+    "Nikolaus Otto", "Orville Wright", "Rudolf Diesel", "Samuel Morse", "Thomas Edison", "Wilbur Wright",
+    "Yuri Gagarin", "Valentina Tereshkova", "Sally Ride", "Robert Goddard", "Konstantin Tsiolkovsky",
+    # Explorers and travellers
+    "Amelia Earhart", "Abel Tasman", "Bartolomeu Dias", "Ernest Shackleton", "Ferdinand Magellan", "Fridtjof Nansen",
+    "Gertrude Bell", "Ibn Battuta", "Isabella Bird", "James Cook", "Leif Erikson", "Matthew Henson", "Marco Polo",
+    "Mary Kingsley", "Roald Amundsen", "Sacagawea", "Tenzing Norgay", "Edmund Hillary", "Zheng He", "Xuanzang",
+    "Vasco da Gama", "Robert Falcon Scott", "Nellie Bly", "Freya Stark", "Jacques Cousteau", "Thor Heyerdahl",
+    # Writers and poets
+    "Agatha Christie", "Anton Chekhov", "Charles Dickens", "Charlotte Bronte", "Emily Bronte", "Emily Dickinson",
+    "Franz Kafka", "Fyodor Dostoevsky", "Gabriel Garcia Marquez", "George Eliot", "Hans Christian Andersen",
+    "Homer", "Italo Calvino", "Jane Austen", "Jorge Luis Borges", "Jules Verne", "Leo Tolstoy", "Mark Twain",
+    "Mary Shelley", "Miguel de Cervantes", "Murasaki Shikibu", "Naguib Mahfouz", "Nazim Hikmet", "Oscar Wilde",
+    "Pablo Neruda", "Rabindranath Tagore", "Rumi", "Sappho", "Toni Morrison", "Victor Hugo", "Virginia Woolf",
+    "Walt Whitman", "William Shakespeare", "Yunus Emre", "Chinua Achebe", "Dante Alighieri", "Edgar Allan Poe",
+    "Geoffrey Chaucer", "Hafez", "Herman Melville", "James Joyce", "Johann Wolfgang von Goethe", "Langston Hughes",
+    "Li Bai", "Du Fu", "Matsuo Basho", "Maya Angelou", "Rainer Maria Rilke", "Ursula K. Le Guin", "Wislawa Szymborska",
+    "Alexandre Dumas", "Arthur Conan Doyle", "Astrid Lindgren", "Bertolt Brecht", "Gustave Flaubert", "H. G. Wells",
+    "Honore de Balzac", "Ivan Turgenev", "Lewis Carroll", "Machado de Assis", "Marcel Proust", "Nikolai Gogol",
+    "Orhan Veli", "Robert Louis Stevenson", "Sei Shonagon", "Selma Lagerlof", "Sylvia Plath", "Zora Neale Hurston",
+    # Philosophers and thinkers
+    "Aristotle", "Baruch Spinoza", "Confucius", "Hannah Arendt", "Ibn Khaldun", "Immanuel Kant",
+    "John Locke", "Laozi", "Mary Wollstonecraft", "Michel de Montaigne", "Plato", "Rene Descartes", "Simone de Beauvoir",
+    "Socrates", "Thales", "Voltaire", "Zeno", "Adam Smith", "David Hume", "Epicurus", "Mencius", "Pythagoras",
+    # Artists and architects
+    "Artemisia Gentileschi", "Claude Monet", "Diego Velazquez", "Frida Kahlo", "Georgia OKeeffe", "Hokusai",
+    "Johannes Vermeer", "Leonardo da Vinci", "Michelangelo", "Mimar Sinan", "Pablo Picasso", "Paul Cezanne",
+    "Rembrandt", "Sandro Botticelli", "Vincent van Gogh", "Wassily Kandinsky", "Zaha Hadid", "Antoni Gaudi",
+    "Filippo Brunelleschi", "Frank Lloyd Wright", "Gustav Klimt", "Henri Matisse", "Hilma af Klint", "Paul Klee",
+    "Raphael", "Rosa Bonheur", "Titian", "Utagawa Hiroshige", "Berthe Morisot", "Edgar Degas", "Le Corbusier",
+    # Composers and musicians
+    "Antonio Vivaldi", "Clara Schumann", "Claude Debussy", "Duke Ellington", "Fanny Mendelssohn", "Frederic Chopin",
+    "George Gershwin", "Hildegard of Bingen", "Igor Stravinsky", "Johann Sebastian Bach", "Ludwig van Beethoven",
+    "Maurice Ravel", "Nina Simone", "Pyotr Tchaikovsky", "Scott Joplin", "Wolfgang Amadeus Mozart", "Ella Fitzgerald",
+    "Louis Armstrong", "Bela Bartok", "Edvard Grieg", "Franz Schubert", "Giuseppe Verdi", "Jean Sibelius",
+    "Joseph Haydn", "Sergei Rachmaninoff", "Antonin Dvorak", "Billie Holiday", "Miles Davis", "Umm Kulthum",
+)
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def time_name(when):
+    """`May 12-10:38pm`: when the sprint was created, in local time."""
+    hour = when.hour % 12 or 12
+    return f"{MONTHS[when.month - 1]} {when.day}-{hour}:{when.minute:02d}{'am' if when.hour < 12 else 'pm'}"
+
+
+def generate_sprint_name(naming, taken):
+    """A new sprint name by `naming` (meta.sprint_names), not one of `taken` (compared case-insensitively). The time
+    is atm's clock in the local time zone (ATM_NOW and TZ in tests); ATM_SEED fixes the random pick, for tests."""
+    used = {name.casefold() for name in taken}
+    if naming == "time":
+        base = time_name(now().astimezone())
+        name, n = base, 1
+        while name.casefold() in used:
+            n += 1
+            name = f"{base}-{n}"
+        return name
+    free, round_ = [p for p in PEOPLE if p.casefold() not in used], 1
+    while not free:
+        # Every name taken (a project with hundreds of sprints): the same names again, numbered
+        round_ += 1
+        free = [f"{p} {round_}" for p in PEOPLE if f"{p} {round_}".casefold() not in used]
+    seed = os.environ.get("ATM_SEED")
+    return (random.Random(seed) if seed else random.Random()).choice(free)
+
+
 # ==== db/interface.py ====
 # The store: how atm-lib reads and writes a project's data, whatever keeps it (docs/layered-architecture.md §3).
 #
@@ -2270,139 +1785,640 @@ class Vcs(Protocol):
         ...
 
 
-# ==== components.py ====
-# Components (docs/sprints-and-releases-design.md §2, SR-2.7): the parts of a project (meta.components, each with
-# globs over its files), the components a task's files suggest, and the IDs a task may name. Listing, defining and
-# changing them is atm-lib's (lib/components.py) since T-370; these rules move into atm-lib with a later slice.
+# ==== db/jsongit/gitrun.py ====
+# Git as the carrier of the task files (docs/layered-architecture.md §2): finding the repository and its common
+# directory, staging the task folder's files, the merge driver's config. Git as the code's version control is vcs/git.py.
 
-def matches(component, path):
-    """Whether `path` (a task's file, relative to the project) is in the component: one of its globs matches. `*`
-    and `**` both match across folders (`dashboard/**` is everything under dashboard/)."""
-    return any(fnmatchcase(path, glob) for glob in component.get("paths") or [])
-
-
-def suggest_components(vocab, files):
-    """The components the files are in, in the project's order."""
-    return [c["id"] for c in vocab["components"] if any(matches(c, f) for f in files if isinstance(f, str))]
-
-
-def component_ids(vocab, values):
-    """The component IDs a task may have: in a project with components, only theirs; otherwise any ID of letters,
-    digits, '.', '-' and '_' (agents put them in shell commands). Raises AtmError naming the first bad one."""
-    known = [c["id"] for c in vocab["components"]]
-    for value in values:
-        if not isinstance(value, str) or not RELEASE_ID.fullmatch(value):
-            raise AtmError(f"component {value!r}: use letters, digits, '.', '-' and '_' (at most 64)", 2)
-        if known and value not in known:
-            raise AtmError(f"no component {value!r}; the components: {', '.join(known)}", 2)
-    return list(values)
-
-
-def suggestion_line(vocab, task):
-    """`atm add` / `edit --add-file` (SR-2.7): the components the task's files suggest that it doesn't have yet, as a
-    line with the command that sets them; None when there are none (or the project has no components)."""
-    missing = [c for c in suggest_components(vocab, task.get("files") or []) if c not in (task.get("components") or [])]
-    if not missing:
+def git(args, cwd):
+    """Run git; return stdout stripped, or None if git fails or isn't installed."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    except OSError:
         return None
-    adds = " ".join(f"--add-component {c}" for c in missing)
-    return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm edit {task['id']} {adds})"
+    return result.stdout.strip() if result.returncode == 0 else None
 
 
-# ==== sprint_names.py ====
-# Names for sprints created without one (docs/sprints-and-releases-design.md SR-2.9), by meta.sprint_names: a
-# historical person's name not yet used in the project (`people`), or the time it was created (`time`).
+def is_tracked(root, p):
+    return git(["ls-files", "--error-unmatch", "--", rel(root, p)], root) is not None
+
+
+def in_git(root):
+    return git(["rev-parse", "--git-dir"], root) is not None
+
+
+# ==== db/jsongit/files.py ====
+# The JSON-in-git store's files (docs/v4/data-model.md §1): reading tasks.json strictly (every command) or tolerantly
+# (showing a malformed file, T-377), and the archive, tasks-archive.json, which the rules look archived tasks up in.
+
+ARCHIVE_FILE = "tasks-archive.json"
+
+
+def archive_path(paths):
+    return os.path.join(paths["dir"], ARCHIVE_FILE)
+
+
+def load_archive(paths):
+    """tasks-archive.json, or an empty archive when there is none (DM-1.2)."""
+    p = archive_path(paths)
+    if not os.path.isfile(p):
+        return {"meta": {}, "tasks": []}
+    data = read_json(p)
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        raise AtmError(f"{p} is not a valid archive (expected an object with a 'tasks' list)")
+    return data
+
+
+def archive_of(paths):
+    """The rules' lookup of archived tasks in the archive of `paths`, read on the first lookup."""
+    found = {}
+
+    def lookup(task_id):
+        if "tasks" not in found:
+            found["tasks"] = {t.get("id"): t for t in load_archive(paths)["tasks"] if isinstance(t, dict)}
+        return found["tasks"].get(task_id)
+
+    return lookup
+
+
+def read_task_file(paths):
+    if not os.path.isfile(paths["tasks"]):
+        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
+    data = read_json(paths["tasks"])
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
+    return data
+
+
+def load_tasks(paths):
+    data = read_task_file(paths)
+    vocabulary(data)  # an unusable vocabulary stops every command before anything is written
+    # Agents put task IDs into shell commands: an ID with shell characters stops every command (atm check lists them)
+    for i, task in enumerate(data["tasks"]):
+        # Every command looks tasks up by ID and follows dependencies: a malformed task stops them all with a clear
+        # message instead of a traceback halfway through (docs/security-review.md F12). atm check lists them all.
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm check")
+        if not valid_task_id(task["id"]):
+            raise AtmError(
+                f"{paths['tasks']}: the task ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', "
+                "'_' and '-' only): fix it in the file, then run atm check"
+            )
+        deps = task.get("dependencies", [])
+        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
+    use_archive(archive_of(paths))
+    return data
+
+
+def load_tasks_tolerant(paths):
+    """tasks.json read as far as it can be, for showing it (the dashboard): what `load_tasks` refuses is kept where it
+    can be, and said. Entries that aren't tasks (no string "id") are left out; a task with an ID atm doesn't allow is
+    kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task read fits
+    the task schema). The data is for reading only. Returns (data, problems): problems as {"file": [...],
+    "tasks": {id: [...]}}, in `atm check`'s words. A file that isn't a task file at all is still an error."""
+    data = read_task_file(paths)
+    problems = {"file": [], "tasks": {}}
+    kept = []
+    for i, task in enumerate(data["tasks"]):
+        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+            problems["file"].append(f"task #{i + 1} isn't a task (an object with an \"id\"): left out")
+            continue
+        own = []
+        if not valid_task_id(task["id"]):
+            own.append(f"the ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', '_' and '-')")
+        deps = task.get("dependencies", [])
+        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
+            # Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
+            task["dependencies"] = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
+            own.append("its dependencies aren't a list of task IDs (shown with the IDs that can be read)")
+        if own:
+            problems["tasks"][task["id"]] = own
+        kept.append(task)
+    data["tasks"] = kept
+    # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
+    _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
+    problems["file"] += vocabulary_problems
+    use_archive(archive_of(paths))
+    return data, problems
+
+
+def archive_hint(paths, data):
+    """The suggestion to archive (CLI-5.1) for the task file of `paths`, or None (common/model.py archive_hint_for)."""
+    return archive_hint_for(data, os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0)
+
+
+# ==== paths.py ====
+# Where a project's task files are: the project root, the task folder, legacy locations.
+
+LEGACY_DIRS = ["docs", "."]
+# The files atm reads and writes in the task folder; a repository can commit any of them as a symlink
+FOLDER_FILES = (TASKS_FILE, "tasks-archive.json", ".gitignore", ".gitattributes")
+
+
+def check_task_folder(root, task_dir):
+    """Refuse a task folder atm would read or write outside the project through (docs/security-review.md F7): a
+    cloned repository can commit `.agentic-task-manager` or its files as symlinks to anything the user can write,
+    such as ~/.zshrc."""
+    if os.path.islink(task_dir):
+        raise AtmError(f"{task_dir} is a symlink; atm works only on a real folder inside the project")
+    if not os.path.isdir(task_dir):
+        return
+    real_root = os.path.realpath(root)
+    if os.path.commonpath([os.path.realpath(task_dir), real_root]) != real_root:
+        raise AtmError(f"{task_dir} leads outside the project ({os.path.realpath(task_dir)})")
+    for name in FOLDER_FILES:
+        if os.path.islink(os.path.join(task_dir, name)):
+            raise AtmError(f"{os.path.join(task_dir, name)} is a symlink; atm reads and writes only regular files there")
+
+
+def project_root(cwd):
+    """The git top level; outside git, the nearest directory with a task folder or docs/tasks.json, else cwd."""
+    top = git(["rev-parse", "--show-toplevel"], cwd)
+    if top:
+        return top
+    d = cwd
+    while True:
+        if os.path.isdir(os.path.join(d, TASK_DIR)) or os.path.isfile(os.path.join(d, "docs", TASKS_FILE)):
+            return d
+        parent = os.path.dirname(d)
+        if parent == d:
+            return cwd
+        d = parent
+
+
+def find_paths(cwd):
+    root = project_root(cwd)
+    task_dir = os.path.join(root, TASK_DIR)
+    check_task_folder(root, task_dir)
+    legacy = None
+    for d in LEGACY_DIRS:
+        candidate = os.path.normpath(os.path.join(root, d, TASKS_FILE))
+        if os.path.isfile(candidate):
+            dashboard = os.path.join(os.path.dirname(candidate), DASHBOARD_FILE)
+            legacy = {"tasks": candidate, "dashboard": dashboard if os.path.isfile(dashboard) else None}
+            break
+    tasks = os.path.join(task_dir, TASKS_FILE)
+    return {
+        "root": root,
+        "dir": task_dir,
+        "tasks": tasks,
+        "tasks_exists": os.path.isfile(tasks),
+        "dashboard": os.path.join(task_dir, DASHBOARD_FILE),
+        "legacy": legacy,
+    }
+
+
+def cmd_paths(args):
+    paths = find_paths(os.getcwd())
+    if args.json:
+        out(to_json(paths))
+        return
+    for key in ["root", "dir", "tasks", "dashboard"]:
+        out(f"{key}: {paths[key]}")
+    if paths["legacy"]:
+        out(f"legacy: {paths['legacy']['tasks']}")
+
+
+# ==== lock.py ====
+# The lock directory.
 #
-# The names are plain ASCII letters, spaces, hyphens and dots, without apostrophes: agents pass sprint names in shell
-# commands, inside single quotes.
+# A lock is a directory: mkdir succeeds for exactly one process, on every OS and file system. The holder writes
+# owner.json inside it and removes the directory when done. A crashed holder leaves the directory behind, so a waiter
+# breaks the lock when its owner is provably gone (same host, pid not running) or it is older than LOCK_STALE. See
+# docs/parallel-agents-design.md, section 4.
 
-PEOPLE = (
-    # Scientists and mathematicians
-    "Ada Lovelace", "Alan Turing", "Albert Einstein", "Alfred Wegener", "Alexander Fleming", "Alexander von Humboldt",
-    "Alhazen", "Andre-Marie Ampere", "Antoine Lavoisier", "Archimedes", "Barbara McClintock",
-    "Benjamin Banneker", "Blaise Pascal", "Carl Friedrich Gauss", "Carl Linnaeus", "Caroline Herschel",
-    "Charles Babbage", "Charles Darwin", "Chien-Shiung Wu", "Claude Shannon", "Dmitri Mendeleev", "Dorothy Hodgkin",
-    "Edmond Halley", "Edwin Hubble", "Emmy Noether", "Enrico Fermi", "Ernest Rutherford", "Euclid", "Evariste Galois",
-    "Florence Nightingale", "Galileo Galilei", "George Washington Carver", "Gertrude Elion", "Grace Hopper",
-    "Gregor Mendel", "Hedy Lamarr", "Henrietta Leavitt", "Hypatia", "Ibn Sina", "Isaac Newton", "James Clerk Maxwell",
-    "Jagadish Chandra Bose", "Johannes Kepler", "John von Neumann", "Jonas Salk", "Katherine Johnson",
-    "Leonhard Euler", "Lise Meitner", "Louis Pasteur", "Mae Jemison", "Marie Curie", "Mary Anning",
-    "Mary Somerville", "Max Planck", "Michael Faraday", "Muhammad al-Khwarizmi", "Niels Bohr", "Nicolaus Copernicus",
-    "Nikola Tesla", "Omar Khayyam", "Pierre Curie", "Rachel Carson", "Richard Feynman", "Robert Hooke",
-    "Rosalind Franklin", "Santiago Ramon y Cajal", "Sophie Germain", "Srinivasa Ramanujan", "Stephen Hawking",
-    "Subrahmanyan Chandrasekhar", "Tu Youyou", "Tycho Brahe", "Vera Rubin", "Werner Heisenberg", "Zhang Heng",
-    "Alessandro Volta", "Anders Celsius", "Christiaan Huygens", "Daniel Bernoulli", "Erwin Schrodinger",
-    "Fibonacci", "Gottfried Leibniz", "Henri Poincare", "Hermann von Helmholtz", "Jean-Baptiste Lamarck",
-    "Joseph Fourier", "Kurt Godel", "Lord Kelvin", "Maria Goeppert Mayer", "Paul Dirac", "Pierre-Simon Laplace",
-    "Ronald Ross", "Seki Takakazu", "Wilhelm Rontgen", "William Harvey", "Annie Jump Cannon", "Cecilia Payne",
-    "Edward Jenner", "Hans Christian Orsted", "Joseph Lister", "Lev Landau", "Linus Pauling",
-    "Ludwig Boltzmann", "Robert Boyle", "Satyendra Nath Bose", "Wangari Maathai",
-    # Engineers and inventors
-    "Alexander Graham Bell", "Charles Kettering", "Edith Clarke", "Frank Whittle", "Granville Woods", "Gustave Eiffel",
-    "Isambard Brunel", "James Watt", "Johannes Gutenberg", "Karl Benz", "Lillian Gilbreth", "Margaret Hamilton",
-    "Nikolaus Otto", "Orville Wright", "Rudolf Diesel", "Samuel Morse", "Thomas Edison", "Wilbur Wright",
-    "Yuri Gagarin", "Valentina Tereshkova", "Sally Ride", "Robert Goddard", "Konstantin Tsiolkovsky",
-    # Explorers and travellers
-    "Amelia Earhart", "Abel Tasman", "Bartolomeu Dias", "Ernest Shackleton", "Ferdinand Magellan", "Fridtjof Nansen",
-    "Gertrude Bell", "Ibn Battuta", "Isabella Bird", "James Cook", "Leif Erikson", "Matthew Henson", "Marco Polo",
-    "Mary Kingsley", "Roald Amundsen", "Sacagawea", "Tenzing Norgay", "Edmund Hillary", "Zheng He", "Xuanzang",
-    "Vasco da Gama", "Robert Falcon Scott", "Nellie Bly", "Freya Stark", "Jacques Cousteau", "Thor Heyerdahl",
-    # Writers and poets
-    "Agatha Christie", "Anton Chekhov", "Charles Dickens", "Charlotte Bronte", "Emily Bronte", "Emily Dickinson",
-    "Franz Kafka", "Fyodor Dostoevsky", "Gabriel Garcia Marquez", "George Eliot", "Hans Christian Andersen",
-    "Homer", "Italo Calvino", "Jane Austen", "Jorge Luis Borges", "Jules Verne", "Leo Tolstoy", "Mark Twain",
-    "Mary Shelley", "Miguel de Cervantes", "Murasaki Shikibu", "Naguib Mahfouz", "Nazim Hikmet", "Oscar Wilde",
-    "Pablo Neruda", "Rabindranath Tagore", "Rumi", "Sappho", "Toni Morrison", "Victor Hugo", "Virginia Woolf",
-    "Walt Whitman", "William Shakespeare", "Yunus Emre", "Chinua Achebe", "Dante Alighieri", "Edgar Allan Poe",
-    "Geoffrey Chaucer", "Hafez", "Herman Melville", "James Joyce", "Johann Wolfgang von Goethe", "Langston Hughes",
-    "Li Bai", "Du Fu", "Matsuo Basho", "Maya Angelou", "Rainer Maria Rilke", "Ursula K. Le Guin", "Wislawa Szymborska",
-    "Alexandre Dumas", "Arthur Conan Doyle", "Astrid Lindgren", "Bertolt Brecht", "Gustave Flaubert", "H. G. Wells",
-    "Honore de Balzac", "Ivan Turgenev", "Lewis Carroll", "Machado de Assis", "Marcel Proust", "Nikolai Gogol",
-    "Orhan Veli", "Robert Louis Stevenson", "Sei Shonagon", "Selma Lagerlof", "Sylvia Plath", "Zora Neale Hurston",
-    # Philosophers and thinkers
-    "Aristotle", "Baruch Spinoza", "Confucius", "Hannah Arendt", "Ibn Khaldun", "Immanuel Kant",
-    "John Locke", "Laozi", "Mary Wollstonecraft", "Michel de Montaigne", "Plato", "Rene Descartes", "Simone de Beauvoir",
-    "Socrates", "Thales", "Voltaire", "Zeno", "Adam Smith", "David Hume", "Epicurus", "Mencius", "Pythagoras",
-    # Artists and architects
-    "Artemisia Gentileschi", "Claude Monet", "Diego Velazquez", "Frida Kahlo", "Georgia OKeeffe", "Hokusai",
-    "Johannes Vermeer", "Leonardo da Vinci", "Michelangelo", "Mimar Sinan", "Pablo Picasso", "Paul Cezanne",
-    "Rembrandt", "Sandro Botticelli", "Vincent van Gogh", "Wassily Kandinsky", "Zaha Hadid", "Antoni Gaudi",
-    "Filippo Brunelleschi", "Frank Lloyd Wright", "Gustav Klimt", "Henri Matisse", "Hilma af Klint", "Paul Klee",
-    "Raphael", "Rosa Bonheur", "Titian", "Utagawa Hiroshige", "Berthe Morisot", "Edgar Degas", "Le Corbusier",
-    # Composers and musicians
-    "Antonio Vivaldi", "Clara Schumann", "Claude Debussy", "Duke Ellington", "Fanny Mendelssohn", "Frederic Chopin",
-    "George Gershwin", "Hildegard of Bingen", "Igor Stravinsky", "Johann Sebastian Bach", "Ludwig van Beethoven",
-    "Maurice Ravel", "Nina Simone", "Pyotr Tchaikovsky", "Scott Joplin", "Wolfgang Amadeus Mozart", "Ella Fitzgerald",
-    "Louis Armstrong", "Bela Bartok", "Edvard Grieg", "Franz Schubert", "Giuseppe Verdi", "Jean Sibelius",
-    "Joseph Haydn", "Sergei Rachmaninoff", "Antonin Dvorak", "Billie Holiday", "Miles Davis", "Umm Kulthum",
-)
-
-MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+LOCK_DIR = ".lock"
+LOCK_OWNER = "owner.json"
+LOCK_TIMEOUT = 10.0  # seconds a command waits for the lock (ATM_LOCK_TIMEOUT overrides)
+LOCK_STALE = 60.0  # a lock older than this is abandoned: commands hold it for milliseconds
+LOCK_POLL = 0.05
 
 
-def time_name(when):
-    """`May 12-10:38pm`: when the sprint was created, in local time."""
-    hour = when.hour % 12 or 12
-    return f"{MONTHS[when.month - 1]} {when.day}-{hour}:{when.minute:02d}{'am' if when.hour < 12 else 'pm'}"
+def lock_timeout():
+    try:
+        return float(os.environ.get("ATM_LOCK_TIMEOUT", LOCK_TIMEOUT))
+    except ValueError:
+        return LOCK_TIMEOUT
 
 
-def generate_sprint_name(naming, taken):
-    """A new sprint name by `naming` (meta.sprint_names), not one of `taken` (compared case-insensitively). The time
-    is atm's clock in the local time zone (ATM_NOW and TZ in tests); ATM_SEED fixes the random pick, for tests."""
-    used = {name.casefold() for name in taken}
-    if naming == "time":
-        base = time_name(now().astimezone())
-        name, n = base, 1
-        while name.casefold() in used:
-            n += 1
-            name = f"{base}-{n}"
-        return name
-    free, round_ = [p for p in PEOPLE if p.casefold() not in used], 1
-    while not free:
-        # Every name taken (a project with hundreds of sprints): the same names again, numbered
-        round_ += 1
-        free = [f"{p} {round_}" for p in PEOPLE if f"{p} {round_}".casefold() not in used]
-    seed = os.environ.get("ATM_SEED")
-    return (random.Random(seed) if seed else random.Random()).choice(free)
+def lock_owner(lock):
+    return read_json(os.path.join(lock, LOCK_OWNER))
+
+
+def lock_age(lock, owner):
+    """Seconds since the lock was taken: from owner.json, or the directory itself if owner.json isn't written yet."""
+    try:
+        since = parse_iso(owner["acquired_at"]).timestamp() if owner else os.stat(lock).st_mtime
+    except (OSError, KeyError, TypeError, ValueError):
+        return 0.0
+    return time.time() - since
+
+
+def lock_is_stale(lock, owner):
+    if owner and owner.get("host") == socket.gethostname() and isinstance(owner.get("pid"), int):
+        if not pid_alive(owner["pid"]):
+            return True
+    return lock_age(lock, owner) > LOCK_STALE
+
+
+def break_lock(lock, owner):
+    """Move a stale lock aside. Returns True if this process broke it.
+
+    Rename first, then check the owner inside the renamed directory (docs/security-review.md F13): checking first and
+    renaming after leaves a gap in which another waiter breaks the same stale lock and takes a fresh one, and this
+    process would then move the fresh lock aside, leaving two holders. If what was moved isn't the stale lock judged
+    here, it goes back."""
+    aside = f"{lock}.stale.{os.getpid()}.{os.urandom(4).hex()}"
+    try:
+        os.rename(lock, aside)
+    except OSError:
+        return False
+    if lock_owner(aside) != owner:
+        try:
+            os.rename(aside, lock)  # someone else's live lock: put it back
+        except OSError:
+            pass  # a newer lock is in place already; the moved one was broken by another waiter too
+        return False
+    shutil.rmtree(aside, ignore_errors=True)
+    return True
+
+
+def describe_owner(owner):
+    if not owner:
+        return "another process"
+    return f"pid {owner.get('pid')} on {owner.get('host')} since {owner.get('acquired_at')}"
+
+
+@contextlib.contextmanager
+def locked(directory, timeout=None):
+    """Hold the lock for `directory` (creating it if needed) for the duration of the block. `timeout` (seconds) replaces
+    the usual wait; 0 tries once."""
+    os.makedirs(directory, exist_ok=True)
+    lock = os.path.join(directory, LOCK_DIR)
+    deadline = time.time() + (lock_timeout() if timeout is None else timeout)
+    while True:
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            owner = lock_owner(lock)
+            if lock_is_stale(lock, owner) and break_lock(lock, owner):
+                continue
+            if time.time() >= deadline:
+                raise AtmError(f"timed out waiting for the lock {lock} (held by {describe_owner(owner)})")
+            time.sleep(LOCK_POLL)
+    # SIGTERM would otherwise end the process without running the cleanup below
+    previous = signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit(128 + signum))
+    try:
+        write_json_atomic(
+            os.path.join(lock, LOCK_OWNER), {"host": socket.gethostname(), "pid": os.getpid(), "acquired_at": now_iso()}
+        )
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+        signal.signal(signal.SIGTERM, previous)
+
+
+def cmd_lock_test(args):
+    """Test hook: hold the task folder's lock for `seconds`, logging to .lock-test.log, so tests can check exclusion."""
+    seconds = args.seconds
+    task_dir = find_paths(os.getcwd())["dir"]
+    log = os.path.join(task_dir, ".lock-test.log")
+    with locked(task_dir):
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"acquire {os.getpid()}\n")
+        time.sleep(seconds)
+        with open(log, "a", encoding="utf-8") as f:
+            f.write(f"release {os.getpid()}\n")
+
+
+# ==== registry.py ====
+# The user's project registry ($ATM_HOME/projects.json): the projects the dashboard server shows.
+#
+# One file per user, guarded by $ATM_HOME/.lock (not by any project's lock, and never taken while holding one), written
+# atomically. A linked git worktree registers its repository's main worktree. Format: docs/multi-project-api.md, 5.1.
+
+REGISTRY_FILE = "projects.json"
+REGISTRY_VERSION = 1
+SEEN_EVERY = 24 * 3600  # seconds between seen_at updates, so the registry isn't rewritten on every command
+
+
+def atm_home():
+    """The user's atm folder: ATM_HOME, else ~/.agentic-task-manager."""
+    return os.path.abspath(os.path.expanduser(os.environ.get("ATM_HOME") or "~/.agentic-task-manager"))
+
+
+def ensure_home(home):
+    """Create the atm folder readable by its owner only: it lists the user's projects and the server's pid and port
+    (docs/security-review.md F18). A folder that exists already keeps its permissions."""
+    os.makedirs(home, mode=0o700, exist_ok=True)
+
+
+# A project id is a key in URLs (#project=<id>, p/<id>/...): letters, digits, '.', '_' and '-'
+PROJECT_ID = re.compile(r"[A-Za-z0-9._-]{1,64}")
+
+
+def unique_id(registry, path, wanted):
+    """The id for the project at `path`: `wanted` unless another project already has it or it isn't a valid id; then
+    one made from the path, so two projects never shadow each other (F18)."""
+    taken = {e.get("id") for e in registry["projects"] if e.get("path") != path}
+    if PROJECT_ID.fullmatch(wanted) and wanted not in taken:
+        return wanted
+    suffix = hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
+    base = wanted if PROJECT_ID.fullmatch(wanted) and len(wanted) <= 56 else "p"
+    return f"{base}-{suffix}"
+
+
+def main_worktree(root):
+    """The main worktree's folder for a project root (itself unless it is a linked git worktree)."""
+    common = git(["rev-parse", "--git-common-dir"], root)
+    if common:
+        common = os.path.normpath(os.path.join(root, common))
+        if os.path.basename(common) == ".git":
+            return os.path.dirname(common)
+    return root
+
+
+def head_branch(git_dir):
+    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
+    try:
+        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
+            head = f.readline().strip()
+    except OSError:
+        return None
+    if head.startswith("ref: "):
+        ref = head[5:]
+        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+    return head[:7] or None
+
+
+def worktrees(root):
+    """The git worktrees of the project whose main worktree is `root`, main first, as `git worktree list` has them:
+    [{path, branch, main}]. Read from the git directory, without running git, so the server can ask on every poll.
+    Linked worktrees whose folder is gone are left out; outside git (or a bare repository) the list is empty."""
+    git_dir = os.path.join(root, ".git")
+    if not os.path.isdir(git_dir):
+        return []
+    found = [{"path": root, "branch": head_branch(git_dir), "main": True}]
+    linked = os.path.join(git_dir, "worktrees")
+    try:
+        names = sorted(os.listdir(linked))
+    except OSError:
+        names = []
+    for name in names:
+        admin = os.path.join(linked, name)
+        try:
+            with open(os.path.join(admin, "gitdir"), encoding="utf-8") as f:
+                path = os.path.dirname(f.readline().strip())  # the worktree's .git file
+        except OSError:
+            continue
+        if path and os.path.isdir(path):
+            found.append({"path": path, "branch": head_branch(admin), "main": False})
+    return found
+
+
+def project_meta(path):
+    """The meta of the project at `path`, or None without a readable tasks.json."""
+    data = read_json(os.path.join(path, TASK_DIR, TASKS_FILE))
+    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+        return None
+    return data.get("meta") if isinstance(data.get("meta"), dict) else {}
+
+
+def project_id(meta, path):
+    """meta.id, else "p" and 7 hex characters of the path's SHA-1 (stable until meta.id is set)."""
+    if isinstance(meta.get("id"), str) and meta["id"]:
+        return meta["id"]
+    return "p" + hashlib.sha1(path.encode("utf-8")).hexdigest()[:7]
+
+
+def project_name(meta, path):
+    return meta.get("project") if isinstance(meta.get("project"), str) and meta["project"] else os.path.basename(path)
+
+
+def listed(meta):
+    dashboard = meta.get("dashboard")
+    return not (isinstance(dashboard, dict) and dashboard.get("listed") is False)
+
+
+def is_missing(entry):
+    return project_meta(entry["path"]) is None
+
+
+def empty_registry():
+    return {"version": REGISTRY_VERSION, "projects": []}
+
+
+def read_registry(home):
+    """(registry, damaged): an unreadable projects.json is moved aside to projects.json.damaged-<time> (its path is
+    returned as `damaged`) and replaced by an empty registry. Call it holding the registry lock."""
+    path = os.path.join(home, REGISTRY_FILE)
+    if not os.path.exists(path):
+        return empty_registry(), None
+    data = read_json(path)
+    entries = data.get("projects") if isinstance(data, dict) else None
+    if isinstance(entries, list) and all(isinstance(e, dict) and isinstance(e.get("path"), str) for e in entries):
+        return data, None
+    damaged = f"{path}.damaged-{now().strftime('%Y%m%dT%H%M%SZ')}"
+    os.replace(path, damaged)
+    return empty_registry(), damaged
+
+
+def write_registry(home, registry):
+    write_json_atomic(os.path.join(home, REGISTRY_FILE), registry)
+
+
+def find_entry(registry, path):
+    return next((e for e in registry["projects"] if e["path"] == path), None)
+
+
+def entry_for(registry, path, meta, stamp):
+    return {
+        "id": unique_id(registry, path, project_id(meta, path)),
+        "name": project_name(meta, path),
+        "path": path,
+        "added_at": stamp,
+        "seen_at": stamp,
+    }
+
+
+def seen_long_ago(entry):
+    """True when the entry's seen_at is a day old (or unreadable): time to refresh it."""
+    try:
+        return (now() - parse_iso(entry.get("seen_at"))).total_seconds() >= SEEN_EVERY
+    except (TypeError, ValueError):
+        return True
+
+
+def update_entry(registry, path, meta):
+    """Add, refresh or (when the project opted out) remove the entry for `path`. Returns what happened: "added",
+    "updated", "unchanged", "removed" or "unlisted"."""
+    entry = find_entry(registry, path)
+    if not listed(meta):
+        if entry:
+            registry["projects"].remove(entry)
+            return "removed"
+        return "unlisted"
+    stamp = now_iso()
+    if entry is None:
+        registry["projects"].append(entry_for(registry, path, meta, stamp))
+        return "added"
+    fresh = {"id": unique_id(registry, path, project_id(meta, path)), "name": project_name(meta, path)}
+    changed = any(entry.get(k) != v for k, v in fresh.items())
+    if not (changed or seen_long_ago(entry)):
+        return "unchanged"
+    entry.update(fresh)
+    entry["seen_at"] = stamp
+    return "updated"
+
+
+def register(paths, wait=True):
+    """Register the project of `paths` (its main worktree). With wait=False the registry lock is tried once and the
+    project is skipped if the lock is taken (the plugin's hook must never wait). Returns update_entry's result,
+    "busy" when skipped, or None when the project has no tasks.json."""
+    path = main_worktree(paths["root"])
+    meta = project_meta(path)
+    if meta is None:
+        meta = project_meta(paths["root"])
+    if meta is None:
+        return None
+    home = atm_home()
+    ensure_home(home)
+    try:
+        with locked(home, timeout=None if wait else 0):
+            registry, _ = read_registry(home)
+            result = update_entry(registry, path, meta)
+            if result not in ("unchanged", "unlisted"):
+                write_registry(home, registry)
+            return result
+    except AtmError:
+        if wait:
+            raise
+        return "busy"
+
+
+def register_if_needed(paths):
+    """The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
+    waiting for the lock) only when the project isn't listed yet or was last seen a day ago."""
+    path = main_worktree(paths["root"])
+    registry = read_json(os.path.join(atm_home(), REGISTRY_FILE))
+    entries = registry.get("projects") if isinstance(registry, dict) else None
+    entry = next((e for e in entries or [] if isinstance(e, dict) and e.get("path") == path), None)
+    if entry is not None and not seen_long_ago(entry):
+        return "unchanged"
+    return register(paths, wait=False)
+
+
+def resolve_project(target):
+    """The main worktree folder of the project at `target` (a path), and its meta; refuses a folder without tasks."""
+    folder = os.path.abspath(os.path.expanduser(target or os.getcwd()))
+    if not os.path.isdir(folder):
+        raise AtmError(f"{target}: not a directory", 2)
+    paths = find_paths(folder)
+    path = main_worktree(paths["root"])
+    meta = project_meta(path) or project_meta(paths["root"])
+    if meta is None:
+        raise AtmError(f"no tasks.json in {os.path.join(path, TASK_DIR)}. Run /atm:create-tasks there first.")
+    return path, meta
+
+
+def describe_entry(entry):
+    return f"{entry['id']}  {entry['name']}  {entry['path']}"
+
+
+def damaged_notice(damaged):
+    return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
+
+
+def projects_list(home, as_json):
+    ensure_home(home)
+    with locked(home):
+        registry, damaged = read_registry(home)
+        if damaged:
+            write_registry(home, registry)
+    entries = [{**e, "missing": is_missing(e)} for e in registry["projects"]]
+    if as_json:
+        out(to_json({"projects": entries, "damaged": damaged}))
+        return
+    if damaged:
+        out(damaged_notice(damaged))
+    if not entries:
+        out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
+    for e in entries:
+        out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
+
+
+def projects_add(home, target, as_json):
+    path, meta = resolve_project(target)
+    if not listed(meta):
+        raise AtmError(f"{path} opts out of the dashboard (meta.dashboard.listed is false)")
+    ensure_home(home)
+    with locked(home):
+        registry, damaged = read_registry(home)
+        result = update_entry(registry, path, meta)
+        write_registry(home, registry)
+    entry = find_entry(registry, path)
+    if as_json:
+        out(to_json({"result": result, "project": entry, "damaged": damaged}))
+        return
+    if damaged:
+        out(damaged_notice(damaged))
+    out(f"{'Added' if result == 'added' else 'Already registered'}: {describe_entry(entry)}")
+
+
+def projects_remove(home, target, as_json):
+    if not target:
+        raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
+    candidates = {target, os.path.abspath(os.path.expanduser(target))}
+    if os.path.isdir(target):
+        candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
+    ensure_home(home)
+    with locked(home):
+        registry, damaged = read_registry(home)
+        entry = next((e for e in registry["projects"] if e.get("id") in candidates or e["path"] in candidates), None)
+        if entry:
+            registry["projects"].remove(entry)
+        if entry or damaged:
+            write_registry(home, registry)
+    if entry is None:
+        raise AtmError(f"no registered project {target} (see `atm projects`)")
+    if as_json:
+        out(to_json({"removed": entry, "damaged": damaged}))
+        return
+    out(f"Removed: {describe_entry(entry)}")
+
+
+def projects_prune(home, as_json):
+    ensure_home(home)
+    with locked(home):
+        registry, damaged = read_registry(home)
+        gone = [e for e in registry["projects"] if is_missing(e)]
+        registry["projects"] = [e for e in registry["projects"] if e not in gone]
+        if gone or damaged:
+            write_registry(home, registry)
+    if as_json:
+        out(to_json({"removed": gone, "damaged": damaged}))
+        return
+    if damaged:
+        out(damaged_notice(damaged))
+    if not gone:
+        out("Nothing to prune: every registered project is there.")
+    for e in gone:
+        out(f"Removed: {describe_entry(e)}")
+
+
+def cmd_projects(args):
+    home = atm_home()
+    if args.action == "add":
+        projects_add(home, args.target, args.json)
+    elif args.action == "remove":
+        projects_remove(home, args.target, args.json)
+    elif args.action == "prune":
+        projects_prune(home, args.json)
+    else:
+        if args.target:
+            raise AtmError(f"unexpected argument '{args.target}'", 2)
+        projects_list(home, args.json)
 
 
 # ==== repository.py ====
@@ -3687,27 +3703,47 @@ def run_git(args, root):
     return result.stdout.strip()
 
 
+def ask_git(args, root):  # not `git`: the store has its own (db/jsongit/gitrun.py), and names are unique
+    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
 class GitVcs:
     def __init__(self, root):
         self.root = root
 
     def in_repository(self):
-        return git(["rev-parse", "--git-dir"], self.root) is not None
+        return ask_git(["rev-parse", "--git-dir"], self.root) is not None
 
     def branch(self):
         """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
         git; None outside git."""
-        git_dir = os.path.join(self.root, ".git")
-        return head_branch(git_dir) if os.path.isdir(git_dir) else None
+        try:
+            with open(os.path.join(self.root, ".git", "HEAD"), encoding="utf-8") as f:
+                head = f.readline().strip()
+        except OSError:
+            return None
+        if head.startswith("ref: "):
+            ref = head[5:]
+            return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+        return head[:7] or None
+
+    def user_name(self):
+        """Who git says the user is (`user.name`), for naming the actor; None when it isn't set."""
+        return ask_git(["config", "user.name"], self.root)
 
     def default_base(self):
         """The remote's default branch (origin/HEAD), else main."""
-        ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
+        ref = ask_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
         return ref.split("/", 1)[1] if ref and "/" in ref else "main"
 
     def remote_url(self):
         """The origin remote's address, as git has it (atm repository turns it into a web address)."""
-        return git(["remote", "get-url", "origin"], self.root)
+        return ask_git(["remote", "get-url", "origin"], self.root)
 
     def paths(self, files, cwd):
         """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
@@ -3725,8 +3761,8 @@ class GitVcs:
             # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
             if (
                 not os.path.exists(full)
-                and git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
-                and git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
+                and ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
+                and ask_git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
             ):
                 raise NotFound(f"{name}: no such file, and git doesn't track it")
             if relative not in picked:
@@ -3740,7 +3776,7 @@ class GitVcs:
         to_add = [
             f
             for f in files
-            if git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
+            if ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
             or os.path.lexists(os.path.join(self.root, f))
         ]
         if to_add:
@@ -3750,11 +3786,11 @@ class GitVcs:
 
     def resolve(self, rev):
         """A revision's SHA, or None if there is no such commit."""
-        return git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
+        return ask_git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
 
     def in_history(self, sha):
         """Whether the commit is an ancestor of HEAD (on the current branch)."""
-        return git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
+        return ask_git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
 
     def message(self, sha):
         return run_git(["log", "-1", "--format=%B", sha], self.root)
@@ -5266,7 +5302,7 @@ def check_project(project, files=False):
 # atm-lib: the project's components (docs/sprints-and-releases-design.md §2, SR-2.7; docs/layered-architecture.md
 # §5.1): list them, define one, change one; moving a label onto a component, or giving it to the tasks its globs match
 # (T-324), changes the archive's tasks too, in the same store change. The rules (which files a component has, the IDs a
-# task may name) are components.py's, from before the layers.
+# task may name) are common's (common/components.py).
 
 def _tasks(*documents):
     return [t for data in documents for t in data["tasks"] if isinstance(t, dict)]
@@ -7880,6 +7916,16 @@ def cmd_claims(args):
 # ==== cli/edit.py ====
 # `atm add`, `atm edit` and `atm check`, through atm-lib (docs/layered-architecture.md §9, step 10). The files these
 # options name (--json-file, --description-file) are read here: atm-lib takes their content.
+
+def suggestion_line(vocab, task):
+    """`atm add` / `edit --add-file` (SR-2.7): the components the task's files suggest that it doesn't have yet, as a
+    line with the command that sets them; None when there are none (or the project has no components)."""
+    missing = [c for c in suggest_components(vocab, task.get("files") or []) if c not in (task.get("components") or [])]
+    if not missing:
+        return None
+    adds = " ".join(f"--add-component {c}" for c in missing)
+    return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm edit {task['id']} {adds})"
+
 
 def read_entries(path):
     """The tasks of an `atm add --json-file`: a list of task objects, or {"tasks": [...]}."""

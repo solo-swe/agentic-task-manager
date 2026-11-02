@@ -4,9 +4,10 @@ dashboard uses to link commits and pull requests. Git remotes are turned into th
 import os
 import re
 
-from .core import AtmError, git, out, to_json, write_json_atomic
+from .common.core import AtmError, out, to_json, write_json_atomic
+from .db.jsongit.gitrun import git
 from .lock import locked
-from .model import archive_path, load_archive, load_tasks
+from .db.jsongit.files import archive_path, load_archive, load_tasks
 from .paths import find_paths
 
 SCP_REMOTE = re.compile(r"^(?:[\w.-]+@)?([\w.-]+):(?!//)(.+)$")  # git@github.com:o/r.git

@@ -1,15 +1,15 @@
-"""Loading tasks.json, the project's vocabularies, looking tasks up, and the status transitions themselves.
+"""The rules of task data: the project's vocabularies, looking tasks up, and the status transitions themselves.
+Reading and writing the files is the store's (db/jsongit/files.py).
 
 Every rule is written against a status's kind, never its name (docs/v4/data-model.md §3): a project may name its own
 statuses in meta.statuses, each with one of the six kinds below.
 """
 
-import os
 import re
 from datetime import timedelta
 
-from .common.vocabularies import DEFAULT_PRIORITIES, DEFAULT_PRIORITY, DEFAULT_STATUSES, DEFAULT_TYPES, KINDS
-from .core import AtmError, now, now_iso, parse_iso, read_json
+from .vocabularies import DEFAULT_PRIORITIES, DEFAULT_PRIORITY, DEFAULT_STATUSES, DEFAULT_TYPES, KINDS
+from .core import AtmError, now, now_iso, parse_iso
 
 # The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
@@ -385,25 +385,19 @@ def status_for(vocab, kind, chosen=None):
     return chosen
 
 
-ARCHIVE_FILE = "tasks-archive.json"
-# The archive of the project this command works on, read only when needed (a dependency not in tasks.json, show of
-# an archived task): one atm process works on one project
-_archive = {"paths": None, "data": None}
+# Where the rules look up an archived task (a dependency not in tasks.json, show of an archived task): the store
+# that loaded the task data sets it (use_archive), read only when needed; one atm process works on one project
+_archive = {"lookup": None}
 
 
-def archive_path(paths):
-    return os.path.join(paths["dir"], ARCHIVE_FILE)
+def use_archive(lookup):
+    """Look archived tasks up with `lookup(task_id)` (task or None) from now on; None: there is no archive."""
+    _archive["lookup"] = lookup
 
 
-def load_archive(paths):
-    """tasks-archive.json, or an empty archive when there is none (DM-1.2)."""
-    p = archive_path(paths)
-    if not os.path.isfile(p):
-        return {"meta": {}, "tasks": []}
-    data = read_json(p)
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{p} is not a valid archive (expected an object with a 'tasks' list)")
-    return data
+def archived_task(task_id):
+    """The archived task with this ID, if the archive has it."""
+    return _archive["lookup"](task_id) if _archive["lookup"] else None
 
 
 ARCHIVE_DEFAULTS = {"threshold_kb": 1024, "threshold_tasks": 500, "keep_days": 14, "auto": True}
@@ -459,14 +453,9 @@ def format_size(size):
     return f"{size / 1048576:.1f} MB" if size >= 1048576 else f"{size // 1024} KB"
 
 
-def archive_hint(paths, data):
-    """The suggestion to archive (CLI-5.1), or None: when tasks.json is over meta.archive.threshold_kb, or has more
-    archivable tasks than threshold_tasks, and there is something to move."""
-    return archive_hint_for(data, os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0)
-
-
 def archive_hint_for(data, size):
-    """archive_hint, for task data `size` bytes big (atm-lib has the size from the store)."""
+    """The suggestion to archive (CLI-5.1), or None: when the task data (`size` bytes) is over
+    meta.archive.threshold_kb, or has more archivable tasks than threshold_tasks, and there is something to move."""
     settings = archive_settings(data)
     movable = len(archivable(data))
     if not movable or (size <= settings["threshold_kb"] * 1024 and movable <= settings["threshold_tasks"]):
@@ -483,40 +472,6 @@ def archive_hint_for(data, size):
         "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm archive` would move "
         f"{movable} of them to tasks-archive.json.",
     }
-
-
-def archived_task(task_id):
-    """The archived task with this ID, if the archive has it (the archive is read on the first lookup)."""
-    if _archive["paths"] is None:
-        return None
-    if _archive["data"] is None:
-        _archive["data"] = {t.get("id"): t for t in load_archive(_archive["paths"])["tasks"]}
-    return _archive["data"].get(task_id)
-
-
-def load_tasks(paths):
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
-    vocabulary(data)  # an unusable vocabulary stops every command before anything is written
-    # Agents put task IDs into shell commands: an ID with shell characters stops every command (atm check lists them)
-    for i, task in enumerate(data["tasks"]):
-        # Every command looks tasks up by ID and follows dependencies: a malformed task stops them all with a clear
-        # message instead of a traceback halfway through (docs/security-review.md F12). atm check lists them all.
-        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm check")
-        if not valid_task_id(task["id"]):
-            raise AtmError(
-                f"{paths['tasks']}: the task ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', "
-                "'_' and '-' only): fix it in the file, then run atm check"
-            )
-        deps = task.get("dependencies", [])
-        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
-    _archive["paths"], _archive["data"] = paths, None
-    return data
 
 
 META_KEY = re.compile(r"meta\.(\w+)")
@@ -540,42 +495,6 @@ def tolerant_vocabulary(meta):
                     usable.pop("default_priority", None)  # it names one of them
             else:
                 usable = {}  # nothing to narrow it to: the defaults
-
-
-def load_tasks_tolerant(paths):
-    """tasks.json read as far as it can be, for showing it (the dashboard): what `load_tasks` refuses is kept where it
-    can be, and said. Entries that aren't tasks (no string "id") are left out; a task with an ID atm doesn't allow is
-    kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task read fits
-    the task schema). The data is for reading only. Returns (data, problems): problems as {"file": [...],
-    "tasks": {id: [...]}}, in `atm check`'s words. A file that isn't a task file at all is still an error."""
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        raise AtmError(f"{paths['tasks']} is not a valid task file (expected an object with a 'tasks' list)")
-    problems = {"file": [], "tasks": {}}
-    kept = []
-    for i, task in enumerate(data["tasks"]):
-        if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            problems["file"].append(f"task #{i + 1} isn't a task (an object with an \"id\"): left out")
-            continue
-        own = []
-        if not valid_task_id(task["id"]):
-            own.append(f"the ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', '_' and '-')")
-        deps = task.get("dependencies", [])
-        if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            # Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
-            task["dependencies"] = [d for d in deps if isinstance(d, str)] if isinstance(deps, list) else []
-            own.append("its dependencies aren't a list of task IDs (shown with the IDs that can be read)")
-        if own:
-            problems["tasks"][task["id"]] = own
-        kept.append(task)
-    data["tasks"] = kept
-    # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
-    _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
-    problems["file"] += vocabulary_problems
-    _archive["paths"], _archive["data"] = paths, None
-    return data, problems
 
 
 def find_task(data, task_id, archived=False):

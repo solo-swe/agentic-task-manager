@@ -6,8 +6,8 @@ The options are named as atm's command line names them (title for --name, target
 
 from ..common.errors import Invalid, NotFound
 from ..common.vocabularies import KINDS
-from ..core import parse_iso
-from ..model import DATE, RELEASE_ID, effective_release, find_release, kind_of, vocabulary
+from ..common.core import parse_iso
+from ..common.model import DATE, RELEASE_ID, effective_release, find_release, kind_of, vocabulary
 
 STAGES = ("done", "in_pr", "merged")
 

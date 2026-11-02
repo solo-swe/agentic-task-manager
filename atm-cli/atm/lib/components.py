@@ -1,11 +1,11 @@
 """atm-lib: the project's components (docs/sprints-and-releases-design.md §2, SR-2.7; docs/layered-architecture.md
 §5.1): list them, define one, change one; moving a label onto a component, or giving it to the tasks its globs match
 (T-324), changes the archive's tasks too, in the same store change. The rules (which files a component has, the IDs a
-task may name) are components.py's, from before the layers."""
+task may name) are common's (common/components.py)."""
 
+from ..common.components import matches
 from ..common.errors import Invalid, NotFound
-from ..components import matches
-from ..model import RELEASE_ID, REVIEW_MODES, vocabulary
+from ..common.model import RELEASE_ID, REVIEW_MODES, vocabulary
 
 
 def _tasks(*documents):

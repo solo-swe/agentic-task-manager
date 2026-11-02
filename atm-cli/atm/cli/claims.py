@@ -8,7 +8,7 @@ import sys
 from ..boot.open import open_project
 from ..claims import agent_identity, report_expired, session_identity
 from ..common.errors import AtmFailure, Invalid
-from ..core import AtmExit, format_duration, now, out, parse_iso, to_json
+from ..common.core import AtmExit, format_duration, now, out, parse_iso, to_json
 from ..lib.claims import live_claims, next_task_for, renew_due_claims, renew_lease, selection
 from ..paths import find_paths
 from ..registry import register_if_needed

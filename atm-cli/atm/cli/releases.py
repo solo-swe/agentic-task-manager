@@ -4,7 +4,7 @@ import os
 
 from ..boot.open import open_project
 from ..common.errors import Invalid
-from ..core import out, to_json
+from ..common.core import out, to_json
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
 
 

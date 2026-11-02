@@ -1,14 +1,14 @@
-"""Constants, errors, output, git, time helpers and atomic writes."""
+"""Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: the
+store runs it for the task files (db/jsongit/gitrun.py), the vcs for the code (vcs/git.py)."""
 
 import contextlib
 import json
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone
 
-from .common.errors import AtmFailure
+from .errors import AtmFailure
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -41,25 +41,8 @@ def to_json(value):
     return json.dumps(value, indent=2, ensure_ascii=False)
 
 
-def git(args, cwd):
-    """Run git; return stdout stripped, or None if git fails or isn't installed."""
-    try:
-        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
-    except OSError:
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
 def rel(root, p):
     return os.path.relpath(p, root)
-
-
-def is_tracked(root, p):
-    return git(["ls-files", "--error-unmatch", "--", rel(root, p)], root) is not None
-
-
-def in_git(root):
-    return git(["rev-parse", "--git-dir"], root) is not None
 
 
 def plugin_version():

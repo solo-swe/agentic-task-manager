@@ -18,7 +18,7 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
 
-from ..core import (
+from ..common.core import (
     PLUGIN_ROOT,
     TASK_DIR,
     TASKS_FILE,

@@ -43,10 +43,10 @@ describe('build', () => {
   test('a name defined in two modules is refused', () => {
     const dir = copyOfSources();
     try {
-      fs.appendFileSync(path.join(dir, 'atm-cli/atm/paths.py'), '\n\ndef out(text=""):\n    pass\n');
+      fs.appendFileSync(path.join(dir, 'atm-cli/atm/lib/project.py'), '\n\ndef out(text=""):\n    pass\n');
       const { code, stderr } = runBuild(['--output', path.join(dir, 'atm.py')], path.join(dir, 'atm-cli/build.py'));
       assert.equal(code, 1);
-      assert.match(stderr, /out is defined in both core\.py and paths\.py/);
+      assert.match(stderr, /out is defined in both common\/core\.py and lib\/project\.py/);
     } finally {
       removeDir(dir);
     }
@@ -55,17 +55,20 @@ describe('build', () => {
   test('importing from a later module, or a name a module does not define, is refused', () => {
     const dir = copyOfSources();
     try {
-      const core = path.join(dir, 'atm-cli/atm/core.py');
-      const original = fs.readFileSync(core, 'utf8');
+      const errors = path.join(dir, 'atm-cli/atm/common/errors.py');
+      const original = fs.readFileSync(errors, 'utf8');
       const output = path.join(dir, 'atm.py');
       const build = path.join(dir, 'atm-cli/build.py');
 
-      fs.writeFileSync(core, original + '\nfrom .paths import find_paths\n');
-      assert.match(runBuild(['--output', output], build).stderr, /core\.py imports from paths/);
+      fs.writeFileSync(errors, original + '\nfrom .core import now\n');
+      assert.match(
+        runBuild(['--output', output], build).stderr,
+        /common\/errors\.py imports from common\.core, which isn't an earlier module/,
+      );
 
-      fs.writeFileSync(core, original);
-      fs.appendFileSync(path.join(dir, 'atm-cli/atm/paths.py'), '\nfrom .core import no_such_name\n');
-      assert.match(runBuild(['--output', output], build).stderr, /imports no_such_name from core/);
+      fs.writeFileSync(errors, original);
+      fs.appendFileSync(path.join(dir, 'atm-cli/atm/lib/project.py'), '\nfrom ..common.core import no_such_name\n');
+      assert.match(runBuild(['--output', output], build).stderr, /imports no_such_name from common\.core/);
     } finally {
       removeDir(dir);
     }

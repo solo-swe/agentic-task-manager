@@ -6,9 +6,9 @@ only through the status commands."""
 import os
 import re
 
-from ..components import component_ids, suggest_components
-from ..core import AtmError, now_iso
-from ..model import (
+from ..common.components import component_ids, suggest_components
+from ..common.core import AtmError, now_iso
+from ..common.model import (
     RESOLUTIONS,
     REVIEW_MODES,
     archived_task,

@@ -8,8 +8,8 @@ The commit goes through the project's version control (`project.vcs`); the files
 import re
 
 from ..common.errors import AtmFailure, Invalid, NotFound
-from ..core import now_iso, parse_iso
-from ..model import WORKFLOW_DEFAULTS, WORKFLOW_TYPES, effective_release, find_task, kind_of, touch, vocabulary, workflow_of
+from ..common.core import now_iso, parse_iso
+from ..common.model import WORKFLOW_DEFAULTS, WORKFLOW_TYPES, effective_release, find_task, kind_of, touch, vocabulary, workflow_of
 
 HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
 CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)

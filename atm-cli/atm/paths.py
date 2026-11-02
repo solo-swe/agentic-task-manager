@@ -2,7 +2,8 @@
 
 import os
 
-from .core import DASHBOARD_FILE, TASK_DIR, TASKS_FILE, AtmError, git, out, to_json
+from .common.core import DASHBOARD_FILE, TASK_DIR, TASKS_FILE, AtmError, out, to_json
+from .db.jsongit.gitrun import git
 
 LEGACY_DIRS = ["docs", "."]
 # The files atm reads and writes in the task folder; a repository can commit any of them as a symlink

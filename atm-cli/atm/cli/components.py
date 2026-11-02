@@ -4,7 +4,7 @@ import os
 
 from ..boot.open import open_project
 from ..common.errors import Invalid
-from ..core import out, to_json
+from ..common.core import out, to_json
 from ..lib.components import add_component, edit_component, list_components
 
 

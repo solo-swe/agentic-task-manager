@@ -7,8 +7,8 @@ move_to, force): the CLI passes its parsed arguments; any object with those attr
 
 from ..common.errors import Invalid, NotFound
 from ..common.vocabularies import KINDS
-from ..core import now_iso
-from ..model import (
+from ..common.core import now_iso
+from ..common.model import (
     DATE,
     MAX_SPRINT_NAME,
     find_sprint,
@@ -19,7 +19,7 @@ from ..model import (
     touch,
     vocabulary,
 )
-from ..sprint_names import generate_sprint_name
+from ..common.sprint_names import generate_sprint_name
 from .edit import open_sprint
 
 

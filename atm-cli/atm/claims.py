@@ -12,11 +12,11 @@ import subprocess
 import sys
 from datetime import timedelta
 
-from .core import (
+from .db.jsongit.gitrun import git
+from .common.core import (
     AtmError,
     AtmExit,
     format_duration,
-    git,
     now,
     now_iso,
     out,
@@ -26,14 +26,14 @@ from .core import (
     write_json_atomic,
 )
 from .lock import locked
-from .model import (
+from .db.jsongit.files import load_tasks
+from .common.model import (
     REWORK_STATES,
     add_note,
     back_to_todo,
     change_status,
     find_sprint,
     kind_of,
-    load_tasks,
     natural_key,
     priority_rank,
     unfinished_dependencies,

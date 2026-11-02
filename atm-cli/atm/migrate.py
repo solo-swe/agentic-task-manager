@@ -7,13 +7,11 @@ import re
 import signal
 
 from .claims import CLAIMS_SNAPSHOT, read_store, write_claims_snapshot
-from .core import (
+from .db.jsongit.gitrun import git, in_git, is_tracked
+from .common.core import (
     DASHBOARD_FILE,
     PLUGIN_ROOT,
     AtmError,
-    git,
-    in_git,
-    is_tracked,
     now_iso,
     out,
     read_json,
@@ -24,7 +22,8 @@ from .core import (
 )
 from .lock import locked
 from .merge import ensure_merge_driver
-from .model import MAX_SPRINT_NAME, archive_hint, archive_path, kind_of, load_archive, load_tasks, vocabulary
+from .common.model import MAX_SPRINT_NAME, kind_of, vocabulary
+from .db.jsongit.files import archive_hint, archive_path, load_archive, load_tasks
 from .paths import find_paths
 from .registry import register
 

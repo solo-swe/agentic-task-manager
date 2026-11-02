@@ -2,7 +2,7 @@
 
 from ..common.fields import priority_of
 from ..lib.tasks import view_task
-from ..model import archived_task, vocabulary
+from ..common.model import archived_task, vocabulary
 
 
 def list_lines(vocab, tasks):

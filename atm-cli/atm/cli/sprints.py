@@ -5,7 +5,7 @@ import os
 from ..boot.open import open_project
 from ..claims import agent_identity
 from ..common.errors import Invalid
-from ..core import out, to_json
+from ..common.core import out, to_json
 from ..lib.query import summary
 from ..lib.sprints import (
     add_sprint,

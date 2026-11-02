@@ -8,11 +8,11 @@ import hashlib
 import os
 import re
 
-from .core import (
+from .db.jsongit.gitrun import git
+from .common.core import (
     TASK_DIR,
     TASKS_FILE,
     AtmError,
-    git,
     now,
     now_iso,
     out,

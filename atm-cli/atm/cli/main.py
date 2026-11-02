@@ -9,8 +9,8 @@ import os
 import sys
 
 from ..common.errors import AtmFailure
-from ..core import AtmError, AtmExit, out, plugin_version, to_json
-from ..model import REVIEW_MODES
+from ..common.core import AtmError, AtmExit, out, plugin_version, to_json
+from ..common.model import REVIEW_MODES
 from ..lock import cmd_lock_test
 from ..merge import cmd_init, cmd_merge_driver
 from ..migrate import cmd_migrate

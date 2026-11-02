@@ -6,9 +6,11 @@ import json
 import os
 
 from ...claims import locked_with_claims, read_store, write_store
-from ...core import AtmError, git, read_json, to_json, write_json_atomic, write_text_atomic
+from ...common.core import AtmError, read_json, to_json, write_json_atomic, write_text_atomic
+from .gitrun import git
 from ...merge import ensure_archive_merge
-from ...model import archive_path, archived_task, load_archive, load_tasks, load_tasks_tolerant, vocabulary
+from ...common.model import archived_task, vocabulary
+from .files import archive_path, load_archive, load_tasks, load_tasks_tolerant
 from ..working import Working
 
 
