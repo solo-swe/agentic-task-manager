@@ -17264,9 +17264,9 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T05:44:10Z",
+      "updated_at": "2026-11-02T05:48:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -17278,7 +17278,15 @@
         "dashboard",
         "docs"
       ],
-      "with": "user"
+      "with": "user",
+      "notes": [
+        {
+          "at": "2026-11-02T05:48:55Z",
+          "kind": "note",
+          "text": "T-334 moved the tabs up 26px on every page (`.topbar`): most visual baselines are now stale, on purpose; regenerate them here or in T-344",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
