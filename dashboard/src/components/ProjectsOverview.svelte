@@ -122,7 +122,8 @@
           id="active-projects-only"
           checked={dashboard.overviewActiveOnly}
           onchange={(e) => dashboard.setOverviewActiveOnly(e.currentTarget.checked)}
-        /> Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
+        />
+        Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
       >
     {/if}
     {#if tab === 'board' && noSprint.length}

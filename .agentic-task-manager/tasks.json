@@ -16745,7 +16745,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T06:37:49Z",
+      "updated_at": "2026-11-02T06:42:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16764,7 +16764,7 @@
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T06:30:28Z",
       "started_by": "claude:b7be7288",
-      "commit": "3f6a94acc14db7125f1718d9e173f9d38adb69e3",
+      "commit": "ee02dedab52edbdbe7c5f7dc015f23ca443c8f3b",
       "completed_at": "2026-11-02T06:37:49Z",
       "completed_by": "claude:b7be7288",
       "notes": [
