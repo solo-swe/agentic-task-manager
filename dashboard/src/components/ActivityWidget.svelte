@@ -7,6 +7,7 @@
     periodPhrase,
     PRESET_BUCKET_MS,
     rangeLabel,
+    rangeAxis,
     rangeWindow,
     sparklineTitle,
     STEPPED_PRESETS,
@@ -68,7 +69,14 @@
   const detail = $derived(
     range.preset === 'all'
       ? series
-      : activitySeries(charted, period, dashboard.loadedAt, vocab, PRESET_BUCKET_MS[range.preset]),
+      : // The whole period on the time axis (T-350): what is still to come stays empty
+        activitySeries(
+          charted,
+          rangeAxis(range, dashboard.loadedAt),
+          dashboard.loadedAt,
+          vocab,
+          PRESET_BUCKET_MS[range.preset],
+        ),
   );
   const phrase = $derived(periodPhrase(range, dashboard.loadedAt));
   // Where the time went in the period (timeuse.ts, shared with the Progress tab), and who works now: from the live

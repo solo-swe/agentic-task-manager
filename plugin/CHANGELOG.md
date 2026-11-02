@@ -69,6 +69,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **The Activity popup's periods and hover** (T-350): a period still running (Today, This week, This month) spans
+  all of it on the charts' time axis, what's to come empty (`rangeAxis`): on a Monday, This week was one bar across
+  the whole chart. The hover's tooltip sits beside the pointer, on the side with room, inside the popup (it was
+  offset by half a bar's width, so a wide bar pushed it out), lists at most five tasks, and keeps showing when the
+  pointer moves straight from one chart to another.
 - **Scrolling honours “reduce motion”** (T-345): the detail panel's paging and sections, dependency links, Markdown
   anchors and scroll hints jump at once when the system asks to reduce motion (`scrollBehavior`), rather than glide.
   For development: screenshots have Linux baselines only, made in Docker (`npm run test:e2e:visual[:update]`), of

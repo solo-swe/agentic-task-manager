@@ -849,9 +849,9 @@ h1 {
   height: 10px;
   border-radius: 2px;
 }
+/* Placed beside the pointer by ActivityDeepDive (T-350) */
 .deep-dive-tooltip {
   position: absolute;
-  top: 40px;
   z-index: 3;
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
   background: var(--surface2);

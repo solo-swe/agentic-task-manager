@@ -8,6 +8,7 @@ import {
   progressBreakdown,
   periodPhrase,
   PRESET_BUCKET_MS,
+  rangeAxis,
   rangeLabel,
   rangeWindow,
   sparklineTitle,
@@ -276,6 +277,38 @@ describe('rangeWindow and activity in a period', () => {
     expect(rangeWindow({ preset: 'all' }, now)).toBeNull();
     expect(rangeWindow({ preset: 'custom', from: 1, to: 5 }, now)).toEqual({ start: 1, end: 5 });
     expect(rangeWindow({ preset: 'custom', from: 5, to: 1 }, now)).toBeNull();
+  });
+
+  it('rangeAxis: a running period spans all of it, to come included; the others are their window (T-350)', () => {
+    expect(rangeAxis({ preset: 'day' }, now)).toEqual({
+      start: new Date(2026, 3, 1).getTime(),
+      end: new Date(2026, 3, 2).getTime(),
+    });
+    expect(rangeAxis({ preset: 'week' }, now)).toEqual({
+      start: new Date(2026, 2, 30).getTime(),
+      end: new Date(2026, 3, 6).getTime(),
+    });
+    expect(rangeAxis({ preset: 'month' }, now)!.end).toBe(new Date(2026, 4, 1).getTime());
+    expect(rangeAxis({ preset: 'hour' }, now)).toEqual(rangeWindow({ preset: 'hour' }, now));
+    expect(rangeAxis({ preset: 'week', offset: -1 }, now)).toEqual(rangeWindow({ preset: 'week', offset: -1 }, now));
+    expect(rangeAxis({ preset: 'all' }, now)).toBeNull();
+  });
+
+  it('a running week on its axis: a bucket per day of it, the days to come empty (T-350)', () => {
+    const t = (d: number, h: number) => new Date(2026, 3, d, h).toISOString();
+    const tasks = [
+      { id: 'A', name: 'A', type: 'feature', status: 'done', started_at: t(1, 9), completed_at: t(1, 10) },
+      { id: 'B', name: 'B', type: 'feature', status: 'done', started_at: t(1, 11), completed_at: t(1, 12) },
+    ] as Task[];
+    const week = activitySeries(tasks, rangeAxis({ preset: 'week' }, now), now, undefined, PRESET_BUCKET_MS.week)!;
+    expect(week.buckets).toHaveLength(7);
+    expect(week.buckets.map((b) => b.completed.length)).toEqual([0, 0, 1 + 1, 0, 0, 0, 0]);
+    expect(week.totalCompleted).toBe(2);
+    // No idle time in the future: idle only up to now
+    expect(week.idle.every((g) => g.end <= now)).toBe(true);
+    const day = activitySeries(tasks, rangeAxis({ preset: 'day' }, now), now, undefined, PRESET_BUCKET_MS.day)!;
+    expect(day.buckets).toHaveLength(24);
+    expect(day.buckets.filter((b) => b.completed.length).map((b) => new Date(b.start).getHours())).toEqual([10, 12]);
   });
 
   it('steps back whole days, weeks and months, with readable labels', () => {

@@ -17694,7 +17694,7 @@
       "description": "The Activity popup (a project's title bar, and the overview's, T-328) has UI issues, found by Hakan:\n\n- **Wrong values per period:** with *Hour*, *Day* or *Week* (and ‹ › to step back), the charts show values that don't match the period: completions, who was working, time per task. Find which (the buckets, the period window, the archive not loaded for an older period, the overview's project split) and fix it.\n- **The hover tooltip runs outside the pane:** its list of tasks goes past the popup's edge (and now the popup scrolls inside, T-328). Keep it inside: cap the list (\"+ N more\") and place it where it fits.\n\nReproduce both with Hakan on the dev server first.\n\n## Tests\nThe gaps that let these through: unit tests for `activitySeries` per preset and offset (the buckets' start, end and counts against a fixture with known times) in `insights.test.ts`; an e2e that steps through Hour, Day and Week and checks the charts' totals and the period label, and one that hovers a busy bucket and checks the tooltip stays inside `#activity-panel` (`widgets.spec.ts`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/insights.ts",
@@ -17704,9 +17704,9 @@
         "dashboard/tests/e2e/widgets.spec.ts"
       ],
       "created_at": "2026-11-02T08:39:41Z",
-      "updated_at": "2026-11-02T08:39:41Z",
+      "updated_at": "2026-11-02T08:50:52Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -17717,7 +17717,9 @@
       "components": [
         "dashboard"
       ],
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-02T08:50:52Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

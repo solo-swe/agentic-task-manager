@@ -96,13 +96,34 @@
   const pct = (v: number) => `${Math.round(v * 100)}%`;
 
   let hover = $state<number | null>(null);
+  // Where the pointer is in the charts' area (T-350): the tooltip goes beside it, on the side with room, so it stays
+  // inside the popup whatever the bars' width (a single bar across the chart pushed it out)
+  let area = $state<HTMLElement>();
+  let pointer = $state({ x: 0, y: 0, w: 1, h: 1 });
   function onMove(e: PointerEvent) {
     const r = (e.currentTarget as SVGElement).getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
     const i = Math.floor((px - PAD_L) / slot);
     hover = i >= 0 && i < n ? i : null;
+    const c = area!.getBoundingClientRect();
+    pointer = { x: e.clientX - c.left, y: e.clientY - c.top, w: c.width, h: c.height };
+  }
+  // Leaving a chart for another: keep the hover, whose move the browser may have delivered before this leave (T-350)
+  function onLeave(e: PointerEvent) {
+    const to = e.relatedTarget;
+    if (to instanceof Element && to.closest('.dive-chart svg')) return;
+    hover = null;
   }
   const hb = $derived(hover === null ? null : b[hover]);
+  const GAP = 14;
+  const tooltipStyle = $derived(
+    [
+      pointer.x > pointer.w / 2 ? `right:${pointer.w - pointer.x + GAP}px` : `left:${pointer.x + GAP}px`,
+      pointer.y > pointer.h / 2 ? `bottom:${pointer.h - pointer.y + GAP}px` : `top:${pointer.y + GAP}px`,
+    ].join(';'),
+  );
+  /** Tasks named in the tooltip; the rest as "+ N more" */
+  const TOOLTIP_TASKS = 5;
 </script>
 
 <!-- Three cards, one question each (docs/activity-popup-review.md §3.1): what got done, how long tasks take, and where
@@ -170,7 +191,7 @@
   {/each}
 {/snippet}
 
-<div class="deep-dive">
+<div class="deep-dive" bind:this={area}>
   <section class="dive-chart" id="dive-completed">
     <header>
       <h4>
@@ -193,7 +214,7 @@
       </div>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(String(maxDone))}
       {@render idleBands(false)}
       <!-- Stacked by type, most completed type at the bottom; a 1px gap between segments -->
@@ -249,7 +270,7 @@
       </div>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(String(maxBusy))}
       {@render idleBands(true)}
       {#each use?.waiting ?? [] as g (g.start)}
@@ -300,7 +321,7 @@
       </h4>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(formatMinutes(maxCycle))}
       {@render idleBands(false)}
       <!-- The typical time of each kind: agents alone solid, labelled on the right; with you dashed, on the left -->
@@ -363,12 +384,8 @@
   </section>
 
   {#if hb}
-    <!-- On the side away from the cursor, so it never hides the period being read -->
-    {@const at = ((PAD_L + (hover! + 0.5) * slot) / W) * 100}
-    <div
-      class="deep-dive-tooltip"
-      style={hover! >= n / 2 ? `right:calc(${100 - at}% + ${slot / 2 + 8}px)` : `left:calc(${at}% + ${slot / 2 + 8}px)`}
-    >
+    <!-- Beside the pointer, on the side with room (T-350): inside the charts' area, whatever the bars' width -->
+    <div class="deep-dive-tooltip" id="dive-tooltip" style={tooltipStyle}>
       <div class="tooltip-title">{when(hb.start)} – {when(hb.end)}</div>
       <div><strong>{hb.completed.length}</strong> completed</div>
       {#each series.types.filter((t) => hb.byType[t.type]) as t (t.type)}
@@ -396,8 +413,10 @@
           </div>
         {/if}
       {/if}
-      {#each hb.completed.slice(0, 5) as c (c.id)}<div class="tooltip-task">{c.id} {c.name}</div>{/each}
-      {#if hb.completed.length > 5}<div class="tooltip-task">+{hb.completed.length - 5} more</div>{/if}
+      {#each hb.completed.slice(0, TOOLTIP_TASKS) as c (c.id)}<div class="tooltip-task">{c.id} {c.name}</div>{/each}
+      {#if hb.completed.length > TOOLTIP_TASKS}<div class="tooltip-task">
+          +{hb.completed.length - TOOLTIP_TASKS} more
+        </div>{/if}
     </div>
   {/if}
 </div>
