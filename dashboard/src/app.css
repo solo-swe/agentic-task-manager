@@ -456,8 +456,9 @@ h1 {
   position: sticky;
   top: 0;
   z-index: 40;
-  margin: -24px -24px 24px;
-  padding: 24px 24px 14px;
+  /* Little room under the subtitle: the tabs sit right below it (T-334) */
+  margin: -24px -24px 0;
+  padding: 24px 24px 12px;
   background: var(--bg);
   transition:
     padding 0.2s ease,
