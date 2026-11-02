@@ -16833,7 +16833,7 @@
       "description": "The project card on the All projects page still looks off. Give it a clearer typographic hierarchy: a larger project name, the key figure (progress, what needs you) prominent, secondary lines smaller and muted, consistent spacing. Try a couple of variants on the dev server and choose with Hakan (with: user).\n\n## Tests\nProjectCard component tests still pass; the overview screenshots updated.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectCard.svelte",
@@ -16841,7 +16841,7 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T06:01:16Z",
+      "updated_at": "2026-11-02T06:29:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16856,7 +16856,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T06:01:16Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "fbca55386714295d127f16e283e3d93a1b397487",
+      "completed_at": "2026-11-02T06:29:53Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T06:29:53Z",
+          "kind": "outcome",
+          "text": "New project card: depth, title band with sparkline, corner needs-you badge, quiet labels, mini task card on a tilted stack; baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-336",
