@@ -44,7 +44,18 @@
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->
         {#if dashboard.archivedCount}
-          {counts} · <span id="archived-count">{dashboard.archivedCount} archived</span> — loaded from tasks.json
+          <!-- The archive one click away (T-354, found in T-277): it toggles Include archived -->
+          {counts} ·
+          <button
+            class="archived-toggle"
+            id="archived-count"
+            aria-pressed={dashboard.includeArchived}
+            title={dashboard.includeArchived
+              ? 'Hide the archived tasks again'
+              : 'Show the archived tasks too (search, List, Graph, Agents)'}
+            onclick={() => dashboard.setIncludeArchived(!dashboard.includeArchived)}
+            >{dashboard.includeArchived ? 'showing ' : ''}{dashboard.archivedCount} archived</button
+          > — loaded from tasks.json
         {:else}
           {counts} — loaded from tasks.json
         {/if}

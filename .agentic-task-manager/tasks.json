@@ -17871,7 +17871,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T09:48:34Z",
+      "updated_at": "2026-11-02T09:53:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17885,7 +17885,8 @@
         "cli"
       ],
       "started_at": "2026-11-02T09:48:34Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "8e6b62c70dfaee09f6ba643cf1c2ba2082ef71e4"
     },
     {
       "id": "T-354",
@@ -17899,7 +17900,7 @@
       "description": "Found in T-277: archived tasks show only with *Include archived*, at the foot of the Filters popup; nothing points to it.\n\n- The subtitle's *N archived* is a toggle for Include archived (it says *showing N archived* while on).\n- The List, when archived tasks are hidden, ends with *N archived tasks hidden · show*.\n\n## Tests\nAn e2e in `archive.spec.ts` for both; the unit tests of anything new in a lib.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/Header.svelte",
@@ -17907,9 +17908,9 @@
         "dashboard/tests/e2e/archive.spec.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:53:52Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -17919,7 +17920,9 @@
       "sprint": "Overview and polish",
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-02T09:53:52Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-355",

@@ -30,6 +30,31 @@ test.describe('archive', () => {
     expect(tasksServer.archiveRequests).toBe(0);
   });
 
+  test('one click away: the subtitle’s count toggles Include archived; the List’s note shows them (T-354)', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.archive('archive');
+    await openDashboard(page, tasksServer, archivedProject(), { tab: 'list' });
+    // At the end of the List: how many are hidden, and a way to show them
+    const note = page.locator('#list-archived-toggle');
+    await expect(note).toHaveText('3 archived tasks hidden · show');
+    await note.click();
+    await expect(page.locator('.task-card')).toHaveCount(15);
+    await expect(note).toHaveCount(0);
+    await expect(page.locator('#archived-count')).toHaveText('showing 3 archived');
+    await expect(page.locator('#archived-count')).toHaveAttribute('aria-pressed', 'true');
+    // The subtitle's count turns it off, and on again (at the top: scrolled down, the title bar hides the subtitle)
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('#archived-count').click();
+    await expect(page.locator('.task-card')).toHaveCount(12);
+    await expect(page.locator('#archived-count')).toHaveText('3 archived');
+    await page.locator('#archived-count').click();
+    await expect(page.locator('.task-card')).toHaveCount(15);
+    await openFilters(page);
+    await expect(page.locator('#include-archived')).toBeChecked();
+  });
+
   test('"Include archived" loads it: search, lists and the graph show archived tasks', async ({
     page,
     tasksServer,

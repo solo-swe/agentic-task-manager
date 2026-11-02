@@ -1772,11 +1772,26 @@ button.menu-trigger:hover,
   color: var(--text);
   font-size: 12px;
 }
-.list-closed-toggle {
+.list-closed-toggle,
+.list-archived-toggle {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+/* The subtitle's "N archived": a toggle for Include archived (T-354), looking like a link */
+.archived-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.archived-toggle:hover {
+  text-decoration-style: solid;
 }
 
 .task-card {
