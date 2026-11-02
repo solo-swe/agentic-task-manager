@@ -16736,7 +16736,7 @@
       "description": "The All projects page has Projects and Board tabs; add an **Agents** tab that shows every listed project's agents together, like a project's Agents tab (`AgentsTab.svelte`): their timeline and who works on what, each lane or row naming its project.\n\n## Change\n- A third overview tab (`#view=agents` on the overview), remembered like the others (`overviewTab`).\n- Its data from what the overview already loads per project; no new server route unless one is needed (then `docs/multi-project-api.md` and `docs/security-architecture.md` updated).\n- Clicking an agent's task opens it in its project.\n\nRelated: T-328 and T-329 (Activity and Progress on the overview).\n\n## Tests\nUnit tests for any new lib; an e2e test with two projects; a screenshot in `visual.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16745,7 +16745,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T06:30:28Z",
+      "updated_at": "2026-11-02T06:37:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16763,7 +16763,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T06:30:28Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "3f6a94acc14db7125f1718d9e173f9d38adb69e3",
+      "completed_at": "2026-11-02T06:37:49Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T06:37:49Z",
+          "kind": "outcome",
+          "text": "Overview Agents tab: every project’s agents on one timeline (`lib/overview-agents.ts`, existing routes), bars open in their project; screenshot left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-334",
@@ -17293,7 +17304,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T05:48:55Z",
+      "updated_at": "2026-11-02T06:37:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17313,6 +17324,12 @@
           "at": "2026-11-02T05:48:55Z",
           "kind": "note",
           "text": "T-334 moved the tabs up 26px on every page (`.topbar`): most visual baselines are now stale, on purpose; regenerate them here or in T-344",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T06:37:50Z",
+          "kind": "note",
+          "text": "T-333 asks for an overview Agents screenshot in `visual.spec.ts`; not added (no baselines during this sprint): add it with the regenerated baselines",
           "by": "claude:b7be7288"
         }
       ]
