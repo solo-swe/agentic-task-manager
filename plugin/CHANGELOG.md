@@ -30,6 +30,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 will
   embed only recent changelog releases).
 
+### Fixed
+- **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it
+  ran off the left of the window on cards in the first column; `NeedsYouMenu` now shifts it back in when it opens.
+
 ## [0.25.0] - 2026-11-01
 
 ### Fixed

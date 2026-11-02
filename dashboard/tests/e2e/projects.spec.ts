@@ -451,6 +451,33 @@ test.describe('projects', () => {
     await expectDetail(page, 'T-005');
   });
 
+  // T-332: on a card in the first column, the list (lined up with the chip's right edge) ran off the window's left
+  for (const width of [1280, 700, 420]) {
+    test(`the “needs you” list stays inside the window, on the first card and the last (${width}px window)`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const two = summary({ needs_you: { review: 1, blocked_on_user: 1 }, needs_you_tasks: [T4, T5] });
+      tasksServer.addProject('asks', 'v4', 'Asks', two).addProject('more', 'v4', 'More asks', two);
+      await openDashboard(page, tasksServer, 'standard');
+      for (const id of ['asks', 'more']) {
+        const card = page.locator(`.project-card[data-id="${id}"]`);
+        await card.locator('.project-card-need').click();
+        const menu = card.locator('.needs-you-menu');
+        await expect(menu).toBeVisible();
+        await expect
+          .poll(async () => {
+            const box = (await menu.boundingBox())!;
+            return box.x >= 0 && box.x + box.width <= width;
+          })
+          .toBe(true);
+        await page.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
+      }
+    });
+  }
+
   test('Active only hides projects with nothing open and nothing done lately; remembered', async ({
     page,
     tasksServer,

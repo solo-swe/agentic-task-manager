@@ -16585,7 +16585,7 @@
       "description": "Closing a sprint carries every unfinished task on, but a task can still end up open in a closed sprint: `atm reopen` of a task in it, a git merge of a branch that closed the sprint with one that reopened or rejected a task in it, or a hand edit. The default loop works on the active sprint, so it never takes such a task (only `--all` does, before the backlog).\n\n## Change\n- `atm status`: list them under a warning (\"N open tasks in closed sprints\"), with their IDs and sprints; `--json` gets them too.\n- `atm check`: a warning for each.\n- `atm reopen` on a task in a closed sprint: after reopening, say the sprint is closed and suggest `atm move <id> --to backlog` or `--to <the active sprint>`. A suggestion only: the task is not moved.\n- `/atm:plan-sprint` Step 2: show them first as candidates, next to the last closed sprint's carried tasks.\n\nThe dashboard part is done in T-323 (the scope bar's warning, the closed sprint's note, List groups, card badges).\n\n## Tests\nScenarios in `tests/scripts/scenarios/` for `status`, `check` and `reopen` with a task open in a closed sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -16595,7 +16595,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-02T02:06:14Z",
+      "updated_at": "2026-11-02T02:14:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16613,7 +16613,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T02:06:14Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "f1f2d223f6d96a3b0f03d127891d0f8ba64efe22",
+      "completed_at": "2026-11-02T02:14:31Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:14:31Z",
+          "kind": "outcome",
+          "text": "atm status warns (and --json lists open_in_closed_sprints), atm check warns per task, atm reopen in a closed sprint suggests atm move; plan-sprint shows them first. §3.3 review written.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-331",
@@ -16678,7 +16689,7 @@
       "description": "On the All projects page, clicking a project card's \"N need you\" chip opens its popup (`NeedsYouMenu.svelte`) so that its left part is outside the window, for a card near the left edge.\n\n## Change\nKeep the popup inside the viewport: anchor it to the chip's left edge when there is no room to its left (or clamp its position), as the title bar's menus do. Check the cards in the first column and the last, and a narrow window.\n\n## Tests\nAn e2e test that opens the popup on the first card of the overview and checks its bounding box is within the viewport; the needs-you screenshot updated if it changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/NeedsYouMenu.svelte",
@@ -16687,9 +16698,9 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T02:14:32Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
@@ -16699,7 +16710,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T02:14:32Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-333",
@@ -17057,13 +17070,13 @@
     },
     {
       "id": "T-342",
-      "name": "Dashboard: embed only the recent changelog releases",
+      "name": "Dashboard: find what makes the shipped file grow, and trim it",
       "type": "refactor",
       "priority": "P3",
       "labels": [
         "ux"
       ],
-      "description": "The dashboard embeds the whole `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` (`dashboard/build/changelog.ts`, `dashboard/vite.config.ts`), so the shipped single-file page grows by a few KB with every release; in 0.26.0 the size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`) had to go from 500 to 525 KiB (T-341).\n\n## Change\n- Find every place the embedded changelog and What's new are shown (What's new, About, the update notice, …) and how far back each one needs to go.\n- Embed only what they need (e.g. the last few releases), with a link to the full `CHANGELOG.md` on the repository for the rest.\n- Measure the saving and lower `MAX_BYTES` in the guardrail back accordingly, updating its comment.\n\n## Tests\nUpdate the unit tests that read the embedded changelog (`tests/unit/changelog.test.ts`, `tests/unit/release-notes.test.ts`) and the e2e specs of the views that show it.",
+      "description": "In 0.26.0 the shipped single-file dashboard went over its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`), which was raised from 500 to 525 KiB (T-341). This task was created assuming the whole `plugin/CHANGELOG.md` is embedded; it isn't: `dashboard/vite.config.ts` embeds only `plugin/WHATS-NEW.md` (`changelogModule(whatsNew)`, for What's new), and reads `CHANGELOG.md` only for the copyright year (`pluginInfoModule`). What's New adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail back accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -17071,12 +17084,13 @@
       "files": [
         "dashboard/build/changelog.ts",
         "dashboard/vite.config.ts",
-        "dashboard/tests/e2e/guardrails.spec.ts"
+        "dashboard/tests/e2e/guardrails.spec.ts",
+        "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-02T01:29:52Z",
+      "updated_at": "2026-11-02T02:16:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ]

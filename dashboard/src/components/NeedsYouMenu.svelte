@@ -28,6 +28,18 @@
   let root = $state<HTMLElement>();
   let chip = $state<HTMLButtonElement>();
   let list = $state<HTMLElement>();
+  /** How far the list is moved so it stays inside the window (T-332): lined up with the chip, it can run off an edge */
+  let shift = $state(0);
+  const EDGE = 8;
+
+  function keepInView() {
+    shift = 0;
+    const box = list?.getBoundingClientRect();
+    if (!box) return;
+    const width = document.documentElement.clientWidth;
+    if (box.left < EDGE) shift = EDGE - box.left;
+    else if (box.right > width - EDGE) shift = Math.max(EDGE - box.left, width - EDGE - box.right);
+  }
 
   const REASONS = { review: 'in review', blocked: 'blocked on a question', together: 'to do with you' } as const;
   const rows = () => [...(list?.querySelectorAll<HTMLButtonElement>('.needs-you-row') ?? [])];
@@ -43,6 +55,7 @@
     }
     open = true;
     await tick();
+    keepInView();
     rows()[0]?.focus();
   }
 
@@ -105,6 +118,7 @@
         role="menu"
         aria-label="Tasks that need you"
         tabindex="-1"
+        style:translate={shift ? `${shift}px 0` : undefined}
         bind:this={list}
         onkeydown={onKey}
       >
