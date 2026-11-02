@@ -71,3 +71,61 @@ describe('build', () => {
     }
   });
 });
+
+// The layer rule and its ratchet (docs/layered-architecture.md §1, §8, §9): atm-cli/layers.json lists what still
+// breaks the rule, and only shrinks
+describe('layers', () => {
+  function brokenBuild(change) {
+    const dir = copyOfSources();
+    try {
+      change(path.join(dir, 'atm-cli'));
+      return runBuild(['--output', path.join(dir, 'atm.py')], path.join(dir, 'atm-cli/build.py'));
+    } finally {
+      removeDir(dir);
+    }
+  }
+
+  test('atm-lib may not import a store, only its interface', () => {
+    const { code, stderr } = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/lib/tasks.py'), '\nfrom ..db.jsongit.store import JsonGitStore\n'),
+    );
+    assert.equal(code, 1);
+    assert.match(stderr, /lib\/tasks\.py imports from db\.jsongit\.store, which the lib layer may not use/);
+  });
+
+  test('the CLI may not reach the store', () => {
+    const { stderr } = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), '\nfrom ..db.memory import MemoryStore\n'),
+    );
+    assert.match(stderr, /cli\/show\.py imports from db\.memory, which the cli layer may not use/);
+  });
+
+  test('a new import from a module before the layers needs an entry in layers.json', () => {
+    const { stderr } = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/lib/tasks.py'), '\nfrom ..model import kind_of\n'),
+    );
+    assert.match(stderr, /lib\/tasks\.py imports from model/);
+  });
+
+  test('a new module outside the layers is refused', () => {
+    const { stderr } = brokenBuild((cli) => {
+      fs.writeFileSync(path.join(cli, 'atm/extra.py'), '"""An extra module."""\n');
+      const build = path.join(cli, 'build.py');
+      fs.writeFileSync(
+        build,
+        fs.readFileSync(build, 'utf8').replace('    "cli.main",\n', '    "extra",\n    "cli.main",\n'),
+      );
+    });
+    assert.match(stderr, /extra\.py is a new module outside the layers/);
+  });
+
+  test('an entry no longer needed must be removed, so the list only shrinks', () => {
+    const { stderr } = brokenBuild((cli) => {
+      const file = path.join(cli, 'layers.json');
+      const layers = JSON.parse(fs.readFileSync(file, 'utf8'));
+      layers.exceptions['lib.project'] = ['model'];
+      fs.writeFileSync(file, JSON.stringify(layers));
+    });
+    assert.match(stderr, /allows lib\.project to import from model, which it no longer does/);
+  });
+});

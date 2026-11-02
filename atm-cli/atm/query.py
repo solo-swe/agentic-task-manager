@@ -28,19 +28,11 @@ from .model import (
     unfinished_dependencies,
     vocabulary,
 )
+from .cli.render import render_task
+from .common.fields import priority_of, started_by
+from .lib.tasks import view_task
 from .paths import find_paths
 from .registry import head_branch
-
-
-def priority_of(vocab, task):
-    """The task's priority, or the default for a missing or unknown one."""
-    ids = [p["id"] for p in vocab["priorities"]]
-    return task.get("priority") if task.get("priority") in ids else vocab["default_priority"]
-
-
-def started_by(task):
-    """started_by, or `agent` in files written before v4."""
-    return task.get("started_by") or task.get("agent")
 
 
 def summary(vocab, task):
@@ -102,85 +94,11 @@ def ready_tasks(data):
 
 
 def describe_task(data, task):
-    """A task in full, as text: what an agent needs to work on it."""
-    vocab = vocabulary(data)
-    by_id = {t.get("id"): t for t in data["tasks"]}
-    for d in task.get("dependencies") or []:
-        if d not in by_id and archived_task(d):
-            by_id[d] = {**archived_task(d), "status": archived_task(d).get("status") + ", archived"}
-    labels = task.get("labels") or []
-    # A task not in tasks.json is from the archive: say so (found in T-277, T-353)
+    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
+    start): the same text as `atm show`, from atm-lib's view of it."""
+    # A task not in tasks.json is from the archive
     archived = all(t is not task for t in data["tasks"])
-    lines = [
-        f"{task.get('id')}  {task.get('name', '')}",
-        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
-        + (" · archived" if archived else "")
-        + f" · {task.get('type')} · {priority_of(vocab, task)}"
-        + (f" · labels: {', '.join(labels)}" if labels else ""),
-    ]
-    deps = task.get("dependencies") or []
-    if deps:
-        lines.append(
-            "  depends on: " + ", ".join(f"{d} ({by_id[d].get('status')})" if d in by_id else f"{d} (missing)" for d in deps)
-        )
-    # How it ended, when it isn't the default (done, or won't do for a skipped task), and its relations (SR-2.8):
-    # `related` is stored on one side and shown on both
-    if task.get("resolution"):
-        lines.append(
-            f"  resolution: {task['resolution']}" + (f" (of {task['duplicate_of']})" if task.get("duplicate_of") else "")
-        )
-    own = [r for r in task.get("related") or [] if isinstance(r, str)]
-    others = [
-        t.get("id")
-        for t in data["tasks"]
-        if t is not task and task.get("id") in (t.get("related") or []) and t.get("id") not in own
-    ]
-    if own or others:
-        lines.append("  related: " + ", ".join(own + others))
-    duplicates = [t.get("id") for t in data["tasks"] if t.get("duplicate_of") == task.get("id")]
-    if duplicates:
-        lines.append("  duplicated by: " + ", ".join(duplicates))
-    for key in ("requirements", "use_cases", "files"):
-        if task.get(key):
-            lines.append(f"  {key.replace('_', ' ')}: {', '.join(task[key])}")
-    who = []
-    for what, at, by in (
-        ("created", "created_at", task.get("created_by")),
-        ("started", "started_at", started_by(task)),
-        ("review requested", "review_requested_at", None),
-        ("completed", "completed_at", task.get("completed_by")),
-    ):
-        if task.get(at):
-            who.append(f"{what} {task[at]}" + (f" by {by}" if by else ""))
-    if who:
-        lines.append("  " + " · ".join(who))
-    if task.get("commit"):
-        lines.append(f"  commit: {task['commit']}")
-    description = (task.get("description") or "").strip()
-    if description:
-        lines.append("  description:")
-        lines.extend("    " + line for line in description.splitlines())
-    notes = task.get("notes") or []
-    if notes:
-        lines.append("  notes:")
-        for n in notes:
-            lines.append(f"    {n.get('at')} {n.get('kind')}" + (f" ({n['by']})" if n.get("by") else "") + f": {n.get('text')}")
-    elif task.get("last_failure"):
-        failure = task["last_failure"]
-        lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
-    return "\n".join(lines)
-
-
-def cmd_show(args):
-    paths = find_paths(os.getcwd())
-    data = load_tasks(paths)
-    tasks = [find_task(data, task_id, archived=True) for task_id in args.ids]
-    if args.json:
-        # An archived task says so (T-353)
-        live = {id(t) for t in data["tasks"]}
-        out(to_json([t if id(t) in live else {**t, "archived": True} for t in tasks]))
-    else:
-        out("\n\n".join(describe_task(data, t) for t in tasks))
+    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
 
 
 def cmd_list(args):

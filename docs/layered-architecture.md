@@ -90,7 +90,8 @@ flowchart TD
 - the Dashboard depends on the REST API, over HTTP only, and on the generated TS types;
 - the REST API, the CLI and other tools depend on atm-lib;
 - atm-lib depends on the db and vcs **interfaces**, never on an implementation; the implementation is chosen once,
-  when atm starts (the CLI's and the REST API's entry points);
+  when a project is opened, in **boot** (`open_project`), a small layer the CLI and the REST API call and the only
+  one that knows the implementations;
 - the db and vcs implementations depend on their interfaces;
 - every Python layer may use common.
 
@@ -181,7 +182,8 @@ class Store(Protocol):
 
     # Tasks
     def create_tasks(self, drafts: list[TaskDraft]) -> list[Task]: ...  # allocates the IDs (next_id)
-    def get_task(self, id: str) -> Task | None: ...                     # tasks.json, else the archive
+    def get_task(self, id: str) -> Task | None: ...                     # a working task
+    def get_archived_task(self, id: str) -> Task | None: ...            # an archived task
     def list_tasks(self, where: TaskFilter | None = None) -> list[Task]: ...
     def update_task(self, id: str, changes: TaskChanges, expect: Version) -> Task: ...
 
@@ -322,9 +324,13 @@ atm-lib is usable by others, so it is an API with a version:
   which holds the store, the vcs and the actor:
 
 ```python
-project = atm.open_project(path, actor="claude:b7be7288")   # picks the store (JSON-in-git) and the vcs (git)
-atm.tasks.start(project, "T-360")
+project = open_project(path, actor="claude:b7be7288")   # boot: picks the store (JSON-in-git) and the vcs (git)
+start_task(project, "T-360")
 ```
+
+- **names unique across atm:** the build puts every module into one namespace (`plugin/scripts/atm.py`), so a
+  function is `show_tasks`, not `tasks.show`. The tables below group the functions by area; the names in code follow
+  this rule;
 
 - **delivery:** the plugin keeps the one-file `atm.py`, built from the same modules. Other tools import atm-lib from
   the repository's `atm-cli/` for now; a published package can come later. Its public surface is one module
@@ -534,6 +540,7 @@ atm-cli/atm/
   db/            interface.py; jsongit/ (files, lock, merge driver, migrations, claims store); memory/
   vcs/           interface.py; git/
   lib/           atm-lib: tasks, claims, project, sprints, releases, components, archive, code, settings, projects
+  boot/          opening a project: picks the store and the vcs
   cli/           argparse, renderers (text, --json), exit codes
   api/           the REST API: routes, HTTP handling, the launcher
 ```
@@ -541,6 +548,10 @@ atm-cli/atm/
 - `atm-cli/build.py` already refuses an import from a module later in `MODULES`. It gets layers: each module's layer
   is its folder, and an import the rule doesn't allow fails the build (`api` → `lib` yes, `lib` → `db/jsongit` no,
   `lib` → `cli` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names stay unique.
+- **The ratchet** is `atm-cli/layers.json`: the flat modules from before the layers (`legacy`, which may import
+  anything until they move) and, per layered module, the imports that still break the rule (`exceptions`). The build
+  refuses a flat module or a forbidden import that isn't listed, and an entry that is no longer needed, so fixing a
+  violation removes its entry in the same change. Adding an entry is a visible edit in review.
 - The Dashboard gets the same as an ESLint rule: only `src/lib/api/` may call `fetch`; generated types are imported,
   never edited.
 

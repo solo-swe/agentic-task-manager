@@ -18446,13 +18446,13 @@
       "description": "Write a design for splitting atm into clear layers, so each part has one job and dependencies run one way. Design only: no code moves in this task; it ends with the follow-up tasks that carry it out.\n\n## Layers (agreed with Hakan)\n- **Dashboard**: talks to the REST API only.\n- **REST API** and **CLI**: both thin, on top of **atm-lib**; other tools (an MCP server, scripts) may use atm-lib too.\n- **atm-lib**: all business logic; a library others can use.\n- **db**: one interface for data access, so the storage can move to another model later (e.g. a cloud DB); today's JSON files in git are its first implementation.\n- **vcs**: the code's version control (git), apart from git's role as the task store.\n- **common**: the data model and shared rules; the dashboard's TypeScript types are generated from it.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-02T18:34:56Z",
+      "updated_at": "2026-11-02T18:37:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18494,10 +18494,15 @@
           "from": "2026-11-02T18:02:36Z",
           "to": "2026-11-02T18:29:34Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-02T18:34:56Z",
+          "to": "2026-11-02T18:37:37Z"
         }
       ],
       "review_requested_at": "2026-11-02T18:34:56Z",
-      "review_state": "waiting"
+      "completed_at": "2026-11-02T18:37:37Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-361",
@@ -18510,7 +18515,7 @@
       "description": "Step 1 of `docs/layered-architecture.md` §9. Read §1, §3, §5 and §8 first.\n\n## Change\n- Create the layer folders in `atm-cli/atm/` (`common/`, `db/`, `vcs/`, `lib/`, `cli/`, `api/`, §8).\n- Teach `atm-cli/build.py` the layers: a module's layer is its folder; an import the dependency rule (§1) doesn't allow fails the build. The output stays one file, `plugin/scripts/atm.py`, with unique top-level names.\n- **The ratchet:** record today's violations as an allowed list beside `build.py`; a test fails if the list grows or names a violation that no longer exists.\n- `Project` (store, vcs, actor), the `Store` and `Vcs` interfaces (§3.2, §2), with only what `show` needs for now.\n- The JSON-in-git store **wraps today's code** (`load_tasks`, `load_archive`, the lock); nothing is rewritten. An in-memory store, and a contract test harness run against both.\n- First slice: `atm show` goes CLI renderer → `atm-lib` `tasks.show` → store.\n\n## Tests\n- New `tests/lib/` (standard `unittest`) with `tasks.show` on the in-memory store; the contract tests; a test for the ratchet.\n- `npm run test:scripts` and `npm run test:e2e` pass unchanged: `atm show`'s output is identical.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/build.py",
@@ -18520,7 +18525,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:42Z",
+      "updated_at": "2026-11-02T18:37:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18536,7 +18541,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T18:37:08Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-362",

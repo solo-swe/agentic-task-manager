@@ -61,6 +61,12 @@ one runtime requirement; why there is a single implementation is in `docs/helper
 earlier ones, and no two modules may define the same top-level name). The pre-commit hook rebuilds it when `atm-cli/`
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 
+**Layers** (`docs/layered-architecture.md`, being migrated): new code goes in a layer's folder (`common/`, `db/`,
+`vcs/`, `lib/`, `boot/`, `cli/`, `api/`), and the build refuses an import the layer rule forbids. The flat modules
+from before, and the imports that still break the rule, are listed in `atm-cli/layers.json`: fixing one removes its
+entry (the build refuses stale entries). atm-lib's unit tests are in `tests/lib/` (`unittest`, on the in-memory store;
+run by `npm run test:scripts`).
+
 Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `npm run test:scripts`) drive the built atm-cli
 through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of
 `scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
