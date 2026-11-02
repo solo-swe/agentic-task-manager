@@ -17694,7 +17694,7 @@
       "description": "The Activity popup (a project's title bar, and the overview's, T-328) has UI issues, found by Hakan:\n\n- **Wrong values per period:** with *Hour*, *Day* or *Week* (and ‹ › to step back), the charts show values that don't match the period: completions, who was working, time per task. Find which (the buckets, the period window, the archive not loaded for an older period, the overview's project split) and fix it.\n- **The hover tooltip runs outside the pane:** its list of tasks goes past the popup's edge (and now the popup scrolls inside, T-328). Keep it inside: cap the list (\"+ N more\") and place it where it fits.\n\nReproduce both with Hakan on the dev server first.\n\n## Tests\nThe gaps that let these through: unit tests for `activitySeries` per preset and offset (the buckets' start, end and counts against a fixture with known times) in `insights.test.ts`; an e2e that steps through Hour, Day and Week and checks the charts' totals and the period label, and one that hovers a busy bucket and checks the tooltip stays inside `#activity-panel` (`widgets.spec.ts`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/insights.ts",
@@ -17704,7 +17704,7 @@
         "dashboard/tests/e2e/widgets.spec.ts"
       ],
       "created_at": "2026-11-02T08:39:41Z",
-      "updated_at": "2026-11-02T09:12:31Z",
+      "updated_at": "2026-11-02T09:20:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17720,7 +17720,7 @@
       "with": "user",
       "started_at": "2026-11-02T09:12:31Z",
       "started_by": "claude:b7be7288",
-      "commit": "50864e2ca94cb3d359cc79c66b98754b8da1fde2",
+      "commit": "da592ff4b8497070a2faa675ce29674f0d156f58",
       "notes": [
         {
           "at": "2026-11-02T09:07:30Z",
@@ -17733,6 +17733,18 @@
           "kind": "rejection",
           "text": "Near the popup’s bottom edge the tooltip grows the popup (its scroll area), which flickers and relays out",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:14:49Z",
+          "kind": "review",
+          "text": "Changes done: the tooltip is placed against the window (fixed), so near the popup’s bottom it no longer grows the popup and flickers; the e2e checks the popup’s size never changes while hovering, its very bottom included. Same component in a project’s and the overview’s popup.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:20:39Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: running periods span the whole period; the tooltip beside the pointer, against the window (no flicker), in both popups",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -17740,8 +17752,15 @@
           "from": "2026-11-02T09:07:30Z",
           "to": "2026-11-02T09:12:31Z",
           "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T09:14:49Z",
+          "to": "2026-11-02T09:20:39Z"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-02T09:14:49Z",
+      "completed_at": "2026-11-02T09:20:39Z",
+      "completed_by": "claude:b7be7288"
     }
   ]
 }
