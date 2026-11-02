@@ -7,6 +7,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 ## [0.26.0] - 2026-11-01
 
 ### Added
+- **`atm --dir PATH <command>`** (T-351, or `--dir=PATH`): runs any command on the project at PATH, as if started
+  there (relative paths in the command count from PATH), without changing directory first; a missing folder is an
+  error. `atm serve --dir` keeps its own meaning.
 - **Graph auto-fit** (T-341): *Auto* (`#graph-auto-fit`, on by default, saved as `graphAutoFit`) refits the graph
   when the filters, data, Hide/Dim or panel size change; panning or zooming turns it off.
 - **Fit All or Matches** (T-341): `#graph-fit-all` (F) and `#graph-fit-matches` (Shift+F, without the greyed-out

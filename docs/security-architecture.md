@@ -300,6 +300,12 @@ key): this review takes its place.
 writes, and the cards are shown as text (Svelte escapes them, I15) like `board`'s. The *Active sprints / All tasks*
 choice is a per-browser preference, never sent anywhere.
 
+**`atm --dir PATH` (T-351).** A new path input: before the command, atm changes to PATH and runs there, finding the
+project as it would from that folder. It gives no reach a `cd PATH` before atm wouldn't: the same user, the same
+files, the same project rules (the project is still the folder with `.agentic-task-manager/` or the git top level,
+and the files atm reads and writes are still that project's). A missing folder is an error, nothing run. No skill
+uses it, and no output agents act on changed, so no live sandbox run is needed.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

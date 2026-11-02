@@ -72,6 +72,7 @@ together in `cli.py`.
 | CLI-3.2 | P1 | Existing commands keep their output and exit codes; new lines are only added after the existing ones. argparse words some usage errors differently, and atm-cli tests checking them are updated. |
 | CLI-3.3 | P1 | Text output is short and stable, meant for agents to read; anything that parses uses `--json`. |
 | CLI-3.4 | P1 | Every change runs under the lock and writes atomically. Status and timestamps change only through the status commands. |
+| CLI-3.6 | P2 | **`--dir PATH` (T-351).** Before the command (`atm --dir ../shop status`, or `--dir=PATH`), atm runs as if started in PATH: the project is found from there, and relative paths in the command (`--file`, `--json-file`) count from there. A missing folder is an error (exit code 2). `atm serve --dir`, after the command, keeps its own meaning. |
 | CLI-3.5 | P1 | Every change records its actor: `updated_by` always, and `created_by`, `started_by`, `completed_by` as in DM-4.4. The actor is `--agent`, else `ATM_AGENT`, else `claude:<session>`, else the git user name (DM-4.5). In a linked git worktree the session form adds the worktree's folder, `claude:<session>@<folder>`: subagents share their parent's session ID, so agents spawned in separate worktrees would otherwise be one actor and could finish or release each other's tasks (T-202). The main worktree keeps the plain form. |
 
 ## 4. Commands

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 351,
+    "next_id": 352,
     "labels": [
       {
         "id": "architecture",
@@ -13680,13 +13680,15 @@
       "description": "An interactive session with Hakan: walk through archiving (`atm archive`, `atm unarchive`) and everything the dashboard shows about archived tasks, on a throwaway project, and write down what is wrong or confusing. **Nothing is fixed during the session**: problems become follow-up tasks, and only those Hakan approves are added.\n\n## How archiving works (what to expect)\n- `atm archive` moves finished tasks (done- and skipped-kind) from `tasks.json` to `tasks-archive.json`, except those finished in the last `meta.archive.keep_days` days (default 14) and those still in an open PR (`pr` set, no `merged_at`). Options: `--phase N` (repeatable), `--before DATE`, `--keep-days N`, `--dry-run`. It prints what moved and both files' sizes; `meta.archived` counts the archive.\n- The hint (`atm status`, `atm done`): shown when `tasks.json` is over `meta.archive.threshold_kb` (1024) or has more archivable tasks than `threshold_tasks` (500), and something can move. `meta.archive.auto: false` makes the skills only relay it.\n- `atm unarchive <id>...` brings tasks back; `atm list --archived` and `atm show <id>` read the archive; an archived task counts as done for dependencies.\n- The dashboard loads the archive only when a view needs it (D-5.2): the subtitle says *N archived*; the filter bar has *Include archived* (search, List, Graph and the Agents timeline then include archived tasks); the detail panel marks an archived task *· archived* and shows an archived dependency as a stub; the Progress tab, the Project tab and the Activity popup count the history (archived tasks too); the status bar shows an archive notice past the threshold.\n\n## Set up (in a terminal next to Hakan)\n1. A git repository in a new temporary folder (`mktemp -d`), **outside this repository**: this repo's own task list is not the test subject.\n2. `atm init --meta-file <file>` with a project name (e.g. *Archive Test*), named phases 0–2, and `meta.archive.threshold_tasks: 5`, so the hint appears without 500 tasks. `atm init` lists the project on the dashboard.\n3. About 20 tasks (`atm add --json-file`), with dependencies across phases, then statuses through atm only (never by editing the file):\n   - phase 0: all done, finished about 30 days ago (`ATM_NOW=<date 30 days ago> atm start/done`), one skipped;\n   - phase 1: some done 20 days ago, two done today, one done 20 days ago but in an open PR (`atm pr <id> --number 1 --url https://example.com/pr/1`), one in a merged PR (`atm merged --pr 2 --at <date>`);\n   - phase 2: a few to do (one depending on a phase-0 task), one in progress, one in review.\n4. `/atm:serve`, and open the project on the dashboard.\n\n## Walk through, with Hakan watching the dashboard\n1. **The hint**: `atm status` shows it (with the numbers), `atm done` on a task too; the status bar's archive notice.\n2. **Dry run**: `atm archive --dry-run`: which tasks would move, and that the recent ones and the open-PR one stay.\n3. **Archive**: `atm archive`: its report (counts, sizes); then `atm list --archived`, `atm show` of an archived task, `atm status` (the hint is gone, the archived count).\n4. **Dashboard after archiving**:\n   - the subtitle's *N archived*; the Kanban, List and Graph without archived tasks;\n   - *Include archived*: search finds archived tasks; List and Graph show them, marked;\n   - the detail panel of an archived task (*· archived*), and of the phase-2 task whose dependency is archived (the stub);\n   - the Progress tab (burndown, phase table), the Project tab (stats, histogram, agents) and the Activity popup: do the numbers still include the archived work, and are they the same as before archiving?\n   - the Agents timeline with and without *Include archived*;\n   - the Projects Overview card (progress rings, counts, the stats line) and the Omniboard (done in the last 24 hours) for this project.\n5. **Unarchive**: `atm unarchive <id>` for one task: it is back in `tasks.json`, on the Kanban, and the counts change.\n6. **Edge cases if time allows**: `atm archive --phase 0`, `--before`, `--keep-days 0`; archiving with the dashboard open (does it update without a reload?); a dependency on a task that was archived and then unarchived.\n\n## Then\n- Write the findings into this task's outcome note (short), and propose a follow-up task per problem; add only those Hakan approves (`/atm:create-tasks`).\n- Clean up: `atm projects remove <the test project's id>`, and delete the temporary folder.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
-      "dependencies": [],
+      "status": "in_progress",
+      "dependencies": [
+        "T-351"
+      ],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T09:23:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Testing together",
@@ -13699,7 +13701,9 @@
         }
       ],
       "with": "user",
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T09:21:07Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-278",
@@ -17761,6 +17765,43 @@
       "review_requested_at": "2026-11-02T09:14:49Z",
       "completed_at": "2026-11-02T09:20:39Z",
       "completed_by": "claude:b7be7288"
+    },
+    {
+      "id": "T-351",
+      "name": "atm --dir PATH: run any command on the project at PATH",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "cli"
+      ],
+      "description": "atm finds the project from the current directory and has no option or environment variable to point it elsewhere, so running it on another project means changing directory first (T-277's throwaway test project; scripts; agents working on two projects).\n\n## Change\n- A global `--dir PATH`, before the command: `atm --dir ../shop status`. atm runs as if started in PATH (the project is found from there, as from the current directory); an unknown or missing PATH is an error naming it. `atm serve --dir` keeps its own meaning (after the command).\n- `atm help` and `docs/v4/atm-cli.md` list it; `docs/security-architecture.md` notes the new path input.\n\n## Tests\nScenarios: `--dir` on a project in another folder (status, list, add), a missing folder, and `serve --dir` unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli.py",
+        "tests/scripts/scenarios/paths.json",
+        "docs/v4/atm-cli.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-02T09:22:58Z",
+      "updated_at": "2026-11-02T09:23:03Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:22:58Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-02T09:23:03Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

@@ -1,0 +1,64 @@
+[
+  {
+    "name": "--dir PATH: the project at PATH, not the current directory's (T-351)",
+    "setup": {
+      "files": {
+        "shop/.agentic-task-manager/tasks.json": { "meta": { "project": "Shop" }, "tasks": [] },
+        "elsewhere/x.txt": "x"
+      }
+    },
+    "cwd": "elsewhere",
+    "args": ["--dir", "../shop", "paths", "--json"],
+    "expect": {
+      "json": {
+        "root": "{root}/shop",
+        "dir": "{root}/shop/.agentic-task-manager",
+        "tasks": "{root}/shop/.agentic-task-manager/tasks.json",
+        "tasks_exists": true,
+        "dashboard": "{root}/shop/.agentic-task-manager/tasks-dashboard.html",
+        "legacy": null
+      }
+    }
+  },
+  {
+    "name": "--dir=PATH changes that project; relative paths in the command count from PATH",
+    "setup": {
+      "files": {
+        "shop/.agentic-task-manager/tasks.json": { "meta": { "project": "Shop" }, "tasks": [] },
+        "shop/new.json": [{ "id": "n1", "name": "Checkout", "type": "feature" }],
+        "elsewhere/x.txt": "x"
+      }
+    },
+    "cwd": "elsewhere",
+    "args": ["--dir=../shop", "add", "--json-file", "new.json"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["Checkout"],
+      "files": { "elsewhere/.agentic-task-manager/tasks.json": false }
+    }
+  },
+  {
+    "name": "--dir with a folder that isn't there: an error naming it, nothing run",
+    "args": ["--dir", "nowhere", "status"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["--dir: no folder 'nowhere'"]
+    }
+  },
+  {
+    "name": "--dir without a folder: the same error",
+    "args": ["--dir"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["--dir: no folder ''"]
+    }
+  },
+  {
+    "name": "--dir is listed in the help",
+    "args": ["--dir", ".", "--help"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["usage: atm [--dir PATH] <command> [options]", "--dir PATH     run as if started in PATH"]
+    }
+  }
+]

@@ -5,6 +5,7 @@ usage line; with --json, every error is {"error": "...", "code": N} on stderr, w
 """
 
 import argparse
+import os
 import sys
 
 from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
@@ -27,7 +28,9 @@ from .git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
 from .query import cmd_deps, cmd_list, cmd_show, cmd_status, cmd_summary
 from .tasks import cmd_note, cmd_status_change
 
-USAGE = """usage: atm <command> [options]
+USAGE = """usage: atm [--dir PATH] <command> [options]
+
+  --dir PATH     run as if started in PATH: on the project there (relative paths in the command count from it)
 
 commands:
   version        print the plugin version
@@ -556,7 +559,24 @@ def report(error, as_json):
         sys.stderr.write(f"atm: {error}\n")
 
 
+def leading_dir(argv):
+    """`atm --dir PATH <command> ...` (or `--dir=PATH`, T-351): the folder to run in, and the rest. Only before the
+    command: `atm serve --dir PATH` keeps its own meaning."""
+    if argv and argv[0] == "--dir":
+        return (argv[1] if len(argv) > 1 else ""), argv[2:]
+    if argv and argv[0].startswith("--dir="):
+        return argv[0][len("--dir=") :], argv[1:]
+    return None, argv
+
+
 def main(argv):
+    target, argv = leading_dir(argv)
+    if target is not None:
+        # As if started in that folder: the project is found from there, and relative paths count from there
+        if not target or not os.path.isdir(target):
+            report(AtmError(f"--dir: no folder '{target}'", 2), "--json" in argv)
+            return 2
+        os.chdir(target)
     if not argv or argv[0] in ("-h", "--help"):
         sys.stdout.write(USAGE)
         return 0
