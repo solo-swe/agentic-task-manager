@@ -1695,7 +1695,7 @@ Task = TypedDict(
         "completed_by": str,
         # The SHA of the task's commit
         "commit": str,
-        "pr": PullRequest,
+        "pr": "PullRequest",
         # ISO 8601 UTC; when that PR was merged (atm merged)
         "merged_at": str,
         # ISO 8601 UTC; when the task asked for a review (atm review). Its work ended here; review time isn't work
@@ -1707,16 +1707,16 @@ Task = TypedDict(
         # ISO 8601 UTC; when it was blocked
         "blocked_at": str,
         # Past blocks, oldest first, with who each waited on (T-244)
-        "blocks": List[BlockRound],
+        "blocks": List["BlockRound"],
         # Past reviews, oldest first
-        "reviews": List[ReviewRound],
+        "reviews": List["ReviewRound"],
         # Handoffs, outcomes, review requests, answers, rejections (docs/v4/data-model.md §4)
-        "notes": List[Note],
-        "last_failure": LastFailure,
+        "notes": List["Note"],
+        "last_failure": "LastFailure",
         # The sprint it is in (a sprint's name, meta.sprints); absent: the backlog
         "sprint": str,
         # Each sprint it was in, from when to when; the open entry has no `to` (SR-2.5)
-        "sprint_history": List[SprintHistoryEntry],
+        "sprint_history": List["SprintHistoryEntry"],
         # The release it ships in; when absent, its sprint's (SR-2.6)
         "release": str,
         # Component IDs (meta.components)
@@ -1737,6 +1737,83 @@ Task = TypedDict(
         "resolution": str,
         # The task this one duplicates (with the duplicate resolution)
         "duplicate_of": str,
+    },
+    total=False,
+)
+
+# A task as stored, and what atm derives for it
+TaskView = TypedDict(
+    "TaskView",
+    {
+        # required
+        "task": "Task",
+        # required
+        "derived": "TaskDerived",
+    },
+    total=False,
+)
+
+# What atm-lib works out for a task, so no front end applies atm's rules itself
+TaskDerived = TypedDict(
+    "TaskDerived",
+    {
+        # required; The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status)
+        "kind": str,
+        # required; To do, and every dependency done (an archived one counts as done)
+        "ready": bool,
+        # required; A to-do task's dependencies that aren't done yet
+        "waiting_for": List[str],
+        # Who a blocked task waits on: user or agent
+        "waiting_on": str,
+        # required; Its priority, or the project's default
+        "priority": str,
+        # Its review mode: its own, else its component's, else the project's
+        "effective_review": str,
+        # Its release: its own, else its sprint's
+        "effective_release": str,
+        # A done task's stage: done, in_pr or merged (DM-4.3)
+        "stage": str,
+        # required; From the archive
+        "archived": bool,
+    },
+    total=False,
+)
+
+DependencyItem = TypedDict(
+    "DependencyItem",
+    {
+        # required
+        "id": str,
+        # required; Its status (", archived" added for an archived task), or missing
+        "status": str,
+        # required
+        "name": str,
+    },
+    total=False,
+)
+
+# atm deps: what a task waits for, and what waits for it
+DepsResult = TypedDict(
+    "DepsResult",
+    {
+        # required
+        "id": str,
+        # required
+        "waits_for": List["DependencyItem"],
+        # required
+        "waited_on_by": List["DependencyItem"],
+    },
+    total=False,
+)
+
+# GET /api/v1/projects/<p>/tasks: the tasks the query's filters keep, each with its derived values (docs/layered-architecture.md §6.2)
+TaskViewList = TypedDict(
+    "TaskViewList",
+    {
+        # required; ISO 8601 UTC
+        "generated_at": str,
+        # required
+        "tasks": List["TaskView"],
     },
     total=False,
 )
@@ -3231,6 +3308,71 @@ def list_matching(project, filters):
             continue
         tasks.append(t)
     return {"vocab": vocab, "tasks": tasks}
+
+
+def task_stage(vocab, task):
+    """A done task's stage (DM-4.3): `done`, `in_pr` (a recorded PR, not merged) or `merged`; None for other kinds."""
+    if kind_of(vocab, task.get("status")) != "done":
+        return None
+    if task.get("merged_at"):
+        return "merged"
+    return "in_pr" if isinstance(task.get("pr"), dict) else "done"
+
+
+def task_views(project, filters):
+    """The tasks the filters keep, each with what atm derives for it (the REST API's tasks, docs/layered-architecture.md
+    §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked task waits on, its effective
+    priority, review mode and release, its stage, and whether it is archived. The dashboard takes these instead of
+    working them out itself."""
+    found = list_matching(project, filters)
+    data, vocab = project.store.document(), found["vocab"]
+    ready = {t.get("id") for t in ready_tasks(data)}
+    views = []
+    for t in found["tasks"]:
+        kind = kind_of(vocab, t.get("status"))
+        values = {
+            "kind": kind,
+            "ready": t.get("id") in ready,
+            "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
+            "priority": priority_of(vocab, t),
+            "effective_review": effective_review(vocab, t),
+            "effective_release": effective_release(vocab, t),
+            "stage": task_stage(vocab, t),
+            "archived": bool(filters.archived),
+        }
+        # What doesn't apply is left out, not null (api.schema.json's optional fields)
+        views.append({"task": t, "derived": {k: v for k, v in values.items() if v is not None}})
+    return views
+
+
+def search_text(task):
+    """What a task is found by: its ID, name, description, type, labels and notes (T-258)."""
+    strings = [task.get(f) for f in ("id", "name", "description", "type")]
+    strings += task.get("labels") if isinstance(task.get("labels"), list) else []
+    strings += [n.get("text") for n in task.get("notes") or [] if isinstance(n, dict)]
+    return " ".join(s for s in strings if isinstance(s, str)).lower()
+
+
+def search_tasks(project, query, also=""):
+    """The IDs of the working tasks (not the archive) in which every word of `query` appears, case-insensitively, in
+    the task's text or in `also` (the project's name, so it finds all of its tasks), in the project's order."""
+    terms = query.lower().split()
+    if not terms:
+        return []
+    extra = also.lower()
+    return [
+        t["id"]
+        for t in project.store.list_tasks()
+        if isinstance(t.get("id"), str) and all(term in f"{extra} {search_text(t)}" for term in terms)
+    ]
+
+
+def list_claims(project):
+    """The project's claims, from every working copy, by task."""
+    claims = project.store.read_claims()["claims"]
+    listed = [c for c in claims.values() if isinstance(c, dict) and isinstance(c.get("task"), str)]
+    return sorted(listed, key=lambda c: c["task"])
 
 
 def task_dependencies(project, task_id):
@@ -6522,7 +6664,7 @@ def cmd_migrate(args):
         out(line)
 
 
-# ==== server.py ====
+# ==== api/server.py ====
 # `atm serve`: one dashboard server per user, a detached process serving every registered project.
 #
 # The server holds the plugin's dashboard in memory and serves each registered project's task files under /p/<id>/.
@@ -6617,7 +6759,7 @@ def ensure_server(home, port):
         if child.poll() is not None:
             break
         time.sleep(0.05)
-    raise AtmError(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
+    raise AtmFailure(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
 
 
 def project_for(paths):
@@ -6639,7 +6781,7 @@ def serve_start(paths, port, overview):
             if line != "Nothing to migrate.":
                 out(line)
         if not os.path.isfile(paths["tasks"]):
-            raise AtmError("no tasks.json to serve. Run /atm:create-tasks first.")
+            raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
         project, shown = project_for(paths)
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
@@ -6733,7 +6875,7 @@ def cmd_serve(args):
     # --dir acts on another project without a cd (which permission rules can't check)
     cwd = os.path.abspath(args.dir) if args.dir else os.getcwd()
     if not os.path.isdir(cwd):
-        raise AtmError(f"--dir {args.dir}: not a directory", 2)
+        raise AtmFailure(f"--dir {args.dir}: not a directory", 2)
     home = atm_home()
     if args.refresh:
         serve_refresh(home)
@@ -6828,6 +6970,11 @@ class Summaries:
             self.paths[entry["path"]] = (paths, claims_store_path(paths))
         return self.paths[entry["path"]][1]
 
+    def project(self, entry):
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call."""
+        self.store(entry)
+        return project_at(self.paths[entry["path"]][0])
+
     def stamp(self, entry):
         """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
         and .git/HEAD (the branch on the card)."""
@@ -6842,8 +6989,8 @@ class Summaries:
         if cached and cached[0] == stamp:
             return cached[1]
         try:
-            summary = project_summary(project_at(self.paths[entry["path"]][0]))
-        except AtmError:
+            summary = project_summary(self.project(entry))
+        except AtmFailure:
             summary = None  # unreadable tasks.json or an unusable vocabulary: listed as missing
         self.cache[entry["path"]] = (stamp, summary)
         return summary
@@ -6902,21 +7049,13 @@ SEARCH_QUERY_CAP = 200  # characters of the query that count
 SEARCH_RESULTS_CAP = 200  # task IDs per project
 
 
-def search_text(task):
-    """What a task is found by: its ID, name, description, type, labels and notes (T-258)."""
-    strings = [task.get(f) for f in ("id", "name", "description", "type")]
-    strings += task.get("labels") if isinstance(task.get("labels"), list) else []
-    strings += [n.get("text") for n in task.get("notes") or [] if isinstance(n, dict)]
-    return " ".join(s for s in strings if isinstance(s, str)).lower()
-
-
-def api_search(registry, query):
+def api_search(registry, summaries, query):
     """The body of /api/search?q=: per project, the IDs of the tasks.json tasks (not the archive) in which every word of
-    the query appears, case-insensitively, as the dashboard's own search finds them; the project's name counts as part
-    of every task's text. Read-only, like every route; `{}` for an empty query."""
-    terms = query[:SEARCH_QUERY_CAP].lower().split()
+    the query appears, case-insensitively, as the dashboard's own search finds them (atm-lib's search_tasks); the
+    project's name counts as part of every task's text. Read-only, like every route; `{}` for an empty query."""
+    query = query[:SEARCH_QUERY_CAP]
     results = {}
-    if not terms:
+    if not query.split():
         return to_json(results).encode("utf-8")
     for entry in registry.entries():
 
@@ -6925,16 +7064,7 @@ def api_search(registry, query):
             stamp = file_stamp(p) if p else None
             if stamp is None or stamp[0] > MAX_SERVED_BYTES:
                 return []
-            data = read_json(p)
-            tasks = data.get("tasks") if isinstance(data, dict) else None
-            name = str(entry.get("name") or "").lower()
-            return [
-                t["id"]
-                for t in tasks or []
-                if isinstance(t, dict)
-                and isinstance(t.get("id"), str)
-                and all(term in f"{name} {search_text(t)}" for term in terms)
-            ]
+            return search_tasks(summaries.project(entry), query, also=str(entry.get("name") or ""))
 
         ids = quietly(matches, [])
         if ids:
@@ -6943,21 +7073,46 @@ def api_search(registry, query):
 
 
 def api_claims(summaries, entry):
-    """(body, ETag) of a project's claims.json: the live claims of all its worktrees, from the shared claims store
-    (each worktree's own snapshot has only the claims made there). None when there is no store yet."""
-    store = summaries.store(entry)
-    stamp = file_stamp(store)
+    """(body, ETag) of a project's claims.json: the claims of all its worktrees (atm-lib's list_claims, from the shared
+    claims store; each worktree's own snapshot has only the claims made there). None when there is no store yet."""
+    stamp = file_stamp(summaries.store(entry))
     if stamp is None:
         return None
 
     def body():
-        data = read_json(store)
-        claims = data.get("claims") if isinstance(data, dict) else None
-        listed_claims = [c for c in (claims or {}).values() if isinstance(c, dict) and isinstance(c.get("task"), str)]
-        snapshot = {"generated_at": now_iso(), "claims": sorted(listed_claims, key=lambda c: c["task"])}
+        snapshot = {"generated_at": now_iso(), "claims": list_claims(summaries.project(entry))}
         return to_json(snapshot).encode("utf-8")
 
     return body, file_etag(stamp)
+
+
+V1_TASKS = re.compile(r"/api/v1/projects/([^/]+)/tasks")
+LIST_PARAMETERS = ("status", "label", "sprint")  # repeatable: ?status=todo&status=blocked
+FLAG_PARAMETERS = ("backlog", "ready", "blocked", "in_pr", "with_user", "archived")
+VALUE_PARAMETERS = ("type", "priority", "agent", "release", "component")
+
+
+def task_filters(query):
+    """atm-lib's Filters from a v1 route's query string (docs/layered-architecture.md §6.2): the list filters
+    repeatable, the flags `true` or `1`, other parameters ignored."""
+    given = parse_qs(query)
+    filters = {name: given[name] for name in LIST_PARAMETERS if name in given}
+    filters.update({name: given[name][0] for name in VALUE_PARAMETERS if name in given})
+    filters.update({name: given[name][0].lower() in ("true", "1") for name in FLAG_PARAMETERS if name in given})
+    return Filters(**filters)
+
+
+def api_v1_tasks(summaries, entry, query):
+    """(body, ETag) of GET /api/v1/projects/<p>/tasks: the project's tasks the filters keep, each with its derived
+    values (atm-lib's task_views). The ETag changes with tasks.json, the archive and the query."""
+    stamps = [file_stamp(task_file(entry, name)) for name in (TASKS_FILE, "tasks-archive.json")]
+    etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
+
+    def body():
+        views = task_views(summaries.project(entry), task_filters(query))
+        return to_json({"generated_at": now_iso(), "tasks": views}).encode("utf-8")
+
+    return body, etag
 
 
 def api_worktrees(entry, store):
@@ -7066,9 +7221,36 @@ def cmd_serve_child(args):
                 self.send_conditional(body, etag)
             elif path == "/api/search":
                 query = parse_qs(urlsplit(self.path).query).get("q", [""])[0]
-                self.send(200, api_search(registry, query))
+                self.send(200, api_search(registry, summaries, query))
+            elif V1_TASKS.fullmatch(path):
+                self.serve_v1_tasks(V1_TASKS.fullmatch(path).group(1), urlsplit(self.path).query)
             else:
                 self.serve_project_file(path)
+
+        def serve_v1_tasks(self, project, query):
+            entry = registry.find(project)
+            if entry is None:
+                self.send_error_json(404, "unknown project")
+                return
+            p = served_file(entry, TASKS_FILE)
+            stamp = file_stamp(p) if p else None
+            if stamp is None:
+                self.send_error_json(404, "not found")
+                return
+            if stamp[0] > MAX_SERVED_BYTES:
+                self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
+                return
+            body, etag = api_v1_tasks(summaries, entry, query)
+            if self.headers.get("If-None-Match") == etag:
+                self.send(304, etag=etag)
+                return
+            try:
+                content = body()
+            except AtmFailure as e:
+                # A filter naming no such sprint or release (400), an unreadable task file (500)
+                self.send_error_json(400 if e.code == 2 else 500, str(e))
+                return
+            self.send(200, content, "application/json", etag)
 
         do_HEAD = do_GET
 

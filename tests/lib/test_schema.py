@@ -44,6 +44,13 @@ class TaskSchema(unittest.TestCase):
                         checked += 1
         self.assertGreater(checked, 0)
 
+    def test_the_generated_python_types_load(self):
+        # Every type refers to the others by name, wherever in the file they are defined
+        from atm.common import types
+
+        self.assertIn("derived", types.TaskView.__annotations__)
+        self.assertIn("notes", types.Task.__annotations__)
+
     def test_a_task_that_does_not_fit_is_named(self):
         self.assertEqual(problems({"id": "T-1", "name": "x", "type": "feature"}, TASK), ["$: missing 'status'"])
         self.assertEqual(

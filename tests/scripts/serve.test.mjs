@@ -844,6 +844,48 @@ describe('serve', () => {
     atm(['serve', 'stop'], shop);
   });
 
+  test('api/v1/projects/<id>/tasks: the tasks with what atm derives, filtered, conditional (T-364)', async () => {
+    const atm = atmIn(home());
+    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const root = project({
+      meta: { id: 'cccc3333', project: 'Shop', sprints: [{ id: 'One', state: 'active' }] },
+      tasks: [
+        task('T-1', { status: 'done', sprint: 'One', pr: { number: 2 } }),
+        task('T-2', { dependencies: ['T-1'], sprint: 'One' }),
+        task('T-3', { dependencies: ['T-2'] }),
+      ],
+    });
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const url = (query = '') => `http://localhost:${port}/api/v1/projects/cccc3333/tasks${query}`;
+
+    const response = await fetch(url());
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(
+      body.tasks.map((v) => [v.task.id, v.derived.kind, v.derived.ready, v.derived.waiting_for, v.derived.stage]),
+      [
+        ['T-1', 'done', false, [], 'in_pr'],
+        ['T-2', 'todo', true, [], undefined],
+        ['T-3', 'todo', false, ['T-2'], undefined],
+      ],
+    );
+    // Filters as query parameters, as atm list takes them
+    const ids = async (query) => (await (await fetch(url(query))).json()).tasks.map((v) => v.task.id);
+    assert.deepEqual(await ids('?sprint=One'), ['T-1', 'T-2']);
+    assert.deepEqual(await ids('?ready=true'), ['T-2']);
+    assert.deepEqual(await ids('?status=done&status=todo&backlog=1'), ['T-3']);
+    assert.equal((await fetch(url('?sprint=Nope'))).status, 400);
+    // Unchanged files: 304, as for every conditional route
+    const again = await fetch(url(), { headers: { 'If-None-Match': response.headers.get('etag') } });
+    assert.equal(again.status, 304);
+    // An unknown project; another Host
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/tasks`)).status, 404);
+    assert.equal((await rawGet(port, '/api/v1/projects/cccc3333/tasks', `evil.example:${port}`)).status, 403);
+    atm(['serve', 'stop'], root);
+  });
+
   test('a busy port moves the server to the next free one', async () => {
     const atm = atmIn(home());
     const root = project();

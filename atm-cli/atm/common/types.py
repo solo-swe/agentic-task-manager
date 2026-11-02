@@ -126,7 +126,7 @@ Task = TypedDict(
         "completed_by": str,
         # The SHA of the task's commit
         "commit": str,
-        "pr": PullRequest,
+        "pr": "PullRequest",
         # ISO 8601 UTC; when that PR was merged (atm merged)
         "merged_at": str,
         # ISO 8601 UTC; when the task asked for a review (atm review). Its work ended here; review time isn't work
@@ -138,16 +138,16 @@ Task = TypedDict(
         # ISO 8601 UTC; when it was blocked
         "blocked_at": str,
         # Past blocks, oldest first, with who each waited on (T-244)
-        "blocks": List[BlockRound],
+        "blocks": List["BlockRound"],
         # Past reviews, oldest first
-        "reviews": List[ReviewRound],
+        "reviews": List["ReviewRound"],
         # Handoffs, outcomes, review requests, answers, rejections (docs/v4/data-model.md §4)
-        "notes": List[Note],
-        "last_failure": LastFailure,
+        "notes": List["Note"],
+        "last_failure": "LastFailure",
         # The sprint it is in (a sprint's name, meta.sprints); absent: the backlog
         "sprint": str,
         # Each sprint it was in, from when to when; the open entry has no `to` (SR-2.5)
-        "sprint_history": List[SprintHistoryEntry],
+        "sprint_history": List["SprintHistoryEntry"],
         # The release it ships in; when absent, its sprint's (SR-2.6)
         "release": str,
         # Component IDs (meta.components)
@@ -168,6 +168,83 @@ Task = TypedDict(
         "resolution": str,
         # The task this one duplicates (with the duplicate resolution)
         "duplicate_of": str,
+    },
+    total=False,
+)
+
+# A task as stored, and what atm derives for it
+TaskView = TypedDict(
+    "TaskView",
+    {
+        # required
+        "task": "Task",
+        # required
+        "derived": "TaskDerived",
+    },
+    total=False,
+)
+
+# What atm-lib works out for a task, so no front end applies atm's rules itself
+TaskDerived = TypedDict(
+    "TaskDerived",
+    {
+        # required; The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status)
+        "kind": str,
+        # required; To do, and every dependency done (an archived one counts as done)
+        "ready": bool,
+        # required; A to-do task's dependencies that aren't done yet
+        "waiting_for": List[str],
+        # Who a blocked task waits on: user or agent
+        "waiting_on": str,
+        # required; Its priority, or the project's default
+        "priority": str,
+        # Its review mode: its own, else its component's, else the project's
+        "effective_review": str,
+        # Its release: its own, else its sprint's
+        "effective_release": str,
+        # A done task's stage: done, in_pr or merged (DM-4.3)
+        "stage": str,
+        # required; From the archive
+        "archived": bool,
+    },
+    total=False,
+)
+
+DependencyItem = TypedDict(
+    "DependencyItem",
+    {
+        # required
+        "id": str,
+        # required; Its status (", archived" added for an archived task), or missing
+        "status": str,
+        # required
+        "name": str,
+    },
+    total=False,
+)
+
+# atm deps: what a task waits for, and what waits for it
+DepsResult = TypedDict(
+    "DepsResult",
+    {
+        # required
+        "id": str,
+        # required
+        "waits_for": List["DependencyItem"],
+        # required
+        "waited_on_by": List["DependencyItem"],
+    },
+    total=False,
+)
+
+# GET /api/v1/projects/<p>/tasks: the tasks the query's filters keep, each with its derived values (docs/layered-architecture.md §6.2)
+TaskViewList = TypedDict(
+    "TaskViewList",
+    {
+        # required; ISO 8601 UTC
+        "generated_at": str,
+        # required
+        "tasks": List["TaskView"],
     },
     total=False,
 )

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "api.schema.json",
+  "title": "TaskViewList",
+  "description": "GET /api/v1/projects/<p>/tasks: the tasks the query's filters keep, each with its derived values (docs/layered-architecture.md §6.2)",
+  "type": "object",
+  "required": ["generated_at", "tasks"],
+  "properties": {
+    "generated_at": { "type": "string", "description": "ISO 8601 UTC" },
+    "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } }
+  },
+  "$defs": {
+    "TaskView": {
+      "type": "object",
+      "description": "A task as stored, and what atm derives for it",
+      "required": ["task", "derived"],
+      "properties": {
+        "task": { "$ref": "task.schema.json" },
+        "derived": { "$ref": "#/$defs/TaskDerived" }
+      }
+    },
+    "TaskDerived": {
+      "type": "object",
+      "description": "What atm-lib works out for a task, so no front end applies atm's rules itself",
+      "required": ["kind", "ready", "waiting_for", "priority", "archived"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status)"
+        },
+        "ready": { "type": "boolean", "description": "To do, and every dependency done (an archived one counts as done)" },
+        "waiting_for": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "A to-do task's dependencies that aren't done yet"
+        },
+        "waiting_on": { "type": "string", "description": "Who a blocked task waits on: user or agent" },
+        "priority": { "type": "string", "description": "Its priority, or the project's default" },
+        "effective_review": { "type": "string", "description": "Its review mode: its own, else its component's, else the project's" },
+        "effective_release": { "type": "string", "description": "Its release: its own, else its sprint's" },
+        "stage": { "type": "string", "description": "A done task's stage: done, in_pr or merged (DM-4.3)" },
+        "archived": { "type": "boolean", "description": "From the archive" }
+      }
+    },
+    "DependencyItem": {
+      "type": "object",
+      "required": ["id", "status", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": "string", "description": "Its status (\", archived\" added for an archived task), or missing" },
+        "name": { "type": "string" }
+      }
+    },
+    "DepsResult": {
+      "type": "object",
+      "description": "atm deps: what a task waits for, and what waits for it",
+      "required": ["id", "waits_for", "waited_on_by"],
+      "properties": {
+        "id": { "type": "string" },
+        "waits_for": { "type": "array", "items": { "$ref": "#/$defs/DependencyItem" } },
+        "waited_on_by": { "type": "array", "items": { "$ref": "#/$defs/DependencyItem" } }
+      }
+    }
+  }
+}

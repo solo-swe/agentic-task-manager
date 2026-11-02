@@ -73,7 +73,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), the project files and `whoami` | `serve.test.mjs` "only the four files…", "api/search" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), the project files, `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `served_file` and `find_paths`; filters are query parameters, compared, never run or used as paths, T-364) and `whoami` | `serve.test.mjs` "only the four files…", "api/search", "api/v1/projects/<id>/tasks" |
 | I12 | **Only the registered projects' task files are served**, regular files only, never through a symlink | `serve.test.mjs` (the four files; the symlink test) |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts` |
 

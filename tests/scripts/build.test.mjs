@@ -152,7 +152,7 @@ describe('generated types', () => {
     const typescript = fs.readFileSync(path.join(REPO, 'dashboard/src/lib/generated/types.ts'), 'utf8');
     assert.match(python, /# required; Letters, digits.*\n {8}"id": str,/);
     assert.match(python, /"from": str,/); // a Python keyword, as a key
-    assert.match(python, /"notes": List\[Note\],/);
+    assert.match(python, /"notes": List\["Note"\],/); // a forward reference: defined anywhere in the file
     assert.match(typescript, /\n {2}id: string;/);
     assert.match(typescript, /\n {2}notes\?: Note\[\];/);
     assert.match(typescript, /\n {2}pr\?: PullRequest;/);

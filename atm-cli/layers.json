@@ -16,14 +16,15 @@
     "registry",
     "releases",
     "repository",
-    "server",
     "sprint_names",
     "sprints",
     "tasks"
   ],
   "exceptions": {
+    "api.server": ["claims", "core", "logo", "migrate", "paths", "registry"],
     "boot.open": ["paths"],
     "cli.main": [
+      "api.server",
       "archive",
       "claims",
       "components",
@@ -39,7 +40,6 @@
       "registry",
       "releases",
       "repository",
-      "server",
       "sprints",
       "tasks"
     ],

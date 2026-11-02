@@ -29,6 +29,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/tasks-archive.json` | that project's archive, as stored | yes |
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
+| `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
 | anything else | `404` | |
 
@@ -106,6 +107,21 @@ dashboard's own search finds them: in the ID, name, description, type, labels or
 Only the first 200 characters of `q` count, and at most 200 IDs come back per project. Like every route it is
 read-only and answers only on loopback with a matching Host (§1); other parameters are ignored. The Vite dev server
 answers the same.
+
+### 2.5 `api/v1/projects/<id>/tasks`: tasks with what atm derives
+
+The first of the v1 routes (docs/layered-architecture.md §6.2), answered by atm-lib (`task_views`): the dashboard
+takes atm's rules from here instead of applying them itself. `{ "generated_at", "tasks": [{ "task", "derived" }] }`,
+typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/generated/types.ts`): `task` as stored,
+`derived` with its `kind`, `ready`, `waiting_for` (a to-do task's unfinished dependencies), `waiting_on` (a blocked
+task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
+`in_pr`, `merged`) and `archived`; what doesn't apply is left out.
+
+- **Filters**, as `atm list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
+  `type`, `priority`, `agent`, `release`, `component`; the flags `backlog`, `ready`, `blocked`, `in_pr`, `with_user`
+  and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.
+- The ETag changes with the project's `tasks.json`, its archive and the query. A `tasks.json` over the size limit gets
+  `413`, as the raw file does; an unknown project `404`.
 
 ## 3. `GET /api/projects`
 

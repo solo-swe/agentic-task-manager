@@ -137,3 +137,52 @@ export interface Task {
   /** The task this one duplicates (with the duplicate resolution) */
   duplicate_of?: string;
 }
+
+/** A task as stored, and what atm derives for it */
+export interface TaskView {
+  task: Task;
+  derived: TaskDerived;
+}
+
+/** What atm-lib works out for a task, so no front end applies atm's rules itself */
+export interface TaskDerived {
+  /** The status's kind: todo, active, review, blocked, done or skipped (absent for an unknown status) */
+  kind: string;
+  /** To do, and every dependency done (an archived one counts as done) */
+  ready: boolean;
+  /** A to-do task's dependencies that aren't done yet */
+  waiting_for: string[];
+  /** Who a blocked task waits on: user or agent */
+  waiting_on?: string;
+  /** Its priority, or the project's default */
+  priority: string;
+  /** Its review mode: its own, else its component's, else the project's */
+  effective_review?: string;
+  /** Its release: its own, else its sprint's */
+  effective_release?: string;
+  /** A done task's stage: done, in_pr or merged (DM-4.3) */
+  stage?: string;
+  /** From the archive */
+  archived: boolean;
+}
+
+export interface DependencyItem {
+  id: string;
+  /** Its status (", archived" added for an archived task), or missing */
+  status: string;
+  name: string;
+}
+
+/** atm deps: what a task waits for, and what waits for it */
+export interface DepsResult {
+  id: string;
+  waits_for: DependencyItem[];
+  waited_on_by: DependencyItem[];
+}
+
+/** GET /api/v1/projects/<p>/tasks: the tasks the query's filters keep, each with its derived values (docs/layered-architecture.md §6.2) */
+export interface TaskViewList {
+  /** ISO 8601 UTC */
+  generated_at: string;
+  tasks: TaskView[];
+}

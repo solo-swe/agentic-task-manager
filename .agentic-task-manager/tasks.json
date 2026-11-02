@@ -18624,7 +18624,7 @@
       "description": "Step 3 of `docs/layered-architecture.md` §9 (atm-lib functions in §5.1).\n\n## Change\n- `list`, `deps`, `status`, `backlog`, `summary` and `projects` (list, add, remove, prune; the `Registry` interface of §3.2) go CLI renderer → atm-lib → store.\n- Typed errors in common (`ErrorCode`, §4.2); the CLI maps them to today's exit codes and messages.\n- Their result types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`, …) in the schema, generated for both sides.\n- Remove the ratchet's entries for these commands.\n\n## Tests\n- `tests/lib/` tests for each function on the in-memory store; contract tests for the store reads added.\n- Output identical: `npm run test:scripts`, `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-362"
       ],
@@ -18634,7 +18634,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:58:35Z",
+      "updated_at": "2026-11-02T19:08:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18652,7 +18652,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-02T18:58:35Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "c622e1aa19969da11fb9a2e0e548e478e41d6da8",
+      "completed_at": "2026-11-02T19:08:40Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:40Z",
+          "kind": "review",
+          "text": "Check: `list`, `deps`, `status`, `summary` via `cli/query.py` → `lib/query.py` (from `query.py`) on a Project; typed errors (`common/errors.py`; `AtmError` subclasses `AtmFailure`); store adds `list_archived`, `read_claims`, `sizes`, `working_copy`, transitional `document()`; `vcs/git.py` branch. Moved on: backlog → T-371, projects → T-374, result types → T-364. 538 atm-cli tests, 40 in `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-364",
@@ -18665,7 +18677,7 @@
       "description": "Step 4 of `docs/layered-architecture.md` §9 (the API in §6).\n\n## Change\n- `server.py` moves to `api/`; `/api/projects`, `/api/search` and `claims.json` are answered through atm-lib instead of reading storage.\n- `GET /api/v1/projects/<p>/tasks`: the tasks as `TaskView`, with their derived values (`kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`), filters as query parameters (§6.2).\n- Every rule of `docs/multi-project-api.md` §1 kept (loopback, Host check, GET/HEAD only, ETags); the API stays read-only.\n- Update `docs/multi-project-api.md` with the v1 route.\n\n## Tests\n- The server's tests in `tests/scripts/` pass unchanged; new ones for the v1 route, its response validated against the schema.\n- The ratchet shrinks.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-363"
       ],
@@ -18677,7 +18689,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:08:26Z",
+      "updated_at": "2026-11-02T19:08:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18703,7 +18715,9 @@
           "text": "From T-363: the read results’ types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`) aren’t in the schema yet; add them here with the API responses (`api.schema.json`).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T19:08:46Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-365",

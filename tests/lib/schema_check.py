@@ -28,7 +28,11 @@ def problems(value, schema, root=None, where="$", required=True):
     fields present are checked (the scenario tests' task files are minimal on purpose)."""
     root = root or schema
     if "$ref" in schema:
-        return problems(value, root["$defs"][schema["$ref"].rsplit("/", 1)[-1]], root, where, required)
+        ref = schema["$ref"]
+        if not ref.startswith("#"):  # another schema file
+            other = load_schema(ref)
+            return problems(value, other, other, where, required)
+        return problems(value, root["$defs"][ref.rsplit("/", 1)[-1]], root, where, required)
     found = []
     kind = schema.get("type")
     if kind and not TYPES[kind](value):

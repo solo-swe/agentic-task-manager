@@ -25,6 +25,7 @@ Design: docs/v4/atm-cli.md, section 2.
 import ast
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +68,7 @@ MODULES = [
     "archive",
     "git_ops",
     "migrate",
-    "server",
+    "api.server",
     "cli.query",
     "cli.show",
     "cli.main",
@@ -266,12 +267,31 @@ GENERATED = "Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don'
 GENERATED_HOW = "`npm run build:cli` in dashboard/ (the pre-commit hook does it too)."
 
 
+FILE_TYPES = {}  # schema file -> the type it defines (its title), for $refs between files
+
+
+def schema_files():
+    """The schemas, by file name, with a file another one refers to before it (task.schema.json before
+    api.schema.json, so the types each language defines come before their use)."""
+    schemas = {}
+    for file in sorted(f for f in os.listdir(SCHEMA_DIR) if f.endswith(".schema.json")):
+        with open(os.path.join(SCHEMA_DIR, file), encoding="utf-8") as f:
+            schemas[file] = json.load(f)
+    refers = lambda schema: {r for r in re.findall(r'"\$ref": "([^"#]+)"', json.dumps(schema))}
+    ordered = []
+    while len(ordered) < len(schemas):
+        ready = [f for f in schemas if f not in ordered and refers(schemas[f]) <= set(ordered)]
+        if not ready:
+            raise BuildError("common/schema: the schemas refer to each other in a cycle")
+        ordered.append(ready[0])
+    return [(f, schemas[f]) for f in ordered]
+
+
 def schema_types():
     """The object types the schemas define, in order: each file's $defs, then the file's own type (its title)."""
     types, seen = [], set()
-    for file in sorted(f for f in os.listdir(SCHEMA_DIR) if f.endswith(".schema.json")):
-        with open(os.path.join(SCHEMA_DIR, file), encoding="utf-8") as f:
-            schema = json.load(f)
+    for file, schema in schema_files():
+        FILE_TYPES[file] = schema["title"]
         for name, definition in list(schema.get("$defs", {}).items()) + [(schema["title"], schema)]:
             if name in seen:
                 raise BuildError(f"common/schema/{file}: the type {name} is defined twice")
@@ -286,7 +306,15 @@ def property_type(prop, where, ts):
     """A property's type in TypeScript (`ts`) or Python. The schemas use a small subset of JSON Schema: the scalar
     types, arrays, string enums and $refs to the types the schemas define."""
     if "$ref" in prop:
-        return prop["$ref"].rsplit("/", 1)[-1]
+        ref = prop["$ref"]
+        if not ref.startswith("#"):
+            if ref not in FILE_TYPES:
+                raise BuildError(f"common/schema: {where} refers to {ref}, which isn't one of the schemas")
+            name = FILE_TYPES[ref]
+        else:
+            name = ref.rsplit("/", 1)[-1]
+        # In Python, a forward reference: the type may be defined further down
+        return name if ts else f'"{name}"'
     if "enum" in prop:
         values = [f"'{v}'" for v in prop["enum"]]
         return " | ".join(values) if ts else f"Literal[{', '.join(values)}]"

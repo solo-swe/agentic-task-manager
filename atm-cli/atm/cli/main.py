@@ -22,7 +22,7 @@ from ..sprints import cmd_backlog, cmd_move, cmd_sprints
 from ..logo import cmd_logo
 from ..registry import cmd_projects
 from ..repository import cmd_repository
-from ..server import DEFAULT_PORT, cmd_serve, cmd_serve_child, refresh_server
+from ..api.server import DEFAULT_PORT, cmd_serve, cmd_serve_child, refresh_server
 from ..archive import cmd_archive, cmd_unarchive
 from ..edit import cmd_add, cmd_check, cmd_edit
 from ..git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow

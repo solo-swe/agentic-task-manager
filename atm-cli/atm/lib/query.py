@@ -17,6 +17,7 @@ from ..model import (
     REWORK_STATES,
     archive_hint_for,
     effective_release,
+    effective_review,
     find_sprint,
     kind_of,
     known_release,
@@ -132,6 +133,71 @@ def list_matching(project, filters):
             continue
         tasks.append(t)
     return {"vocab": vocab, "tasks": tasks}
+
+
+def task_stage(vocab, task):
+    """A done task's stage (DM-4.3): `done`, `in_pr` (a recorded PR, not merged) or `merged`; None for other kinds."""
+    if kind_of(vocab, task.get("status")) != "done":
+        return None
+    if task.get("merged_at"):
+        return "merged"
+    return "in_pr" if isinstance(task.get("pr"), dict) else "done"
+
+
+def task_views(project, filters):
+    """The tasks the filters keep, each with what atm derives for it (the REST API's tasks, docs/layered-architecture.md
+    §6.2): its kind, whether it is ready, the dependencies it waits for, who a blocked task waits on, its effective
+    priority, review mode and release, its stage, and whether it is archived. The dashboard takes these instead of
+    working them out itself."""
+    found = list_matching(project, filters)
+    data, vocab = project.store.document(), found["vocab"]
+    ready = {t.get("id") for t in ready_tasks(data)}
+    views = []
+    for t in found["tasks"]:
+        kind = kind_of(vocab, t.get("status"))
+        values = {
+            "kind": kind,
+            "ready": t.get("id") in ready,
+            "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
+            "priority": priority_of(vocab, t),
+            "effective_review": effective_review(vocab, t),
+            "effective_release": effective_release(vocab, t),
+            "stage": task_stage(vocab, t),
+            "archived": bool(filters.archived),
+        }
+        # What doesn't apply is left out, not null (api.schema.json's optional fields)
+        views.append({"task": t, "derived": {k: v for k, v in values.items() if v is not None}})
+    return views
+
+
+def search_text(task):
+    """What a task is found by: its ID, name, description, type, labels and notes (T-258)."""
+    strings = [task.get(f) for f in ("id", "name", "description", "type")]
+    strings += task.get("labels") if isinstance(task.get("labels"), list) else []
+    strings += [n.get("text") for n in task.get("notes") or [] if isinstance(n, dict)]
+    return " ".join(s for s in strings if isinstance(s, str)).lower()
+
+
+def search_tasks(project, query, also=""):
+    """The IDs of the working tasks (not the archive) in which every word of `query` appears, case-insensitively, in
+    the task's text or in `also` (the project's name, so it finds all of its tasks), in the project's order."""
+    terms = query.lower().split()
+    if not terms:
+        return []
+    extra = also.lower()
+    return [
+        t["id"]
+        for t in project.store.list_tasks()
+        if isinstance(t.get("id"), str) and all(term in f"{extra} {search_text(t)}" for term in terms)
+    ]
+
+
+def list_claims(project):
+    """The project's claims, from every working copy, by task."""
+    claims = project.store.read_claims()["claims"]
+    listed = [c for c in claims.values() if isinstance(c, dict) and isinstance(c.get("task"), str)]
+    return sorted(listed, key=lambda c: c["task"])
 
 
 def task_dependencies(project, task_id):

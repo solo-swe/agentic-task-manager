@@ -18,12 +18,11 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlsplit
 
-from .core import (
+from ..core import (
     PLUGIN_ROOT,
     TASK_DIR,
     TASKS_FILE,
     WHOAMI,
-    AtmError,
     format_duration,
     now,
     now_iso,
@@ -36,13 +35,14 @@ from .core import (
     whoami,
     write_json_atomic,
 )
-from .claims import claims_store_path
-from .logo import find_logo
-from .migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
-from .paths import find_paths
-from .boot.open import project_at
-from .lib.query import project_summary
-from .registry import (
+from ..claims import claims_store_path
+from ..common.errors import AtmFailure
+from ..logo import find_logo
+from ..migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
+from ..paths import find_paths
+from ..boot.open import project_at
+from ..lib.query import Filters, list_claims, project_summary, search_tasks, task_views
+from ..registry import (
     REGISTRY_FILE,
     atm_home,
     ensure_home,
@@ -143,7 +143,7 @@ def ensure_server(home, port):
         if child.poll() is not None:
             break
         time.sleep(0.05)
-    raise AtmError(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
+    raise AtmFailure(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
 
 
 def project_for(paths):
@@ -165,7 +165,7 @@ def serve_start(paths, port, overview):
             if line != "Nothing to migrate.":
                 out(line)
         if not os.path.isfile(paths["tasks"]):
-            raise AtmError("no tasks.json to serve. Run /atm:create-tasks first.")
+            raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
         project, shown = project_for(paths)
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
@@ -259,7 +259,7 @@ def cmd_serve(args):
     # --dir acts on another project without a cd (which permission rules can't check)
     cwd = os.path.abspath(args.dir) if args.dir else os.getcwd()
     if not os.path.isdir(cwd):
-        raise AtmError(f"--dir {args.dir}: not a directory", 2)
+        raise AtmFailure(f"--dir {args.dir}: not a directory", 2)
     home = atm_home()
     if args.refresh:
         serve_refresh(home)
@@ -354,6 +354,11 @@ class Summaries:
             self.paths[entry["path"]] = (paths, claims_store_path(paths))
         return self.paths[entry["path"]][1]
 
+    def project(self, entry):
+        """The project, opened afresh for each request: atm-lib reads one snapshot of its files per call."""
+        self.store(entry)
+        return project_at(self.paths[entry["path"]][0])
+
     def stamp(self, entry):
         """What the summary depends on, or None when the project is missing: tasks.json, the claims store, the day,
         and .git/HEAD (the branch on the card)."""
@@ -368,8 +373,8 @@ class Summaries:
         if cached and cached[0] == stamp:
             return cached[1]
         try:
-            summary = project_summary(project_at(self.paths[entry["path"]][0]))
-        except AtmError:
+            summary = project_summary(self.project(entry))
+        except AtmFailure:
             summary = None  # unreadable tasks.json or an unusable vocabulary: listed as missing
         self.cache[entry["path"]] = (stamp, summary)
         return summary
@@ -428,21 +433,13 @@ SEARCH_QUERY_CAP = 200  # characters of the query that count
 SEARCH_RESULTS_CAP = 200  # task IDs per project
 
 
-def search_text(task):
-    """What a task is found by: its ID, name, description, type, labels and notes (T-258)."""
-    strings = [task.get(f) for f in ("id", "name", "description", "type")]
-    strings += task.get("labels") if isinstance(task.get("labels"), list) else []
-    strings += [n.get("text") for n in task.get("notes") or [] if isinstance(n, dict)]
-    return " ".join(s for s in strings if isinstance(s, str)).lower()
-
-
-def api_search(registry, query):
+def api_search(registry, summaries, query):
     """The body of /api/search?q=: per project, the IDs of the tasks.json tasks (not the archive) in which every word of
-    the query appears, case-insensitively, as the dashboard's own search finds them; the project's name counts as part
-    of every task's text. Read-only, like every route; `{}` for an empty query."""
-    terms = query[:SEARCH_QUERY_CAP].lower().split()
+    the query appears, case-insensitively, as the dashboard's own search finds them (atm-lib's search_tasks); the
+    project's name counts as part of every task's text. Read-only, like every route; `{}` for an empty query."""
+    query = query[:SEARCH_QUERY_CAP]
     results = {}
-    if not terms:
+    if not query.split():
         return to_json(results).encode("utf-8")
     for entry in registry.entries():
 
@@ -451,16 +448,7 @@ def api_search(registry, query):
             stamp = file_stamp(p) if p else None
             if stamp is None or stamp[0] > MAX_SERVED_BYTES:
                 return []
-            data = read_json(p)
-            tasks = data.get("tasks") if isinstance(data, dict) else None
-            name = str(entry.get("name") or "").lower()
-            return [
-                t["id"]
-                for t in tasks or []
-                if isinstance(t, dict)
-                and isinstance(t.get("id"), str)
-                and all(term in f"{name} {search_text(t)}" for term in terms)
-            ]
+            return search_tasks(summaries.project(entry), query, also=str(entry.get("name") or ""))
 
         ids = quietly(matches, [])
         if ids:
@@ -469,21 +457,46 @@ def api_search(registry, query):
 
 
 def api_claims(summaries, entry):
-    """(body, ETag) of a project's claims.json: the live claims of all its worktrees, from the shared claims store
-    (each worktree's own snapshot has only the claims made there). None when there is no store yet."""
-    store = summaries.store(entry)
-    stamp = file_stamp(store)
+    """(body, ETag) of a project's claims.json: the claims of all its worktrees (atm-lib's list_claims, from the shared
+    claims store; each worktree's own snapshot has only the claims made there). None when there is no store yet."""
+    stamp = file_stamp(summaries.store(entry))
     if stamp is None:
         return None
 
     def body():
-        data = read_json(store)
-        claims = data.get("claims") if isinstance(data, dict) else None
-        listed_claims = [c for c in (claims or {}).values() if isinstance(c, dict) and isinstance(c.get("task"), str)]
-        snapshot = {"generated_at": now_iso(), "claims": sorted(listed_claims, key=lambda c: c["task"])}
+        snapshot = {"generated_at": now_iso(), "claims": list_claims(summaries.project(entry))}
         return to_json(snapshot).encode("utf-8")
 
     return body, file_etag(stamp)
+
+
+V1_TASKS = re.compile(r"/api/v1/projects/([^/]+)/tasks")
+LIST_PARAMETERS = ("status", "label", "sprint")  # repeatable: ?status=todo&status=blocked
+FLAG_PARAMETERS = ("backlog", "ready", "blocked", "in_pr", "with_user", "archived")
+VALUE_PARAMETERS = ("type", "priority", "agent", "release", "component")
+
+
+def task_filters(query):
+    """atm-lib's Filters from a v1 route's query string (docs/layered-architecture.md §6.2): the list filters
+    repeatable, the flags `true` or `1`, other parameters ignored."""
+    given = parse_qs(query)
+    filters = {name: given[name] for name in LIST_PARAMETERS if name in given}
+    filters.update({name: given[name][0] for name in VALUE_PARAMETERS if name in given})
+    filters.update({name: given[name][0].lower() in ("true", "1") for name in FLAG_PARAMETERS if name in given})
+    return Filters(**filters)
+
+
+def api_v1_tasks(summaries, entry, query):
+    """(body, ETag) of GET /api/v1/projects/<p>/tasks: the project's tasks the filters keep, each with its derived
+    values (atm-lib's task_views). The ETag changes with tasks.json, the archive and the query."""
+    stamps = [file_stamp(task_file(entry, name)) for name in (TASKS_FILE, "tasks-archive.json")]
+    etag = '"' + hashlib.sha1(repr([stamps, query]).encode("utf-8")).hexdigest()[:16] + '"'
+
+    def body():
+        views = task_views(summaries.project(entry), task_filters(query))
+        return to_json({"generated_at": now_iso(), "tasks": views}).encode("utf-8")
+
+    return body, etag
 
 
 def api_worktrees(entry, store):
@@ -592,9 +605,36 @@ def cmd_serve_child(args):
                 self.send_conditional(body, etag)
             elif path == "/api/search":
                 query = parse_qs(urlsplit(self.path).query).get("q", [""])[0]
-                self.send(200, api_search(registry, query))
+                self.send(200, api_search(registry, summaries, query))
+            elif V1_TASKS.fullmatch(path):
+                self.serve_v1_tasks(V1_TASKS.fullmatch(path).group(1), urlsplit(self.path).query)
             else:
                 self.serve_project_file(path)
+
+        def serve_v1_tasks(self, project, query):
+            entry = registry.find(project)
+            if entry is None:
+                self.send_error_json(404, "unknown project")
+                return
+            p = served_file(entry, TASKS_FILE)
+            stamp = file_stamp(p) if p else None
+            if stamp is None:
+                self.send_error_json(404, "not found")
+                return
+            if stamp[0] > MAX_SERVED_BYTES:
+                self.send_error_json(413, f"larger than {MAX_SERVED_BYTES // 1_000_000} MB")
+                return
+            body, etag = api_v1_tasks(summaries, entry, query)
+            if self.headers.get("If-None-Match") == etag:
+                self.send(304, etag=etag)
+                return
+            try:
+                content = body()
+            except AtmFailure as e:
+                # A filter naming no such sprint or release (400), an unreadable task file (500)
+                self.send_error_json(400 if e.code == 2 else 500, str(e))
+                return
+            self.send(200, content, "application/json", etag)
 
         do_HEAD = do_GET
 
