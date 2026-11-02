@@ -11,6 +11,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   a line on the finished tasks kept in `tasks.json`, grouped by reason: in an open PR, finished in the last
   `keep_days` days, finished on or after `--before`, not in the `--sprint` chosen (`kept: [{id, reason}]` in
   `--json`).
+- **`atm unarchive` says when the next archive moves a task back, and what a wrong ID is** (T-357, found in T-277):
+  a task brought back that is still finished and old gets a line saying the next `atm archive` moves it back unless
+  reopened (`moves_back` in `--json`); an ID it can't bring back is named as *already in tasks.json* or *no such
+  task*, instead of one list for both.
 - **`atm --dir PATH <command>`** (T-351, or `--dir=PATH`): runs any command on the project at PATH, as if started
   there (relative paths in the command count from PATH), without changing directory first; a missing folder is an
   error. `atm serve --dir` keeps its own meaning.

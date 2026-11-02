@@ -290,7 +290,7 @@
     },
     "args": ["unarchive", "T-1"],
     "expect": {
-      "stdout": "Brought back T-1 from the archive.\n",
+      "stdout": "Brought back T-1 from the archive.\nT-1 is finished: the next `atm archive` moves it back, unless reopened (`atm reopen <id> --reason …`).\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
@@ -310,7 +310,58 @@
     "name": "unarchive of a task that isn't archived",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["unarchive", "T-9"],
-    "expect": { "exit": 1, "stderrIncludes": ["atm: not in the archive: T-9"] }
+    "expect": { "exit": 1, "stderrIncludes": ["atm: not in the archive: T-9 (no such task)"] }
+  },
+  {
+    "name": "unarchive tells a task already in tasks.json from one that doesn't exist, and moves nothing (T-357)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "status": "todo" }, { "id": "T-3", "status": "done" }] },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
+      }
+    },
+    "args": ["unarchive", "T-1", "T-2", "T-9", "T-3"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["atm: not in the archive: T-2, T-3 (already in tasks.json); T-9 (no such task)"],
+      "files": {
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
+      }
+    }
+  },
+  {
+    "name": "unarchive of a task finished recently, or not finished: no word about archiving it again (T-357)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [
+            { "id": "T-1", "status": "done", "completed_at": "2026-05-01T09:00:00Z" },
+            { "id": "T-2", "status": "todo" }
+          ]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-05-02T09:00:00Z" },
+    "args": ["unarchive", "T-1", "T-2"],
+    "expect": { "stdout": "Brought back T-1, T-2 from the archive.\n" }
+  },
+  {
+    "name": "unarchive --json names the tasks the next archive moves back (T-357)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [
+            { "id": "T-1", "status": "done", "completed_at": "2026-01-01T09:00:00Z" },
+            { "id": "T-2", "status": "done", "completed_at": "2026-05-01T09:00:00Z" }
+          ]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-05-02T09:00:00Z" },
+    "args": ["unarchive", "T-1", "T-2", "--json"],
+    "expect": { "json": { "restored": ["T-1", "T-2"], "moves_back": ["T-1"] } }
   },
   {
     "name": "a move interrupted between the two writes: the task stays in tasks.json, the archive's copy goes",

@@ -18016,14 +18016,14 @@
       "description": "Found in T-277: `atm edit T-014 --add-dep T-001` refuses with \"T-001 doesn't exist\" when T-001 is archived, and `atm add` checks dependencies the same way (`add_tasks` and `edit_task` in `atm-cli/atm/edit.py` look only at `data[\"tasks\"]`). An archived task counts as done, and `atm check` already accepts such a dependency (`check_data`'s `archived`).\n\n## Change\nBoth also accept the archive's IDs (`load_archive`, loaded only when an ID isn't in tasks.json, so the usual case reads no extra file). A truly unknown ID is still refused. Same for `--add-related` / `related`.\n\n## Tests\nScenarios in `tests/scripts/scenarios/archive.json`: `atm add` with a dependency on an archived task, `atm edit --add-dep` on one, and an unknown ID still refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/edit.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:11:29Z",
+      "updated_at": "2026-11-02T10:12:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18037,7 +18037,18 @@
         "cli"
       ],
       "started_at": "2026-11-02T10:11:29Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "f4dc5ea1e8887e813fc6792a4ded9e5f177a2a83",
+      "completed_at": "2026-11-02T10:12:56Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:12:56Z",
+          "kind": "outcome",
+          "text": "atm add and atm edit --add-dep accept a dependency on an archived task (via `archived_task`), as atm check does; an unknown ID is still refused. Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-357",
@@ -18050,16 +18061,16 @@
       "description": "Found in T-277, two things about `atm unarchive` (`atm-cli/atm/archive.py`):\n\n1. Its error lumps every wrong ID together (\"not in the archive: T-003, T-999, T-014\"). Say which are already in tasks.json and which don't exist at all.\n2. A task brought back that is still finished and old is moved straight back by the next `atm archive`, with no warning. After bringing back a finished task, say so in one line (e.g. that `atm reopen` keeps it out, or that the next archive moves it again).\n\n## Tests\nScenarios in `tests/scripts/scenarios/archive.json`: the two kinds of wrong ID, and the note after bringing back a finished task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/archive.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:10:38Z",
+      "updated_at": "2026-11-02T10:12:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -18069,7 +18080,9 @@
       "sprint": "Overview and polish",
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-02T10:12:56Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-358",

@@ -154,9 +154,18 @@ def cmd_unarchive(args):
         by_id = {t.get("id"): t for t in archive["tasks"]}
         missing = [i for i in args.ids if i not in by_id]
         if missing:
-            raise AtmError(f"not in the archive: {', '.join(missing)}")
+            # Already back, or never there at all: two different mistakes (T-357)
+            live = {t.get("id") for t in data["tasks"]}
+            here = [i for i in missing if i in live]
+            unknown = [i for i in missing if i not in live]
+            parts = ([f"{', '.join(here)} (already in tasks.json)"] if here else []) + (
+                [f"{', '.join(unknown)} (no such task)"] if unknown else []
+            )
+            raise AtmError(f"not in the archive: {'; '.join(parts)}")
         # tasks.json first: a crash here leaves the task in both files, and it stays in tasks.json
         data["tasks"].extend(by_id[i] for i in args.ids)
+        # Still finished and old: the next atm archive would move it straight back (T-357)
+        again = [t.get("id") for t in archivable(data, None, None) if t.get("id") in args.ids]
         if not isinstance(data.get("meta"), dict):
             data["meta"] = {}
         data["meta"]["archived"] = len(archive["tasks"]) - len(set(args.ids))
@@ -164,6 +173,11 @@ def cmd_unarchive(args):
         archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in args.ids]
         write_json_atomic(archive_path(paths), archive)
     if args.json:
-        out(to_json({"restored": args.ids}))
+        out(to_json({"restored": args.ids, "moves_back": again}))
     else:
         out(f"Brought back {', '.join(args.ids)} from the archive.")
+        if again:
+            out(
+                f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
+                f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
+            )
