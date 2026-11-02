@@ -1,5 +1,62 @@
 [
   {
+    "name": "list --derived: each task with what atm derives for it, an archived dependency done (T-366)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-2", "name": "Two", "type": "feature", "status": "todo", "dependencies": ["T-1"] },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "type": "feature",
+              "status": "todo",
+              "dependencies": ["T-2"],
+              "priority": "P0"
+            }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "name": "One", "type": "feature", "status": "done" }]
+        }
+      }
+    },
+    "args": ["list", "--derived"],
+    "expect": {
+      "json": [
+        {
+          "task": { "id": "T-2", "name": "Two", "type": "feature", "status": "todo", "dependencies": ["T-1"] },
+          "derived": {
+            "kind": "todo",
+            "ready": true,
+            "waiting_for": [],
+            "priority": "P2",
+            "effective_review": "none",
+            "archived": false
+          }
+        },
+        {
+          "task": {
+            "id": "T-3",
+            "name": "Three",
+            "type": "feature",
+            "status": "todo",
+            "dependencies": ["T-2"],
+            "priority": "P0"
+          },
+          "derived": {
+            "kind": "todo",
+            "ready": false,
+            "waiting_for": ["T-2"],
+            "priority": "P0",
+            "effective_review": "none",
+            "archived": false
+          }
+        }
+      ]
+    }
+  },
+  {
     "name": "show: a task in full, as text",
     "setup": {
       "files": {

@@ -200,7 +200,7 @@ export type LoadResult = { unchanged: true } | { unchanged: false; loaded: Loade
 interface TaskViewList {
   meta?: TasksFile['meta'];
   bytes?: number;
-  tasks?: { task: Task }[];
+  tasks?: { task: Task; derived?: Task['derived'] }[];
 }
 
 /**
@@ -216,7 +216,10 @@ export async function loadTasks(
   const file = await fetchFile(v1TasksUrl(project), fetchFn, since);
   if (file.unchanged) return file;
   const list = JSON.parse(file.text) as TaskViewList;
-  const tasks = Array.isArray(list.tasks) ? list.tasks.map((view) => view.task) : [];
+  // Each task as stored, with what atm derives for it (T-366): the dashboard takes atm's rules from there
+  const tasks = Array.isArray(list.tasks)
+    ? list.tasks.map((view) => (view.derived ? { ...view.task, derived: view.derived } : view.task))
+    : [];
   return {
     unchanged: false,
     loaded: parseTasksFile({ meta: list.meta, tasks }, typeof list.bytes === 'number' ? list.bytes : file.text.length),

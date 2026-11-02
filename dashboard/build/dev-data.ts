@@ -24,6 +24,25 @@ function summary(root: string): Promise<unknown> {
   });
 }
 
+/** The project's tasks with what atm derives for each (`atm list --derived`, as atm serve's v1 route gives them,
+ * T-366); null when Python or the project can't give them */
+function taskViews(root: string): Promise<unknown[] | null> {
+  return new Promise((resolve) => {
+    execFile(
+      'python3',
+      [ATM, 'list', '--derived'],
+      { cwd: root, timeout: 10_000, maxBuffer: 64 << 20 },
+      (error, stdout) => {
+        try {
+          resolve(error ? null : JSON.parse(stdout));
+        } catch {
+          resolve(null);
+        }
+      },
+    );
+  });
+}
+
 // worktrees.json is never in a task folder, so it answers 404: the dev server shows no linked worktrees
 const FILES = new Set(['tasks.json', 'claims.json', 'tasks-archive.json', 'worktrees.json']);
 
@@ -124,9 +143,9 @@ export function devData(defaultDir: string): Plugin {
           );
           return;
         }
-        // atm serve's v1 tasks route (docs/multi-project-api.md §2.5): the tasks as views, with the project's meta and
-        // size. Without the derived values for now: the dashboard doesn't read them yet, and the dev server will run
-        // the real API instead (docs/layered-architecture.md §9, step 15)
+        // atm serve's v1 tasks route (docs/multi-project-api.md §2.5): the tasks as views, with atm-cli's own derived
+        // values, the project's meta and size (until the dev server runs the real API, docs/layered-architecture.md §9,
+        // step 15)
         const v1 = /^\/api\/v1\/projects\/([^/]+)\/tasks$/.exec(url);
         if (v1) {
           const project = (await devProjects(dirs)).find((p) => p.id === decodeURIComponent(v1[1]));
@@ -142,7 +161,9 @@ export function devData(defaultDir: string): Plugin {
               return;
             }
             const data = JSON.parse(await readFile(file, 'utf8')) as { meta?: unknown; tasks?: unknown[] };
-            const tasks = (Array.isArray(data.tasks) ? data.tasks : []).map((task) => ({ task, derived: {} }));
+            const tasks =
+              (await taskViews(path.dirname(project.dir))) ??
+              (Array.isArray(data.tasks) ? data.tasks : []).map((task) => ({ task, derived: {} }));
             json(200, { generated_at: new Date().toISOString(), meta: data.meta ?? {}, bytes: size, tasks });
           } catch {
             json(404, { error: 'not found' });

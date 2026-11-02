@@ -48,8 +48,9 @@ commands:
   summary        the project's numbers as atm serve gives them to the dashboard (JSON)
   show <id>...   tasks in full (description, dependencies, files, notes)
   list [--status S] [--sprint S | --backlog] [--type T] [--priority P] [--label L] [--agent A] [--ready]
-       [--blocked] [--in-pr] [--with-user]
-                 one line per task: ID, status, priority, labels, name
+       [--blocked] [--in-pr] [--with-user] [--derived]
+                 one line per task: ID, status, priority, labels, name (--derived: each task in full with what atm
+                 derives for it, as JSON)
   deps <id>      what a task waits for, and what waits for it
   start <id>     mark a task in_progress and claim it (its dependencies must be done); prints the task
   review <id> [--note TEXT]
@@ -290,6 +291,12 @@ def build_parser():
     list_.add_argument("--in-pr", action="store_true", help="only tasks in a PR that isn't recorded as merged")
     list_.add_argument("--with-user", action="store_true", help="only tasks done together with the user (with: user)")
     list_.add_argument("--archived", action="store_true", help="list the archive (tasks-archive.json) instead")
+    list_.add_argument(
+        "--derived",
+        action="store_true",
+        help="each task in full with what atm derives for it (kind, ready, waiting for, effective review and release, "
+        "stage), as JSON: what atm serve's api/v1/projects/<id>/tasks gives the dashboard",
+    )
     status = command(
         "status",
         cmd_status,

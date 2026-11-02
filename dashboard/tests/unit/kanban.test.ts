@@ -38,6 +38,24 @@ describe('readiness', () => {
       waitingOn: ['b', 'gone'],
     });
   });
+
+  it('takes atm’s word when the API gives it (T-366): an archived dependency it can’t see is done', () => {
+    const archivedDep = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
+    expect(readiness(t('x', 'todo', { dependencies: ['gone'], derived: archivedDep }), map)).toEqual({ ready: true });
+    const waiting = { ...archivedDep, ready: false, waiting_for: ['b'] };
+    expect(readiness(t('x', 'todo', { dependencies: ['a', 'b'], derived: waiting }), map)).toEqual({
+      ready: false,
+      waitingOn: ['b'],
+    });
+  });
+
+  it('judges itself only a task without atm’s values (a linked worktree’s copy, or empty ones)', () => {
+    const empty = {} as Task['derived'];
+    expect(readiness(t('x', 'todo', { dependencies: ['b'], derived: empty }), map)).toEqual({
+      ready: false,
+      waitingOn: ['b'],
+    });
+  });
 });
 
 describe('Next up: atm says which task it is (T-321)', () => {

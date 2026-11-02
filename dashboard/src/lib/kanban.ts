@@ -43,8 +43,15 @@ const time = (iso: string | undefined) => (iso ? Date.parse(iso) || 0 : 0);
 const newestFirst = (when: (t: Task) => string | undefined) => (a: Task, b: Task) =>
   time(when(b)) - time(when(a)) || byId(a, b);
 
-/** Ready if every dependency is done (a done-kind status); dependencies on tasks that don't exist count as unfinished. */
+/**
+ * Whether a to-do task can start, and what it waits for: as atm says it (the task's `derived` values from the API,
+ * T-366), which counts an archived dependency as done. Only a task that comes without them (a linked worktree's copy)
+ * is judged here: ready if every dependency it can see is done; one it can't see counts as unfinished.
+ */
 export function readiness(task: Task, taskMap: ReadonlyMap<string, Task>, vocab = DEFAULT_VOCABULARY): Readiness {
+  const derived = task.derived;
+  if (derived && typeof derived.ready === 'boolean')
+    return derived.ready ? { ready: true } : { ready: false, waitingOn: derived.waiting_for ?? [] };
   const waitingOn = (task.dependencies ?? []).filter((d) => {
     const dep = taskMap.get(d);
     return !dep || kindOf(vocab, dep.status) !== 'done';

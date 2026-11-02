@@ -18740,7 +18740,7 @@
       "description": "Step 5 of `docs/layered-architecture.md` §9.\n\n## Change\n- Every request the dashboard makes (today in `load.ts`, `state.svelte.ts`, `claims.ts`, `worktrees.ts`, `overview-data.ts`) moves into `dashboard/src/lib/api/`, typed by the generated types; polling and ETags unchanged.\n- An ESLint rule: only `src/lib/api/` may call `fetch`.\n- A project's tasks load from `/api/v1/projects/<p>/tasks`. The views don't change.\n- The e2e `tasksServer` fixture and the dev server answer the v1 route too.\n\n## Tests\n- Unit tests for the client module; `npm run check`, unit tests and `npm run test:e2e` pass; bundle size checked.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-364"
       ],
@@ -18756,7 +18756,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:17:42Z",
+      "updated_at": "2026-11-02T19:34:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18779,10 +18779,20 @@
           "kind": "note",
           "text": "From T-364: v1 has only `…/tasks` (`{task, derived}` per task); the dashboard also needs `meta` (vocabularies, sprints…): add `GET /api/v1/projects/<p>` (§6.2) here. `ProjectSummary`/`StatusReport` aren’t in `api.schema.json` yet: add them when the dashboard types `/api/projects`.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:34:43Z",
+          "kind": "review",
+          "text": "Check: `src/lib/api/http.ts` is the only module that calls `fetch` (ESLint `no-restricted-globals` elsewhere in `src/`); tasks load from `api/v1/projects/<id>/tasks`, which now also returns `meta` and `bytes` (one snapshot); e2e fixture and dev server answer it (empty `derived` for now, note on T-366). Views unchanged. 951 unit, 357 e2e, 539 atm-cli pass.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T19:17:42Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "11dc8eca93b685b8be0eb87f6b76e041a54f095b",
+      "completed_at": "2026-11-02T19:34:43Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-366",
@@ -18795,7 +18805,7 @@
       "description": "Step 6 of `docs/layered-architecture.md` §9: the first duplicated rule goes.\n\n## Change\n- The dashboard's own computation of which tasks are ready and what they wait for (`waiting.ts`, `work.ts`) is replaced by `TaskView`'s `ready`, `waiting_for` and `waiting_on`.\n- Remove the code that is no longer used, and its unit tests (replaced by tests on the API's values).\n\n## Tests\n- Unit and component tests updated; the Kanban, List and graph specs and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-365"
       ],
@@ -18805,7 +18815,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:45Z",
+      "updated_at": "2026-11-02T19:35:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18821,7 +18831,17 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:34:42Z",
+          "kind": "note",
+          "text": "From T-365: the e2e fixture (`tests/e2e/helpers.ts` `asTaskViews`) and the dev server (`build/dev-data.ts`) answer the v1 tasks route with empty `derived` values. Before the dashboard reads them, have the fixture take atm’s own (as it does for summaries with `atm summary`), e.g. via a read command that prints the task views.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:35:05Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-367",
@@ -18846,7 +18866,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:45Z",
+      "updated_at": "2026-11-02T19:34:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18863,7 +18883,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:34:43Z",
+          "kind": "note",
+          "text": "Carried from T-363/T-365: `ProjectSummary` and `StatusReport` aren’t in `api.schema.json` yet (the dashboard’s `ProjectSummary` in `load.ts` is still hand-written); add them with `meta.schema.json` here.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-368",

@@ -135,6 +135,21 @@ describe('needingUser', () => {
     // Without a scope (older callers), every with-you task, as before
     expect(needingUser(tasks, vocab).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W4', 'W5', 'R']);
   });
+
+  it('with you: whether its dependencies are done is atm’s to say when the API gives it (T-366)', () => {
+    const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
+    const tasks = [
+      // Waits on a task this page can't see, which atm counts as done (archived)
+      task('todo', { id: 'W1', with: 'user', sprint: 'Now', dependencies: ['GONE'], derived: derived(true) }),
+      // Its dependency looks done here, but atm says it isn't ready
+      task('todo', { id: 'W2', with: 'user', sprint: 'Now', dependencies: ['D'], derived: derived(false) }),
+      task('done', { id: 'D', sprint: 'Now' }),
+    ];
+    const meta = { sprints: [{ id: 'Now', state: 'active' }] };
+    const vocab = resolveVocabulary(meta);
+    const scope = { model: sprintModel(meta, tasks, vocab), tasks: new Map(tasks.map((t) => [t.id, t])) };
+    expect(needingUser(tasks, vocab, scope).map((t) => t.id)).toEqual(['W1']);
+  });
 });
 
 describe('summaries', () => {

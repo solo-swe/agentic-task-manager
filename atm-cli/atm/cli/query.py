@@ -6,11 +6,23 @@ import os
 
 from ..boot.open import open_project
 from ..core import out, to_json
-from ..lib.query import Filters, list_matching, project_summary, status_report, summary, task_dependencies
+from ..lib.query import (
+    Filters,
+    list_matching,
+    project_summary,
+    status_report,
+    summary,
+    task_dependencies,
+    task_views,
+)
 from .render import list_lines
 
 
 def cmd_list(args):
+    if args.derived:
+        # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
+        out(to_json(task_views(open_project(os.getcwd()), args)))
+        return
     found = list_matching(open_project(os.getcwd()), args)
     vocab, tasks = found["vocab"], found["tasks"]
     if args.json:

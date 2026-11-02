@@ -85,6 +85,8 @@ function togetherNow(task: Task, vocab: Vocabulary, scope?: NeedsYouScope): bool
   if (!scope) return true;
   const active = activeSprint(scope.model);
   if (active && scope.model.sprintOf(task) !== active.id) return false;
+  // Its dependencies done, as atm says it (T-366); judged here only for a task that comes without atm's values
+  if (typeof task.derived?.ready === 'boolean') return task.derived.ready;
   return (task.dependencies ?? []).every((id) => {
     const dep = scope.tasks.get(id);
     return !dep || kindOf(vocab, dep.status) === 'done';

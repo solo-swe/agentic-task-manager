@@ -172,7 +172,8 @@ describe('loadTasks', () => {
     expect(result.unchanged).toBe(false);
     if (result.unchanged) return;
     expect(result.loaded.tasks).toHaveLength(12);
-    expect(result.loaded.tasks[0]).toEqual(standard.tasks[0]); // the task as stored, without the derived values
+    // The task as stored, with what atm derives for it beside its own fields (T-366)
+    expect(result.loaded.tasks[0]).toEqual({ ...standard.tasks[0], derived: {} });
     expect(result.loaded.projectName).toBe('Standard Project'); // its meta, in the same snapshot
     expect(result.validators).toEqual({ etag: '"abc"', lastModified: 'Sat, 24 Oct 2026 10:00:00 GMT' });
   });

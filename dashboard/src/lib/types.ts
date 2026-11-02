@@ -1,4 +1,4 @@
-import type { Task as StoredTask } from './generated/types';
+import type { Task as StoredTask, TaskDerived } from './generated/types';
 
 export type { Note } from './generated/types';
 
@@ -17,6 +17,9 @@ export interface Task extends StoredTask {
   description: string;
   type: TaskType;
   status: Status;
+  /** What atm derives for the task (its readiness, what it waits for, …), from the API's v1 tasks route
+   * (docs/multi-project-api.md §2.5). Absent for tasks that come without it: the archive's, a linked worktree's copy. */
+  derived?: TaskDerived;
 }
 
 export interface TasksFile {

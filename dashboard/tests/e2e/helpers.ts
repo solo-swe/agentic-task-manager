@@ -21,11 +21,20 @@ const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 
-/** GET api/v1/projects/<id>/tasks for a project holding `body` as its tasks.json (docs/multi-project-api.md §2.5): its
- * meta and size, and each task as a view. The derived values are empty: the dashboard doesn't read them yet
- * (docs/layered-architecture.md §9, step 6). A body that isn't a task file is served as it is, so the dashboard's
- * error handling sees it. */
-function asTaskViews(body: string): string {
+/** Task views already worked out, by the files they are of: atm runs once per version of the data */
+const viewCache = new Map<string, string>();
+
+/**
+ * GET api/v1/projects/<id>/tasks for a project holding `body` as its tasks.json and `archive` as its archive
+ * (docs/multi-project-api.md §2.5): its meta and size, and each task with what atm-cli itself derives for it
+ * (`atm list --derived`), so the dashboard's readiness is tested against atm's rule, not a copy of it (T-366). A body
+ * that isn't a task file is served as it is, so the dashboard's error handling sees it; a file atm refuses (the
+ * fixtures of broken data) gets its tasks without derived values.
+ */
+function asTaskViews(body: string, archive: string | null = null): string {
+  const key = JSON.stringify([body, archive]);
+  const cached = viewCache.get(key);
+  if (cached !== undefined) return cached;
   let data: TasksData;
   try {
     data = JSON.parse(body) as TasksData;
@@ -33,8 +42,33 @@ function asTaskViews(body: string): string {
     return body;
   }
   if (!data || typeof data !== 'object' || !Array.isArray(data.tasks)) return body;
-  const tasks = data.tasks.map((task) => ({ task, derived: {} }));
-  return JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', meta: data.meta ?? {}, bytes: body.length, tasks });
+  const tasks = atmViews(body, archive) ?? data.tasks.map((task) => ({ task, derived: {} }));
+  const views = JSON.stringify({
+    generated_at: '2026-01-01T00:00:00Z',
+    meta: data.meta ?? {},
+    bytes: body.length,
+    tasks,
+  });
+  viewCache.set(key, views);
+  return views;
+}
+
+/** atm's task views of the files (`atm list --derived`), or null when atm refuses them */
+function atmViews(body: string, archive: string | null): unknown[] | null {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
+  try {
+    mkdirSync(path.join(dir, '.agentic-task-manager'));
+    writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
+    if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
+    const r = spawnSync('python3', [ATM, 'list', '--derived'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+    });
+    return r.status === 0 ? (JSON.parse(r.stdout) as unknown[]) : null;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
@@ -208,7 +242,9 @@ export class TasksServer {
       return route.fulfill({ status: this.status, contentType: 'application/json', body, headers });
     };
     await this.page.route(TASKS_JSON, (route) => answerTasks(route, TASKS_JSON, (body) => body));
-    await this.page.route(V1_TASKS, (route) => answerTasks(route, V1_TASKS, asTaskViews));
+    await this.page.route(V1_TASKS, (route) =>
+      answerTasks(route, V1_TASKS, (body) => asTaskViews(body, body === this.body ? this.archiveBody : null)),
+    );
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
       const mine = isDefault(route.request().url(), ARCHIVE_JSON);
@@ -283,6 +319,7 @@ export class TasksServer {
    * (summary() makes one) for api/projects. */
   addProject(id: string, data: string | TasksData, name = id, summary: Record<string, unknown> | null = null) {
     this.others.set(id, { name, body: toBody(data), summary });
+    asTaskViews(toBody(data)); // worked out now, not during a request
     return this;
   }
 
@@ -322,6 +359,7 @@ export class TasksServer {
   /** Serve tasks-archive.json (a fixture by name or inline tasks); null makes it a 404 (no archive) again. */
   archive(data: string | TasksData | null) {
     this.archiveBody = data === null ? null : toBody(data);
+    this.warm();
     return this;
   }
 
@@ -330,7 +368,13 @@ export class TasksServer {
     this.body = toBody(data);
     this.status = 200;
     this.version++;
+    this.warm();
     return this;
+  }
+
+  /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
+  private warm() {
+    if (this.body !== null) asTaskViews(this.body, this.archiveBody);
   }
 
   fail(status = 404) {
