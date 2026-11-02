@@ -6,7 +6,9 @@ import { agentTimeline, UNATTRIBUTED, type AgentBar, type AgentLane, type AgentT
 import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';
 import { loadTasks, type ProjectEntry, type Validators } from './load';
-import type { Task } from './types';
+import { releaseSummaries, splitReleases } from './releases';
+import { activeSprint, sprintModel, sprintSummary, type SprintSummary } from './sprints';
+import type { Task, TasksFile } from './types';
 import { DEFAULT_VOCABULARY, kindOf, resolveVocabulary, type StatusKind, type Vocabulary } from './vocab';
 
 export interface ProjectSource {
@@ -14,6 +16,8 @@ export interface ProjectSource {
   tasks: Task[];
   claims: ClaimMap;
   vocab: Vocabulary;
+  /** tasks.json's meta: its sprints and releases (T-329) */
+  meta?: TasksFile['meta'];
   validators?: Validators;
 }
 
@@ -39,7 +43,7 @@ export async function loadProjectSources(
           ]);
           if (result.unchanged) return old ? { ...old, project, claims } : null;
           const { tasks, meta } = result.loaded;
-          return { project, tasks, claims, vocab: resolveVocabulary(meta), validators: result.validators };
+          return { project, tasks, claims, vocab: resolveVocabulary(meta), meta, validators: result.validators };
         } catch (e) {
           console.error(`Loading ${project.id}'s tasks for the overview failed:`, e);
           return old ? { ...old, project } : null;
@@ -79,6 +83,58 @@ export function mergedTasks(sources: readonly ProjectSource[]): MergedTasks {
     }
   }
   return { tasks, claims, origin };
+}
+
+/** One project's row on the overview's Progress tab (T-329) */
+export interface ProjectProgress {
+  project: ProjectEntry;
+  /** Done-kind tasks, and every task but the skipped ones */
+  done: number;
+  total: number;
+  /** Its active sprint's figures, if one is active */
+  sprint?: SprintSummary;
+  /** Its releases still open, in its order */
+  releases: { id: string; name?: string; done: number; total: number }[];
+}
+
+export function projectProgress({ project, tasks, vocab, meta }: ProjectSource, now: number): ProjectProgress {
+  const kinds = tasks.map((t) => kindOf(vocab, t.status));
+  const model = sprintModel(meta, tasks, vocab);
+  const active = activeSprint(model);
+  return {
+    project,
+    done: kinds.filter((k) => k === 'done').length,
+    total: kinds.filter((k) => k !== 'skipped').length,
+    ...(active ? { sprint: sprintSummary(model, tasks, active, vocab, now) } : {}),
+    releases: splitReleases(releaseSummaries(meta, tasks, model, vocab)).open.map((r) => ({
+      id: r.release.id,
+      ...(r.release.name ? { name: r.release.name } : {}),
+      done: r.done,
+      total: r.total,
+    })),
+  };
+}
+
+const WEEK = 7 * 86_400_000;
+
+/**
+ * Tasks done per week over the last `weeks` weeks, oldest first (the last one ends now), and their average: the
+ * velocity across projects, whose sprints don't line up (T-329). `tasks` as mergedTasks gives them.
+ */
+export function weeklyVelocity(
+  tasks: readonly Task[],
+  now: number,
+  weeks = 10,
+): { weeks: { start: number; done: number }[]; average: number } {
+  const done = tasks
+    .filter((t) => kindOf(DEFAULT_VOCABULARY, t.status) === 'done')
+    .map((t) => Date.parse(t.completed_at ?? ''))
+    .filter((t) => !Number.isNaN(t));
+  const buckets = Array.from({ length: weeks }, (_, i) => {
+    const start = now - (weeks - i) * WEEK;
+    return { start, done: done.filter((t) => t > start && t <= start + WEEK).length };
+  });
+  return { weeks: buckets, average: buckets.reduce((n, b) => n + b.done, 0) / weeks };
 }
 
 /** How many tasks each source finished in `period` (all time without one), most first; none left out */

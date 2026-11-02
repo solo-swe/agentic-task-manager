@@ -22,9 +22,9 @@ export function hasOverviewHash(hash: string): boolean {
   return hashParams(hash).has('overview');
 }
 
-/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, or every project's
- * agents (T-333) */
-export const OVERVIEW_TABS = ['projects', 'board', 'agents'] as const;
+/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
+ * progress (T-329) or agents (T-333) */
+export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents'] as const;
 export type OverviewTab = (typeof OVERVIEW_TABS)[number];
 
 export function isOverviewTab(value: unknown): value is OverviewTab {

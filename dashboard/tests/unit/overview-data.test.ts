@@ -6,6 +6,8 @@ import {
   completionsByProject,
   loadProjectSources,
   mergedTasks,
+  projectProgress,
+  weeklyVelocity,
   type ProjectSource,
 } from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
@@ -138,6 +140,53 @@ describe('mergedTasks (T-328)', () => {
       ['a', 0],
       ['c', 0],
     ]);
+  });
+});
+
+describe('projectProgress and weeklyVelocity (T-329)', () => {
+  it('a project’s done of total (skipped left out), its active sprint and its open releases', () => {
+    const meta = {
+      sprints: [
+        { id: 'One', state: 'closed' },
+        { id: 'Two', state: 'active', goal: 'Ship it', due: '2026-01-05', release: '1.0' },
+      ],
+      releases: [
+        { id: '0.9', state: 'released' },
+        { id: '1.0', state: 'planned', name: 'First' },
+      ],
+    } as never;
+    const tasks = [
+      { ...task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'), sprint: 'One' },
+      { ...task('T-2', 'Ada', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z'), sprint: 'Two' },
+      { ...task('T-3', 'Ada', '2026-01-02T10:00:00Z', null), sprint: 'Two' },
+      { id: 'T-4', name: 'Dropped', type: 'feature', status: 'skipped', sprint: 'Two' } as Task,
+    ];
+    const row = projectProgress({ ...source(project('a'), tasks), meta }, NOW);
+    expect([row.done, row.total]).toEqual([2, 3]);
+    expect(row.sprint && [row.sprint.sprint.id, row.sprint.done, row.sprint.total, row.sprint.dueIn]).toEqual([
+      'Two',
+      1,
+      2,
+      3,
+    ]);
+    expect(row.releases).toEqual([{ id: '1.0', name: 'First', done: 1, total: 2 }]);
+    // Without sprints or releases
+    const plain = projectProgress(source(project('b'), tasks.slice(0, 1)), NOW);
+    expect([plain.sprint, plain.releases]).toEqual([undefined, []]);
+  });
+
+  it('weeklyVelocity: done per week, the last one ending now, oldest first, with the average', () => {
+    const day = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
+    const tasks = [
+      task('T-1', 'Ada', day(1), day(1)),
+      task('T-2', 'Ada', day(2), day(2)),
+      task('T-3', 'Ada', day(9), day(9)),
+      task('T-4', 'Ada', day(1), null),
+    ];
+    const v = weeklyVelocity(tasks, NOW, 3);
+    expect(v.weeks.map((w) => w.done)).toEqual([0, 1, 2]);
+    expect(v.weeks[2].start).toBe(NOW - 7 * 86_400_000);
+    expect(v.average).toBe(1);
   });
 });
 

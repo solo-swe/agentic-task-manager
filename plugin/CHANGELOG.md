@@ -35,6 +35,11 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   (opening the project), its own period, and a task opening in its project. The overview now loads every project's
   `tasks.json` and `claims.json` while shown (`lib/overview-data.ts`, which `lib/overview-agents.ts` became), rather
   than the summary growing; `ActivityWidget` takes the tasks, period state, a click handler and the breakdown.
+- **A Progress tab on the Projects Overview** (T-329, `#overview&view=progress`): a row per shown project with its
+  done of total, its active sprint (done of total, due date, goal on hover) and open releases, opening the project's
+  own Progress tab; then the burndown of every project's tasks together (last 14 days or all time, with the forecast)
+  and the tasks done per week over the last ten (the projects' sprints don't line up). `projectProgress`,
+  `weeklyVelocity` in `lib/overview-data.ts`.
 
 ### Changed
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own

@@ -42,7 +42,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 - Query strings are ignored, except `q` on `api/search`.
 - The Projects Overview reads every listed project's `tasks.json` and `claims.json` through these routes while it is
   shown, conditionally on each refresh (an unchanged `tasks.json` answers `304`), for its views across projects: the
-  Agents tab (T-333) and the title bar's Activity (T-328). There is no route of their own.
+  Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329). There is no route of their own.
 
 ### 2.1 `claims.json`: claims from every worktree
 

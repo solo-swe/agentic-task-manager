@@ -11,6 +11,7 @@
   import Icon from './Icon.svelte';
   import InfoTip from './InfoTip.svelte';
   import OverviewAgents from './OverviewAgents.svelte';
+  import OverviewProgress from './OverviewProgress.svelte';
   import ProjectCard from './ProjectCard.svelte';
 
   const ordered = $derived(orderProjects(dashboard.projects));
@@ -22,8 +23,13 @@
   const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
 
   // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
-  const LABELS: Record<OverviewTab, string> = { projects: 'Projects', board: 'Omniboard', agents: 'Agents' };
-  const ICONS = { projects: 'folder', board: 'square-kanban', agents: 'bot' } as const;
+  const LABELS: Record<OverviewTab, string> = {
+    projects: 'Projects',
+    board: 'Omniboard',
+    progress: 'Progress',
+    agents: 'Agents',
+  };
+  const ICONS = { projects: 'folder', board: 'square-kanban', progress: 'trending-up', agents: 'bot' } as const;
   const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
 
   function onTabKeydown(e: KeyboardEvent) {
@@ -138,6 +144,8 @@
       <AllProjectsBoard projects={shown} />
     {:else if tab === 'agents'}
       <OverviewAgents projects={shown} />
+    {:else if tab === 'progress'}
+      <OverviewProgress projects={shown} />
     {:else}
       <div class="projects-grid" id="projects-grid">
         {#each shown as project (project.id)}

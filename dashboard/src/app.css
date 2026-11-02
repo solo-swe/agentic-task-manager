@@ -3852,6 +3852,104 @@ svg.graph-minimap.hidden {
 .overview-agents {
   min-width: 0;
 }
+/* The overview's Progress tab (T-329): a row per project, then the burndown and velocity of all of them */
+.overview-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.overview-progress-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.overview-progress-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(200px, 1.4fr) minmax(140px, 1fr);
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.overview-progress-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+}
+.overview-progress-row > span {
+  min-width: 0;
+}
+.overview-progress-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.overview-progress-name > span:last-child,
+.overview-progress-sprint strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.overview-progress-total {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.overview-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface2);
+  overflow: hidden;
+}
+.overview-progress-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--green);
+}
+.overview-progress-count {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.overview-progress-sprint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.overview-progress-sprint .overdue {
+  color: var(--red);
+}
+.overview-progress-releases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  font-size: 12px;
+}
+.overview-progress-release {
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--purple) 12%, transparent);
+  color: var(--purple);
+  font-variant-numeric: tabular-nums;
+}
+.overview-progress .muted {
+  color: var(--text-muted);
+}
+@media (max-width: 900px) {
+  .overview-progress-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
 .agent-track {
   position: relative;
   border-bottom: 1px solid var(--border);

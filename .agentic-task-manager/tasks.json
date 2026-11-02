@@ -16517,7 +16517,7 @@
       "description": "The title bar's Activity chart and popup (completions over time, agents working, waiting on you, idle, time per task) show on the Projects Overview too, for every project the server lists, summed, with a breakdown by project (as the Omniboard combines boards).\n\n## Data\nFrom `api/projects`' summaries (`completions_14d`, `stats`, `needs_you`, ...). What's missing for the popup's charts is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ActivityWidget.svelte",
@@ -16525,7 +16525,7 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T06:44:33Z",
+      "updated_at": "2026-11-02T06:50:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16539,7 +16539,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T06:44:33Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "3abbdb15b71d9c1604b333329c46e747ecd87143",
+      "review_requested_at": "2026-11-02T06:50:51Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-02T06:50:51Z",
+          "kind": "review",
+          "text": "Check on the dev server: the overview’s title bar has the Activity chart for every shown project; its popup lists each project’s count for the period (click opens it); a task’s dot opens it in its project. **Design change to approve**: the overview loads each project’s `tasks.json`/`claims.json` (conditional, 304 when unchanged) instead of growing the summary, as the task asked. Screenshots left for T-345.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-329",
@@ -16553,7 +16564,7 @@
       "description": "A Progress tab on the Projects Overview, next to Projects and Omniboard: every project's done of total and its active sprint (goal, due date, progress), a combined burndown and velocity, and each project's open releases. Clicking a project opens its own Progress tab.\n\n## Data\nFrom `api/projects`' summaries (`active_sprint`, `recent_sprints`, `stats`); what velocity or the burndown need beyond them (e.g. closed sprints' reports, completion times) is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16561,9 +16572,9 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T06:50:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard",
         "cli"
@@ -16574,7 +16585,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T06:50:51Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-330",
