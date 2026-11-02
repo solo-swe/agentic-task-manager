@@ -8,7 +8,6 @@ import argparse
 import os
 import sys
 
-from ..claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
 from ..common.errors import AtmFailure
 from ..components import cmd_components
 from ..core import AtmError, AtmExit, out, plugin_version, to_json
@@ -26,6 +25,7 @@ from ..api.server import DEFAULT_PORT, cmd_serve, cmd_serve_child, refresh_serve
 from ..archive import cmd_archive, cmd_unarchive
 from ..edit import cmd_add, cmd_check, cmd_edit
 from ..git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
+from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
 from .query import cmd_deps, cmd_list, cmd_status, cmd_summary
 from .status import cmd_note, cmd_status_change
 from .show import cmd_show

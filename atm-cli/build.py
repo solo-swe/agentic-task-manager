@@ -61,6 +61,7 @@ MODULES = [
     "lib.tasks",
     "lib.query",
     "lib.status",
+    "lib.claims",
     "boot.open",
     "cli.render",
     "edit",
@@ -73,6 +74,7 @@ MODULES = [
     "api.server",
     "cli.query",
     "cli.status",
+    "cli.claims",
     "cli.show",
     "cli.main",
 ]

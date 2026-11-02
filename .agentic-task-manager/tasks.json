@@ -18992,7 +18992,7 @@
       "description": "Step 9 of `docs/layered-architecture.md` §9.\n\n## Change\n- `claims.next` (with `claim`, atomic), `claims.heartbeat`, `claims.heartbeat_due` and `claims.list` (§5.1); the claims store and resolutions behind `Store` (§3.2).\n- `atm run` stays in the CLI, keeping the claim alive with `claims.heartbeat`.\n- `claims.py`'s storage code moves into the JSON-in-git store; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (selection order, `with_user`, back from review first, expiry); contract tests for claims on both stores; `npm run test:scripts` and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-368"
       ],
@@ -19002,7 +19002,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:54Z",
+      "updated_at": "2026-11-02T20:40:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19018,7 +19018,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T20:40:54Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-370",
@@ -19347,7 +19349,7 @@
       "description": "Since T-365 the dashboard loads tasks through atm-lib (`GET /api/v1/projects/<id>/tasks`), which refuses a task file every `atm` command refuses (`load_tasks` in `model.py`: an entry without a string `id`, an ID with characters atm doesn't allow, `dependencies` that aren't a list of IDs, an unusable vocabulary). The dashboard used to show such a file anyway. Keep that, as agreed with Hakan (option 1).\n\n## Change\n- A tolerant read mode in the store (`JsonGitStore`, and the in-memory store): writes stay strict, reads keep what they can. An entry that isn't a task (no string `id`) is left out; a task with a bad ID or bad `dependencies` is kept; an unusable vocabulary falls back to the defaults (as `dashboard/src/lib/vocab.ts` already does).\n- Each problem is reported: per task as `derived.problems` (a list of messages, the wording of `atm check`), and for the file as a top-level `problems` list in the v1 response (`api.schema.json`). The rules skip what they can't judge: a task with broken `dependencies` isn't `ready` and waits for nothing it can name.\n- The REST API's v1 tasks route reads tolerantly; every `atm` command stays strict.\n- The dashboard shows a notice when `problems` isn't empty (e.g. \"atm check finds 3 problems in tasks.json\"), and a task's problems in its detail panel.\n\n## Tests\n- `tests/lib/`: the tolerant read on both stores (contract tests), `task_views` with each kind of problem.\n- `tests/scripts/serve.test.mjs`: the v1 route serves a malformed file with `problems`, where `atm list` still refuses it.\n- The e2e fixture's fallback (`asTaskViews` in `tests/e2e/helpers.ts`, empty derived values when atm refuses a file) goes: it takes atm's tolerant views. Unit and e2e tests for the notice.\n- Update `docs/multi-project-api.md` §2.5 and `docs/layered-architecture.md` §3.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-368"
       ],
@@ -19363,7 +19365,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T20:15:57Z",
-      "updated_at": "2026-11-02T20:29:01Z",
+      "updated_at": "2026-11-02T20:40:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19384,7 +19386,19 @@
         "T-360"
       ],
       "started_at": "2026-11-02T20:29:01Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "0300c3b87f376a5ab191fdef4f5c09de5006b39f",
+      "completed_at": "2026-11-02T20:40:46Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-02T20:40:46Z",
+          "kind": "review",
+          "text": "Check: `load_tasks_tolerant` + `JsonGitStore(tolerant=True)`/`problems()`; the v1 route reads tolerantly (commands stay strict): non-task entries left out, bad IDs kept, broken deps shown with the readable IDs (every task fits the schema; a string there used to break the page), unusable vocab lists → defaults; `derived.problems` (not ready) + response `problems`. Footer notice, detail list. `atm list --derived --tolerant`. 955 unit, 359 e2e, 541 atm-cli.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

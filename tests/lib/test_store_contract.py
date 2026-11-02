@@ -114,6 +114,13 @@ class JsonGitStoreContract(StoreContract, unittest.TestCase):
     def reopen(self):
         return JsonGitStore(find_paths(self.root))  # read from the files again
 
+    def test_a_change_that_changes_nothing_leaves_the_file_alone(self):
+        # atm next and the heartbeats look without changing: open dashboards must not reload for them (T-369)
+        tasks_file = os.path.join(self.root, ".agentic-task-manager", "tasks.json")
+        os.utime(tasks_file, (1_000_000, 1_000_000))
+        self.store.change(lambda work: work.tasks()[0].get("id"))
+        self.assertEqual(os.stat(tasks_file).st_mtime, 1_000_000)
+
 
 if __name__ == "__main__":
     unittest.main()

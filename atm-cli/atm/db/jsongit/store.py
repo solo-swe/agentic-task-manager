@@ -2,10 +2,11 @@
 has. For now it wraps the code from before the layers (`load_tasks`, the archive, the claims store); that code moves
 in here as the migration's slices do (§9)."""
 
+import json
 import os
 
 from ...claims import locked_with_claims, read_store, write_store
-from ...core import git, read_json, write_json_atomic
+from ...core import git, read_json, to_json, write_text_atomic
 from ...model import archive_path, archived_task, load_archive, load_tasks, load_tasks_tolerant, vocabulary
 from ..working import Working
 
@@ -83,8 +84,14 @@ class JsonGitStore:
                 lambda: (read_json(tasks_file), read_store(self.paths)),
             )
             result = fn(work)
-            # tasks.json is written on every change, as atm always has (comparing first would cost more than writing)
-            write_json_atomic(self.paths["tasks"], work.document)
+            # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and its
+            # mtime alone, so open dashboards don't reload for nothing
+            text = to_json(work.document) + "\n"
+            with open(tasks_file, encoding="utf-8") as f:
+                stored = f.read()
+            # The same data in another layout (a file edited by hand) is unchanged too
+            if stored != text and json.loads(stored) != work.document:
+                write_text_atomic(tasks_file, text)
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
         self._data = None  # this store's snapshot is out of date now

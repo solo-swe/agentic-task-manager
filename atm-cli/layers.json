@@ -25,7 +25,6 @@
     "cli.main": [
       "api.server",
       "archive",
-      "claims",
       "components",
       "core",
       "edit",
@@ -41,12 +40,14 @@
       "repository",
       "sprints"
     ],
+    "cli.claims": ["claims", "core", "paths", "registry"],
     "cli.query": ["core"],
     "cli.render": ["model"],
     "cli.show": ["core"],
     "cli.status": ["claims", "core"],
     "db.jsongit.store": ["claims", "core", "model"],
     "db.memory": ["model"],
+    "lib.claims": ["claims", "core", "model"],
     "lib.query": ["claims", "core", "model"],
     "lib.status": ["claims", "core", "model"],
     "vcs.git": ["registry"]
