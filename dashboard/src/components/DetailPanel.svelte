@@ -12,7 +12,7 @@
   import { parseInline, parseMarkdown } from '../lib/markdown';
   import { taskTimes } from '../lib/work';
   import { commitRef } from '../lib/repo';
-  import { cutOff } from '../lib/scroll';
+  import { cutOff, scrollBehavior } from '../lib/scroll';
   import RepoRef from './RepoRef.svelte';
   import BranchChip from './BranchChip.svelte';
   import ComponentChips from './ComponentChips.svelte';
@@ -125,7 +125,7 @@
   });
   function page(direction: 1 | -1) {
     manual();
-    body?.scrollBy({ top: direction * body.clientHeight * 0.85, behavior: 'smooth' });
+    body?.scrollBy({ top: direction * body.clientHeight * 0.85, behavior: scrollBehavior() });
   }
   // A group scrolled to sits just below the "▲ N more" hint, which covers the top of the sections (.kanban-more.top)
   const HINT_HEIGHT = 28;
@@ -140,7 +140,7 @@
     jumpTo = top;
     active = id;
     await tick();
-    body.scrollTo({ top, behavior: 'smooth' });
+    body.scrollTo({ top, behavior: scrollBehavior() });
   }
 
   // Another task opens at its top; the same task re-rendered (auto-refresh, a reload) keeps its scroll position

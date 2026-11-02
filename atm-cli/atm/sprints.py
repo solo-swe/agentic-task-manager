@@ -313,6 +313,84 @@ def sprints_close(paths, args):
         out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
 
 
+def mentions_sprint(task, sprint):
+    """Whether the task's sprint history names the sprint (case-insensitively)."""
+    return any(
+        isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
+        for e in task.get("sprint_history") or []
+    )
+
+
+def sprints_delete(paths, args):
+    """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
+    state; an open one's unfinished tasks go to --move-to (the backlog by default); one that tasks finished in or
+    moved on from needs --force when open, and a closed one with any history stays (its record and report)."""
+    actor = agent_identity(args.agent)
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        archived = load_archive(paths)["tasks"]
+        vocab = vocabulary(data)
+        sprint = stored_sprint(data, args.name)
+        state = sprint.get("state", "planned")
+
+        def kind(task):
+            return kind_of(vocab, task.get("status"))
+
+        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
+        claimed = [t["id"] for t in own if kind(t) == "active"]
+        if claimed:
+            raise AtmError(
+                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
+                f"{'it' if len(claimed) == 1 else 'them'} before deleting the sprint",
+                2,
+            )
+        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
+        # Its history: tasks that finished in it (archived ones too), or were in it and moved on
+        history = [t["id"] for t in own if t not in unfinished]
+        history += [t.get("id") for t in archived if isinstance(t, dict) and in_sprint(t, sprint)]
+        history += [
+            t.get("id")
+            for t in list(data["tasks"]) + list(archived)
+            if isinstance(t, dict) and not in_sprint(t, sprint) and mentions_sprint(t, sprint)
+        ]
+        if history and state == "closed":
+            raise AtmError(
+                f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
+                "stay; only an empty sprint can be deleted",
+                2,
+            )
+        if history and not args.force:
+            raise AtmError(
+                f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
+                "with --force to drop that record (its tasks go to --move-to, the backlog by default)",
+                2,
+            )
+        to = args.move_to or "backlog"
+        target = None if to == "backlog" else open_sprint(vocab, to)
+        if target is not None and target.casefold() == sprint["id"].casefold():
+            raise AtmError(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})", 2)
+        # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
+        moving = own if args.force else unfinished
+        stamp = now_iso()
+        for task in moving:
+            set_sprint(task, target, stamp)
+            touch(task, actor, stamp)
+        data["meta"]["sprints"] = [s for s in data["meta"]["sprints"] if s is not sprint]
+        vocabulary(data)
+        write_json_atomic(paths["tasks"], data)
+    moved = [t["id"] for t in moving]
+    if args.json:
+        out(to_json({"deleted": sprint["id"], "state": state, "moved": moved, "to": target or "backlog"}))
+        return
+    line = f"Deleted the sprint “{sprint['id']}” ({state})"
+    if moved:
+        where = "the backlog" if target is None else f"“{target}”"
+        line += f": {len(moved)} task{'' if len(moved) == 1 else 's'} moved to {where} ({', '.join(moved)})"
+    out(line + ".")
+    if state == "active":
+        out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
+
+
 def cmd_sprints(args):
     paths = find_paths(os.getcwd())
     if args.action in (None, "list"):
@@ -324,7 +402,8 @@ def cmd_sprints(args):
     else:
         if not args.name:
             raise AtmError(f"atm sprints {args.action} needs a sprint name", 2)
-        {"edit": sprints_edit, "start": sprints_start, "close": sprints_close}[args.action](paths, args)
+        actions = {"edit": sprints_edit, "start": sprints_start, "close": sprints_close, "delete": sprints_delete}
+        actions[args.action](paths, args)
 
 
 def move_target(vocab, task, to):

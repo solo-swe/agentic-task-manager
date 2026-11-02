@@ -23,6 +23,8 @@ export interface Prefs {
   boardGroupByProject: boolean;
   /** The All projects board's search (T-261) */
   boardQuery: string;
+  /** The All projects board shows the active sprints' tasks ('active', the default) or every task ('all'; T-340) */
+  boardScope: string;
 }
 
 function storage(): Storage | null {

@@ -177,3 +177,75 @@ describe('atm commit', () => {
     }
   });
 });
+
+// T-343: after a rebase or cherry-pick, the recorded SHA is no longer on the branch; --record names the new one
+describe('atm commit --record', () => {
+  /** A project with a commit for T-001 on top of the initial one; returns [root, its SHA] */
+  function withTaskCommit(message = 'feat(T-001): Add login') {
+    const root = project();
+    write(root, 'src/a.txt', 'a2\n');
+    git(['commit', '-q', '-am', message], root);
+    return [root, git(['rev-parse', 'HEAD'], root)];
+  }
+
+  test('records an existing commit, by SHA or by ref, as its full SHA; nothing is committed', () => {
+    const [root, sha] = withTaskCommit();
+    try {
+      const count = git(['rev-list', '--count', 'HEAD'], root);
+      const short = runAtm(['commit', 'T-001', '--record', sha.slice(0, 8)], root, ENV);
+      assert.equal(short.code, 0, short.stderr);
+      assert.equal(short.stdout, `T-001: recorded ${sha.slice(0, 7)} feat(T-001): Add login\n`);
+      assert.equal(read(root).tasks[0].commit, sha);
+      assert.equal(read(root).tasks[0].updated_by, 'alice');
+      assert.equal(git(['rev-list', '--count', 'HEAD'], root), count);
+
+      const json = runAtm(['commit', 'T-001', '--record', 'HEAD', '--json'], root, ENV);
+      assert.equal(json.code, 0, json.stderr);
+      assert.deepEqual(JSON.parse(json.stdout), { task: 'T-001', commit: sha, recorded: true });
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('a commit whose message does not name the task is recorded, with a hint', () => {
+    const [root, sha] = withTaskCommit('Tidy up');
+    try {
+      const result = runAtm(['commit', 'T-001', '--record', sha], root, ENV);
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stdout, /its message doesn.t mention T-001/);
+      assert.equal(read(root).tasks[0].commit, sha);
+      const json = JSON.parse(runAtm(['commit', 'T-001', '--record', sha, '--json'], root, ENV).stdout);
+      assert.match(json.hint, /doesn.t mention T-001/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('refuses an unknown revision, an option, a commit not on the branch, and --record with --file', () => {
+    const [root] = withTaskCommit();
+    try {
+      // A commit on another branch only
+      git(['switch', '-q', '-c', 'side'], root);
+      write(root, 'src/b.txt', 'side\n');
+      git(['commit', '-q', '-am', 'feat(T-001): on the side'], root);
+      const side = git(['rev-parse', 'HEAD'], root);
+      git(['switch', '-q', '-'], root);
+      const tree = git(['rev-parse', 'HEAD^{tree}'], root);
+      for (const [args, code, message] of [
+        [['--record', 'nope'], 1, /no commit nope/],
+        [['--record=--output=x'], 2, /a revision, not an option/],
+        [['--record', side], 1, /not on the current branch/],
+        [['--record', tree], 1, /no commit/],
+        [['--record', 'HEAD', '--file', 'src/a.txt'], 2, /--record records an existing commit: no --file or --message/],
+      ]) {
+        const result = runAtm(['commit', 'T-001', ...args], root, ENV);
+        assert.equal(result.code, code, `${args.join(' ')}: ${result.stderr}`);
+        assert.match(result.stderr, message);
+      }
+      assert.equal(read(root).tasks[0].commit, undefined);
+      assert.ok(!fs.existsSync(path.join(root, 'x')));
+    } finally {
+      removeDir(root);
+    }
+  });
+});

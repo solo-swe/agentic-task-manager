@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Block, Inline } from '../lib/markdown';
+  import { scrollBehavior } from '../lib/scroll';
 
   // Renders parsed Markdown (lib/markdown.ts). Every piece of text goes through Svelte, so it is escaped.
   // Heading IDs get `idPrefix`, so they can't collide with the dashboard's own IDs or the flags in the URL hash
@@ -10,7 +11,7 @@
   // The URL hash holds the dashboard's state (tab, open dialog), so links within the page scroll instead
   function scrollTo(e: MouseEvent, href: string) {
     e.preventDefault();
-    document.getElementById(idPrefix + href.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById(idPrefix + href.slice(1))?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
   }
 </script>
 

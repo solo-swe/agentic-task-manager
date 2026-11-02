@@ -1,5 +1,6 @@
 // Tasks waiting on someone rather than on agent work (docs/v4/dashboard.md section 3): how long, and what was said.
 import { formatMinutes } from './format';
+import { activeSprint, type SprintModel } from './sprints';
 import type { Note, Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
 
@@ -70,19 +71,43 @@ export function blockSummary(wait: BlockWait): string {
 /** Review states that hand the task back to an agent: no longer waiting on the reviewer (SR-6.1) */
 export const REWORK_STATES = ['changes_requested', 'approved'];
 
+/**
+ * Which to-do tasks marked `with: user` need the user now (T-347): those in the active sprint (any, without one) whose
+ * dependencies are done. A dependency the project doesn't list (archived, while the archive isn't loaded) counts as
+ * done, as atm counts an archived one.
+ */
+export interface NeedsYouScope {
+  model: SprintModel;
+  tasks: ReadonlyMap<string, Task>;
+}
+
+function togetherNow(task: Task, vocab: Vocabulary, scope?: NeedsYouScope): boolean {
+  if (!scope) return true;
+  const active = activeSprint(scope.model);
+  if (active && scope.model.sprintOf(task) !== active.id) return false;
+  return (task.dependencies ?? []).every((id) => {
+    const dep = scope.tasks.get(id);
+    return !dep || kindOf(vocab, dep.status) === 'done';
+  });
+}
+
 /** Why a task needs the user (D-3.3, SR-6.6): in review and waiting for the reviewer, blocked on a question for the
- * user, or to do together with the user (`with: user`); undefined when it doesn't. */
-export function needsYouReason(task: Task, vocab: Vocabulary = DEFAULT_VOCABULARY): NeedsYouItem['reason'] | undefined {
+ * user, or to do together with the user (`with: user`) now (`scope`, T-347); undefined when it doesn't. */
+export function needsYouReason(
+  task: Task,
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  scope?: NeedsYouScope,
+): NeedsYouItem['reason'] | undefined {
   const kind = kindOf(vocab, task.status);
   if (kind === 'review') return REWORK_STATES.includes(task.review_state ?? '') ? undefined : 'review';
   if (kind === 'blocked' && task.waiting_on === 'user') return 'blocked';
-  if (kind === 'todo' && task.with === 'user') return 'together';
+  if (kind === 'todo' && task.with === 'user' && togetherNow(task, vocab, scope)) return 'together';
   return undefined;
 }
 
 /** Tasks that need the user */
-export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): Task[] {
-  return tasks.filter((t) => needsYouReason(t, vocab));
+export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY, scope?: NeedsYouScope): Task[] {
+  return tasks.filter((t) => needsYouReason(t, vocab, scope));
 }
 
 /** A task that needs the user, and why: what the "need you" chips list (also atm serve's `needs_you_tasks`) */
@@ -93,9 +118,13 @@ export interface NeedsYouItem {
 }
 
 /** needingUser as the chips list it */
-export function needsYouItems(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULARY): NeedsYouItem[] {
+export function needsYouItems(
+  tasks: Task[],
+  vocab: Vocabulary = DEFAULT_VOCABULARY,
+  scope?: NeedsYouScope,
+): NeedsYouItem[] {
   return tasks.flatMap((t) => {
-    const reason = needsYouReason(t, vocab);
+    const reason = needsYouReason(t, vocab, scope);
     return reason ? [{ id: t.id, name: t.name, reason }] : [];
   });
 }

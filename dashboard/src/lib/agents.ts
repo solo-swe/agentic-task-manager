@@ -15,6 +15,9 @@ export interface AgentBar {
   end: number;
   /** Still in progress: the bar runs to now */
   live: boolean;
+  /** On the overview's Agents tab (T-333): the task's project, and a key unique across projects */
+  project?: { id: string; name: string };
+  key?: string;
 }
 
 export interface AgentLane {
@@ -29,6 +32,8 @@ export interface AgentLane {
   current: Task[];
   /** When the agent last started or finished something */
   lastActive: number;
+  /** On the overview's Agents tab (T-333): the names of the projects it worked in */
+  projects?: string[];
 }
 
 export interface AgentTimeline {

@@ -3,8 +3,10 @@ import { layoutGraph } from '../../src/lib/graph/layout';
 import type { Task } from '../../src/lib/types';
 import { expect, filterButton, loadFixture, openDashboard, openFilters, test } from './helpers';
 
-// The Kanban is the default tab (T-251): these open on the graph
-const GRAPH = { tab: 'graph' } as const;
+// The Kanban is the default tab (T-251): these open on the graph. Most test the view without auto-fit (T-341), which
+// is on by default: AUTO_FIT opens the graph as a new user sees it.
+const GRAPH = { tab: 'graph', graphAutoFit: false } as const;
+const AUTO_FIT = { tab: 'graph' } as const;
 const svg = (page: Page) => page.locator('#dep-graph');
 const zoomLabel = (page: Page) => page.locator('#graph-zoom-level');
 const minimap = (page: Page) => page.locator('#graph-minimap');
@@ -254,6 +256,146 @@ test.describe('view persistence', () => {
     await filterButton(page, 'type', 'docs').click();
     await expect(svg(page)).toContainText('No tasks match current filters');
     await expect(minimap(page)).toBeHidden();
+  });
+});
+
+test.describe('auto-fit and fitting the matches (T-341)', () => {
+  const autoFit = (page: Page) => page.locator('#graph-auto-fit');
+  const fitAll = (page: Page) => page.locator('#graph-fit-all');
+  const fitMatches = (page: Page) => page.locator('#graph-fit-matches');
+  const mode = (page: Page, m: 'hide' | 'dim') => page.locator(`#graph-filtered [data-mode="${m}"]`);
+  /** The matching (not greyed-out) nodes' box on screen, against the graph's */
+  async function matchesOnScreen(page: Page) {
+    return svg(page).evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const rs = [...el.querySelectorAll('g.graph-node:not(.graph-dimmed)')].map((g) => g.getBoundingClientRect());
+      return {
+        inside: rs.every(
+          (r) => r.left >= box.left && r.right <= box.right && r.top >= box.top && r.bottom <= box.bottom,
+        ),
+        width: Math.max(...rs.map((r) => r.right)) - Math.min(...rs.map((r) => r.left)),
+        height: Math.max(...rs.map((r) => r.bottom)) - Math.min(...rs.map((r) => r.top)),
+        vw: box.width,
+        vh: box.height,
+      };
+    });
+  }
+  /** Fitted: every match on screen, filling the width or the height (or at 100%) */
+  async function expectMatchesFitted(page: Page) {
+    await expect
+      .poll(async () => {
+        const m = await matchesOnScreen(page);
+        const fills = m.width > m.vw * 0.8 || m.height > m.vh * 0.8;
+        return m.inside && (fills || (await zoomLabel(page).textContent()) === '100%');
+      })
+      .toBe(true);
+  }
+  async function filterPhase0(page: Page) {
+    await openFilters(page);
+    await page.locator('#filter-closed-sprints').click(); // phase 0 is finished, a closed sprint: listed once shown
+    await filterButton(page, 'sprint', 'Phase 0').click();
+    await page.keyboard.press('Escape'); // the popover would cover the graph's controls
+    await expect(page.getByRole('dialog', { name: 'Filters' })).toBeHidden();
+  }
+
+  test('on by default: the graph opens fitted', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await expect(autoFit(page)).toHaveAttribute('aria-pressed', 'true');
+    await expectMatchesFitted(page);
+  });
+
+  test('filtering fits the matches again', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await filterPhase0(page);
+    await expect(page.locator('#dep-graph g.graph-node')).toHaveCount(14);
+    await expectMatchesFitted(page);
+  });
+
+  test('switching from Dim to Hide fits the tasks left', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await filterPhase0(page);
+    await mode(page, 'dim').click();
+    await expectMatchesFitted(page);
+    await expect(fitMatches(page)).toHaveClass(/active/);
+    await fitAll(page).click(); // everything, small; auto-fit stays on and now follows "All"
+    await expect(autoFit(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(fitAll(page)).toHaveClass(/active/);
+    await mode(page, 'hide').click();
+    await expect(page.locator('#dep-graph g.graph-node')).toHaveCount(14);
+    await expectMatchesFitted(page);
+  });
+
+  test('panning or zooming turns it off; the zoom then stays', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await page.locator('#graph-container').focus();
+    await page.keyboard.press('+');
+    await expect(autoFit(page)).toHaveAttribute('aria-pressed', 'false');
+    const zoom = await zoomLabel(page).textContent();
+    await filterPhase0(page);
+    await expect(zoomLabel(page)).toHaveText(zoom!);
+  });
+
+  test('Fit matches is disabled until greyed-out tasks are laid out too', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await expect(fitAll(page)).toBeEnabled();
+    await expect(fitMatches(page)).toBeDisabled();
+    await filterPhase0(page);
+    await expect(fitMatches(page)).toBeDisabled(); // Hide: the matches are all there is
+    await mode(page, 'dim').click();
+    await expect(fitMatches(page)).toBeEnabled();
+    await fitAll(page).click();
+    const all = await view(page);
+    await fitMatches(page).click();
+    expect((await view(page)).k).toBeGreaterThan(all.k);
+    await expectMatchesFitted(page);
+  });
+
+  test('the fit target is remembered with the view', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await filterPhase0(page);
+    await mode(page, 'dim').click();
+    await fitAll(page).click();
+    await page.reload();
+    await expect(fitAll(page)).toHaveClass(/active/);
+    await expect(fitMatches(page)).not.toHaveClass(/active/);
+  });
+
+  test('a narrow panel hides the hint and wraps the toolbar inside the panel', async ({ page, tasksServer }) => {
+    await page.setViewportSize({ width: 700, height: 900 });
+    await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+    await expect(page.locator('.graph-hint')).toBeHidden();
+    const panel = (await page.locator('#graph-container').boundingBox())!;
+    const toolbar = (await page.locator('.graph-toolbar').boundingBox())!;
+    expect(toolbar.x).toBeGreaterThanOrEqual(panel.x);
+  });
+
+  test.describe('with motion', () => {
+    test.use({ reducedMotion: 'no-preference' });
+
+    test('fitting animates the view to where it goes', async ({ page, tasksServer }) => {
+      await openDashboard(page, tasksServer, 'large-90', AUTO_FIT);
+      await filterPhase0(page);
+      await mode(page, 'dim').click();
+      await expectMatchesFitted(page);
+      const before = await view(page);
+      await fitAll(page).click();
+      // The zoom label shows where the view goes at once; the drawn view gets there over a few frames
+      const target = Number((await zoomLabel(page).textContent())!.replace('%', '')) / 100;
+      const seen = new Set<number>();
+      await expect
+        .poll(
+          async () => {
+            const k = (await view(page)).k;
+            seen.add(Math.round(k * 1000));
+            return Math.abs(k - target) < 0.006;
+          },
+          { intervals: [16] },
+        )
+        .toBe(true);
+      // Steps between the start and the end were drawn
+      const between = [...seen].filter((k) => k / 1000 < before.k - 0.01 && k / 1000 > target + 0.01);
+      expect(between.length).toBeGreaterThan(0);
+    });
   });
 });
 

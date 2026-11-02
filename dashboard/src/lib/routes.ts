@@ -22,27 +22,33 @@ export function hasOverviewHash(hash: string): boolean {
   return hashParams(hash).has('overview');
 }
 
-/** The All projects page's tabs (T-259): the project cards, or the board of every project's tasks */
-export const OVERVIEW_TABS = ['projects', 'board'] as const;
+/** The All projects page's tabs (T-259): the project cards, the board of every project's tasks, every project's
+ * progress (T-329) or agents (T-333) */
+export const OVERVIEW_TABS = ['projects', 'board', 'progress', 'agents'] as const;
 export type OverviewTab = (typeof OVERVIEW_TABS)[number];
 
 export function isOverviewTab(value: unknown): value is OverviewTab {
   return OVERVIEW_TABS.includes(value as OverviewTab);
 }
 
-/** The overview tab a hash names ("#overview&view=board"), or null */
+/** The overview tab a hash names ("#overview&view=board"), or null. A project's hash names a project's tab, even one
+ * of the same name ("agents" is both, T-333). */
 export function parseOverviewTab(hash: string): OverviewTab | null {
-  const view = hashParams(hash).get('view');
-  return isOverviewTab(view) ? view : null;
+  const params = hashParams(hash);
+  const view = params.get('view');
+  return !params.has('project') && isOverviewTab(view) ? view : null;
 }
 
-/** `hash` showing project `id`, or the overview for null. Other parameters are kept, and the view too when the page
- * has it: a project's tab stays out of the overview, the overview's tab out of a project. */
+/** `hash` showing project `id`, or the overview for null. Other parameters are kept, and the view too when it is the
+ * same kind of page: a project's tab stays out of the overview, the overview's tab out of a project. */
 export function withProjectHash(hash: string, id: string | null): string {
   const params = hashParams(hash);
+  // Whose tab the view is: the page's the hash names; on the landing page (neither named), by its value
+  const view = params.get('view');
+  const projectView = params.has('project') || (!params.has('overview') && !isOverviewTab(view));
   params.delete('project');
   params.delete('overview');
-  if (params.has('view') && isOverviewTab(params.get('view')) !== (id === null)) params.delete('view');
+  if (view !== null && projectView !== (id !== null)) params.delete('view');
   if (id === null) params.set('overview', '');
   else params.set('project', id);
   return formatHash(params);

@@ -129,6 +129,8 @@
             onkeydown={() => {}}
             onmouseenter={() => (active = OVERVIEW)}
           >
+            <!-- Where each project shows its logo (T-348) -->
+            <span class="project-option-icon"><Icon name="layout-grid" size={16} /></span>
             <span class="project-option-name">Projects Overview</span>
           </li>
         {/if}

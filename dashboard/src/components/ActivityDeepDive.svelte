@@ -13,12 +13,31 @@
   // working (agents busy, stacked per agent), and how long tasks took. One hover reads a period across all three.
   // `period` names the selected period for the headings: "this week", "today", "over all time" (periodPhrase).
   // `use` is where the period's time went; `workingNow` the agents working now, null for a period in the past.
+  // `onopen` opens a task (the overview's opens it in its project, T-328); a project's shows its details
   let {
     series,
     period,
     use = null,
     workingNow = null,
-  }: { series: ActivitySeries; period: string; use?: TimeUseWithSplit | null; workingNow?: number | null } = $props();
+    onopen = undefined,
+    group = undefined,
+  }: {
+    series: ActivitySeries;
+    period: string;
+    use?: TimeUseWithSplit | null;
+    workingNow?: number | null;
+    onopen?: (id: string) => void;
+    /** The overview's Activity by project (T-328 review): the series' types are projects, its workers "project ·
+     * agent"; completions, who was working and the dots are stacked and coloured by project */
+    group?: { color: (project: string) => string; of: (worker: string) => string; order: string[] };
+  } = $props();
+  const openTask = (id: string) => (onopen ? onopen(id) : dashboard.showDetail(id));
+  const colorOf = (type: string) => (group ? group.color(type) : typeStyle(type).color);
+  // Who was working: by kind (agents, people), or by project
+  const busyIn = (x: (typeof series.buckets)[number], key: string) =>
+    group
+      ? Object.entries(x.agentBusy).reduce((n, [w, v]) => n + (group.of(w) === key ? v : 0), 0)
+      : x.byKind[key as 'agents' | 'people'];
 
   const W = 640;
   const PAD_L = 34;
@@ -47,7 +66,12 @@
     { key: 'agents', label: 'Agents', color: 'var(--accent)' },
     { key: 'people', label: 'People', color: 'color-mix(in srgb, var(--accent) 45%, var(--surface))' },
   ] as const;
-  const kinds = $derived(KINDS.filter((k) => b.some((x) => x.byKind[k.key] > 0)));
+  const kinds = $derived(
+    (group
+      ? group.order.map((p) => ({ key: p, label: p, color: group.color(p) }))
+      : KINDS.map((k) => ({ key: k.key as string, label: k.label as string, color: k.color as string }))
+    ).filter((k) => b.some((x) => busyIn(x, k.key) > 0)),
+  );
   const busyTotal = (x: (typeof b)[number]) => x.byKind.agents + x.byKind.people;
   // Idle and waiting on you as the Where the time went bar has them (timeuse.ts); idle alone without it
   const idle = $derived(use?.idle ?? series.idle);
@@ -72,13 +96,38 @@
   const pct = (v: number) => `${Math.round(v * 100)}%`;
 
   let hover = $state<number | null>(null);
+  // Where the pointer is (T-350): the tooltip goes beside it, on the side of the popup with room, so it stays inside
+  // the popup whatever the bars' width (a single bar across the chart pushed it out). It is placed against the window
+  // (position: fixed), not in the popup's content: there, near the bottom, it grew the popup's scroll area, and the
+  // popup flickered as its scrollbar came and went
+  let area = $state<HTMLElement>();
+  let pointer = $state({ x: 0, y: 0, mid: { x: 0, y: 0 } });
   function onMove(e: PointerEvent) {
     const r = (e.currentTarget as SVGElement).getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
     const i = Math.floor((px - PAD_L) / slot);
     hover = i >= 0 && i < n ? i : null;
+    // The popup's visible box (the charts' area, outside a popup)
+    const box = (area!.closest('.insights-panel') ?? area!).getBoundingClientRect();
+    pointer = { x: e.clientX, y: e.clientY, mid: { x: box.left + box.width / 2, y: box.top + box.height / 2 } };
+  }
+  // Leaving a chart for another: keep the hover, whose move the browser may have delivered before this leave (T-350)
+  function onLeave(e: PointerEvent) {
+    const to = e.relatedTarget;
+    if (to instanceof Element && to.closest('.dive-chart svg')) return;
+    hover = null;
   }
   const hb = $derived(hover === null ? null : b[hover]);
+  const GAP = 14;
+  // Toward the popup's middle from the pointer: left of it in the right half, above it in the lower half
+  const tooltipStyle = $derived(
+    [
+      pointer.x > pointer.mid.x ? `right:${innerWidth - pointer.x + GAP}px` : `left:${pointer.x + GAP}px`,
+      pointer.y > pointer.mid.y ? `bottom:${innerHeight - pointer.y + GAP}px` : `top:${pointer.y + GAP}px`,
+    ].join(';'),
+  );
+  /** Tasks named in the tooltip; the rest as "+ N more" */
+  const TOOLTIP_TASKS = 5;
 </script>
 
 <!-- Three cards, one question each (docs/activity-popup-review.md §3.1): what got done, how long tasks take, and where
@@ -146,11 +195,11 @@
   {/each}
 {/snippet}
 
-<div class="deep-dive">
+<div class="deep-dive" bind:this={area}>
   <section class="dive-chart" id="dive-completed">
     <header>
       <h4>
-        Tasks completed {period}, per {series.unitLabel}, by type
+        Tasks completed {period}, per {series.unitLabel}, by {group ? 'project' : 'type'}
         <InfoTip label="tasks completed">
           <p>
             Per {series.unitLabel}, the tasks done in it (not skipped), stacked by type, in the dashboard's type
@@ -162,15 +211,14 @@
       <div class="type-legend">
         {#each series.types as t (t.type)}
           <span class="type-chip"
-            ><span class="legend-swatch" style="background:{typeStyle(t.type).color}"></span>{t.type}<strong
-              >{t.count}</strong
+            ><span class="legend-swatch" style="background:{colorOf(t.type)}"></span>{t.type}<strong>{t.count}</strong
             ></span
           >
         {/each}
       </div>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(String(maxDone))}
       {@render idleBands(false)}
       <!-- Stacked by type, most completed type at the bottom; a 1px gap between segments -->
@@ -184,7 +232,7 @@
             width={Math.max(1, slot - 2)}
             height={Math.max(1, yDone(below) - yDone(below + bucket.byType[seg.type]) - (j > 0 ? 1 : 0))}
             rx="1.5"
-            fill={typeStyle(seg.type).color}
+            fill={colorOf(seg.type)}
           />
         {/each}
       {/each}
@@ -226,7 +274,7 @@
       </div>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(String(maxBusy))}
       {@render idleBands(true)}
       {#each use?.waiting ?? [] as g (g.start)}
@@ -243,14 +291,14 @@
         <line x1={PAD_L} x2={W - PAD_R} y1={yBusy(level)} y2={yBusy(level)} class="chart-grid" />
       {/each}
       {#each b as bucket, i (bucket.start)}
-        {@const segments = kinds.filter((k) => bucket.byKind[k.key])}
+        {@const segments = kinds.filter((k) => busyIn(bucket, k.key))}
         {#each segments as k, j (k.key)}
-          {@const below = segments.slice(0, j).reduce((sum, x) => sum + bucket.byKind[x.key], 0)}
+          {@const below = segments.slice(0, j).reduce((sum, x) => sum + busyIn(bucket, x.key), 0)}
           <rect
             x={PAD_L + i * slot + 1}
-            y={yBusy(below + bucket.byKind[k.key])}
+            y={yBusy(below + busyIn(bucket, k.key))}
             width={Math.max(1, slot - 2)}
-            height={Math.max(0.5, yBusy(below) - yBusy(below + bucket.byKind[k.key]) - (j > 0 ? 1 : 0))}
+            height={Math.max(0.5, yBusy(below) - yBusy(below + busyIn(bucket, k.key)) - (j > 0 ? 1 : 0))}
             rx="1.5"
             fill={k.color}
           />
@@ -277,7 +325,7 @@
       </h4>
     </header>
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={() => (hover = null)}>
+    <svg viewBox="0 0 {W} {H + 2}" width="100%" onpointermove={onMove} onpointerleave={onLeave}>
       {@render frame(formatMinutes(maxCycle))}
       {@render idleBands(false)}
       <!-- The typical time of each kind: agents alone solid, labelled on the right; with you dashed, on the left -->
@@ -295,7 +343,7 @@
         {/if}
       {/each}
       {#each series.cycleTimes as c (c.id)}
-        {@const color = typeStyle(c.type).color}
+        {@const color = colorOf(c.type)}
         {@const over = c.minutes > maxCycle}
         <g
           class="cycle-mark"
@@ -305,8 +353,8 @@
           role="button"
           tabindex="0"
           aria-label="{c.id} {c.name}: {formatMinutes(c.minutes)}"
-          onclick={() => dashboard.showDetail(c.id)}
-          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && dashboard.showDetail(c.id)}
+          onclick={() => openTask(c.id)}
+          onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && openTask(c.id)}
         >
           <title>{c.id} {c.name}: {formatMinutes(c.minutes)}{c.withYou ? ' (with you)' : ''}</title>
           {#if over}
@@ -340,17 +388,13 @@
   </section>
 
   {#if hb}
-    <!-- On the side away from the cursor, so it never hides the period being read -->
-    {@const at = ((PAD_L + (hover! + 0.5) * slot) / W) * 100}
-    <div
-      class="deep-dive-tooltip"
-      style={hover! >= n / 2 ? `right:calc(${100 - at}% + ${slot / 2 + 8}px)` : `left:calc(${at}% + ${slot / 2 + 8}px)`}
-    >
+    <!-- Beside the pointer, on the side with room (T-350): inside the charts' area, whatever the bars' width -->
+    <div class="deep-dive-tooltip" id="dive-tooltip" style={tooltipStyle}>
       <div class="tooltip-title">{when(hb.start)} – {when(hb.end)}</div>
       <div><strong>{hb.completed.length}</strong> completed</div>
       {#each series.types.filter((t) => hb.byType[t.type]) as t (t.type)}
         <div class="tooltip-type">
-          <span class="legend-dot" style="background:{typeStyle(t.type).color}"></span>{t.type}
+          <span class="legend-dot" style="background:{colorOf(t.type)}"></span>{t.type}
           <strong>{hb.byType[t.type]}</strong>
         </div>
       {/each}
@@ -358,7 +402,8 @@
         <div class="tooltip-section">Busy</div>
         {#each series.agents.filter((a) => hb.agentBusy[a]) as a (a)}
           <div class="tooltip-type">
-            <span class="legend-dot" style="background:{agentColor(a)}"></span>{agentName(a)}
+            <span class="legend-dot" style="background:{group ? group.color(group.of(a)) : agentColor(a)}"
+            ></span>{agentName(a)}
             <strong>{pct(hb.agentBusy[a])}</strong>
           </div>
         {/each}
@@ -372,8 +417,10 @@
           </div>
         {/if}
       {/if}
-      {#each hb.completed.slice(0, 5) as c (c.id)}<div class="tooltip-task">{c.id} {c.name}</div>{/each}
-      {#if hb.completed.length > 5}<div class="tooltip-task">+{hb.completed.length - 5} more</div>{/if}
+      {#each hb.completed.slice(0, TOOLTIP_TASKS) as c (c.id)}<div class="tooltip-task">{c.id} {c.name}</div>{/each}
+      {#if hb.completed.length > TOOLTIP_TASKS}<div class="tooltip-task">
+          +{hb.completed.length - TOOLTIP_TASKS} more
+        </div>{/if}
     </div>
   {/if}
 </div>

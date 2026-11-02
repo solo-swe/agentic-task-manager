@@ -84,6 +84,23 @@ test.describe('projects', () => {
     await footerAtBottom();
   });
 
+  test('the overview’s tabs sit right under the title bar, as on a project’s page (T-334)', async ({
+    page,
+    tasksServer,
+  }) => {
+    const tabsTop = async () => {
+      const main = (await page.locator('#app-main').boundingBox())!;
+      const tab = (await page.locator('.view-tab[aria-selected="true"]').first().boundingBox())!;
+      return tab.y - main.y;
+    };
+    await openDashboard(page, tasksServer, 'minimal');
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    const onProject = await tabsTop();
+    await page.goto('tasks-dashboard.html#overview');
+    await expect(page.locator('#projects-grid .project-card')).toHaveCount(1);
+    expect(await tabsTop()).toBe(onProject);
+  });
+
   test('with one project, the dashboard opens it right away', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
@@ -279,6 +296,8 @@ test.describe('projects', () => {
       )
       .addProject('empty', 'minimal', 'Empty', summary());
     await openDashboard(page, tasksServer, 'standard');
+    // Once both cards are there: measured at once, the page could still be empty
+    await expect(page.locator('.project-card[data-id="full"], .project-card[data-id="empty"]')).toHaveCount(2);
     const sections = [
       '.project-card-head',
       '.project-card-progress',
@@ -304,8 +323,8 @@ test.describe('projects', () => {
     );
   });
 
-  // T-194 review: two lines for every card's name, so a long one doesn't push its card's rings below the others'
-  test('overview cards: a long project name takes at most two lines; the rings of a row line up', async ({
+  // T-194 review, T-335: one line for every card's name, so a long one doesn't push its card's rings below the others'
+  test('overview cards: a long project name takes one line; the rings of a row line up', async ({
     page,
     tasksServer,
   }) => {
@@ -324,15 +343,15 @@ test.describe('projects', () => {
       const nameHeight = (id: string) => card(id).querySelector('.project-card-name')!.getBoundingClientRect().height;
       const ringsTop = (id: string) => card(id).querySelector('.project-card-rings')!.getBoundingClientRect().top;
       return {
-        twoLines: Math.round(nameHeight('long') / lineHeight) <= 2 && nameHeight('long') <= 2 * lineHeight + 4,
+        oneLine: nameHeight('long') <= lineHeight + 1,
         sameNameHeight: Math.round(nameHeight('long')) === Math.round(nameHeight('short')),
         ringsLevel: Math.round(ringsTop('long')) === Math.round(ringsTop('short')),
       };
     });
-    expect(geometry).toEqual({ twoLines: true, sameNameHeight: true, ringsLevel: true });
+    expect(geometry).toEqual({ oneLine: true, sameNameHeight: true, ringsLevel: true });
   });
 
-  // T-207: who works on what, by name, or what comes next; two lines on every card
+  // T-207: who works on what, by name, or what comes next; T-335: a mini task card on a stack, as tall on every card
   test('overview cards: the tasks at work or next, by name, in a section of the same height on every card', async ({
     page,
     tasksServer,
@@ -353,8 +372,9 @@ test.describe('projects', () => {
       .addProject('done', 'minimal', 'Done', summary());
     await openDashboard(page, tasksServer, 'standard');
     const work = (id: string) => page.locator(`.project-card[data-id="${id}"] .project-card-work-line`);
-    await expect(work('busy')).toHaveText([/T-1\s*Build the board/, /T-2\s*Write the tests\s*\+1 more/]);
-    await expect(work('idle')).toHaveText([/Next:\s*T-9\s*Next thing/]);
+    await expect(work('busy')).toHaveText([/Now\s*T-1\s*claude:e5ea9db0\s*\+2 more\s*Build the board/]);
+    await expect(page.locator('.project-card[data-id="busy"] .project-card-task-layer')).toHaveCount(2);
+    await expect(work('idle')).toHaveText([/Next\s*T-9\s*Next thing/]);
     await expect(work('done')).toHaveCount(0);
     const tops = await page.evaluate(() =>
       ['busy', 'idle', 'done'].map((id) => {
@@ -451,7 +471,34 @@ test.describe('projects', () => {
     await expectDetail(page, 'T-005');
   });
 
-  test('Active only hides projects with nothing open and nothing done lately; remembered', async ({
+  // T-332: on a card in the first column, the list (lined up with the chip's right edge) ran off the window's left
+  for (const width of [1280, 700, 420]) {
+    test(`the “needs you” list stays inside the window, on the first card and the last (${width}px window)`, async ({
+      page,
+      tasksServer,
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const two = summary({ needs_you: { review: 1, blocked_on_user: 1 }, needs_you_tasks: [T4, T5] });
+      tasksServer.addProject('asks', 'v4', 'Asks', two).addProject('more', 'v4', 'More asks', two);
+      await openDashboard(page, tasksServer, 'standard');
+      for (const id of ['asks', 'more']) {
+        const card = page.locator(`.project-card[data-id="${id}"]`);
+        await card.locator('.project-card-need').click();
+        const menu = card.locator('.needs-you-menu');
+        await expect(menu).toBeVisible();
+        await expect
+          .poll(async () => {
+            const box = (await menu.boundingBox())!;
+            return box.x >= 0 && box.x + box.width <= width;
+          })
+          .toBe(true);
+        await page.keyboard.press('Escape');
+        await expect(menu).toBeHidden();
+      }
+    });
+  }
+
+  test('Hide inactive projects: projects with nothing open and nothing done lately; remembered', async ({
     page,
     tasksServer,
   }) => {
@@ -466,11 +513,20 @@ test.describe('projects', () => {
     await openDashboard(page, tasksServer, 'standard');
     await expect(page.locator('#active-projects-only')).toBeChecked();
     await expect(page.locator('.project-card[data-id="idle"]')).toHaveCount(0);
-    await expect(page.locator('#projects-hidden')).toHaveText('1 inactive project hidden');
+    // T-333 review: says what it does, and how many it hides (or would)
+    await expect(page.locator('label.projects-active-only')).toHaveText('Hide inactive projects (1)');
     await page.locator('#active-projects-only').uncheck();
     await expect(page.locator('.project-card[data-id="idle"]')).toHaveCount(1);
+    await expect(page.locator('#projects-hidden')).toHaveText('(1)');
     await page.reload();
     await expect(page.locator('#active-projects-only')).not.toBeChecked();
+  });
+
+  test('Hide inactive projects shows only when there is a project it would hide', async ({ page, tasksServer }) => {
+    tasksServer.addProject('open', 'minimal', 'Open', summary()).addProject('also', 'minimal', 'Also', summary());
+    await openDashboard(page, tasksServer, 'standard');
+    await expect(page.locator('.project-card')).toHaveCount(3);
+    await expect(page.locator('#active-projects-only')).toHaveCount(0);
   });
 
   test('overview cards: one line of stats; About links to the Project tab (T-255)', async ({ page, tasksServer }) => {

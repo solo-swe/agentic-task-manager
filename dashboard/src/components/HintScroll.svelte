@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { cutOff } from '../lib/scroll';
+  import { cutOff, scrollBehavior } from '../lib/scroll';
 
   // Content scrolling on its own without a scrollbar (T-262, T-282): "▲ N more" and "▼ N more" at the edges say how
   // many items (`item`, a selector) are cut off above and below; the wheel and the trackpad scroll as usual, a hint
@@ -33,7 +33,8 @@
       mutation.disconnect();
     };
   });
-  const page = (direction: 1 | -1) => el?.scrollBy({ top: direction * el.clientHeight * 0.85, behavior: 'smooth' });
+  const page = (direction: 1 | -1) =>
+    el?.scrollBy({ top: direction * el.clientHeight * 0.85, behavior: scrollBehavior() });
 </script>
 
 <div class="hint-scroll {outer}">

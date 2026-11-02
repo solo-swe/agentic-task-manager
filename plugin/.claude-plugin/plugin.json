@@ -1,7 +1,7 @@
 {
   "name": "atm",
   "description": "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard. Works with any language; needs only Python 3.9+ (standard library).",
-  "version": "0.25.0",
+  "version": "0.26.0",
   "author": {
     "name": "Hakan Serce",
     "email": "hakanserce@gmail.com"

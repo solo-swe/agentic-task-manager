@@ -23,6 +23,7 @@ from .model import (
     load_archive,
     load_tasks,
     natural_key,
+    open_in_closed_sprints,
     priority_rank,
     unfinished_dependencies,
     vocabulary,
@@ -108,9 +109,13 @@ def describe_task(data, task):
         if d not in by_id and archived_task(d):
             by_id[d] = {**archived_task(d), "status": archived_task(d).get("status") + ", archived"}
     labels = task.get("labels") or []
+    # A task not in tasks.json is from the archive: say so (found in T-277, T-353)
+    archived = all(t is not task for t in data["tasks"])
     lines = [
         f"{task.get('id')}  {task.get('name', '')}",
-        f"  {task.get('status')} · {task.get('sprint') or 'backlog'} · {task.get('type')} · {priority_of(vocab, task)}"
+        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
+        + (" · archived" if archived else "")
+        + f" · {task.get('type')} · {priority_of(vocab, task)}"
         + (f" · labels: {', '.join(labels)}" if labels else ""),
     ]
     deps = task.get("dependencies") or []
@@ -171,7 +176,9 @@ def cmd_show(args):
     data = load_tasks(paths)
     tasks = [find_task(data, task_id, archived=True) for task_id in args.ids]
     if args.json:
-        out(to_json(tasks))
+        # An archived task says so (T-353)
+        live = {id(t) for t in data["tasks"]}
+        out(to_json([t if id(t) in live else {**t, "archived": True} for t in tasks]))
     else:
         out("\n\n".join(describe_task(data, t) for t in tasks))
 
@@ -247,6 +254,16 @@ def cmd_deps(args):
         {"id": t.get("id"), "status": t.get("status"), "name": t.get("name", "")}
         for t in data["tasks"]
         if args.id in (t.get("dependencies") or [])
+    ]
+    # Archived tasks that depended on it are history too, marked as the waits-for side marks them (T-358); a task in
+    # both files is the tasks.json one
+    waited_on_by += [
+        {"id": t.get("id"), "status": f"{t.get('status')}, archived", "name": t.get("name", "")}
+        for t in load_archive(paths)["tasks"]
+        if isinstance(t, dict)
+        and t.get("id") not in by_id
+        and isinstance(t.get("dependencies"), list)
+        and args.id in t["dependencies"]
     ]
     if args.json:
         out(to_json({"id": args.id, "waits_for": waits_for, "waited_on_by": waited_on_by}))
@@ -350,7 +367,7 @@ def git_summary(paths, tasks):
 
 
 BOARD_CAP = 30  # cards per column of the All projects board (docs/all-projects-kanban-proposal.md, 3.1)
-BOARD_READY_CAP = 10  # ready tasks per project, so one project's new batch doesn't fill the To Do column
+BOARD_READY_CAP = 10  # to-do tasks per project, so one project's new batch doesn't fill the To Do column
 BOARD_DONE_HOURS = 24
 
 
@@ -374,11 +391,34 @@ def board_column(cards, cap=BOARD_CAP):
     return {"count": len(cards), "cards": cards[:cap]}
 
 
-def board(data, store, tasks, kinds, ready, vocab, current, live):
-    """The project's cards for the All projects board (T-257), one rule per column: the tasks ready to start in the
-    loop's default selection (`ready`, the active sprint's), in its order; everything in progress (longest running
-    first), in review (longest waiting first) and blocked (on the user first, then longest waiting); what was
-    finished in the last 24 hours, newest first."""
+def todo_order(data, tasks, kinds, loop_ready, vocab):
+    """Every to-do task, for the board's To Do column (T-349): first the ready ones, those the loop takes in its order
+    before the rest (other sprints', the backlog's), then the ready ones done with the user, then those waiting on
+    dependencies (each by priority, then ID). Each with why it isn't plain ready: done with the user, or the
+    dependencies it waits for."""
+    rank = {t.get("id"): i for i, t in enumerate(loop_ready)}
+
+    def entry(t):
+        waits = [dep for dep, _ in unfinished_dependencies(data, t)]
+        key = (
+            bool(waits),
+            t.get("with") == "user",
+            t.get("id") not in rank,
+            rank.get(t.get("id"), 0),
+            priority_rank(vocab, t.get("priority")),
+            natural_key(t.get("id")),
+        )
+        return key, t, waits
+
+    entries = sorted((entry(t) for t, k in zip(tasks, kinds) if k == "todo"), key=lambda e: e[0])
+    return [(t, waits) for _, t, waits in entries]
+
+
+def board(data, store, tasks, kinds, todo, vocab, current, live, recent_done=True):
+    """The project's cards for the All projects board (T-257), one rule per column: every to-do task (`todo`, as
+    todo_order gives it, T-349); everything in progress (longest running first), in review (longest waiting first)
+    and blocked (on the user first, then longest waiting); what was finished, newest first: in the last 24 hours, or
+    all of it without `recent_done` (a sprint's board shows all its tasks, T-349)."""
     of_kind = lambda kind: [t for t, k in zip(tasks, kinds) if k == kind]
     claimed_by = {c.get("task"): c.get("agent") for c in live}
     since = lambda t, field: t.get(field) or t.get("updated_at")
@@ -390,10 +430,23 @@ def board(data, store, tasks, kinds, ready, vocab, current, live):
     )
     cutoff = current.timestamp() - BOARD_DONE_HOURS * 3600
     finished_at = lambda t: parse_time(t.get("completed_at"))
-    done = [t for t in of_kind("done") if finished_at(t) and finished_at(t).timestamp() > cutoff]
+    done = [
+        t for t in of_kind("done") if not recent_done or (finished_at(t) and finished_at(t).timestamp() > cutoff)
+    ]
     done.sort(key=lambda t: str(t.get("completed_at")), reverse=True)
     return {
-        "todo": board_column([board_card(vocab, t) for t in ready], BOARD_READY_CAP),
+        "todo": board_column(
+            [
+                board_card(
+                    vocab,
+                    t,
+                    **({"with_user": True} if t.get("with") == "user" else {}),
+                    **({"waiting_for": waits} if waits else {}),
+                )
+                for t, waits in todo
+            ],
+            BOARD_READY_CAP,
+        ),
         "active": board_column(
             [
                 board_card(vocab, t, by=claimed_by.get(t.get("id")) or started_by(t), since=since(t, "started_at"))
@@ -520,7 +573,8 @@ def project_summary(paths):
     # by the very rule `atm next` follows: the dashboard's Next up shows the first (T-321)
     in_loop_order = loop_order(data, store, Selection())[0]
     next_up = [{"id": t.get("id"), "name": capped(t.get("name"))} for t in in_loop_order[:NEXT_TASKS]]
-    ready = [t for t in in_loop_order if kind_of(vocab, t.get("status")) == "todo"]
+    # The board's To Do column: every to-do task, the loop's first (T-349)
+    todo = todo_order(data, tasks, kinds, in_loop_order, vocab)
     finished = [(t.get("completed_at"), t) for t, k in zip(tasks, kinds) if k == "done" and parse_time(t.get("completed_at"))]
     last_task = max(finished, key=lambda f: f[0])[1] if finished else None
     last_done = (
@@ -544,13 +598,20 @@ def project_summary(paths):
                 completions[SUMMARY_DAYS - 1 - age] += 1
 
     # The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
-    # reviewer, blocked on the user, or to do together with the user (SR-6.6)
+    # reviewer, blocked on the user, or to do together with the user (SR-6.6) now: in the active sprint (any, without
+    # one) and ready, its dependencies done (T-347)
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+
+    def together_now(t):
+        in_scope = active is None or (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+        return in_scope and not unfinished_dependencies(data, t)
+
     def needs_you(t, k):
         if k == "review":
             return None if t.get("review_state") in REWORK_STATES else "review"
         if k == "blocked" and t.get("waiting_on") == "user":
             return "blocked"
-        return "together" if k == "todo" and t.get("with") == "user" else None
+        return "together" if k == "todo" and t.get("with") == "user" and together_now(t) else None
 
     needs_you_tasks = [
         {"id": t.get("id"), "name": capped(t.get("name")), "reason": needs_you(t, k)}
@@ -579,9 +640,32 @@ def project_summary(paths):
         "description": description(data.get("meta")),
         "last_activity": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
         "completions_14d": completions,
-        "board": board(data, store, tasks, kinds, ready, vocab, current, live),
+        "board": board(data, store, tasks, kinds, todo, vocab, current, live),
+        "board_active_sprint": active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live),
         "stats": project_stats(paths, data, vocab, tasks, current),
     }
+
+
+def active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live):
+    """The All projects board's default view (T-340): the same columns, of the active sprint's tasks only, no more, no
+    less (T-349: every one done too, not the last 24 hours'), with their own counts; None without an active sprint (the
+    board says so)."""
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+    if active is None:
+        return None
+    in_sprint = lambda t: (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+    pairs = [(t, k) for t, k in zip(tasks, kinds) if in_sprint(t)]
+    return board(
+        data,
+        store,
+        [t for t, _ in pairs],
+        [k for _, k in pairs],
+        [(t, waits) for t, waits in todo if in_sprint(t)],
+        vocab,
+        current,
+        live,
+        recent_done=False,
+    )
 
 
 def cmd_summary(args):
@@ -676,6 +760,10 @@ def cmd_status(args):
         "archived": len(load_archive(paths)["tasks"]),
         "archive_bytes": os.path.getsize(archive_path(paths)) if os.path.isfile(archive_path(paths)) else 0,
     }
+    # Open tasks left in closed sprints (T-330), whatever the scope: the loop's default selection never takes them
+    stranded = open_in_closed_sprints(vocab, data["tasks"])
+    if stranded:
+        result["open_in_closed_sprints"] = stranded
     hint = archive_hint(paths, data)
     if hint:
         result["suggest"] = {"archive": hint}
@@ -695,6 +783,13 @@ def cmd_status(args):
             out(f"  waiting for the sprint review: {', '.join(sprint['review_pending'])} (/atm:close-sprint)")
     elif vocab["sprints"]:
         out("sprint: none active (plan one with /atm:plan-sprint)")
+    if stranded:
+        n = len(stranded)
+        out(
+            f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
+            + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
+            + " (atm move <id> --to backlog or --to active)"
+        )
     out(f"{len(tasks)} tasks: {pairs(by_status)}")
     if vocab["sprints"]:
         out(f"by sprint: {pairs(result['by_sprint'])}")

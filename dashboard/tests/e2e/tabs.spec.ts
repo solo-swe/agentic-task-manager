@@ -87,7 +87,8 @@ test.describe('view tabs', () => {
   });
 
   test('the graph keeps its zoom across a tab round trip', async ({ page, tasksServer }) => {
-    await openDashboard(page, tasksServer, 'large-90', { tab: 'graph' });
+    // Without auto-fit (T-341), the graph opens at 60%
+    await openDashboard(page, tasksServer, 'large-90', { tab: 'graph', graphAutoFit: false });
     await page.locator('#graph-container').focus();
     await page.keyboard.press('+');
     await expect(zoomLabel(page)).toHaveText('75%');

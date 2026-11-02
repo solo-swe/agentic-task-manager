@@ -40,6 +40,10 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 - A missing project (§3.1 `missing: true`) answers `404` for its files.
 - The ETag of a project file is its size and nanosecond mtime, as today's `json_etag` (`"<size hex>-<mtime_ns hex>"`).
 - Query strings are ignored, except `q` on `api/search`.
+- The Projects Overview reads every listed project's `tasks.json`, `tasks-archive.json` (T-355; a `404` is an empty
+  archive) and `claims.json` through these routes while it is shown, conditionally on each refresh (an unchanged file
+  answers `304`), for its views across projects: the
+  Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329). There is no route of their own.
 
 ### 2.1 `claims.json`: claims from every worktree
 
@@ -187,12 +191,14 @@ logic (`query.py`). Task names in `working`, `next`, `last_done` and `needs_you_
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
 | `git.pr` | the latest PR recorded on the tasks (`atm pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm merged`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
-| `needs_you.review` | review-kind tasks |
+| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
 | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
-| `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"` or `"blocked"` (on a question for the user). The card's "needs you" chip opens them |
+| `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
+| `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |
 | `last_activity` | the newest of all tasks' `updated_at`, `started_at`, `completed_at`, `review_requested_at`, `blocked_at` and `skipped_at`, and of note times; `null` without any |
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
+| `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 
 ### 3.3 The board
@@ -202,7 +208,7 @@ many tasks follow the column's rule, `cards` the first of them (so the dashboard
 
 | Column | Rule | Order | At most |
 |---|---|---|---|
-| `todo` | ready to start (the tasks `next` takes from: to do, dependencies done, not claimed) in the loop's default selection: the active sprint's, or the backlog's in a project without sprints | the loop's | 10 |
+| `todo` | every to-do task in the board's scope (T-349; `board_active_sprint` holds the active sprint's tasks, no more, no less, its `done` every finished one, not the last 24 hours'); a card done with the user has `with_user: true`, one waiting on dependencies `waiting_for` (their IDs) | the ready ones the loop takes, in its order; then the ready ones done with the user; then those waiting on dependencies (each by priority, then ID) | 10 |
 | `active` | every active-kind task | longest running first (`started_at`) | 30 |
 | `review` | every review-kind task | longest waiting first | 30 |
 | `blocked` | every blocked-kind task | blocked on the user first, then longest waiting | 30 |
@@ -213,6 +219,9 @@ above, the priority the project's default when a task has none), plus `by` (the 
 `active`; `since` (`started_at`, `review_requested_at` or `blocked_at`, else `updated_at`, else `null`) on `active`,
 `review` and `blocked`;
 `waiting_on` and `questions` (how many) on `blocked`; `completed_at` on `done`.
+
+`board_active_sprint` follows the same rules over the tasks in the active sprint only (T-340), so its counts and
+*+ N more* are the active sprint's: the board shows it by default (*Active sprints*) and `board` with *All tasks*.
 
 ## 4. `GET /__atm/whoami`
 

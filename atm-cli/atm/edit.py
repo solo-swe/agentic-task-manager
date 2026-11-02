@@ -20,6 +20,8 @@ from .model import (
     known_release,
     load_archive,
     load_tasks,
+    move_out_hint,
+    open_in_closed_sprints,
     split_id,
     status_for,
     touch,
@@ -201,7 +203,8 @@ def add_tasks(data, entries, actor):
     for task, real in zip(tasks, ids):
         task["id"] = real
         task["dependencies"] = [rename.get(d, d) for d in task["dependencies"]]
-        missing = [d for d in task["dependencies"] if d not in existing and d not in ids]
+        # An archived task is done: depending on it is fine, as atm check says (T-356)
+        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived_task(d)]
         if missing:
             raise AtmError(f"{real} ({task['name']}) depends on {', '.join(missing)}, which doesn't exist", 2)
         if task.get("related"):
@@ -327,7 +330,7 @@ def edit_task(data, task, args):
         if key in task and not task[key]:
             del task[key]
     ids = {t.get("id") for t in data["tasks"]}
-    missing = [d for d in args.add_dep if d not in ids]
+    missing = [d for d in args.add_dep if d not in ids and not archived_task(d)]
     if missing:
         raise AtmError(f"{task['id']} can't depend on {', '.join(missing)}, which doesn't exist", 2)
     if task["id"] in args.add_dep:
@@ -448,6 +451,8 @@ def check_data(data, root, files=False, archived=()):
             for f in task.get("files") or []:
                 if isinstance(f, str) and not os.path.exists(os.path.join(root, f)):
                     warnings.append(f"{task_id}: the file {f} doesn't exist")
+    for t in open_in_closed_sprints(vocab, [t for t in tasks if isinstance(t, dict) and isinstance(t.get("id"), str)]):
+        warnings.append(f"{t['id']}: {t['status']} in {move_out_hint(t['id'], t['sprint'])}")
     for sprint in vocab["sprints"]:
         if sprint.get("release") and find_release(vocab, sprint["release"]) is None:
             errors.append(f"the sprint {sprint['id']!r}: the release {sprint['release']!r} is not one of meta.releases")

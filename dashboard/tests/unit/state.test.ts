@@ -58,14 +58,25 @@ describe('DashboardState', () => {
       expect(urls()).toEqual(['api/projects', 'p/p2/tasks.json', 'p/p2/claims.json', 'p/p2/worktrees.json']);
     });
 
-    it('with several, lands on the overview without loading any project', async () => {
+    it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
       fetchMock = server({ projects: [project('p2'), project('p3')] });
       vi.stubGlobal('fetch', fetchMock);
       const s = new DashboardState();
       await s.load();
       expect(s.route).toEqual({ page: 'overview' });
       expect([s.loaded, s.loadError, s.projectsLoaded]).toEqual([false, null, true]);
-      expect(urls()).toEqual(['api/projects']);
+      // For the overview's views across projects (T-333, T-328): each project's tasks, archive (T-355) and claims, no
+      // project opened
+      expect(urls()[0]).toBe('api/projects');
+      expect(urls().slice(1).sort()).toEqual([
+        'p/p2/claims.json',
+        'p/p2/tasks-archive.json',
+        'p/p2/tasks.json',
+        'p/p3/claims.json',
+        'p/p3/tasks-archive.json',
+        'p/p3/tasks.json',
+      ]);
+      expect(s.projectSources.map((p) => p.project.id)).toEqual(['p2', 'p3']);
     });
 
     it('#project= picks one; a later hash change switches project and restores that one’s view', async () => {

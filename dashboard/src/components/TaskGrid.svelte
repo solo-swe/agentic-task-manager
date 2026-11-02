@@ -89,6 +89,15 @@
       {#if dashboard.filtered.length === 0}
         <div style="color:var(--text-muted);padding:12px;font-size:14px">No tasks match current filters</div>
       {/if}
+      {#if dashboard.archivedCount && !dashboard.includeArchived}
+        <!-- Where the list ends, the archive is one click away (T-354, found in T-277) -->
+        <button
+          class="finished-chip list-archived-toggle"
+          id="list-archived-toggle"
+          onclick={() => dashboard.setIncludeArchived(true)}
+          >{dashboard.archivedCount} archived {dashboard.archivedCount === 1 ? 'task' : 'tasks'} hidden · show</button
+        >
+      {/if}
     </div>
   {/if}
 </div>

@@ -4,6 +4,125 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.26.0] - 2026-11-02
+
+### Added
+- **`atm archive` says what stays, and why** (T-352, found in T-277): after what moves (or would, with `--dry-run`),
+  a line on the finished tasks kept in `tasks.json`, grouped by reason: in an open PR, finished in the last
+  `keep_days` days, finished on or after `--before`, not in the `--sprint` chosen (`kept: [{id, reason}]` in
+  `--json`).
+- **`atm unarchive` says when the next archive moves a task back, and what a wrong ID is** (T-357, found in T-277):
+  a task brought back that is still finished and old gets a line saying the next `atm archive` moves it back unless
+  reopened (`moves_back` in `--json`); an ID it can't bring back is named as *already in tasks.json* or *no such
+  task*, instead of one list for both.
+- **`atm deps` lists archived dependents** (T-358, found in T-277): *is waited on by* also names the archived tasks
+  that depended on the task, marked `(done, archived)` as the *waits for* side already marks them (also in `--json`).
+- **`atm --dir PATH <command>`** (T-351, or `--dir=PATH`): runs any command on the project at PATH, as if started
+  there (relative paths in the command count from PATH), without changing directory first; a missing folder is an
+  error. `atm serve --dir` keeps its own meaning.
+- **Graph auto-fit** (T-341): *Auto* (`#graph-auto-fit`, on by default, saved as `graphAutoFit`) refits the graph
+  when the filters, data, Hide/Dim or panel size change; panning or zooming turns it off.
+- **Fit All or Matches** (T-341): `#graph-fit-all` (F) and `#graph-fit-matches` (Shift+F, without the greyed-out
+  tasks; disabled when the same). The last one pressed is what auto-fit fits (`graphFitTarget`). `fitBox`, `nodesBox`.
+- **`atm commit <id> --record <rev>`** (T-343): records an existing commit on the task without committing, for a
+  task whose commit a rebase or cherry-pick replaced; the revision must be a commit on the current branch. A hint
+  when its message doesn't mention the task. `--file` is now checked by atm (needed unless `--record`).
+- **Animated fits** (T-341): fits, zoom buttons and filter changes glide (280 ms, `interpolateView`); not with
+  reduced motion.
+- **`atm sprints delete <name> [--move-to S|backlog] [--force]`** (T-339): deletes a sprint created by mistake. An
+  empty one goes at once, closed too; an open one's unfinished tasks move (backlog by default). Refused for a closed
+  sprint that had tasks, while a task in it is in progress, and without `--force` for an open one with history.
+  `/atm:plan-sprint` mentions it, for when the user asks.
+- **Open tasks left in closed sprints** (T-330): `atm status` warns about them (`open_in_closed_sprints` in
+  `--json`), `atm check` warns about each, and `atm reopen` of a task in a closed sprint suggests `atm move <id> --to
+  backlog` or `--to active` (`hint` in `--json`), moving nothing. `/atm:plan-sprint` shows them first as candidates.
+- **An Agents tab on the Projects Overview** (T-333, `#overview&view=agents`, remembered as `overviewTab`): every shown
+  project's agents on one timeline, a lane per agent or person across projects naming the projects it worked in, a
+  bar opening its task in its project. It reads each project's `tasks.json` and `claims.json` while shown
+  (`lib/overview-agents.ts`; conditional on refresh), with its own zoom and Live. `AgentsTab` takes a timeline, view
+  state and click handler. A project's own `#view=agents` no longer changes the overview's remembered tab.
+  The overview's *Active only* is now *Hide inactive projects (N)*, the same setting, shown only when a project would
+  be hidden; the separate "N inactive projects hidden" note is gone.
+- **Activity on the Projects Overview** (T-328): the title bar's Activity chart and popup for every shown project
+  together (statuses read by kind, task IDs as "Project: T-1"), its own period, and a task opening in its project.
+  Stacked and coloured by project (the Progress tab's colours): the pill's bars, the completions, who was working
+  and the time-per-task dots (`projectTasks`). The insights popups now scroll inside the window rather than run under
+  the status bar. The overview now loads every project's
+  `tasks.json` and `claims.json` while shown (`lib/overview-data.ts`, which `lib/overview-agents.ts` became), rather
+  than the summary growing; `ActivityWidget` takes the tasks, period state, a click handler and the breakdown.
+- **A Progress tab on the Projects Overview** (T-329, `#overview&view=progress`): a row per shown project with its
+  done of total, its active sprint (done of total, due date, goal on hover) and open releases, opening the project's
+  own Progress tab; then the burndown of every project's tasks together (last 14 days or all time, with the forecast)
+  and the velocity: tasks done per day (last 14), week (last 10, the default) or month (last 6, 30 days each), stacked
+  in a colour per project with a legend (the projects' sprints don't line up). `projectProgress`, `velocityByPeriod`
+  in `lib/overview-data.ts`. The shipped file's size guardrail goes from 525 to 550 KiB (T-342 trims).
+
+### Changed
+- **Archive tests** (T-359, after T-277): scenarios for archiving a second time (the archive grows, `meta.archived`
+  counts all), archiving with nothing to move, bringing back several tasks at once and `list --archived --json`;
+  component tests for the subtitle's archived toggle and the List's *N archived tasks hidden* (new
+  `TaskGrid.component.test.ts`).
+- **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own
+  counts and *+ N more*, from the new `board_active_sprint` in `api/projects` summaries (`null` without an active
+  sprint; `atm summary` too). *All tasks* (`#board-scope`, remembered as `boardScope`) shows every task, as before; a
+  note names the projects without an active sprint. An older server's summary falls back to the whole board.
+- **Graph toolbar** (T-341, `.graph-toolbar`): grouped, with segmented switches and a compact zoom; under 920 px the
+  hint hides and the toolbar wraps. e2e runs with `reducedMotion: 'reduce'`; `openDashboard(…, { graphAutoFit:
+  false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 looks
+  for what makes the file grow).
+- **The tabs sit right under the title bar** (T-334), 12 px below the subtitle instead of 38 px (`.topbar`'s bottom
+  padding and margin), on the overview and on a project's page alike; `.landing` lost its 24 px top padding.
+- **One look for the tabs** (T-346): a project's view tabs look like the overview's, on a line with the selected tab
+  open onto the page; the views no longer sit in a framed, filled panel (`.view-panels`), and their content lines up
+  with the page's edges.
+- **Richer Task List cards** (T-338, `TaskCard`, `lib/cardfacts.ts`): the description's first two lines and the
+  latest outcome or handoff under the chips, and a column on the right with who created it, worked on it and (when
+  someone else) finished it, when it was done, started or created, and its work time. One column under 760 px.
+- **A new project card on the overview** (T-335, `ProjectCard`): some depth (a soft shadow, a light top edge, a lift on
+  hover); a title band with the name on one line, a hairline under it and the 14-day sparkline at its right; what needs
+  you as a badge on the card's top-right corner; the active sprint's ring marked; quiet labels (*Sprint*, *Now*,
+  *Next*) and the last finished task led by its time; the stats line as a caption under the sprint line. The task at
+  work (or next up) is a mini task card on a stack of tilted cards, one per other task in progress or ready (at most
+  three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
+
+### Fixed
+- **A dependency on an archived task** (T-356, found in T-277): `atm add` (`--dep`, or `dependencies` in
+  `--json-file`) and `atm edit --add-dep` accept an archived task, as `atm check` does (it counts as done); before,
+  they said it didn't exist. An ID in neither file is still refused.
+- **`atm show` marks an archived task** (T-353, found in T-277): `· archived` in its header, `archived: true` in
+  `--json`; before, only its archived dependencies said so.
+- **The Projects Overview counts each project's archive** (T-355, found in T-277): its Activity, Progress and Agents
+  load each project's `tasks-archive.json` with its `tasks.json` (conditionally; a missing one is empty) and count the
+  history as the project's own pages do (`withArchive`: a task in both files is the live one).
+- **The archive one click away** (T-354, found in T-277): the subtitle's *N archived* is a toggle for Include archived
+  (*showing N archived* while on, `aria-pressed`), and the List ends with *N archived tasks hidden · show*; before,
+  only the checkbox at the foot of the Filters popup showed them.
+- **The Activity popup's periods and hover** (T-350): a period still running (Today, This week, This month) spans
+  all of it on the charts' time axis, what's to come empty (`rangeAxis`): on a Monday, This week was one bar across
+  the whole chart. The hover's tooltip sits beside the pointer, on the side with room, inside the popup (it was
+  offset by half a bar's width, so a wide bar pushed it out), lists at most five tasks, and keeps showing when the
+  pointer moves straight from one chart to another. It is placed against the window, so near the popup's bottom it
+  no longer grows the popup's scroll area (the popup flickered). The same in a project's and the overview's popup.
+- **Scrolling honours “reduce motion”** (T-345): the detail panel's paging and sections, dependency links, Markdown
+  anchors and scroll hints jump at once when the system asks to reduce motion (`scrollBehavior`), rather than glide.
+  For development: screenshots have Linux baselines only, made in Docker (`npm run test:e2e:visual[:update]`), of
+  parts rather than whole pages, with a small pixel tolerance; `npm run test:e2e` leaves them out; traces only on
+  CI's retry; three tests that read the page before it was drawn now wait for it.
+- **Projects Overview has an icon in the project selector** (T-348): a grid (`layout-grid`), where each project shows
+  its logo.
+- **The Omniboard's Active sprints shows the sprints' tasks, no more, no less** (T-349): its To Do column was the
+  loop's list, missing the tasks done with you and those waiting on dependencies (and, in *All tasks*, every other
+  sprint's), and Done held only the last 24 hours. Now To Do has every to-do task (`todo_order`: the ready ones in the
+  loop's order first, then with you, then waiting; a card says *With you* or *Waits on T-…*, from `with_user` and
+  `waiting_for`), and the active sprints' Done every finished task of them. *All tasks* keeps the last 24 hours'
+  Done. The column is *To Do*, not *To Do · ready*.
+- **“Needs you” counts only what you can take up now** (T-347): a to-do task to do with you (`with: user`) counts only
+  when it is in the active sprint (any, without one) and its dependencies are done; before, every such task did, also
+  in planned sprints and the backlog. Reviews and questions for you count as before. The same in `atm summary`
+  (`needs_you.together`, `needs_you_tasks`) and a project's title bar (`needsYouReason`'s scope).
+- **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it
+  ran off the left of the window on cards in the first column; `NeedsYouMenu` now shifts it back in when it opens.
+
 ## [0.25.0] - 2026-11-01
 
 ### Fixed

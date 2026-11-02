@@ -6,6 +6,7 @@
   import Filters from './Filters.svelte';
   import NeedsYouMenu from './NeedsYouMenu.svelte';
   import ActivityWidget from './ActivityWidget.svelte';
+  import OverviewActivity from './OverviewActivity.svelte';
   import ProgressWidget from './ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
 
@@ -30,7 +31,10 @@
       (backlogCount && sprintCount ? ` · ${backlogCount} in the backlog` : ''),
   );
   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
-  const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab));
+  // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
+  const needYou = $derived(
+    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints, tasks: dashboard.taskMap }),
+  );
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
@@ -40,7 +44,18 @@
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->
         {#if dashboard.archivedCount}
-          {counts} · <span id="archived-count">{dashboard.archivedCount} archived</span> — loaded from tasks.json
+          <!-- The archive one click away (T-354, found in T-277): it toggles Include archived -->
+          {counts} ·
+          <button
+            class="archived-toggle"
+            id="archived-count"
+            aria-pressed={dashboard.includeArchived}
+            title={dashboard.includeArchived
+              ? 'Hide the archived tasks again'
+              : 'Show the archived tasks too (search, List, Graph, Agents)'}
+            onclick={() => dashboard.setIncludeArchived(!dashboard.includeArchived)}
+            >{dashboard.includeArchived ? 'showing ' : ''}{dashboard.archivedCount} archived</button
+          > — loaded from tasks.json
         {:else}
           {counts} — loaded from tasks.json
         {/if}
@@ -72,6 +87,14 @@
         Loading projects…
       {:else}
         {present.length} project{present.length === 1 ? '' : 's'}
+      {/if}
+    {/snippet}
+    {#snippet charts()}
+      {#if dashboard.route.page === 'overview'}
+        <!-- Every project's activity together (T-328) -->
+        <div class="topbar-charts">
+          <OverviewActivity />
+        </div>
       {/if}
     {/snippet}
   </TitleBar>

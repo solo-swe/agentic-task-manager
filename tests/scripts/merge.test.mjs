@@ -241,6 +241,25 @@ describe('merge driver: sprints', () => {
     });
   });
 
+  test('a sprint deleted on one branch stays deleted; changed on the other, it comes back as a conflict (T-339)', () => {
+    withSprints((root) => {
+      const deleteBeta = (d) => (d.meta.sprints = d.meta.sprints.filter((s) => s.id !== 'Beta'));
+      // Deleted here, the other branch added a sprint without touching Beta
+      const r = mergeBranches(root, (d) => d.meta.sprints.push({ id: 'Gamma', state: 'planned' }), deleteBeta);
+      assert.ok(r.clean, r.output);
+      assert.deepEqual(
+        r.merged.meta.sprints.map((s) => s.id),
+        ['Alpha', 'Gamma'],
+      );
+    });
+    withSprints((root) => {
+      const deleteBeta = (d) => (d.meta.sprints = d.meta.sprints.filter((s) => s.id !== 'Beta'));
+      const r = mergeBranches(root, (d) => (sprint(d, 'Beta').goal = 'Kept after all'), deleteBeta);
+      assert.ok(!r.clean);
+      assert.match(r.output, /meta\.sprints: 'Beta' deleted on this branch, changed on the other/);
+    });
+  });
+
   test('one branch closes a sprint, the other changes its goal: closed, with the new goal', () => {
     withSprints((root) => {
       const r = mergeBranches(

@@ -12,16 +12,17 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "vite build && playwright test",
+    "test:e2e": "vite build && playwright test --grep-invert visual",
     "test:scripts": "node ../tests/scripts/run.mjs",
     "bench": "node ../tests/scripts/bench.mjs",
     "branding": "node ../branding/generate.mjs",
     "lint": "eslint .",
     "format": "prettier --config .prettierrc --write . ../tests/scripts",
     "check": "node scripts/check-versions.mjs && svelte-check --fail-on-warnings && eslint . && prettier --config .prettierrc --check . ../tests/scripts",
-    "verify": "npm run build:cli && npm run check && npm run test:coverage && npm run build && npm run test:scripts && npm run test:e2e",
+    "verify": "npm run build:cli && npm run check && npm run test:coverage && npm run build && npm run test:scripts && npm run test:e2e && npm run test:e2e:visual",
     "prepare": "git -C .. config core.hooksPath .githooks 2>/dev/null || echo \"prepare: git hooks not enabled (not a usable git checkout, e.g. CI)\"",
-    "test:e2e:linux-snapshots": "docker run --rm -v \"$(cd .. && pwd)\":/repo -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble sh -c \"npm ci && npm run build && npx playwright test visual --update-snapshots=missing\""
+    "test:e2e:visual": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm ci && npm run build && npx playwright test visual\"",
+    "test:e2e:visual:update": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm ci && npm run build && npx playwright test visual --update-snapshots=changed\""
   },
   "devDependencies": {
     "@dagrejs/dagre": "^3.1.3",

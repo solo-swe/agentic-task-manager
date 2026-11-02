@@ -1070,6 +1070,23 @@ def kind_of(vocab, status):
     return None
 
 
+def open_in_closed_sprints(vocab, tasks):
+    """Unfinished tasks whose sprint is closed (T-330): reopened there, or left by a merge. The loop's default selection
+    (the active sprint) never takes them. [{id, name, status, sprint}]"""
+    found = []
+    for task in tasks:
+        sprint = find_sprint(vocab, task.get("sprint")) if isinstance(task, dict) else None
+        if sprint and sprint["state"] == "closed" and kind_of(vocab, task.get("status")) not in ("done", "skipped"):
+            found.append({"id": task.get("id"), "name": task.get("name", ""), "status": task.get("status"), "sprint": sprint["id"]})
+    return found
+
+
+def move_out_hint(task_id, sprint):
+    """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
+    nothing on its own."""
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+
+
 def priority_rank(vocab, priority):
     """0 for the most urgent priority. A missing or unknown priority ranks as the default priority."""
     ids = [p["id"] for p in vocab["priorities"]]
@@ -2696,9 +2713,13 @@ def describe_task(data, task):
         if d not in by_id and archived_task(d):
             by_id[d] = {**archived_task(d), "status": archived_task(d).get("status") + ", archived"}
     labels = task.get("labels") or []
+    # A task not in tasks.json is from the archive: say so (found in T-277, T-353)
+    archived = all(t is not task for t in data["tasks"])
     lines = [
         f"{task.get('id')}  {task.get('name', '')}",
-        f"  {task.get('status')} · {task.get('sprint') or 'backlog'} · {task.get('type')} · {priority_of(vocab, task)}"
+        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
+        + (" · archived" if archived else "")
+        + f" · {task.get('type')} · {priority_of(vocab, task)}"
         + (f" · labels: {', '.join(labels)}" if labels else ""),
     ]
     deps = task.get("dependencies") or []
@@ -2759,7 +2780,9 @@ def cmd_show(args):
     data = load_tasks(paths)
     tasks = [find_task(data, task_id, archived=True) for task_id in args.ids]
     if args.json:
-        out(to_json(tasks))
+        # An archived task says so (T-353)
+        live = {id(t) for t in data["tasks"]}
+        out(to_json([t if id(t) in live else {**t, "archived": True} for t in tasks]))
     else:
         out("\n\n".join(describe_task(data, t) for t in tasks))
 
@@ -2835,6 +2858,16 @@ def cmd_deps(args):
         {"id": t.get("id"), "status": t.get("status"), "name": t.get("name", "")}
         for t in data["tasks"]
         if args.id in (t.get("dependencies") or [])
+    ]
+    # Archived tasks that depended on it are history too, marked as the waits-for side marks them (T-358); a task in
+    # both files is the tasks.json one
+    waited_on_by += [
+        {"id": t.get("id"), "status": f"{t.get('status')}, archived", "name": t.get("name", "")}
+        for t in load_archive(paths)["tasks"]
+        if isinstance(t, dict)
+        and t.get("id") not in by_id
+        and isinstance(t.get("dependencies"), list)
+        and args.id in t["dependencies"]
     ]
     if args.json:
         out(to_json({"id": args.id, "waits_for": waits_for, "waited_on_by": waited_on_by}))
@@ -2938,7 +2971,7 @@ def git_summary(paths, tasks):
 
 
 BOARD_CAP = 30  # cards per column of the All projects board (docs/all-projects-kanban-proposal.md, 3.1)
-BOARD_READY_CAP = 10  # ready tasks per project, so one project's new batch doesn't fill the To Do column
+BOARD_READY_CAP = 10  # to-do tasks per project, so one project's new batch doesn't fill the To Do column
 BOARD_DONE_HOURS = 24
 
 
@@ -2962,11 +2995,34 @@ def board_column(cards, cap=BOARD_CAP):
     return {"count": len(cards), "cards": cards[:cap]}
 
 
-def board(data, store, tasks, kinds, ready, vocab, current, live):
-    """The project's cards for the All projects board (T-257), one rule per column: the tasks ready to start in the
-    loop's default selection (`ready`, the active sprint's), in its order; everything in progress (longest running
-    first), in review (longest waiting first) and blocked (on the user first, then longest waiting); what was
-    finished in the last 24 hours, newest first."""
+def todo_order(data, tasks, kinds, loop_ready, vocab):
+    """Every to-do task, for the board's To Do column (T-349): first the ready ones, those the loop takes in its order
+    before the rest (other sprints', the backlog's), then the ready ones done with the user, then those waiting on
+    dependencies (each by priority, then ID). Each with why it isn't plain ready: done with the user, or the
+    dependencies it waits for."""
+    rank = {t.get("id"): i for i, t in enumerate(loop_ready)}
+
+    def entry(t):
+        waits = [dep for dep, _ in unfinished_dependencies(data, t)]
+        key = (
+            bool(waits),
+            t.get("with") == "user",
+            t.get("id") not in rank,
+            rank.get(t.get("id"), 0),
+            priority_rank(vocab, t.get("priority")),
+            natural_key(t.get("id")),
+        )
+        return key, t, waits
+
+    entries = sorted((entry(t) for t, k in zip(tasks, kinds) if k == "todo"), key=lambda e: e[0])
+    return [(t, waits) for _, t, waits in entries]
+
+
+def board(data, store, tasks, kinds, todo, vocab, current, live, recent_done=True):
+    """The project's cards for the All projects board (T-257), one rule per column: every to-do task (`todo`, as
+    todo_order gives it, T-349); everything in progress (longest running first), in review (longest waiting first)
+    and blocked (on the user first, then longest waiting); what was finished, newest first: in the last 24 hours, or
+    all of it without `recent_done` (a sprint's board shows all its tasks, T-349)."""
     of_kind = lambda kind: [t for t, k in zip(tasks, kinds) if k == kind]
     claimed_by = {c.get("task"): c.get("agent") for c in live}
     since = lambda t, field: t.get(field) or t.get("updated_at")
@@ -2978,10 +3034,23 @@ def board(data, store, tasks, kinds, ready, vocab, current, live):
     )
     cutoff = current.timestamp() - BOARD_DONE_HOURS * 3600
     finished_at = lambda t: parse_time(t.get("completed_at"))
-    done = [t for t in of_kind("done") if finished_at(t) and finished_at(t).timestamp() > cutoff]
+    done = [
+        t for t in of_kind("done") if not recent_done or (finished_at(t) and finished_at(t).timestamp() > cutoff)
+    ]
     done.sort(key=lambda t: str(t.get("completed_at")), reverse=True)
     return {
-        "todo": board_column([board_card(vocab, t) for t in ready], BOARD_READY_CAP),
+        "todo": board_column(
+            [
+                board_card(
+                    vocab,
+                    t,
+                    **({"with_user": True} if t.get("with") == "user" else {}),
+                    **({"waiting_for": waits} if waits else {}),
+                )
+                for t, waits in todo
+            ],
+            BOARD_READY_CAP,
+        ),
         "active": board_column(
             [
                 board_card(vocab, t, by=claimed_by.get(t.get("id")) or started_by(t), since=since(t, "started_at"))
@@ -3108,7 +3177,8 @@ def project_summary(paths):
     # by the very rule `atm next` follows: the dashboard's Next up shows the first (T-321)
     in_loop_order = loop_order(data, store, Selection())[0]
     next_up = [{"id": t.get("id"), "name": capped(t.get("name"))} for t in in_loop_order[:NEXT_TASKS]]
-    ready = [t for t in in_loop_order if kind_of(vocab, t.get("status")) == "todo"]
+    # The board's To Do column: every to-do task, the loop's first (T-349)
+    todo = todo_order(data, tasks, kinds, in_loop_order, vocab)
     finished = [(t.get("completed_at"), t) for t, k in zip(tasks, kinds) if k == "done" and parse_time(t.get("completed_at"))]
     last_task = max(finished, key=lambda f: f[0])[1] if finished else None
     last_done = (
@@ -3132,13 +3202,20 @@ def project_summary(paths):
                 completions[SUMMARY_DAYS - 1 - age] += 1
 
     # The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
-    # reviewer, blocked on the user, or to do together with the user (SR-6.6)
+    # reviewer, blocked on the user, or to do together with the user (SR-6.6) now: in the active sprint (any, without
+    # one) and ready, its dependencies done (T-347)
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+
+    def together_now(t):
+        in_scope = active is None or (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+        return in_scope and not unfinished_dependencies(data, t)
+
     def needs_you(t, k):
         if k == "review":
             return None if t.get("review_state") in REWORK_STATES else "review"
         if k == "blocked" and t.get("waiting_on") == "user":
             return "blocked"
-        return "together" if k == "todo" and t.get("with") == "user" else None
+        return "together" if k == "todo" and t.get("with") == "user" and together_now(t) else None
 
     needs_you_tasks = [
         {"id": t.get("id"), "name": capped(t.get("name")), "reason": needs_you(t, k)}
@@ -3167,9 +3244,32 @@ def project_summary(paths):
         "description": description(data.get("meta")),
         "last_activity": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
         "completions_14d": completions,
-        "board": board(data, store, tasks, kinds, ready, vocab, current, live),
+        "board": board(data, store, tasks, kinds, todo, vocab, current, live),
+        "board_active_sprint": active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live),
         "stats": project_stats(paths, data, vocab, tasks, current),
     }
+
+
+def active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live):
+    """The All projects board's default view (T-340): the same columns, of the active sprint's tasks only, no more, no
+    less (T-349: every one done too, not the last 24 hours'), with their own counts; None without an active sprint (the
+    board says so)."""
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+    if active is None:
+        return None
+    in_sprint = lambda t: (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+    pairs = [(t, k) for t, k in zip(tasks, kinds) if in_sprint(t)]
+    return board(
+        data,
+        store,
+        [t for t, _ in pairs],
+        [k for _, k in pairs],
+        [(t, waits) for t, waits in todo if in_sprint(t)],
+        vocab,
+        current,
+        live,
+        recent_done=False,
+    )
 
 
 def cmd_summary(args):
@@ -3264,6 +3364,10 @@ def cmd_status(args):
         "archived": len(load_archive(paths)["tasks"]),
         "archive_bytes": os.path.getsize(archive_path(paths)) if os.path.isfile(archive_path(paths)) else 0,
     }
+    # Open tasks left in closed sprints (T-330), whatever the scope: the loop's default selection never takes them
+    stranded = open_in_closed_sprints(vocab, data["tasks"])
+    if stranded:
+        result["open_in_closed_sprints"] = stranded
     hint = archive_hint(paths, data)
     if hint:
         result["suggest"] = {"archive": hint}
@@ -3283,6 +3387,13 @@ def cmd_status(args):
             out(f"  waiting for the sprint review: {', '.join(sprint['review_pending'])} (/atm:close-sprint)")
     elif vocab["sprints"]:
         out("sprint: none active (plan one with /atm:plan-sprint)")
+    if stranded:
+        n = len(stranded)
+        out(
+            f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
+            + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
+            + " (atm move <id> --to backlog or --to active)"
+        )
     out(f"{len(tasks)} tasks: {pairs(by_status)}")
     if vocab["sprints"]:
         out(f"by sprint: {pairs(result['by_sprint'])}")
@@ -3414,14 +3525,24 @@ def cmd_status_change(command):
                 store["hints"]["archive"] = today
             write_store(paths, store)
         report_expired(expired)
+        # Reopened in a closed sprint, the task is open where the loop's default selection never looks (T-330)
+        stranded = None
+        if command == "reopen":
+            sprint = find_sprint(vocabulary(data), task.get("sprint"))
+            if sprint and sprint["state"] == "closed":
+                stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
         if args.json:
             extra = {"unblocked": unblocked} if command == "done" else {}
             if hint:
                 extra["suggest"] = {"archive": hint}
+            if stranded:
+                extra["hint"] = stranded
             out(to_json({**task, "claim": claims.get(task_id), **extra}))
             return
         # New lines only after the existing one (CLI-3.2)
         out(f"{task['id']}: {previous} -> {task['status']}")
+        if stranded:
+            out(f"  {stranded}")
         if command == "start":
             out(describe_task(data, task))
         if unblocked:
@@ -3632,7 +3753,8 @@ def add_tasks(data, entries, actor):
     for task, real in zip(tasks, ids):
         task["id"] = real
         task["dependencies"] = [rename.get(d, d) for d in task["dependencies"]]
-        missing = [d for d in task["dependencies"] if d not in existing and d not in ids]
+        # An archived task is done: depending on it is fine, as atm check says (T-356)
+        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived_task(d)]
         if missing:
             raise AtmError(f"{real} ({task['name']}) depends on {', '.join(missing)}, which doesn't exist", 2)
         if task.get("related"):
@@ -3758,7 +3880,7 @@ def edit_task(data, task, args):
         if key in task and not task[key]:
             del task[key]
     ids = {t.get("id") for t in data["tasks"]}
-    missing = [d for d in args.add_dep if d not in ids]
+    missing = [d for d in args.add_dep if d not in ids and not archived_task(d)]
     if missing:
         raise AtmError(f"{task['id']} can't depend on {', '.join(missing)}, which doesn't exist", 2)
     if task["id"] in args.add_dep:
@@ -3879,6 +4001,8 @@ def check_data(data, root, files=False, archived=()):
             for f in task.get("files") or []:
                 if isinstance(f, str) and not os.path.exists(os.path.join(root, f)):
                     warnings.append(f"{task_id}: the file {f} doesn't exist")
+    for t in open_in_closed_sprints(vocab, [t for t in tasks if isinstance(t, dict) and isinstance(t.get("id"), str)]):
+        warnings.append(f"{t['id']}: {t['status']} in {move_out_hint(t['id'], t['sprint'])}")
     for sprint in vocab["sprints"]:
         if sprint.get("release") and find_release(vocab, sprint["release"]) is None:
             errors.append(f"the sprint {sprint['id']!r}: the release {sprint['release']!r} is not one of meta.releases")
@@ -4211,6 +4335,84 @@ def sprints_close(paths, args):
         out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
 
 
+def mentions_sprint(task, sprint):
+    """Whether the task's sprint history names the sprint (case-insensitively)."""
+    return any(
+        isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
+        for e in task.get("sprint_history") or []
+    )
+
+
+def sprints_delete(paths, args):
+    """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
+    state; an open one's unfinished tasks go to --move-to (the backlog by default); one that tasks finished in or
+    moved on from needs --force when open, and a closed one with any history stays (its record and report)."""
+    actor = agent_identity(args.agent)
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        archived = load_archive(paths)["tasks"]
+        vocab = vocabulary(data)
+        sprint = stored_sprint(data, args.name)
+        state = sprint.get("state", "planned")
+
+        def kind(task):
+            return kind_of(vocab, task.get("status"))
+
+        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
+        claimed = [t["id"] for t in own if kind(t) == "active"]
+        if claimed:
+            raise AtmError(
+                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
+                f"{'it' if len(claimed) == 1 else 'them'} before deleting the sprint",
+                2,
+            )
+        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
+        # Its history: tasks that finished in it (archived ones too), or were in it and moved on
+        history = [t["id"] for t in own if t not in unfinished]
+        history += [t.get("id") for t in archived if isinstance(t, dict) and in_sprint(t, sprint)]
+        history += [
+            t.get("id")
+            for t in list(data["tasks"]) + list(archived)
+            if isinstance(t, dict) and not in_sprint(t, sprint) and mentions_sprint(t, sprint)
+        ]
+        if history and state == "closed":
+            raise AtmError(
+                f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
+                "stay; only an empty sprint can be deleted",
+                2,
+            )
+        if history and not args.force:
+            raise AtmError(
+                f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
+                "with --force to drop that record (its tasks go to --move-to, the backlog by default)",
+                2,
+            )
+        to = args.move_to or "backlog"
+        target = None if to == "backlog" else open_sprint(vocab, to)
+        if target is not None and target.casefold() == sprint["id"].casefold():
+            raise AtmError(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})", 2)
+        # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
+        moving = own if args.force else unfinished
+        stamp = now_iso()
+        for task in moving:
+            set_sprint(task, target, stamp)
+            touch(task, actor, stamp)
+        data["meta"]["sprints"] = [s for s in data["meta"]["sprints"] if s is not sprint]
+        vocabulary(data)
+        write_json_atomic(paths["tasks"], data)
+    moved = [t["id"] for t in moving]
+    if args.json:
+        out(to_json({"deleted": sprint["id"], "state": state, "moved": moved, "to": target or "backlog"}))
+        return
+    line = f"Deleted the sprint “{sprint['id']}” ({state})"
+    if moved:
+        where = "the backlog" if target is None else f"“{target}”"
+        line += f": {len(moved)} task{'' if len(moved) == 1 else 's'} moved to {where} ({', '.join(moved)})"
+    out(line + ".")
+    if state == "active":
+        out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
+
+
 def cmd_sprints(args):
     paths = find_paths(os.getcwd())
     if args.action in (None, "list"):
@@ -4222,7 +4424,8 @@ def cmd_sprints(args):
     else:
         if not args.name:
             raise AtmError(f"atm sprints {args.action} needs a sprint name", 2)
-        {"edit": sprints_edit, "start": sprints_start, "close": sprints_close}[args.action](paths, args)
+        actions = {"edit": sprints_edit, "start": sprints_start, "close": sprints_close, "delete": sprints_delete}
+        actions[args.action](paths, args)
 
 
 def move_target(vocab, task, to):
@@ -5005,6 +5208,42 @@ def describe_ids(ids, limit=12):
     return ", ".join(ids[:limit]) + (f" and {len(ids) - limit} more" if len(ids) > limit else "")
 
 
+def kept_finished(data, moving, before, keep, sprints):
+    """The finished tasks that stay in tasks.json, and why (T-352), as archivable() decides: in an open PR, finished
+    in the last keep days, not before --before, not in the --sprint chosen. [{id, reason}], in file order."""
+    vocab = vocabulary(data)
+    days = archive_settings(data)["keep_days"] if keep is None else keep
+    recent = now() - timedelta(days=days)
+    moved = {t.get("id") for t in moving}
+    kept = []
+    for t in data["tasks"]:
+        if not isinstance(t, dict) or t.get("id") in moved:
+            continue
+        if kind_of(vocab, t.get("status")) not in ("done", "skipped"):
+            continue
+        finished = finished_at(t)
+        if isinstance(t.get("pr"), dict) and not t.get("merged_at"):
+            reason = f"in open PR #{t['pr'].get('number')}"
+        elif finished is not None and finished > recent:
+            reason = f"finished in the last {days} days"
+        elif before is not None and (finished is None or finished >= before):
+            reason = f"finished on or after {before.date().isoformat()}"
+        elif sprints is not None:
+            reason = "not in the sprints chosen"
+        else:
+            continue
+        kept.append({"id": t.get("id"), "reason": reason})
+    return kept
+
+
+def describe_kept(kept):
+    """ "T-010 (in open PR #1); T-011, T-012 (finished in the last 14 days)": grouped by reason, in first-seen order"""
+    groups = {}
+    for k in kept:
+        groups.setdefault(k["reason"], []).append(k["id"])
+    return "; ".join(f"{describe_ids(ids)} ({reason})" for reason, ids in groups.items())
+
+
 def cmd_archive(args):
     before = None
     if args.before:
@@ -5018,6 +5257,7 @@ def cmd_archive(args):
         archive = load_archive(paths)
         dropped = drop_duplicates(data, archive)
         moving = archivable(data, before, args.keep_days)
+        names = None
         if args.sprint:
             vocab = vocabulary(data)
             names = set()
@@ -5028,6 +5268,7 @@ def cmd_archive(args):
                 names.add(sprint["id"])
             moving = [t for t in moving if (find_sprint(vocab, t.get("sprint")) or {}).get("id") in names]
         ids = [t.get("id") for t in moving]
+        kept = kept_finished(data, moving, before, args.keep_days, names)
         if not args.dry_run and (moving or dropped):
             # New IDs must never come back to an archived ID (DM-2.3)
             if not isinstance(data.get("meta"), dict):
@@ -5048,6 +5289,7 @@ def cmd_archive(args):
         "tasks_kb": size_kb(paths["tasks"]),
         "archive_kb": size_kb(archive_path(paths)),
         "duplicates_dropped": dropped,
+        "kept": kept,
     }
     if args.json:
         out(to_json(result))
@@ -5063,6 +5305,9 @@ def cmd_archive(args):
             f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
             f"tasks.json is now {result['tasks_kb']} KB, tasks-archive.json {result['archive_kb']} KB."
         )
+    # What stays, and why (T-352)
+    if kept:
+        out(f"{'Would keep' if args.dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}.")
 
 
 def cmd_unarchive(args):
@@ -5074,9 +5319,18 @@ def cmd_unarchive(args):
         by_id = {t.get("id"): t for t in archive["tasks"]}
         missing = [i for i in args.ids if i not in by_id]
         if missing:
-            raise AtmError(f"not in the archive: {', '.join(missing)}")
+            # Already back, or never there at all: two different mistakes (T-357)
+            live = {t.get("id") for t in data["tasks"]}
+            here = [i for i in missing if i in live]
+            unknown = [i for i in missing if i not in live]
+            parts = ([f"{', '.join(here)} (already in tasks.json)"] if here else []) + (
+                [f"{', '.join(unknown)} (no such task)"] if unknown else []
+            )
+            raise AtmError(f"not in the archive: {'; '.join(parts)}")
         # tasks.json first: a crash here leaves the task in both files, and it stays in tasks.json
         data["tasks"].extend(by_id[i] for i in args.ids)
+        # Still finished and old: the next atm archive would move it straight back (T-357)
+        again = [t.get("id") for t in archivable(data, None, None) if t.get("id") in args.ids]
         if not isinstance(data.get("meta"), dict):
             data["meta"] = {}
         data["meta"]["archived"] = len(archive["tasks"]) - len(set(args.ids))
@@ -5084,9 +5338,14 @@ def cmd_unarchive(args):
         archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in args.ids]
         write_json_atomic(archive_path(paths), archive)
     if args.json:
-        out(to_json({"restored": args.ids}))
+        out(to_json({"restored": args.ids, "moves_back": again}))
     else:
         out(f"Brought back {', '.join(args.ids)} from the archive.")
+        if again:
+            out(
+                f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
+                f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
+            )
 
 
 # ==== git_ops.py ====
@@ -5210,6 +5469,37 @@ def commit_message(text, trailers):
     return text
 
 
+def record_commit(paths, args, agent):
+    """atm commit --record (T-343): record an existing commit on the current branch, e.g. the one a rebase or a
+    cherry-pick made of the task's commit, without committing anything."""
+    root, rev = paths["root"], args.record
+    if args.file or args.message is not None:
+        raise AtmError("--record records an existing commit: no --file or --message", 2)
+    if rev.startswith("-"):
+        raise AtmError(f"--record takes a revision, not an option: {rev!r}", 2)
+    sha = git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], root)
+    if not sha:
+        raise AtmError(f"no commit {rev} in this repository")
+    if git(["merge-base", "--is-ancestor", sha, "HEAD"], root) is None:
+        raise AtmError(f"{sha[:7]} is not on the current branch (an ancestor of HEAD)")
+    message = run_git(["log", "-1", "--format=%B", sha], root)
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        task = find_task(data, args.id)
+        task["commit"] = sha
+        touch(task, agent, now_iso())
+        write_json_atomic(paths["tasks"], data)
+    hint = None
+    if not re.search(rf"(?<![\w-]){re.escape(task['id'])}(?![\w-])", message):
+        hint = f"its message doesn't mention {task['id']}: is it the task's commit?"
+    if args.json:
+        out(to_json({"task": task["id"], "commit": sha, "recorded": True, **({"hint": hint} if hint else {})}))
+        return
+    out(f"{task['id']}: recorded {sha[:7]} {message.splitlines()[0] if message else ''}".rstrip())
+    if hint:
+        out(f"  {hint}")
+
+
 def cmd_commit(args):
     """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
     agent = agent_identity(args.agent)
@@ -5217,6 +5507,10 @@ def cmd_commit(args):
     root = paths["root"]
     if not in_git(root):
         raise AtmError("atm commit needs a git repository")
+    if args.record is not None:
+        return record_commit(paths, args, agent)
+    if not args.file:
+        raise AtmError("atm commit needs --file (once per file the task changed), or --record REV", 2)
     data = load_tasks(paths)
     task = find_task(data, args.id)
     workflow = workflow_of(data) or WORKFLOW_DEFAULTS
@@ -6456,7 +6750,9 @@ def cmd_serve_child(args):
 # Every command takes --json. Usage errors keep atm's format ("atm: <message>", exit code 2) followed by the command's
 # usage line; with --json, every error is {"error": "...", "code": N} on stderr, with the same exit code.
 
-USAGE = """usage: atm <command> [options]
+USAGE = """usage: atm [--dir PATH] <command> [options]
+
+  --dir PATH     run as if started in PATH: on the project there (relative paths in the command count from it)
 
 commands:
   version        print the plugin version
@@ -6827,9 +7123,14 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", required=True, metavar="F", help="a file the task changed (repeat for each)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
+    commit.add_argument(
+        "--record",
+        metavar="REV",
+        help="record this existing commit on the current branch instead of committing (e.g. after a rebase)",
+    )
     agent_option(commit)
 
     pr = command("pr", cmd_pr, "record the PR that contains the tasks")
@@ -6889,8 +7190,10 @@ def build_parser():
     logo = command("logo", cmd_logo, "print, set or unset the project's logo for the dashboard (meta.logo)")
     logo.add_argument("action", nargs="?", choices=["set", "unset"], help="set or unset it")
     logo.add_argument("path", nargs="?", help="set: the image (SVG, PNG, WebP or ICO), relative to here")
-    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit or start one")
-    sprints.add_argument("action", nargs="?", choices=["list", "add", "edit", "start", "close"], help="what to do")
+    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit, start or delete one")
+    sprints.add_argument(
+        "action", nargs="?", choices=["list", "add", "edit", "start", "close", "delete"], help="what to do"
+    )
     sprints.add_argument("name", nargs="?", help="the sprint's name (add: generated when left out)")
     sprints.add_argument(
         "--carry-to", metavar="WHERE", help="close: where unfinished tasks go: a sprint's name, new, or backlog"
@@ -6907,6 +7210,12 @@ def build_parser():
     sprints.add_argument("--release", help="add, edit: the release it delivers to (empty: remove it)")
     sprints.add_argument("--due", metavar="DATE", help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)")
     sprints.add_argument("--after", metavar="NAME", help="add: put it after this sprint (default: last)")
+    sprints.add_argument(
+        "--move-to", metavar="WHERE", help="delete: where its tasks go: a sprint's name or backlog (default)"
+    )
+    sprints.add_argument(
+        "--force", action="store_true", help="delete: also a sprint tasks finished in or moved on from"
+    )
     move = command("move", cmd_move, "move tasks into a sprint, the next sprint, the active one, or the backlog")
     move.add_argument("ids", nargs="+", metavar="id", help="task IDs")
     move.add_argument(
@@ -6972,7 +7281,24 @@ def report(error, as_json):
         sys.stderr.write(f"atm: {error}\n")
 
 
+def leading_dir(argv):
+    """`atm --dir PATH <command> ...` (or `--dir=PATH`, T-351): the folder to run in, and the rest. Only before the
+    command: `atm serve --dir PATH` keeps its own meaning."""
+    if argv and argv[0] == "--dir":
+        return (argv[1] if len(argv) > 1 else ""), argv[2:]
+    if argv and argv[0].startswith("--dir="):
+        return argv[0][len("--dir=") :], argv[1:]
+    return None, argv
+
+
 def main(argv):
+    target, argv = leading_dir(argv)
+    if target is not None:
+        # As if started in that folder: the project is found from there, and relative paths count from there
+        if not target or not os.path.isdir(target):
+            report(AtmError(f"--dir: no folder '{target}'", 2), "--json" in argv)
+            return 2
+        os.chdir(target)
     if not argv or argv[0] in ("-h", "--help"):
         sys.stdout.write(USAGE)
         return 0

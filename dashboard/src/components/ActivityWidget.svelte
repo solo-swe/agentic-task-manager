@@ -7,47 +7,91 @@
     periodPhrase,
     PRESET_BUCKET_MS,
     rangeLabel,
+    rangeAxis,
     rangeWindow,
     sparklineTitle,
     STEPPED_PRESETS,
     type ActivityPreset,
+    type ActivityRange,
   } from '../lib/insights';
+  import type { ClaimMap } from '../lib/claims';
   import { dashboard } from '../lib/state.svelte';
   import { timeUse } from '../lib/timeuse';
+  import type { Task } from '../lib/types';
+  import { DEFAULT_VOCABULARY } from '../lib/vocab';
   import ActivityDeepDive from './ActivityDeepDive.svelte';
   import Icon from './Icon.svelte';
   import InfoTip from './InfoTip.svelte';
 
+  // A project's Activity by default. The overview's (T-328) gives every project's tasks and claims (`source`, with
+  // the default vocabulary's statuses, and the same tasks by project with the projects' colours), its own period
+  // (`view`) and how to open a task (`onopen`)
+  let {
+    source = undefined,
+    view = dashboard,
+    onopen = undefined,
+  }: {
+    source?: {
+      tasks: Task[];
+      claims: ClaimMap;
+      byProject: Task[];
+      projects: { name: string; color: string }[];
+      of: (worker: string) => string;
+    };
+    view?: { activityRange: ActivityRange };
+    onopen?: (id: string) => void;
+  } = $props();
+  const tasks = $derived(source ? source.tasks : dashboard.history);
+  const vocab = $derived(source ? DEFAULT_VOCABULARY : dashboard.vocab);
+  const claims = $derived(source ? source.claims : dashboard.claims);
+  // The overview's charts are by project, in the projects' colours (T-328 review)
+  const charted = $derived(source ? source.byProject : tasks);
+  const colors = $derived(new Map(source?.projects.map((p) => [p.name, p.color]) ?? []));
+  const group = $derived(
+    source
+      ? {
+          color: (p: string) => colors.get(p) ?? 'var(--text-muted)',
+          of: source.of,
+          order: source.projects.map((p) => p.name),
+        }
+      : undefined,
+  );
+
   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
   // Archived completions count too once the archive is loaded (dashboard.history)
-  const series = $derived(activitySeries(dashboard.history, null, dashboard.loadedAt, dashboard.vocab));
+  const series = $derived(activitySeries(charted, null, dashboard.loadedAt, vocab));
   let open = $state(false);
 
   // The panel shows the chosen period (saved with the view); the pill always shows all time
-  const range = $derived(dashboard.activityRange);
+  const range = $derived(view.activityRange);
   const period = $derived(rangeWindow(range, dashboard.loadedAt));
   // Each stepped period in its natural bucket: a week per day, a day per hour (PRESET_BUCKET_MS)
   const detail = $derived(
     range.preset === 'all'
       ? series
-      : activitySeries(dashboard.history, period, dashboard.loadedAt, dashboard.vocab, PRESET_BUCKET_MS[range.preset]),
+      : // The whole period on the time axis (T-350): what is still to come stays empty
+        activitySeries(
+          charted,
+          rangeAxis(range, dashboard.loadedAt),
+          dashboard.loadedAt,
+          vocab,
+          PRESET_BUCKET_MS[range.preset],
+        ),
   );
   const phrase = $derived(periodPhrase(range, dashboard.loadedAt));
   // Where the time went in the period (timeuse.ts, shared with the Progress tab), and who works now: from the live
   // claims, only for a period that runs up to now (T-246)
-  const use = $derived(open ? timeUse(dashboard.history, period, dashboard.loadedAt, dashboard.vocab) : null);
+  const use = $derived(open ? timeUse(tasks, period, dashboard.loadedAt, vocab) : null);
   const workingNow = $derived(
-    !period || period.end >= dashboard.loadedAt
-      ? new Set([...dashboard.claims.values()].map((c) => c.agent)).size
-      : null,
+    !period || period.end >= dashboard.loadedAt ? new Set([...claims.values()].map((c) => c.agent)).size : null,
   );
 
-  // A period reaching back before tasks.json's oldest completion needs the archive (D-5.2)
+  // A period reaching back before tasks.json's oldest completion needs the archive (D-5.2); a project's only
   const oldest = $derived(
     Math.min(...dashboard.tasks.map((t) => Date.parse(t.completed_at ?? '')).filter((t) => !Number.isNaN(t))),
   );
   $effect(() => {
-    if (open && dashboard.archivedCount > 0 && (!period || period.start < oldest)) dashboard.wantArchive();
+    if (!source && open && dashboard.archivedCount > 0 && (!period || period.start < oldest)) dashboard.wantArchive();
   });
 
   // <input type="datetime-local"> works in local time without seconds
@@ -60,23 +104,22 @@
   const stepped = $derived(STEPPED_PRESETS.includes(range.preset));
   const offset = $derived(range.offset ?? 0);
   // ‹ › move a whole hour/day/week/month back or forward, never past now
-  const stepPeriod = (by: number) =>
-    (dashboard.activityRange = { preset: range.preset, offset: Math.min(0, offset + by) });
+  const stepPeriod = (by: number) => (view.activityRange = { preset: range.preset, offset: Math.min(0, offset + by) });
 
   function choose(preset: ActivityPreset) {
-    if (preset !== 'custom') return (dashboard.activityRange = { preset });
+    if (preset !== 'custom') return (view.activityRange = { preset });
     // Start a custom range from what is shown now
     const shown =
       period ?? (detail?.buckets.length ? { start: detail.buckets[0].start, end: dashboard.loadedAt } : null);
     const end = shown?.end ?? dashboard.loadedAt;
-    dashboard.activityRange = { preset, from: shown?.start ?? end - 24 * 3_600_000, to: end };
+    view.activityRange = { preset, from: shown?.start ?? end - 24 * 3_600_000, to: end };
   }
 
   function setCustom(which: 'from' | 'to', value: string) {
     const t = fromInput(value);
     if (Number.isNaN(t) || range.preset !== 'custom') return;
     const next = { ...range, [which]: t };
-    if (next.from! < next.to!) dashboard.activityRange = next;
+    if (next.from! < next.to!) view.activityRange = next;
   }
   let root = $state<HTMLElement>();
 
@@ -110,7 +153,23 @@
       <span class="widget-body">
         <svg class="sparkline" width={W} height={H} viewBox="0 0 {W} {H}" aria-hidden="true">
           {#each series.buckets as b, i (b.start)}
-            {#if b.completed.length}
+            {#if b.completed.length && group}
+              <!-- On the overview, stacked by project in their colours (T-328 review) -->
+              {#each group.order.filter((p) => b.byType[p]) as p, j (p)}
+                {@const below = group.order
+                  .filter((q) => b.byType[q])
+                  .slice(0, j)
+                  .reduce((n, q) => n + b.byType[q], 0)}
+                <rect
+                  class:ongoing={ongoing(b, dashboard.loadedAt)}
+                  x={i * step + 1}
+                  y={y(below + b.byType[p])}
+                  width={Math.max(1, step - 2)}
+                  height={y(below) - y(below + b.byType[p])}
+                  fill={group.color(p)}
+                />
+              {/each}
+            {:else if b.completed.length}
               <!-- The current period, not over yet, lighter: it would otherwise look like a drop -->
               <rect
                 class:ongoing={ongoing(b, dashboard.loadedAt)}
@@ -137,8 +196,13 @@
             >Activity
             <InfoTip label="activity">
               <p>
-                The whole project, archived tasks included: the search and filters don't apply here. All times are for
-                the chosen period.
+                {#if source}
+                  Every project shown, together (their archives left out), in a colour each. All times are for the
+                  chosen period.
+                {:else}
+                  The whole project, archived tasks included: the search and filters don't apply here. All times are for
+                  the chosen period.
+                {/if}
               </p>
               <p>
                 <strong>Agents working</strong>: at least one agent at work on a task, from its start until it asked for
@@ -210,7 +274,7 @@
           </div>
         {/if}
         {#if detail}
-          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} />
+          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} {onopen} {group} />
         {/if}
       </div>
     {/if}

@@ -1,4 +1,9 @@
-const HIGHLIGHT_MS = 2000;
+export const HIGHLIGHT_MS = 2000;
+
+/** How to scroll: smoothly, but at once for someone who asked their system to reduce motion (T-345) */
+export function scrollBehavior(): ScrollBehavior {
+  return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+}
 
 /** What a scroller without a scrollbar needs for its "▲ N more" / "▼ N more" hints */
 export interface Box {
@@ -26,7 +31,7 @@ export function cutOff(top: number, height: number, items: Iterable<Box>): { abo
 export function scrollToTask(id: string) {
   const el = document.getElementById('task-' + id);
   if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
   el.style.borderColor = 'var(--yellow)';
   el.style.boxShadow = '0 0 12px color-mix(in srgb, var(--yellow) 30%, transparent)';
   setTimeout(() => {

@@ -1,0 +1,28 @@
+{
+  "meta": {
+    "id": "demo0001",
+    "project": "Storefront",
+    "description": "A small online shop: the demo project of the social preview (branding/generate.mjs)",
+    "sprints": [
+      { "id": "Foundations", "state": "closed", "start": "2026-03-02T09:00:00Z", "end": "2026-03-06T17:00:00Z" },
+      { "id": "Checkout", "state": "active", "goal": "Customers can pay", "start": "2026-03-09T09:00:00Z", "due": "2026-03-13" },
+      { "id": "Accounts", "state": "planned" }
+    ]
+  },
+  "tasks": [
+    { "id": "T-001", "name": "Product catalogue API", "type": "feature", "status": "done", "sprint": "Foundations", "priority": "P1", "labels": ["api"], "created_at": "2026-03-02T09:00:00Z", "started_at": "2026-03-02T09:10:00Z", "started_by": "claude:4f2a91c0", "completed_at": "2026-03-02T10:05:00Z" },
+    { "id": "T-002", "name": "Product page", "type": "feature", "status": "done", "sprint": "Foundations", "labels": ["ui"], "created_at": "2026-03-02T09:00:00Z", "started_at": "2026-03-03T09:00:00Z", "started_by": "claude:4f2a91c0", "completed_at": "2026-03-03T10:20:00Z" },
+    { "id": "T-003", "name": "Search with filters", "type": "feature", "status": "done", "sprint": "Foundations", "labels": ["ui"], "created_at": "2026-03-02T09:00:00Z", "started_at": "2026-03-04T09:00:00Z", "started_by": "claude:9b13de77", "completed_at": "2026-03-04T11:40:00Z" },
+    { "id": "T-004", "name": "Cart: add, remove, update", "type": "feature", "status": "done", "sprint": "Checkout", "priority": "P1", "labels": ["ui"], "dependencies": ["T-002"], "created_at": "2026-03-06T16:00:00Z", "started_at": "2026-03-09T09:05:00Z", "started_by": "claude:4f2a91c0", "completed_at": "2026-03-09T10:30:00Z" },
+    { "id": "T-005", "name": "Tax and shipping rules", "type": "feature", "status": "done", "sprint": "Checkout", "labels": ["api"], "created_at": "2026-03-06T16:00:00Z", "started_at": "2026-03-09T10:40:00Z", "started_by": "claude:9b13de77", "completed_at": "2026-03-10T09:15:00Z" },
+    { "id": "T-006", "name": "Payment provider webhooks", "type": "feature", "status": "in_progress", "sprint": "Checkout", "priority": "P0", "labels": ["api", "payments"], "dependencies": ["T-004"], "created_at": "2026-03-06T16:00:00Z", "started_at": "2026-03-10T13:20:00Z", "started_by": "claude:4f2a91c0" },
+    { "id": "T-007", "name": "Checkout form validation", "type": "feature", "status": "in_progress", "sprint": "Checkout", "priority": "P1", "labels": ["ui"], "dependencies": ["T-004"], "created_at": "2026-03-06T16:00:00Z", "started_at": "2026-03-10T14:05:00Z", "started_by": "claude:9b13de77" },
+    { "id": "T-008", "name": "Order confirmation email", "type": "feature", "status": "in_review", "sprint": "Checkout", "labels": ["email"], "created_at": "2026-03-06T16:00:00Z", "started_at": "2026-03-10T09:30:00Z", "started_by": "claude:9b13de77", "review_requested_at": "2026-03-10T11:50:00Z" },
+    { "id": "T-009", "name": "Choose the payment provider", "type": "infra", "status": "blocked", "sprint": "Checkout", "priority": "P1", "waiting_on": "user", "questions": ["Stripe or Adyen?"], "created_at": "2026-03-06T16:00:00Z", "blocked_at": "2026-03-10T12:00:00Z" },
+    { "id": "T-010", "name": "Refunds", "type": "feature", "status": "todo", "sprint": "Checkout", "labels": ["payments"], "dependencies": ["T-006"], "created_at": "2026-03-06T16:00:00Z" },
+    { "id": "T-011", "name": "Checkout end-to-end tests", "type": "test", "status": "todo", "sprint": "Checkout", "dependencies": ["T-007"], "created_at": "2026-03-06T16:00:00Z" },
+    { "id": "T-012", "name": "Discount codes", "type": "feature", "status": "todo", "sprint": "Checkout", "priority": "P2", "labels": ["payments"], "created_at": "2026-03-06T16:00:00Z" },
+    { "id": "T-013", "name": "Sign in with email", "type": "feature", "status": "todo", "sprint": "Accounts", "created_at": "2026-03-06T16:00:00Z" },
+    { "id": "T-014", "name": "Order history", "type": "feature", "status": "todo", "sprint": "Accounts", "created_at": "2026-03-06T16:00:00Z" }
+  ]
+}

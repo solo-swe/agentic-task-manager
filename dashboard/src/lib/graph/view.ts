@@ -22,17 +22,41 @@ export const KEEP_VISIBLE = 60;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
+/** A rectangle in content coordinates */
+export interface Box extends Size {
+  x: number;
+  y: number;
+}
+
 /** Scale to fit inside the padding (never above 100%, optionally not below minK); center whatever fits. */
 export function fitView(content: Size, viewport: Size, minK?: number): View {
-  let k = Math.min((viewport.w - PAD * 2) / content.w, (viewport.h - PAD * 2) / content.h, 1);
+  return fitBox({ x: 0, y: 0, ...content }, viewport, minK);
+}
+
+/** Like fitView, for one part of the content: `box` fitted and centered in the viewport (T-341). */
+export function fitBox(box: Box, viewport: Size, minK?: number): View {
+  let k = Math.min((viewport.w - PAD * 2) / box.w, (viewport.h - PAD * 2) / box.h, 1);
   if (minK !== undefined) k = Math.max(k, minK);
   k = clamp(k, MIN_K, MAX_K);
-  const cw = content.w * k;
-  const ch = content.h * k;
+  const cw = box.w * k;
+  const ch = box.h * k;
   return {
     k,
-    x: cw <= viewport.w ? (viewport.w - cw) / 2 : PAD,
-    y: ch <= viewport.h ? (viewport.h - ch) / 2 : PAD,
+    x: (cw <= viewport.w ? (viewport.w - cw) / 2 : PAD) - box.x * k,
+    y: (ch <= viewport.h ? (viewport.h - ch) / 2 : PAD) - box.y * k,
+  };
+}
+
+/** The smallest box around these nodes (top-left x/y, all of `nodeSize`), with `margin` around it; null for none. */
+export function nodesBox(nodes: readonly { x: number; y: number }[], nodeSize: Size, margin = 0): Box | null {
+  if (!nodes.length) return null;
+  const x = Math.min(...nodes.map((n) => n.x)) - margin;
+  const y = Math.min(...nodes.map((n) => n.y)) - margin;
+  return {
+    x,
+    y,
+    w: Math.max(...nodes.map((n) => n.x)) + nodeSize.w + margin - x,
+    h: Math.max(...nodes.map((n) => n.y)) + nodeSize.h + margin - y,
   };
 }
 
@@ -46,6 +70,27 @@ export function autoFitView(content: Size, viewport: Size, focus?: { cx: number;
     k: v.k,
     x: cw > viewport.w ? clamp(viewport.w / 2 - focus.cx * v.k, viewport.w - cw - PAD, PAD) : v.x,
     y: ch > viewport.h ? clamp(viewport.h / 2 - focus.cy * v.k, viewport.h - ch - PAD, PAD) : v.y,
+  };
+}
+
+/**
+ * The views between `a` and `b` (t from 0 to 1) for animating a fit (T-341): the content point at the viewport's
+ * center moves in a straight line while the zoom changes geometrically, so zooming feels even.
+ */
+export function interpolateView(a: View, b: View, viewport: Size): (t: number) => View {
+  const cx = viewport.w / 2;
+  const cy = viewport.h / 2;
+  const from = { x: (cx - a.x) / a.k, y: (cy - a.y) / a.k };
+  const to = { x: (cx - b.x) / b.k, y: (cy - b.y) / b.k };
+  return (t) => {
+    if (t <= 0) return a;
+    if (t >= 1) return b;
+    const k = a.k * Math.pow(b.k / a.k, t);
+    return {
+      k,
+      x: cx - (from.x + (to.x - from.x) * t) * k,
+      y: cy - (from.y + (to.y - from.y) * t) * k,
+    };
   };
 }
 

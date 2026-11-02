@@ -16,16 +16,23 @@ export default defineConfig({
   snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}-{platform}{ext}',
   // Strict on purpose: any visual change should be deliberate (regenerate baselines). Loosen per test, if ever.
   // The default per-pixel threshold (0.2) misses e.g. a green -> cyan text color change.
-  expect: { toHaveScreenshot: { threshold: 0.05 } },
+  // A few dozen pixels may differ (T-345): anti-aliasing moves a little from run to run; a real change (a colour, a
+  // moved element) differs in many more
+  expect: { toHaveScreenshot: { threshold: 0.05, maxDiffPixels: 50 } },
   use: {
     ...devices['Desktop Chrome'],
     viewport: { width: 1280, height: 900 },
     // The dashboard follows the OS color scheme; tests run in dark (the original look) unless they switch it
     colorScheme: 'dark',
+    // The graph animates its fits (T-341) unless the OS asks for reduced motion: tests read the view at once
+    // (graph-zoom.spec.ts turns motion on to test the animation)
+    reducedMotion: 'reduce',
     // Dates are rendered with toLocale*String: pin them so text and screenshots are stable
     locale: 'en-US',
     timezoneId: 'UTC',
-    trace: 'retain-on-failure',
+    // Only when CI retries a failed test: recording one for every test made the suite ~40% slower (T-345). Locally,
+    // `npx playwright test <spec> --trace on` records them while looking into a failure
+    trace: 'on-first-retry',
   },
   projects: [{ name: 'svelte', use: { baseURL: `http://localhost:${PORT}/svelte/` } }],
   webServer: {

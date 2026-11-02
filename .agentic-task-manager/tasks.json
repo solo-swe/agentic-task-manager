@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 339,
+    "next_id": 360,
     "labels": [
       {
         "id": "architecture",
@@ -549,7 +549,19 @@
       },
       {
         "id": "Testing together",
-        "state": "planned"
+        "state": "closed",
+        "start": "2026-11-01T09:08:13Z",
+        "end": "2026-11-01T09:08:14Z",
+        "report": {
+          "done": [
+            "T-278",
+            "T-280",
+            "T-281",
+            "T-282"
+          ],
+          "carried": [],
+          "added": []
+        }
       },
       {
         "id": "Themes",
@@ -623,11 +635,37 @@
       },
       {
         "id": "Sprints on the dashboard",
-        "state": "active",
+        "state": "closed",
         "goal": "The dashboard fits the sprint model: the active sprint, the backlog, planned and closed sprints, and sprint metrics",
         "release": "0.25.0",
         "due": "2026-11-01",
-        "start": "2026-10-31T09:01:12Z"
+        "start": "2026-10-31T09:01:12Z",
+        "end": "2026-11-01T09:08:09Z",
+        "report": {
+          "done": [
+            "T-323",
+            "T-324",
+            "T-325",
+            "T-326",
+            "T-327",
+            "T-331"
+          ],
+          "carried": [],
+          "added": [
+            "T-324",
+            "T-325",
+            "T-326",
+            "T-327",
+            "T-331"
+          ]
+        }
+      },
+      {
+        "id": "Overview and polish",
+        "state": "active",
+        "goal": "The Projects Overview catches up with a project’s page (Activity, Progress, Agents, a better card), with polish across the dashboard",
+        "release": "0.26.0",
+        "start": "2026-11-01T09:28:31Z"
       }
     ],
     "releases": [
@@ -772,7 +810,17 @@
       },
       {
         "id": "0.25.0",
-        "state": "planned"
+        "state": "released",
+        "pr": {
+          "number": 30,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
+        },
+        "released_at": "2026-11-01T09:07:00Z"
+      },
+      {
+        "id": "0.26.0",
+        "state": "planned",
+        "name": "Overview and polish"
       }
     ],
     "migrations": [
@@ -13632,21 +13680,46 @@
       "description": "An interactive session with Hakan: walk through archiving (`atm archive`, `atm unarchive`) and everything the dashboard shows about archived tasks, on a throwaway project, and write down what is wrong or confusing. **Nothing is fixed during the session**: problems become follow-up tasks, and only those Hakan approves are added.\n\n## How archiving works (what to expect)\n- `atm archive` moves finished tasks (done- and skipped-kind) from `tasks.json` to `tasks-archive.json`, except those finished in the last `meta.archive.keep_days` days (default 14) and those still in an open PR (`pr` set, no `merged_at`). Options: `--phase N` (repeatable), `--before DATE`, `--keep-days N`, `--dry-run`. It prints what moved and both files' sizes; `meta.archived` counts the archive.\n- The hint (`atm status`, `atm done`): shown when `tasks.json` is over `meta.archive.threshold_kb` (1024) or has more archivable tasks than `threshold_tasks` (500), and something can move. `meta.archive.auto: false` makes the skills only relay it.\n- `atm unarchive <id>...` brings tasks back; `atm list --archived` and `atm show <id>` read the archive; an archived task counts as done for dependencies.\n- The dashboard loads the archive only when a view needs it (D-5.2): the subtitle says *N archived*; the filter bar has *Include archived* (search, List, Graph and the Agents timeline then include archived tasks); the detail panel marks an archived task *· archived* and shows an archived dependency as a stub; the Progress tab, the Project tab and the Activity popup count the history (archived tasks too); the status bar shows an archive notice past the threshold.\n\n## Set up (in a terminal next to Hakan)\n1. A git repository in a new temporary folder (`mktemp -d`), **outside this repository**: this repo's own task list is not the test subject.\n2. `atm init --meta-file <file>` with a project name (e.g. *Archive Test*), named phases 0–2, and `meta.archive.threshold_tasks: 5`, so the hint appears without 500 tasks. `atm init` lists the project on the dashboard.\n3. About 20 tasks (`atm add --json-file`), with dependencies across phases, then statuses through atm only (never by editing the file):\n   - phase 0: all done, finished about 30 days ago (`ATM_NOW=<date 30 days ago> atm start/done`), one skipped;\n   - phase 1: some done 20 days ago, two done today, one done 20 days ago but in an open PR (`atm pr <id> --number 1 --url https://example.com/pr/1`), one in a merged PR (`atm merged --pr 2 --at <date>`);\n   - phase 2: a few to do (one depending on a phase-0 task), one in progress, one in review.\n4. `/atm:serve`, and open the project on the dashboard.\n\n## Walk through, with Hakan watching the dashboard\n1. **The hint**: `atm status` shows it (with the numbers), `atm done` on a task too; the status bar's archive notice.\n2. **Dry run**: `atm archive --dry-run`: which tasks would move, and that the recent ones and the open-PR one stay.\n3. **Archive**: `atm archive`: its report (counts, sizes); then `atm list --archived`, `atm show` of an archived task, `atm status` (the hint is gone, the archived count).\n4. **Dashboard after archiving**:\n   - the subtitle's *N archived*; the Kanban, List and Graph without archived tasks;\n   - *Include archived*: search finds archived tasks; List and Graph show them, marked;\n   - the detail panel of an archived task (*· archived*), and of the phase-2 task whose dependency is archived (the stub);\n   - the Progress tab (burndown, phase table), the Project tab (stats, histogram, agents) and the Activity popup: do the numbers still include the archived work, and are they the same as before archiving?\n   - the Agents timeline with and without *Include archived*;\n   - the Projects Overview card (progress rings, counts, the stats line) and the Omniboard (done in the last 24 hours) for this project.\n5. **Unarchive**: `atm unarchive <id>` for one task: it is back in `tasks.json`, on the Kanban, and the counts change.\n6. **Edge cases if time allows**: `atm archive --phase 0`, `--before`, `--keep-days 0`; archiving with the dashboard open (does it update without a reload?); a dependency on a task that was archived and then unarchived.\n\n## Then\n- Write the findings into this task's outcome note (short), and propose a follow-up task per problem; add only those Hakan approves (`/atm:create-tasks`).\n- Clean up: `atm projects remove <the test project's id>`, and delete the temporary folder.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
-      "dependencies": [],
+      "status": "done",
+      "dependencies": [
+        "T-351"
+      ],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-11-01T08:35:03Z",
+      "updated_at": "2026-11-02T10:23:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Testing together",
           "from": "2026-10-27T09:19:02Z",
           "to": "2026-11-01T08:35:03Z"
+        },
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "with": "user"
+      "with": "user",
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T09:21:07Z",
+      "started_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:22:12Z",
+          "kind": "note",
+          "text": "Walkthrough on a throwaway project: archive, dry-run, keep rules, open PR, unarchive, edge cases. Findings fixed in this sprint: T-351 (`atm --dir`), T-352 (what stays, and why), T-353 (show marks archived), T-354 (dashboard toggles), T-355 (Overview counts the archive), T-356 (deps on archived tasks), T-357 (unarchive messages), T-358 (deps lists archived dependents), T-359 (test gaps).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T10:23:15Z",
+          "kind": "outcome",
+          "text": "Walked through archiving and its dashboard views with Hakan on a throwaway project. 9 findings, all approved and fixed in this sprint: T-351–T-359. Test project removed and its folder deleted.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "completed_at": "2026-11-02T10:23:15Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-278",
@@ -13716,7 +13789,7 @@
       "description": "Hakan finds the social preview (logo, name, one line) too simple. The card GitHub shows when the repository is linked should say what atm is at a glance.\n\n## Content (1280×640)\n- The logo and the name, *Agentic Task Manager*, with a short line on what it does (task management for Claude Code agents, with a live dashboard).\n- **A hint of the dashboard**: a real, recognisable piece of it (e.g. a Kanban with cards, the progress ring, an agent at work), not a mock-up drawn by hand. Render it from the built dashboard (`plugin/templates/tasks-dashboard.html`) with a fixture, the way the e2e tests do, so it stays true to the product and updates when the dashboard changes; crop or scale it into the card.\n- **How to install**: the two commands (`/plugin marketplace add solo-swe/agentic-task-manager`, `/plugin install atm@solo-swe-plugins`), readable at the card's size.\n- The dark theme, the accent blue; text large enough to read in a link preview.\n\n## Made by the script\n`npm run branding` (`branding/generate.mjs`, previous task) renders it: no hand-made image. Document its inputs (the fixture, the theme) in `branding/README.md`.\n\n## Review with Hakan\nTwo or three layouts first, shown to him (rendered PNGs) before settling one; put the task in review (`atm review`) before showing them. After he approves, Hakan uploads the PNG in Settings → General → Social preview.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-278"
       ],
@@ -13726,20 +13799,55 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-01T08:35:03Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Testing together",
           "from": "2026-10-27T16:41:57Z",
           "to": "2026-11-01T08:35:03Z"
+        },
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
         }
       ],
       "with": "user",
       "components": [
         "branding"
-      ]
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T08:34:20Z",
+      "started_by": "claude:b7be7288",
+      "commit": "db0ae476f60e2c1d1bcccc8e6d9d9c5e25f881c4",
+      "review_requested_at": "2026-11-02T08:36:41Z",
+      "notes": [
+        {
+          "at": "2026-11-02T08:36:41Z",
+          "kind": "review",
+          "text": "Three layouts of the social preview, rendered from the built dashboard on a demo project (`branding/demo-tasks.json`): A words left / dashboard right, B title band / dashboard / install line, C dashboard faded behind centred words. Pick one; then it becomes `branding/social-preview.png`.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T08:50:51Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: layout A, tagline without Claude Code; `branding/social-preview-dark.png` and `-light.png` made by `npm run branding` from the built dashboard on a demo project; Hakan uploads one",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T08:36:41Z",
+          "to": "2026-11-02T08:50:51Z"
+        }
+      ],
+      "completed_at": "2026-11-02T08:50:51Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-280",
@@ -16193,7 +16301,7 @@
         "dashboard/src/components/Filters.svelte"
       ],
       "created_at": "2026-10-31T08:58:00Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "with": "user",
@@ -16233,7 +16341,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-324",
@@ -16255,7 +16364,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16289,7 +16398,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-325",
@@ -16307,7 +16417,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T06:50:28Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16336,7 +16446,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-326",
@@ -16357,7 +16468,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16392,7 +16503,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-327",
@@ -16410,7 +16522,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-01T07:15:37Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16440,7 +16552,8 @@
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-328",
@@ -16454,7 +16567,7 @@
       "description": "The title bar's Activity chart and popup (completions over time, agents working, waiting on you, idle, time per task) show on the Projects Overview too, for every project the server lists, summed, with a breakdown by project (as the Omniboard combines boards).\n\n## Data\nFrom `api/projects`' summaries (`completions_14d`, `stats`, `needs_you`, ...). What's missing for the popup's charts is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ActivityWidget.svelte",
@@ -16462,12 +16575,83 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-01T07:24:01Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T07:32:31Z",
+      "started_by": "claude:b7be7288",
+      "commit": "cc0664b417a0e2cec0169fd6376f065fb4f43b33",
+      "notes": [
+        {
+          "at": "2026-11-02T06:50:51Z",
+          "kind": "review",
+          "text": "Check on the dev server: the overview’s title bar has the Activity chart for every shown project; its popup lists each project’s count for the period (click opens it); a task’s dot opens it in its project. **Design change to approve**: the overview loads each project’s `tasks.json`/`claims.json` (conditional, 304 when unchanged) instead of growing the summary, as the task asked. Screenshots left for T-345.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:21:30Z",
+          "kind": "rejection",
+          "text": "Overview level: colour by project (with a Project/Type switch), where the time went per project, and the pill stacked by project",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:27:47Z",
+          "kind": "review",
+          "text": "Changes done: coloured by project (Progress tab colours) with a *Colour by: Project / Type* switch, for the pill, completions, who was working and the dots; a row per project under the charts (done, where its time went, agent time, waiting on you). Popups now scroll inside the window.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:32:31Z",
+          "kind": "rejection",
+          "text": "Drop the Colour by switch (by project only) and the by-project rows under the charts",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:35:30Z",
+          "kind": "review",
+          "text": "Changes done: by project only (no Colour by switch), and the by-project rows under the charts are gone.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:36:08Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: overview Activity stacked and coloured by project",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T06:50:51Z",
+          "to": "2026-11-02T07:21:30Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T07:27:47Z",
+          "to": "2026-11-02T07:32:31Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T07:35:30Z",
+          "to": "2026-11-02T07:36:08Z"
+        }
+      ],
+      "review_requested_at": "2026-11-02T07:35:30Z",
+      "completed_at": "2026-11-02T07:36:08Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-329",
@@ -16481,7 +16665,7 @@
       "description": "A Progress tab on the Projects Overview, next to Projects and Omniboard: every project's done of total and its active sprint (goal, due date, progress), a combined burndown and velocity, and each project's open releases. Clicking a project opens its own Progress tab.\n\n## Data\nFrom `api/projects`' summaries (`active_sprint`, `recent_sprints`, `stats`); what velocity or the burndown need beyond them (e.g. closed sprints' reports, completion times) is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16489,13 +16673,67 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-01T07:24:06Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard",
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T07:13:17Z",
+      "started_by": "claude:b7be7288",
+      "commit": "b1104ee9ba2d06879ab4ab90e67347f47bfd52bc",
+      "notes": [
+        {
+          "at": "2026-11-02T06:55:06Z",
+          "kind": "review",
+          "text": "Check the overview’s **Progress** tab: a row per project (done/total, active sprint and due date, open releases; click opens its Progress tab), the burndown of all projects (14 days / all time), tasks done per week (not per sprint: sprints don’t line up). Data from each project’s `tasks.json`, as in T-328. **Bundle ~430 bytes under the guardrail**: T-342 is needed next. Screenshots left for T-345.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:13:17Z",
+          "kind": "rejection",
+          "text": "Velocity: a colour per project, stacked; per day, week or month (an option)",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:16:14Z",
+          "kind": "review",
+          "text": "Changes done: velocity is stacked in a colour per project (legend above), per Day / Week / Month (switch; week by default). Also check the rest of the Progress tab (rows, burndown). Size guardrail raised to 550 KiB as agreed; T-342 trims.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:17:53Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: overview Progress tab with per-project rows, combined burndown, stacked velocity per day/week/month",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T06:55:06Z",
+          "to": "2026-11-02T07:13:17Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T07:16:14Z",
+          "to": "2026-11-02T07:17:53Z"
+        }
+      ],
+      "review_requested_at": "2026-11-02T07:16:14Z",
+      "completed_at": "2026-11-02T07:17:53Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-330",
@@ -16508,7 +16746,7 @@
       "description": "Closing a sprint carries every unfinished task on, but a task can still end up open in a closed sprint: `atm reopen` of a task in it, a git merge of a branch that closed the sprint with one that reopened or rejected a task in it, or a hand edit. The default loop works on the active sprint, so it never takes such a task (only `--all` does, before the backlog).\n\n## Change\n- `atm status`: list them under a warning (\"N open tasks in closed sprints\"), with their IDs and sprints; `--json` gets them too.\n- `atm check`: a warning for each.\n- `atm reopen` on a task in a closed sprint: after reopening, say the sprint is closed and suggest `atm move <id> --to backlog` or `--to <the active sprint>`. A suggestion only: the task is not moved.\n- `/atm:plan-sprint` Step 2: show them first as candidates, next to the last closed sprint's carried tasks.\n\nThe dashboard part is done in T-323 (the scope bar's warning, the closed sprint's note, List groups, card badges).\n\n## Tests\nScenarios in `tests/scripts/scenarios/` for `status`, `check` and `reopen` with a task open in a closed sprint.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -16518,16 +16756,40 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-01T08:21:22Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "cli",
         "skills"
       ],
       "related": [
         "T-323"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T02:06:14Z",
+      "started_by": "claude:b7be7288",
+      "commit": "f1f2d223f6d96a3b0f03d127891d0f8ba64efe22",
+      "completed_at": "2026-11-02T02:14:31Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:14:31Z",
+          "kind": "outcome",
+          "text": "atm status warns (and --json lists open_in_closed_sprints), atm check warns per task, atm reopen in a closed sprint suggests atm move; plan-sprint shows them first. §3.3 review written.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-331",
@@ -16540,7 +16802,7 @@
       "description": "Ship the sprint *Sprints on the dashboard* as 0.25.0, the way CLAUDE.md's *Versions* and *CI* sections describe.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.25.0` (they must match).\n- Turn `plugin/CHANGELOG.md`'s `[Unreleased]` into `[0.25.0]` with today's date; merge repeated `### Changed` / `### Added` sections into one of each.\n- Write the `plugin/WHATS-NEW.md` entry from the changelog: 3–6 short plain-language bullets about what a user notices (the board opens on the active sprint, the backlog and grouped List, velocity, components, search and filters in the title bar), no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills and atm output changed in this release keep their written review in §3.3 (no live sandbox run, no API key); check every new entry point (`atm components`, the `#sprint=` URL parameter) is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens (or updates) the release PR to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-323"
       ],
@@ -16552,7 +16814,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:50:40Z",
+      "updated_at": "2026-11-01T09:07:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:9fec227a",
       "sprint_history": [
@@ -16564,11 +16826,22 @@
       "sprint": "Sprints on the dashboard",
       "started_at": "2026-11-01T08:43:39Z",
       "started_by": "claude:9fec227a",
-      "commit": "f92a94c0af6c9cf98f46da581c2acf7f1a0e255b",
+      "commit": "dbb5477faa4d712076e117c1da893705182fbc53",
       "pr": {
         "number": 30,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/30"
-      }
+      },
+      "completed_at": "2026-11-01T09:05:13Z",
+      "completed_by": "claude:9fec227a",
+      "notes": [
+        {
+          "at": "2026-11-01T09:05:13Z",
+          "kind": "outcome",
+          "text": "Release PR #30 to main, CI green after the Linux baselines and a test that pressed `/` before the page loaded. Merging is Hakan’s.",
+          "by": "claude:9fec227a"
+        }
+      ],
+      "merged_at": "2026-11-01T09:07:00Z"
     },
     {
       "id": "T-332",
@@ -16581,7 +16854,7 @@
       "description": "On the All projects page, clicking a project card's \"N need you\" chip opens its popup (`NeedsYouMenu.svelte`) so that its left part is outside the window, for a card near the left edge.\n\n## Change\nKeep the popup inside the viewport: anchor it to the chip's left edge when there is no room to its left (or clamp its position), as the title bar's menus do. Check the cards in the first column and the last, and a narrow window.\n\n## Tests\nAn e2e test that opens the popup on the first card of the overview and checks its bounding box is within the viewport; the needs-you screenshot updated if it changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/NeedsYouMenu.svelte",
@@ -16590,12 +16863,36 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-01T08:24:38Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T02:14:32Z",
+      "started_by": "claude:b7be7288",
+      "commit": "f28f28c6bf3ecabd4a2030b6fcbe2e1777d36bf7",
+      "completed_at": "2026-11-02T02:17:09Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:17:09Z",
+          "kind": "outcome",
+          "text": "NeedsYouMenu measures the list when it opens and shifts it back inside the window (8 px margin); e2e on the first and last card at 1280, 700 and 420 px.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-333",
@@ -16608,7 +16905,7 @@
       "description": "The All projects page has Projects and Board tabs; add an **Agents** tab that shows every listed project's agents together, like a project's Agents tab (`AgentsTab.svelte`): their timeline and who works on what, each lane or row naming its project.\n\n## Change\n- A third overview tab (`#view=agents` on the overview), remembered like the others (`overviewTab`).\n- Its data from what the overview already loads per project; no new server route unless one is needed (then `docs/multi-project-api.md` and `docs/security-architecture.md` updated).\n- Clicking an agent's task opens it in its project.\n\nRelated: T-328 and T-329 (Activity and Progress on the overview).\n\n## Tests\nUnit tests for any new lib; an e2e test with two projects; a screenshot in `visual.spec.ts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16617,16 +16914,40 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-328",
         "T-329"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T06:30:28Z",
+      "started_by": "claude:b7be7288",
+      "commit": "e76e88405988f137e2b90ba57c05b46b795a50ed",
+      "completed_at": "2026-11-02T06:37:49Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T06:37:49Z",
+          "kind": "outcome",
+          "text": "Overview Agents tab: every project’s agents on one timeline (`lib/overview-agents.ts`, existing routes), bars open in their project; screenshot left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-334",
@@ -16640,19 +16961,55 @@
       "description": "On the All projects page there is too much empty space between the title bar and the tabs and cards. Tighten it to match a project's page (where the tabs sit right under the title bar), keeping whole-pixel heights (the sticky footer test).\n\n## Tests\nThe projects overview screenshots updated (dark, light, narrow); the footer test still passes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "notes": [
+        {
+          "at": "2026-11-02T05:41:21Z",
+          "kind": "outcome",
+          "text": "The overview’s tabs now sit at the same height under the title bar as a project’s (`.landing` top padding removed); e2e test added, 8 darwin baselines updated, Linux ones deleted",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T05:45:26Z",
+          "kind": "note",
+          "text": "Reopened: The user still sees extra space under the title bar: the ~40px gap from `.topbar` is shared with project pages and was left alone",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T05:48:50Z",
+          "kind": "outcome",
+          "text": "Tabs now 12px under the subtitle on every page (`.topbar` bottom padding and margin); screenshot baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T05:46:17Z",
+      "started_by": "claude:b7be7288",
+      "commit": "7110700ad99dea0afa2ea95dfdfbd4f726502306",
+      "completed_at": "2026-11-02T05:48:50Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-335",
@@ -16666,7 +17023,7 @@
       "description": "The project card on the All projects page still looks off. Give it a clearer typographic hierarchy: a larger project name, the key figure (progress, what needs you) prominent, secondary lines smaller and muted, consistent spacing. Try a couple of variants on the dev server and choose with Hakan (with: user).\n\n## Tests\nProjectCard component tests still pass; the overview screenshots updated.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectCard.svelte",
@@ -16674,13 +17031,37 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T08:33:56Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T06:01:16Z",
+      "started_by": "claude:b7be7288",
+      "commit": "fbca55386714295d127f16e283e3d93a1b397487",
+      "completed_at": "2026-11-02T06:29:53Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T06:29:53Z",
+          "kind": "outcome",
+          "text": "New project card: depth, title band with sparkline, corner needs-you badge, quiet labels, mini task card on a tilted stack; baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-336",
@@ -16752,7 +17133,7 @@
       "description": "The Task List is one card per row, so most of each row is empty. Show more of the task there (`TaskCard.svelte`), choosing with Hakan on the dev server.\n\n## Candidates\n- the first line or two of the description (plain text, `markdownPlainText`);\n- who created it, who works or worked on it, and when (created, started, done, relative times as elsewhere);\n- how long it took (work time) or how long it has waited (in review, blocked);\n- its stage with the commit or PR link, its dependencies and what waits for it;\n- the latest note (outcome, handoff) in one line.\n\n## Layout\nA right-hand column for the facts (people, times, stage) and the left for the name, chips and description, collapsing to today's single column on narrow windows. Cards stay quick to scan; no new data loads.\n\n## Tests\nTaskCard component tests for the new fields; the List screenshots updated; the performance budget still holds (`tests/e2e/performance.spec.ts`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/TaskCard.svelte",
@@ -16760,13 +17141,1196 @@
         "dashboard/tests/unit/TaskCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:42:49Z",
-      "updated_at": "2026-11-01T08:42:49Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:28:31Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T05:55:01Z",
+      "started_by": "claude:b7be7288",
+      "commit": "ba75932707b9b77ac164f29bda05abb8a75fac94",
+      "completed_at": "2026-11-02T06:01:15Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T06:01:15Z",
+          "kind": "outcome",
+          "text": "Cards show the description’s start, the latest outcome/handoff, and a who/when/work-time column (`lib/cardfacts.ts`); baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-339",
+      "name": "atm sprints delete: remove a sprint created by mistake",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "sprints"
+      ],
+      "description": "Sprints are sometimes created by mistake and then stay around as garbage, even after they are closed. Add a `delete` action to `atm sprints` that removes a sprint from `meta.sprints`.\n\n## Command\n`atm sprints delete <name> [--move-to <sprint>|backlog] [--force]` in `atm-cli/atm/sprints.py` and `atm-cli/atm/cli.py`. Names match regardless of case, as elsewhere.\n\n## Rules\n- **Empty sprint** (no task is in it now and no task's `sprint_history` mentions it): deleted straight away, whatever its state, **including a closed one** (earlier trash).\n- **Planned or active sprint with tasks**: the tasks move to the backlog (default) or to the sprint named by `--move-to`, and the output says how many moved. A sprint that tasks were once in (`sprint_history`) needs `--force`.\n- **Closed sprint that ever had tasks**: refused (its history and report stay), and the error explains why.\n- An unknown name is an error that lists the sprints.\n\n## Merging\nCheck how `atm-cli/atm/merge.py` merges `meta.sprints` item by item: a sprint deleted on one branch must stay deleted when the other branch did not touch it. Fix it if needed (same approach as deleted tasks).\n\n## Tests\n- A scenario file `tests/scripts/scenarios/sprints-delete.json`: deleting an empty planned sprint and an empty closed one; a refused closed sprint with history; tasks moved to the backlog and to another sprint; `--force`; an unknown name; a name with different case.\n- A git-merge test in a `*.test.mjs` file (with `helpers.mjs`) if `merge.py` changes.\n\n## Docs\n- `docs/security-architecture.md`: the new CLI command.\n- Mention `atm sprints delete` in `plugin/skills/plan-sprint/SKILL.md` (and `close-sprint` if it fits).\n- Entries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.\n\nThe dashboard is out of scope here.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/sprints.py",
+        "atm-cli/atm/cli.py",
+        "atm-cli/atm/merge.py",
+        "tests/scripts/scenarios/sprints-delete.json",
+        "docs/security-architecture.md",
+        "plugin/skills/plan-sprint/SKILL.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T09:50:16Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:50:16Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "started_at": "2026-11-02T01:57:02Z",
+      "started_by": "claude:b7be7288",
+      "commit": "44a651d90864463d343f0894901c9647b200b9d5",
+      "completed_at": "2026-11-02T02:06:13Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:06:13Z",
+          "kind": "outcome",
+          "text": "atm sprints delete <name> [--move-to S|backlog] [--force]: empty sprints (closed too) go at once; refuses closed with history, in-progress tasks, and open sprints with history unless --force. Merge already kept deletions (test added). plan-sprint mentions it; §3.3 review written.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-340",
+      "name": "All Projects Board: show only the active sprints by default",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "sprints"
+      ],
+      "description": "The All Projects Board (`dashboard/src/components/AllProjectsBoard.svelte`, `dashboard/src/lib/allboard.ts`) shows, per project, the ready tasks of the loop's selection, everything in progress, in review and blocked, and what was finished in the last 24 hours, whatever sprint those tasks are in. Make **Active sprints** the default: every column shows only tasks in the project's active sprint. Today's rules stay available as an option (e.g. a toggle *Active sprints* / *All tasks* in the board's toolbar), remembered like the board's other view settings.\n\n## Server\nCounts and caps are computed per project by `board()` in `atm-cli/atm/query.py`, so filtering the capped cards in the browser would make the totals and \"+ N more\" wrong. Have the board summary carry the active-sprint view as well (the same five columns limited to tasks whose `sprint` is the project's active sprint, with their own counts), or another way that keeps counts right; document the shape in `docs/multi-project-api.md`.\n\n## Rules\n- A project with no active sprint shows nothing in the Active sprints view; the board says so (e.g. in its lane or as a note: \"N projects have no active sprint\"), so the board isn't mysteriously empty.\n- Search, grouping by project and the \"N of M\" totals work in both views.\n\n## Tests\n- atm-cli: a scenario in `tests/scripts/scenarios/` for the board summary's active-sprint columns (tasks in the active sprint, in a planned sprint, in the backlog; a project without an active sprint).\n- Unit tests in `dashboard/tests/unit/allboard.test.ts` for both views.\n- An e2e spec for the toggle and its default; update the visual baselines if the toolbar changes.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "dashboard/src/lib/allboard.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "dashboard/tests/unit/allboard.test.ts",
+        "docs/multi-project-api.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T09:59:28Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T09:59:28Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "started_at": "2026-11-02T02:17:35Z",
+      "started_by": "claude:b7be7288",
+      "commit": "d6fb128a65de698759a7afdc1433cf7dac7faf0a",
+      "completed_at": "2026-11-02T02:29:48Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T02:29:48Z",
+          "kind": "outcome",
+          "text": "Omniboard defaults to Active sprints (board_active_sprint in api/projects, own counts; null without an active sprint), All tasks as a remembered option, a note naming projects without one; older servers fall back to the whole board. Worth a look on the dev server.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-341",
+      "name": "Dependency Graph: a more usable fit (auto-fit toggle, fit all vs the filtered tasks)",
+      "type": "polish",
+      "priority": "P1",
+      "labels": [
+        "interactive",
+        "ux"
+      ],
+      "description": "A live session with the user on the dev server (`npm run dev` in `dashboard/`): small changes that make the Dependency Graph tab easier to use, decided as we go.\n\n## Starting points\n- **Auto-fit toggle:** today only the first layout is fitted automatically (`DepGraph.svelte`, `autoFit`); once the filters or the data change, the view stays where it was. A toggle in `GraphControls.svelte` that keeps the graph fitted while it is on (filters, reloads, resizes), and switches off when the user pans or zooms.\n- **Fit everything vs the filtered tasks:** with filters or a search in *Dim* mode, \"Fit everything\" (F) fits all tasks; offer fitting only the tasks that match (e.g. a second button or the fit following the filters), keeping a way to fit everything.\n- Whatever else comes up in the session, kept small.\n\n## Tests\nUnit tests for the view logic in `dashboard/src/lib/` (fit to a subset of nodes), and e2e checks for the new controls; update the visual baselines if the controls change.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/DepGraph.svelte",
+        "dashboard/src/components/GraphControls.svelte",
+        "dashboard/src/lib/state.svelte.ts",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-01T22:36:01Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-01T22:36:01Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "with": "user",
+      "components": [
+        "dashboard"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-02T00:24:07Z",
+          "kind": "failure",
+          "text": "lease expired (claude:b7be7288)"
+        },
+        {
+          "at": "2026-11-02T01:30:09Z",
+          "kind": "failure",
+          "text": "lease expired (claude:b7be7288)"
+        },
+        {
+          "at": "2026-11-02T01:37:04Z",
+          "kind": "outcome",
+          "text": "Graph auto-fit (on by default), Fit All/Matches (saved target), animated fits, regrouped toolbar; reviewed live with the user. Guardrail raised to 525 KiB with the user (T-342 follows up).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T01:30:09Z",
+      "started_by": "claude:b7be7288",
+      "commit": "8ab96f0b9863b6246961fa8eed19fd2595575a13",
+      "completed_at": "2026-11-02T01:37:04Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-342",
+      "name": "Dashboard: find what makes the shipped file grow, and trim it",
+      "type": "refactor",
+      "priority": "P3",
+      "labels": [
+        "ux"
+      ],
+      "description": "In 0.26.0 the shipped single-file dashboard went over its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`), which was raised from 500 to 525 KiB (T-341). This task was created assuming the whole `plugin/CHANGELOG.md` is embedded; it isn't: `dashboard/vite.config.ts` embeds only `plugin/WHATS-NEW.md` (`changelogModule(whatsNew)`, for What's new), and reads `CHANGELOG.md` only for the copyright year (`pluginInfoModule`). What's New adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail back accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/build/changelog.ts",
+        "dashboard/vite.config.ts",
+        "dashboard/tests/e2e/guardrails.spec.ts",
+        "dashboard/src/lib/release-notes.ts"
+      ],
+      "created_at": "2026-11-02T01:29:52Z",
+      "updated_at": "2026-11-02T02:16:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-343",
+      "name": "atm commit --record: record an existing commit on a task (after a rebase)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "git"
+      ],
+      "description": "After a rebase or cherry-pick a task's recorded `commit` (written by `atm commit`) names a SHA that is no longer on the branch, and nothing can change it short of editing `tasks.json` (T-341's commit after moving it to `dev/0.26.0`). Add `atm commit <id> --record <rev>`: record an existing commit on the task, without committing.\n\n## Rules\n- `--record` and `--file`/`--message` exclude each other; `--file` is required only without `--record`.\n- The revision must not start with `-`, must resolve to a commit (`git rev-parse --verify <rev>^{commit}`), and must be on the current branch (reachable from HEAD); otherwise an error, nothing written. It is stored as the full SHA.\n- Any status (like `atm commit`); the change to `tasks.json` goes in with the next commit.\n- When the commit's message doesn't mention the task's ID, say so in a hint (still recorded).\n- `--json` prints `{task, commit, recorded: true}`.\n\n## Tests\nScenarios in `tests/scripts/` (a git repo is needed: a `*.test.mjs` with `helpers.mjs` if scenarios can't make commits): records a commit by SHA and by ref; refuses an unknown revision, one starting with `-`, a commit not on the branch, and `--record` with `--file`; the hint for a message without the ID; `--json`.\n\n## Docs\n`docs/v4/atm-cli.md` (the commit row), `plugin/CHANGELOG.md`, `plugin/WHATS-NEW.md`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/git_ops.py",
+        "atm-cli/atm/cli.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/git.test.mjs",
+        "docs/v4/atm-cli.md",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md"
+      ],
+      "created_at": "2026-11-02T01:40:40Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T01:40:40Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-02T01:40:43Z",
+      "started_by": "claude:b7be7288",
+      "commit": "e00930607630114f15b7f386c05ee9b0c7be876a",
+      "completed_at": "2026-11-02T01:48:01Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T01:48:01Z",
+          "kind": "outcome",
+          "text": "atm commit <id> --record <rev>: records an existing commit on the current branch (full SHA), refusing options, unknown revisions and commits off the branch; hint when the message lacks the ID. Used it to re-record T-341 as 8ab96f0.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-344",
+      "name": "Release v0.26.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "Ship the sprint *Overview and polish* as 0.26.0, the way CLAUDE.md's *Versions* and *CI* sections describe. Work is on `dev/0.26.0` (branched from `origin/main` after PR #30).\n\n## Change\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are already `0.26.0` (T-341): check they still match.\n- `plugin/CHANGELOG.md`'s `[0.26.0]` entry: set the date to the release day (in `plugin/WHATS-NEW.md` too); merge repeated `### Added` / `### Changed` / `### Fixed` sections into one of each.\n- `plugin/WHATS-NEW.md`: rewrite the 0.26.0 entry from the changelog as 3–6 short plain-language bullets about what a user notices across the sprint, no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills, `plugin/CLAUDE.md` and atm output changed in this release (e.g. T-339's `atm sprints delete` and its skill mention) get a written review in §3.3 (no live sandbox run, no API key); check every new entry point is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens the release PR from `dev/0.26.0` to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines (T-341 deleted the graph ones) are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-277",
+        "T-279",
+        "T-328",
+        "T-329",
+        "T-330",
+        "T-332",
+        "T-333",
+        "T-334",
+        "T-335",
+        "T-338",
+        "T-339",
+        "T-340",
+        "T-341",
+        "T-343",
+        "T-345",
+        "T-346",
+        "T-347",
+        "T-348",
+        "T-349",
+        "T-350",
+        "T-352",
+        "T-353",
+        "T-354",
+        "T-355",
+        "T-356",
+        "T-357",
+        "T-358",
+        "T-359"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-02T01:55:27Z",
+      "updated_at": "2026-11-02T10:34:24Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T01:55:27Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "docs"
+      ],
+      "started_at": "2026-11-02T10:23:58Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2c28455be77f3b890dfcfba7c258d5a465c46137",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      },
+      "completed_at": "2026-11-02T10:34:24Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:34:24Z",
+          "kind": "outcome",
+          "text": "Released as PR #31 (dev/0.26.0 → main): changelog dated, What’s new rewritten for the sprint, §3.3 reviews for `--record`, the overview’s reads and 0.26.0; verify green after regenerating 4 Linux baselines (T-354).",
+          "by": "claude:b7be7288"
+        }
+      ]
+    },
+    {
+      "id": "T-345",
+      "name": "Testing: make screenshots and e2e tests cheaper to keep up",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "interactive",
+        "testing"
+      ],
+      "description": "Screenshot baselines and the e2e suite make every UI change expensive. Discuss the options with the user, agree on a plan, implement it, and write the result into the testing conventions. The scope covers both the screenshots and the functional e2e tests (widened with the user).\n\n## Pain points (this sprint)\n- **Too many baselines:** 176, per platform. Small UI changes rewrite many: T-334's spacing touched 8, T-341 and T-340 another 12.\n- **The Linux round trip:** Linux baselines need a CI run and an artifact download (or Docker), an extra push cycle per visual change.\n- **Flakes:** anti-aliasing differs by a few pixels between runs (the settings-menu screenshot).\n- **Slow wrap-ups:** the full e2e and visual run make finishing a task slow (T-341's wrap-up took hours).\n\n## Screenshots: decided (see the note)\n- A. Fewer, smaller screenshots: themes as one compact sample each, a few whole pages, the rest per component.\n- B. Linux-only baselines, made locally in Docker (`npm run test:e2e:linux-snapshots`).\n- C. Screenshots out of the per-task checks: CI runs them on every push; regenerated once a sprint in the release task; `npm run verify` keeps all.\n- D. A small pixel tolerance (`maxDiffPixels`), the colour threshold kept strict.\n\n## Functional e2e: to discuss\nWhat takes the ~40 s (the slowest tests), and what to change: slow waits, redundant tests, fixtures, parallelism.\n\n## Then\nImplement what was agreed, regenerate the baselines left stale this sprint (T-334, T-346, T-335, T-338 …) and add T-333's overview Agents screenshot, update `CLAUDE.md` (Testing conventions, CI) and the agent's memory notes, and make sure `npm run verify` and CI still cover what matters.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/playwright.config.ts",
+        "dashboard/tests/e2e/visual.spec.ts",
+        "dashboard/package.json",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-02T05:44:10Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T05:44:10Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "with": "user",
+      "notes": [
+        {
+          "at": "2026-11-02T05:48:55Z",
+          "kind": "note",
+          "text": "T-334 moved the tabs up 26px on every page (`.topbar`): most visual baselines are now stale, on purpose; regenerate them here or in T-344",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T06:37:50Z",
+          "kind": "note",
+          "text": "T-333 asks for an overview Agents screenshot in `visual.spec.ts`; not added (no baselines during this sprint): add it with the regenerated baselines",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:40:29Z",
+          "kind": "note",
+          "text": "Decided with Hakan (screenshots): A fewer, smaller screenshots (themes as one compact sample, few whole pages); B Linux-only baselines made locally in Docker; C screenshots out of per-task checks (CI each push, regenerated once a sprint in the release task; `verify` keeps all); D a small pixel tolerance. Not E. Scope widened to the functional e2e suite too.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:50:06Z",
+          "kind": "note",
+          "text": "Decided with Hakan (e2e): 1 honour reduced motion in the smooth scrolls (detail rail, dependency links) and check the highlight is removed rather than wait for the fade; 2 lighter setup per test (smaller fixtures, related checks in one page); 3 conventions: area specs while working, full suite once at the end. More workers: no (5 is the limit here).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T08:32:15Z",
+          "kind": "outcome",
+          "text": "Screenshots: Linux-only baselines made in Docker, of parts, 50 px tolerance, out of per-task runs; e2e: no real-time waits, racy reads fixed, conventions in CLAUDE.md. All 84 baselines regenerated and stable.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T07:36:08Z",
+      "started_by": "claude:b7be7288",
+      "commit": "9ba18bc69eae193654d265bf2062db38aaf6dfc5",
+      "completed_at": "2026-11-02T08:32:15Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-346",
+      "name": "One look for the tabs on the overview and on a project's page",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "interactive",
+        "ux"
+      ],
+      "description": "The Projects Overview's tabs (Projects | Omniboard) sit on a plain line, while a project's view tabs (Kanban Board, Task List, …) have a bordered, filled tab joined to the view's panel. Make them look the same.\n\nLive with the user on the dev server:\n1. Try the overview's simpler look on a project's tabs.\n2. Then the other way around: the project's look on the overview's tabs.\n3. The user picks one; keep whole-pixel heights (the footer test).\n\nScreenshot baselines are left for T-345.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-11-02T05:50:04Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T05:50:04Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user",
+      "started_at": "2026-11-02T05:50:05Z",
+      "started_by": "claude:b7be7288",
+      "commit": "19b9313b0021f7e2036e4dbb2f3307d01165a9f0",
+      "completed_at": "2026-11-02T05:53:42Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T05:53:42Z",
+          "kind": "outcome",
+          "text": "A project’s tabs now look like the overview’s: on a line, no framed panel; one `.view-tabs` rule for both. Baselines left for T-345",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-347",
+      "name": "\"Needs you\": count a with-you task only when it is in the active sprint and ready",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "overview"
+      ],
+      "description": "The \"N need you\" count (project cards, the overview badge, a project's title bar) counts every to-do task marked `with: user`, wherever it is: also tasks in a planned sprint or the backlog, and tasks whose dependencies aren't done (here T-336, T-337). It should say what needs the user **now**.\n\n## Rule\n- In review (not approved or with changes asked for): counted, as now.\n- Blocked on a question for the user: counted, as now.\n- To do with `with: user`: counted only when it is in the active sprint (in a project without an active sprint: any) **and** its dependencies are done (archived ones count as done).\n\n## Change\nThe same rule in atm-cli's summary (`needs_you`, `needs_you_tasks` in `query.py`) and the dashboard (`needsYouReason` in `lib/waiting.ts`, which needs the sprint model and the done IDs). `docs/multi-project-api.md` §3.2 says the rule.\n\n## Tests\nScenarios or `summary.test.mjs` for the summary; `waiting.test.ts` for the dashboard.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "dashboard/src/lib/waiting.ts",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-02T06:55:54Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T06:55:54Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "started_at": "2026-11-02T06:55:58Z",
+      "started_by": "claude:b7be7288",
+      "commit": "8eb4c58cec709879153193ab07b919562b992736",
+      "completed_at": "2026-11-02T07:04:37Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T07:04:37Z",
+          "kind": "outcome",
+          "text": "“Needs you” counts a with-you task only in the active sprint (any, without one) and ready, in `atm summary` and the title bar; here 7 → 5",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-348",
+      "name": "Project selector: an icon for Projects Overview",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "overview",
+        "ux"
+      ],
+      "description": "In the project selector, each project shows its logo (or monogram) at 16px before its name; the Projects Overview entry has nothing. Give it Lucide's `layout-grid` icon (chosen with the user), added to `lib/icons.ts`, at the same size and place.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/icons.ts",
+        "dashboard/src/components/ProjectSelector.svelte"
+      ],
+      "created_at": "2026-11-02T07:45:42Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T07:45:42Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user",
+      "started_at": "2026-11-02T07:45:51Z",
+      "started_by": "claude:b7be7288",
+      "commit": "9764162ffd64542da5460566ad919ce15515bcaa",
+      "completed_at": "2026-11-02T08:04:51Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T08:04:51Z",
+          "kind": "outcome",
+          "text": "Projects Overview has the `layout-grid` icon in the project selector (chosen with Hakan)",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-349",
+      "name": "Omniboard: the To Do column lists every to-do task, not only what the loop takes",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "overview"
+      ],
+      "description": "The Omniboard's To Do column is the loop's list (`loop_order`): the active sprint's tasks only (even in *All tasks*), without those done with the user, without those waiting on a dependency. So in this sprint T-277, T-279 (with you) and T-344 (waiting) are missing.\n\n## Change\n- `atm summary`'s boards: the To Do column has every to-do task in the board's scope (the active sprint's, or every task): first the ready ones in the loop's order, then ready ones done with the user, then those waiting on dependencies; still at most 10 cards, with *+ N more*.\n- A card says why it isn't plain ready: `with_user: true`, or `waiting_for: [ids]`; the dashboard shows it (a *with you* chip, *waits on T-…*).\n- The column is *To Do*, not *To Do · ready*. `docs/multi-project-api.md` §3.3.\n\n## Tests\n`summary.test.mjs`; the Omniboard e2e.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "dashboard/src/lib/allboard.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-02T07:50:39Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T07:50:39Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "started_at": "2026-11-02T07:50:54Z",
+      "started_by": "claude:b7be7288",
+      "commit": "854ca856819d2dcb32800ab977b9e0b5017550ba",
+      "completed_at": "2026-11-02T08:04:52Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T08:04:52Z",
+          "kind": "outcome",
+          "text": "Omniboard Active sprints: every task of the sprints (To Do all to-do tasks with why, Done all finished); All tasks keeps 24 h Done",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-350",
+      "name": "Activity popup: correct values per hour, day and week, and its hover inside the pane",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "activity"
+      ],
+      "description": "The Activity popup (a project's title bar, and the overview's, T-328) has UI issues, found by Hakan:\n\n- **Wrong values per period:** with *Hour*, *Day* or *Week* (and ‹ › to step back), the charts show values that don't match the period: completions, who was working, time per task. Find which (the buckets, the period window, the archive not loaded for an older period, the overview's project split) and fix it.\n- **The hover tooltip runs outside the pane:** its list of tasks goes past the popup's edge (and now the popup scrolls inside, T-328). Keep it inside: cap the list (\"+ N more\") and place it where it fits.\n\nReproduce both with Hakan on the dev server first.\n\n## Tests\nThe gaps that let these through: unit tests for `activitySeries` per preset and offset (the buckets' start, end and counts against a fixture with known times) in `insights.test.ts`; an e2e that steps through Hour, Day and Week and checks the charts' totals and the period label, and one that hovers a busy bucket and checks the tooltip stays inside `#activity-panel` (`widgets.spec.ts`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/insights.ts",
+        "dashboard/src/components/ActivityWidget.svelte",
+        "dashboard/src/components/ActivityDeepDive.svelte",
+        "dashboard/tests/unit/insights.test.ts",
+        "dashboard/tests/e2e/widgets.spec.ts"
+      ],
+      "created_at": "2026-11-02T08:39:41Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T08:39:41Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "with": "user",
+      "started_at": "2026-11-02T09:12:31Z",
+      "started_by": "claude:b7be7288",
+      "commit": "da592ff4b8497070a2faa675ce29674f0d156f58",
+      "notes": [
+        {
+          "at": "2026-11-02T09:07:30Z",
+          "kind": "review",
+          "text": "Check on the dev server: Day, Week and Month span the whole period (the days and hours to come empty); hover anywhere, the tooltip stays beside the pointer inside the popup. Tests: `rangeAxis` and a running week/day in `insights.test.ts`; `overview-activity-periods.spec.ts` (axes, bars, tooltip inside the popup).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:12:31Z",
+          "kind": "rejection",
+          "text": "Near the popup’s bottom edge the tooltip grows the popup (its scroll area), which flickers and relays out",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:14:49Z",
+          "kind": "review",
+          "text": "Changes done: the tooltip is placed against the window (fixed), so near the popup’s bottom it no longer grows the popup and flickers; the e2e checks the popup’s size never changes while hovering, its very bottom included. Same component in a project’s and the overview’s popup.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:20:39Z",
+          "kind": "outcome",
+          "text": "Approved by Hakan: running periods span the whole period; the tooltip beside the pointer, against the window (no flicker), in both popups",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T09:07:30Z",
+          "to": "2026-11-02T09:12:31Z",
+          "outcome": "changes_requested"
+        },
+        {
+          "from": "2026-11-02T09:14:49Z",
+          "to": "2026-11-02T09:20:39Z"
+        }
+      ],
+      "review_requested_at": "2026-11-02T09:14:49Z",
+      "completed_at": "2026-11-02T09:20:39Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-351",
+      "name": "atm --dir PATH: run any command on the project at PATH",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "cli"
+      ],
+      "description": "atm finds the project from the current directory and has no option or environment variable to point it elsewhere, so running it on another project means changing directory first (T-277's throwaway test project; scripts; agents working on two projects).\n\n## Change\n- A global `--dir PATH`, before the command: `atm --dir ../shop status`. atm runs as if started in PATH (the project is found from there, as from the current directory); an unknown or missing PATH is an error naming it. `atm serve --dir` keeps its own meaning (after the command).\n- `atm help` and `docs/v4/atm-cli.md` list it; `docs/security-architecture.md` notes the new path input.\n\n## Tests\nScenarios: `--dir` on a project in another folder (status, list, add), a missing folder, and `serve --dir` unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli.py",
+        "tests/scripts/scenarios/paths.json",
+        "docs/v4/atm-cli.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-02T09:22:58Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:22:58Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-02T09:23:03Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2fb9cfff1e67653243cbc52f56167d6d53506169",
+      "completed_at": "2026-11-02T09:34:01Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T09:34:01Z",
+          "kind": "outcome",
+          "text": "`atm --dir PATH <command>` (or `--dir=PATH`) runs on the project at PATH; scenarios in `dir.json`; security doc §3.3 notes the path input",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-352",
+      "name": "atm archive --dry-run: say what stays, and why",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm archive --dry-run` lists only what would move. Also list the finished tasks that stay and why: in an open PR (`#N`), or finished in the last `keep_days` days. Text and `--json` (`kept: [{id, reason}]`); the real `atm archive` says it too, in one line.\n\n## Tests\nScenarios in `archive.json`: an open-PR task and a recent one kept, with their reasons.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/archive.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ],
+      "started_at": "2026-11-02T09:47:03Z",
+      "started_by": "claude:b7be7288",
+      "commit": "113ab2844c1591913089a817082ba93db711a0ec",
+      "completed_at": "2026-11-02T10:03:56Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:03:56Z",
+          "kind": "outcome",
+          "text": "atm archive (and --dry-run) lists what stays and why: in an open PR, finished within keep_days, on or after --before, not in the chosen sprints; JSON `kept`",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-353",
+      "name": "atm show: mark an archived task as archived",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm show` of an archived task reads like a live one (\"done · Phase 0\"); only its archived dependencies are marked. Its header says `· archived`, and `--json` has `archived: true`.\n\n## Tests\nA scenario in `archive.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ],
+      "started_at": "2026-11-02T09:48:34Z",
+      "started_by": "claude:b7be7288",
+      "commit": "8e6b62c70dfaee09f6ba643cf1c2ba2082ef71e4",
+      "completed_at": "2026-11-02T10:03:57Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:03:57Z",
+          "kind": "outcome",
+          "text": "atm show marks an archived task: `· archived` in its header, `archived: true` in --json",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-354",
+      "name": "Dashboard: the archive one click away (the subtitle's \"N archived\", the List's note)",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "archive",
+        "ux"
+      ],
+      "description": "Found in T-277: archived tasks show only with *Include archived*, at the foot of the Filters popup; nothing points to it.\n\n- The subtitle's *N archived* is a toggle for Include archived (it says *showing N archived* while on).\n- The List, when archived tasks are hidden, ends with *N archived tasks hidden · show*.\n\n## Tests\nAn e2e in `archive.spec.ts` for both; the unit tests of anything new in a lib.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/Header.svelte",
+        "dashboard/src/components/TaskGrid.svelte",
+        "dashboard/tests/e2e/archive.spec.ts"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-02T09:53:52Z",
+      "started_by": "claude:b7be7288",
+      "commit": "1590af4079c0325e8a5f6109714c3a4e26135776",
+      "completed_at": "2026-11-02T10:03:57Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:03:57Z",
+          "kind": "outcome",
+          "text": "The subtitle’s *N archived* toggles Include archived (*showing N archived* while on); the List ends with *N archived tasks hidden · show*. e2e in archive.spec.ts",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-355",
+      "name": "Projects Overview: Activity, Progress and Agents count each project's archive",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "archive",
+        "overview"
+      ],
+      "description": "Found in T-277: the overview's Activity, Progress and Agents (T-328, T-329, T-333) load each project's `tasks.json` only (`loadProjectSources`), never its `tasks-archive.json`, so after archiving they show less history than the project's own pages, which count the archive.\n\n## Change\nLoad each project's archive with its tasks (conditionally, a 404 is an empty one, as `loadArchive` does), merged as a project's history is (a task in both files from `tasks.json`).\n\n## Tests\n`overview-data.test.ts`: the archive is loaded and merged, unchanged on a 304; an e2e: an archived task's completion counts in the overview's Activity.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/overview-data.ts",
+        "dashboard/tests/unit/overview-data.test.ts"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-02T09:45:35Z",
+      "started_by": "claude:b7be7288",
+      "commit": "7f5fb716e8a128fb0effca7d51b33fa4814040d6",
+      "completed_at": "2026-11-02T10:03:58Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:03:58Z",
+          "kind": "outcome",
+          "text": "Projects Overview Activity, Progress and Agents load each project’s tasks-archive.json and merge it (`withArchive`), so archiving no longer shrinks them",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-356",
+      "name": "atm add / atm edit --add-dep: a dependency on an archived task is fine",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm edit T-014 --add-dep T-001` refuses with \"T-001 doesn't exist\" when T-001 is archived, and `atm add` checks dependencies the same way (`add_tasks` and `edit_task` in `atm-cli/atm/edit.py` look only at `data[\"tasks\"]`). An archived task counts as done, and `atm check` already accepts such a dependency (`check_data`'s `archived`).\n\n## Change\nBoth also accept the archive's IDs (`load_archive`, loaded only when an ID isn't in tasks.json, so the usual case reads no extra file). A truly unknown ID is still refused. Same for `--add-related` / `related`.\n\n## Tests\nScenarios in `tests/scripts/scenarios/archive.json`: `atm add` with a dependency on an archived task, `atm edit --add-dep` on one, and an unknown ID still refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/edit.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T10:10:38Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T10:10:38Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ],
+      "started_at": "2026-11-02T10:11:29Z",
+      "started_by": "claude:b7be7288",
+      "commit": "f4dc5ea1e8887e813fc6792a4ded9e5f177a2a83",
+      "completed_at": "2026-11-02T10:12:56Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:12:56Z",
+          "kind": "outcome",
+          "text": "atm add and atm edit --add-dep accept a dependency on an archived task (via `archived_task`), as atm check does; an unknown ID is still refused. Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-357",
+      "name": "atm unarchive: tell an ID already in tasks.json from an unknown one, and say archiving moves it back",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277, two things about `atm unarchive` (`atm-cli/atm/archive.py`):\n\n1. Its error lumps every wrong ID together (\"not in the archive: T-003, T-999, T-014\"). Say which are already in tasks.json and which don't exist at all.\n2. A task brought back that is still finished and old is moved straight back by the next `atm archive`, with no warning. After bringing back a finished task, say so in one line (e.g. that `atm reopen` keeps it out, or that the next archive moves it again).\n\n## Tests\nScenarios in `tests/scripts/scenarios/archive.json`: the two kinds of wrong ID, and the note after bringing back a finished task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/archive.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T10:10:38Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T10:10:38Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ],
+      "started_at": "2026-11-02T10:12:56Z",
+      "started_by": "claude:b7be7288",
+      "commit": "e7c645f7b9567913ef6c007643591c5788240107",
+      "completed_at": "2026-11-02T10:14:08Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:14:08Z",
+          "kind": "outcome",
+          "text": "atm unarchive names wrong IDs as *already in tasks.json* or *no such task*, and says when the next archive moves a brought-back task back (`moves_back` in --json). Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-358",
+      "name": "atm deps: list archived tasks that wait on this one",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm deps T-003` lists T-014 under \"is waited on by\" but not the archived T-004, which depends on T-003. Its \"waits for\" side already marks archived tasks (`(done, archived)`); list archived dependents too, marked the same way, in text and `--json` (`atm-cli/atm/query.py`).\n\n## Tests\nA scenario in `tests/scripts/scenarios/archive.json`: an archived task depending on a live one shows under \"is waited on by\".",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T10:10:38Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T10:10:38Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ],
+      "started_at": "2026-11-02T10:14:09Z",
+      "started_by": "claude:b7be7288",
+      "commit": "13c9fc179ad83a6b1cd6c5570c001fdaf915fefa",
+      "completed_at": "2026-11-02T10:14:49Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:14:49Z",
+          "kind": "outcome",
+          "text": "atm deps’ *is waited on by* also lists archived dependents, marked `(done, archived)`; text and --json. Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
+    },
+    {
+      "id": "T-359",
+      "name": "Archive tests: fill the gaps found in T-277",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Gaps in the archive's tests, found while surveying them after T-277 (the findings' own tests are in T-356, T-357 and T-358).\n\n## atm-cli (`tests/scripts/scenarios/archive.json`)\n- Archiving twice: the second run appends to the existing archive (both runs' tasks in it, none lost) and `meta.archived` counts them all.\n- `atm archive` with nothing to move says so, and changes neither file.\n- `atm unarchive` of several tasks at once: all come back, the archive keeps the rest, `meta.archived` goes down by as many.\n- `atm list --archived --json`.\n\n## Dashboard unit tests\n- `tests/unit/Header.component.test.ts`: the subtitle's *N archived* is a button; a click turns Include archived on (`aria-pressed`, *showing N archived*), another turns it off; none without an archive.\n- A new `tests/unit/TaskGrid.component.test.ts`: *N archived tasks hidden · show* only with an archive and Include archived off, singular for one, and a click turns it on.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/scenarios/archive.json",
+        "dashboard/tests/unit/Header.component.test.ts",
+        "dashboard/tests/unit/TaskGrid.component.test.ts"
+      ],
+      "created_at": "2026-11-02T10:11:16Z",
+      "updated_at": "2026-11-02T10:34:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T10:11:16Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "started_at": "2026-11-02T10:14:50Z",
+      "started_by": "claude:b7be7288",
+      "commit": "cdc288e4c0bf7f58c621bdbdea1eb52ee84200fd",
+      "completed_at": "2026-11-02T10:22:05Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:22:05Z",
+          "kind": "outcome",
+          "text": "Scenarios: archiving twice, nothing to move, unarchive of several, list --archived --json. Component tests: Header’s archived toggle, new TaskGrid.component.test.ts for the List’s note. Also formatted archive.json (T-356–T-358 had left it unformatted)",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     }
   ]
 }

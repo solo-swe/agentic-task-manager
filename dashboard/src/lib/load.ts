@@ -53,6 +53,8 @@ export interface ProjectSummary {
   completions_14d: number[];
   /** The project's cards for the All projects board (absent before 0.20; lib/allboard.ts) */
   board?: ProjectBoard;
+  /** The same, of the active sprint's tasks only; null without an active sprint (absent before 0.26; T-340) */
+  board_active_sprint?: ProjectBoard | null;
   /** The overview card's line, archived tasks included (absent before 0.20; lib/projects.ts statsLine) */
   stats?: { started: string | null; tasks: number; agent_minutes: number };
 }
@@ -75,6 +77,9 @@ export interface BoardCard {
   questions?: number;
   /** Done: when */
   completed_at?: string | null;
+  /** To do (T-349): done with the user, or the dependencies it waits for */
+  with_user?: boolean;
+  waiting_for?: string[];
 }
 
 export type BoardColumnId = 'todo' | 'active' | 'review' | 'blocked' | 'done';

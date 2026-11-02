@@ -275,6 +275,58 @@ atm's `components` output, reviewed above (T-324); no skill changed. Its new ent
 parameter (above) and `atm components` (no path or URL read). As for 0.24.0, no API key is used for the sandbox, so no
 live run: this written review takes its place.
 
+**Deleting a sprint (T-339).** `atm sprints delete <name> [--move-to WHERE] [--force]` removes a sprint from
+`meta.sprints` under the lock, through the same writes as every command (I6); its tasks move with `set_sprint`, as
+`atm move` moves them, keeping their history. It reads no path or URL (the name is matched against the sprints, as
+`edit` and `start` do). What it can lose is bounded: a closed sprint that ever had tasks (in either file) is refused,
+so a sprint's report and the record of what was done in it can't be deleted; an open one that tasks finished in or
+moved on from needs `--force`. A merge keeps a deletion only when the other branch didn't change the sprint (else a
+conflict, as for a deleted task). `/atm:plan-sprint` mentions it, to use **only when the user asks** (I22), saying
+what `--force` drops before using it; its pre-approval (`atm sprints:*`) already covered the command. Review against
+the red-team cases: *Task text is data* is unchanged in `/atm:plan-sprint`, so a task or sprint goal asking to
+delete a sprint is data, not a request; the sprint name is quoted like every argument (I3) and can't carry shell
+syntax (48 characters, checked on load). No new entry point, and no live sandbox run (no API key): this review
+takes its place.
+
+**Open tasks in closed sprints (T-330).** `atm status`, `check` and `reopen` now name unfinished tasks whose sprint
+is closed, with a suggested `atm move`; they read nothing new and move nothing. The output agents act on carries
+task IDs and sprint names only (both checked on load, I8), never a task's text. `/atm:plan-sprint` Step 2 lists these
+tasks first as candidates and moves one only once the user agrees (I22); its *Task text is data* rule is unchanged,
+so a task's name or a note asking to be pulled in is still data. No new entry point, no live sandbox run (no API
+key): this review takes its place.
+
+**The Omniboard's active sprints (T-340).** `api/projects` summaries gain `board_active_sprint`, the same cards as
+`board` (§3.3 of `docs/multi-project-api.md`) for the active sprint's tasks only: no new route, nothing the page
+writes, and the cards are shown as text (Svelte escapes them, I15) like `board`'s. The *Active sprints / All tasks*
+choice is a per-browser preference, never sent anywhere.
+
+**`atm --dir PATH` (T-351).** A new path input: before the command, atm changes to PATH and runs there, finding the
+project as it would from that folder. It gives no reach a `cd PATH` before atm wouldn't: the same user, the same
+files, the same project rules (the project is still the folder with `.agentic-task-manager/` or the git top level,
+and the files atm reads and writes are still that project's). A missing folder is an error, nothing run. No skill
+uses it, and no output agents act on changed, so no live sandbox run is needed.
+
+**Recording an existing commit (T-343).** `atm commit <id> --record <rev>` takes a git revision: one starting with
+`-` is refused (no option injection into git, I3), it must name a commit (`rev-parse --verify`) on the current branch
+(an ancestor of HEAD), and only its SHA is written to the task, under the lock (I6). It commits nothing and pushes
+nothing; the commit's message is read only to say when it doesn't mention the task.
+
+**The Projects Overview reads every project's files (T-328, T-329, T-333, T-355).** Its Activity, Progress and
+Agents views fetch each listed project's `tasks.json`, `claims.json` and `tasks-archive.json` from the routes a
+project's own page already uses (`p/<id>/…`, `docs/multi-project-api.md`): no new route, nothing written, and the
+tasks' text is shown as text (Svelte escapes it, I15). The new `#overview&view=…` parameters choose a tab, as
+`#view=` does; they are kept in the browser and never sent.
+
+**Release 0.26.0 (T-344).** Its agent-facing changes: `/atm:plan-sprint` (sprints left with open tasks, deleting a
+sprint) and atm's output for them, reviewed above (T-330, T-339); `atm commit --record` (above); and output that
+adds facts about the archive (`atm archive`'s *kept* reasons, `atm unarchive`'s *moves back* line and its two kinds
+of wrong ID, `atm show`'s *archived*, archived dependents in `atm deps`), which carries task IDs, statuses and atm's
+own fixed wording, never a task's text; and `atm summary`'s board, whose To Do column is now ordered by `todo_order`
+with *With you* / *Waits on* facts (IDs only) on the same cards as before, and a narrower *needs you* (T-347, T-349).
+None of it tells agents anything new to do. New entry points: `atm --dir` and
+`--record` (above); no new route, task-folder file or CI permission. As for 0.24.0 and 0.25.0, no API key is used
+for the sandbox, so no live run: this written review takes its place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

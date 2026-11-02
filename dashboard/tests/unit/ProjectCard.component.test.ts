@@ -24,6 +24,31 @@ const card = (): ProjectEntry => ({
 
 const rings = (container: HTMLElement) => [...container.querySelectorAll('.project-card-ring')];
 
+describe('ProjectCard: the title band (T-335)', () => {
+  it('the sparkline in the title row; what needs you as a badge on the corner, only when something does', () => {
+    const base = card();
+    const needs = render(ProjectCard, {
+      project: {
+        ...base,
+        summary: {
+          ...base.summary!,
+          completions_14d: [0, 1, 2],
+          needs_you_tasks: [{ id: 'T-1', name: 'Review me', reason: 'review' }],
+        },
+      } as ProjectEntry,
+    }).container;
+    expect(needs.querySelector('.project-card-head .project-card-spark')).not.toBeNull();
+    expect(needs.querySelector('.project-card-badge .project-card-need')).not.toBeNull();
+    expect(render(ProjectCard, { project: card() }).container.querySelector('.project-card-badge')).toBeNull();
+  });
+
+  it('a missing project: no sparkline, no badge', () => {
+    const { container } = render(ProjectCard, { project: { ...card(), missing: true } as ProjectEntry });
+    expect(container.querySelector('.project-card-spark')).toBeNull();
+    expect(container.querySelector('.project-card-badge')).toBeNull();
+  });
+});
+
 describe('ProjectCard: a project without sprints', () => {
   it('one ring for all its tasks (skipped ones left out), and a line saying it has no sprints yet', () => {
     const { container } = render(ProjectCard, { project: card() });
@@ -74,7 +99,9 @@ describe('ProjectCard: a project with sprints (SR-7.7)', () => {
       'Ada Lovelace',
     ]);
     const line = container.querySelector('.project-card-sprint')!;
-    expect(line).toHaveTextContent('Ada Lovelace — 1 / 3 · due in 3 days');
+    expect(line).toHaveTextContent('Sprint Ada Lovelace — 1 / 3 · due in 3 days');
+    // The active sprint's ring is marked (T-335)
+    expect(rings(container).map((r) => r.classList.contains('active'))).toEqual([false, true]);
     expect(line).toHaveAttribute('title', 'Sign-in');
     const [, ring] = rings(container);
     expect(ring.querySelector('.ring-value')).toHaveTextContent('33%');
@@ -111,7 +138,9 @@ describe('ProjectCard: working now, or next up, by task name (T-207)', () => {
     const { container } = render(ProjectCard, {
       project: withWork({ agents_working: 1, working: [claim('T-188', 'One title bar')], next: [] }),
     });
-    expect(lines(container)).toEqual(['T-188 One title bar']);
+    // A mini task card (T-335): Now, the ID, the agent, then the name
+    expect(lines(container)).toEqual(['Now T-188 claude:e5ea9db0 One title bar']);
+    expect(container.querySelectorAll('.project-card-task-layer')).toHaveLength(0);
     expect(container.querySelector('.project-card-work-line')).toHaveAttribute(
       'title',
       'T-188 One title bar — claude:e5ea9db0 · dev/x',
@@ -119,10 +148,29 @@ describe('ProjectCard: working now, or next up, by task name (T-207)', () => {
     expect(container.querySelector('.project-card-agents')).toBeNull();
   });
 
-  it('more than two: two lines, the second ending in "+N more"', () => {
+  it('more work: the first task on a stack of the others (at most 3 cards under it), "+N more" (T-335)', () => {
     const working = [claim('T-1', 'One'), claim('T-2', 'Two'), claim('T-3', 'Three'), claim('T-4', 'Four')];
     const { container } = render(ProjectCard, { project: withWork({ agents_working: 4, working, next: [] }) });
-    expect(lines(container)).toEqual(['T-1 One', 'T-2 Two +2 more']);
+    expect(lines(container)).toEqual(['Now T-1 claude:e5ea9db0 +3 more One']);
+    const layers = [...container.querySelectorAll<HTMLElement>('.project-card-task-layer')];
+    // Deepest first, each tilted by a fixed angle
+    expect(layers.map((l) => l.style.getPropertyValue('--depth'))).toEqual(['3', '2', '1']);
+    expect(layers.every((l) => /^-?[\d.]+deg$/.test(l.style.getPropertyValue('--tilt')))).toBe(true);
+    expect(layers.every((l) => l.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+
+  it('the stack counts what is in progress or ready on the board, not only the tasks listed (T-335)', () => {
+    const project = card();
+    const column = (count: number) => ({ count, cards: [] });
+    const board = { todo: column(5), active: column(1), review: column(0), blocked: column(0), done: column(0) };
+    const { container } = render(ProjectCard, {
+      project: {
+        ...project,
+        summary: { ...project.summary!, working: [claim('T-1', 'One')], next: [], board_active_sprint: board },
+      } as ProjectEntry,
+    });
+    expect(lines(container)).toEqual(['Now T-1 claude:e5ea9db0 +5 more One']);
+    expect(container.querySelectorAll('.project-card-task-layer')).toHaveLength(3);
   });
 
   it('nobody at work: what the loop takes next', () => {
@@ -131,7 +179,8 @@ describe('ProjectCard: working now, or next up, by task name (T-207)', () => {
       { id: 'T-8', name: 'Eight' },
     ];
     const { container } = render(ProjectCard, { project: withWork({ working: [], next }) });
-    expect(lines(container)).toEqual(['Next: T-7 Seven', 'Next: T-8 Eight']);
+    expect(lines(container)).toEqual(['Next T-7 +1 more Seven']);
+    expect(container.querySelectorAll('.project-card-task-layer')).toHaveLength(1);
     expect(container.querySelector('.project-card-work')).toHaveAttribute('aria-label', 'Next up');
   });
 
@@ -195,7 +244,9 @@ describe('ProjectCard: the git line and the task finished last (T-208)', () => {
         last_done: { id: 'T-189', name: 'Status bar', completed_at: '2020-01-01T00:00:00Z' },
       }),
     });
-    expect(text(container.querySelector('.project-card-last'))).toMatch(/^T-189 Status bar · .+ ago$/);
+    // When first, in the quiet label style (T-335)
+    expect(text(container.querySelector('.project-card-last'))).toMatch(/^.+ ago T-189 Status bar$/);
+    expect(container.querySelector('.project-card-last-when')).toHaveClass('project-card-label');
   });
 
   it('nothing finished yet (or an older server): the last activity, as before', () => {

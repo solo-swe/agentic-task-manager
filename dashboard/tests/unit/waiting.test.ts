@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sprintModel } from '../../src/lib/sprints';
 import type { Task } from '../../src/lib/types';
 import { resolveVocabulary } from '../../src/lib/vocab';
 import {
@@ -104,6 +105,35 @@ describe('needingUser', () => {
       { id: 'A', name: 'Alpha', reason: 'review' },
       { id: 'B', name: 'Beta', reason: 'blocked' },
     ]);
+  });
+
+  it('with you: only the active sprint’s, with their dependencies done (T-347)', () => {
+    const tasks = [
+      task('todo', { id: 'W1', with: 'user', sprint: 'Now' }),
+      task('todo', { id: 'W2', with: 'user', sprint: 'Later' }),
+      task('todo', { id: 'W3', with: 'user' }),
+      task('todo', { id: 'W4', with: 'user', sprint: 'Now', dependencies: ['D1'] }),
+      task('todo', { id: 'W5', with: 'user', sprint: 'Now', dependencies: ['D2', 'ARCHIVED'] }),
+      task('in_progress', { id: 'D1', sprint: 'Now' }),
+      task('done', { id: 'D2', sprint: 'Now' }),
+      task('in_review', { id: 'R', sprint: 'Later' }),
+    ];
+    const meta = {
+      sprints: [
+        { id: 'Now', state: 'active' },
+        { id: 'Later', state: 'planned' },
+      ],
+    };
+    const vocab = resolveVocabulary(meta);
+    const scope = { model: sprintModel(meta, tasks, vocab), tasks: new Map(tasks.map((t) => [t.id, t])) };
+    // Reviews count wherever they are; W2 is in a planned sprint, W3 in the backlog, W4 waits on D1
+    expect(needingUser(tasks, vocab, scope).map((t) => t.id)).toEqual(['W1', 'W5', 'R']);
+    // Without an active sprint, any sprint's, still only when ready
+    const none = { sprints: [{ id: 'Now', state: 'planned' }] };
+    const idle = { model: sprintModel(none, tasks, resolveVocabulary(none)), tasks: scope.tasks };
+    expect(needingUser(tasks, vocab, idle).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W5', 'R']);
+    // Without a scope (older callers), every with-you task, as before
+    expect(needingUser(tasks, vocab).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W4', 'W5', 'R']);
   });
 });
 

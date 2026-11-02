@@ -266,6 +266,19 @@ export function rangeWindow(range: ActivityRange, now: number): { start: number;
   }
 }
 
+/**
+ * The time axis the charts draw for a range (T-350): the whole period, even while it runs (all of today, the whole
+ * week from Monday, the whole month), so a Monday's "This week" is seven days with one filled in, not one bar across
+ * the chart. The last hour, an earlier period and a custom one are their window; all time is null.
+ */
+export function rangeAxis(range: ActivityRange, now: number): { start: number; end: number } | null {
+  const w = rangeWindow(range, now);
+  if (!w || (range.offset ?? 0) < 0) return w;
+  if (range.preset === 'day' || range.preset === 'week' || range.preset === 'month')
+    return { start: w.start, end: unitStart(range.preset, now, 1) };
+  return w;
+}
+
 /** "Today", "Yesterday", "Wed, Oct 21", "Last week", "Week of Oct 5", "August 2026", … */
 export function rangeLabel(range: ActivityRange, now: number): string {
   const offset = Math.min(0, range.offset ?? 0);

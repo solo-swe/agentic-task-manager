@@ -34,6 +34,10 @@ describe('the project in the URL', () => {
     expect(withProjectHash('#project=abc&view=list&about', null)).toBe('#about&overview');
     expect(withProjectHash('#overview&view=board', 'abc')).toBe('#project=abc');
     expect(withProjectHash('#overview&view=projects', null)).toBe('#view=projects&overview');
+    // "agents" is both (T-333): whose it is follows the page the hash names
+    expect(withProjectHash('#project=abc&view=agents', null)).toBe('#overview');
+    expect(withProjectHash('#overview&view=agents', 'abc')).toBe('#project=abc');
+    expect(withProjectHash('#project=abc&view=agents', 'def')).toBe('#view=agents&project=def');
   });
 });
 
@@ -43,6 +47,9 @@ describe('the overview tab in the URL', () => {
     expect(parseOverviewTab('#overview&view=projects')).toBe('projects');
     expect(parseOverviewTab('#overview&view=kanban')).toBeNull();
     expect(parseOverviewTab('#overview')).toBeNull();
+    expect(parseOverviewTab('#overview&view=agents')).toBe('agents');
+    // A project's Agents tab is the project's (T-333)
+    expect(parseOverviewTab('#project=abc&view=agents')).toBeNull();
     expect(isOverviewTab('board')).toBe(true);
     expect(isOverviewTab(3)).toBe(false);
   });

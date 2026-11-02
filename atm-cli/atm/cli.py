@@ -5,6 +5,7 @@ usage line; with --json, every error is {"error": "...", "code": N} on stderr, w
 """
 
 import argparse
+import os
 import sys
 
 from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
@@ -27,7 +28,9 @@ from .git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
 from .query import cmd_deps, cmd_list, cmd_show, cmd_status, cmd_summary
 from .tasks import cmd_note, cmd_status_change
 
-USAGE = """usage: atm <command> [options]
+USAGE = """usage: atm [--dir PATH] <command> [options]
+
+  --dir PATH     run as if started in PATH: on the project there (relative paths in the command count from it)
 
 commands:
   version        print the plugin version
@@ -398,9 +401,14 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", required=True, metavar="F", help="a file the task changed (repeat for each)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
+    commit.add_argument(
+        "--record",
+        metavar="REV",
+        help="record this existing commit on the current branch instead of committing (e.g. after a rebase)",
+    )
     agent_option(commit)
 
     pr = command("pr", cmd_pr, "record the PR that contains the tasks")
@@ -460,8 +468,10 @@ def build_parser():
     logo = command("logo", cmd_logo, "print, set or unset the project's logo for the dashboard (meta.logo)")
     logo.add_argument("action", nargs="?", choices=["set", "unset"], help="set or unset it")
     logo.add_argument("path", nargs="?", help="set: the image (SVG, PNG, WebP or ICO), relative to here")
-    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit or start one")
-    sprints.add_argument("action", nargs="?", choices=["list", "add", "edit", "start", "close"], help="what to do")
+    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit, start or delete one")
+    sprints.add_argument(
+        "action", nargs="?", choices=["list", "add", "edit", "start", "close", "delete"], help="what to do"
+    )
     sprints.add_argument("name", nargs="?", help="the sprint's name (add: generated when left out)")
     sprints.add_argument(
         "--carry-to", metavar="WHERE", help="close: where unfinished tasks go: a sprint's name, new, or backlog"
@@ -478,6 +488,12 @@ def build_parser():
     sprints.add_argument("--release", help="add, edit: the release it delivers to (empty: remove it)")
     sprints.add_argument("--due", metavar="DATE", help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)")
     sprints.add_argument("--after", metavar="NAME", help="add: put it after this sprint (default: last)")
+    sprints.add_argument(
+        "--move-to", metavar="WHERE", help="delete: where its tasks go: a sprint's name or backlog (default)"
+    )
+    sprints.add_argument(
+        "--force", action="store_true", help="delete: also a sprint tasks finished in or moved on from"
+    )
     move = command("move", cmd_move, "move tasks into a sprint, the next sprint, the active one, or the backlog")
     move.add_argument("ids", nargs="+", metavar="id", help="task IDs")
     move.add_argument(
@@ -543,7 +559,24 @@ def report(error, as_json):
         sys.stderr.write(f"atm: {error}\n")
 
 
+def leading_dir(argv):
+    """`atm --dir PATH <command> ...` (or `--dir=PATH`, T-351): the folder to run in, and the rest. Only before the
+    command: `atm serve --dir PATH` keeps its own meaning."""
+    if argv and argv[0] == "--dir":
+        return (argv[1] if len(argv) > 1 else ""), argv[2:]
+    if argv and argv[0].startswith("--dir="):
+        return argv[0][len("--dir=") :], argv[1:]
+    return None, argv
+
+
 def main(argv):
+    target, argv = leading_dir(argv)
+    if target is not None:
+        # As if started in that folder: the project is found from there, and relative paths count from there
+        if not target or not os.path.isdir(target):
+            report(AtmError(f"--dir: no folder '{target}'", 2), "--json" in argv)
+            return 2
+        os.chdir(target)
     if not argv or argv[0] in ("-h", "--help"):
         sys.stdout.write(USAGE)
         return 0

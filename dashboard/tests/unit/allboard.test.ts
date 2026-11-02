@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allBoard, allBoardLanes, BOARD_COLUMNS } from '../../src/lib/allboard';
+import { allBoard, allBoardLanes, BOARD_COLUMNS, boardOf, withoutActiveSprint } from '../../src/lib/allboard';
 import type { BoardCard, BoardColumnId, ProjectBoard, ProjectEntry, ProjectSummary } from '../../src/lib/load';
 
 const card = (id: string, fields: Partial<BoardCard> = {}): BoardCard => ({
@@ -39,7 +39,7 @@ describe('allBoard', () => {
   it('has the five columns, empty ones saying why', () => {
     const columns = allBoard([]);
     expect(columns.map((c) => c.id)).toEqual(['todo', 'active', 'review', 'blocked', 'done']);
-    expect(columns[0]).toMatchObject({ cards: [], more: [], empty: 'Nothing ready to start' });
+    expect(columns[0]).toMatchObject({ cards: [], more: [], empty: 'Nothing to do' });
     expect(columns[4].empty).toBe('Nothing finished in the last 24 hours');
   });
 
@@ -126,5 +126,50 @@ describe('allBoard', () => {
     const gone = project('g', null, { todo: [card('G-1')] }, {}, { missing: true });
     const older = { ...project('o', null, {}), summary: { last_activity: null } as ProjectSummary };
     expect(allBoard([gone, older]).every((c) => c.cards.length === 0 && c.more.length === 0)).toBe(true);
+  });
+});
+
+describe('the active sprints or all tasks (T-340)', () => {
+  /** A project whose whole board has `all` and whose active sprint's board has `active` (null: no active sprint) */
+  function scoped(id: string, all: Partial<Record<BoardColumnId, BoardCard[]>>, active: typeof all | null) {
+    const whole = project(id, '2026-05-01T10:00:00Z', all);
+    const sprint = active && project(id, null, active).summary!.board!;
+    return { ...whole, summary: { ...whole.summary!, board_active_sprint: sprint } } as ProjectEntry;
+  }
+  const a = scoped('a', { todo: [card('A-1'), card('A-2')], blocked: [card('A-3')] }, { todo: [card('A-1')] });
+  const b = scoped('b', { todo: [card('B-1')] }, null);
+
+  it('the active scope shows each project’s active sprint board, with its own counts; all, the whole board', () => {
+    const active = allBoard([a, b], undefined, null, 'active');
+    expect(ids(active, 'todo')).toEqual(['a/A-1']);
+    expect(active.find((c) => c.id === 'todo')!.total).toBe(1);
+    expect(ids(active, 'blocked')).toEqual([]);
+    const all = allBoard([a, b], undefined, null, 'all');
+    expect(ids(all, 'todo')).toEqual(['a/A-1', 'a/A-2', 'b/B-1']);
+    expect(ids(all, 'blocked')).toEqual(['a/A-3']);
+  });
+
+  it('grouped by project: no lane for a project without an active sprint', () => {
+    expect(allBoardLanes([a, b], undefined, null, 'active').map((l) => l.project.id)).toEqual(['a']);
+    expect(allBoardLanes([a, b], undefined, null, 'all').map((l) => l.project.id)).toEqual(['a', 'b']);
+  });
+
+  it('the active scope’s Done is every done task of the sprints, not the last 24 hours’ (T-349)', () => {
+    const done = (scope: 'active' | 'all') => allBoard([a, b], 30, null, scope).find((c) => c.id === 'done')!;
+    expect([done('active').label, done('active').empty]).toEqual(['Done', 'Nothing done in it yet']);
+    expect(done('all').label).toBe('Done · last 24 h');
+    expect(allBoard([a], 30, null, 'active')[0].label).toBe('To Do');
+  });
+
+  it('names the projects without an active sprint, only in the active scope', () => {
+    expect(withoutActiveSprint([a, b], 'active').map((p) => p.id)).toEqual(['b']);
+    expect(withoutActiveSprint([a, b], 'all')).toEqual([]);
+  });
+
+  it('an older server without the active sprint’s board shows the whole board, and is not listed as without one', () => {
+    const older = project('o', null, { todo: [card('O-1')] });
+    expect(boardOf(older, 'active')).toBe(older.summary!.board);
+    expect(withoutActiveSprint([older], 'active')).toEqual([]);
+    expect(boardOf({ ...older, missing: true }, 'active')).toBeNull();
   });
 });

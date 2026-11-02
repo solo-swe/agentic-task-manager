@@ -3,12 +3,13 @@ import type { Page } from '@playwright/test';
 import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test } from './helpers';
 
 /**
- * Screenshot of the view under the title bar (#graph-section). The section is scrolled into view first, and the
+ * Screenshot of the view shown, its panel only: not the tabs or the title bar above it, so a change there (spacing,
+ * the tabs' look) doesn't change every view's baseline (T-345). The section is scrolled into view first, and the
  * title bar is given time to compact (it does once the page scrolls, from a scroll handler): otherwise, on a busy
  * machine, the screenshot could land between the scroll and the compacting, with everything shifted.
  */
 async function sectionScreenshot(page: Page, name: string) {
-  const section = page.locator('#graph-section');
+  const section = page.locator('.view-panels');
   await section.scrollIntoViewIfNeeded();
   await expect
     .poll(() => page.evaluate(() => document.querySelector('.topbar')!.classList.contains('scrolled') === scrollY > 8))
@@ -29,8 +30,13 @@ async function sectionScreenshot(page: Page, name: string) {
 // fixed width for the screenshot, so a longer version number (0.9.0 -> 0.10.0) doesn't move the mask's edge.
 // The auto-refresh interval box is masked too (when its menu is open): headless Chromium places the text inside a
 // number input at a slightly different sub-pixel position from run to run. refresh.spec covers its value.
-// Baselines are per platform (-darwin locally, -linux in CI). Regenerate deliberately after an intended UI change:
-//   npx playwright test visual --update-snapshots   (then delete the stale -linux.png files; CI regenerates them)
+// Baselines are Linux only (T-345): made and checked in the pinned Playwright container, the same as CI's, so there
+// is one set and no round trip through CI. With Docker running:
+//   npm run test:e2e:visual           compare
+//   npm run test:e2e:visual:update    regenerate after an intended UI change (once a sprint, in the release task)
+// Elsewhere (macOS) the tests skip. Screenshots are of parts (a panel, a menu, a card) rather than whole pages, so one
+// change touches few baselines; the standard fixture's page, dark and light, is the only whole page.
+test.skip(process.platform !== 'linux', 'Linux baselines: npm run test:e2e:visual (Docker)');
 
 for (const fixture of ['standard', 'large-90', 'empty', 'edge-cases']) {
   test.describe(`visual: ${fixture}`, () => {
@@ -40,13 +46,19 @@ for (const fixture of ['standard', 'large-90', 'empty', 'edge-cases']) {
       await expect(page.locator('#subtitle')).toContainText('loaded from tasks.json');
     });
 
-    test('full page', async ({ page }) => {
-      await expect(page).toHaveScreenshot(`${fixture}-page.png`, {
-        fullPage: true,
-        mask: [page.locator('#version-chip'), page.locator('#footer-version'), page.locator('#auto-refresh-interval')],
-        stylePath: path.join(import.meta.dirname, 'screenshot.css'),
+    if (fixture === 'standard') {
+      test('full page', async ({ page }) => {
+        await expect(page).toHaveScreenshot(`${fixture}-page.png`, {
+          fullPage: true,
+          mask: [
+            page.locator('#version-chip'),
+            page.locator('#footer-version'),
+            page.locator('#auto-refresh-interval'),
+          ],
+          stylePath: path.join(import.meta.dirname, 'screenshot.css'),
+        });
       });
-    });
+    }
 
     test('dependency graph', async ({ page }) => {
       await sectionScreenshot(page, `${fixture}-graph.png`);
@@ -78,6 +90,8 @@ test('visual: progress tab', async ({ page, tasksServer }) => {
 });
 
 test('visual: list tab', async ({ page, tasksServer }) => {
+  // The cards say when (done 3 h ago, T-338): a fixed clock, so the text doesn't move with time
+  await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
   await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
   await sectionScreenshot(page, 'standard-list.png');
 });
@@ -208,6 +222,8 @@ for (const mode of ['dark', 'light'] as const) {
     });
 
     test('list: labels, priorities, stages', async ({ page, tasksServer }) => {
+      // The cards say when (T-338): a fixed clock
+      await page.clock.setFixedTime(new Date('2026-04-14T12:00:00Z'));
       await openDashboard(page, tasksServer, 'v4', { tab: 'list' });
       await sectionScreenshot(page, `v4-${mode}-list.png`);
     });
@@ -384,6 +400,16 @@ for (const mode of ['dark', 'light'] as const) {
   });
 }
 
+// The overview's Agents tab (T-333): two projects' agents on one timeline, each lane naming its projects
+test('visual: projects overview agents', async ({ page, tasksServer }) => {
+  await page.clock.setFixedTime(new Date('2026-04-02T12:00:00Z'));
+  tasksServer.use('agents');
+  tasksServer.addProject('second', 'agents', 'Second Project');
+  await page.goto('tasks-dashboard.html#overview&view=agents');
+  await expect(page.locator('#overview-agents .agent-info').first()).toBeVisible();
+  await expect(page.locator('#overview-agents')).toHaveScreenshot('overview-agents.png');
+});
+
 // The All projects board (T-259): cards from two projects with their chips, each column's line, an empty column and
 // "+ N more"
 for (const mode of ['dark', 'light'] as const) {
@@ -438,7 +464,8 @@ for (const mode of ['dark', 'light'] as const) {
   });
 }
 
-// FR-3: one main view (the Kanban board) per theme and mode, to catch regressions in any palette.
+// FR-3: per theme and mode, a compact sample to catch regressions in any palette: a Kanban column, with its cards,
+// chips and badges (T-345: not the whole view, which a layout change would touch in every theme)
 for (const theme of [
   'nord',
   'solarized',
@@ -462,7 +489,7 @@ for (const theme of [
       await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
       await page.locator('#tab-kanban').click();
       await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
-      await sectionScreenshot(page, `theme-${theme}-${mode}.png`);
+      await expect(page.locator('#kanban .kanban-column').first()).toHaveScreenshot(`theme-${theme}-${mode}.png`);
     });
   }
 }

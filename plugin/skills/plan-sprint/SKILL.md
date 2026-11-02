@@ -54,6 +54,9 @@ Read:
 | a task in full, or its dependencies | `atm show <id>`, `atm deps <id>` |
 
 Then show the user, briefly:
+- first, any **open tasks left in closed sprints** (`atm status` warns about them; `open_in_closed_sprints` in its
+  `--json`): the loop doesn't take them where they are, so propose each as a candidate for this sprint or the
+  backlog (`atm move <id> --to '<sprint>'` or `--to backlog`, once the user agrees);
 - the **active sprint**, if there is one: its goal, due date and what's left in it (to do, blocked, in review);
 - the **planned sprints**, in order, with their sizes;
 - the **backlog**, grouped by label and by component (a line per group: how many tasks, the most urgent first);
@@ -71,6 +74,11 @@ atm sprints add '<name>' --goal '<goal>' [--release '<release>'] [--due YYYY-MM-
 For a planned one, change only what the user agreed to change: `atm sprints edit '<name>' --goal '…'` (an empty value
 removes a field). An active sprint is planned the same way: tasks can be pulled into it or pushed out of it at any
 time.
+
+A sprint created by mistake (an empty one, or a duplicate) can go, **only when the user asks**:
+`atm sprints delete '<name>'` deletes an empty sprint, closed ones too; its unfinished tasks go to the backlog, or
+`--move-to '<sprint>'`. atm refuses a closed sprint that had tasks, and an open one that tasks finished in or moved
+on from unless `--force` (say what that drops before using it).
 
 ## Step 4: Choose its tasks
 

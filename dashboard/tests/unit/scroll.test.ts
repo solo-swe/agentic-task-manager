@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cutOff, scrollToTask } from '../../src/lib/scroll';
+import { cutOff, scrollBehavior, scrollToTask } from '../../src/lib/scroll';
+
+describe('scrollBehavior (T-345)', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('smooth, but at once when the system asks to reduce motion, or nothing can tell', () => {
+    const media = (reduce: boolean) => vi.fn((q: string) => ({ matches: reduce && q.includes('reduce') }));
+    vi.stubGlobal('matchMedia', media(false));
+    expect(scrollBehavior()).toBe('smooth');
+    vi.stubGlobal('matchMedia', media(true));
+    expect(scrollBehavior()).toBe('auto');
+    vi.stubGlobal('matchMedia', undefined);
+    expect(scrollBehavior()).toBe('smooth');
+  });
+});
 
 describe('cutOff', () => {
   // Items 100px tall, 10px apart: 0–100, 110–210, 220–320, 330–430

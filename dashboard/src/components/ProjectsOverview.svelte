@@ -1,31 +1,43 @@
 <script lang="ts">
   // All projects at a glance (docs/multi-project-dashboard-proposal.md 3.5): a card per project, those that need you
-  // first; or, on the Omniboard tab, every project's tasks in one board (T-259, T-266). "Active only" hides projects with no open
-  // work and nothing done lately, on both tabs.
+  // first; or, on the Omniboard tab, every project's tasks in one board (T-259, T-266); or every project's agents
+  // (T-333). "Hide inactive projects" leaves out projects with no open work and nothing done lately, on every tab; it
+  // shows only when there is such a project.
+  import { BOARD_SCOPES, withoutActiveSprint } from '../lib/allboard';
   import { ACTIVE_DAYS, isActive, orderProjects } from '../lib/projects';
   import { OVERVIEW_TABS, type OverviewTab } from '../lib/routes';
   import { dashboard } from '../lib/state.svelte';
   import AllProjectsBoard from './AllProjectsBoard.svelte';
   import Icon from './Icon.svelte';
   import InfoTip from './InfoTip.svelte';
+  import OverviewAgents from './OverviewAgents.svelte';
+  import OverviewProgress from './OverviewProgress.svelte';
   import ProjectCard from './ProjectCard.svelte';
 
   const ordered = $derived(orderProjects(dashboard.projects));
-  const shown = $derived(
-    dashboard.overviewActiveOnly ? ordered.filter((p) => isActive(p, dashboard.loadedAt)) : ordered,
-  );
-  const hidden = $derived(ordered.length - shown.length);
+  const active = $derived(ordered.filter((p) => isActive(p, dashboard.loadedAt)));
+  const shown = $derived(dashboard.overviewActiveOnly ? active : ordered);
+  // How many projects the option hides (or would): it shows only when there is one
+  const inactive = $derived(ordered.length - active.length);
   const tab = $derived(dashboard.overviewTab);
+  const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
 
   // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
-  const LABELS: Record<OverviewTab, string> = { projects: 'Projects', board: 'Omniboard' };
-  const ICONS = { projects: 'folder', board: 'square-kanban' } as const;
+  const LABELS: Record<OverviewTab, string> = {
+    projects: 'Projects',
+    board: 'Omniboard',
+    progress: 'Progress',
+    agents: 'Agents',
+  };
+  const ICONS = { projects: 'folder', board: 'square-kanban', progress: 'trending-up', agents: 'bot' } as const;
   const buttons: Partial<Record<OverviewTab, HTMLButtonElement>> = {};
 
   function onTabKeydown(e: KeyboardEvent) {
-    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!step) return;
     e.preventDefault();
-    const next = tab === 'projects' ? 'board' : 'projects';
+    const i = OVERVIEW_TABS.indexOf(tab);
+    const next = OVERVIEW_TABS[(i + step + OVERVIEW_TABS.length) % OVERVIEW_TABS.length];
     dashboard.selectOverviewTab(next);
     buttons[next]?.focus();
   }
@@ -69,17 +81,34 @@
       </label>
       <InfoTip label="the Omniboard">
         <p>
-          What's happening now across your projects: the tasks <strong>ready to start</strong>,
+          What's happening now across your projects: the tasks <strong>to do</strong> (ready ones first),
           <strong>in progress</strong>,
-          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those
-          <strong>done in the last 24 hours</strong>. At most 30 cards per column; <em>+ N more</em> says how many a project
-          has beyond them.
+          <strong>waiting for a review</strong> or <strong>blocked</strong>, and those <strong>done</strong>. At most 30
+          cards per column; <em>+ N more</em> says how many a project has beyond them.
+        </p>
+        <p>
+          <em>Active sprints</em> shows each project's active sprint, all of its tasks, done ones too;
+          <em>All tasks</em>, every sprint and the backlog, with what was done in the last 24 hours.
         </p>
         <p>
           Each project's full details are on its own Kanban board: a card opens its task there, the project chip or
           <em>+ N more</em> opens the project.
         </p>
       </InfoTip>
+      <!-- The active sprints' tasks (the default) or every task, as before (T-340) -->
+      <span class="board-scope" role="group" aria-label="Which tasks the board shows" id="board-scope">
+        {#each BOARD_SCOPES as scope (scope)}
+          <button
+            class:active={dashboard.boardScope === scope}
+            aria-pressed={dashboard.boardScope === scope}
+            data-scope={scope}
+            title={scope === 'active'
+              ? "Only the tasks in each project's active sprint"
+              : 'Every task: all sprints and the backlog'}
+            onclick={() => dashboard.setBoardScope(scope)}>{scope === 'active' ? 'Active sprints' : 'All tasks'}</button
+          >
+        {/each}
+      </span>
       <label class="projects-active-only"
         ><input
           type="checkbox"
@@ -89,24 +118,33 @@
         /> Group by project</label
       >
     {/if}
-    <label
-      class="projects-active-only"
-      title="Hide projects with no open tasks and no activity in the last {ACTIVE_DAYS} days"
-      ><input
-        type="checkbox"
-        id="active-projects-only"
-        checked={dashboard.overviewActiveOnly}
-        onchange={(e) => dashboard.setOverviewActiveOnly(e.currentTarget.checked)}
-      /> Active only</label
-    >
-    {#if hidden}
-      <span class="projects-hidden" id="projects-hidden">{hidden} inactive project{hidden === 1 ? '' : 's'} hidden</span
+    {#if inactive}
+      <label
+        class="projects-active-only"
+        title="Hide the projects with no open tasks and no activity in the last {ACTIVE_DAYS} days"
+        ><input
+          type="checkbox"
+          id="active-projects-only"
+          checked={dashboard.overviewActiveOnly}
+          onchange={(e) => dashboard.setOverviewActiveOnly(e.currentTarget.checked)}
+        />
+        Hide inactive projects <span class="projects-hidden" id="projects-hidden">({inactive})</span></label
+      >
+    {/if}
+    {#if tab === 'board' && noSprint.length}
+      <!-- So the board isn't empty without a word: these projects have nothing in the active sprints view -->
+      <span class="projects-hidden" id="board-no-active-sprint" title={noSprint.map((p) => p.name).join(', ')}
+        >{noSprint.length} project{noSprint.length === 1 ? ' has' : 's have'} no active sprint</span
       >
     {/if}
   </div>
   <div id="overview-panel" role="tabpanel" aria-labelledby="overview-tab-{tab}">
     {#if tab === 'board'}
       <AllProjectsBoard projects={shown} />
+    {:else if tab === 'agents'}
+      <OverviewAgents projects={shown} />
+    {:else if tab === 'progress'}
+      <OverviewProgress projects={shown} />
     {:else}
       <div class="projects-grid" id="projects-grid">
         {#each shown as project (project.id)}

@@ -22,6 +22,9 @@ describe('the branding files', () => {
     expect(read('README.md')).toContain('src="branding/atm-logo.svg"');
     // The PNGs differ by platform, so only their presence is checked
     expect(existsSync(file('../../../branding/atm-logo.png'))).toBe(true);
-    expect(existsSync(file('../../../branding/social-preview.png'))).toBe(true);
+    // The social preview, dark and light (T-279): one of them is uploaded
+    expect(existsSync(file('../../../branding/social-preview-dark.png'))).toBe(true);
+    expect(existsSync(file('../../../branding/social-preview-light.png'))).toBe(true);
+    expect(existsSync(file('../../../branding/social-preview.png'))).toBe(false);
   });
 });

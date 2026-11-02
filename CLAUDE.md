@@ -42,12 +42,13 @@ Commands (run in `dashboard/`):
   folders with `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (`build/dev-data.ts`)
 - `npm run build` — single-file build
 - `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
-- `npm run test:e2e` — build, then the Playwright e2e suite
+- `npm run test:e2e` — build, then the Playwright e2e suite without the screenshots
+- `npm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
 - `npm run check` — svelte-check, ESLint, Prettier
 - `npm run build:cli` — build `plugin/scripts/atm.py` from `atm-cli/` (see below)
 - `npm run test:scripts` — atm-cli's test suite (see below)
 - `npm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
-- `npm run verify` — everything above; run before committing
+- `npm run verify` — everything above (needs Docker for the screenshots)
 
 ## atm-cli (`atm-cli/`, built into `plugin/scripts/`)
 atm-cli is the `atm` command the skills run (earlier docs call it "the helper"). `plugin/scripts/atm` is a POSIX sh
@@ -79,16 +80,26 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 - Specs run against the build (`plugin/templates/tasks-dashboard.html`). They rely on stable DOM hooks (ids,
   `.filter-btn[data-filter]`, `.task-card[data-id]`, `#detail-overlay.open`, …) that date from the pre-Svelte
   dashboard, which was the parity oracle during the port and is kept, unused, at `tests/legacy/`.
-- Screenshot baselines are strict and per platform: `-darwin.png` locally, `-linux.png` in CI (pinned Playwright
-  container). After an intended UI change: `npx playwright test visual --update-snapshots`, delete the matching
-  `-linux.png` files, push; CI generates the missing Linux baselines as an artifact and fails until you commit them
-  (or run `npm run test:e2e:linux-snapshots` with Docker running).
+- **Which tests to run (T-345):** while working on a task, the specs of the area you change
+  (`npx playwright test kanban`, after `npm run build`) and the unit tests; the whole functional suite
+  (`npm run test:e2e`, about 40 s) once, before committing. Not the screenshots: they run in CI on every push, and are
+  regenerated once a sprint, in the release task. `npm run verify` runs everything, the screenshots too.
+- **Screenshots** (`visual.spec.ts`) have **Linux baselines only**, made and checked in the pinned Playwright
+  container, the same as CI's; on macOS the tests skip. With Docker running: `npm run test:e2e:visual` compares,
+  `npm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). They are of
+  parts (a panel, a menu, a card, a theme's Kanban column) rather than whole pages, so one change touches few; a
+  few dozen differing pixels pass (anti-aliasing), a real change doesn't.
+- A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are
+  instant, and a timer is skipped with `page.clock` (`cards.spec.ts`). More workers than Playwright's default don't
+  help here (the machine is saturated at 5) and break the timing budgets. Traces are recorded only on CI's retry;
+  locally, `--trace on` while looking into a failure.
 
 ## CI
 - **Workflow:** `pull-request` (also in `tasks.json` `meta.workflow`, so `/atm:push` knows): work happens on a
   release branch (e.g. `dev/v4`) and reaches `main` through **one combined PR per release branch**.
-- **Linux screenshot baselines:** after a visual change, CI fails until the `-linux.png` baselines are committed, and
-  attaches the generated ones as the `linux-screenshot-baselines` artifact. Find its ID with
+- **Linux screenshot baselines:** made locally with `npm run test:e2e:visual:update` (Docker), normally. As a
+  fallback, CI generates missing ones: it fails until the `-linux.png` baselines are committed, and attaches them as
+  the `linux-screenshot-baselines` artifact. Find its ID with
   `gh api repos/solo-swe/agentic-task-manager/actions/runs/<run-id>/artifacts`; **check its `workflow_run` is your
   branch's run**: `head_branch` your branch, `head_repository_id` this repository's, and `head_sha` a commit on your
   branch (a fork's PR uploads an artifact of the same name). Download it with

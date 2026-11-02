@@ -31,11 +31,13 @@ import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
 import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
 import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
 import { formatHash, hashParams } from './hash';
+import type { BoardScope } from './allboard';
 import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
 import type { ListGroupBy } from './list-groups';
+import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
 import { parseSprintHash, withSprintHash } from './sprint-hash';
 import { sprintModel } from './sprints';
@@ -82,6 +84,19 @@ export class DashboardState {
   boardGroupByProject = $state(getPref('boardGroupByProject', false));
   /** The All projects board's search (T-261), over every project's tasks through api/search; remembered per browser */
   boardQuery = $state(getPref('boardQuery', ''));
+  /** The All projects board: the active sprints' tasks (the default) or every task (T-340); remembered per browser */
+  boardScope = $state<BoardScope>(getPref('boardScope', 'active') === 'all' ? 'all' : 'active');
+  /** Every listed project's tasks and claims, for the overview's views across projects (Agents T-333, Activity T-328,
+   * Progress T-329): loaded while the overview is shown, refreshed with it */
+  projectSources = $state.raw<ProjectSource[]>([]);
+  projectSourcesLoaded = $state(false);
+  /** The overview's Agents timeline: its zoomed range and Live, apart from a project's (not saved) */
+  overviewAgents = $state<{ agentsWindow: ViewWindow | null; agentsLive: boolean }>({
+    agentsWindow: null,
+    agentsLive: false,
+  });
+  /** The overview's Activity period, apart from a project's (not saved) */
+  overviewActivity = $state<{ activityRange: ActivityRange }>({ activityRange: { preset: 'all' } });
   tasks = $state.raw<Task[]>([]);
   // Never mutated, only replaced on (re)load, so a plain Map in $state.raw is reactive enough
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -198,6 +213,10 @@ export class DashboardState {
   graphFiltered = $state<'hide' | 'dim'>('hide');
   /** The graph greys out done tasks, whatever the filters (part of the saved view) */
   graphDimDone = $state(false);
+  /** The graph keeps the matching tasks fitted; panning or zooming turns it off (part of the saved view) */
+  graphAutoFit = $state(true);
+  /** What auto-fit keeps fitted, set by the fit buttons (part of the saved view) */
+  graphFitTarget = $state<'all' | 'matches'>('matches');
   /** The graph's zoom and position once the user moved it; null while it is the automatic view */
   graphView = $state.raw<{ k: number; x: number; y: number } | null>(null);
   /** The Agents tab's zoomed time range; null shows everything */
@@ -402,6 +421,7 @@ export class DashboardState {
     const project = await this.refreshProjects();
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     if (project === null) {
+      if (this.route.page === 'overview') await this.refreshProjectSources();
       this.loadedAt = Date.now();
       return;
     }
@@ -457,9 +477,21 @@ export class DashboardState {
     this.overviewTab = tab;
   }
 
+  /** Every listed project's tasks and claims, for the overview's views across projects; a failure keeps what was
+   * there */
+  private async refreshProjectSources() {
+    this.projectSources = await loadProjectSources(this.projects, this.projectSources);
+    this.projectSourcesLoaded = true;
+  }
+
   setBoardGroupByProject(on: boolean) {
     this.boardGroupByProject = on;
     setPref('boardGroupByProject', on);
+  }
+
+  setBoardScope(scope: BoardScope) {
+    this.boardScope = scope;
+    setPref('boardScope', scope);
   }
 
   setBoardQuery(query: string) {
@@ -574,6 +606,8 @@ export class DashboardState {
       progressRange: this.progressRange,
       graphFiltered: this.graphFiltered,
       graphDimDone: this.graphDimDone,
+      graphAutoFit: this.graphAutoFit,
+      graphFitTarget: this.graphFitTarget,
       graph: this.graphView,
       agents: this.agentsWindow,
       agentsLive: this.agentsLive,
@@ -638,6 +672,8 @@ export class DashboardState {
     this.progressRange = view.progressRange;
     this.graphFiltered = view.graphFiltered;
     this.graphDimDone = view.graphDimDone;
+    this.graphAutoFit = view.graphAutoFit;
+    this.graphFitTarget = view.graphFitTarget;
     this.graphView = view.graph;
     this.agentsWindow = view.agents;
     this.agentsLive = view.agentsLive;

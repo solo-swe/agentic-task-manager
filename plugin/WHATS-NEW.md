@@ -2,6 +2,15 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.26.0] - 2026-11-02
+
+- The Projects Overview has Activity, Progress and Agents views of all your projects together, each project in its own colour.
+- Project cards show at a glance what is being worked on, what comes next and what needs you.
+- Task List cards show more: how a task starts, how it ended, who worked on it and for how long.
+- The dependency graph keeps the tasks you're looking at in view as you filter, and glides to each new view.
+- The all-projects board shows exactly your active sprints' tasks, and "needs you" counts only what you can act on now.
+- Archived tasks are one click away, and the overview counts them in its numbers.
+
 ## [0.25.0] - 2026-11-01
 
 - The board opens on the active sprint, with its goal, due date and progress, and hints for what to do next.

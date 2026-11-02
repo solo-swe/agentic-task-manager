@@ -9,13 +9,13 @@
     "args": [],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["usage: atm <command>", "paths [--json]"]
+      "stdoutIncludes": ["usage: atm [--dir PATH] <command>", "paths [--json]"]
     }
   },
   {
     "name": "help prints usage",
     "args": ["help"],
-    "expect": { "exit": 0, "stdoutIncludes": ["usage: atm <command>"] }
+    "expect": { "exit": 0, "stdoutIncludes": ["usage: atm [--dir PATH] <command>"] }
   },
   {
     "name": "an unknown command is a usage error",

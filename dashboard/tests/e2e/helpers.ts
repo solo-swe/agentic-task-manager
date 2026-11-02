@@ -366,7 +366,16 @@ export async function openDashboard(
   page: Page,
   tasksServer: TasksServer,
   data: string | TasksData,
-  { autoRefresh = false, tab }: { autoRefresh?: boolean; tab?: ViewId } = {},
+  {
+    autoRefresh = false,
+    tab,
+    graphAutoFit = true,
+  }: {
+    autoRefresh?: boolean;
+    tab?: ViewId;
+    /** false: the project's view starts with the graph's auto-fit off (T-341), as before it existed */
+    graphAutoFit?: boolean;
+  } = {},
 ) {
   if (!autoRefresh) {
     await page.addInitScript((key) => {
@@ -379,6 +388,17 @@ export async function openDashboard(
     }, PREFS_KEY);
   }
   tasksServer.use(data);
+  if (!graphAutoFit) {
+    // The project's saved view (view-store.ts projectKey: the server's project id)
+    await page.addInitScript((key) => {
+      try {
+        const view = JSON.parse(localStorage.getItem(key) || '{}');
+        if (!('graphAutoFit' in view)) localStorage.setItem(key, JSON.stringify({ ...view, graphAutoFit: false }));
+      } catch {
+        // storage unavailable: the dashboard falls back to its defaults
+      }
+    }, `atm-dashboard:view:id:${tasksServer.projectId}`);
+  }
   await page.goto('tasks-dashboard.html' + (tab ? `#view=${tab}` : ''));
 }
 

@@ -86,7 +86,7 @@ test.describe('All projects board', () => {
     await expect(page).toHaveURL(/view=board/);
     await expect(page.locator('#projects-grid')).toHaveCount(0);
 
-    await expect(column(page, 'todo').locator('.kanban-column-title')).toHaveText('To Do · ready');
+    await expect(column(page, 'todo').locator('.kanban-column-title')).toHaveText('To Do');
     // To Do: the most recently active project first, then each project's (the loop's) order
     await expect(ids(page, 'todo')).toHaveText(['B-1', 'T-008', 'T-009']);
     // In progress: longest running first; blocked: on you first; done: newest first
@@ -276,6 +276,8 @@ test.describe('All projects board', () => {
     for (let i = 0; i < 12; i++) tasksServer.addProject(`p${i}`, 'minimal', `Project ${i}`, summary());
     await page.clock.setFixedTime(NOW);
     await openDashboard(page, tasksServer, 'standard');
+    // Once the cards are there: measured at once, the page could still be empty
+    await expect(page.locator('.project-card')).toHaveCount(13);
     expect(await page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(720);
   });
 
@@ -308,5 +310,49 @@ test.describe('All projects board', () => {
     await expect(page.locator('#all-board .board-card')).toHaveCount(0);
     await page.locator('#active-projects-only').uncheck();
     await expect(page.locator('#all-board .board-card[data-id="I-1"]')).toHaveCount(1);
+  });
+
+  // T-340: by default the board shows each project's active sprint; All tasks shows everything, as before
+  test('Active sprints by default, All tasks as an option; remembered; projects without an active sprint named', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    const whole = board({
+      todo: [boardCard('S-1', 'In the sprint'), boardCard('S-2', 'In the backlog')],
+      blocked: [boardCard('S-3', 'Blocked, planned sprint', { since: '2026-03-01T10:00:00Z', waiting_on: 'user' })],
+    });
+    const sprint = board({ todo: [boardCard('S-1', 'In the sprint')] });
+    // Sprints the more recently active, so its cards come first in a column
+    const recent = { last_activity: '2026-03-01T11:00:00Z' };
+    tasksServer
+      .addProject('sprints', 'minimal', 'Sprints', summary({ ...recent, board: whole, board_active_sprint: sprint }))
+      .addProject(
+        'nosprint',
+        'minimal',
+        'No Sprint',
+        summary({
+          last_activity: '2026-03-01T10:00:00Z',
+          board: board({ todo: [boardCard('N-1', 'Any')] }),
+          board_active_sprint: null,
+        }),
+      );
+    await openDashboard(page, tasksServer, 'standard');
+    await page.locator('#overview-tab-board').click();
+    const scope = (s: string) => page.locator(`#board-scope [data-scope="${s}"]`);
+    await expect(scope('active')).toHaveAttribute('aria-pressed', 'true');
+    await expect(ids(page, 'todo')).toHaveText(['S-1']);
+    await expect(column(page, 'todo').locator('.kanban-count')).toHaveText('1');
+    await expect(ids(page, 'blocked')).toHaveText([]);
+    await expect(page.locator('#board-no-active-sprint')).toHaveText('1 project has no active sprint');
+    await expect(page.locator('#board-no-active-sprint')).toHaveAttribute('title', 'No Sprint');
+
+    await scope('all').click();
+    await expect(ids(page, 'todo')).toHaveText(['S-1', 'S-2', 'N-1']);
+    await expect(ids(page, 'blocked')).toHaveText(['S-3']);
+    await expect(page.locator('#board-no-active-sprint')).toHaveCount(0);
+    await page.reload();
+    await page.locator('#overview-tab-board').click();
+    await expect(scope('all')).toHaveAttribute('aria-pressed', 'true');
   });
 });
