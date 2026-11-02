@@ -72,19 +72,25 @@ test.describe('Activity: the periods and the hover (T-350)', () => {
     await page.setViewportSize({ width: 1280, height: 1200 });
     await openActivity(page, tasksServer);
     await page.locator('#activity-panel [data-range="week"]').click();
-    // Left (Monday's bar), middle and right of the first chart, and the right of the lowest
-    // From chart to chart too: leaving one for another keeps the hover
+    // The popup's size and scroll height: the tooltip must never change them (near the bottom it did, flickering)
+    const size = () =>
+      page.locator('#activity-panel').evaluate((el) => [el.clientWidth, el.clientHeight, el.scrollHeight]);
+    const before = await size();
+    // Left (Monday's bar), middle and right of the first chart, the right of the lowest, and its very bottom; from
+    // chart to chart too: leaving one for another keeps the hover
     for (const [chart, fx, fy] of [
       ['#dive-completed', 0.08, 0.5],
       ['#dive-completed', 0.5, 0.5],
       ['#dive-completed', 0.95, 0.5],
       ['#dive-cycle', 0.95, 0.8],
+      ['#dive-cycle', 0.3, 0.98],
     ] as const) {
       const svg = page.locator(`${chart} > svg`);
       const box = (await svg.boundingBox())!;
       await svg.hover({ position: { x: box.width * fx, y: box.height * fy } });
       const panel = (await page.locator('#activity-panel').boundingBox())!;
       const tip = (await page.locator('#dive-tooltip').boundingBox())!;
+      expect(await size()).toEqual(before);
       expect(tip.x).toBeGreaterThanOrEqual(panel.x);
       expect(tip.x + tip.width).toBeLessThanOrEqual(panel.x + panel.width);
       expect(tip.y).toBeGreaterThanOrEqual(panel.y);

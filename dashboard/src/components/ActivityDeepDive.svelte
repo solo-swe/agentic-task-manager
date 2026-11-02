@@ -96,17 +96,20 @@
   const pct = (v: number) => `${Math.round(v * 100)}%`;
 
   let hover = $state<number | null>(null);
-  // Where the pointer is in the charts' area (T-350): the tooltip goes beside it, on the side with room, so it stays
-  // inside the popup whatever the bars' width (a single bar across the chart pushed it out)
+  // Where the pointer is (T-350): the tooltip goes beside it, on the side of the popup with room, so it stays inside
+  // the popup whatever the bars' width (a single bar across the chart pushed it out). It is placed against the window
+  // (position: fixed), not in the popup's content: there, near the bottom, it grew the popup's scroll area, and the
+  // popup flickered as its scrollbar came and went
   let area = $state<HTMLElement>();
-  let pointer = $state({ x: 0, y: 0, w: 1, h: 1 });
+  let pointer = $state({ x: 0, y: 0, mid: { x: 0, y: 0 } });
   function onMove(e: PointerEvent) {
     const r = (e.currentTarget as SVGElement).getBoundingClientRect();
     const px = ((e.clientX - r.left) / r.width) * W;
     const i = Math.floor((px - PAD_L) / slot);
     hover = i >= 0 && i < n ? i : null;
-    const c = area!.getBoundingClientRect();
-    pointer = { x: e.clientX - c.left, y: e.clientY - c.top, w: c.width, h: c.height };
+    // The popup's visible box (the charts' area, outside a popup)
+    const box = (area!.closest('.insights-panel') ?? area!).getBoundingClientRect();
+    pointer = { x: e.clientX, y: e.clientY, mid: { x: box.left + box.width / 2, y: box.top + box.height / 2 } };
   }
   // Leaving a chart for another: keep the hover, whose move the browser may have delivered before this leave (T-350)
   function onLeave(e: PointerEvent) {
@@ -116,10 +119,11 @@
   }
   const hb = $derived(hover === null ? null : b[hover]);
   const GAP = 14;
+  // Toward the popup's middle from the pointer: left of it in the right half, above it in the lower half
   const tooltipStyle = $derived(
     [
-      pointer.x > pointer.w / 2 ? `right:${pointer.w - pointer.x + GAP}px` : `left:${pointer.x + GAP}px`,
-      pointer.y > pointer.h / 2 ? `bottom:${pointer.h - pointer.y + GAP}px` : `top:${pointer.y + GAP}px`,
+      pointer.x > pointer.mid.x ? `right:${innerWidth - pointer.x + GAP}px` : `left:${pointer.x + GAP}px`,
+      pointer.y > pointer.mid.y ? `bottom:${innerHeight - pointer.y + GAP}px` : `top:${pointer.y + GAP}px`,
     ].join(';'),
   );
   /** Tasks named in the tooltip; the rest as "+ N more" */

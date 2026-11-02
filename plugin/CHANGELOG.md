@@ -73,7 +73,8 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   all of it on the charts' time axis, what's to come empty (`rangeAxis`): on a Monday, This week was one bar across
   the whole chart. The hover's tooltip sits beside the pointer, on the side with room, inside the popup (it was
   offset by half a bar's width, so a wide bar pushed it out), lists at most five tasks, and keeps showing when the
-  pointer moves straight from one chart to another.
+  pointer moves straight from one chart to another. It is placed against the window, so near the popup's bottom it
+  no longer grows the popup's scroll area (the popup flickered). The same in a project's and the overview's popup.
 - **Scrolling honours “reduce motion”** (T-345): the detail panel's paging and sections, dependency links, Markdown
   anchors and scroll hints jump at once when the system asks to reduce motion (`scrollBehavior`), rather than glide.
   For development: screenshots have Linux baselines only, made in Docker (`npm run test:e2e:visual[:update]`), of

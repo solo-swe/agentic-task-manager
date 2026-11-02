@@ -17704,7 +17704,7 @@
         "dashboard/tests/e2e/widgets.spec.ts"
       ],
       "created_at": "2026-11-02T08:39:41Z",
-      "updated_at": "2026-11-02T08:50:52Z",
+      "updated_at": "2026-11-02T09:12:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17718,8 +17718,30 @@
         "dashboard"
       ],
       "with": "user",
-      "started_at": "2026-11-02T08:50:52Z",
-      "started_by": "claude:b7be7288"
+      "started_at": "2026-11-02T09:12:31Z",
+      "started_by": "claude:b7be7288",
+      "commit": "50864e2ca94cb3d359cc79c66b98754b8da1fde2",
+      "notes": [
+        {
+          "at": "2026-11-02T09:07:30Z",
+          "kind": "review",
+          "text": "Check on the dev server: Day, Week and Month span the whole period (the days and hours to come empty); hover anywhere, the tooltip stays beside the pointer inside the popup. Tests: `rangeAxis` and a running week/day in `insights.test.ts`; `overview-activity-periods.spec.ts` (axes, bars, tooltip inside the popup).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T09:12:31Z",
+          "kind": "rejection",
+          "text": "Near the popup’s bottom edge the tooltip grows the popup (its scroll area), which flickers and relays out",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T09:07:30Z",
+          "to": "2026-11-02T09:12:31Z",
+          "outcome": "changes_requested"
+        }
+      ]
     }
   ]
 }

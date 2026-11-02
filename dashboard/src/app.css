@@ -849,10 +849,11 @@ h1 {
   height: 10px;
   border-radius: 2px;
 }
-/* Placed beside the pointer by ActivityDeepDive (T-350) */
+/* Placed beside the pointer by ActivityDeepDive (T-350), against the window: never part of the popup's content, so
+   it can't change the popup's size (scrollbar flicker) */
 .deep-dive-tooltip {
-  position: absolute;
-  z-index: 3;
+  position: fixed;
+  z-index: 70;
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
   background: var(--surface2);
   border: 1px solid var(--border);
