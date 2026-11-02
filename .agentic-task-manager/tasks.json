@@ -18520,9 +18520,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18535,7 +18535,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-362",
@@ -18560,9 +18561,9 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18576,7 +18577,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-363",
@@ -18599,9 +18601,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:43Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18614,7 +18616,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-364",
@@ -18639,9 +18642,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18656,7 +18659,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-365",
@@ -18685,9 +18689,9 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18700,7 +18704,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-366",
@@ -18723,9 +18728,9 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:45Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18738,7 +18743,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-367",
@@ -18763,9 +18769,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:45Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18779,7 +18785,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-368",
@@ -18802,9 +18809,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18817,7 +18824,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-369",
@@ -18840,9 +18848,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:54Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18855,7 +18863,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-370",
@@ -18878,9 +18887,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18893,7 +18902,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-371",
@@ -18918,9 +18928,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18934,7 +18944,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-372",
@@ -18959,9 +18970,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -18975,7 +18986,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-373",
@@ -18998,9 +19010,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -19013,7 +19025,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-374",
@@ -19037,9 +19050,9 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -19054,7 +19067,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-375",
@@ -19077,9 +19091,9 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -19093,7 +19107,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     },
     {
       "id": "T-376",
@@ -19118,9 +19133,9 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-02T18:36:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Layered Architecture",
@@ -19134,7 +19149,8 @@
       ],
       "related": [
         "T-360"
-      ]
+      ],
+      "review": "batch"
     }
   ]
 }
