@@ -6,7 +6,7 @@ import json
 import os
 
 from ...claims import locked_with_claims, read_store, write_store
-from ...core import git, read_json, to_json, write_text_atomic
+from ...core import AtmError, git, read_json, to_json, write_json_atomic, write_text_atomic
 from ...model import archive_path, archived_task, load_archive, load_tasks, load_tasks_tolerant, vocabulary
 from ..working import Working
 
@@ -69,6 +69,20 @@ class JsonGitStore:
     def working_copy(self):
         return self.paths["root"]
 
+    def raw(self):
+        """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
+        it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
+        if not os.path.isfile(self.paths["tasks"]):
+            raise AtmError(f"no tasks.json in {self.paths['dir']}. Run /atm:create-tasks first.")
+        data = read_json(self.paths["tasks"])
+        if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+            data = None
+        try:
+            archive, error = load_archive(self.paths)["tasks"], None
+        except AtmError as e:
+            archive, error = [], str(e)
+        return {"document": data, "archive": archive, "archive_error": error}
+
     def change(self, fn):
         """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
         tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
@@ -82,6 +96,7 @@ class JsonGitStore:
                 lambda: os.path.getsize(tasks_file),
                 # The files still hold what was read: nothing is written before fn returns
                 lambda: (read_json(tasks_file), read_store(self.paths)),
+                lambda: load_archive(self.paths),
             )
             result = fn(work)
             # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and its
@@ -92,6 +107,8 @@ class JsonGitStore:
             # The same data in another layout (a file edited by hand) is unchanged too
             if stored != text and json.loads(stored) != work.document:
                 write_text_atomic(tasks_file, text)
+            if work.archive_changed():
+                write_json_atomic(archive_path(self.paths), work.archive())
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
         self._data = None  # this store's snapshot is out of date now

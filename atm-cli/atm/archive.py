@@ -10,7 +10,7 @@ import os
 from datetime import timedelta
 
 from .core import AtmError, now, now_iso, out, parse_iso, to_json, write_json_atomic
-from .edit import next_number
+from .lib.edit import next_number
 from .lock import locked
 from .merge import ensure_archive_merge
 from .model import (

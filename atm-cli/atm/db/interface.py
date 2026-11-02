@@ -47,6 +47,11 @@ class Store(Protocol):
         """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
         ...
 
+    def raw(self) -> dict:
+        """The data as stored, unchecked, for `atm check` to report on: {"document" (None when it isn't task data),
+        "archive" (the archived tasks), "archive_error" (why the archive can't be read, or None)}."""
+        ...
+
     def change(self, fn: Callable[[Any], Any]) -> Any:
         """Run `fn(work)` (a db.working.Working: the tasks and claims to change) under the store's isolation, and write
         what it changed; nothing when it raises. Returns what `fn` returns, then raises what it deferred. The

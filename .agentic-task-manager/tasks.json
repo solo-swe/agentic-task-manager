@@ -18992,7 +18992,7 @@
       "description": "Step 9 of `docs/layered-architecture.md` §9.\n\n## Change\n- `claims.next` (with `claim`, atomic), `claims.heartbeat`, `claims.heartbeat_due` and `claims.list` (§5.1); the claims store and resolutions behind `Store` (§3.2).\n- `atm run` stays in the CLI, keeping the claim alive with `claims.heartbeat`.\n- `claims.py`'s storage code moves into the JSON-in-git store; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (selection order, `with_user`, back from review first, expiry); contract tests for claims on both stores; `npm run test:scripts` and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-368"
       ],
@@ -19002,7 +19002,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T20:40:54Z",
+      "updated_at": "2026-11-02T20:51:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19020,7 +19020,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-02T20:40:54Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "5ded0f50d55dd1e54211ef18ca9acad6b0de8b7e",
+      "completed_at": "2026-11-02T20:51:00Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-02T20:51:00Z",
+          "kind": "review",
+          "text": "Check: `next` (with `--claim` in one store change), `heartbeat` (+ `--auto`), `run`’s renewals and `claims` via `lib/claims.py`; printing, hook input and the child process in `cli/claims.py`; the loop’s rule (`next_task`, `Selection`) still claims.py’s. The JSON store writes tasks.json only when the data changed (a read-only `next` leaves its mtime: no dashboard reloads). 10k-task write 0.95 s (0.90 before). 541 atm-cli, 80 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-370",
@@ -19033,7 +19045,7 @@
       "description": "Step 10 of `docs/layered-architecture.md` §9.\n\n## Change\n- `tasks.add` (IDs allocated by the store's `create_tasks`), `tasks.edit`, `tasks.check`, and `components.list/add/edit` (§5.1), on the store's task and component operations (§3.2).\n- `edit.py` and `components.py` split into atm-lib functions and CLI renderers; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (placeholders and dependencies, a dependency on an archived task, cycles, component hints, `--from-label` on archived tasks); contract tests for `create_tasks` and components; `npm run test:scripts` and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-369"
       ],
@@ -19043,7 +19055,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:55Z",
+      "updated_at": "2026-11-02T20:51:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19059,7 +19071,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T20:51:09Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-371",

@@ -2186,6 +2186,11 @@ class Store(Protocol):
         """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
         ...
 
+    def raw(self) -> dict:
+        """The data as stored, unchecked, for `atm check` to report on: {"document" (None when it isn't task data),
+        "archive" (the archived tasks), "archive_error" (why the archive can't be read, or None)}."""
+        ...
+
     def change(self, fn: Callable[[Any], Any]) -> Any:
         """Run `fn(work)` (a db.working.Working: the tasks and claims to change) under the store's isolation, and write
         what it changed; nothing when it raises. Returns what `fn` returns, then raises what it deferred. The
@@ -2235,9 +2240,8 @@ class Vcs(Protocol):
 
 # ==== components.py ====
 # Components (docs/sprints-and-releases-design.md §2, SR-2.7): the parts of a project (meta.components, each with
-# globs over its files), the components a task's files suggest, and the IDs a task may name. `atm components` lists
-# them; `atm components add` defines one, and can move a label onto it or give it to the tasks its globs match (T-324),
-# for projects that marked their parts with labels.
+# globs over its files), the components a task's files suggest, and the IDs a task may name. Listing, defining and
+# changing them is atm-lib's (lib/components.py) since T-370; these rules move into atm-lib with a later slice.
 
 def matches(component, path):
     """Whether `path` (a task's file, relative to the project) is in the component: one of its globs matches. `*`
@@ -2270,201 +2274,6 @@ def suggestion_line(vocab, task):
         return None
     adds = " ".join(f"--add-component {c}" for c in missing)
     return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm edit {task['id']} {adds})"
-
-
-def _tasks(*files):
-    return [t for data in files for t in data["tasks"] if isinstance(t, dict)]
-
-
-def components_list(paths, as_json):
-    """meta.components in order, each with how many tasks have it, archived ones too."""
-    data = load_tasks(paths)
-    tasks = _tasks(data, load_archive(paths))
-    listed = [
-        {**c, "tasks": sum(1 for t in tasks if c["id"] in (t.get("components") or []))}
-        for c in vocabulary(data)["components"]
-    ]
-    if as_json:
-        out(to_json(listed))
-        return
-    if not listed:
-        out("No components yet: atm components add <id> --path GLOB.")
-    for c in listed:
-        details = [f"“{c['label']}”"] if c.get("label") else []
-        details.append(", ".join(c["paths"]) if c["paths"] else "no paths")
-        if c.get("review"):
-            details.append(f"review {c['review']}")
-        out(f"{c['id']} · {' · '.join(details)}: {c['tasks']} task{'' if c['tasks'] == 1 else 's'}")
-
-
-def _label_entry(entry):
-    """A meta.labels entry's ID: the entry itself when it is a string, else its "id"."""
-    return entry if isinstance(entry, str) else entry.get("id") if isinstance(entry, dict) else None
-
-
-def _label_text(meta, label):
-    """The text meta.labels gives `label` (e.g. "Dashboard" for dashboard), or None."""
-    entries = meta.get("labels") if isinstance(meta.get("labels"), list) else []
-    entry = next((e for e in entries if _label_entry(e) == label), None)
-    return entry["label"] if isinstance(entry, dict) and isinstance(entry.get("label"), str) else None
-
-
-def _check_options(globs, review):
-    if any(not glob for glob in globs):
-        raise AtmError("--path needs a glob, e.g. 'dashboard/**'", 2)
-    if review and review not in REVIEW_MODES:
-        raise AtmError(f"--review {review!r}: use one of {', '.join(REVIEW_MODES)}", 2)
-
-
-def _move_and_assign(data, archive_data, component, label, assign):
-    """On every task of both files: `label` (if given) becomes the component, and with `assign` a task whose files
-    the component's globs match gets it too; `label` leaves meta.labels. Returns the task IDs from the label, those by
-    their files, and whether the archive changed. A label no task has and meta.labels doesn't define (most likely a
-    typo) is refused before anything changes."""
-    meta = data["meta"]
-    known_label = any(_label_entry(e) == label for e in meta.get("labels") or [])
-    if label and not known_label and not any(label in (t.get("labels") or []) for t in _tasks(data, archive_data)):
-        raise AtmError(f"no task has the label {label!r}", 2)
-    from_label, by_files, archive_changed = [], [], False
-    for task in _tasks(data, archive_data):
-        labels = task.get("labels") if isinstance(task.get("labels"), list) else []
-        moved = bool(label) and label in labels
-        current = task.get("components") if isinstance(task.get("components"), list) else []
-        matched = (
-            assign
-            and component["id"] not in current
-            and any(matches(component, f) for f in task.get("files") or [] if isinstance(f, str))
-        )
-        if not (moved or matched):
-            continue
-        if moved:
-            task["labels"] = [x for x in labels if x != label]
-            if not task["labels"]:
-                del task["labels"]
-        if component["id"] not in current:
-            task["components"] = current + [component["id"]]
-        (from_label if moved else by_files).append(task["id"])
-        archive_changed = archive_changed or any(task is t for t in archive_data["tasks"])
-    if label and isinstance(meta.get("labels"), list):
-        meta["labels"] = [e for e in meta["labels"] if _label_entry(e) != label]
-        if not meta["labels"]:
-            del meta["labels"]
-    return from_label, by_files, archive_changed
-
-
-def _write(paths, data, archive_data, archive_changed):
-    vocabulary(data)  # checks meta.components, as atm init would
-    write_json_atomic(paths["tasks"], data)
-    if archive_changed:
-        write_json_atomic(archive_path(paths), archive_data)
-
-
-def _moved_text(label, from_label, assign, by_files):
-    """What --from-label and --assign did, e.g. "6 tasks from the label atm-cli, 2 more by their files"."""
-    parts = []
-    if label:
-        parts.append(f"{len(from_label)} task{'' if len(from_label) == 1 else 's'} from the label {label}")
-    if assign:
-        parts.append(f"{len(by_files)} {'more ' if label else ''}by their files")
-    return ", ".join(parts)
-
-
-def components_add(paths, args):
-    """Define a component; --from-label moves that label onto it on every task (both files) and drops it from
-    meta.labels; --assign gives it to every task whose files its globs match. One locked write."""
-    component_id = args.id
-    if not RELEASE_ID.fullmatch(component_id):
-        raise AtmError(f"{component_id!r}: a component ID is letters, digits, '.', '-' and '_' (at most 64)", 2)
-    globs = args.path or []
-    _check_options(globs, args.review)
-    if args.assign and not globs:
-        raise AtmError("--assign gives the component to the tasks its globs match: it needs --path", 2)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive_data = load_archive(paths)
-        if any(c["id"] == component_id for c in vocabulary(data)["components"]):
-            raise AtmError(f"there is already a component {component_id!r} (atm components edit changes it)", 2)
-        meta = data.setdefault("meta", {})
-        component = {"id": component_id}
-        # The name shown: --label, else the label's own text (meta.labels), else none
-        label_text = args.label or (_label_text(meta, args.from_label) if args.from_label else None)
-        if label_text:
-            component["label"] = label_text
-        component["paths"] = list(globs)
-        if args.review:
-            component["review"] = args.review
-        meta["components"] = list(meta.get("components") or []) + [component]
-        moved = _move_and_assign(data, archive_data, component, args.from_label, args.assign)
-        _write(paths, data, archive_data, moved[2])
-    from_label, by_files = moved[0], moved[1]
-    if args.json:
-        out(to_json({"component": component, "from_label": from_label, "by_files": by_files}))
-        return
-    text = _moved_text(args.from_label, from_label, args.assign, by_files)
-    out(f"Added the component {component_id}" + (f": {text}." if text else "."))
-
-
-def components_edit(paths, args):
-    """Change a component: --label and --review (empty: remove), --add-path; --from-label and --assign as for add,
-    the globs added included. One locked write."""
-    globs = args.add_path or []
-    _check_options(globs, args.review)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive_data = load_archive(paths)
-        known = [c["id"] for c in vocabulary(data)["components"]]
-        if args.id not in known:
-            raise AtmError(f"no component {args.id!r}; the components: {', '.join(known) or 'none yet'}", 2)
-        component = next(c for c in data["meta"]["components"] if c.get("id") == args.id)
-        changed = []
-        for key, value in (("label", args.label), ("review", args.review)):
-            if value == "" and key in component:
-                del component[key]
-                changed.append(key)
-            elif value and component.get(key) != value:
-                component[key] = value
-                changed.append(key)
-        added = [g for g in dict.fromkeys(globs) if g not in (component.get("paths") or [])]
-        if added:
-            component["paths"] = list(component.get("paths") or []) + added
-            changed.append("paths")
-        if args.assign and not component.get("paths"):
-            raise AtmError(f"--assign gives {args.id} to the tasks its globs match, and it has none: add --add-path", 2)
-        moved = _move_and_assign(data, archive_data, component, args.from_label, args.assign)
-        if changed or moved[0] or moved[1] or args.from_label:
-            _write(paths, data, archive_data, moved[2])
-    from_label, by_files = moved[0], moved[1]
-    if args.json:
-        out(to_json({"component": component, "changed": changed, "from_label": from_label, "by_files": by_files}))
-        return
-    text = ", ".join(([f"changed {', '.join(changed)}"] if changed else []) + [
-        t for t in [_moved_text(args.from_label, from_label, args.assign, by_files)] if t
-    ])
-    out(f"{args.id}: {text or 'nothing changed'}")
-
-
-def cmd_components(args):
-    paths = find_paths(os.getcwd())
-    if args.action in (None, "list"):
-        if args.id is not None:
-            raise AtmError(f"unexpected argument '{args.id}'", 2)
-        for option in ("label", "path", "add_path", "review", "from_label"):
-            if getattr(args, option) is not None:
-                raise AtmError(f"--{option.replace('_', '-')} is for atm components add or edit", 2)
-        if args.assign:
-            raise AtmError("--assign is for atm components add or edit", 2)
-        components_list(paths, args.json)
-        return
-    if not args.id:
-        raise AtmError(f"atm components {args.action} needs the component's ID", 2)
-    if args.action == "add":
-        if args.add_path is not None:
-            raise AtmError("--add-path is for atm components edit (add takes --path)", 2)
-        components_add(paths, args)
-    else:
-        if args.path is not None:
-            raise AtmError("--path is for atm components add (edit takes --add-path)", 2)
-        components_edit(paths, args)
 
 
 # ==== sprint_names.py ====
@@ -3121,17 +2930,32 @@ def _stamp(value):
 
 
 class Working:
-    def __init__(self, document, claims_store, here, size, before):
+    def __init__(self, document, claims_store, here, size, before, archive=None):
         """`here` and `size` may be callables (worked out when asked); `before()` gives the document and the claims
         store as they were, from wherever the store keeps them (the JSON-in-git store: its files, not written until
-        the change ends), so recording what changed costs nothing unless `changes()` is asked for."""
+        the change ends), so recording what changed costs nothing unless `changes()` is asked for. `archive()` loads
+        the archive document, only when a change asks for it."""
         self.document = document
         self.claims_store = claims_store
         self._here = here
         self._size = size
         self._before = before
+        self._load_archive = archive
+        self._archive = None
+        self._before_archive = None
         self._deferred = None
         self._before_store = _stamp(claims_store)
+
+    def archive(self):
+        """The archive document ({"meta", "tasks"}), to read and change in place; loaded on first use."""
+        if self._archive is None:
+            self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
+            self._before_archive = _stamp(self._archive)
+        return self._archive
+
+    def archive_changed(self):
+        """Whether the archive was asked for and changed: the store writes it then, and only then."""
+        return self._archive is not None and _stamp(self._archive) != self._before_archive
 
     @staticmethod
     def _entities(document, claims_store):
@@ -3246,6 +3070,20 @@ class JsonGitStore:
     def working_copy(self):
         return self.paths["root"]
 
+    def raw(self):
+        """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
+        it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
+        if not os.path.isfile(self.paths["tasks"]):
+            raise AtmError(f"no tasks.json in {self.paths['dir']}. Run /atm:create-tasks first.")
+        data = read_json(self.paths["tasks"])
+        if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
+            data = None
+        try:
+            archive, error = load_archive(self.paths)["tasks"], None
+        except AtmError as e:
+            archive, error = [], str(e)
+        return {"document": data, "archive": archive, "archive_error": error}
+
     def change(self, fn):
         """Run `fn(work)` under the task folder's lock (and the claims store's), as every atm write always has: read
         tasks.json and the claims store, let `fn` change them, write what changed. If `fn` raises, nothing is written.
@@ -3259,6 +3097,7 @@ class JsonGitStore:
                 lambda: os.path.getsize(tasks_file),
                 # The files still hold what was read: nothing is written before fn returns
                 lambda: (read_json(tasks_file), read_store(self.paths)),
+                lambda: load_archive(self.paths),
             )
             result = fn(work)
             # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and its
@@ -3269,6 +3108,8 @@ class JsonGitStore:
             # The same data in another layout (a file edited by hand) is unchanged too
             if stored != text and json.loads(stored) != work.document:
                 write_text_atomic(tasks_file, text)
+            if work.archive_changed():
+                write_json_atomic(archive_path(self.paths), work.archive())
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
         self._data = None  # this store's snapshot is out of date now
@@ -3326,6 +3167,9 @@ class MemoryStore:
     def working_copy(self):
         return None
 
+    def raw(self):
+        return {"document": self.document(), "archive": self.archive, "archive_error": None}
+
     def change(self, fn):
         """Run `fn(work)` on copies, and keep them only when it succeeds: a failed change leaves the store as it was."""
         original, original_claims = self.document(), self.claims
@@ -3336,9 +3180,12 @@ class MemoryStore:
             {"worktree": None, "branch": None},
             lambda: self.sizes()["tasks"],
             lambda: (original, original_claims),  # replaced, not changed, when the change is kept
+            lambda: {"meta": {}, "tasks": copy.deepcopy(self.archive)},
         )
         result = fn(work)
         self.meta, self.tasks, self.claims = document["meta"], document["tasks"], claims
+        if work.archive_changed():
+            self.archive = work.archive()["tasks"]
         self.changes = work.changes()  # what the last change did, for the tests
         work.raise_deferred()
         return result
@@ -4435,110 +4282,11 @@ def live_claims(project):
     return project.store.change(change)
 
 
-# ==== boot/open.py ====
-# Opening a project: its task files (the JSON-in-git store) and git.
-
-def open_project(cwd, actor=None, tolerant=False):
-    """The project at or above `cwd`. `tolerant`: read a malformed task file as far as it can be read (T-377)."""
-    return project_at(find_paths(cwd), actor, tolerant)
-
-
-def project_at(paths, actor=None, tolerant=False):
-    """The project whose task files `paths` locates (atm serve opens each registered project this way)."""
-    return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
-
-
-# ==== cli/render.py ====
-# Text for people and agents: how the CLI shows atm-lib's results. Short and stable, for agents to read (CLI-3.3).
-
-def list_lines(vocab, tasks):
-    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
-    id_width = max(len(str(t.get("id"))) for t in tasks)
-    status_width = max(len(str(t.get("status"))) for t in tasks)
-    for t in tasks:
-        labels = t.get("labels") or []
-        yield (
-            f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
-            f"{priority_of(vocab, t)}  "
-            + (f"[{', '.join(labels)}] " if labels else "")
-            + str(t.get("name", ""))
-        )
-
-
-def describe_task(data, task):
-    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
-    start): the same text as `atm show`, from atm-lib's view of it."""
-    # A task not in tasks.json is from the archive
-    archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
-
-
-def render_task(view):
-    """A task in full, as text (from atm-lib's `view_task`): what an agent needs to work on it."""
-    task = view["task"]
-    labels = task.get("labels") or []
-    lines = [
-        f"{task.get('id')}  {task.get('name', '')}",
-        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
-        # A task from the archive says so (found in T-277, T-353)
-        + (" · archived" if view["archived"] else "")
-        + f" · {task.get('type')} · {view['priority']}"
-        + (f" · labels: {', '.join(labels)}" if labels else ""),
-    ]
-    if view["dependencies"]:
-        lines.append(
-            "  depends on: "
-            + ", ".join(
-                f"{d['id']} (missing)"
-                if d["status"] is None
-                else f"{d['id']} ({d['status']}" + (", archived" if d["archived"] else "") + ")"
-                for d in view["dependencies"]
-            )
-        )
-    # How it ended, when it isn't the default (done, or won't do for a skipped task), and its relations (SR-2.8)
-    if task.get("resolution"):
-        lines.append(
-            f"  resolution: {task['resolution']}" + (f" (of {task['duplicate_of']})" if task.get("duplicate_of") else "")
-        )
-    if view["related"]:
-        lines.append("  related: " + ", ".join(view["related"]))
-    if view["duplicated_by"]:
-        lines.append("  duplicated by: " + ", ".join(view["duplicated_by"]))
-    for key in ("requirements", "use_cases", "files"):
-        if task.get(key):
-            lines.append(f"  {key.replace('_', ' ')}: {', '.join(task[key])}")
-    who = []
-    for what, at, by in (
-        ("created", "created_at", task.get("created_by")),
-        ("started", "started_at", view["started_by"]),
-        ("review requested", "review_requested_at", None),
-        ("completed", "completed_at", task.get("completed_by")),
-    ):
-        if task.get(at):
-            who.append(f"{what} {task[at]}" + (f" by {by}" if by else ""))
-    if who:
-        lines.append("  " + " · ".join(who))
-    if task.get("commit"):
-        lines.append(f"  commit: {task['commit']}")
-    description = (task.get("description") or "").strip()
-    if description:
-        lines.append("  description:")
-        lines.extend("    " + line for line in description.splitlines())
-    notes = task.get("notes") or []
-    if notes:
-        lines.append("  notes:")
-        for n in notes:
-            lines.append(f"    {n.get('at')} {n.get('kind')}" + (f" ({n['by']})" if n.get("by") else "") + f": {n.get('text')}")
-    elif task.get("last_failure"):
-        failure = task["last_failure"]
-        lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
-    return "\n".join(lines)
-
-
-# ==== edit.py ====
-# Adding and changing tasks: atm add (one task, or many from a JSON file), atm edit, and atm check. IDs come from
-# meta.next_id under the lock, so two agents adding at once never get the same one (docs/v4/data-model.md DM-2.3).
-# Status and timestamps are not edited here: they change only through the status commands.
+# ==== lib/edit.py ====
+# atm-lib: adding and changing tasks (`atm add`, one task or many; `atm edit`) and checking the task data (`atm
+# check`), docs/layered-architecture.md §5.1. IDs come from meta.next_id inside the store's change, so two agents adding
+# at once never get the same one (docs/v4/data-model.md DM-2.3). Status and timestamps are not edited here: they change
+# only through the status commands.
 
 LABEL = re.compile(r"^[a-z0-9_-]{1,32}$")
 DEFAULT_ID = ("T-", 3)
@@ -4610,11 +4358,12 @@ def check_review(value):
     return value
 
 
-def check_related(task_id, related, known):
+def check_related(task_id, related, known, archived=archived_task):
+    """`archived(id)`: the archived task with that ID, or None (the store's lookup, from atm-lib)."""
     for other in related:
         if other == task_id:
             raise AtmError(f"{task_id} can't be related to itself", 2)
-        if other not in known and not archived_task(other):
+        if other not in known and not archived(other):
             raise AtmError(f"{task_id} can't be related to {other}, which doesn't exist", 2)
     return related
 
@@ -4696,9 +4445,10 @@ def find_cycle(tasks):
     return None
 
 
-def add_tasks(data, entries, actor):
+def add_tasks(data, entries, actor, archived=archived_task):
     """Add `entries` (dicts of task fields; an "id" there is a placeholder other entries' dependencies may use) to
-    `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid."""
+    `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid. `archived(id)` looks
+    up an archived task (a dependency on one is fine)."""
     vocab = vocabulary(data)
     stamp = now_iso()
     tasks = [new_task(vocab, e, actor, stamp) for e in entries]
@@ -4713,11 +4463,12 @@ def add_tasks(data, entries, actor):
         task["id"] = real
         task["dependencies"] = [rename.get(d, d) for d in task["dependencies"]]
         # An archived task is done: depending on it is fine, as atm check says (T-356)
-        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived_task(d)]
+        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived(d)]
         if missing:
             raise AtmError(f"{real} ({task['name']}) depends on {', '.join(missing)}, which doesn't exist", 2)
         if task.get("related"):
-            task["related"] = check_related(real, [rename.get(r, r) for r in task["related"]], existing | set(ids))
+            related = [rename.get(r, r) for r in task["related"]]
+            task["related"] = check_related(real, related, existing | set(ids), archived)
     cycle = find_cycle(data["tasks"] + tasks)
     if cycle:
         raise AtmError("these dependencies would make a cycle: " + " -> ".join(cycle), 2)
@@ -4725,62 +4476,58 @@ def add_tasks(data, entries, actor):
     return tasks
 
 
-def read_entries(path):
-    """The tasks of an `atm add --json-file`: a list of task objects, or {"tasks": [...]}."""
-    value = read_json(path)
-    if isinstance(value, dict):
-        value = value.get("tasks")
-    if not isinstance(value, list) or not all(isinstance(e, dict) for e in value):
-        raise AtmError(f"{path}: expected a JSON list of tasks (or {{\"tasks\": [...]}})", 2)
-    return value
+def archived_in(work):
+    """A lookup of the archived tasks of a change: the archive is read only when something asks for it."""
+    index = {}
+
+    def lookup(task_id):
+        if not index:
+            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
+        return index.get(task_id)
+
+    return lookup
 
 
-def cmd_add(args):
-    actor = agent_identity(args.agent)
-    if args.json_file:
-        entries = read_entries(args.json_file)
-    else:
-        description = args.description
-        if args.description_file:
-            with open(args.description_file, encoding="utf-8") as f:
-                description = f.read()
-        entries = [
-            {
-                "name": args.name,
-                "type": args.type,
-                "priority": args.priority,
-                "labels": args.label,
-                "description": description,
-                "dependencies": args.dep,
-                "files": args.file,
-                "requirements": args.requirement,
-                "sprint": args.sprint,
-                "release": args.release,
-                "components": "auto" if args.components == "auto" else args.component,
-                "review": args.review,
-                "with": args.with_,
-                "related": args.related,
-            }
-        ]
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        tasks = add_tasks(data, entries, actor)
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(tasks))
-    else:
-        vocab = vocabulary(data)
-        for task in tasks:
-            out(f"Added {task['id']} {task['name']}")
-            line = suggestion_line(vocab, task)
-            if line:
-                out(line)
+def add_new_tasks(project, entries):
+    """`atm add`: the tasks `entries` describe (dicts of task fields; an "id" there is a placeholder the others'
+    dependencies may use), with the next IDs, all or none, as `project.actor`. Returns {tasks, vocab}."""
+
+    def change(work):
+        tasks = add_tasks(work.document, entries, project.actor, archived_in(work))
+        return {"tasks": tasks, "vocab": vocabulary(work.document)}
+
+    return project.store.change(change)
 
 
-def edit_task(data, task, args):
+class Changes:
+    """What `atm edit` changes (its options' names: name, description, sprint, backlog, type, priority, release, review,
+    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing. The CLI
+    passes its parsed arguments, which have these names."""
+
+    def __init__(self, **given):
+        self.__dict__.update(given)
+
+    def __getattr__(self, name):
+        return [] if name.startswith(("add_", "remove_")) else None
+
+
+def edit_existing_task(project, task_id, changes):
+    """`atm edit`: change a task's definition (never its status), as `project.actor`. Returns {task, changed, vocab}:
+    `changed` the names of the fields that changed (nothing is written when none did)."""
+
+    def change(work):
+        task = find_task(work.document, task_id)
+        changed = edit_task(work.document, task, changes, archived_in(work))
+        if changed:
+            touch(task, project.actor, now_iso())
+        return {"task": task, "changed": changed, "vocab": vocabulary(work.document)}
+
+    return project.store.change(change)
+
+
+def edit_task(data, task, args, archived=archived_task):
     """Apply atm edit's options to `task`; returns the names of the fields that changed. Raises AtmError (nothing
-    changed yet in the file) when a value is invalid."""
+    changed yet in the file) when a value is invalid. A description from a file is the caller's to read."""
     vocab = vocabulary(data)
     changed = []
 
@@ -4798,12 +4545,8 @@ def edit_task(data, task, args):
 
     if args.name is not None:
         set_field("name", args.name)
-    description = args.description
-    if args.description_file:
-        with open(args.description_file, encoding="utf-8") as f:
-            description = f.read()
-    if description is not None:
-        set_field("description", description)
+    if args.description is not None:
+        set_field("description", args.description)
     if args.sprint is not None or args.backlog:
         if set_sprint(task, None if args.backlog else open_sprint(vocab, args.sprint), now_iso()):
             changed.append("sprint")
@@ -4834,12 +4577,12 @@ def edit_task(data, task, args):
         edit_list("components", suggest_components(vocab, task.get("files") or []), [])
     edit_list("components", component_ids(vocab, args.add_component), args.remove_component)
     known = {t.get("id") for t in data["tasks"]}
-    edit_list("related", check_related(task["id"], args.add_related, known), args.remove_related)
+    edit_list("related", check_related(task["id"], args.add_related, known, archived), args.remove_related)
     for key in ("components", "related"):
         if key in task and not task[key]:
             del task[key]
     ids = {t.get("id") for t in data["tasks"]}
-    missing = [d for d in args.add_dep if d not in ids and not archived_task(d)]
+    missing = [d for d in args.add_dep if d not in ids and not archived(d)]
     if missing:
         raise AtmError(f"{task['id']} can't depend on {', '.join(missing)}, which doesn't exist", 2)
     if task["id"] in args.add_dep:
@@ -4849,26 +4592,6 @@ def edit_task(data, task, args):
     if cycle:
         raise AtmError("these dependencies would make a cycle: " + " -> ".join(cycle), 2)
     return changed
-
-
-def cmd_edit(args):
-    actor = agent_identity(args.agent)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        task = find_task(data, args.id)
-        changed = edit_task(data, task, args)
-        if changed:
-            touch(task, actor, now_iso())
-            write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(task))
-        return
-    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
-    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
-    line = suggestion_line(vocabulary(data), task) if args.add_file else None
-    if line:
-        out(line)
 
 
 def check_resolution(vocab, task, known_ids, errors):
@@ -4972,35 +4695,256 @@ def check_data(data, root, files=False, archived=()):
     return errors, warnings
 
 
-def cmd_check(args):
-    paths = find_paths(os.getcwd())
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        errors, warnings = ["tasks.json is not a task file (expected an object with a 'tasks' list)"], []
-    else:
-        try:
-            archived = load_archive(paths)["tasks"]
-        except AtmError as e:
-            archived = []
-            errors_before = [str(e)]
-        else:
-            errors_before = []
-        errors, warnings = check_data(data, paths["root"], files=args.files, archived=archived)
-        errors = errors_before + errors
-    if args.json:
-        out(to_json({"errors": errors, "warnings": warnings}))
-    else:
-        for e in errors:
-            out(f"error: {e}")
-        for w in warnings:
-            out(f"warning: {w}")
-        if not errors:
-            count = len(data["tasks"])
-            out(f"tasks.json is fine ({count} tasks" + (f", {len(warnings)} warnings)" if warnings else ")"))
-    if errors:
-        raise AtmExit(1)
+def check_project(project, files=False):
+    """`atm check`: what is wrong with the task data as stored. Returns {errors, warnings, count}: `count` the tasks,
+    None when the data isn't task data at all. With `files`, a finished task's files that don't exist are warned about
+    too (relative to the working copy)."""
+    raw = project.store.raw()
+    data = raw["document"]
+    if data is None:
+        return {"errors": ["tasks.json is not a task file (expected an object with a 'tasks' list)"], "warnings": [], "count": None}
+    errors_before = [raw["archive_error"]] if raw["archive_error"] else []
+    errors, warnings = check_data(data, project.store.working_copy(), files=files, archived=raw["archive"])
+    return {"errors": errors_before + errors, "warnings": warnings, "count": len(data["tasks"])}
+
+
+# ==== lib/components.py ====
+# atm-lib: the project's components (docs/sprints-and-releases-design.md §2, SR-2.7; docs/layered-architecture.md
+# §5.1): list them, define one, change one; moving a label onto a component, or giving it to the tasks its globs match
+# (T-324), changes the archive's tasks too, in the same store change. The rules (which files a component has, the IDs a
+# task may name) are components.py's, from before the layers.
+
+def _tasks(*documents):
+    return [t for data in documents for t in data["tasks"] if isinstance(t, dict)]
+
+
+def list_components(project):
+    """meta.components in order, each with how many tasks have it, archived ones too."""
+    store = project.store
+    tasks = [t for t in store.list_tasks() if isinstance(t, dict)] + store.list_archived()
+    return [
+        {**c, "tasks": sum(1 for t in tasks if c["id"] in (t.get("components") or []))}
+        for c in store.get_vocabularies()["components"]
+    ]
+
+
+def _label_entry(entry):
+    """A meta.labels entry's ID: the entry itself when it is a string, else its "id"."""
+    return entry if isinstance(entry, str) else entry.get("id") if isinstance(entry, dict) else None
+
+
+def _label_text(meta, label):
+    """The text meta.labels gives `label` (e.g. "Dashboard" for dashboard), or None."""
+    entries = meta.get("labels") if isinstance(meta.get("labels"), list) else []
+    entry = next((e for e in entries if _label_entry(e) == label), None)
+    return entry["label"] if isinstance(entry, dict) and isinstance(entry.get("label"), str) else None
+
+
+def _check_options(globs, review):
+    if any(not glob for glob in globs):
+        raise Invalid("--path needs a glob, e.g. 'dashboard/**'")
+    if review and review not in REVIEW_MODES:
+        raise Invalid(f"--review {review!r}: use one of {', '.join(REVIEW_MODES)}")
+
+
+def _move_and_assign(data, archive_data, component, label, assign):
+    """On every task of both files: `label` (if given) becomes the component, and with `assign` a task whose files
+    the component's globs match gets it too; `label` leaves meta.labels. Returns the task IDs from the label and those
+    by their files. A label no task has and meta.labels doesn't define (most likely a typo) is refused before anything
+    changes."""
+    meta = data["meta"]
+    known_label = any(_label_entry(e) == label for e in meta.get("labels") or [])
+    if label and not known_label and not any(label in (t.get("labels") or []) for t in _tasks(data, archive_data)):
+        raise Invalid(f"no task has the label {label!r}")
+    from_label, by_files = [], []
+    for task in _tasks(data, archive_data):
+        labels = task.get("labels") if isinstance(task.get("labels"), list) else []
+        moved = bool(label) and label in labels
+        current = task.get("components") if isinstance(task.get("components"), list) else []
+        matched = (
+            assign
+            and component["id"] not in current
+            and any(matches(component, f) for f in task.get("files") or [] if isinstance(f, str))
+        )
+        if not (moved or matched):
+            continue
+        if moved:
+            task["labels"] = [x for x in labels if x != label]
+            if not task["labels"]:
+                del task["labels"]
+        if component["id"] not in current:
+            task["components"] = current + [component["id"]]
+        (from_label if moved else by_files).append(task["id"])
+    if label and isinstance(meta.get("labels"), list):
+        meta["labels"] = [e for e in meta["labels"] if _label_entry(e) != label]
+        if not meta["labels"]:
+            del meta["labels"]
+    return from_label, by_files
+
+
+def add_component(project, component_id, label=None, paths=(), review=None, from_label=None, assign=False):
+    """Define a component; `from_label` moves that label onto it on every task (both files) and drops it from
+    meta.labels; `assign` gives it to every task whose files its globs match. One change. Returns {component,
+    from_label, by_files}."""
+    if not RELEASE_ID.fullmatch(component_id):
+        raise Invalid(f"{component_id!r}: a component ID is letters, digits, '.', '-' and '_' (at most 64)")
+    globs = list(paths or [])
+    _check_options(globs, review)
+    if assign and not globs:
+        raise Invalid("--assign gives the component to the tasks its globs match: it needs --path")
+
+    def change(work):
+        data = work.document
+        if any(c["id"] == component_id for c in vocabulary(data)["components"]):
+            raise Invalid(f"there is already a component {component_id!r} (atm components edit changes it)")
+        meta = data.setdefault("meta", {})
+        component = {"id": component_id}
+        # The name shown: the label given, else the label's own text (meta.labels), else none
+        label_text = label or (_label_text(meta, from_label) if from_label else None)
+        if label_text:
+            component["label"] = label_text
+        component["paths"] = globs
+        if review:
+            component["review"] = review
+        meta["components"] = list(meta.get("components") or []) + [component]
+        moved, by_files = _move_and_assign(data, work.archive(), component, from_label, assign)
+        vocabulary(data)  # checks meta.components, as atm init would
+        return {"component": component, "from_label": moved, "by_files": by_files}
+
+    return project.store.change(change)
+
+
+def edit_component(project, component_id, label=None, add_paths=(), review=None, from_label=None, assign=False):
+    """Change a component: `label` and `review` (empty: remove them), `add_paths`; `from_label` and `assign` as for
+    add, the globs added included. One change. Returns {component, changed, from_label, by_files}."""
+    globs = list(add_paths or [])
+    _check_options(globs, review)
+
+    def change(work):
+        data = work.document
+        known = [c["id"] for c in vocabulary(data)["components"]]
+        if component_id not in known:
+            raise NotFound(f"no component {component_id!r}; the components: {', '.join(known) or 'none yet'}", 2)
+        component = next(c for c in data["meta"]["components"] if c.get("id") == component_id)
+        changed = []
+        for key, value in (("label", label), ("review", review)):
+            if value == "" and key in component:
+                del component[key]
+                changed.append(key)
+            elif value and component.get(key) != value:
+                component[key] = value
+                changed.append(key)
+        added = [g for g in dict.fromkeys(globs) if g not in (component.get("paths") or [])]
+        if added:
+            component["paths"] = list(component.get("paths") or []) + added
+            changed.append("paths")
+        if assign and not component.get("paths"):
+            raise Invalid(f"--assign gives {component_id} to the tasks its globs match, and it has none: add --add-path")
+        moved, by_files = _move_and_assign(data, work.archive(), component, from_label, assign)
+        vocabulary(data)  # checks meta.components, as atm init would
+        return {"component": component, "changed": changed, "from_label": moved, "by_files": by_files}
+
+    return project.store.change(change)
+
+
+# ==== boot/open.py ====
+# Opening a project: its task files (the JSON-in-git store) and git.
+
+def open_project(cwd, actor=None, tolerant=False):
+    """The project at or above `cwd`. `tolerant`: read a malformed task file as far as it can be read (T-377)."""
+    return project_at(find_paths(cwd), actor, tolerant)
+
+
+def project_at(paths, actor=None, tolerant=False):
+    """The project whose task files `paths` locates (atm serve opens each registered project this way)."""
+    return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
+
+
+# ==== cli/render.py ====
+# Text for people and agents: how the CLI shows atm-lib's results. Short and stable, for agents to read (CLI-3.3).
+
+def list_lines(vocab, tasks):
+    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
+    id_width = max(len(str(t.get("id"))) for t in tasks)
+    status_width = max(len(str(t.get("status"))) for t in tasks)
+    for t in tasks:
+        labels = t.get("labels") or []
+        yield (
+            f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
+            f"{priority_of(vocab, t)}  "
+            + (f"[{', '.join(labels)}] " if labels else "")
+            + str(t.get("name", ""))
+        )
+
+
+def describe_task(data, task):
+    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
+    start): the same text as `atm show`, from atm-lib's view of it."""
+    # A task not in tasks.json is from the archive
+    archived = all(t is not task for t in data["tasks"])
+    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
+
+
+def render_task(view):
+    """A task in full, as text (from atm-lib's `view_task`): what an agent needs to work on it."""
+    task = view["task"]
+    labels = task.get("labels") or []
+    lines = [
+        f"{task.get('id')}  {task.get('name', '')}",
+        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
+        # A task from the archive says so (found in T-277, T-353)
+        + (" · archived" if view["archived"] else "")
+        + f" · {task.get('type')} · {view['priority']}"
+        + (f" · labels: {', '.join(labels)}" if labels else ""),
+    ]
+    if view["dependencies"]:
+        lines.append(
+            "  depends on: "
+            + ", ".join(
+                f"{d['id']} (missing)"
+                if d["status"] is None
+                else f"{d['id']} ({d['status']}" + (", archived" if d["archived"] else "") + ")"
+                for d in view["dependencies"]
+            )
+        )
+    # How it ended, when it isn't the default (done, or won't do for a skipped task), and its relations (SR-2.8)
+    if task.get("resolution"):
+        lines.append(
+            f"  resolution: {task['resolution']}" + (f" (of {task['duplicate_of']})" if task.get("duplicate_of") else "")
+        )
+    if view["related"]:
+        lines.append("  related: " + ", ".join(view["related"]))
+    if view["duplicated_by"]:
+        lines.append("  duplicated by: " + ", ".join(view["duplicated_by"]))
+    for key in ("requirements", "use_cases", "files"):
+        if task.get(key):
+            lines.append(f"  {key.replace('_', ' ')}: {', '.join(task[key])}")
+    who = []
+    for what, at, by in (
+        ("created", "created_at", task.get("created_by")),
+        ("started", "started_at", view["started_by"]),
+        ("review requested", "review_requested_at", None),
+        ("completed", "completed_at", task.get("completed_by")),
+    ):
+        if task.get(at):
+            who.append(f"{what} {task[at]}" + (f" by {by}" if by else ""))
+    if who:
+        lines.append("  " + " · ".join(who))
+    if task.get("commit"):
+        lines.append(f"  commit: {task['commit']}")
+    description = (task.get("description") or "").strip()
+    if description:
+        lines.append("  description:")
+        lines.extend("    " + line for line in description.splitlines())
+    notes = task.get("notes") or []
+    if notes:
+        lines.append("  notes:")
+        for n in notes:
+            lines.append(f"    {n.get('at')} {n.get('kind')}" + (f" ({n['by']})" if n.get("by") else "") + f": {n.get('text')}")
+    elif task.get("last_failure"):
+        failure = task["last_failure"]
+        lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
+    return "\n".join(lines)
 
 
 # ==== sprints.py ====
@@ -8033,6 +7977,155 @@ def cmd_claims(args):
     for c in live:
         left = format_duration((parse_iso(c["lease_expires_at"]) - current).total_seconds())
         out(f"{c['task']}  {c.get('agent')}  {c.get('branch') or '-'}  {left} left  ({c.get('worktree')})")
+
+
+# ==== cli/edit.py ====
+# `atm add`, `atm edit` and `atm check`, through atm-lib (docs/layered-architecture.md §9, step 10). The files these
+# options name (--json-file, --description-file) are read here: atm-lib takes their content.
+
+def read_entries(path):
+    """The tasks of an `atm add --json-file`: a list of task objects, or {"tasks": [...]}."""
+    value = read_json(path)
+    if isinstance(value, dict):
+        value = value.get("tasks")
+    if not isinstance(value, list) or not all(isinstance(e, dict) for e in value):
+        raise Invalid(f"{path}: expected a JSON list of tasks (or {{\"tasks\": [...]}})")
+    return value
+
+
+def description_of(args):
+    """--description, or the content of --description-file."""
+    if getattr(args, "description_file", None):
+        with open(args.description_file, encoding="utf-8") as f:
+            return f.read()
+    return args.description
+
+
+def cmd_add(args):
+    if args.json_file:
+        entries = read_entries(args.json_file)
+    else:
+        entries = [
+            {
+                "name": args.name,
+                "type": args.type,
+                "priority": args.priority,
+                "labels": args.label,
+                "description": description_of(args),
+                "dependencies": args.dep,
+                "files": args.file,
+                "requirements": args.requirement,
+                "sprint": args.sprint,
+                "release": args.release,
+                "components": "auto" if args.components == "auto" else args.component,
+                "review": args.review,
+                "with": args.with_,
+                "related": args.related,
+            }
+        ]
+    result = add_new_tasks(open_project(os.getcwd(), agent_identity(args.agent)), entries)
+    if args.json:
+        out(to_json(result["tasks"]))
+        return
+    for task in result["tasks"]:
+        out(f"Added {task['id']} {task['name']}")
+        line = suggestion_line(result["vocab"], task)
+        if line:
+            out(line)
+
+
+def cmd_edit(args):
+    changes = Changes(**{**vars(args), "description": description_of(args)})
+    result = edit_existing_task(open_project(os.getcwd(), agent_identity(args.agent)), args.id, changes)
+    task, changed = result["task"], result["changed"]
+    if args.json:
+        out(to_json(task))
+        return
+    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
+    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
+    line = suggestion_line(result["vocab"], task) if args.add_file else None
+    if line:
+        out(line)
+
+
+def cmd_check(args):
+    result = check_project(open_project(os.getcwd()), files=args.files)
+    errors, warnings = result["errors"], result["warnings"]
+    if args.json:
+        out(to_json({"errors": errors, "warnings": warnings}))
+    else:
+        for e in errors:
+            out(f"error: {e}")
+        for w in warnings:
+            out(f"warning: {w}")
+        if not errors:
+            count = result["count"]
+            out(f"tasks.json is fine ({count} tasks" + (f", {len(warnings)} warnings)" if warnings else ")"))
+    if errors:
+        raise AtmExit(1)
+
+
+# ==== cli/components.py ====
+# `atm components`, through atm-lib (docs/layered-architecture.md §9, step 10).
+
+def moved_text(label, from_label, assign, by_files):
+    """What --from-label and --assign did, e.g. "6 tasks from the label atm-cli, 2 more by their files"."""
+    parts = []
+    if label:
+        parts.append(f"{len(from_label)} task{'' if len(from_label) == 1 else 's'} from the label {label}")
+    if assign:
+        parts.append(f"{len(by_files)} {'more ' if label else ''}by their files")
+    return ", ".join(parts)
+
+
+def show_list(project, as_json):
+    listed = list_components(project)
+    if as_json:
+        out(to_json(listed))
+        return
+    if not listed:
+        out("No components yet: atm components add <id> --path GLOB.")
+    for c in listed:
+        details = [f"“{c['label']}”"] if c.get("label") else []
+        details.append(", ".join(c["paths"]) if c["paths"] else "no paths")
+        if c.get("review"):
+            details.append(f"review {c['review']}")
+        out(f"{c['id']} · {' · '.join(details)}: {c['tasks']} task{'' if c['tasks'] == 1 else 's'}")
+
+
+def cmd_components(args):
+    project = open_project(os.getcwd())
+    if args.action in (None, "list"):
+        if args.id is not None:
+            raise Invalid(f"unexpected argument '{args.id}'")
+        for option in ("label", "path", "add_path", "review", "from_label"):
+            if getattr(args, option) is not None:
+                raise Invalid(f"--{option.replace('_', '-')} is for atm components add or edit")
+        if args.assign:
+            raise Invalid("--assign is for atm components add or edit")
+        show_list(project, args.json)
+        return
+    if not args.id:
+        raise Invalid(f"atm components {args.action} needs the component's ID")
+    if args.action == "add":
+        if args.add_path is not None:
+            raise Invalid("--add-path is for atm components edit (add takes --path)")
+        result = add_component(project, args.id, args.label, args.path, args.review, args.from_label, args.assign)
+        if args.json:
+            out(to_json(result))
+            return
+        text = moved_text(args.from_label, result["from_label"], args.assign, result["by_files"])
+        out(f"Added the component {args.id}" + (f": {text}." if text else "."))
+        return
+    if args.path is not None:
+        raise Invalid("--path is for atm components add (edit takes --add-path)")
+    result = edit_component(project, args.id, args.label, args.add_path, args.review, args.from_label, args.assign)
+    if args.json:
+        out(to_json(result))
+        return
+    moved = moved_text(args.from_label, result["from_label"], args.assign, result["by_files"])
+    text = ", ".join(([f"changed {', '.join(result['changed'])}"] if result["changed"] else []) + [t for t in [moved] if t])
+    out(f"{args.id}: {text or 'nothing changed'}")
 
 
 # ==== cli/show.py ====

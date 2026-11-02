@@ -1,14 +1,14 @@
-"""Adding and changing tasks: atm add (one task, or many from a JSON file), atm edit, and atm check. IDs come from
-meta.next_id under the lock, so two agents adding at once never get the same one (docs/v4/data-model.md DM-2.3).
-Status and timestamps are not edited here: they change only through the status commands."""
+"""atm-lib: adding and changing tasks (`atm add`, one task or many; `atm edit`) and checking the task data (`atm
+check`), docs/layered-architecture.md §5.1. IDs come from meta.next_id inside the store's change, so two agents adding
+at once never get the same one (docs/v4/data-model.md DM-2.3). Status and timestamps are not edited here: they change
+only through the status commands."""
 
 import os
 import re
 
-from .claims import agent_identity
-from .core import AtmError, AtmExit, now_iso, out, read_json, to_json, write_json_atomic
-from .lock import locked
-from .model import (
+from ..components import component_ids, suggest_components
+from ..core import AtmError, now_iso
+from ..model import (
     RESOLUTIONS,
     REVIEW_MODES,
     archived_task,
@@ -18,8 +18,6 @@ from .model import (
     set_sprint,
     kind_of,
     known_release,
-    load_archive,
-    load_tasks,
     move_out_hint,
     open_in_closed_sprints,
     split_id,
@@ -28,8 +26,6 @@ from .model import (
     valid_task_id,
     vocabulary,
 )
-from .components import component_ids, suggest_components, suggestion_line
-from .paths import find_paths
 
 LABEL = re.compile(r"^[a-z0-9_-]{1,32}$")
 DEFAULT_ID = ("T-", 3)
@@ -101,11 +97,12 @@ def check_review(value):
     return value
 
 
-def check_related(task_id, related, known):
+def check_related(task_id, related, known, archived=archived_task):
+    """`archived(id)`: the archived task with that ID, or None (the store's lookup, from atm-lib)."""
     for other in related:
         if other == task_id:
             raise AtmError(f"{task_id} can't be related to itself", 2)
-        if other not in known and not archived_task(other):
+        if other not in known and not archived(other):
             raise AtmError(f"{task_id} can't be related to {other}, which doesn't exist", 2)
     return related
 
@@ -187,9 +184,10 @@ def find_cycle(tasks):
     return None
 
 
-def add_tasks(data, entries, actor):
+def add_tasks(data, entries, actor, archived=archived_task):
     """Add `entries` (dicts of task fields; an "id" there is a placeholder other entries' dependencies may use) to
-    `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid."""
+    `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid. `archived(id)` looks
+    up an archived task (a dependency on one is fine)."""
     vocab = vocabulary(data)
     stamp = now_iso()
     tasks = [new_task(vocab, e, actor, stamp) for e in entries]
@@ -204,11 +202,12 @@ def add_tasks(data, entries, actor):
         task["id"] = real
         task["dependencies"] = [rename.get(d, d) for d in task["dependencies"]]
         # An archived task is done: depending on it is fine, as atm check says (T-356)
-        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived_task(d)]
+        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived(d)]
         if missing:
             raise AtmError(f"{real} ({task['name']}) depends on {', '.join(missing)}, which doesn't exist", 2)
         if task.get("related"):
-            task["related"] = check_related(real, [rename.get(r, r) for r in task["related"]], existing | set(ids))
+            related = [rename.get(r, r) for r in task["related"]]
+            task["related"] = check_related(real, related, existing | set(ids), archived)
     cycle = find_cycle(data["tasks"] + tasks)
     if cycle:
         raise AtmError("these dependencies would make a cycle: " + " -> ".join(cycle), 2)
@@ -216,62 +215,58 @@ def add_tasks(data, entries, actor):
     return tasks
 
 
-def read_entries(path):
-    """The tasks of an `atm add --json-file`: a list of task objects, or {"tasks": [...]}."""
-    value = read_json(path)
-    if isinstance(value, dict):
-        value = value.get("tasks")
-    if not isinstance(value, list) or not all(isinstance(e, dict) for e in value):
-        raise AtmError(f"{path}: expected a JSON list of tasks (or {{\"tasks\": [...]}})", 2)
-    return value
+def archived_in(work):
+    """A lookup of the archived tasks of a change: the archive is read only when something asks for it."""
+    index = {}
+
+    def lookup(task_id):
+        if not index:
+            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
+        return index.get(task_id)
+
+    return lookup
 
 
-def cmd_add(args):
-    actor = agent_identity(args.agent)
-    if args.json_file:
-        entries = read_entries(args.json_file)
-    else:
-        description = args.description
-        if args.description_file:
-            with open(args.description_file, encoding="utf-8") as f:
-                description = f.read()
-        entries = [
-            {
-                "name": args.name,
-                "type": args.type,
-                "priority": args.priority,
-                "labels": args.label,
-                "description": description,
-                "dependencies": args.dep,
-                "files": args.file,
-                "requirements": args.requirement,
-                "sprint": args.sprint,
-                "release": args.release,
-                "components": "auto" if args.components == "auto" else args.component,
-                "review": args.review,
-                "with": args.with_,
-                "related": args.related,
-            }
-        ]
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        tasks = add_tasks(data, entries, actor)
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(tasks))
-    else:
-        vocab = vocabulary(data)
-        for task in tasks:
-            out(f"Added {task['id']} {task['name']}")
-            line = suggestion_line(vocab, task)
-            if line:
-                out(line)
+def add_new_tasks(project, entries):
+    """`atm add`: the tasks `entries` describe (dicts of task fields; an "id" there is a placeholder the others'
+    dependencies may use), with the next IDs, all or none, as `project.actor`. Returns {tasks, vocab}."""
+
+    def change(work):
+        tasks = add_tasks(work.document, entries, project.actor, archived_in(work))
+        return {"tasks": tasks, "vocab": vocabulary(work.document)}
+
+    return project.store.change(change)
 
 
-def edit_task(data, task, args):
+class Changes:
+    """What `atm edit` changes (its options' names: name, description, sprint, backlog, type, priority, release, review,
+    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing. The CLI
+    passes its parsed arguments, which have these names."""
+
+    def __init__(self, **given):
+        self.__dict__.update(given)
+
+    def __getattr__(self, name):
+        return [] if name.startswith(("add_", "remove_")) else None
+
+
+def edit_existing_task(project, task_id, changes):
+    """`atm edit`: change a task's definition (never its status), as `project.actor`. Returns {task, changed, vocab}:
+    `changed` the names of the fields that changed (nothing is written when none did)."""
+
+    def change(work):
+        task = find_task(work.document, task_id)
+        changed = edit_task(work.document, task, changes, archived_in(work))
+        if changed:
+            touch(task, project.actor, now_iso())
+        return {"task": task, "changed": changed, "vocab": vocabulary(work.document)}
+
+    return project.store.change(change)
+
+
+def edit_task(data, task, args, archived=archived_task):
     """Apply atm edit's options to `task`; returns the names of the fields that changed. Raises AtmError (nothing
-    changed yet in the file) when a value is invalid."""
+    changed yet in the file) when a value is invalid. A description from a file is the caller's to read."""
     vocab = vocabulary(data)
     changed = []
 
@@ -289,12 +284,8 @@ def edit_task(data, task, args):
 
     if args.name is not None:
         set_field("name", args.name)
-    description = args.description
-    if args.description_file:
-        with open(args.description_file, encoding="utf-8") as f:
-            description = f.read()
-    if description is not None:
-        set_field("description", description)
+    if args.description is not None:
+        set_field("description", args.description)
     if args.sprint is not None or args.backlog:
         if set_sprint(task, None if args.backlog else open_sprint(vocab, args.sprint), now_iso()):
             changed.append("sprint")
@@ -325,12 +316,12 @@ def edit_task(data, task, args):
         edit_list("components", suggest_components(vocab, task.get("files") or []), [])
     edit_list("components", component_ids(vocab, args.add_component), args.remove_component)
     known = {t.get("id") for t in data["tasks"]}
-    edit_list("related", check_related(task["id"], args.add_related, known), args.remove_related)
+    edit_list("related", check_related(task["id"], args.add_related, known, archived), args.remove_related)
     for key in ("components", "related"):
         if key in task and not task[key]:
             del task[key]
     ids = {t.get("id") for t in data["tasks"]}
-    missing = [d for d in args.add_dep if d not in ids and not archived_task(d)]
+    missing = [d for d in args.add_dep if d not in ids and not archived(d)]
     if missing:
         raise AtmError(f"{task['id']} can't depend on {', '.join(missing)}, which doesn't exist", 2)
     if task["id"] in args.add_dep:
@@ -340,26 +331,6 @@ def edit_task(data, task, args):
     if cycle:
         raise AtmError("these dependencies would make a cycle: " + " -> ".join(cycle), 2)
     return changed
-
-
-def cmd_edit(args):
-    actor = agent_identity(args.agent)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        task = find_task(data, args.id)
-        changed = edit_task(data, task, args)
-        if changed:
-            touch(task, actor, now_iso())
-            write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(task))
-        return
-    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
-    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
-    line = suggestion_line(vocabulary(data), task) if args.add_file else None
-    if line:
-        out(line)
 
 
 def check_resolution(vocab, task, known_ids, errors):
@@ -463,32 +434,14 @@ def check_data(data, root, files=False, archived=()):
     return errors, warnings
 
 
-def cmd_check(args):
-    paths = find_paths(os.getcwd())
-    if not os.path.isfile(paths["tasks"]):
-        raise AtmError(f"no tasks.json in {paths['dir']}. Run /atm:create-tasks first.")
-    data = read_json(paths["tasks"])
-    if not isinstance(data, dict) or not isinstance(data.get("tasks"), list):
-        errors, warnings = ["tasks.json is not a task file (expected an object with a 'tasks' list)"], []
-    else:
-        try:
-            archived = load_archive(paths)["tasks"]
-        except AtmError as e:
-            archived = []
-            errors_before = [str(e)]
-        else:
-            errors_before = []
-        errors, warnings = check_data(data, paths["root"], files=args.files, archived=archived)
-        errors = errors_before + errors
-    if args.json:
-        out(to_json({"errors": errors, "warnings": warnings}))
-    else:
-        for e in errors:
-            out(f"error: {e}")
-        for w in warnings:
-            out(f"warning: {w}")
-        if not errors:
-            count = len(data["tasks"])
-            out(f"tasks.json is fine ({count} tasks" + (f", {len(warnings)} warnings)" if warnings else ")"))
-    if errors:
-        raise AtmExit(1)
+def check_project(project, files=False):
+    """`atm check`: what is wrong with the task data as stored. Returns {errors, warnings, count}: `count` the tasks,
+    None when the data isn't task data at all. With `files`, a finished task's files that don't exist are warned about
+    too (relative to the working copy)."""
+    raw = project.store.raw()
+    data = raw["document"]
+    if data is None:
+        return {"errors": ["tasks.json is not a task file (expected an object with a 'tasks' list)"], "warnings": [], "count": None}
+    errors_before = [raw["archive_error"]] if raw["archive_error"] else []
+    errors, warnings = check_data(data, project.store.working_copy(), files=files, archived=raw["archive"])
+    return {"errors": errors_before + errors, "warnings": warnings, "count": len(data["tasks"])}

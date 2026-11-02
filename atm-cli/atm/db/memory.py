@@ -54,6 +54,9 @@ class MemoryStore:
     def working_copy(self):
         return None
 
+    def raw(self):
+        return {"document": self.document(), "archive": self.archive, "archive_error": None}
+
     def change(self, fn):
         """Run `fn(work)` on copies, and keep them only when it succeeds: a failed change leaves the store as it was."""
         original, original_claims = self.document(), self.claims
@@ -64,9 +67,12 @@ class MemoryStore:
             {"worktree": None, "branch": None},
             lambda: self.sizes()["tasks"],
             lambda: (original, original_claims),  # replaced, not changed, when the change is kept
+            lambda: {"meta": {}, "tasks": copy.deepcopy(self.archive)},
         )
         result = fn(work)
         self.meta, self.tasks, self.claims = document["meta"], document["tasks"], claims
+        if work.archive_changed():
+            self.archive = work.archive()["tasks"]
         self.changes = work.changes()  # what the last change did, for the tests
         work.raise_deferred()
         return result

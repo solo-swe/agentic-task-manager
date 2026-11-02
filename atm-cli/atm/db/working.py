@@ -15,17 +15,32 @@ def _stamp(value):
 
 
 class Working:
-    def __init__(self, document, claims_store, here, size, before):
+    def __init__(self, document, claims_store, here, size, before, archive=None):
         """`here` and `size` may be callables (worked out when asked); `before()` gives the document and the claims
         store as they were, from wherever the store keeps them (the JSON-in-git store: its files, not written until
-        the change ends), so recording what changed costs nothing unless `changes()` is asked for."""
+        the change ends), so recording what changed costs nothing unless `changes()` is asked for. `archive()` loads
+        the archive document, only when a change asks for it."""
         self.document = document
         self.claims_store = claims_store
         self._here = here
         self._size = size
         self._before = before
+        self._load_archive = archive
+        self._archive = None
+        self._before_archive = None
         self._deferred = None
         self._before_store = _stamp(claims_store)
+
+    def archive(self):
+        """The archive document ({"meta", "tasks"}), to read and change in place; loaded on first use."""
+        if self._archive is None:
+            self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
+            self._before_archive = _stamp(self._archive)
+        return self._archive
+
+    def archive_changed(self):
+        """Whether the archive was asked for and changed: the store writes it then, and only then."""
+        return self._archive is not None and _stamp(self._archive) != self._before_archive
 
     @staticmethod
     def _entities(document, claims_store):
