@@ -4847,6 +4847,609 @@ def edit_component(project, component_id, label=None, add_paths=(), review=None,
     return project.store.change(change)
 
 
+# ==== lib/sprints.py ====
+# atm-lib: sprints and the backlog (docs/sprints-and-releases-design.md §3.1; docs/layered-architecture.md §5.1):
+# list, add, edit, start, close and delete sprints (meta.sprints), move tasks between sprints and the backlog, list the
+# backlog. Each write is one store change; a task's sprint changes only through set_sprint, which keeps its history.
+#
+# The options are named as atm's command line names them (goal, release, due, after, carry_to, new_name, reviewed,
+# move_to, force): the CLI passes its parsed arguments; any object with those attributes does.
+
+def sprint_overview(data, archived, include_closed):
+    """The sprints in order, each with its task counts by kind (tasks.json and the archive): {..., tasks, by_kind}."""
+    vocab = vocabulary(data)
+    counts = {s["id"]: {kind: 0 for kind in KINDS} for s in vocab["sprints"]}
+    pending = {s["id"]: 0 for s in vocab["sprints"]}
+    for task in list(data["tasks"]) + list(archived):
+        sprint = find_sprint(vocab, task.get("sprint")) if isinstance(task, dict) else None
+        kind = kind_of(vocab, task.get("status")) if sprint else None
+        if kind in KINDS:
+            counts[sprint["id"]][kind] += 1
+        if sprint and task.get("sprint_review") == "pending":
+            pending[sprint["id"]] += 1
+    return [
+        {
+            **s,
+            "tasks": sum(counts[s["id"]].values()),
+            "by_kind": {kind: n for kind, n in counts[s["id"]].items() if n},
+            "review_pending": pending[s["id"]],
+        }
+        for s in vocab["sprints"]
+        if include_closed or s["state"] != "closed"
+    ]
+
+
+def taken_names(data, archived):
+    """Every sprint name in use: the sprints, and the sprints tasks in either file name (compared case-insensitively
+    by the caller)."""
+    names = [s.get("id") for s in data.get("meta", {}).get("sprints") or [] if isinstance(s, dict)]
+    for task in list(data["tasks"]) + list(archived):
+        if isinstance(task, dict):
+            names.append(task.get("sprint"))
+            names.extend(e.get("sprint") for e in task.get("sprint_history") or [] if isinstance(e, dict))
+    return [n for n in names if isinstance(n, str)]
+
+
+def check_due(due):
+    if due and not DATE.fullmatch(due):
+        raise Invalid(f"--due {due!r}: use a date, YYYY-MM-DD")
+    return due
+
+
+def apply_fields(sprint, options, vocab):
+    """goal, release and due on a sprint; an empty value removes the field; a release must be one of meta.releases
+    (SR-2.2). Returns the names changed."""
+    changed = []
+    release = known_release(vocab, options.release) if options.release else options.release
+    for key, value in (("goal", options.goal), ("release", release), ("due", check_due(options.due))):
+        if value is None:
+            continue
+        if value == "":
+            if key in sprint:
+                del sprint[key]
+                changed.append(key)
+        elif sprint.get(key) != value:
+            sprint[key] = value
+            changed.append(key)
+    return changed
+
+
+def in_backlog(vocab, task, finished=False):
+    """A task with no sprint; a finished one only with `finished`."""
+    return not task.get("sprint") and (finished or kind_of(vocab, task.get("status")) not in ("done", "skipped"))
+
+
+def list_sprints(project, include_closed=False):
+    """The sprints in order with their task counts (the closed ones too with `include_closed`), and how many tasks
+    are in the backlog. Returns {sprints, backlog, has_sprints}."""
+    store = project.store
+    data = store.document()
+    vocab = vocabulary(data)
+    return {
+        "sprints": sprint_overview(data, store.list_archived(), include_closed),
+        "backlog": len([t for t in data["tasks"] if in_backlog(vocab, t)]),
+        "has_sprints": bool(vocab["sprints"]),
+    }
+
+
+def backlog_tasks(project, finished=False):
+    """The tasks with no sprint (the finished ones too with `finished`). Returns {tasks, vocab}."""
+    data = project.store.document()
+    vocab = vocabulary(data)
+    return {"tasks": [t for t in data["tasks"] if in_backlog(vocab, t, finished=finished)], "vocab": vocab}
+
+
+def add_sprint(project, options):
+    """A planned sprint, named `options.name` (generated without one), after `options.after` (default: last), with
+    its goal, release and due date. Returns the sprint."""
+
+    def change(work):
+        data = work.document
+        vocab = vocabulary(data)
+        name = (options.name or "").strip() or generate_sprint_name(
+            vocab["sprint_names"], taken_names(data, work.archive()["tasks"])
+        )
+        if find_sprint(vocab, name):
+            raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
+        if len(name) > MAX_SPRINT_NAME:
+            raise Invalid(f"a sprint name is at most {MAX_SPRINT_NAME} characters")
+        sprint = {"id": name, "state": "planned"}
+        apply_fields(sprint, options, vocab)
+        meta = data.setdefault("meta", {})
+        sprints = list(meta.get("sprints") or [])
+        position = len(sprints)
+        if options.after:
+            after = find_sprint(vocab, options.after)
+            if after is None:
+                raise NotFound(f"no sprint {options.after!r} to add it after", 2)
+            position = next(i for i, s in enumerate(sprints) if s.get("id") == after["id"]) + 1
+        sprints.insert(position, sprint)
+        meta["sprints"] = sprints
+        vocabulary(data)
+        return sprint
+
+    return project.store.change(change)
+
+
+def stored_sprint(data, name):
+    """The sprint called `name` as stored in meta.sprints (to change it), or an error naming the sprints."""
+    vocab = vocabulary(data)
+    found = find_sprint(vocab, name)
+    if found is None:
+        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprints add"
+        raise NotFound(f"no sprint {name!r}; the sprints: {known}", 2)
+    return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
+
+
+def edit_sprint(project, name, options):
+    """Change a sprint's goal, release or due date (an empty value removes it). Returns {sprint, changed}."""
+
+    def change(work):
+        sprint = stored_sprint(work.document, name)
+        changed = apply_fields(sprint, options, vocabulary(work.document))
+        if changed:
+            vocabulary(work.document)
+        return {"sprint": sprint, "changed": changed}
+
+    return project.store.change(change)
+
+
+def start_sprint(project, name):
+    """Make a planned sprint the active one (one at a time). Returns the sprint."""
+
+    def change(work):
+        data = work.document
+        sprint = stored_sprint(data, name)
+        state = sprint.get("state", "planned")
+        if state == "closed":
+            raise Invalid(f"the sprint {sprint['id']!r} is closed; closed sprints aren't started again")
+        if state == "active":
+            raise Invalid(f"the sprint {sprint['id']!r} is already active")
+        active = [s["id"] for s in vocabulary(data)["sprints"] if s["state"] == "active"]
+        if active:
+            raise Invalid(f"the sprint {active[0]!r} is active; close it first (one active sprint at a time)")
+        sprint["state"] = "active"
+        sprint["start"] = now_iso()
+        return sprint
+
+    return project.store.change(change)
+
+
+def in_sprint(task, sprint):
+    """Whether the task is in the sprint (names compare case-insensitively)."""
+    return (
+        isinstance(task, dict)
+        and isinstance(task.get("sprint"), str)
+        and task["sprint"].casefold() == sprint["id"].casefold()
+    )
+
+
+def added_mid_sprint(task, sprint):
+    """Whether the task joined the sprint after it started: its history entry for the sprint (the last one) begins
+    after the sprint's start (SR-2.5)."""
+    entries = [
+        e
+        for e in task.get("sprint_history") or []
+        if isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
+    ]
+    start = sprint.get("start")
+    return bool(entries and start and isinstance(entries[-1].get("from"), str) and entries[-1]["from"] > start)
+
+
+def carry_target(data, vocab, sprint, options, taken):
+    """Where carry_to sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint (added
+    to meta.sprints after the one closing). Returns (target, created sprint or None)."""
+    to = options.carry_to
+    if options.new_name and to != "new":
+        raise Invalid("--name names a new sprint: use it with --carry-to new")
+    if to == "backlog":
+        return None, None
+    if to == "new":
+        name = (options.new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
+        if find_sprint(vocab, name):
+            raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
+        if len(name) > MAX_SPRINT_NAME:
+            raise Invalid(f"a sprint name is at most {MAX_SPRINT_NAME} characters")
+        created = {"id": name, "state": "planned"}
+        sprints = data["meta"]["sprints"]
+        sprints.insert(next(i for i, s in enumerate(sprints) if s.get("id") == sprint["id"]) + 1, created)
+        return name, created
+    target = open_sprint(vocab, to)
+    if target == sprint["id"]:
+        raise Invalid(f"the tasks can't be carried to the sprint that is closing ({sprint['id']!r})")
+    return target, None
+
+
+def close_sprint(project, name, options):
+    """Close a sprint (SR-4.3): its unfinished tasks go to options.carry_to, keeping their status and history (SR-4.5);
+    the sprint gets `end` and its report {done, carried, added, to}; with options.reviewed its batch tasks are marked
+    reviewed (SR-4.4). Returns {sprint, created, target, was_active}."""
+    actor = project.actor
+
+    def change(work):
+        data = work.document
+        archived = work.archive()["tasks"]
+        vocab = vocabulary(data)
+        sprint = stored_sprint(data, name)
+        if sprint.get("state") == "closed":
+            raise Invalid(f"the sprint {sprint['id']!r} is already closed")
+        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
+        own_archived = [t for t in archived if in_sprint(t, sprint)]
+
+        def kind(task):
+            return kind_of(vocab, task.get("status"))
+
+        claimed = [t["id"] for t in own if kind(t) == "active"]
+        if claimed:
+            raise Invalid(
+                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
+                f"{'it' if len(claimed) == 1 else 'them'} before closing the sprint"
+            )
+        # Batch tasks wait for the end-of-sprint review (SR-4.4): /atm:close-sprint reviews them, then --reviewed
+        pending = [t for t in own if t.get("sprint_review") == "pending"]
+        if pending and not options.reviewed:
+            ids = ", ".join(t["id"] for t in pending)
+            raise Invalid(
+                f"{ids} {'waits' if len(pending) == 1 else 'wait'} for the end-of-sprint review: review "
+                f"{'it' if len(pending) == 1 else 'them'} with the user (/atm:close-sprint), then close with --reviewed"
+            )
+        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
+        if unfinished and not options.carry_to:
+            ids = ", ".join(t["id"] for t in unfinished)
+            raise Invalid(
+                f"{ids} {'is' if len(unfinished) == 1 else 'are'}n't finished: say where "
+                f"{'it goes' if len(unfinished) == 1 else 'they go'} with --carry-to <sprint>, new or backlog"
+            )
+        target, created = (None, None)
+        if unfinished:
+            target, created = carry_target(data, vocab, sprint, options, taken_names(data, archived))
+        stamp = now_iso()
+        report = {
+            "done": [t["id"] for t in own + own_archived if kind(t) == "done"],
+            "carried": [t["id"] for t in unfinished],
+            "added": [t["id"] for t in own + own_archived if added_mid_sprint(t, sprint)],
+        }
+        if unfinished:
+            report["to"] = target or "backlog"
+        for task in unfinished:
+            set_sprint(task, target, stamp)
+            touch(task, actor, stamp)
+        for task in pending:
+            task["sprint_review"] = "reviewed"
+            touch(task, actor, stamp)
+        was_active = sprint.get("state") == "active"
+        sprint["state"] = "closed"
+        sprint["end"] = stamp
+        sprint["report"] = report
+        vocabulary(data)
+        return {"sprint": sprint, "created": created, "target": target, "was_active": was_active}
+
+    return project.store.change(change)
+
+
+def mentions_sprint(task, sprint):
+    """Whether the task's sprint history names the sprint (case-insensitively)."""
+    return any(
+        isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
+        for e in task.get("sprint_history") or []
+    )
+
+
+def delete_sprint(project, name, options):
+    """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
+    state; an open one's unfinished tasks go to options.move_to (the backlog by default); one that tasks finished in
+    or moved on from needs options.force when open, and a closed one with any history stays (its record and report).
+    Returns {sprint, state, moved, target}."""
+    actor = project.actor
+
+    def change(work):
+        data = work.document
+        archived = work.archive()["tasks"]
+        vocab = vocabulary(data)
+        sprint = stored_sprint(data, name)
+        state = sprint.get("state", "planned")
+
+        def kind(task):
+            return kind_of(vocab, task.get("status"))
+
+        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
+        claimed = [t["id"] for t in own if kind(t) == "active"]
+        if claimed:
+            raise Invalid(
+                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
+                f"{'it' if len(claimed) == 1 else 'them'} before deleting the sprint"
+            )
+        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
+        # Its history: tasks that finished in it (archived ones too), or were in it and moved on
+        history = [t["id"] for t in own if t not in unfinished]
+        history += [t.get("id") for t in archived if isinstance(t, dict) and in_sprint(t, sprint)]
+        history += [
+            t.get("id")
+            for t in list(data["tasks"]) + list(archived)
+            if isinstance(t, dict) and not in_sprint(t, sprint) and mentions_sprint(t, sprint)
+        ]
+        if history and state == "closed":
+            raise Invalid(
+                f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
+                "stay; only an empty sprint can be deleted"
+            )
+        if history and not options.force:
+            raise Invalid(
+                f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
+                "with --force to drop that record (its tasks go to --move-to, the backlog by default)"
+            )
+        to = options.move_to or "backlog"
+        target = None if to == "backlog" else open_sprint(vocab, to)
+        if target is not None and target.casefold() == sprint["id"].casefold():
+            raise Invalid(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})")
+        # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
+        moving = own if options.force else unfinished
+        stamp = now_iso()
+        for task in moving:
+            set_sprint(task, target, stamp)
+            touch(task, actor, stamp)
+        data["meta"]["sprints"] = [s for s in data["meta"]["sprints"] if s is not sprint]
+        vocabulary(data)
+        return {"sprint": sprint, "state": state, "moved": [t["id"] for t in moving], "target": target}
+
+    return project.store.change(change)
+
+
+def move_target(vocab, task, to):
+    """The sprint ID (or None, the backlog) `atm move --to` means for `task`."""
+    if to == "backlog":
+        return None
+    if to == "active":
+        active = [s["id"] for s in vocab["sprints"] if s["state"] == "active"]
+        if not active:
+            raise Invalid("no sprint is active (atm sprints start <name>)")
+        return active[0]
+    if to == "next":
+        # The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
+        # planned sprint)
+        sprints = vocab["sprints"]
+        current = find_sprint(vocab, task.get("sprint"))
+        start = sprints.index(current) + 1 if current else 0
+        following = [s["id"] for s in sprints[start:] if s["state"] == "planned"]
+        if not following:
+            raise Invalid(
+                f"{task['id']}: no planned sprint after {current['id'] if current else 'the active one'}; "
+                'add one with atm sprints add ["<name>"]'
+            )
+        return following[0]
+    return open_sprint(vocab, to)
+
+
+def move_tasks(project, ids, to):
+    """Move to-do, blocked or in-review tasks into a sprint, the next planned one, the active one, or the backlog
+    (claimed and finished tasks stay where they are), all or none. Returns [{id, from, to}]."""
+    actor = project.actor
+
+    def change(work):
+        data = work.document
+        vocab = vocabulary(data)
+        plans = []
+        for task_id in ids:
+            task = find_task(data, task_id)
+            kind = kind_of(vocab, task.get("status"))
+            if kind == "active":
+                raise Invalid(f"{task_id} is in progress (claimed): it stays where the work is happening")
+            if kind in ("done", "skipped"):
+                raise Invalid(f"{task_id} is {task.get('status')}: finished work stays in the sprint it was done in")
+            plans.append((task, move_target(vocab, task, to)))
+        stamp = now_iso()
+        moved = []
+        for task, target in plans:
+            before = task.get("sprint")
+            if set_sprint(task, target, stamp):
+                touch(task, actor, stamp)
+            moved.append({"id": task["id"], "from": before, "to": target})
+        return moved
+
+    return project.store.change(change)
+
+
+# ==== lib/releases.py ====
+# atm-lib: releases (docs/sprints-and-releases-design.md §3.3, SR-2.2; docs/layered-architecture.md §5.1): list them
+# with their tasks by kind and stage, add one (with PRs, giving it their tasks, archived ones too), edit and archive one,
+# and draft its notes. A task's release is its own, else its sprint's. Each write is one store change.
+#
+# The options are named as atm's command line names them (title for --name, target, pr, released_at).
+
+STAGES = ("done", "in_pr", "merged")
+
+
+def stage_of(vocab, task):
+    """A done task's stage (DM-4.3): merged once its PR merged, in_pr while its PR is open, else done; None when it
+    isn't done."""
+    if kind_of(vocab, task.get("status")) != "done":
+        return None
+    pr = task.get("pr") if isinstance(task.get("pr"), dict) else None
+    if pr and task.get("merged_at"):
+        return "merged"
+    return "in_pr" if pr else "done"
+
+
+def release_overview(data, archived, include_archived):
+    """The releases in order, each with its tasks (by effective release, both files) by kind and by stage."""
+    vocab = vocabulary(data)
+    counts = {r["id"]: ({k: 0 for k in KINDS}, {s: 0 for s in STAGES}) for r in vocab["releases"]}
+    for task in list(data["tasks"]) + list(archived):
+        if not isinstance(task, dict):
+            continue
+        release = effective_release(vocab, task)
+        if release not in counts:
+            continue
+        by_kind, by_stage = counts[release]
+        kind = kind_of(vocab, task.get("status"))
+        if kind in by_kind:
+            by_kind[kind] += 1
+        stage = stage_of(vocab, task)
+        if stage:
+            by_stage[stage] += 1
+    return [
+        {
+            **r,
+            "tasks": sum(counts[r["id"]][0].values()),
+            "by_kind": {k: n for k, n in counts[r["id"]][0].items() if n},
+            "by_stage": {s: n for s, n in counts[r["id"]][1].items() if n},
+        }
+        for r in vocab["releases"]
+        if include_archived or r["state"] != "archived"
+    ]
+
+
+def list_releases(project, include_archived=False):
+    """The releases in order with their tasks by kind and stage. Returns {releases, has_releases}."""
+    data = project.store.document()
+    return {
+        "releases": release_overview(data, project.store.list_archived(), include_archived),
+        "has_releases": bool(vocabulary(data)["releases"]),
+    }
+
+
+def check_target(target):
+    if target and not DATE.fullmatch(target):
+        raise Invalid(f"--target {target!r}: use a date, YYYY-MM-DD")
+    return target
+
+
+def release_fields(release, options):
+    """name (options.title) and target on a release; an empty value removes the field. Returns the names changed."""
+    changed = []
+    for key, value in (("name", options.title), ("target", check_target(options.target))):
+        if value is None:
+            continue
+        if value == "":
+            if key in release:
+                del release[key]
+                changed.append(key)
+        elif release.get(key) != value:
+            release[key] = value
+            changed.append(key)
+    return changed
+
+
+def unknown_release(vocab, release_id):
+    known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+    return NotFound(f"no release {release_id!r}; the releases: {known}", 2)
+
+
+def stored_release(data, release_id):
+    """The release as stored in meta.releases (to change it), or an error naming the releases."""
+    vocab = vocabulary(data)
+    if find_release(vocab, release_id) is None:
+        raise unknown_release(vocab, release_id)
+    return next(r for r in data["meta"]["releases"] if r.get("id") == release_id)
+
+
+def add_release(project, release_id, options):
+    """A planned release; with options.pr (pull request numbers) every task of those PRs, in both files, goes into
+    it; with options.released_at it shipped already. Returns {release, tasks}: the tasks given to it."""
+    if not RELEASE_ID.fullmatch(release_id):
+        raise Invalid(f"{release_id!r}: a release ID is letters, digits, '.', '-' and '_' (at most 64)")
+    prs = options.pr or []
+    if any(n <= 0 for n in prs):
+        raise Invalid("--pr needs a pull request number")
+    if options.released_at is not None:
+        try:
+            parse_iso(options.released_at)
+        except ValueError:
+            raise Invalid(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {options.released_at!r}")
+
+    def change(work):
+        data, archive_data = work.document, work.archive()
+        vocab = vocabulary(data)
+        if find_release(vocab, release_id):
+            raise Invalid(f"there is already a release {release_id!r}")
+        release = {"id": release_id, "state": "planned"}
+        release_fields(release, options)
+        given = []
+        # A release recovered from pull requests (SR-8.2): their tasks, in both files, go into it; the release records
+        # the last PR given (the one that shipped it)
+        for number in prs:
+            own = []
+            for task in list(data["tasks"]) + list(archive_data["tasks"]):
+                pr = task.get("pr") if isinstance(task, dict) and isinstance(task.get("pr"), dict) else None
+                if pr and pr.get("number") == number:
+                    task["release"] = release_id
+                    own.append(task["id"])
+                    if isinstance(pr.get("url"), str):
+                        release["pr"] = {"number": number, "url": pr["url"]}
+            if not own:
+                raise Invalid(f"no task is in pull request #{number}")
+            given += own
+        if options.released_at is not None:
+            # One that shipped already: released at that time (its PR's merge, for one recovered from PRs)
+            release["state"] = "released"
+            release["released_at"] = options.released_at
+        meta = data.setdefault("meta", {})
+        meta["releases"] = list(meta.get("releases") or []) + [release]
+        vocabulary(data)
+        return {"release": release, "tasks": given}
+
+    return project.store.change(change)
+
+
+def edit_release(project, release_id, options):
+    """Change a release's name or target (an empty value removes it). Returns {release, changed}."""
+
+    def change(work):
+        release = stored_release(work.document, release_id)
+        changed = release_fields(release, options)
+        if changed:
+            vocabulary(work.document)
+        return {"release": release, "changed": changed}
+
+    return project.store.change(change)
+
+
+def archive_release(project, release_id):
+    """Archive a release: it leaves the open releases (`atm releases --all` shows it). Returns the release."""
+
+    def change(work):
+        release = stored_release(work.document, release_id)
+        if release.get("state") == "archived":
+            raise Invalid(f"the release {release['id']!r} is already archived")
+        release["state"] = "archived"
+        return release
+
+    return project.store.change(change)
+
+
+def outcome_of(task):
+    """The task's last outcome note (what `atm done --note` said), or None."""
+    notes = [n for n in task.get("notes") or [] if isinstance(n, dict) and n.get("kind") == "outcome"]
+    return notes[-1].get("text") if notes else None
+
+
+def release_notes(project, release_id):
+    """A draft of the release's changes (§3.3): its done tasks (by effective release, both files) grouped by type in
+    the project's order, each with its ID, name and outcome note; and the tasks in it not done yet. Returns
+    {release, groups, open}."""
+    data = project.store.document()
+    vocab = vocabulary(data)
+    release = find_release(vocab, release_id)
+    if release is None:
+        raise unknown_release(vocab, release_id)
+    tasks = [t for t in list(data["tasks"]) + project.store.list_archived() if isinstance(t, dict)]
+    own = [t for t in tasks if effective_release(vocab, t) == release_id]
+    done = [t for t in own if kind_of(vocab, t.get("status")) == "done"]
+    types = [(t["id"], t["label"]) for t in vocab["types"]]
+    types += [(t, t) for t in dict.fromkeys(x.get("type") for x in done) if t not in dict(types)]
+    groups = []
+    for type_id, label in types:
+        items = [{"id": t.get("id"), "name": t.get("name"), "outcome": outcome_of(t)} for t in done if t.get("type") == type_id]
+        if items:
+            groups.append({"type": type_id, "label": label, "tasks": items})
+    open_tasks = [
+        {"id": t.get("id"), "name": t.get("name"), "status": t.get("status")}
+        for t in own
+        if kind_of(vocab, t.get("status")) not in ("done", "skipped")
+    ]
+    return {"release": release, "groups": groups, "open": open_tasks}
+
+
 # ==== boot/open.py ====
 # Opening a project: its task files (the JSON-in-git store) and git.
 
@@ -4945,727 +5548,6 @@ def render_task(view):
         failure = task["last_failure"]
         lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
     return "\n".join(lines)
-
-
-# ==== sprints.py ====
-# Sprints and the backlog (docs/sprints-and-releases-design.md §3.1): `atm sprints` lists, adds, edits and starts
-# sprints (meta.sprints), `atm move` moves tasks between sprints and the backlog, `atm backlog` lists the tasks with no
-# sprint. Every write is under the lock; a task's sprint changes only through set_sprint, which keeps its history.
-
-def sprint_overview(data, archived, include_closed):
-    """The sprints in order, each with its task counts by kind (tasks.json and the archive): {..., tasks, by_kind}."""
-    vocab = vocabulary(data)
-    counts = {s["id"]: {kind: 0 for kind in KINDS} for s in vocab["sprints"]}
-    pending = {s["id"]: 0 for s in vocab["sprints"]}
-    for task in list(data["tasks"]) + list(archived):
-        sprint = find_sprint(vocab, task.get("sprint")) if isinstance(task, dict) else None
-        kind = kind_of(vocab, task.get("status")) if sprint else None
-        if kind in KINDS:
-            counts[sprint["id"]][kind] += 1
-        if sprint and task.get("sprint_review") == "pending":
-            pending[sprint["id"]] += 1
-    return [
-        {
-            **s,
-            "tasks": sum(counts[s["id"]].values()),
-            "by_kind": {kind: n for kind, n in counts[s["id"]].items() if n},
-            "review_pending": pending[s["id"]],
-        }
-        for s in vocab["sprints"]
-        if include_closed or s["state"] != "closed"
-    ]
-
-
-def describe_sprint(s):
-    details = [s["state"]] + [f"{key} {s[key]}" for key in ("release", "due") if s.get(key)]
-    counts = ", ".join(f"{kind} {n}" for kind, n in s["by_kind"].items())
-    line = f"{s['id']} · {' · '.join(details)}: {s['tasks']} task{'' if s['tasks'] == 1 else 's'}"
-    line += f" ({counts})" if counts else ""
-    if s.get("review_pending"):
-        line += f"; {s['review_pending']} waiting for the sprint review"
-    return line + (f"\n  goal: {s['goal']}" if s.get("goal") else "")
-
-
-def taken_names(data, archived):
-    """Every sprint name in use: the sprints, and the sprints tasks in either file name (compared case-insensitively
-    by the caller)."""
-    names = [s.get("id") for s in data.get("meta", {}).get("sprints") or [] if isinstance(s, dict)]
-    for task in list(data["tasks"]) + list(archived):
-        if isinstance(task, dict):
-            names.append(task.get("sprint"))
-            names.extend(e.get("sprint") for e in task.get("sprint_history") or [] if isinstance(e, dict))
-    return [n for n in names if isinstance(n, str)]
-
-
-def check_due(due):
-    if due and not DATE.fullmatch(due):
-        raise AtmError(f"--due {due!r}: use a date, YYYY-MM-DD", 2)
-    return due
-
-
-def apply_fields(sprint, args, vocab):
-    """--goal, --release and --due on a sprint; an empty value removes the field; a release must be one of
-    meta.releases (SR-2.2). Returns the names changed."""
-    changed = []
-    release = known_release(vocab, args.release) if args.release else args.release
-    for key, value in (("goal", args.goal), ("release", release), ("due", check_due(args.due))):
-        if value is None:
-            continue
-        if value == "":
-            if key in sprint:
-                del sprint[key]
-                changed.append(key)
-        elif sprint.get(key) != value:
-            sprint[key] = value
-            changed.append(key)
-    return changed
-
-
-def in_backlog(vocab, task, finished=False):
-    """A task with no sprint; a finished one only with `finished`."""
-    return not task.get("sprint") and (finished or kind_of(vocab, task.get("status")) not in ("done", "skipped"))
-
-
-def sprints_list(paths, include_closed, as_json):
-    data = load_tasks(paths)
-    sprints = sprint_overview(data, load_archive(paths)["tasks"], include_closed)
-    vocab = vocabulary(data)
-    backlog = [t for t in data["tasks"] if in_backlog(vocab, t)]
-    if as_json:
-        out(to_json({"sprints": sprints, "backlog": len(backlog)}))
-        return
-    if not sprints:
-        out(
-            "No open sprints (--all lists the closed ones)."
-            if vocab["sprints"]
-            else "No sprints yet: atm sprints add creates one."
-        )
-    for s in sprints:
-        out(describe_sprint(s))
-    out(f"backlog: {len(backlog)} task{'' if len(backlog) == 1 else 's'} (atm backlog)")
-
-
-def sprints_add(paths, args):
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        vocab = vocabulary(data)
-        name = (args.name or "").strip() or generate_sprint_name(
-            vocab["sprint_names"], taken_names(data, load_archive(paths)["tasks"])
-        )
-        if find_sprint(vocab, name):
-            raise AtmError(f"there is already a sprint {find_sprint(vocab, name)['id']!r}", 2)
-        if len(name) > MAX_SPRINT_NAME:
-            raise AtmError(f"a sprint name is at most {MAX_SPRINT_NAME} characters", 2)
-        sprint = {"id": name, "state": "planned"}
-        apply_fields(sprint, args, vocab)
-        meta = data.setdefault("meta", {})
-        sprints = list(meta.get("sprints") or [])
-        position = len(sprints)
-        if args.after:
-            after = find_sprint(vocab, args.after)
-            if after is None:
-                raise AtmError(f"no sprint {args.after!r} to add it after", 2)
-            position = next(i for i, s in enumerate(sprints) if s.get("id") == after["id"]) + 1
-        sprints.insert(position, sprint)
-        meta["sprints"] = sprints
-        vocabulary(data)
-        write_json_atomic(paths["tasks"], data)
-    out(to_json(sprint) if args.json else f"Added the sprint “{name}” (planned).")
-
-
-def stored_sprint(data, name):
-    """The sprint called `name` as stored in meta.sprints (to change it), or an error naming the sprints."""
-    vocab = vocabulary(data)
-    found = find_sprint(vocab, name)
-    if found is None:
-        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprints add"
-        raise AtmError(f"no sprint {name!r}; the sprints: {known}", 2)
-    return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
-
-
-def sprints_edit(paths, args):
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        sprint = stored_sprint(data, args.name)
-        changed = apply_fields(sprint, args, vocabulary(data))
-        if changed:
-            vocabulary(data)
-            write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(sprint))
-    else:
-        out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
-
-
-def sprints_start(paths, args):
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        sprint = stored_sprint(data, args.name)
-        state = sprint.get("state", "planned")
-        if state == "closed":
-            raise AtmError(f"the sprint {sprint['id']!r} is closed; closed sprints aren't started again", 2)
-        if state == "active":
-            raise AtmError(f"the sprint {sprint['id']!r} is already active", 2)
-        active = [s["id"] for s in vocabulary(data)["sprints"] if s["state"] == "active"]
-        if active:
-            raise AtmError(f"the sprint {active[0]!r} is active; close it first (one active sprint at a time)", 2)
-        sprint["state"] = "active"
-        sprint["start"] = now_iso()
-        write_json_atomic(paths["tasks"], data)
-    out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
-
-
-def in_sprint(task, sprint):
-    """Whether the task is in the sprint (names compare case-insensitively)."""
-    return (
-        isinstance(task, dict)
-        and isinstance(task.get("sprint"), str)
-        and task["sprint"].casefold() == sprint["id"].casefold()
-    )
-
-
-def added_mid_sprint(task, sprint):
-    """Whether the task joined the sprint after it started: its history entry for the sprint (the last one) begins
-    after the sprint's start (SR-2.5)."""
-    entries = [
-        e
-        for e in task.get("sprint_history") or []
-        if isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
-    ]
-    start = sprint.get("start")
-    return bool(entries and start and isinstance(entries[-1].get("from"), str) and entries[-1]["from"] > start)
-
-
-def carry_target(data, vocab, sprint, args, taken):
-    """Where --carry-to sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint (added
-    to meta.sprints after the one closing). Returns (target, created sprint or None)."""
-    to = args.carry_to
-    if args.new_name and to != "new":
-        raise AtmError("--name names a new sprint: use it with --carry-to new", 2)
-    if to == "backlog":
-        return None, None
-    if to == "new":
-        name = (args.new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
-        if find_sprint(vocab, name):
-            raise AtmError(f"there is already a sprint {find_sprint(vocab, name)['id']!r}", 2)
-        if len(name) > MAX_SPRINT_NAME:
-            raise AtmError(f"a sprint name is at most {MAX_SPRINT_NAME} characters", 2)
-        created = {"id": name, "state": "planned"}
-        sprints = data["meta"]["sprints"]
-        sprints.insert(next(i for i, s in enumerate(sprints) if s.get("id") == sprint["id"]) + 1, created)
-        return name, created
-    target = open_sprint(vocab, to)
-    if target == sprint["id"]:
-        raise AtmError(f"the tasks can't be carried to the sprint that is closing ({sprint['id']!r})", 2)
-    return target, None
-
-
-def sprints_close(paths, args):
-    """Close a sprint (SR-4.3): its unfinished tasks go to --carry-to, keeping their status and history (SR-4.5); the
-    sprint gets `end` and its report {done, carried, added, to}."""
-    actor = agent_identity(args.agent)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archived = load_archive(paths)["tasks"]
-        vocab = vocabulary(data)
-        sprint = stored_sprint(data, args.name)
-        if sprint.get("state") == "closed":
-            raise AtmError(f"the sprint {sprint['id']!r} is already closed", 2)
-        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
-        own_archived = [t for t in archived if in_sprint(t, sprint)]
-
-        def kind(task):
-            return kind_of(vocab, task.get("status"))
-
-        claimed = [t["id"] for t in own if kind(t) == "active"]
-        if claimed:
-            raise AtmError(
-                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
-                f"{'it' if len(claimed) == 1 else 'them'} before closing the sprint",
-                2,
-            )
-        # Batch tasks wait for the end-of-sprint review (SR-4.4): /atm:close-sprint reviews them, then --reviewed
-        pending = [t for t in own if t.get("sprint_review") == "pending"]
-        if pending and not args.reviewed:
-            ids = ", ".join(t["id"] for t in pending)
-            raise AtmError(
-                f"{ids} {'waits' if len(pending) == 1 else 'wait'} for the end-of-sprint review: review "
-                f"{'it' if len(pending) == 1 else 'them'} with the user (/atm:close-sprint), then close with --reviewed",
-                2,
-            )
-        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
-        if unfinished and not args.carry_to:
-            ids = ", ".join(t["id"] for t in unfinished)
-            raise AtmError(
-                f"{ids} {'is' if len(unfinished) == 1 else 'are'}n't finished: say where "
-                f"{'it goes' if len(unfinished) == 1 else 'they go'} with --carry-to <sprint>, new or backlog",
-                2,
-            )
-        target, created = (None, None)
-        if unfinished:
-            target, created = carry_target(data, vocab, sprint, args, taken_names(data, archived))
-        stamp = now_iso()
-        report = {
-            "done": [t["id"] for t in own + own_archived if kind(t) == "done"],
-            "carried": [t["id"] for t in unfinished],
-            "added": [t["id"] for t in own + own_archived if added_mid_sprint(t, sprint)],
-        }
-        if unfinished:
-            report["to"] = target or "backlog"
-        for task in unfinished:
-            set_sprint(task, target, stamp)
-            touch(task, actor, stamp)
-        for task in pending:
-            task["sprint_review"] = "reviewed"
-            touch(task, actor, stamp)
-        was_active = sprint.get("state") == "active"
-        sprint["state"] = "closed"
-        sprint["end"] = stamp
-        sprint["report"] = report
-        vocabulary(data)
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json({"sprint": sprint, "created": created}))
-        return
-    line = f"Closed the sprint “{sprint['id']}”: {len(report['done'])} done"
-    if report["carried"]:
-        where = "the backlog" if target is None else f"“{target}”" + (" (new, planned)" if created else "")
-        line += f", {len(report['carried'])} carried to {where} ({', '.join(report['carried'])})"
-    if report["added"]:
-        line += f", {len(report['added'])} added mid-sprint"
-    out(line + ".")
-    if was_active:
-        out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
-
-
-def mentions_sprint(task, sprint):
-    """Whether the task's sprint history names the sprint (case-insensitively)."""
-    return any(
-        isinstance(e, dict) and isinstance(e.get("sprint"), str) and e["sprint"].casefold() == sprint["id"].casefold()
-        for e in task.get("sprint_history") or []
-    )
-
-
-def sprints_delete(paths, args):
-    """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
-    state; an open one's unfinished tasks go to --move-to (the backlog by default); one that tasks finished in or
-    moved on from needs --force when open, and a closed one with any history stays (its record and report)."""
-    actor = agent_identity(args.agent)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archived = load_archive(paths)["tasks"]
-        vocab = vocabulary(data)
-        sprint = stored_sprint(data, args.name)
-        state = sprint.get("state", "planned")
-
-        def kind(task):
-            return kind_of(vocab, task.get("status"))
-
-        own = [t for t in data["tasks"] if in_sprint(t, sprint)]
-        claimed = [t["id"] for t in own if kind(t) == "active"]
-        if claimed:
-            raise AtmError(
-                f"{', '.join(claimed)} {'is' if len(claimed) == 1 else 'are'} in progress: finish or release "
-                f"{'it' if len(claimed) == 1 else 'them'} before deleting the sprint",
-                2,
-            )
-        unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
-        # Its history: tasks that finished in it (archived ones too), or were in it and moved on
-        history = [t["id"] for t in own if t not in unfinished]
-        history += [t.get("id") for t in archived if isinstance(t, dict) and in_sprint(t, sprint)]
-        history += [
-            t.get("id")
-            for t in list(data["tasks"]) + list(archived)
-            if isinstance(t, dict) and not in_sprint(t, sprint) and mentions_sprint(t, sprint)
-        ]
-        if history and state == "closed":
-            raise AtmError(
-                f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
-                "stay; only an empty sprint can be deleted",
-                2,
-            )
-        if history and not args.force:
-            raise AtmError(
-                f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
-                "with --force to drop that record (its tasks go to --move-to, the backlog by default)",
-                2,
-            )
-        to = args.move_to or "backlog"
-        target = None if to == "backlog" else open_sprint(vocab, to)
-        if target is not None and target.casefold() == sprint["id"].casefold():
-            raise AtmError(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})", 2)
-        # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
-        moving = own if args.force else unfinished
-        stamp = now_iso()
-        for task in moving:
-            set_sprint(task, target, stamp)
-            touch(task, actor, stamp)
-        data["meta"]["sprints"] = [s for s in data["meta"]["sprints"] if s is not sprint]
-        vocabulary(data)
-        write_json_atomic(paths["tasks"], data)
-    moved = [t["id"] for t in moving]
-    if args.json:
-        out(to_json({"deleted": sprint["id"], "state": state, "moved": moved, "to": target or "backlog"}))
-        return
-    line = f"Deleted the sprint “{sprint['id']}” ({state})"
-    if moved:
-        where = "the backlog" if target is None else f"“{target}”"
-        line += f": {len(moved)} task{'' if len(moved) == 1 else 's'} moved to {where} ({', '.join(moved)})"
-    out(line + ".")
-    if state == "active":
-        out("No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.")
-
-
-def cmd_sprints(args):
-    paths = find_paths(os.getcwd())
-    if args.action in (None, "list"):
-        if args.name is not None:
-            raise AtmError(f"unexpected argument '{args.name}'", 2)
-        sprints_list(paths, args.all, args.json)
-    elif args.action == "add":
-        sprints_add(paths, args)
-    else:
-        if not args.name:
-            raise AtmError(f"atm sprints {args.action} needs a sprint name", 2)
-        actions = {"edit": sprints_edit, "start": sprints_start, "close": sprints_close, "delete": sprints_delete}
-        actions[args.action](paths, args)
-
-
-def move_target(vocab, task, to):
-    """The sprint ID (or None, the backlog) `atm move --to` means for `task`."""
-    if to == "backlog":
-        return None
-    if to == "active":
-        active = [s["id"] for s in vocab["sprints"] if s["state"] == "active"]
-        if not active:
-            raise AtmError("no sprint is active (atm sprints start <name>)", 2)
-        return active[0]
-    if to == "next":
-        # The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
-        # planned sprint)
-        sprints = vocab["sprints"]
-        current = find_sprint(vocab, task.get("sprint"))
-        start = sprints.index(current) + 1 if current else 0
-        following = [s["id"] for s in sprints[start:] if s["state"] == "planned"]
-        if not following:
-            raise AtmError(
-                f"{task['id']}: no planned sprint after {current['id'] if current else 'the active one'}; "
-                'add one with atm sprints add ["<name>"]',
-                2,
-            )
-        return following[0]
-    return open_sprint(vocab, to)
-
-
-def cmd_move(args):
-    actor = agent_identity(args.agent)
-    paths = find_paths(os.getcwd())
-    moved = []
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        vocab = vocabulary(data)
-        plans = []
-        for task_id in args.ids:
-            task = find_task(data, task_id)
-            kind = kind_of(vocab, task.get("status"))
-            if kind == "active":
-                raise AtmError(f"{task_id} is in progress (claimed): it stays where the work is happening", 2)
-            if kind in ("done", "skipped"):
-                raise AtmError(f"{task_id} is {task.get('status')}: finished work stays in the sprint it was done in", 2)
-            plans.append((task, move_target(vocab, task, args.to)))
-        stamp = now_iso()
-        for task, target in plans:
-            before = task.get("sprint")
-            if set_sprint(task, target, stamp):
-                touch(task, actor, stamp)
-            moved.append({"id": task["id"], "from": before, "to": target})
-        if any(m["from"] != m["to"] for m in moved):
-            write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(moved))
-        return
-    for m in moved:
-        before, after = m["from"] or "backlog", m["to"] or "backlog"
-        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
-
-
-def cmd_backlog(args):
-    paths = find_paths(os.getcwd())
-    data = load_tasks(paths)
-    vocab = vocabulary(data)
-    tasks = [t for t in data["tasks"] if in_backlog(vocab, t, finished=args.all)]
-    if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
-    elif not tasks:
-        out("The backlog is empty.")
-    else:
-        for line in list_lines(vocab, tasks):
-            out(line)
-
-
-# ==== releases.py ====
-# Releases (docs/sprints-and-releases-design.md §3.3, SR-2.2): `atm releases` lists them with their tasks by kind
-# and stage, adds one (with --pr, giving it the tasks of a pull request), edits and archives one. A task's release is
-# its own, else its sprint's. Every write is under the lock.
-
-STAGES = ("done", "in_pr", "merged")
-
-
-def stage_of(vocab, task):
-    """A done task's stage (DM-4.3): merged once its PR merged, in_pr while its PR is open, else done; None when it
-    isn't done."""
-    if kind_of(vocab, task.get("status")) != "done":
-        return None
-    pr = task.get("pr") if isinstance(task.get("pr"), dict) else None
-    if pr and task.get("merged_at"):
-        return "merged"
-    return "in_pr" if pr else "done"
-
-
-def release_overview(data, archived, include_archived):
-    """The releases in order, each with its tasks (by effective release, both files) by kind and by stage."""
-    vocab = vocabulary(data)
-    counts = {r["id"]: ({k: 0 for k in KINDS}, {s: 0 for s in STAGES}) for r in vocab["releases"]}
-    for task in list(data["tasks"]) + list(archived):
-        if not isinstance(task, dict):
-            continue
-        release = effective_release(vocab, task)
-        if release not in counts:
-            continue
-        by_kind, by_stage = counts[release]
-        kind = kind_of(vocab, task.get("status"))
-        if kind in by_kind:
-            by_kind[kind] += 1
-        stage = stage_of(vocab, task)
-        if stage:
-            by_stage[stage] += 1
-    return [
-        {
-            **r,
-            "tasks": sum(counts[r["id"]][0].values()),
-            "by_kind": {k: n for k, n in counts[r["id"]][0].items() if n},
-            "by_stage": {s: n for s, n in counts[r["id"]][1].items() if n},
-        }
-        for r in vocab["releases"]
-        if include_archived or r["state"] != "archived"
-    ]
-
-
-def describe_release(r):
-    details = [r["state"]] + ([f"target {r['target']}"] if r.get("target") else [])
-    if r.get("released_at"):
-        details.append(f"released {r['released_at'][:10]}")
-    if isinstance(r.get("pr"), dict) and r["pr"].get("number"):
-        details.append(f"PR #{r['pr']['number']}")
-    title = r["id"] + (f" “{r['name']}”" if r.get("name") else "")
-    kinds = ", ".join(f"{k} {n}" for k, n in r["by_kind"].items())
-    stages = ", ".join(f"{s.replace('_', ' ')} {n}" for s, n in r["by_stage"].items())
-    line = f"{title} · {' · '.join(details)}: {r['tasks']} task{'' if r['tasks'] == 1 else 's'}"
-    return line + (f" ({kinds})" if kinds else "") + (f"; {stages}" if stages else "")
-
-
-def releases_list(paths, include_archived, as_json):
-    data = load_tasks(paths)
-    releases = release_overview(data, load_archive(paths)["tasks"], include_archived)
-    if as_json:
-        out(to_json(releases))
-        return
-    if not releases:
-        has_any = bool(vocabulary(data)["releases"])
-        out("No open releases (--all lists the archived ones)." if has_any else "No releases yet: atm releases add <R>.")
-    for r in releases:
-        out(describe_release(r))
-
-
-def check_target(target):
-    if target and not DATE.fullmatch(target):
-        raise AtmError(f"--target {target!r}: use a date, YYYY-MM-DD", 2)
-    return target
-
-
-def release_fields(release, args):
-    """--name and --target on a release; an empty value removes the field. Returns the names changed."""
-    changed = []
-    for key, value in (("name", args.title), ("target", check_target(args.target))):
-        if value is None:
-            continue
-        if value == "":
-            if key in release:
-                del release[key]
-                changed.append(key)
-        elif release.get(key) != value:
-            release[key] = value
-            changed.append(key)
-    return changed
-
-
-def stored_release(data, release_id):
-    """The release as stored in meta.releases (to change it), or an error naming the releases."""
-    vocab = vocabulary(data)
-    if find_release(vocab, release_id) is None:
-        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
-        raise AtmError(f"no release {release_id!r}; the releases: {known}", 2)
-    return next(r for r in data["meta"]["releases"] if r.get("id") == release_id)
-
-
-def releases_add(paths, args):
-    release_id = args.id
-    if not RELEASE_ID.fullmatch(release_id):
-        raise AtmError(f"{release_id!r}: a release ID is letters, digits, '.', '-' and '_' (at most 64)", 2)
-    prs = args.pr or []
-    if any(n <= 0 for n in prs):
-        raise AtmError("--pr needs a pull request number", 2)
-    if args.released_at is not None:
-        try:
-            parse_iso(args.released_at)
-        except ValueError:
-            raise AtmError(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {args.released_at!r}", 2)
-    archive = archive_path(paths)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive_data = load_archive(paths)
-        vocab = vocabulary(data)
-        if find_release(vocab, release_id):
-            raise AtmError(f"there is already a release {release_id!r}", 2)
-        release = {"id": release_id, "state": "planned"}
-        release_fields(release, args)
-        given = []
-        # A release recovered from pull requests (SR-8.2): their tasks, in both files, go into it; the release records
-        # the last PR given (the one that shipped it)
-        for number in prs:
-            own = []
-            for task in list(data["tasks"]) + list(archive_data["tasks"]):
-                pr = task.get("pr") if isinstance(task, dict) and isinstance(task.get("pr"), dict) else None
-                if pr and pr.get("number") == number:
-                    task["release"] = release_id
-                    own.append(task["id"])
-                    if isinstance(pr.get("url"), str):
-                        release["pr"] = {"number": number, "url": pr["url"]}
-            if not own:
-                raise AtmError(f"no task is in pull request #{number}", 2)
-            given += own
-        if args.released_at is not None:
-            # One that shipped already: released at that time (its PR's merge, for one recovered from PRs)
-            release["state"] = "released"
-            release["released_at"] = args.released_at
-        meta = data.setdefault("meta", {})
-        meta["releases"] = list(meta.get("releases") or []) + [release]
-        vocabulary(data)
-        write_json_atomic(paths["tasks"], data)
-        if any(t.get("id") in given for t in archive_data["tasks"] if isinstance(t, dict)):
-            write_json_atomic(archive, archive_data)
-    if args.json:
-        out(to_json({"release": release, "tasks": given}))
-        return
-    line = f"Added the release “{release_id}” ({release['state']})"
-    if given:
-        numbers = ", ".join(f"#{n}" for n in prs)
-        line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
-    out(line + ".")
-
-
-def releases_edit(paths, args):
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        release = stored_release(data, args.id)
-        changed = release_fields(release, args)
-        if changed:
-            vocabulary(data)
-            write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json(release))
-    else:
-        out(f"{release['id']}: changed {', '.join(changed)}" if changed else f"{release['id']}: nothing changed")
-
-
-def releases_archive(paths, args):
-    """Archive a release: it leaves `atm releases` and the dashboard's open releases (--all shows it)."""
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        release = stored_release(data, args.id)
-        if release.get("state") == "archived":
-            raise AtmError(f"the release {release['id']!r} is already archived", 2)
-        release["state"] = "archived"
-        write_json_atomic(paths["tasks"], data)
-    out(to_json(release) if args.json else f"Archived the release “{release['id']}”.")
-
-
-def outcome_of(task):
-    """The task's last outcome note (what `atm done --note` said), or None."""
-    notes = [n for n in task.get("notes") or [] if isinstance(n, dict) and n.get("kind") == "outcome"]
-    return notes[-1].get("text") if notes else None
-
-
-def release_notes(data, archived, release_id):
-    """A draft of the release's changes (§3.3): its done tasks (by effective release, both files) grouped by type in
-    the project's order, each with its ID, name and outcome note; and the tasks in it not done yet."""
-    vocab = vocabulary(data)
-    release = find_release(vocab, release_id)
-    if release is None:
-        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
-        raise AtmError(f"no release {release_id!r}; the releases: {known}", 2)
-    tasks = [t for t in list(data["tasks"]) + list(archived) if isinstance(t, dict)]
-    own = [t for t in tasks if effective_release(vocab, t) == release_id]
-    done = [t for t in own if kind_of(vocab, t.get("status")) == "done"]
-    types = [(t["id"], t["label"]) for t in vocab["types"]]
-    types += [(t, t) for t in dict.fromkeys(x.get("type") for x in done) if t not in dict(types)]
-    groups = []
-    for type_id, label in types:
-        items = [
-            {"id": t.get("id"), "name": t.get("name"), "outcome": outcome_of(t)}
-            for t in done
-            if t.get("type") == type_id
-        ]
-        if items:
-            groups.append({"type": type_id, "label": label, "tasks": items})
-    open_tasks = [
-        {"id": t.get("id"), "name": t.get("name"), "status": t.get("status")}
-        for t in own
-        if kind_of(vocab, t.get("status")) not in ("done", "skipped")
-    ]
-    return {"release": release, "groups": groups, "open": open_tasks}
-
-
-def describe_notes(notes):
-    """The draft as Markdown: a heading per type, a line per task; what's not done yet at the end."""
-    release = notes["release"]
-    lines = [f"# {release['id']}" + (f" “{release['name']}”" if release.get("name") else "")]
-    if not notes["groups"]:
-        lines += ["", "Nothing done in it yet."]
-    for group in notes["groups"]:
-        lines += ["", f"## {group['label']}", ""]
-        for t in group["tasks"]:
-            lines.append(f"- **{t['id']}** {t['name']}" + (f": {t['outcome']}" if t["outcome"] else ""))
-    if notes["open"]:
-        lines += ["", "## Not done yet", ""]
-        lines += [f"- {t['id']} {t['name']} ({t['status']})" for t in notes["open"]]
-    return lines
-
-
-def releases_notes(paths, args):
-    notes = release_notes(load_tasks(paths), load_archive(paths)["tasks"], args.id)
-    if args.json:
-        out(to_json(notes))
-        return
-    for line in describe_notes(notes):
-        out(line)
-
-
-def cmd_releases(args):
-    paths = find_paths(os.getcwd())
-    if args.action in (None, "list"):
-        if args.id is not None:
-            raise AtmError(f"unexpected argument '{args.id}'", 2)
-        releases_list(paths, args.all, args.json)
-        return
-    if not args.id:
-        raise AtmError(f"atm releases {args.action} needs a release ID", 2)
-    if args.pr is not None and args.action != "add":
-        raise AtmError("--pr is for atm releases add", 2)
-    if args.released_at is not None and args.action != "add":
-        raise AtmError("--released-at is for atm releases add", 2)
-    actions = {"add": releases_add, "edit": releases_edit, "archive": releases_archive, "notes": releases_notes}
-    actions[args.action](paths, args)
 
 
 # ==== merge.py ====
@@ -8126,6 +8008,203 @@ def cmd_components(args):
     moved = moved_text(args.from_label, result["from_label"], args.assign, result["by_files"])
     text = ", ".join(([f"changed {', '.join(result['changed'])}"] if result["changed"] else []) + [t for t in [moved] if t])
     out(f"{args.id}: {text or 'nothing changed'}")
+
+
+# ==== cli/sprints.py ====
+# `atm sprints`, `atm move` and `atm backlog`, through atm-lib (docs/layered-architecture.md §9, step 11).
+
+NONE_ACTIVE = "No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint."
+
+
+def describe_sprint(s):
+    details = [s["state"]] + [f"{key} {s[key]}" for key in ("release", "due") if s.get(key)]
+    counts = ", ".join(f"{kind} {n}" for kind, n in s["by_kind"].items())
+    line = f"{s['id']} · {' · '.join(details)}: {s['tasks']} task{'' if s['tasks'] == 1 else 's'}"
+    line += f" ({counts})" if counts else ""
+    if s.get("review_pending"):
+        line += f"; {s['review_pending']} waiting for the sprint review"
+    return line + (f"\n  goal: {s['goal']}" if s.get("goal") else "")
+
+
+def show_sprints(project, include_closed, as_json):
+    listed = list_sprints(project, include_closed)
+    sprints, backlog = listed["sprints"], listed["backlog"]
+    if as_json:
+        out(to_json({"sprints": sprints, "backlog": backlog}))
+        return
+    if not sprints:
+        out("No open sprints (--all lists the closed ones)." if listed["has_sprints"] else "No sprints yet: atm sprints add creates one.")
+    for s in sprints:
+        out(describe_sprint(s))
+    out(f"backlog: {backlog} task{'' if backlog == 1 else 's'} (atm backlog)")
+
+
+def show_close(result, as_json):
+    sprint, created, target = result["sprint"], result["created"], result["target"]
+    if as_json:
+        out(to_json({"sprint": sprint, "created": created}))
+        return
+    report = sprint["report"]
+    line = f"Closed the sprint “{sprint['id']}”: {len(report['done'])} done"
+    if report["carried"]:
+        where = "the backlog" if target is None else f"“{target}”" + (" (new, planned)" if created else "")
+        line += f", {len(report['carried'])} carried to {where} ({', '.join(report['carried'])})"
+    if report["added"]:
+        line += f", {len(report['added'])} added mid-sprint"
+    out(line + ".")
+    if result["was_active"]:
+        out(NONE_ACTIVE)
+
+
+def show_delete(result, as_json):
+    sprint, state, moved, target = result["sprint"], result["state"], result["moved"], result["target"]
+    if as_json:
+        out(to_json({"deleted": sprint["id"], "state": state, "moved": moved, "to": target or "backlog"}))
+        return
+    line = f"Deleted the sprint “{sprint['id']}” ({state})"
+    if moved:
+        where = "the backlog" if target is None else f"“{target}”"
+        line += f": {len(moved)} task{'' if len(moved) == 1 else 's'} moved to {where} ({', '.join(moved)})"
+    out(line + ".")
+    if state == "active":
+        out(NONE_ACTIVE)
+
+
+def cmd_sprints(args):
+    project = open_project(os.getcwd(), agent_identity(getattr(args, "agent", None)))
+    if args.action in (None, "list"):
+        if args.name is not None:
+            raise Invalid(f"unexpected argument '{args.name}'")
+        show_sprints(project, args.all, args.json)
+        return
+    if args.action == "add":
+        sprint = add_sprint(project, args)
+        out(to_json(sprint) if args.json else f"Added the sprint “{sprint['id']}” (planned).")
+        return
+    if not args.name:
+        raise Invalid(f"atm sprints {args.action} needs a sprint name")
+    if args.action == "edit":
+        result = edit_sprint(project, args.name, args)
+        sprint, changed = result["sprint"], result["changed"]
+        if args.json:
+            out(to_json(sprint))
+        else:
+            out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
+    elif args.action == "start":
+        sprint = start_sprint(project, args.name)
+        out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
+    elif args.action == "close":
+        show_close(close_sprint(project, args.name, args), args.json)
+    else:
+        show_delete(delete_sprint(project, args.name, args), args.json)
+
+
+def cmd_move(args):
+    moved = move_tasks(open_project(os.getcwd(), agent_identity(args.agent)), args.ids, args.to)
+    if args.json:
+        out(to_json(moved))
+        return
+    for m in moved:
+        before, after = m["from"] or "backlog", m["to"] or "backlog"
+        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
+
+
+def cmd_backlog(args):
+    found = backlog_tasks(open_project(os.getcwd()), finished=args.all)
+    vocab, tasks = found["vocab"], found["tasks"]
+    if args.json:
+        out(to_json([summary(vocab, t) for t in tasks]))
+    elif not tasks:
+        out("The backlog is empty.")
+    else:
+        for line in list_lines(vocab, tasks):
+            out(line)
+
+
+# ==== cli/releases.py ====
+# `atm releases`, through atm-lib (docs/layered-architecture.md §9, step 11).
+
+def describe_release(r):
+    details = [r["state"]] + ([f"target {r['target']}"] if r.get("target") else [])
+    if r.get("released_at"):
+        details.append(f"released {r['released_at'][:10]}")
+    if isinstance(r.get("pr"), dict) and r["pr"].get("number"):
+        details.append(f"PR #{r['pr']['number']}")
+    title = r["id"] + (f" “{r['name']}”" if r.get("name") else "")
+    kinds = ", ".join(f"{k} {n}" for k, n in r["by_kind"].items())
+    stages = ", ".join(f"{s.replace('_', ' ')} {n}" for s, n in r["by_stage"].items())
+    line = f"{title} · {' · '.join(details)}: {r['tasks']} task{'' if r['tasks'] == 1 else 's'}"
+    return line + (f" ({kinds})" if kinds else "") + (f"; {stages}" if stages else "")
+
+
+def describe_notes(notes):
+    """The draft as Markdown: a heading per type, a line per task; what's not done yet at the end."""
+    release = notes["release"]
+    lines = [f"# {release['id']}" + (f" “{release['name']}”" if release.get("name") else "")]
+    if not notes["groups"]:
+        lines += ["", "Nothing done in it yet."]
+    for group in notes["groups"]:
+        lines += ["", f"## {group['label']}", ""]
+        for t in group["tasks"]:
+            lines.append(f"- **{t['id']}** {t['name']}" + (f": {t['outcome']}" if t["outcome"] else ""))
+    if notes["open"]:
+        lines += ["", "## Not done yet", ""]
+        lines += [f"- {t['id']} {t['name']} ({t['status']})" for t in notes["open"]]
+    return lines
+
+
+def cmd_releases(args):
+    project = open_project(os.getcwd())
+    if args.action in (None, "list"):
+        if args.id is not None:
+            raise Invalid(f"unexpected argument '{args.id}'")
+        listed = list_releases(project, args.all)
+        if args.json:
+            out(to_json(listed["releases"]))
+            return
+        if not listed["releases"]:
+            out(
+                "No open releases (--all lists the archived ones)."
+                if listed["has_releases"]
+                else "No releases yet: atm releases add <R>."
+            )
+        for r in listed["releases"]:
+            out(describe_release(r))
+        return
+    if not args.id:
+        raise Invalid(f"atm releases {args.action} needs a release ID")
+    if args.pr is not None and args.action != "add":
+        raise Invalid("--pr is for atm releases add")
+    if args.released_at is not None and args.action != "add":
+        raise Invalid("--released-at is for atm releases add")
+    if args.action == "add":
+        result = add_release(project, args.id, args)
+        if args.json:
+            out(to_json(result))
+            return
+        release, given, prs = result["release"], result["tasks"], args.pr or []
+        line = f"Added the release “{args.id}” ({release['state']})"
+        if given:
+            numbers = ", ".join(f"#{n}" for n in prs)
+            line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
+        out(line + ".")
+    elif args.action == "edit":
+        result = edit_release(project, args.id, args)
+        release, changed = result["release"], result["changed"]
+        if args.json:
+            out(to_json(release))
+        else:
+            out(f"{release['id']}: changed {', '.join(changed)}" if changed else f"{release['id']}: nothing changed")
+    elif args.action == "archive":
+        release = archive_release(project, args.id)
+        out(to_json(release) if args.json else f"Archived the release “{release['id']}”.")
+    else:
+        notes = release_notes(project, args.id)
+        if args.json:
+            out(to_json(notes))
+            return
+        for line in describe_notes(notes):
+            out(line)
 
 
 # ==== cli/show.py ====

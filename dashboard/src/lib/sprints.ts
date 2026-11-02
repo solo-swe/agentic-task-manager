@@ -107,6 +107,9 @@ export function backlog(model: SprintModel, tasks: Task[]): Task[] {
 
 /** A task's release: its own, else its sprint's (SR-2.6) */
 export function effectiveRelease(model: SprintModel, task: Task): string | undefined {
+  // As atm says it (T-371), for a task that comes with atm's values; judged here only for the others (archived ones,
+  // a linked worktree's copy)
+  if (typeof task.derived?.ready === 'boolean') return task.derived.effective_release;
   if (task.release) return task.release;
   const sprint = model.sprintOf(task);
   return sprint ? model.sprints.find((s) => s.id === sprint)?.release : undefined;

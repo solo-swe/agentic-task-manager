@@ -25,6 +25,17 @@ describe('effectiveReview (SR-2.6)', () => {
     expect(effectiveReview(meta, t('a', 'todo', { components: ['docs'] }))).toBe('async');
     expect(effectiveReview({}, t('a', 'todo', { review: 'whatever' }))).toBe('none');
   });
+
+  it('is atm’s to say when the task comes with atm’s values (T-371)', () => {
+    const derived = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
+    // atm says batch; the dashboard's own reading of the task would say blocker
+    const task = t('a', 'todo', { review: 'blocker', derived: { ...derived, effective_review: 'batch' } });
+    expect(effectiveReview(meta, task)).toBe('batch');
+    // Empty values (a fixture's, a worktree copy's) leave it to the dashboard
+    expect(effectiveReview(meta, t('a', 'todo', { review: 'blocker', derived: {} as Task['derived'] }))).toBe(
+      'blocker',
+    );
+  });
 });
 
 describe('needs you (SR-6.6)', () => {

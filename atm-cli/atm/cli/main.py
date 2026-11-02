@@ -15,8 +15,6 @@ from ..lock import cmd_lock_test
 from ..merge import cmd_init, cmd_merge_driver
 from ..migrate import cmd_migrate
 from ..paths import cmd_paths
-from ..releases import cmd_releases
-from ..sprints import cmd_backlog, cmd_move, cmd_sprints
 from ..logo import cmd_logo
 from ..registry import cmd_projects
 from ..repository import cmd_repository
@@ -25,6 +23,8 @@ from ..archive import cmd_archive, cmd_unarchive
 from ..git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
 from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
 from .components import cmd_components
+from .releases import cmd_releases
+from .sprints import cmd_backlog, cmd_move, cmd_sprints
 from .edit import cmd_add, cmd_check, cmd_edit
 from .query import cmd_deps, cmd_list, cmd_status, cmd_summary
 from .status import cmd_note, cmd_status_change
