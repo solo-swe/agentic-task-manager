@@ -4,7 +4,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { stampBuildId } from './build/build-id.ts';
 import { changelogModule } from './build/changelog.ts';
-import { devData } from './build/dev-data.ts';
+import { devApi } from './build/dev-api.ts';
 import { favicon } from './build/favicon.ts';
 import { helpModule } from './build/help.ts';
 import { injectVersion } from './build/inject-version.ts';
@@ -28,7 +28,7 @@ export default defineConfig({
     changelogModule(whatsNew),
     helpModule(help),
     pluginInfoModule(pluginJson, changelog),
-    devData(ownTasks),
+    devApi(ownTasks),
     securityHeaders(),
     viteSingleFile(),
     injectVersion(pluginJson),

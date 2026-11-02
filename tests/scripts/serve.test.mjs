@@ -761,6 +761,12 @@ describe('serve', () => {
   test('two projects with the same meta.id both stay reachable; ATM_HOME is private (T-227, F18)', async () => {
     const atmHome = path.join(tempDir('atm-parent-'), 'home');
     const atm = atmIn(atmHome);
+    // Stopped and removed when the tests end even if this one fails, so its server can't answer a later run's port
+    cleanups.push(() => {
+      const r = record(atmHome);
+      if (r && alive(r.pid)) process.kill(r.pid, 'SIGTERM');
+      removeDir(path.dirname(atmHome));
+    });
     const first = project(TASKS);
     const second = project({
       meta: { id: 'abcd1234', project: 'Copy' },

@@ -37,9 +37,11 @@ not `npm install`: it installs exactly the locked versions and never updates the
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):
-- `npm run dev` — Vite dev server; like `atm serve`, it serves the API the dashboard loads (`api/projects`,
-  `api/v1/projects/<id>/tasks`, …; see `docs/multi-project-api.md`) for this repo's `.agentic-task-manager/`, or for other
-  folders with `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (`build/dev-data.ts`)
+- `npm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`atm _serve-child` on a
+  temporary `ATM_HOME`, so your own `atm serve` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
+  to it) for this repo's `.agentic-task-manager/`, or for other folders with
+  `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev`. Rebuild atm-cli (`npm run build:cli`) and
+  restart it to pick up atm-cli changes
 - `npm run build` — single-file build
 - `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `npm run test:e2e` — build, then the Playwright e2e suite without the screenshots

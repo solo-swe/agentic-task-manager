@@ -19269,7 +19269,7 @@
       "description": "Step 14 of `docs/layered-architecture.md` §9.\n\n## Change\n- The merge driver (`merge.py`), the migrations of old layouts (`migrate.py`), `paths` and the worktrees' copies (`worktrees.json`) inside the JSON-in-git store (§3.2); `atm merge-driver`, `migrate` and `paths` reach that store directly.\n- The raw file routes (`/p/<id>/tasks.json`, `tasks-archive.json`) dropped once nothing reads them; `docs/multi-project-api.md` updated.\n- The ratchet's list is empty: remove its exception mechanism, so the rule holds with none.\n\n## Tests\n- The merge-driver and migrate tests pass; `npm run test:scripts`, `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-373"
       ],
@@ -19280,7 +19280,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:02:10Z",
+      "updated_at": "2026-11-02T22:32:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19317,11 +19317,20 @@
           "kind": "note",
           "text": "From T-373: `repository.py`, `logo.py` and `init` (merge.py) still call git directly; `GitVcs.remote_url` exists for `atm repository` to use.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:32:43Z",
+          "kind": "review",
+          "text": "Batch review: no flat modules, no `layers.json`; the build refuses any import the rule forbids. New `app/` layer hands `atm serve` to the CLI. Store owns paths, lock, claims, merge, migrations, worktrees, logo; registry in `db/registry.py`. The server reads no task file: raw `p/<id>/tasks.json` and archive routes gone. Check: the `archived_task` hook in `common/model.py` (§8). 540 + 120 + 954 unit + 359 e2e pass.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T21:48:13Z",
       "started_by": "claude:b7be7288",
-      "commit": "5c2f666c2d719744e96d76e9d2265d07452671de"
+      "commit": "ae6367675517619f5c0895a34ce80eaf9d943c3f",
+      "completed_at": "2026-11-02T22:32:43Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-375",
@@ -19334,7 +19343,7 @@
       "description": "Step 15 of `docs/layered-architecture.md` §9.\n\n## Change\n- `npm run dev` serves the API from this checkout's atm-cli (the REST API layer) instead of reimplementing it in `dashboard/build/dev-data.ts`; `ATM_DEV_DATA` keeps working.\n- `dev-data.ts` goes; `CLAUDE.md`'s description of `npm run dev` updated.\n\n## Tests\n- `npm run dev` shows this repository's project with live data; `npm run check` and unit tests pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-374"
       ],
@@ -19344,7 +19353,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:21:37Z",
+      "updated_at": "2026-11-02T22:32:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19369,7 +19378,9 @@
           "text": "From T-374 (carried from T-366): give the worktree copies (`worktrees.json`, now `lib/worktrees.py`) atm’s derived values too, and drop the dashboard’s own fallbacks for tasks without `derived` (`kanban.ts` readiness, `waiting.ts` togetherNow). T-374 moved the copies into atm-lib but left their shape as it was.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T22:32:50Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-376",
