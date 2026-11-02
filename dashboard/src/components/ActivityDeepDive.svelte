@@ -20,14 +20,24 @@
     use = null,
     workingNow = null,
     onopen = undefined,
+    group = undefined,
   }: {
     series: ActivitySeries;
     period: string;
     use?: TimeUseWithSplit | null;
     workingNow?: number | null;
     onopen?: (id: string) => void;
+    /** The overview's Activity by project (T-328 review): the series' types are projects, its workers "project ·
+     * agent"; completions, who was working and the dots are stacked and coloured by project */
+    group?: { color: (project: string) => string; of: (worker: string) => string; order: string[] };
   } = $props();
   const openTask = (id: string) => (onopen ? onopen(id) : dashboard.showDetail(id));
+  const colorOf = (type: string) => (group ? group.color(type) : typeStyle(type).color);
+  // Who was working: by kind (agents, people), or by project
+  const busyIn = (x: (typeof series.buckets)[number], key: string) =>
+    group
+      ? Object.entries(x.agentBusy).reduce((n, [w, v]) => n + (group.of(w) === key ? v : 0), 0)
+      : x.byKind[key as 'agents' | 'people'];
 
   const W = 640;
   const PAD_L = 34;
@@ -56,7 +66,12 @@
     { key: 'agents', label: 'Agents', color: 'var(--accent)' },
     { key: 'people', label: 'People', color: 'color-mix(in srgb, var(--accent) 45%, var(--surface))' },
   ] as const;
-  const kinds = $derived(KINDS.filter((k) => b.some((x) => x.byKind[k.key] > 0)));
+  const kinds = $derived(
+    (group
+      ? group.order.map((p) => ({ key: p, label: p, color: group.color(p) }))
+      : KINDS.map((k) => ({ key: k.key as string, label: k.label as string, color: k.color as string }))
+    ).filter((k) => b.some((x) => busyIn(x, k.key) > 0)),
+  );
   const busyTotal = (x: (typeof b)[number]) => x.byKind.agents + x.byKind.people;
   // Idle and waiting on you as the Where the time went bar has them (timeuse.ts); idle alone without it
   const idle = $derived(use?.idle ?? series.idle);
@@ -159,7 +174,7 @@
   <section class="dive-chart" id="dive-completed">
     <header>
       <h4>
-        Tasks completed {period}, per {series.unitLabel}, by type
+        Tasks completed {period}, per {series.unitLabel}, by {group ? 'project' : 'type'}
         <InfoTip label="tasks completed">
           <p>
             Per {series.unitLabel}, the tasks done in it (not skipped), stacked by type, in the dashboard's type
@@ -171,8 +186,7 @@
       <div class="type-legend">
         {#each series.types as t (t.type)}
           <span class="type-chip"
-            ><span class="legend-swatch" style="background:{typeStyle(t.type).color}"></span>{t.type}<strong
-              >{t.count}</strong
+            ><span class="legend-swatch" style="background:{colorOf(t.type)}"></span>{t.type}<strong>{t.count}</strong
             ></span
           >
         {/each}
@@ -193,7 +207,7 @@
             width={Math.max(1, slot - 2)}
             height={Math.max(1, yDone(below) - yDone(below + bucket.byType[seg.type]) - (j > 0 ? 1 : 0))}
             rx="1.5"
-            fill={typeStyle(seg.type).color}
+            fill={colorOf(seg.type)}
           />
         {/each}
       {/each}
@@ -252,14 +266,14 @@
         <line x1={PAD_L} x2={W - PAD_R} y1={yBusy(level)} y2={yBusy(level)} class="chart-grid" />
       {/each}
       {#each b as bucket, i (bucket.start)}
-        {@const segments = kinds.filter((k) => bucket.byKind[k.key])}
+        {@const segments = kinds.filter((k) => busyIn(bucket, k.key))}
         {#each segments as k, j (k.key)}
-          {@const below = segments.slice(0, j).reduce((sum, x) => sum + bucket.byKind[x.key], 0)}
+          {@const below = segments.slice(0, j).reduce((sum, x) => sum + busyIn(bucket, x.key), 0)}
           <rect
             x={PAD_L + i * slot + 1}
-            y={yBusy(below + bucket.byKind[k.key])}
+            y={yBusy(below + busyIn(bucket, k.key))}
             width={Math.max(1, slot - 2)}
-            height={Math.max(0.5, yBusy(below) - yBusy(below + bucket.byKind[k.key]) - (j > 0 ? 1 : 0))}
+            height={Math.max(0.5, yBusy(below) - yBusy(below + busyIn(bucket, k.key)) - (j > 0 ? 1 : 0))}
             rx="1.5"
             fill={k.color}
           />
@@ -304,7 +318,7 @@
         {/if}
       {/each}
       {#each series.cycleTimes as c (c.id)}
-        {@const color = typeStyle(c.type).color}
+        {@const color = colorOf(c.type)}
         {@const over = c.minutes > maxCycle}
         <g
           class="cycle-mark"
@@ -359,7 +373,7 @@
       <div><strong>{hb.completed.length}</strong> completed</div>
       {#each series.types.filter((t) => hb.byType[t.type]) as t (t.type)}
         <div class="tooltip-type">
-          <span class="legend-dot" style="background:{typeStyle(t.type).color}"></span>{t.type}
+          <span class="legend-dot" style="background:{colorOf(t.type)}"></span>{t.type}
           <strong>{hb.byType[t.type]}</strong>
         </div>
       {/each}
@@ -367,7 +381,8 @@
         <div class="tooltip-section">Busy</div>
         {#each series.agents.filter((a) => hb.agentBusy[a]) as a (a)}
           <div class="tooltip-type">
-            <span class="legend-dot" style="background:{agentColor(a)}"></span>{agentName(a)}
+            <span class="legend-dot" style="background:{group ? group.color(group.of(a)) : agentColor(a)}"
+            ></span>{agentName(a)}
             <strong>{pct(hb.agentBusy[a])}</strong>
           </div>
         {/each}

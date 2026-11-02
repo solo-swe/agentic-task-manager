@@ -154,6 +154,27 @@ export function velocityByPeriod(
   return { bars, average: bars.reduce((n, b) => n + b.total, 0) / count };
 }
 
+/** Between a project and its worker in projectTasks' `started_by` */
+const PROJECT_SEP = ' · ';
+
+/**
+ * mergedTasks by project (T-328 review): each task's `type` is its project's name, and its `started_by` its project's
+ * name before its worker's, so the Activity charts that split by type or by worker split by project instead (one agent
+ * on two projects' tasks counted per project).
+ */
+export function projectTasks(merged: MergedTasks): Task[] {
+  return merged.tasks.map((t) => {
+    const name = merged.origin.get(t.id)?.project.name ?? '';
+    return { ...t, type: name, started_by: name + PROJECT_SEP + (t.started_by ?? t.agent ?? ''), agent: undefined };
+  });
+}
+
+/** The project of a projectTasks worker */
+export function projectOfWorker(worker: string): string {
+  const at = worker.indexOf(PROJECT_SEP);
+  return at < 0 ? worker : worker.slice(0, at);
+}
+
 /** How many tasks each source finished in `period` (all time without one), most first; none left out */
 export function completionsByProject(
   sources: readonly ProjectSource[],

@@ -6,7 +6,9 @@ import {
   completionsByProject,
   loadProjectSources,
   mergedTasks,
+  projectOfWorker,
   projectProgress,
+  projectTasks,
   velocityByPeriod,
   type ProjectSource,
 } from '../../src/lib/overview-data';
@@ -116,6 +118,20 @@ describe('mergedTasks (T-328)', () => {
     expect([...merged.claims.keys()]).toEqual(['B: T-2']);
     expect(merged.claims.get('B: T-2')?.task).toBe('B: T-2');
     expect(merged.origin.get('B: T-1')).toEqual({ project: project('b'), id: 'T-1' });
+  });
+
+  it('projectTasks: by project, for the Activity charts (type = project, worker = project · agent) (T-328 review)', () => {
+    const merged = mergedTasks([
+      source(project('a'), [task('T-1', 'claude:x', '2026-01-02T08:00:00Z', '2026-01-02T09:00:00Z')]),
+      source(project('b'), [{ ...task('T-1', '', '2026-01-02T08:00:00Z', null), started_by: undefined }]),
+    ]);
+    const tasks = projectTasks(merged);
+    expect(tasks.map((t) => [t.id, t.type, t.started_by])).toEqual([
+      ['A: T-1', 'A', 'A · claude:x'],
+      ['B: T-1', 'B', 'B · '],
+    ]);
+    expect(tasks.map((t) => projectOfWorker(t.started_by!))).toEqual(['A', 'B']);
+    expect(projectOfWorker('no separator')).toBe('no separator');
   });
 
   it('completionsByProject: done in the period (all time without one), most first, none left out', () => {

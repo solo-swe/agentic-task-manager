@@ -95,8 +95,11 @@ export class DashboardState {
     agentsWindow: null,
     agentsLive: false,
   });
-  /** The overview's Activity period, apart from a project's (not saved) */
-  overviewActivity = $state<{ activityRange: ActivityRange }>({ activityRange: { preset: 'all' } });
+  /** The overview's Activity period and colouring (by project, or by type), apart from a project's (not saved) */
+  overviewActivity = $state<{ activityRange: ActivityRange; colorBy: 'project' | 'type' }>({
+    activityRange: { preset: 'all' },
+    colorBy: 'project',
+  });
   tasks = $state.raw<Task[]>([]);
   // Never mutated, only replaced on (re)load, so a plain Map in $state.raw is reactive enough
   // eslint-disable-next-line svelte/prefer-svelte-reactivity

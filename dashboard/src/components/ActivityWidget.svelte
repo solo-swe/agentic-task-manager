@@ -14,8 +14,9 @@
     type ActivityRange,
   } from '../lib/insights';
   import type { ClaimMap } from '../lib/claims';
+  import { formatMinutes } from '../lib/format';
   import { dashboard } from '../lib/state.svelte';
-  import { timeUse } from '../lib/timeuse';
+  import { timeUse, type TimeUse } from '../lib/timeuse';
   import type { Task } from '../lib/types';
   import { DEFAULT_VOCABULARY } from '../lib/vocab';
   import ActivityDeepDive from './ActivityDeepDive.svelte';
@@ -23,26 +24,47 @@
   import InfoTip from './InfoTip.svelte';
 
   // A project's Activity by default. The overview's (T-328) gives every project's tasks and claims (`source`, with
-  // the default vocabulary's statuses), its own period (`view`), how to open a task (`onopen`) and a line per project
-  // (`byProject`, for the chosen period)
+  // the default vocabulary's statuses, and the same tasks by project with the projects' colours), its own period and
+  // colouring (`view`), how to open a task (`onopen`) and a row per project (`byProject`, for the chosen period)
   let {
     source = undefined,
     view = dashboard,
     onopen = undefined,
     byProject = undefined,
   }: {
-    source?: { tasks: Task[]; claims: ClaimMap };
-    view?: { activityRange: ActivityRange };
+    source?: {
+      tasks: Task[];
+      claims: ClaimMap;
+      byProject: Task[];
+      projects: { name: string; color: string }[];
+      of: (worker: string) => string;
+    };
+    view?: { activityRange: ActivityRange; colorBy?: 'project' | 'type' };
     onopen?: (id: string) => void;
-    byProject?: (period: { start: number; end: number } | null) => { label: string; count: number; open: () => void }[];
+    byProject?: (period: { start: number; end: number } | null) => ProjectRow[];
   } = $props();
+  /** `use` is null for a project with no work in the period */
+  type ProjectRow = { label: string; color: string; count: number; use: TimeUse | null; open: () => void };
   const tasks = $derived(source ? source.tasks : dashboard.history);
   const vocab = $derived(source ? DEFAULT_VOCABULARY : dashboard.vocab);
   const claims = $derived(source ? source.claims : dashboard.claims);
+  // The overview's charts by project (the default) or by type (T-328 review)
+  const grouped = $derived(!!source && view.colorBy !== 'type');
+  const charted = $derived(grouped ? source!.byProject : tasks);
+  const colors = $derived(new Map(source?.projects.map((p) => [p.name, p.color]) ?? []));
+  const group = $derived(
+    grouped
+      ? {
+          color: (p: string) => colors.get(p) ?? 'var(--text-muted)',
+          of: source!.of,
+          order: source!.projects.map((p) => p.name),
+        }
+      : undefined,
+  );
 
   // Compact: completions per period (bars) with their rolling average (line, same scale). Click: the deep dive.
   // Archived completions count too once the archive is loaded (dashboard.history)
-  const series = $derived(activitySeries(tasks, null, dashboard.loadedAt, vocab));
+  const series = $derived(activitySeries(charted, null, dashboard.loadedAt, vocab));
   let open = $state(false);
 
   // The panel shows the chosen period (saved with the view); the pill always shows all time
@@ -52,7 +74,7 @@
   const detail = $derived(
     range.preset === 'all'
       ? series
-      : activitySeries(tasks, period, dashboard.loadedAt, vocab, PRESET_BUCKET_MS[range.preset]),
+      : activitySeries(charted, period, dashboard.loadedAt, vocab, PRESET_BUCKET_MS[range.preset]),
   );
   const phrase = $derived(periodPhrase(range, dashboard.loadedAt));
   // Where the time went in the period (timeuse.ts, shared with the Progress tab), and who works now: from the live
@@ -130,7 +152,23 @@
       <span class="widget-body">
         <svg class="sparkline" width={W} height={H} viewBox="0 0 {W} {H}" aria-hidden="true">
           {#each series.buckets as b, i (b.start)}
-            {#if b.completed.length}
+            {#if b.completed.length && group}
+              <!-- On the overview, stacked by project in their colours (T-328 review) -->
+              {#each group.order.filter((p) => b.byType[p]) as p, j (p)}
+                {@const below = group.order
+                  .filter((q) => b.byType[q])
+                  .slice(0, j)
+                  .reduce((n, q) => n + b.byType[q], 0)}
+                <rect
+                  class:ongoing={ongoing(b, dashboard.loadedAt)}
+                  x={i * step + 1}
+                  y={y(below + b.byType[p])}
+                  width={Math.max(1, step - 2)}
+                  height={y(below) - y(below + b.byType[p])}
+                  fill={group.color(p)}
+                />
+              {/each}
+            {:else if b.completed.length}
               <!-- The current period, not over yet, lighter: it would otherwise look like a drop -->
               <rect
                 class:ongoing={ongoing(b, dashboard.loadedAt)}
@@ -234,19 +272,54 @@
             >
           </div>
         {/if}
+        {#if source}
+          <!-- The overview colours its charts by project, or by type as a project's do (T-328 review) -->
+          <div class="activity-color-by">
+            <span>Colour by</span>
+            <span class="activity-range" role="group" aria-label="Colour by" id="activity-color-by">
+              {#each [['project', 'Project'], ['type', 'Type']] as const as [key, label] (key)}
+                <button
+                  class:active={(view.colorBy ?? 'project') === key}
+                  aria-pressed={(view.colorBy ?? 'project') === key}
+                  data-color-by={key}
+                  onclick={() => (view.colorBy = key)}>{label}</button
+                >
+              {/each}
+            </span>
+          </div>
+        {/if}
         {#if detail}
-          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} {onopen} />
+          <ActivityDeepDive series={detail} period={phrase} {use} {workingNow} {onopen} {group} />
         {/if}
         {#if projects.length}
-          <!-- Each project's part (T-328): done in the period; a project opens on its own page -->
+          <!-- Each project's part (T-328): done in the period and where its time went; a row opens the project -->
           <div class="activity-projects" id="activity-projects">
-            <span class="activity-projects-title">Done {phrase}, by project</span>
+            <span class="activity-projects-title">By project, {phrase}</span>
             {#each projects as p (p.label)}
-              <button class="activity-project" onclick={p.open}
-                ><span class="activity-project-name">{p.label}</span><span class="activity-project-count"
-                  >{p.count}</span
-                ></button
-              >
+              <button class="activity-project" onclick={p.open} title="Open {p.label}">
+                <span class="activity-project-name"
+                  ><span class="legend-swatch" style:background={p.color}></span>{p.label}</span
+                >
+                <span class="activity-project-count">{p.count} done</span>
+                <span class="status-bar activity-project-split" aria-hidden="true">
+                  {#if p.use}
+                    <span class="time-split-working" style:flex={p.use.workingMs}></span>
+                    <span class="time-split-waiting" style:flex={p.use.waitingMs}></span>
+                    <span class="time-split-idle" style:flex={p.use.idleMs}></span>
+                  {/if}
+                </span>
+                <span class="activity-project-times">
+                  {#if p.use}
+                    {formatMinutes(p.use.agentMs / 60_000)} agent time{#if p.use.waitingMs}<span
+                        class="activity-project-waiting"
+                      >
+                        · waiting on you {formatMinutes(p.use.waitingMs / 60_000)}</span
+                      >{/if}
+                  {:else}
+                    No work in this period
+                  {/if}
+                </span>
+              </button>
             {/each}
           </div>
         {/if}

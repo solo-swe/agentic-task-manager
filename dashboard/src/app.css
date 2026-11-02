@@ -568,6 +568,10 @@ h1 {
   z-index: 60;
   width: 560px;
   max-width: calc(100vw - 48px);
+  /* Never under the status bar (the title bar's layer is below it): a tall popup, like the overview's Activity with
+     a row per project (T-328), scrolls inside */
+  max-height: calc(100vh - 150px);
+  overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -4413,44 +4417,72 @@ svg.graph-minimap.hidden {
   font-weight: 600;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 15%, transparent);
 }
-/* The overview's Activity (T-328): each project's count for the period, under the charts */
+/* The overview's Activity (T-328): colour by project or type, and a row per project under the charts: done in the
+   period and where its time went */
+.activity-color-by {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 .activity-projects {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px solid var(--border);
   font-size: 12px;
 }
 .activity-projects-title {
-  margin-right: 4px;
+  margin-bottom: 2px;
   color: var(--text-muted);
 }
 .activity-project {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) 60px minmax(90px, 1fr) minmax(150px, 1.4fr);
   align-items: center;
-  gap: 6px;
-  padding: 2px 4px 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
+  gap: 12px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
   color: var(--text);
   font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 .activity-project:hover {
-  border-color: var(--accent);
+  border-color: var(--border);
+  background: var(--surface);
+}
+.activity-project-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
 }
 .activity-project-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 8px;
-  background: var(--surface2);
-  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  color: var(--text-muted);
+}
+.activity-project-split {
+  height: 8px;
+}
+.activity-project-times {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+}
+.activity-project-waiting {
+  color: var(--yellow);
 }
 .activity-custom {
   display: flex;
