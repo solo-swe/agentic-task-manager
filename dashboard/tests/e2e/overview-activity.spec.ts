@@ -24,6 +24,22 @@ test.describe('Projects Overview: Activity across projects', () => {
     await expect(page.locator('#activity-color-by, #activity-projects')).toHaveCount(0);
   });
 
+  test('a project’s archived work counts too, as on its own page (T-355)', async ({ page, tasksServer }) => {
+    // Two more finished tasks, archived, for the first project
+    const archived = (id: string) => ({
+      id,
+      name: `Archived ${id}`,
+      type: 'feature',
+      status: 'done',
+      started_by: 'claude:alice001',
+      started_at: '2026-03-20T09:00:00Z',
+      completed_at: '2026-03-20T09:30:00Z',
+    });
+    tasksServer.archive({ tasks: [archived('A-1'), archived('A-2')] });
+    await page.reload();
+    await expect(page.locator('#activity-card')).toHaveAttribute('aria-label', 'Activity: 14 tasks completed');
+  });
+
   test('its period is its own: a project’s Activity keeps the one it had', async ({ page }) => {
     await page.locator('#activity-card').click();
     await page.locator('#activity-panel [data-range="week"]').click();

@@ -1,11 +1,11 @@
-// The overview's views across projects: Agents (T-333), Activity (T-328), Progress (T-329). Each project's tasks and
-// claims come from the routes a project's page uses (p/<id>/tasks.json, p/<id>/claims.json), loaded while the overview
-// is shown; a refresh asks conditionally, so an unchanged project costs a 304. The charts a project's page has then run
+// The overview's views across projects: Agents (T-333), Activity (T-328), Progress (T-329). Each project's tasks, its
+// archive (T-355) and claims come from the routes a project's page uses (p/<id>/tasks.json, tasks-archive.json,
+// claims.json), loaded while the overview is shown; a refresh asks conditionally, so an unchanged file costs a 304. The charts a project's page has then run
 // over every project's tasks (mergedTasks), or per project and combined (combinedTimeline).
 import { agentTimeline, UNATTRIBUTED, type AgentBar, type AgentLane, type AgentTimeline } from './agents';
 import { loadClaims, type Claim, type ClaimMap } from './claims';
 import { median } from './insights';
-import { loadTasks, type ProjectEntry, type Validators } from './load';
+import { loadArchive, loadTasks, type ProjectEntry, type Validators } from './load';
 import { releaseSummaries, splitReleases } from './releases';
 import { activeSprint, sprintModel, sprintSummary, type SprintSummary } from './sprints';
 import type { Task, TasksFile } from './types';
@@ -13,17 +13,31 @@ import { DEFAULT_VOCABULARY, kindOf, resolveVocabulary, type StatusKind, type Vo
 
 export interface ProjectSource {
   project: ProjectEntry;
+  /** Its history: tasks.json's tasks, then the archived ones tasks.json doesn't have (T-355), as a project's own
+   * history views count them */
   tasks: Task[];
   claims: ClaimMap;
   vocab: Vocabulary;
   /** tasks.json's meta: its sprints and releases (T-329) */
   meta?: TasksFile['meta'];
+  /** The two files as last loaded, and their validators, for the next conditional load */
+  live?: Task[];
+  archived?: Task[];
   validators?: Validators;
+  archiveValidators?: Validators;
+}
+
+/** A project's history: the live tasks, then the archived ones not among them (a task in both is the live one) */
+export function withArchive(live: Task[], archived: Task[]): Task[] {
+  if (!archived.length) return live;
+  const ids = new Set(live.map((t) => t.id));
+  return [...live, ...archived.filter((t) => !ids.has(t.id))];
 }
 
 /**
- * The sources for `projects` (missing ones left out), refreshed from `previous`: a project whose tasks.json is
- * unchanged keeps its tasks (its claims are fetched again); one that fails to load keeps what it had, or is left out.
+ * The sources for `projects` (missing ones left out), refreshed from `previous`: each project's tasks.json and its
+ * archive (a missing one is empty), each kept as it was when unchanged (304), and its claims fetched again; a project
+ * that fails to load keeps what it had, or is left out.
  */
 export async function loadProjectSources(
   projects: readonly ProjectEntry[],
@@ -37,13 +51,27 @@ export async function loadProjectSources(
       .map(async (project): Promise<ProjectSource | null> => {
         const old = before.get(project.id);
         try {
-          const [result, claims] = await Promise.all([
+          const [result, archive, claims] = await Promise.all([
             loadTasks(project.id, fetchFn, old?.validators),
+            loadArchive(project.id, fetchFn, old?.archiveValidators),
             loadClaims(project.id, fetchFn),
           ]);
-          if (result.unchanged) return old ? { ...old, project, claims } : null;
-          const { tasks, meta } = result.loaded;
-          return { project, tasks, claims, vocab: resolveVocabulary(meta), meta, validators: result.validators };
+          if (result.unchanged && archive.unchanged) return old ? { ...old, project, claims } : null;
+          if (result.unchanged && !old) return null;
+          const live = result.unchanged ? (old!.live ?? old!.tasks) : result.loaded.tasks;
+          const meta = result.unchanged ? old!.meta : result.loaded.meta;
+          const archived = archive.unchanged ? (old?.archived ?? []) : archive.tasks;
+          return {
+            project,
+            tasks: withArchive(live, archived),
+            claims,
+            vocab: result.unchanged ? old!.vocab : resolveVocabulary(meta),
+            meta,
+            live,
+            archived,
+            validators: result.unchanged ? old!.validators : result.validators,
+            archiveValidators: archive.unchanged ? old?.archiveValidators : archive.validators,
+          };
         } catch (e) {
           console.error(`Loading ${project.id}'s tasks for the overview failed:`, e);
           return old ? { ...old, project } : null;

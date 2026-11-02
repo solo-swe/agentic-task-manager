@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 352,
+    "next_id": 356,
     "labels": [
       {
         "id": "architecture",
@@ -17396,7 +17396,11 @@
         "T-347",
         "T-348",
         "T-349",
-        "T-350"
+        "T-350",
+        "T-352",
+        "T-353",
+        "T-354",
+        "T-355"
       ],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -17406,7 +17410,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T08:39:44Z",
+      "updated_at": "2026-11-02T09:45:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17777,7 +17781,7 @@
       "description": "atm finds the project from the current directory and has no option or environment variable to point it elsewhere, so running it on another project means changing directory first (T-277's throwaway test project; scripts; agents working on two projects).\n\n## Change\n- A global `--dir PATH`, before the command: `atm --dir ../shop status`. atm runs as if started in PATH (the project is found from there, as from the current directory); an unknown or missing PATH is an error naming it. `atm serve --dir` keeps its own meaning (after the command).\n- `atm help` and `docs/v4/atm-cli.md` list it; `docs/security-architecture.md` notes the new path input.\n\n## Tests\nScenarios: `--dir` on a project in another folder (status, list, add), a missing folder, and `serve --dir` unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli.py",
@@ -17786,7 +17790,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T09:22:58Z",
-      "updated_at": "2026-11-02T09:23:03Z",
+      "updated_at": "2026-11-02T09:34:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17801,6 +17805,150 @@
         "docs"
       ],
       "started_at": "2026-11-02T09:23:03Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2fb9cfff1e67653243cbc52f56167d6d53506169",
+      "completed_at": "2026-11-02T09:34:01Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T09:34:01Z",
+          "kind": "outcome",
+          "text": "`atm --dir PATH <command>` (or `--dir=PATH`) runs on the project at PATH; scenarios in `dir.json`; security doc §3.3 notes the path input",
+          "by": "claude:b7be7288"
+        }
+      ]
+    },
+    {
+      "id": "T-352",
+      "name": "atm archive --dry-run: say what stays, and why",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm archive --dry-run` lists only what would move. Also list the finished tasks that stay and why: in an open PR (`#N`), or finished in the last `keep_days` days. Text and `--json` (`kept: [{id, reason}]`); the real `atm archive` says it too, in one line.\n\n## Tests\nScenarios in `archive.json`: an open-PR task and a recent one kept, with their reasons.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/archive.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:45:30Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-353",
+      "name": "atm show: mark an archived task as archived",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "archive"
+      ],
+      "description": "Found in T-277: `atm show` of an archived task reads like a live one (\"done · Phase 0\"); only its archived dependencies are marked. Its header says `· archived`, and `--json` has `archived: true`.\n\n## Tests\nA scenario in `archive.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/query.py",
+        "tests/scripts/scenarios/archive.json"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:45:30Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-354",
+      "name": "Dashboard: the archive one click away (the subtitle's \"N archived\", the List's note)",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "archive",
+        "ux"
+      ],
+      "description": "Found in T-277: archived tasks show only with *Include archived*, at the foot of the Filters popup; nothing points to it.\n\n- The subtitle's *N archived* is a toggle for Include archived (it says *showing N archived* while on).\n- The List, when archived tasks are hidden, ends with *N archived tasks hidden · show*.\n\n## Tests\nAn e2e in `archive.spec.ts` for both; the unit tests of anything new in a lib.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/Header.svelte",
+        "dashboard/src/components/TaskGrid.svelte",
+        "dashboard/tests/e2e/archive.spec.ts"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:45:30Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-355",
+      "name": "Projects Overview: Activity, Progress and Agents count each project's archive",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "archive",
+        "overview"
+      ],
+      "description": "Found in T-277: the overview's Activity, Progress and Agents (T-328, T-329, T-333) load each project's `tasks.json` only (`loadProjectSources`), never its `tasks-archive.json`, so after archiving they show less history than the project's own pages, which count the archive.\n\n## Change\nLoad each project's archive with its tasks (conditionally, a 404 is an empty one, as `loadArchive` does), merged as a project's history is (a task in both files from `tasks.json`).\n\n## Tests\n`overview-data.test.ts`: the archive is loaded and merged, unchanged on a 304; an e2e: an archived task's completion counts in the overview's Activity.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/overview-data.ts",
+        "dashboard/tests/unit/overview-data.test.ts"
+      ],
+      "created_at": "2026-11-02T09:45:30Z",
+      "updated_at": "2026-11-02T09:45:35Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T09:45:30Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-02T09:45:35Z",
       "started_by": "claude:b7be7288"
     }
   ]

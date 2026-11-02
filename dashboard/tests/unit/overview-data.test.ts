@@ -9,6 +9,7 @@ import {
   projectProgress,
   projectTasks,
   velocityByPeriod,
+  withArchive,
   type ProjectSource,
 } from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
@@ -234,5 +235,44 @@ describe('loadProjectSources', () => {
     expect(kept.map((s) => s.tasks[0].id)).toEqual(['T-1']);
     expect(error).toHaveBeenCalled();
     error.mockRestore();
+  });
+
+  it('the archive joins each project’s history, the live copy winning; an unchanged one is kept (T-355)', async () => {
+    const live = task('T-2', 'Ada', '2026-01-02T08:00:00Z', null);
+    const archived = [
+      task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'),
+      { ...task('T-2', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z'), name: 'Old copy' },
+    ];
+    let archiveRequests = 0;
+    const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.startsWith('p/a/tasks.json')) return json({ meta: { project: 'A' }, tasks: [live] }, '"t1"');
+      if (u.startsWith('p/a/tasks-archive.json')) {
+        archiveRequests++;
+        if ((init?.headers as Record<string, string>)['If-None-Match'] === '"a1"')
+          return new Response(null, { status: 304 });
+        return json({ tasks: archived }, '"a1"');
+      }
+      return new Response('', { status: 404 });
+    }) as unknown as typeof fetch;
+    const [first] = await loadProjectSources([project('a')], [], fetchFn);
+    expect(first.tasks.map((t) => [t.id, t.name])).toEqual([
+      ['T-2', 'Task T-2'],
+      ['T-1', 'Task T-1'],
+    ]);
+    expect(first.archiveValidators).toEqual({ etag: '"a1"' });
+    // tasks.json changed, the archive didn't: the archive comes from the last load
+    const [second] = await loadProjectSources([project('a')], [first], fetchFn);
+    expect(archiveRequests).toBe(2);
+    expect(second.archived).toBe(first.archived);
+    expect(second.tasks.map((t) => t.id)).toEqual(['T-2', 'T-1']);
+  });
+
+  it('withArchive: the live tasks, then the archived ones they lack; nothing archived, the same list', () => {
+    const live = [task('T-2', 'Ada', '2026-01-02T08:00:00Z', null)];
+    expect(withArchive(live, [])).toBe(live);
+    expect(
+      withArchive(live, [task('T-1', 'Ada', '2026-01-01T08:00:00Z', '2026-01-01T09:00:00Z')]).map((t) => t.id),
+    ).toEqual(['T-2', 'T-1']);
   });
 });

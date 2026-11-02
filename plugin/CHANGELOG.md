@@ -72,6 +72,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **The Projects Overview counts each project's archive** (T-355, found in T-277): its Activity, Progress and Agents
+  load each project's `tasks-archive.json` with its `tasks.json` (conditionally; a missing one is empty) and count the
+  history as the project's own pages do (`withArchive`: a task in both files is the live one).
 - **The Activity popup's periods and hover** (T-350): a period still running (Today, This week, This month) spans
   all of it on the charts' time axis, what's to come empty (`rangeAxis`): on a Monday, This week was one bar across
   the whole chart. The hover's tooltip sits beside the pointer, on the side with room, inside the popup (it was

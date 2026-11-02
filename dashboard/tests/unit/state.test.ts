@@ -65,12 +65,15 @@ describe('DashboardState', () => {
       await s.load();
       expect(s.route).toEqual({ page: 'overview' });
       expect([s.loaded, s.loadError, s.projectsLoaded]).toEqual([false, null, true]);
-      // For the overview's views across projects (T-333, T-328): each project's tasks and claims, no project opened
+      // For the overview's views across projects (T-333, T-328): each project's tasks, archive (T-355) and claims, no
+      // project opened
       expect(urls()[0]).toBe('api/projects');
       expect(urls().slice(1).sort()).toEqual([
         'p/p2/claims.json',
+        'p/p2/tasks-archive.json',
         'p/p2/tasks.json',
         'p/p3/claims.json',
+        'p/p3/tasks-archive.json',
         'p/p3/tasks.json',
       ]);
       expect(s.projectSources.map((p) => p.project.id)).toEqual(['p2', 'p3']);
