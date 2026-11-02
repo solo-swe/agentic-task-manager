@@ -13799,7 +13799,7 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-02T08:50:51Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13843,7 +13843,11 @@
         }
       ],
       "completed_at": "2026-11-02T08:50:51Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-280",
@@ -16571,7 +16575,7 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T07:36:08Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16643,7 +16647,11 @@
       ],
       "review_requested_at": "2026-11-02T07:35:30Z",
       "completed_at": "2026-11-02T07:36:08Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-329",
@@ -16665,7 +16673,7 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T07:17:53Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16721,7 +16729,11 @@
       ],
       "review_requested_at": "2026-11-02T07:16:14Z",
       "completed_at": "2026-11-02T07:17:53Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-330",
@@ -16744,7 +16756,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-02T02:14:31Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16773,7 +16785,11 @@
           "text": "atm status warns (and --json lists open_in_closed_sprints), atm check warns per task, atm reopen in a closed sprint suggests atm move; plan-sprint shows them first. §3.3 review written.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-331",
@@ -16847,7 +16863,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-02T02:17:09Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16872,7 +16888,11 @@
           "text": "NeedsYouMenu measures the list when it opens and shifts it back inside the window (8 px margin); e2e on the first and last card at 1280, 700 and 420 px.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-333",
@@ -16894,7 +16914,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T06:42:58Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16923,7 +16943,11 @@
           "text": "Overview Agents tab: every project’s agents on one timeline (`lib/overview-agents.ts`, existing routes), bars open in their project; screenshot left for T-345",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-334",
@@ -16944,7 +16968,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T05:48:50Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16981,7 +17005,11 @@
       "started_by": "claude:b7be7288",
       "commit": "7110700ad99dea0afa2ea95dfdfbd4f726502306",
       "completed_at": "2026-11-02T05:48:50Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-335",
@@ -17003,7 +17031,7 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T06:29:53Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17029,7 +17057,11 @@
           "text": "New project card: depth, title band with sparkline, corner needs-you badge, quiet labels, mini task card on a tilted stack; baselines left for T-345",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-336",
@@ -17109,7 +17141,7 @@
         "dashboard/tests/unit/TaskCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:42:49Z",
-      "updated_at": "2026-11-02T06:01:15Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17135,7 +17167,11 @@
           "text": "Cards show the description’s start, the latest outcome/handoff, and a who/when/work-time column (`lib/cardfacts.ts`); baselines left for T-345",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-339",
@@ -17161,7 +17197,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:50:16Z",
-      "updated_at": "2026-11-02T02:06:13Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17188,7 +17224,11 @@
           "text": "atm sprints delete <name> [--move-to S|backlog] [--force]: empty sprints (closed too) go at once; refuses closed with history, in-progress tasks, and open sprints with history unless --force. Merge already kept deletions (test added). plan-sprint mentions it; §3.3 review written.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-340",
@@ -17215,7 +17255,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:59:28Z",
-      "updated_at": "2026-11-02T02:29:48Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17243,7 +17283,11 @@
           "text": "Omniboard defaults to Active sprints (board_active_sprint in api/projects, own counts; null without an active sprint), All tasks as a remembered option, a note naming projects without one; older servers fall back to the whole board. Worth a look on the dev server.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-341",
@@ -17267,7 +17311,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T22:36:01Z",
-      "updated_at": "2026-11-02T01:42:47Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17303,7 +17347,11 @@
       "started_by": "claude:b7be7288",
       "commit": "8ab96f0b9863b6246961fa8eed19fd2595575a13",
       "completed_at": "2026-11-02T01:37:04Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-342",
@@ -17355,7 +17403,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-02T01:40:40Z",
-      "updated_at": "2026-11-02T01:48:01Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17381,7 +17429,11 @@
           "text": "atm commit <id> --record <rev>: records an existing commit on the current branch (full SHA), refusing options, unknown revisions and commits off the branch; hint when the message lacks the ID. Used it to re-record T-341 as 8ab96f0.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-344",
@@ -17391,7 +17443,7 @@
       "description": "Ship the sprint *Overview and polish* as 0.26.0, the way CLAUDE.md's *Versions* and *CI* sections describe. Work is on `dev/0.26.0` (branched from `origin/main` after PR #30).\n\n## Change\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are already `0.26.0` (T-341): check they still match.\n- `plugin/CHANGELOG.md`'s `[0.26.0]` entry: set the date to the release day (in `plugin/WHATS-NEW.md` too); merge repeated `### Added` / `### Changed` / `### Fixed` sections into one of each.\n- `plugin/WHATS-NEW.md`: rewrite the 0.26.0 entry from the changelog as 3–6 short plain-language bullets about what a user notices across the sprint, no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills, `plugin/CLAUDE.md` and atm output changed in this release (e.g. T-339's `atm sprints delete` and its skill mention) get a written review in §3.3 (no live sandbox run, no API key); check every new entry point is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens the release PR from `dev/0.26.0` to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines (T-341 deleted the graph ones) are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-277",
         "T-279",
@@ -17430,7 +17482,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T10:23:58Z",
+      "updated_at": "2026-11-02T10:34:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17444,7 +17496,22 @@
         "docs"
       ],
       "started_at": "2026-11-02T10:23:58Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "2c28455be77f3b890dfcfba7c258d5a465c46137",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      },
+      "completed_at": "2026-11-02T10:34:24Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:34:24Z",
+          "kind": "outcome",
+          "text": "Released as PR #31 (dev/0.26.0 → main): changelog dated, What’s new rewritten for the sprint, §3.3 reviews for `--record`, the overview’s reads and 0.26.0; verify green after regenerating 4 Linux baselines (T-354).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-345",
@@ -17467,7 +17534,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T08:32:15Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17518,7 +17585,11 @@
       "started_by": "claude:b7be7288",
       "commit": "9ba18bc69eae193654d265bf2062db38aaf6dfc5",
       "completed_at": "2026-11-02T08:32:15Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-346",
@@ -17538,7 +17609,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-02T05:50:04Z",
-      "updated_at": "2026-11-02T05:53:42Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17564,7 +17635,11 @@
           "text": "A project’s tabs now look like the overview’s: on a line, no framed panel; one `.view-tabs` rule for both. Baselines left for T-345",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-347",
@@ -17585,7 +17660,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T06:55:54Z",
-      "updated_at": "2026-11-02T07:04:37Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17613,7 +17688,11 @@
           "text": "“Needs you” counts a with-you task only in the active sprint (any, without one) and ready, in `atm summary` and the title bar; here 7 → 5",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-348",
@@ -17634,7 +17713,7 @@
         "dashboard/src/components/ProjectSelector.svelte"
       ],
       "created_at": "2026-11-02T07:45:42Z",
-      "updated_at": "2026-11-02T08:04:51Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17660,7 +17739,11 @@
           "text": "Projects Overview has the `layout-grid` icon in the project selector (chosen with Hakan)",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-349",
@@ -17683,7 +17766,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T07:50:39Z",
-      "updated_at": "2026-11-02T08:04:52Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17711,7 +17794,11 @@
           "text": "Omniboard Active sprints: every task of the sprints (To Do all to-do tasks with why, Done all finished); All tasks keeps 24 h Done",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-350",
@@ -17734,7 +17821,7 @@
         "dashboard/tests/e2e/widgets.spec.ts"
       ],
       "created_at": "2026-11-02T08:39:41Z",
-      "updated_at": "2026-11-02T09:20:39Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17790,7 +17877,11 @@
       ],
       "review_requested_at": "2026-11-02T09:14:49Z",
       "completed_at": "2026-11-02T09:20:39Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-351",
@@ -17812,7 +17903,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T09:22:58Z",
-      "updated_at": "2026-11-02T09:34:01Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17838,7 +17929,11 @@
           "text": "`atm --dir PATH <command>` (or `--dir=PATH`) runs on the project at PATH; scenarios in `dir.json`; security doc §3.3 notes the path input",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-352",
@@ -17858,7 +17953,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:03:56Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17883,7 +17978,11 @@
           "text": "atm archive (and --dry-run) lists what stays and why: in an open PR, finished within keep_days, on or after --before, not in the chosen sprints; JSON `kept`",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-353",
@@ -17903,7 +18002,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:03:57Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17928,7 +18027,11 @@
           "text": "atm show marks an archived task: `· archived` in its header, `archived: true` in --json",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-354",
@@ -17950,7 +18053,7 @@
         "dashboard/tests/e2e/archive.spec.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:03:57Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17975,7 +18078,11 @@
           "text": "The subtitle’s *N archived* toggles Include archived (*showing N archived* while on); the List ends with *N archived tasks hidden · show*. e2e in archive.spec.ts",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-355",
@@ -17996,7 +18103,7 @@
         "dashboard/tests/unit/overview-data.test.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:03:58Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18021,7 +18128,11 @@
           "text": "Projects Overview Activity, Progress and Agents load each project’s tasks-archive.json and merge it (`withArchive`), so archiving no longer shrinks them",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-356",
@@ -18041,7 +18152,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:12:56Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18066,7 +18177,11 @@
           "text": "atm add and atm edit --add-dep accept a dependency on an archived task (via `archived_task`), as atm check does; an unknown ID is still refused. Scenarios in archive.json",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-357",
@@ -18086,7 +18201,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:14:08Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18111,7 +18226,11 @@
           "text": "atm unarchive names wrong IDs as *already in tasks.json* or *no such task*, and says when the next archive moves a brought-back task back (`moves_back` in --json). Scenarios in archive.json",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-358",
@@ -18131,7 +18250,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:14:49Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18156,7 +18275,11 @@
           "text": "atm deps’ *is waited on by* also lists archived dependents, marked `(done, archived)`; text and --json. Scenarios in archive.json",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     },
     {
       "id": "T-359",
@@ -18177,7 +18300,7 @@
         "dashboard/tests/unit/TaskGrid.component.test.ts"
       ],
       "created_at": "2026-11-02T10:11:16Z",
-      "updated_at": "2026-11-02T10:22:05Z",
+      "updated_at": "2026-11-02T10:34:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18203,7 +18326,11 @@
           "text": "Scenarios: archiving twice, nothing to move, unarchive of several, list --archived --json. Component tests: Header’s archived toggle, new TaskGrid.component.test.ts for the List’s note. Also formatted archive.json (T-356–T-358 had left it unformatted)",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      }
     }
   ]
 }
