@@ -2196,6 +2196,11 @@ class Store(Protocol):
         """How big the project's data is, in bytes: `tasks` (the working tasks) and `archive`."""
         ...
 
+    def files_for_commit(self) -> List[str]:
+        """The files of the store that travel with a code commit (relative to the repository): tasks.json for the
+        JSON-in-git store, none for a store that syncs elsewhere (docs/layered-architecture.md §2)."""
+        ...
+
     def problems(self) -> dict:
         """What a tolerant read found wrong with the data (T-377): {"file": [...], "tasks": {id: [...]}}, in `atm
         check`'s words; empty for a strict read, which refuses such data instead."""
@@ -2224,10 +2229,18 @@ class Store(Protocol):
 
 # ==== vcs/interface.py ====
 # The code's version control, as atm-lib uses it (docs/layered-architecture.md §2). Git's other role, carrying the
-# task files, belongs to the JSON-in-git store, not here. Nothing implements it yet: the slice that moves `atm commit`
-# does (§9, step 13).
+# task files, belongs to the JSON-in-git store, not here. vcs/git.py implements it with git.
 
 class Vcs(Protocol):
+    def in_repository(self) -> bool:
+        """Whether the project's folder is under version control at all."""
+        ...
+
+    def paths(self, files: List[str], cwd: str) -> List[str]:
+        """The files to commit, relative to the repository, from names relative to `cwd`; refuses a name that would
+        commit more than one file (the whole tree, a directory, a pattern) or a file outside the repository."""
+        ...
+
     def commit(self, files: List[str], message: str) -> str:
         """Commit exactly these files; the new commit's SHA."""
         ...
@@ -3515,6 +3528,10 @@ class JsonGitStore:
     def working_copy(self):
         return self.paths["root"]
 
+    def files_for_commit(self):
+        """tasks.json travels with the code: `atm commit` commits it with the task's files (relative to the root)."""
+        return [os.path.relpath(self.paths["tasks"], self.paths["root"])]
+
     def raw(self):
         """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
         it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
@@ -3622,6 +3639,9 @@ class MemoryStore:
     def working_copy(self):
         return None
 
+    def files_for_commit(self):
+        return []  # nothing of the memory travels with code commits
+
     def raw(self):
         return {"document": self.document(), "archive": self.archive, "archive_error": None}
 
@@ -3647,18 +3667,97 @@ class MemoryStore:
 
 
 # ==== vcs/git.py ====
-# Git as the code's version control (docs/layered-architecture.md §2). It grows with the migration: the branch for
-# the project's card now; committing, history and the remote when `atm commit` moves (§9, step 13).
+# Git as the code's version control (docs/layered-architecture.md §2): committing exactly the files named, the
+# history, the base branch, the remote. Git's other role, carrying the task files, is the JSON-in-git store's.
+
+# Pathspecs that stage more than the files named: another agent's work can be in the same tree
+WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
+# git reads a path as a pattern (`*.env` is every .env file, `src/[id]` matches `src/i`); with this, a path names
+# exactly one file (docs/security-review.md F6)
+LITERAL = ["--literal-pathspecs"]
+
+
+def run_git(args, root):
+    """Run git; return stdout stripped, or raise with git's own message."""
+    result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).strip()
+        command = next((a for a in args if not a.startswith("-")), "")
+        raise AtmFailure(f"git {command} failed: {message}")
+    return result.stdout.strip()
+
 
 class GitVcs:
     def __init__(self, root):
         self.root = root
+
+    def in_repository(self):
+        return git(["rev-parse", "--git-dir"], self.root) is not None
 
     def branch(self):
         """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
         git; None outside git."""
         git_dir = os.path.join(self.root, ".git")
         return head_branch(git_dir) if os.path.isdir(git_dir) else None
+
+    def default_base(self):
+        """The remote's default branch (origin/HEAD), else main."""
+        ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
+        return ref.split("/", 1)[1] if ref and "/" in ref else "main"
+
+    def remote_url(self):
+        """The origin remote's address, as git has it (atm repository turns it into a web address)."""
+        return git(["remote", "get-url", "origin"], self.root)
+
+    def paths(self, files, cwd):
+        """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
+        would stage more than the files named, and a missing file git doesn't track."""
+        picked = []
+        for name in files:
+            if name in WHOLE_TREE or name.startswith(":"):
+                raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
+            full = os.path.realpath(os.path.join(cwd, name))
+            relative = os.path.relpath(full, self.root)
+            if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
+                raise Invalid(f"{name} is outside the repository")
+            if os.path.isdir(full):
+                raise Invalid(f"{name} is a directory: name the files in it")
+            # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
+            if (
+                not os.path.exists(full)
+                and git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
+                and git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
+            ):
+                raise NotFound(f"{name}: no such file, and git doesn't track it")
+            if relative not in picked:
+                picked.append(relative)
+        return picked
+
+    def commit(self, files, message):
+        """Commit exactly `files` (relative to the repository); whatever else is staged stays staged and out of this
+        commit. Returns the new commit's SHA."""
+        # A deletion already staged with `git rm` is in neither the tree nor the index: there is nothing to add for it
+        to_add = [
+            f
+            for f in files
+            if git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
+            or os.path.lexists(os.path.join(self.root, f))
+        ]
+        if to_add:
+            run_git(LITERAL + ["add", "-A", "--"] + to_add, self.root)
+        run_git(LITERAL + ["commit", "-q", "-m", message, "--"] + list(files), self.root)
+        return run_git(["rev-parse", "HEAD"], self.root)
+
+    def resolve(self, rev):
+        """A revision's SHA, or None if there is no such commit."""
+        return git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
+
+    def in_history(self, sha):
+        """Whether the commit is an ancestor of HEAD (on the current branch)."""
+        return git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
+
+    def message(self, sha):
+        return run_git(["log", "-1", "--format=%B", sha], self.root)
 
 
 # ==== lib/project.py ====
@@ -6047,6 +6146,215 @@ def archive_hint_now(project):
     return archive_hint_for(project.store.document(), project.store.sizes()["tasks"])
 
 
+# ==== lib/code.py ====
+# atm-lib: the project's workflow (meta.workflow: direct or pull-request, docs/v4/skills-and-workflows.md §1) and the
+# code side of tasks: committing a task's files and recording the commit, the PR that contains tasks, its merge
+# (docs/v4/atm-cli.md §4.5, data-model.md §4; docs/layered-architecture.md §2, §5.1).
+#
+# The commit goes through the project's version control (`project.vcs`); the files that travel with a code commit
+# (tasks.json, for the JSON-in-git store) are the store's to say (`store.files_for_commit()`).
+
+HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
+CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
+
+
+def workflow_settings(project):
+    """The project's workflow (meta.workflow with its defaults), or None when none is set."""
+    return workflow_of(project.store.document())
+
+
+def set_workflow(project, workflow_type, base=None, verify=None, max_rounds=None, commit_template=None, trailers=None, trailer=()):
+    """Set the workflow: its type, and what is given of the rest; `trailers` forbid, require (with `trailer` lines) or
+    none (removes the rule). Returns the workflow with its defaults."""
+    if workflow_type not in WORKFLOW_TYPES:
+        raise Invalid(f"atm workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}")
+    changes = {"type": workflow_type}
+    if base is not None:
+        changes["base"] = base
+    if verify is not None:
+        changes["verify"] = verify
+    if max_rounds is not None:
+        changes["max_rounds"] = max_rounds
+    if commit_template is not None:
+        changes["commit_template"] = commit_template
+    if trailers == "forbid":
+        changes["trailers"] = "forbid"
+    elif trailers == "require":
+        if not trailer:
+            raise Invalid("--trailers require needs at least one --trailer LINE")
+        changes["trailers"] = {"require": list(trailer)}
+
+    def change(work):
+        data = work.document
+        if not isinstance(data.get("meta"), dict):
+            data["meta"] = {}
+        current = data["meta"].get("workflow") if isinstance(data["meta"].get("workflow"), dict) else {}
+        workflow = {**current, **changes}
+        if trailers == "none":
+            workflow.pop("trailers", None)
+        data["meta"]["workflow"] = workflow
+        return workflow_of(data)  # validates before anything is written
+
+    return project.store.change(change)
+
+
+def commit_message(text, trailers):
+    """Apply the workflow's trailer rule: forbid removes Co-Authored-By lines, require adds the missing lines."""
+    if trailers == "forbid":
+        text = "\n".join(line for line in text.splitlines() if not CO_AUTHORED.match(line.strip())).rstrip()
+    elif isinstance(trailers, dict):
+        missing = [line for line in trailers["require"] if line not in text.splitlines()]
+        if missing:
+            text = text.rstrip() + "\n\n" + "\n".join(missing)
+    return text
+
+
+def record_on_task(project, task_id, sha):
+    """The task's commit is `sha` (the SHA is known only once the commit exists: a change for the next commit)."""
+
+    def change(work):
+        task = find_task(work.document, task_id)
+        task["commit"] = sha
+        touch(task, project.actor, now_iso())
+        return task
+
+    return project.store.change(change)
+
+
+def commit_task(project, task_id, files, cwd, message=None):
+    """`atm commit`: commit exactly `files` (named relative to `cwd`) plus the task data that travels with code commits,
+    with the workflow's message, then record the commit on the task. Returns {task, commit, message, files}."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    if not files:
+        raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
+    data = project.store.document()
+    task = find_task(data, task_id)
+    workflow = workflow_of(data) or WORKFLOW_DEFAULTS
+    text = message if message is not None else workflow["commit_template"]
+    for key in ("id", "name", "phase", "type"):
+        text = text.replace("{" + key + "}", str(task.get(key, "")))
+    text = commit_message(text, workflow.get("trailers"))
+    if not text.strip():
+        raise Invalid("the commit message is empty")
+    picked = vcs.paths(files, cwd)
+    picked += [f for f in project.store.files_for_commit() if f not in picked]
+    sha = vcs.commit(picked, text)
+    task = record_on_task(project, task_id, sha)
+    return {"task": task["id"], "commit": sha, "message": text, "files": picked}
+
+
+def record_commit(project, task_id, rev):
+    """`atm commit --record` (T-343): record an existing commit on the current branch, e.g. the one a rebase or a
+    cherry-pick made of the task's commit, without committing anything. Returns {task, commit, recorded, summary,
+    hint}: `hint` when the commit's message doesn't mention the task."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    if rev.startswith("-"):
+        raise Invalid(f"--record takes a revision, not an option: {rev!r}")
+    sha = vcs.resolve(rev)
+    if not sha:
+        raise NotFound(f"no commit {rev} in this repository")
+    if not vcs.in_history(sha):
+        raise AtmFailure(f"{sha[:7]} is not on the current branch (an ancestor of HEAD)")
+    text = vcs.message(sha)
+    task = record_on_task(project, task_id, sha)
+    hint = None
+    if not re.search(rf"(?<![\w-]){re.escape(task['id'])}(?![\w-])", text):
+        hint = f"its message doesn't mention {task['id']}: is it the task's commit?"
+    return {"task": task["id"], "commit": sha, "recorded": True, "summary": text.splitlines()[0] if text else "", "hint": hint}
+
+
+def record_pr(project, ids, number, url):
+    """`atm pr`: the PR that contains the tasks (DM-4.3: the tasks are then In PR). Returns the task IDs."""
+    if number <= 0:
+        raise Invalid("--number must be a positive whole number")
+    # The dashboard links to it: only a web address, never javascript: or data: (docs/security-review.md F9)
+    if not HTTP_URL.match(url):
+        raise Invalid(f"--url must be an http:// or https:// address, not {url!r}")
+
+    def change(work):
+        found = [find_task(work.document, task_id) for task_id in ids]
+        stamp = now_iso()
+        for task in found:
+            task["pr"] = {"number": number, "url": url}
+            task.pop("merged_at", None)
+            touch(task, project.actor, stamp)
+        return [t["id"] for t in found]
+
+    return project.store.change(change)
+
+
+def release_with_merge(data, merged, pr_number, at):
+    """Release the planned releases the merged PR completes (SR-3.7): every task of the release in tasks.json (its own
+    release, or its sprint's) is in this PR and merged; archived and skipped tasks don't hold it back. Sets its state,
+    `pr` and `released_at`. Returns (the released IDs, {release: the tasks still keeping it planned})."""
+    vocab = vocabulary(data)
+    touched = {effective_release(vocab, t) for t in merged} - {None}
+    released, pending = [], {}
+    for release in (data.get("meta") or {}).get("releases") or []:
+        if not isinstance(release, dict) or release.get("id") not in touched:
+            continue
+        if release.get("state", "planned") != "planned":
+            continue
+        own = [
+            t
+            for t in data["tasks"]
+            if isinstance(t, dict)
+            and effective_release(vocab, t) == release["id"]
+            and kind_of(vocab, t.get("status")) != "skipped"
+        ]
+        waiting = [
+            t.get("id")
+            for t in own
+            if not (isinstance(t.get("pr"), dict) and t["pr"].get("number") == pr_number and t.get("merged_at"))
+        ]
+        if waiting:
+            pending[release["id"]] = waiting
+            continue
+        url = next((t["pr"].get("url") for t in merged if isinstance(t["pr"].get("url"), str)), None)
+        release["state"] = "released"
+        release["pr"] = {"number": pr_number, **({"url": url} if url else {})}
+        release["released_at"] = at
+        released.append(release["id"])
+    return released, pending
+
+
+def record_merge(project, pr, at=None):
+    """`atm merged`: PR `pr` was merged (at `at`, default now), on every task that records it (DM-4.3: the tasks are
+    then Merged); the releases it completes are released. Returns {pr, tasks, already, released, pending}."""
+    if at is not None:
+        try:
+            parse_iso(at)
+        except ValueError:
+            raise Invalid(f"--at needs a time like 2026-10-24T18:00:00Z, not {at!r}")
+
+    def change(work):
+        data = work.document
+        tasks = [
+            t for t in data["tasks"] if isinstance(t, dict) and isinstance(t.get("pr"), dict) and t["pr"].get("number") == pr
+        ]
+        if not tasks:
+            raise NotFound(f"no task records PR #{pr} (atm pr records it)")
+        stamp = now_iso()
+        changed = [t for t in tasks if not t.get("merged_at")]
+        for task in changed:
+            task["merged_at"] = at or stamp
+            touch(task, project.actor, stamp)
+        released, pending = release_with_merge(data, tasks, pr, at or stamp)
+        return {
+            "pr": pr,
+            "tasks": [t["id"] for t in changed],
+            "already": [t["id"] for t in tasks if t not in changed],
+            "released": released,
+            "pending": pending,
+        }
+
+    return project.store.change(change)
+
+
 # ==== boot/open.py ====
 # Opening a project: its task files (the JSON-in-git store) and git.
 
@@ -6145,319 +6453,6 @@ def render_task(view):
         failure = task["last_failure"]
         lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
     return "\n".join(lines)
-
-
-# ==== git_ops.py ====
-# The project's workflow (meta.workflow: direct or pull-request, docs/v4/skills-and-workflows.md §1) and the git
-# side of tasks: atm workflow, atm commit, atm pr, atm merged (docs/v4/atm-cli.md §4.5, data-model.md §4).
-
-# Pathspecs that stage more than the files named: another agent's work can be in the same tree
-WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
-# git reads a path as a pattern (`*.env` is every .env file, `src/[id]` matches `src/i`); with this, a --file names
-# exactly one file (docs/security-review.md F6)
-LITERAL = ["--literal-pathspecs"]
-HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
-CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
-
-
-def default_base(root):
-    """The remote's default branch (origin/HEAD), else main."""
-    ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], root)
-    return ref.split("/", 1)[1] if ref and "/" in ref else "main"
-
-
-def describe_workflow(workflow, root):
-    if workflow is None:
-        return "No workflow set: /atm:push asks for one, or run `atm workflow set direct|pull-request`."
-    trailers = workflow.get("trailers")
-    lines = [
-        f"workflow: {workflow['type']}",
-        "  base: " + (workflow["base"] if workflow.get("base") else f"{default_base(root)} (the remote's default branch)"),
-        f"  verify before pushing: {'yes' if workflow['verify'] else 'no'}",
-        f"  CI fix rounds: {workflow['max_rounds']}",
-        f"  commit message: {workflow['commit_template']}",
-        "  trailers: "
-        + (
-            "none (Co-Authored-By lines are removed)"
-            if trailers == "forbid"
-            else ("required: " + "; ".join(trailers["require"]) if isinstance(trailers, dict) else "as the agent writes them")
-        ),
-    ]
-    return "\n".join(lines)
-
-
-def cmd_workflow(args):
-    paths = find_paths(os.getcwd())
-    if args.action is None:
-        workflow = workflow_of(load_tasks(paths))
-        out(to_json(workflow or {"type": None}) if args.json else describe_workflow(workflow, paths["root"]))
-        return
-    if args.type not in WORKFLOW_TYPES:
-        raise AtmError(f"atm workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}", 2)
-    changes = {"type": args.type}
-    if args.base is not None:
-        changes["base"] = args.base
-    if args.verify is not None:
-        changes["verify"] = args.verify == "true"
-    if args.max_rounds is not None:
-        changes["max_rounds"] = args.max_rounds
-    if args.commit_template is not None:
-        changes["commit_template"] = args.commit_template
-    if args.trailers == "forbid":
-        changes["trailers"] = "forbid"
-    elif args.trailers == "require":
-        if not args.trailer:
-            raise AtmError("--trailers require needs at least one --trailer LINE", 2)
-        changes["trailers"] = {"require": args.trailer}
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        if not isinstance(data.get("meta"), dict):
-            data["meta"] = {}
-        current = data["meta"].get("workflow") if isinstance(data["meta"].get("workflow"), dict) else {}
-        workflow = {**current, **changes}
-        if args.trailers == "none":
-            workflow.pop("trailers", None)
-        data["meta"]["workflow"] = workflow
-        effective = workflow_of(data)  # validates before anything is written
-        write_json_atomic(paths["tasks"], data)
-    out(to_json(effective) if args.json else describe_workflow(effective, paths["root"]))
-
-
-def run_git(args, root):
-    """Run git; return stdout stripped, or raise AtmError with git's own message."""
-    result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
-    if result.returncode != 0:
-        message = (result.stderr or result.stdout).strip()
-        command = next((a for a in args if not a.startswith("-")), "")
-        raise AtmError(f"git {command} failed: {message}")
-    return result.stdout.strip()
-
-
-def commit_paths(root, files):
-    """The files to commit, relative to the root; refuses anything that would stage more than the files named."""
-    picked = []
-    for name in files:
-        if name in WHOLE_TREE or name.startswith(":"):
-            raise AtmError(f"atm commit stages only the files you name; {name!r} would stage the whole tree", 2)
-        full = os.path.realpath(os.path.join(os.getcwd(), name))
-        relative = os.path.relpath(full, root)
-        if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
-            raise AtmError(f"{name} is outside the repository", 2)
-        if os.path.isdir(full):
-            raise AtmError(f"{name} is a directory: name the files in it", 2)
-        # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
-        if (
-            not os.path.exists(full)
-            and git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], root) is None
-            and git(["cat-file", "-e", f"HEAD:{relative}"], root) is None
-        ):
-            raise AtmError(f"{name}: no such file, and git doesn't track it")
-        if relative not in picked:
-            picked.append(relative)
-    return picked
-
-
-def commit_message(text, trailers):
-    """Apply the workflow's trailer rule: forbid removes Co-Authored-By lines, require adds the missing lines."""
-    if trailers == "forbid":
-        text = "\n".join(line for line in text.splitlines() if not CO_AUTHORED.match(line.strip())).rstrip()
-    elif isinstance(trailers, dict):
-        missing = [line for line in trailers["require"] if line not in text.splitlines()]
-        if missing:
-            text = text.rstrip() + "\n\n" + "\n".join(missing)
-    return text
-
-
-def record_commit(paths, args, agent):
-    """atm commit --record (T-343): record an existing commit on the current branch, e.g. the one a rebase or a
-    cherry-pick made of the task's commit, without committing anything."""
-    root, rev = paths["root"], args.record
-    if args.file or args.message is not None:
-        raise AtmError("--record records an existing commit: no --file or --message", 2)
-    if rev.startswith("-"):
-        raise AtmError(f"--record takes a revision, not an option: {rev!r}", 2)
-    sha = git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], root)
-    if not sha:
-        raise AtmError(f"no commit {rev} in this repository")
-    if git(["merge-base", "--is-ancestor", sha, "HEAD"], root) is None:
-        raise AtmError(f"{sha[:7]} is not on the current branch (an ancestor of HEAD)")
-    message = run_git(["log", "-1", "--format=%B", sha], root)
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        task = find_task(data, args.id)
-        task["commit"] = sha
-        touch(task, agent, now_iso())
-        write_json_atomic(paths["tasks"], data)
-    hint = None
-    if not re.search(rf"(?<![\w-]){re.escape(task['id'])}(?![\w-])", message):
-        hint = f"its message doesn't mention {task['id']}: is it the task's commit?"
-    if args.json:
-        out(to_json({"task": task["id"], "commit": sha, "recorded": True, **({"hint": hint} if hint else {})}))
-        return
-    out(f"{task['id']}: recorded {sha[:7]} {message.splitlines()[0] if message else ''}".rstrip())
-    if hint:
-        out(f"  {hint}")
-
-
-def cmd_commit(args):
-    """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
-    agent = agent_identity(args.agent)
-    paths = find_paths(os.getcwd())
-    root = paths["root"]
-    if not in_git(root):
-        raise AtmError("atm commit needs a git repository")
-    if args.record is not None:
-        return record_commit(paths, args, agent)
-    if not args.file:
-        raise AtmError("atm commit needs --file (once per file the task changed), or --record REV", 2)
-    data = load_tasks(paths)
-    task = find_task(data, args.id)
-    workflow = workflow_of(data) or WORKFLOW_DEFAULTS
-    template = args.message if args.message is not None else workflow["commit_template"]
-    message = template
-    for key in ("id", "name", "phase", "type"):
-        message = message.replace("{" + key + "}", str(task.get(key, "")))
-    message = commit_message(message, workflow.get("trailers"))
-    if not message.strip():
-        raise AtmError("the commit message is empty", 2)
-    files = commit_paths(root, args.file)
-    tasks_file = os.path.relpath(paths["tasks"], root)
-    if tasks_file not in files:
-        files.append(tasks_file)
-    # A deletion already staged with `git rm` is in neither the tree nor the index: there is nothing to add for it
-    to_add = [
-        f
-        for f in files
-        if git(LITERAL + ["ls-files", "--error-unmatch", "--", f], root) is not None
-        or os.path.lexists(os.path.join(root, f))
-    ]
-    if to_add:
-        run_git(LITERAL + ["add", "-A", "--"] + to_add, root)
-    # With paths, git commits only those, so whatever else is staged stays staged and out of this commit
-    run_git(LITERAL + ["commit", "-q", "-m", message, "--"] + files, root)
-    sha = run_git(["rev-parse", "HEAD"], root)
-    # The SHA is known only once the commit exists, so tasks.json records it as a change for the next commit
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        task = find_task(data, args.id)
-        task["commit"] = sha
-        touch(task, agent, now_iso())
-        write_json_atomic(paths["tasks"], data)
-    if args.json:
-        out(to_json({"task": task["id"], "commit": sha, "message": message, "files": files}))
-    else:
-        out(f"{task['id']}: committed {sha[:7]} {message.splitlines()[0]}")
-        out("  " + ", ".join(files))
-
-
-def cmd_pr(args):
-    """Record the PR that contains the tasks (DM-4.3: the tasks are then In PR)."""
-    agent = agent_identity(args.agent)
-    if args.number <= 0:
-        raise AtmError("--number must be a positive whole number", 2)
-    # The dashboard links to it: only a web address, never javascript: or data: (docs/security-review.md F9)
-    if not HTTP_URL.match(args.url):
-        raise AtmError(f"--url must be an http:// or https:// address, not {args.url!r}", 2)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        found = [find_task(data, task_id) for task_id in args.ids]
-        stamp = now_iso()
-        for task in found:
-            task["pr"] = {"number": args.number, "url": args.url}
-            task.pop("merged_at", None)
-            touch(task, agent, stamp)
-        write_json_atomic(paths["tasks"], data)
-    ids = [t["id"] for t in found]
-    if args.json:
-        out(to_json({"tasks": ids, "pr": {"number": args.number, "url": args.url}}))
-    else:
-        out(f"{', '.join(ids)}: in PR #{args.number} ({args.url})")
-
-
-def cmd_merged(args):
-    """Record that a PR was merged, on every task that records it (DM-4.3: the tasks are then Merged)."""
-    agent = agent_identity(args.agent)
-    if args.at is not None:
-        try:
-            parse_iso(args.at)
-        except ValueError:
-            raise AtmError(f"--at needs a time like 2026-10-24T18:00:00Z, not {args.at!r}", 2)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        tasks = [
-            t
-            for t in data["tasks"]
-            if isinstance(t, dict) and isinstance(t.get("pr"), dict) and t["pr"].get("number") == args.pr
-        ]
-        if not tasks:
-            raise AtmError(f"no task records PR #{args.pr} (atm pr records it)")
-        stamp = now_iso()
-        changed = [t for t in tasks if not t.get("merged_at")]
-        for task in changed:
-            task["merged_at"] = args.at or stamp
-            touch(task, agent, stamp)
-        released, pending = release_with_merge(data, tasks, args.pr, args.at or stamp)
-        if changed or released:
-            write_json_atomic(paths["tasks"], data)
-    ids = [t["id"] for t in changed]
-    if args.json:
-        out(
-            to_json(
-                {
-                    "pr": args.pr,
-                    "tasks": ids,
-                    "already": [t["id"] for t in tasks if t not in changed],
-                    "released": released,
-                    "pending": pending,
-                }
-            )
-        )
-        return
-    if ids:
-        out(f"PR #{args.pr} merged: {', '.join(ids)}")
-    else:
-        out(f"PR #{args.pr}: already recorded as merged")
-    for release_id in released:
-        out(f"Released {release_id}: all its tasks are merged in PR #{args.pr}.")
-    for release_id, waiting in pending.items():
-        out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{args.pr}.")
-
-
-def release_with_merge(data, merged, pr_number, at):
-    """Release the planned releases the merged PR completes (SR-3.7): every task of the release in tasks.json (its own
-    release, or its sprint's) is in this PR and merged; archived and skipped tasks don't hold it back. Sets its state,
-    `pr` and `released_at`. Returns (the released IDs, {release: the tasks still keeping it planned})."""
-    vocab = vocabulary(data)
-    touched = {effective_release(vocab, t) for t in merged} - {None}
-    released, pending = [], {}
-    for release in (data.get("meta") or {}).get("releases") or []:
-        if not isinstance(release, dict) or release.get("id") not in touched:
-            continue
-        if release.get("state", "planned") != "planned":
-            continue
-        own = [
-            t
-            for t in data["tasks"]
-            if isinstance(t, dict)
-            and effective_release(vocab, t) == release["id"]
-            and kind_of(vocab, t.get("status")) != "skipped"
-        ]
-        waiting = [
-            t.get("id")
-            for t in own
-            if not (isinstance(t.get("pr"), dict) and t["pr"].get("number") == pr_number and t.get("merged_at"))
-        ]
-        if waiting:
-            pending[release["id"]] = waiting
-            continue
-        url = next((t["pr"].get("url") for t in merged if isinstance(t["pr"].get("url"), str)), None)
-        release["state"] = "released"
-        release["pr"] = {"number": pr_number, **({"url": url} if url else {})}
-        release["released_at"] = at
-        released.append(release["id"])
-    return released, pending
 
 
 # ==== migrate.py ====
@@ -8297,6 +8292,96 @@ def cmd_show(args):
         out(to_json([{**v["task"], "archived": True} if v["archived"] else v["task"] for v in views]))
     else:
         out("\n\n".join(render_task(v) for v in views))
+
+
+# ==== cli/code.py ====
+# `atm workflow`, `atm commit`, `atm pr` and `atm merged`, through atm-lib (docs/layered-architecture.md §9, step 13).
+
+def describe_workflow(workflow, base_default):
+    if workflow is None:
+        return "No workflow set: /atm:push asks for one, or run `atm workflow set direct|pull-request`."
+    trailers = workflow.get("trailers")
+    lines = [
+        f"workflow: {workflow['type']}",
+        "  base: " + (workflow["base"] if workflow.get("base") else f"{base_default()} (the remote's default branch)"),
+        f"  verify before pushing: {'yes' if workflow['verify'] else 'no'}",
+        f"  CI fix rounds: {workflow['max_rounds']}",
+        f"  commit message: {workflow['commit_template']}",
+        "  trailers: "
+        + (
+            "none (Co-Authored-By lines are removed)"
+            if trailers == "forbid"
+            else ("required: " + "; ".join(trailers["require"]) if isinstance(trailers, dict) else "as the agent writes them")
+        ),
+    ]
+    return "\n".join(lines)
+
+
+def cmd_workflow(args):
+    project = open_project(os.getcwd())
+    if args.action is None:
+        workflow = workflow_settings(project)
+    else:
+        workflow = set_workflow(
+            project,
+            args.type,
+            base=args.base,
+            verify=None if args.verify is None else args.verify == "true",
+            max_rounds=args.max_rounds,
+            commit_template=args.commit_template,
+            trailers=args.trailers,
+            trailer=args.trailer,
+        )
+    if args.json:
+        out(to_json(workflow or {"type": None}))
+    else:
+        out(describe_workflow(workflow, project.vcs.default_base))
+
+
+def cmd_commit(args):
+    """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
+    project = open_project(os.getcwd(), agent_identity(args.agent))
+    if args.record is not None:
+        if args.file or args.message is not None:
+            raise Invalid("--record records an existing commit: no --file or --message")
+        result = record_commit(project, args.id, args.record)
+        if args.json:
+            shown = {k: result[k] for k in ("task", "commit", "recorded")}
+            out(to_json({**shown, **({"hint": result["hint"]} if result["hint"] else {})}))
+            return
+        out(f"{result['task']}: recorded {result['commit'][:7]} {result['summary']}".rstrip())
+        if result["hint"]:
+            out(f"  {result['hint']}")
+        return
+    result = commit_task(project, args.id, args.file, os.getcwd(), args.message)
+    if args.json:
+        out(to_json(result))
+    else:
+        out(f"{result['task']}: committed {result['commit'][:7]} {result['message'].splitlines()[0]}")
+        out("  " + ", ".join(result["files"]))
+
+
+def cmd_pr(args):
+    """Record the PR that contains the tasks (DM-4.3: the tasks are then In PR)."""
+    ids = record_pr(open_project(os.getcwd(), agent_identity(args.agent)), args.ids, args.number, args.url)
+    if args.json:
+        out(to_json({"tasks": ids, "pr": {"number": args.number, "url": args.url}}))
+    else:
+        out(f"{', '.join(ids)}: in PR #{args.number} ({args.url})")
+
+
+def cmd_merged(args):
+    """Record that a PR was merged, on every task that records it (DM-4.3: the tasks are then Merged)."""
+    result = record_merge(open_project(os.getcwd(), agent_identity(args.agent)), args.pr, args.at)
+    if args.json:
+        out(to_json(result))
+        return
+    ids = result["tasks"]
+    out(f"PR #{args.pr} merged: {', '.join(ids)}" if ids else f"PR #{args.pr}: already recorded as merged")
+    for release_id in result["released"]:
+        out(f"Released {release_id}: all its tasks are merged in PR #{args.pr}.")
+    for release_id, waiting in result["pending"].items():
+        out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{args.pr}.")
 
 
 # ==== cli/main.py ====

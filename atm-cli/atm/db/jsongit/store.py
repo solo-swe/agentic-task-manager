@@ -70,6 +70,10 @@ class JsonGitStore:
     def working_copy(self):
         return self.paths["root"]
 
+    def files_for_commit(self):
+        """tasks.json travels with the code: `atm commit` commits it with the task's files (relative to the root)."""
+        return [os.path.relpath(self.paths["tasks"], self.paths["root"])]
+
     def raw(self):
         """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
         it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""

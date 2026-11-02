@@ -19160,7 +19160,7 @@
       "description": "Step 12 of `docs/layered-architecture.md` §9: the fourth duplicated rule goes.\n\n## Change\n- `archive.archive`, `archive.unarchive` and `archive.hint` (§5.1) on the store's `archive_tasks` and `restore_tasks`, keeping the crash-safe order of `docs/v4/data-model.md` DM-5.2.\n- `GET /api/v1/projects/<p>/tasks?archived=true` and `…/archive/hint`; the dashboard loads archived tasks and its archive notice from them, not from `tasks-archive.json`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; the archive scenarios in `tests/scripts/scenarios/archive.json` and `archive.spec.ts` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-371"
       ],
@@ -19172,7 +19172,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:13:44Z",
+      "updated_at": "2026-11-02T21:37:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19191,7 +19191,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-02T21:13:44Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "3244b8d22a953ed87733edc4062117260a03f399",
+      "completed_at": "2026-11-02T21:37:40Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-02T21:37:40Z",
+          "kind": "review",
+          "text": "Check: `archive`/`unarchive` via `lib/archive.py` (crash-safe order kept: `work.moving_into_archive()` makes the JSON store write the archive first; merge driver registered there); dashboard loads the archive from `v1 …/tasks?archived=true` and its notice from atm’s `archive_hint` (its own archive rule removed). Fixture: a 1 MB output cap hid a failure; it now throws instead of serving around one. 954 unit, 359 e2e, 541 atm-cli, 97 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-373",
@@ -19204,7 +19216,7 @@
       "description": "Step 13 of `docs/layered-architecture.md` §9 (§2).\n\n## Change\n- The `Vcs` interface in full, with git behind it; `code.commit` (adding the store's `files_for_commit`), `code.record_commit`, `code.pr`, `code.merged`; `settings.init`, `workflow`, `repository`, `logo` (§5.1).\n- `git_ops.py`, `repository.py` and the branch read in `query.py` split into vcs and atm-lib; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests with a fake vcs; the git scenarios and `tests/scripts/*.test.mjs` for commit and merge pass unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-372"
       ],
@@ -19214,7 +19226,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:57Z",
+      "updated_at": "2026-11-02T21:37:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19230,7 +19242,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T21:37:47Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-374",

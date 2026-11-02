@@ -91,6 +91,9 @@ class StoreContract:
         here = self.store.change(lambda work: work.here())
         self.assertEqual(sorted(here), ["branch", "worktree"])
 
+    def test_the_files_for_commit_are_a_list_of_relative_paths(self):
+        self.assertTrue(all(isinstance(f, str) and not os.path.isabs(f) for f in self.store.files_for_commit()))
+
 
 class MemoryStoreContract(StoreContract, unittest.TestCase):
     def make_store(self):
@@ -113,6 +116,9 @@ class JsonGitStoreContract(StoreContract, unittest.TestCase):
 
     def reopen(self):
         return JsonGitStore(find_paths(self.root))  # read from the files again
+
+    def test_tasks_json_travels_with_code_commits(self):
+        self.assertEqual(self.store.files_for_commit(), [os.path.join(".agentic-task-manager", "tasks.json")])
 
     def test_a_change_that_changes_nothing_leaves_the_file_alone(self):
         # atm next and the heartbeats look without changing: open dashboards must not reload for them (T-369)

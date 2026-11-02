@@ -54,6 +54,9 @@ class MemoryStore:
     def working_copy(self):
         return None
 
+    def files_for_commit(self):
+        return []  # nothing of the memory travels with code commits
+
     def raw(self):
         return {"document": self.document(), "archive": self.archive, "archive_error": None}
 

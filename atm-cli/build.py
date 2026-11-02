@@ -68,9 +68,9 @@ MODULES = [
     "lib.sprints",
     "lib.releases",
     "lib.archive",
+    "lib.code",
     "boot.open",
     "cli.render",
-    "git_ops",
     "migrate",
     "api.server",
     "cli.query",
@@ -82,6 +82,7 @@ MODULES = [
     "cli.releases",
     "cli.archive",
     "cli.show",
+    "cli.code",
     "cli.main",
 ]
 

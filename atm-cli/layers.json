@@ -4,7 +4,6 @@
     "claims",
     "components",
     "core",
-    "git_ops",
     "lock",
     "logo",
     "merge",
@@ -21,7 +20,6 @@
     "cli.main": [
       "api.server",
       "core",
-      "git_ops",
       "lock",
       "logo",
       "merge",
@@ -32,6 +30,7 @@
       "repository"
     ],
     "cli.archive": ["core"],
+    "cli.code": ["claims", "core"],
     "cli.claims": ["claims", "core", "paths", "registry"],
     "cli.components": ["core"],
     "cli.edit": ["claims", "components", "core"],
@@ -45,12 +44,13 @@
     "db.memory": ["model"],
     "lib.archive": ["core", "model"],
     "lib.claims": ["claims", "core", "model"],
+    "lib.code": ["core", "model"],
     "lib.components": ["components", "model"],
     "lib.edit": ["components", "core", "model"],
     "lib.query": ["claims", "core", "model"],
     "lib.releases": ["core", "model"],
     "lib.sprints": ["core", "model", "sprint_names"],
     "lib.status": ["claims", "core", "model"],
-    "vcs.git": ["registry"]
+    "vcs.git": ["core", "registry"]
   }
 }

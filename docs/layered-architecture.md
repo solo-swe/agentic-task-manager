@@ -113,7 +113,7 @@ atm runs `git` today for two different reasons, and the design keeps them apart.
 
 **Git as the code's version control** (the vcs interface):
 
-- `atm commit`: commits exactly a task's files with `tasks.json`, and records the SHA on the task (`git_ops.py:172`);
+- `atm commit`: commits exactly a task's files with `tasks.json`, and records the SHA on the task (`lib/code.py` `commit_task`, through `vcs/git.py`; before step 13, `git_ops.py`);
 - `atm commit --record`: checks a commit is in the history (`merge-base --is-ancestor`);
 - `atm workflow`'s default base branch (`origin/HEAD`), `atm repository`'s remote address.
 

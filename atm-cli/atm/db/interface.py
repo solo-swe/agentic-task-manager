@@ -38,6 +38,11 @@ class Store(Protocol):
         """How big the project's data is, in bytes: `tasks` (the working tasks) and `archive`."""
         ...
 
+    def files_for_commit(self) -> List[str]:
+        """The files of the store that travel with a code commit (relative to the repository): tasks.json for the
+        JSON-in-git store, none for a store that syncs elsewhere (docs/layered-architecture.md §2)."""
+        ...
+
     def problems(self) -> dict:
         """What a tolerant read found wrong with the data (T-377): {"file": [...], "tasks": {id: [...]}}, in `atm
         check`'s words; empty for a strict read, which refuses such data instead."""
