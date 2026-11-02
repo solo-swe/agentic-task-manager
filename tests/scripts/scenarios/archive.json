@@ -165,6 +165,51 @@
     "expect": { "stdout": "Next: T-2 Next (backlog, feature)\n" }
   },
   {
+    "name": "add: a dependency on an archived task is fine, as check says (T-356)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "next_id": 3 }, "tasks": [{ "id": "T-2", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
+      }
+    },
+    "args": ["add", "--name", "New", "--type", "feature", "--dep", "T-1", "--json"],
+    "expect": { "stdoutIncludes": ["\"id\": \"T-3\"", "\"dependencies\": [\n      \"T-1\"\n    ]"] }
+  },
+  {
+    "name": "add: a dependency on a task in neither file is still refused (T-356)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "next_id": 3 }, "tasks": [{ "id": "T-2", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
+      }
+    },
+    "args": ["add", "--name", "New", "--type", "feature", "--dep", "T-9"],
+    "expect": { "exit": 2, "stderrIncludes": ["T-3 (New) depends on T-9, which doesn't exist"] }
+  },
+  {
+    "name": "edit --add-dep: an archived task is fine (T-356)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "name": "Now", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
+      },
+      "commands": [["sh", "-c", "\"$ATM\" edit T-2 --add-dep T-1"]]
+    },
+    "args": ["deps", "T-2"],
+    "expect": { "stdout": "T-2 waits for: T-1 (done, archived)\nT-2 is waited on by: nothing\n" }
+  },
+  {
+    "name": "edit --add-dep: a task in neither file is refused (T-356)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "name": "Now", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
+      }
+    },
+    "args": ["edit", "T-2", "--add-dep", "T-9"],
+    "expect": { "exit": 2, "stderrIncludes": ["T-2 can't depend on T-9, which doesn't exist"] }
+  },
+  {
     "name": "show and deps fall back to the archive; start refuses an archived task with a hint",
     "setup": {
       "files": {

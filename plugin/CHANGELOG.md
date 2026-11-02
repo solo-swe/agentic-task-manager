@@ -76,6 +76,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **A dependency on an archived task** (T-356, found in T-277): `atm add` (`--dep`, or `dependencies` in
+  `--json-file`) and `atm edit --add-dep` accept an archived task, as `atm check` does (it counts as done); before,
+  they said it didn't exist. An ID in neither file is still refused.
 - **`atm show` marks an archived task** (T-353, found in T-277): `· archived` in its header, `archived: true` in
   `--json`; before, only its archived dependencies said so.
 - **The Projects Overview counts each project's archive** (T-355, found in T-277): its Activity, Progress and Agents

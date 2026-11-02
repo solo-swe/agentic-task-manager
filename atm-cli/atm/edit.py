@@ -203,7 +203,8 @@ def add_tasks(data, entries, actor):
     for task, real in zip(tasks, ids):
         task["id"] = real
         task["dependencies"] = [rename.get(d, d) for d in task["dependencies"]]
-        missing = [d for d in task["dependencies"] if d not in existing and d not in ids]
+        # An archived task is done: depending on it is fine, as atm check says (T-356)
+        missing = [d for d in task["dependencies"] if d not in existing and d not in ids and not archived_task(d)]
         if missing:
             raise AtmError(f"{real} ({task['name']}) depends on {', '.join(missing)}, which doesn't exist", 2)
         if task.get("related"):
@@ -329,7 +330,7 @@ def edit_task(data, task, args):
         if key in task and not task[key]:
             del task[key]
     ids = {t.get("id") for t in data["tasks"]}
-    missing = [d for d in args.add_dep if d not in ids]
+    missing = [d for d in args.add_dep if d not in ids and not archived_task(d)]
     if missing:
         raise AtmError(f"{task['id']} can't depend on {', '.join(missing)}, which doesn't exist", 2)
     if task["id"] in args.add_dep:
