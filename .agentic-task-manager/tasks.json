@@ -16775,14 +16775,14 @@
       "description": "On the All projects page there is too much empty space between the title bar and the tabs and cards. Tighten it to match a project's page (where the tabs sit right under the title bar), keeping whole-pixel heights (the sticky footer test).\n\n## Tests\nThe projects overview screenshots updated (dark, light, narrow); the footer test still passes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T05:46:17Z",
+      "updated_at": "2026-11-02T05:48:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16807,10 +16807,19 @@
           "kind": "note",
           "text": "Reopened: The user still sees extra space under the title bar: the ~40px gap from `.topbar` is shared with project pages and was left alone",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T05:48:50Z",
+          "kind": "outcome",
+          "text": "Tabs now 12px under the subtitle on every page (`.topbar` bottom padding and margin); screenshot baselines left for T-345",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T05:46:17Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "7110700ad99dea0afa2ea95dfdfbd4f726502306",
+      "completed_at": "2026-11-02T05:48:50Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-335",
