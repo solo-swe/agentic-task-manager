@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 345,
+    "next_id": 346,
     "labels": [
       {
         "id": "architecture",
@@ -16775,14 +16775,14 @@
       "description": "On the All projects page there is too much empty space between the title bar and the tabs and cards. Tighten it to match a project's page (where the tabs sit right under the title bar), keeping whole-pixel heights (the sticky footer test).\n\n## Tests\nThe projects overview screenshots updated (dark, light, narrow); the footer test still passes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T05:38:22Z",
+      "updated_at": "2026-11-02T05:41:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16796,7 +16796,18 @@
       ],
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T05:38:22Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "d763151a6712b1dce05780196cfd11bd8941279a",
+      "completed_at": "2026-11-02T05:41:21Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T05:41:21Z",
+          "kind": "outcome",
+          "text": "The overview’s tabs now sit at the same height under the title bar as a project’s (`.landing` top padding removed); e2e test added, 8 darwin baselines updated, Linux ones deleted",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-335",
@@ -17195,7 +17206,8 @@
         "T-339",
         "T-340",
         "T-341",
-        "T-343"
+        "T-343",
+        "T-345"
       ],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -17205,9 +17217,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T01:55:27Z",
+      "updated_at": "2026-11-02T05:44:13Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -17218,6 +17230,43 @@
       "components": [
         "docs"
       ]
+    },
+    {
+      "id": "T-345",
+      "name": "Testing: make screenshots and e2e runs cheaper to keep up",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "interactive",
+        "testing"
+      ],
+      "description": "Screenshot baselines and the full e2e run make every UI change expensive. Discuss the options with the user, agree on a plan, implement it, and write the result into the testing conventions.\n\n## Pain points (this sprint)\n- **Too many baselines:** 176, per platform. Small UI changes rewrite many: T-334's spacing touched 8, T-341 and T-340 another 12.\n- **The Linux round trip:** Linux baselines need a CI run and an artifact download (or Docker), an extra push cycle per visual change.\n- **Flakes:** anti-aliasing differs by a few pixels between runs (the settings-menu screenshot).\n- **Slow wrap-ups:** the full e2e and visual run make finishing a task slow (T-341's wrap-up took hours).\n\n## Options to discuss\n- Fewer, smaller screenshots: per component instead of whole pages, a few page-level ones kept.\n- Masking what changes; a small pixel tolerance.\n- The visual suite apart from the functional e2e suite.\n- Visual run only at the end of a sprint, baselines updated once there (in the release task).\n- Agents run only the specs their change affects (tags, or a map from changed files to specs).\n- Linux baselines generated locally in Docker, or Linux-only baselines.\n\n## Then\nImplement what was agreed, update `CLAUDE.md` (Testing conventions, CI) and the agent's memory notes, and make sure `npm run verify` and CI still cover what matters.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/playwright.config.ts",
+        "dashboard/tests/e2e/visual.spec.ts",
+        "dashboard/package.json",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-02T05:44:10Z",
+      "updated_at": "2026-11-02T05:44:10Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T05:44:10Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "with": "user"
     }
   ]
 }
