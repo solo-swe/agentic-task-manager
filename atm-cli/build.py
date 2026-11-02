@@ -12,9 +12,13 @@ layers (flat, in atm-cli/atm/) and the imports that still break the rule are lis
 ratchet: the build refuses a flat module or a forbidden import that isn't listed, and an entry that is no longer
 needed, so the list only shrinks as the migration goes on.
 
-Usage: python3 atm-cli/build.py           write plugin/scripts/atm.py (only if it changed)
-       python3 atm-cli/build.py --check   exit 1 if plugin/scripts/atm.py is not what the modules build
-       python3 atm-cli/build.py --output F   write the build to F instead
+It generates the data model's types too (docs/layered-architecture.md §4): from the JSON Schemas in
+atm-cli/atm/common/schema/, the Python TypedDicts in atm-cli/atm/common/types.py and the TypeScript interfaces in
+dashboard/src/lib/generated/types.ts. One generator, in the standard library, for both languages.
+
+Usage: python3 atm-cli/build.py           write the generated types and plugin/scripts/atm.py (only if they changed)
+       python3 atm-cli/build.py --check   exit 1 if any of them is not what the sources build
+       python3 atm-cli/build.py --output F   write the build to F instead (the generated types are left alone)
 Design: docs/v4/atm-cli.md, section 2.
 """
 
@@ -27,6 +31,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.join(HERE, "atm")
 LAYERS_FILE = os.path.join(HERE, "layers.json")
 TARGET = os.path.join(os.path.dirname(HERE), "plugin", "scripts", "atm.py")
+SCHEMA_DIR = os.path.join(PACKAGE, "common", "schema")
+PY_TYPES = os.path.join(PACKAGE, "common", "types.py")
+TS_TYPES = os.path.join(os.path.dirname(HERE), "dashboard", "src", "lib", "generated", "types.ts")
 # Dependency order: a module may only import from modules before it. A dotted name is a module in a layer's folder.
 MODULES = [
     "core",
@@ -35,6 +42,7 @@ MODULES = [
     "registry",
     "model",
     "common.fields",
+    "common.types",
     "db.interface",
     "db.jsongit.store",
     "db.memory",
@@ -251,13 +259,127 @@ def build():
     return HEADER + docstring + "\n\n" + "\n".join(imports) + "\n\n\n" + "\n\n\n".join(sections) + "\n"
 
 
+GENERATED = "Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run"
+GENERATED_HOW = "`npm run build:cli` in dashboard/ (the pre-commit hook does it too)."
+
+
+def schema_types():
+    """The object types the schemas define, in order: each file's $defs, then the file's own type (its title)."""
+    types, seen = [], set()
+    for file in sorted(f for f in os.listdir(SCHEMA_DIR) if f.endswith(".schema.json")):
+        with open(os.path.join(SCHEMA_DIR, file), encoding="utf-8") as f:
+            schema = json.load(f)
+        for name, definition in list(schema.get("$defs", {}).items()) + [(schema["title"], schema)]:
+            if name in seen:
+                raise BuildError(f"common/schema/{file}: the type {name} is defined twice")
+            if definition.get("type") != "object":
+                raise BuildError(f"common/schema/{file}: {name} isn't an object type")
+            seen.add(name)
+            types.append((name, definition))
+    return types
+
+
+def property_type(prop, where, ts):
+    """A property's type in TypeScript (`ts`) or Python. The schemas use a small subset of JSON Schema: the scalar
+    types, arrays, string enums and $refs to the types the schemas define."""
+    if "$ref" in prop:
+        return prop["$ref"].rsplit("/", 1)[-1]
+    if "enum" in prop:
+        values = [f"'{v}'" for v in prop["enum"]]
+        return " | ".join(values) if ts else f"Literal[{', '.join(values)}]"
+    kind = prop.get("type")
+    scalars = {"string": ("string", "str"), "integer": ("number", "int"), "number": ("number", "float"), "boolean": ("boolean", "bool")}
+    if kind in scalars:
+        return scalars[kind][0 if ts else 1]
+    if kind == "array":
+        item = property_type(prop.get("items", {}), where, ts)
+        return (f"({item})[]" if " | " in item else f"{item}[]") if ts else f"List[{item}]"
+    raise BuildError(f"common/schema: {where} has a type the generator doesn't know (define objects in $defs)")
+
+
+def generated_typescript(types):
+    lines = [f"// {GENERATED}", f"// {GENERATED_HOW}"]
+    for name, definition in types:
+        lines.append("")
+        if definition.get("description"):
+            lines.append(f"/** {definition['description']} */")
+        lines.append(f"export interface {name} {{")
+        required = set(definition.get("required", []))
+        for prop, spec in definition.get("properties", {}).items():
+            if spec.get("description"):
+                lines.append(f"  /** {spec['description']} */")
+            optional = "" if prop in required else "?"
+            lines.append(f"  {prop}{optional}: {property_type(spec, f'{name}.{prop}', True)};")
+        lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+def generated_python(types):
+    # The functional form: keys such as `from` and `with` are Python keywords
+    body, used = [], set()
+    for name, definition in types:
+        body += [""]
+        if definition.get("description"):
+            body.append(f"# {definition['description']}")
+        body.append(f'{name} = TypedDict(')
+        body.append(f'    "{name}",')
+        body.append("    {")
+        required = set(definition.get("required", []))
+        for prop, spec in definition.get("properties", {}).items():
+            annotation = property_type(spec, f"{name}.{prop}", False)
+            used.update(t for t in ("List", "Literal") if t + "[" in annotation)
+            notes = (["required"] if prop in required else []) + ([spec["description"]] if spec.get("description") else [])
+            if notes:
+                body.append(f"        # {'; '.join(notes)}")
+            body.append(f'        "{prop}": {annotation},')
+        body.append("    },")
+        body.append("    total=False,")
+        body.append(")")
+    header = [
+        f'"""{GENERATED}',
+        f"{GENERATED_HOW} TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has",
+        'no typing.Required)."""',
+        "",
+        f"from typing import {', '.join(sorted(used | {'TypedDict'}))}",
+    ]
+    return "\n".join(header + body) + "\n"
+
+
+def generated_files():
+    """The files generated from the schemas, by path."""
+    types = schema_types()
+    return {PY_TYPES: generated_python(types), TS_TYPES: generated_typescript(types)}
+
+
+def read_text(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return None
+
+
 def main(argv):
     try:
+        generated = generated_files()
+        if "--check" not in argv and "--output" not in argv:
+            for path, content in generated.items():
+                if read_text(path) != content:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(content)
         text = build()
     except BuildError as e:
         sys.stderr.write(f"build.py: {e}\n")
         return 1
     if "--check" in argv:
+        for path, content in generated.items():
+            if read_text(path) != content:
+                sys.stderr.write(
+                    f"build.py: {os.path.relpath(path, os.path.dirname(HERE))} is stale. Run `npm run build:cli` in "
+                    "dashboard/ and commit it.\n"
+                )
+                return 1
         try:
             with open(TARGET, encoding="utf-8") as f:
                 current = f.read()

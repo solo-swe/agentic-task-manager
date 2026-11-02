@@ -1,0 +1,56 @@
+"""common's schemas describe the data atm writes and the dashboard reads (docs/layered-architecture.md §4): every
+task in the dashboard's fixtures fits task.schema.json, and so does every field of the tasks in the task files the
+scenario tests expect (written by atm; minimal on purpose, so without the required fields)."""
+
+import glob
+import json
+import os
+import unittest
+
+from schema_check import load_schema, problems
+from support import REPO
+
+TASK = load_schema("task.schema.json")
+
+
+def tasks_in(document):
+    """The tasks of a task file; some scenarios keep malformed entries on purpose, which aren't tasks."""
+    tasks = document.get("tasks", []) if isinstance(document, dict) else []
+    return [t for t in tasks if isinstance(t, dict)] if isinstance(tasks, list) else []
+
+
+class TaskSchema(unittest.TestCase):
+    def assert_fits(self, tasks, source, required=True):
+        for t in tasks:
+            self.assertEqual(problems(t, TASK, required=required), [], f"{source}: {t.get('id')}")
+
+    def test_the_dashboard_fixtures(self):
+        files = glob.glob(os.path.join(REPO, "dashboard", "tests", "fixtures", "*.json"))
+        self.assertTrue(files)
+        for path in files:
+            with open(path, encoding="utf-8") as f:
+                self.assert_fits(tasks_in(json.load(f)), os.path.basename(path))
+
+    def test_the_task_files_the_scenarios_expect(self):
+        checked = 0
+        for path in glob.glob(os.path.join(REPO, "tests", "scripts", "scenarios", "*.json")):
+            with open(path, encoding="utf-8") as f:
+                scenarios = json.load(f)
+            for scenario in scenarios if isinstance(scenarios, list) else scenarios.get("scenarios", []):
+                for name, content in ((scenario.get("expect") or {}).get("files") or {}).items():
+                    if name.endswith(("tasks.json", "tasks-archive.json")) and isinstance(content, dict):
+                        source = f"{os.path.basename(path)}: {scenario.get('name')}"
+                        self.assert_fits(tasks_in(content), source, required=False)
+                        checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_a_task_that_does_not_fit_is_named(self):
+        self.assertEqual(problems({"id": "T-1", "name": "x", "type": "feature"}, TASK), ["$: missing 'status'"])
+        self.assertEqual(
+            problems({"id": "T-1", "name": "x", "type": "f", "status": "todo", "pr": {"number": "7"}}, TASK),
+            ["$.pr.number: expected integer, got str"],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

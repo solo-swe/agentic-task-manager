@@ -129,3 +129,32 @@ describe('layers', () => {
     assert.match(stderr, /allows lib\.project to import from model, which it no longer does/);
   });
 });
+
+// The types generated from common's schemas (docs/layered-architecture.md §4): Python and TypeScript, one generator
+describe('generated types', () => {
+  test('a schema changed without rebuilding fails the check', () => {
+    const dir = copyOfSources();
+    try {
+      const file = path.join(dir, 'atm-cli/atm/common/schema/task.schema.json');
+      const schema = JSON.parse(fs.readFileSync(file, 'utf8'));
+      schema.properties.estimate = { type: 'integer' };
+      fs.writeFileSync(file, JSON.stringify(schema));
+      const { code, stderr } = runBuild(['--check'], path.join(dir, 'atm-cli/build.py'));
+      assert.equal(code, 1);
+      assert.match(stderr, /atm-cli\/atm\/common\/types\.py is stale/);
+    } finally {
+      removeDir(dir);
+    }
+  });
+
+  test('both languages get every field, required or not', () => {
+    const python = fs.readFileSync(path.join(REPO, 'atm-cli/atm/common/types.py'), 'utf8');
+    const typescript = fs.readFileSync(path.join(REPO, 'dashboard/src/lib/generated/types.ts'), 'utf8');
+    assert.match(python, /# required; Letters, digits.*\n {8}"id": str,/);
+    assert.match(python, /"from": str,/); // a Python keyword, as a key
+    assert.match(python, /"notes": List\[Note\],/);
+    assert.match(typescript, /\n {2}id: string;/);
+    assert.match(typescript, /\n {2}notes\?: Note\[\];/);
+    assert.match(typescript, /\n {2}pr\?: PullRequest;/);
+  });
+});
