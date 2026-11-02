@@ -58,6 +58,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   in `lib/overview-data.ts`. The shipped file's size guardrail goes from 525 to 550 KiB (T-342 trims).
 
 ### Changed
+- **Archive tests** (T-359, after T-277): scenarios for archiving a second time (the archive grows, `meta.archived`
+  counts all), archiving with nothing to move, bringing back several tasks at once and `list --archived --json`;
+  component tests for the subtitle's archived toggle and the List's *N archived tasks hidden* (new
+  `TaskGrid.component.test.ts`).
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own
   counts and *+ N more*, from the new `board_active_sprint` in `api/projects` summaries (`null` without an active
   sprint; `atm summary` too). *All tasks* (`#board-scope`, remembered as `boardScope`) shows every task, as before; a

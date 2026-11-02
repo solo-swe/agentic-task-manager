@@ -18106,14 +18106,14 @@
       "description": "Found in T-277: `atm deps T-003` lists T-014 under \"is waited on by\" but not the archived T-004, which depends on T-003. Its \"waits for\" side already marks archived tasks (`(done, archived)`); list archived dependents too, marked the same way, in text and `--json` (`atm-cli/atm/query.py`).\n\n## Tests\nA scenario in `tests/scripts/scenarios/archive.json`: an archived task depending on a live one shows under \"is waited on by\".",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:14:09Z",
+      "updated_at": "2026-11-02T10:14:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18127,7 +18127,18 @@
         "cli"
       ],
       "started_at": "2026-11-02T10:14:09Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "13c9fc179ad83a6b1cd6c5570c001fdaf915fefa",
+      "completed_at": "2026-11-02T10:14:49Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T10:14:49Z",
+          "kind": "outcome",
+          "text": "atm deps’ *is waited on by* also lists archived dependents, marked `(done, archived)`; text and --json. Scenarios in archive.json",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-359",
@@ -18140,7 +18151,7 @@
       "description": "Gaps in the archive's tests, found while surveying them after T-277 (the findings' own tests are in T-356, T-357 and T-358).\n\n## atm-cli (`tests/scripts/scenarios/archive.json`)\n- Archiving twice: the second run appends to the existing archive (both runs' tasks in it, none lost) and `meta.archived` counts them all.\n- `atm archive` with nothing to move says so, and changes neither file.\n- `atm unarchive` of several tasks at once: all come back, the archive keeps the rest, `meta.archived` goes down by as many.\n- `atm list --archived --json`.\n\n## Dashboard unit tests\n- `tests/unit/Header.component.test.ts`: the subtitle's *N archived* is a button; a click turns Include archived on (`aria-pressed`, *showing N archived*), another turns it off; none without an archive.\n- A new `tests/unit/TaskGrid.component.test.ts`: *N archived tasks hidden · show* only with an archive and Include archived off, singular for one, and a click turns it on.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "tests/scripts/scenarios/archive.json",
@@ -18148,9 +18159,9 @@
         "dashboard/tests/unit/TaskGrid.component.test.ts"
       ],
       "created_at": "2026-11-02T10:11:16Z",
-      "updated_at": "2026-11-02T10:11:16Z",
+      "updated_at": "2026-11-02T10:14:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Overview and polish",
@@ -18161,7 +18172,9 @@
       "components": [
         "dashboard",
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-02T10:14:50Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

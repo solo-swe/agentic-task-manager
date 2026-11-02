@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import Header from '../../src/components/Header.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';
+import archive from '../fixtures/archive.json';
 import sprints from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
@@ -21,6 +22,31 @@ describe('Header', () => {
     // Its phases read as sprints (not migrated)
     expect(container.querySelector('#subtitle')).toHaveTextContent('12 tasks across 3 sprints · 600 archived —');
     expect(dashboard.archiveLoaded).toBe(false);
+  });
+
+  it('the archived count is a toggle for Include archived (T-354)', async () => {
+    loadIntoDashboard({ ...standard, meta: { ...standard.meta, archived: 3 } }, archive as TasksFile);
+    const { container } = render(Header);
+    const toggle = container.querySelector<HTMLButtonElement>('#archived-count')!;
+    expect(toggle.tagName).toBe('BUTTON');
+    expect(toggle).toHaveTextContent('3 archived');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    await fireEvent.click(toggle);
+    expect(dashboard.includeArchived).toBe(true);
+    expect(toggle).toHaveTextContent('showing 3 archived');
+    expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    expect(toggle.title).toBe('Hide the archived tasks again');
+    await fireEvent.click(toggle);
+    expect(dashboard.includeArchived).toBe(false);
+    expect(toggle).toHaveTextContent(/^3 archived$/);
+  });
+
+  it('without an archive, no toggle: the subtitle is one text, as before the archive existed', () => {
+    const { container } = render(Header);
+    expect(container.querySelector('#archived-count')).toBeNull();
+    expect(container.querySelector('#subtitle')).toHaveTextContent(
+      '12 tasks across 3 sprints — loaded from tasks.json',
+    );
   });
 
   it('counts the sprints and the backlog in a migrated project (SR-7.6)', () => {

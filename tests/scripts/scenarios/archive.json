@@ -100,6 +100,69 @@
     }
   },
   {
+    "name": "archiving again appends to the archive: the earlier tasks stay, meta.archived counts them all (T-359)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "archived": 1 },
+          "tasks": [
+            { "id": "T-002", "status": "done", "completed_at": "2026-04-01T00:00:00Z" },
+            { "id": "T-003", "status": "todo" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "meta": { "archived_at": "2026-03-01T00:00:00Z" },
+          "tasks": [{ "id": "T-001", "status": "done", "completed_at": "2026-02-01T00:00:00Z" }]
+        }
+      }
+    },
+    "args": ["archive"],
+    "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
+    "expect": {
+      "stdoutIncludes": ["Archived 1 task(s): T-002."],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "archived": 2, "next_id": 4 },
+          "tasks": [{ "id": "T-003", "status": "todo" }]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "meta": { "archived_at": "2026-05-01T00:00:00Z" },
+          "tasks": [
+            { "id": "T-001", "status": "done", "completed_at": "2026-02-01T00:00:00Z" },
+            { "id": "T-002", "status": "done", "completed_at": "2026-04-01T00:00:00Z" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "archive with nothing to move says so and writes neither file (T-359)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-1", "status": "todo" },
+            { "id": "T-2", "status": "done", "completed_at": "2026-04-30T00:00:00Z" }
+          ]
+        }
+      }
+    },
+    "args": ["archive"],
+    "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
+    "expect": {
+      "stdout": "Nothing to archive.\nKept 1 finished: T-2 (finished in the last 14 days).\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-1", "status": "todo" },
+            { "id": "T-2", "status": "done", "completed_at": "2026-04-30T00:00:00Z" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": false
+      }
+    }
+  },
+  {
     "name": "archive --dry-run only says what would move",
     "setup": {
       "files": {
@@ -358,6 +421,61 @@
     }
   },
   {
+    "name": "unarchive of several tasks at once: all come back, the archive keeps the rest, meta.archived goes down (T-359)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "archived": 3 }, "tasks": [{ "id": "T-9", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [
+            { "id": "T-1", "status": "done" },
+            { "id": "T-2", "status": "done" },
+            { "id": "T-3", "status": "done" }
+          ]
+        }
+      }
+    },
+    "args": ["unarchive", "T-3", "T-1"],
+    "expect": {
+      "stdout": "Brought back T-3, T-1 from the archive.\nT-3, T-1 are finished: the next `atm archive` moves them back, unless reopened (`atm reopen <id> --reason …`).\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "archived": 1 },
+          "tasks": [
+            { "id": "T-9", "status": "todo" },
+            { "id": "T-3", "status": "done" },
+            { "id": "T-1", "status": "done" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-2", "status": "done" }] }
+      }
+    }
+  },
+  {
+    "name": "list --archived --json lists the archive, as list --json lists tasks.json (T-359)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "name": "New", "status": "todo" }] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "name": "Old", "status": "done", "priority": "P1", "labels": ["api"] }]
+        }
+      }
+    },
+    "args": ["list", "--archived", "--json"],
+    "expect": {
+      "json": [
+        {
+          "id": "T-1",
+          "status": "done",
+          "kind": "done",
+          "sprint": null,
+          "priority": "P1",
+          "labels": ["api"],
+          "name": "Old"
+        }
+      ]
+    }
+  },
+  {
     "name": "unarchive of a task that isn't archived",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["unarchive", "T-9"],
@@ -367,7 +485,12 @@
     "name": "unarchive tells a task already in tasks.json from one that doesn't exist, and moves nothing (T-357)",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "status": "todo" }, { "id": "T-3", "status": "done" }] },
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-2", "status": "todo" },
+            { "id": "T-3", "status": "done" }
+          ]
+        },
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
       }
     },
