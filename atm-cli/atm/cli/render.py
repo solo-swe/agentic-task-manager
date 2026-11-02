@@ -1,5 +1,31 @@
 """Text for people and agents: how the CLI shows atm-lib's results. Short and stable, for agents to read (CLI-3.3)."""
 
+from ..common.fields import priority_of
+from ..lib.tasks import view_task
+from ..model import archived_task, vocabulary
+
+
+def list_lines(vocab, tasks):
+    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
+    id_width = max(len(str(t.get("id"))) for t in tasks)
+    status_width = max(len(str(t.get("status"))) for t in tasks)
+    for t in tasks:
+        labels = t.get("labels") or []
+        yield (
+            f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
+            f"{priority_of(vocab, t)}  "
+            + (f"[{', '.join(labels)}] " if labels else "")
+            + str(t.get("name", ""))
+        )
+
+
+def describe_task(data, task):
+    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
+    start): the same text as `atm show`, from atm-lib's view of it."""
+    # A task not in tasks.json is from the archive
+    archived = all(t is not task for t in data["tasks"])
+    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
+
 
 def render_task(view):
     """A task in full, as text (from atm-lib's `view_task`): what an agent needs to work on it."""

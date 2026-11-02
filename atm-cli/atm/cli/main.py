@@ -9,6 +9,7 @@ import os
 import sys
 
 from ..claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
+from ..common.errors import AtmFailure
 from ..components import cmd_components
 from ..core import AtmError, AtmExit, out, plugin_version, to_json
 from ..model import REVIEW_MODES
@@ -25,8 +26,8 @@ from ..server import DEFAULT_PORT, cmd_serve, cmd_serve_child, refresh_server
 from ..archive import cmd_archive, cmd_unarchive
 from ..edit import cmd_add, cmd_check, cmd_edit
 from ..git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
-from ..query import cmd_deps, cmd_list, cmd_status, cmd_summary
 from ..tasks import cmd_note, cmd_status_change
+from .query import cmd_deps, cmd_list, cmd_status, cmd_summary
 from .show import cmd_show
 
 USAGE = """usage: atm [--dir PATH] <command> [options]
@@ -606,7 +607,8 @@ def main(argv):
             except Exception:
                 pass  # never in the way of the command itself
         args.run(args)
-    except AtmError as e:
+    except AtmFailure as e:
+        # atm-lib's errors and those of the modules from before the layers (AtmError is one of them)
         report(e, as_json)
         return e.code
     except AtmExit as e:

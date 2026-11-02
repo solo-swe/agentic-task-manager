@@ -1,38 +1,44 @@
-"""Reading tasks: show, list, status, deps. Agents read tasks through these, never tasks.json itself (DM-1.1).
+"""atm-lib: the read commands (docs/layered-architecture.md §5.1): list, deps, status, the project's summary, the
+backlog. Agents read tasks through these, never tasks.json itself (DM-1.1). They never write: the store reads the
+task files and the claims without the lock (both are replaced atomically).
 
-Text output is short and stable, for agents to read; --json is for anything that parses it (CLI-3.3). These commands
-never write: they read tasks.json and the claims store without the lock (both are replaced atomically).
+Much of it still takes the whole task document (`store.document()`) for the rules from before the layers it calls
+(`unfinished_dependencies`, `loop_order`, ...); those move into atm-lib with their own slices (§9).
 """
 
 import json
-import os
 import re
 
-from .claims import Selection, loop_order, next_task, read_store
-from .core import AtmError, now, out, parse_iso, to_json
-from .model import (
+from ..claims import Selection, loop_order, next_task
+from ..common.errors import AtmFailure, NotFound
+from ..common.fields import priority_of, started_by
+from ..core import now, parse_iso
+from ..model import (
     REWORK_STATES,
-    archive_hint,
-    archive_path,
-    archived_task,
+    archive_hint_for,
     effective_release,
     find_sprint,
-    find_task,
     kind_of,
     known_release,
-    load_archive,
-    load_tasks,
     natural_key,
     open_in_closed_sprints,
     priority_rank,
     unfinished_dependencies,
     vocabulary,
 )
-from .cli.render import render_task
-from .common.fields import priority_of, started_by
-from .lib.tasks import view_task
-from .paths import find_paths
-from .registry import head_branch
+
+
+class Filters:
+    """What a read keeps (`atm list`'s and `atm status`'s options): any of `sprint` (a list of names), `backlog`,
+    `release`, `component`, `status` (a list), `type`, `priority`, `label` (a list: all of them), `agent`, `ready`,
+    `blocked`, `in_pr`, `with_user`, `archived`; what isn't given keeps everything. The CLI passes its parsed
+    arguments, which have these names."""
+
+    def __init__(self, **given):
+        self.__dict__.update(given)
+
+    def __getattr__(self, name):
+        return None
 
 
 def summary(vocab, task):
@@ -59,7 +65,7 @@ def scope_filter(vocab, args):
     for name in getattr(args, "sprint", None) or []:
         sprint = find_sprint(vocab, name)
         if sprint is None:
-            raise AtmError(f"no sprint {name!r}; the sprints: {', '.join(s['id'] for s in vocab['sprints']) or 'none'}", 2)
+            raise NotFound(f"no sprint {name!r}; the sprints: {', '.join(s['id'] for s in vocab['sprints']) or 'none'}", 2)
         names.append(sprint["id"])
     if getattr(args, "release", None):
         known_release(vocab, args.release)
@@ -93,22 +99,16 @@ def ready_tasks(data):
     return sorted(ready, key=lambda t: (priority_rank(vocab, t.get("priority")), natural_key(t.get("id"))))
 
 
-def describe_task(data, task):
-    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
-    start): the same text as `atm show`, from atm-lib's view of it."""
-    # A task not in tasks.json is from the archive
-    archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
-
-
-def cmd_list(args):
-    paths = find_paths(os.getcwd())
-    data = load_tasks(paths)
+def list_matching(project, filters):
+    """`atm list`: the tasks the filters keep, in the project's order (the archive's with `archived`)."""
+    store = project.store
+    data = store.document()
     vocab = vocabulary(data)
+    args = filters
     ready = {t.get("id") for t in ready_tasks(data)}
     in_scope = scope_filter(vocab, args)
     tasks = []
-    for t in load_archive(paths)["tasks"] if args.archived else data["tasks"]:
+    for t in store.list_archived() if args.archived else data["tasks"]:
         kind = kind_of(vocab, t.get("status"))
         if not in_scope(t):
             continue
@@ -131,38 +131,19 @@ def cmd_list(args):
         if args.with_user and t.get("with") != "user":
             continue
         tasks.append(t)
-    if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
-        return
-    if not tasks:
-        out("No tasks match.")
-        return
-    for line in list_lines(vocab, tasks):
-        out(line)
+    return {"vocab": vocab, "tasks": tasks}
 
 
-def list_lines(vocab, tasks):
-    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
-    id_width = max(len(str(t.get("id"))) for t in tasks)
-    status_width = max(len(str(t.get("status"))) for t in tasks)
-    for t in tasks:
-        labels = t.get("labels") or []
-        yield (
-            f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
-            f"{priority_of(vocab, t)}  "
-            + (f"[{', '.join(labels)}] " if labels else "")
-            + str(t.get("name", ""))
-        )
-
-
-def cmd_deps(args):
-    paths = find_paths(os.getcwd())
-    data = load_tasks(paths)
-    task = find_task(data, args.id, archived=True)
-    by_id = {t.get("id"): t for t in data["tasks"]}
+def task_dependencies(project, task_id):
+    """`atm deps`: what a task waits for, and what waits for it, archived tasks included (T-358)."""
+    store = project.store
+    task = store.get_task(task_id) or store.get_archived_task(task_id)
+    if task is None:
+        raise NotFound(f"no task {task_id}")
+    by_id = {t.get("id"): t for t in store.list_tasks()}
 
     def dependency(d):
-        found = by_id.get(d) or archived_task(d)
+        found = by_id.get(d) or store.get_archived_task(d)
         if not found:
             return {"id": d, "status": "missing", "name": ""}
         return {"id": d, "status": found.get("status") + (", archived" if d not in by_id else ""), "name": found.get("name", "")}
@@ -170,25 +151,17 @@ def cmd_deps(args):
     waits_for = [dependency(d) for d in task.get("dependencies") or []]
     waited_on_by = [
         {"id": t.get("id"), "status": t.get("status"), "name": t.get("name", "")}
-        for t in data["tasks"]
-        if args.id in (t.get("dependencies") or [])
+        for t in store.list_tasks()
+        if task_id in (t.get("dependencies") or [])
     ]
     # Archived tasks that depended on it are history too, marked as the waits-for side marks them (T-358); a task in
     # both files is the tasks.json one
     waited_on_by += [
         {"id": t.get("id"), "status": f"{t.get('status')}, archived", "name": t.get("name", "")}
-        for t in load_archive(paths)["tasks"]
-        if isinstance(t, dict)
-        and t.get("id") not in by_id
-        and isinstance(t.get("dependencies"), list)
-        and args.id in t["dependencies"]
+        for t in store.list_archived()
+        if t.get("id") not in by_id and isinstance(t.get("dependencies"), list) and task_id in t["dependencies"]
     ]
-    if args.json:
-        out(to_json({"id": args.id, "waits_for": waits_for, "waited_on_by": waited_on_by}))
-        return
-    line = lambda items: ", ".join(f"{i['id']} ({i['status']})" for i in items) or "nothing"
-    out(f"{args.id} waits for: {line(waits_for)}")
-    out(f"{args.id} is waited on by: {line(waited_on_by)}")
+    return {"id": task_id, "waits_for": waits_for, "waited_on_by": waited_on_by}
 
 
 ACTIVITY_FIELDS = ("updated_at", "started_at", "completed_at", "review_requested_at", "blocked_at", "skipped_at")
@@ -265,12 +238,11 @@ def description(meta):
     return text if len(text) <= DESCRIPTION_CAP else text[: DESCRIPTION_CAP - 1] + "…"
 
 
-def git_summary(paths, tasks):
+def git_summary(project, tasks):
     """The project's git line for its card (T-206): the main worktree's branch (read from .git/HEAD, no git process),
     and the latest PR recorded on its tasks (`atm pr`; the highest number), `merged` once its tasks have merged_at.
     No forge call and no CI state."""
-    git_dir = os.path.join(paths["root"], ".git")
-    branch = head_branch(git_dir) if os.path.isdir(git_dir) else None
+    branch = project.vcs.branch() if project.vcs else None
     prs = {}
     for t in tasks:
         pr = t.get("pr")
@@ -433,13 +405,13 @@ def agent_minutes(vocab, tasks, current):
     return round(total / 60)
 
 
-def project_stats(paths, data, vocab, tasks, current):
+def project_stats(store, data, vocab, tasks, current):
     """The overview card's line (T-255): when the project started (its first task's created_at, else meta.created),
     how many tasks it has, and the agent time, archived tasks included; an unreadable archive is left out. (A task
     folder with a symlinked file never gets here: find_paths refuses it, docs/security-review.md F8.)"""
     try:
-        archived = [t for t in load_archive(paths)["tasks"] if isinstance(t, dict)]
-    except AtmError:
+        archived = store.list_archived()
+    except AtmFailure:
         archived = []
     ids = {t.get("id") for t in tasks}
     every = tasks + [t for t in archived if t.get("id") not in ids]
@@ -453,11 +425,11 @@ def project_stats(paths, data, vocab, tasks, current):
     }
 
 
-def project_summary(paths):
+def project_summary(project):
     """A project's numbers for the dashboard's overview and project selector (docs/multi-project-api.md, 3.2), by
     status kind as atm counts them everywhere else: done / (total - skipped), the active and recent sprints, live
     claims, what needs the user, the latest activity and the completions of the last 14 days."""
-    data = load_tasks(paths)
+    data = project.store.document()
     vocab = vocabulary(data)
     tasks = data["tasks"]
     kinds = [kind_of(vocab, t.get("status")) for t in tasks]
@@ -466,7 +438,7 @@ def project_summary(paths):
     percent = round(100 * done / counted) if counted else (100 if skipped else 0)
 
     current = now()
-    store = read_store(paths)
+    store = project.store.read_claims()
     live = sorted(
         (
             c
@@ -554,13 +526,13 @@ def project_summary(paths):
             "together": sum(1 for item in needs_you_tasks if item["reason"] == "together"),
         },
         "needs_you_tasks": needs_you_tasks,
-        "git": git_summary(paths, tasks),
+        "git": git_summary(project, tasks),
         "description": description(data.get("meta")),
         "last_activity": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
         "completions_14d": completions,
         "board": board(data, store, tasks, kinds, todo, vocab, current, live),
         "board_active_sprint": active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live),
-        "stats": project_stats(paths, data, vocab, tasks, current),
+        "stats": project_stats(project.store, data, vocab, tasks, current),
     }
 
 
@@ -586,17 +558,15 @@ def active_sprint_board(data, store, tasks, kinds, todo, vocab, current, live):
     )
 
 
-def cmd_summary(args):
-    """The project's summary as atm serve lists it in api/projects (3.2); the dashboard's dev server plays atm serve
-    with it, so its numbers and Next up come from atm-cli too. JSON either way: it is for tools."""
-    out(to_json(project_summary(find_paths(os.getcwd()))))
-
-
-def cmd_status(args):
-    paths = find_paths(os.getcwd())
-    data = load_tasks(paths)
+def status_report(project, scope):
+    """`atm status`: the overview, in the scope's tasks (`Filters` with sprint, backlog, release, component): the
+    active sprint, counts, what is in progress, in review, blocked or waiting, the next task, the files' size and the
+    hints. `report` is what --json prints; `has_sprints` says whether the project has any."""
+    data = project.store.document()
     vocab = vocabulary(data)
-    store = read_store(paths)
+    store = project.store.read_claims()
+    sizes = project.store.sizes()
+    args = scope
     in_scope = scope_filter(vocab, args)
     tasks = [t for t in data["tasks"] if in_scope(t)]
     active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
@@ -651,7 +621,8 @@ def cmd_status(args):
     task_names = {t.get("id"): t.get("name", "") for t in tasks}
     listed = {i["id"] for i in blocked + in_review}
     for record in store["waiting"].values():
-        if not isinstance(record, dict) or record.get("worktree") == paths["root"] or record.get("task") in listed:
+        here = project.store.working_copy()
+        if not isinstance(record, dict) or record.get("worktree") == here or record.get("task") in listed:
             continue
         item = {"id": record.get("task"), "name": task_names.get(record.get("task"), ""), "branch": record.get("branch")}
         if kind_of(vocab, record.get("status")) == "review":
@@ -659,7 +630,7 @@ def cmd_status(args):
         else:
             blocked.append({**item, "waiting_on": record.get("waiting_on"), "questions": record.get("questions") or []})
     nxt, reason = next_task(data, store)
-    sizes = sorted(((len(json.dumps(t, ensure_ascii=False)), t.get("id")) for t in tasks), reverse=True)
+    largest = sorted(((len(json.dumps(t, ensure_ascii=False)), t.get("id")) for t in tasks), reverse=True)
     result = {
         "sprint": sprint,
         "tasks": len(tasks),
@@ -673,59 +644,16 @@ def cmd_status(args):
         "waiting_on_dependencies": waiting,
         "next": {"id": nxt.get("id"), "name": nxt.get("name", "")} if nxt else None,
         "next_reason": reason,
-        "file_bytes": os.path.getsize(paths["tasks"]),
-        "largest_tasks": [{"id": task_id, "bytes": size} for size, task_id in sizes[:3]],
-        "archived": len(load_archive(paths)["tasks"]),
-        "archive_bytes": os.path.getsize(archive_path(paths)) if os.path.isfile(archive_path(paths)) else 0,
+        "file_bytes": sizes["tasks"],
+        "largest_tasks": [{"id": task_id, "bytes": size} for size, task_id in largest[:3]],
+        "archived": len(project.store.list_archived()),
+        "archive_bytes": sizes["archive"],
     }
     # Open tasks left in closed sprints (T-330), whatever the scope: the loop's default selection never takes them
     stranded = open_in_closed_sprints(vocab, data["tasks"])
     if stranded:
         result["open_in_closed_sprints"] = stranded
-    hint = archive_hint(paths, data)
+    hint = archive_hint_for(data, sizes["tasks"])
     if hint:
         result["suggest"] = {"archive": hint}
-    if args.json:
-        out(to_json(result))
-        return
-    pairs = lambda d: ", ".join(f"{k} {v}" for k, v in d.items())
-    elsewhere = lambda i: f" [in another worktree, {i['branch'] or 'detached'}]" if "branch" in i else ""
-    if sprint:
-        details = [f"{sprint['done']} of {sprint['tasks']} done"] + [
-            f"{k} {sprint[k]}" for k in ("due", "release") if sprint.get(k)
-        ]
-        out(f"sprint: {sprint['id']} (active): {' · '.join(details)}")
-        if sprint.get("goal"):
-            out(f"  goal: {sprint['goal']}")
-        if sprint["review_pending"]:
-            out(f"  waiting for the sprint review: {', '.join(sprint['review_pending'])} (/atm:close-sprint)")
-    elif vocab["sprints"]:
-        out("sprint: none active (plan one with /atm:plan-sprint)")
-    if stranded:
-        n = len(stranded)
-        out(
-            f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
-            + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
-            + " (atm move <id> --to backlog or --to active)"
-        )
-    out(f"{len(tasks)} tasks: {pairs(by_status)}")
-    if vocab["sprints"]:
-        out(f"by sprint: {pairs(result['by_sprint'])}")
-    out(f"by type: {pairs(result['by_type'])}")
-    if result["by_label"]:
-        out(f"by label: {pairs(result['by_label'])}")
-    for title, items, extra in (
-        ("in progress", in_progress, lambda i: f" ({i['by']})" if i["by"] else ""),
-        ("in review", in_review, lambda i: (f" (since {i['since']})" if i["since"] else "") + elsewhere(i)),
-        ("blocked", blocked, lambda i: (f" (on {i['waiting_on']})" if i["waiting_on"] else "") + elsewhere(i)),
-        ("waiting on dependencies", waiting, lambda i: f" (on {', '.join(i['on'])})"),
-    ):
-        if items:
-            out(f"{title}: " + "; ".join(f"{i['id']} {i['name']}{extra(i)}" for i in items))
-    out(f"next: {nxt.get('id')} {nxt.get('name', '')}" if nxt else f"next: none ({reason})")
-    largest = ", ".join(f"{i['id']} {i['bytes'] // 1024 or 1} KB" for i in result["largest_tasks"])
-    out(f"file: {result['file_bytes'] // 1024} KB" + (f"; largest tasks: {largest}" if largest else ""))
-    if result["archived"]:
-        out(f"archive: {result['archived']} tasks, {result['archive_bytes'] // 1024} KB")
-    if hint:
-        out(hint["text"])
+    return {"report": result, "has_sprints": bool(vocab["sprints"])}

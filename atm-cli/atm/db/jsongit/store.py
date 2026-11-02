@@ -1,8 +1,11 @@
 """The JSON-in-git store (docs/layered-architecture.md §3): the project's task files, read and written as atm always
-has. For now it wraps the code from before the layers (`load_tasks`, the archive lookup); that code moves in here as
-the migration's slices do (§9)."""
+has. For now it wraps the code from before the layers (`load_tasks`, the archive, the claims store); that code moves
+in here as the migration's slices do (§9)."""
 
-from ...model import archived_task, load_tasks, vocabulary
+import os
+
+from ...claims import read_store
+from ...model import archive_path, archived_task, load_archive, load_tasks, vocabulary
 
 
 class JsonGitStore:
@@ -31,3 +34,22 @@ class JsonGitStore:
     def get_archived_task(self, task_id):
         self._loaded()  # the archive is looked up for the file it belongs to
         return archived_task(task_id)
+
+    def list_archived(self):
+        return [t for t in load_archive(self.paths)["tasks"] if isinstance(t, dict)]
+
+    def read_claims(self):
+        return read_store(self.paths)
+
+    def document(self):
+        return self._loaded()
+
+    def sizes(self):
+        archive = archive_path(self.paths)
+        return {
+            "tasks": os.path.getsize(self.paths["tasks"]),
+            "archive": os.path.getsize(archive) if os.path.isfile(archive) else 0,
+        }
+
+    def working_copy(self):
+        return self.paths["root"]

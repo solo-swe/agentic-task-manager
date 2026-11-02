@@ -49,6 +49,24 @@ class StoreContract:
         self.assertEqual([s["kind"] for s in vocab["statuses"]][:2], ["todo", "active"])
         self.assertEqual(vocab["default_priority"], "P2")
 
+    def test_lists_the_archived_tasks(self):
+        self.assertEqual([t["id"] for t in self.store.list_archived()], ["T-0"])
+
+    def test_no_claims_yet(self):
+        claims = self.store.read_claims()
+        self.assertEqual(sorted(claims), ["claims", "completed", "hints", "resolved", "waiting"])
+        self.assertEqual(claims["claims"], {})
+
+    def test_sizes_in_bytes(self):
+        sizes = self.store.sizes()
+        self.assertGreater(sizes["tasks"], 0)
+        self.assertGreater(sizes["archive"], 0)
+
+    def test_the_document_has_meta_and_the_working_tasks(self):
+        document = self.store.document()
+        self.assertEqual(document["meta"]["project"], "Contract")
+        self.assertEqual([t["id"] for t in document["tasks"]], ["T-1", "T-2"])
+
 
 class MemoryStoreContract(StoreContract, unittest.TestCase):
     def make_store(self):

@@ -1,7 +1,7 @@
 """atm-lib: reading tasks (docs/layered-architecture.md §5.1)."""
 
+from ..common.errors import NotFound
 from ..common.fields import priority_of, started_by
-from ..core import AtmError
 
 
 def view_task(task, archived, tasks, archived_lookup, vocab):
@@ -46,6 +46,6 @@ def show_tasks(project, ids):
         if task is None:
             task, archived = store.get_archived_task(task_id), True
         if task is None:
-            raise AtmError(f"no task {task_id}")
+            raise NotFound(f"no task {task_id}")
         views.append(view_task(task, archived, tasks, store.get_archived_task, vocab))
     return views

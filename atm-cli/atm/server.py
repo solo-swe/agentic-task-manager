@@ -40,7 +40,8 @@ from .claims import claims_store_path
 from .logo import find_logo
 from .migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
 from .paths import find_paths
-from .query import project_summary
+from .boot.open import project_at
+from .lib.query import project_summary
 from .registry import (
     REGISTRY_FILE,
     atm_home,
@@ -339,7 +340,7 @@ def served_file(entry, name):
 
 
 class Summaries:
-    """Each project's summary (query.project_summary), computed again only when its tasks.json or claims store
+    """Each project's summary (atm-lib's project_summary), computed again only when its tasks.json or claims store
     changed, or the day did (the completions count by day)."""
 
     def __init__(self):
@@ -367,7 +368,7 @@ class Summaries:
         if cached and cached[0] == stamp:
             return cached[1]
         try:
-            summary = project_summary(self.paths[entry["path"]][0])
+            summary = project_summary(project_at(self.paths[entry["path"]][0]))
         except AtmError:
             summary = None  # unreadable tasks.json or an unusable vocabulary: listed as missing
         self.cache[entry["path"]] = (stamp, summary)

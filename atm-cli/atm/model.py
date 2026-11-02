@@ -479,8 +479,12 @@ def format_size(size):
 def archive_hint(paths, data):
     """The suggestion to archive (CLI-5.1), or None: when tasks.json is over meta.archive.threshold_kb, or has more
     archivable tasks than threshold_tasks, and there is something to move."""
+    return archive_hint_for(data, os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0)
+
+
+def archive_hint_for(data, size):
+    """archive_hint, for task data `size` bytes big (atm-lib has the size from the store)."""
     settings = archive_settings(data)
-    size = os.path.getsize(paths["tasks"]) if os.path.isfile(paths["tasks"]) else 0
     movable = len(archivable(data))
     if not movable or (size <= settings["threshold_kb"] * 1024 and movable <= settings["threshold_tasks"]):
         return None

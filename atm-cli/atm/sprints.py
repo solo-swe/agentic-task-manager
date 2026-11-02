@@ -23,7 +23,8 @@ from .model import (
     vocabulary,
 )
 from .paths import find_paths
-from .query import list_lines, summary
+from .cli.render import list_lines
+from .lib.query import summary
 from .sprint_names import generate_sprint_name
 
 

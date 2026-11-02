@@ -4,7 +4,7 @@ import unittest
 
 from support import task
 
-from atm.core import AtmError
+from atm.common.errors import NotFound
 from atm.db.memory import MemoryStore
 from atm.lib.project import Project
 from atm.lib.tasks import show_tasks
@@ -25,7 +25,7 @@ class ShowTasks(unittest.TestCase):
         self.assertTrue(view["archived"])
 
     def test_an_unknown_task_is_an_error(self):
-        with self.assertRaisesRegex(AtmError, "no task T-9"):
+        with self.assertRaisesRegex(NotFound, "no task T-9"):
             show_tasks(project([task("T-1")]), ["T-1", "T-9"])
 
     def test_dependencies_with_their_status_archived_or_missing(self):

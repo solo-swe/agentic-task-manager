@@ -8,6 +8,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from .common.errors import AtmFailure
+
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
@@ -16,10 +18,11 @@ TASKS_FILE = "tasks.json"
 DASHBOARD_FILE = "tasks-dashboard.html"
 
 
-class AtmError(Exception):
+class AtmError(AtmFailure):
+    """The errors of the modules from before the layers: atm's errors (common/errors.py) without a kind."""
+
     def __init__(self, message, code=1):
-        super().__init__(message)
-        self.code = code
+        super().__init__(message, code)
 
 
 class AtmExit(Exception):

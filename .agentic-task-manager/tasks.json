@@ -18568,7 +18568,7 @@
       "description": "Step 2 of `docs/layered-architecture.md` §9 (see §4).\n\n## Change\n- `atm-cli/atm/common/schema/task.schema.json`: one task, every field of `docs/v4/data-model.md` §4.\n- Generators: TypeScript into `dashboard/src/lib/generated/` (a dev-only generator such as `json-schema-to-typescript`, installed with `npm ci` like the other dev dependencies); Python `TypedDict`s into `common/` by `atm-cli/build.py` (standard library only in the output).\n- The dashboard imports the generated `Task` type instead of its hand-written one in `types.ts`.\n- CI fails when a generated file is stale, as it does for `atm.py` (through the existing build check; ask the user before changing a CI workflow file).\n\n## Tests\n- Every fixture in `dashboard/tests/fixtures/` and the task files the scenario tests produce validate against the schema.\n- `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet doesn't grow.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-361"
       ],
@@ -18580,7 +18580,7 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:49:06Z",
+      "updated_at": "2026-11-02T18:58:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18599,7 +18599,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-02T18:49:06Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "30b70f123355da2c4e08ac6d11a4ae0cc1f2de5c",
+      "completed_at": "2026-11-02T18:58:30Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-02T18:58:30Z",
+          "kind": "review",
+          "text": "Check: `task.schema.json`; one stdlib generator in `build.py` writes `common/types.py` (functional TypedDicts) and `dashboard/src/lib/generated/types.ts`; no npm dependency (design §4.3 updated). Dashboard `Task` extends the generated one (keeps phase/description narrow). Fixtures and scenario task files validated. 538 atm-cli, 950 unit, 357 e2e pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-363",
@@ -18612,7 +18624,7 @@
       "description": "Step 3 of `docs/layered-architecture.md` §9 (atm-lib functions in §5.1).\n\n## Change\n- `list`, `deps`, `status`, `backlog`, `summary` and `projects` (list, add, remove, prune; the `Registry` interface of §3.2) go CLI renderer → atm-lib → store.\n- Typed errors in common (`ErrorCode`, §4.2); the CLI maps them to today's exit codes and messages.\n- Their result types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`, …) in the schema, generated for both sides.\n- Remove the ratchet's entries for these commands.\n\n## Tests\n- `tests/lib/` tests for each function on the in-memory store; contract tests for the store reads added.\n- Output identical: `npm run test:scripts`, `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-362"
       ],
@@ -18622,7 +18634,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:43Z",
+      "updated_at": "2026-11-02T18:58:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18638,7 +18650,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T18:58:35Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-364",
@@ -18663,7 +18677,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:44Z",
+      "updated_at": "2026-11-02T19:08:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18681,7 +18695,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:26Z",
+          "kind": "note",
+          "text": "From T-363: the read results’ types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`) aren’t in the schema yet; add them here with the API responses (`api.schema.json`).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-365",
@@ -18949,7 +18971,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:56Z",
+      "updated_at": "2026-11-02T19:08:27Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18966,7 +18988,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:27Z",
+          "kind": "note",
+          "text": "From T-363: `atm backlog` (in `sprints.py`) moves with this slice, not with the reads.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-372",
@@ -19071,7 +19101,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:58Z",
+      "updated_at": "2026-11-02T19:08:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19089,7 +19119,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:28Z",
+          "kind": "note",
+          "text": "From T-363: `atm projects` (the registry, `registry.py`: list, add, remove, prune) moves here, behind the `Registry` interface of §3.2.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-375",

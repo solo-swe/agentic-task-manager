@@ -13,7 +13,6 @@
     "migrate",
     "model",
     "paths",
-    "query",
     "registry",
     "releases",
     "repository",
@@ -37,7 +36,6 @@
       "migrate",
       "model",
       "paths",
-      "query",
       "registry",
       "releases",
       "repository",
@@ -45,9 +43,12 @@
       "sprints",
       "tasks"
     ],
+    "cli.query": ["core"],
+    "cli.render": ["model"],
     "cli.show": ["core"],
-    "db.jsongit.store": ["model"],
+    "db.jsongit.store": ["claims", "model"],
     "db.memory": ["model"],
-    "lib.tasks": ["core"]
+    "lib.query": ["claims", "core", "model"],
+    "vcs.git": ["registry"]
   }
 }

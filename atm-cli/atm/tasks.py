@@ -32,7 +32,8 @@ from .model import (
     vocabulary,
 )
 from .paths import find_paths
-from .query import describe_task, ready_tasks
+from .cli.render import describe_task
+from .lib.query import ready_tasks
 
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing

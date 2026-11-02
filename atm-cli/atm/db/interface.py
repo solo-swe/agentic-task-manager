@@ -24,3 +24,25 @@ class Store(Protocol):
     def get_archived_task(self, task_id: str) -> Optional[dict]:
         """An archived task, or None."""
         ...
+
+    def list_archived(self) -> List[dict]:
+        """The archived tasks."""
+        ...
+
+    def read_claims(self) -> dict:
+        """The claims and what goes with them: `claims` (by task), `completed`, `waiting` and `resolved` (tasks done,
+        waiting or decided in another working copy) and `hints` (when each hint was last shown)."""
+        ...
+
+    def sizes(self) -> dict:
+        """How big the project's data is, in bytes: `tasks` (the working tasks) and `archive`."""
+        ...
+
+    def working_copy(self) -> Optional[str]:
+        """The working copy this store reads, for a store that has several (git worktrees); None otherwise."""
+        ...
+
+    def document(self) -> dict:
+        """The whole task document (`meta` and `tasks`), for the code from before the layers that still takes it.
+        Transitional: it goes when the last of that code has moved (docs/layered-architecture.md §9, step 14)."""
+        ...
