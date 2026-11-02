@@ -38,6 +38,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 - **One look for the tabs** (T-346): a project's view tabs look like the overview's, on a line with the selected tab
   open onto the page; the views no longer sit in a framed, filled panel (`.view-panels`), and their content lines up
   with the page's edges.
+- **Richer Task List cards** (T-338, `TaskCard`, `lib/cardfacts.ts`): the description's first two lines and the
+  latest outcome or handoff under the chips, and a column on the right with who created it, worked on it and (when
+  someone else) finished it, when it was done, started or created, and its work time. One column under 760 px.
 
 ### Fixed
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it

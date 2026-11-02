@@ -16926,7 +16926,7 @@
       "description": "The Task List is one card per row, so most of each row is empty. Show more of the task there (`TaskCard.svelte`), choosing with Hakan on the dev server.\n\n## Candidates\n- the first line or two of the description (plain text, `markdownPlainText`);\n- who created it, who works or worked on it, and when (created, started, done, relative times as elsewhere);\n- how long it took (work time) or how long it has waited (in review, blocked);\n- its stage with the commit or PR link, its dependencies and what waits for it;\n- the latest note (outcome, handoff) in one line.\n\n## Layout\nA right-hand column for the facts (people, times, stage) and the left for the name, chips and description, collapsing to today's single column on narrow windows. Cards stay quick to scan; no new data loads.\n\n## Tests\nTaskCard component tests for the new fields; the List screenshots updated; the performance budget still holds (`tests/e2e/performance.spec.ts`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/TaskCard.svelte",
@@ -16934,9 +16934,9 @@
         "dashboard/tests/unit/TaskCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:42:49Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T05:55:01Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
@@ -16947,7 +16947,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T05:55:01Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-339",

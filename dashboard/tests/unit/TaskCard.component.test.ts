@@ -162,6 +162,39 @@ describe('TaskCard', () => {
     expect(badge.querySelector('.sprint-marker.closed')).not.toBeNull();
   });
 
+  it('uses the row: the description’s start, the latest note, who and when (T-338)', () => {
+    const t: Task = {
+      ...task('T-001'),
+      status: 'done',
+      description: 'Set up **the** repo\n\nwith `npm`',
+      created_by: 'Ada',
+      started_by: 'claude:abc',
+      completed_by: 'Ada',
+      started_at: '2026-01-01T10:00:00Z',
+      completed_at: '2026-01-01T10:30:00Z',
+      notes: [{ at: '2026-01-01T10:30:00Z', by: 'claude:abc', kind: 'outcome', text: 'Ran `npm test`' }],
+    };
+    const { container } = render(TaskCard, { task: t });
+    expect(container.querySelector('.task-excerpt')?.textContent).toContain('Set up the repo');
+    expect(container.querySelector('.task-note')?.textContent).toMatch(/Outcome:\s*Ran npm test/);
+    expect([...container.querySelectorAll('.task-fact-who')].map((e) => e.textContent)).toEqual([
+      'Ada',
+      'claude:abc',
+      'Ada',
+    ]);
+    expect(container.querySelector('.task-fact[data-role="finished"]')).toHaveAttribute('title', 'Finished by Ada');
+    expect(container.querySelector('.task-fact-time')?.textContent).toMatch(/^done .* ago · took 30 m$/);
+  });
+
+  it('has no excerpt, note or facts when the task holds none', () => {
+    const bare: Task = { id: 'T-900', name: 'Bare', status: 'todo', type: 'feature' } as Task;
+    const { container } = render(TaskCard, { task: bare });
+    expect(container.querySelector('.task-excerpt')).toBeNull();
+    expect(container.querySelector('.task-note')).toBeNull();
+    expect(container.querySelector('.task-facts')).toHaveClass('empty');
+    expect(container.querySelector('.task-fact')).toBeNull();
+  });
+
   it('has no dependency label, label chips or tags when there are none', () => {
     const { container } = render(TaskCard, { task: task('T-001') });
     expect(container.querySelector('.label-chips')).toBeNull();

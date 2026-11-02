@@ -4,7 +4,9 @@
   import { dashboard } from '../lib/state.svelte';
   import { kindStyle, phaseColor, typeStyle } from '../lib/theme';
   import type { Task } from '../lib/types';
+  import { cardFacts, cardNote } from '../lib/cardfacts';
   import { markdownPlainText } from '../lib/markdown';
+  import { noteKindLabel } from '../lib/notes';
   import { kindOf, statusLabel, typeLabel } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
   import BranchChip from './BranchChip.svelte';
@@ -30,6 +32,11 @@
   const claim = $derived(kind === 'active' ? dashboard.claims.get(task.id) : undefined);
   const review = $derived(reviewWait(task, dashboard.loadedAt, dashboard.vocab));
   const block = $derived(blockWait(task, dashboard.loadedAt, dashboard.vocab));
+  // The row's width (T-338): the description's start and the latest note on the left, who and when on the right
+  const excerpt = $derived(task.description ? markdownPlainText(task.description) : '');
+  const note = $derived(cardNote(task));
+  const facts = $derived(cardFacts(task, dashboard.loadedAt, dashboard.vocab));
+  const ROLE = { created: 'Created by', worked: 'Worked on by', finished: 'Finished by' } as const;
 </script>
 
 <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
@@ -37,6 +44,7 @@
   <div class="task-body">
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
     <div class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</div>
+    {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
     <div class="task-meta">
       {#if showSprint}
         <span
@@ -82,6 +90,23 @@
       >
         {blockSummary(block)}
       </div>
+    {/if}
+    {#if note}
+      <div class="task-note" data-kind={note.kind}>
+        <span class="task-note-kind">{noteKindLabel(note.kind)}:</span>
+        {markdownPlainText(note.text)}
+      </div>
+    {/if}
+  </div>
+  <div class="task-facts" class:empty={!facts.people.length && !facts.when && !facts.took}>
+    {#each facts.people as p (p.role)}
+      <div class="task-fact" data-role={p.role} title="{ROLE[p.role]} {p.who}">
+        <span class="task-fact-label">{ROLE[p.role]}</span>
+        <span class="task-fact-who">{p.who}</span>
+      </div>
+    {/each}
+    {#if facts.when || facts.took}
+      <div class="task-fact task-fact-time">{[facts.when, facts.took].filter(Boolean).join(' · ')}</div>
     {/if}
   </div>
   <div class="task-tags">
