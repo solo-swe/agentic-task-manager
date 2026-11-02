@@ -16564,7 +16564,7 @@
       "description": "A Progress tab on the Projects Overview, next to Projects and Omniboard: every project's done of total and its active sprint (goal, due date, progress), a combined burndown and velocity, and each project's open releases. Clicking a project opens its own Progress tab.\n\n## Data\nFrom `api/projects`' summaries (`active_sprint`, `recent_sprints`, `stats`); what velocity or the burndown need beyond them (e.g. closed sprints' reports, completion times) is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16572,7 +16572,7 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T07:13:17Z",
+      "updated_at": "2026-11-02T07:16:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16588,7 +16588,7 @@
       "sprint": "Overview and polish",
       "started_at": "2026-11-02T07:13:17Z",
       "started_by": "claude:b7be7288",
-      "commit": "c0470e16d4af7b2c9ea024b5bc3673547232e19a",
+      "commit": "b1104ee9ba2d06879ab4ab90e67347f47bfd52bc",
       "notes": [
         {
           "at": "2026-11-02T06:55:06Z",
@@ -16601,6 +16601,12 @@
           "kind": "rejection",
           "text": "Velocity: a colour per project, stacked; per day, week or month (an option)",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:16:14Z",
+          "kind": "review",
+          "text": "Changes done: velocity is stacked in a colour per project (legend above), per Day / Week / Month (switch; week by default). Also check the rest of the Progress tab (rows, burndown). Size guardrail raised to 550 KiB as agreed; T-342 trims.",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -16609,7 +16615,9 @@
           "to": "2026-11-02T07:13:17Z",
           "outcome": "changes_requested"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-02T07:16:14Z",
+      "review_state": "waiting"
     },
     {
       "id": "T-330",
