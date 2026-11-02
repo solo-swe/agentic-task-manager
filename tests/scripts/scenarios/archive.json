@@ -176,15 +176,33 @@
     "expect": { "stdout": "T-2 waits for: T-1 (done, archived)\nT-2 is waited on by: nothing\n" }
   },
   {
-    "name": "show of an archived task",
+    "name": "show of an archived task: archived, in --json (T-353); a live one isn't",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "tasks": [] },
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "name": "New", "status": "todo" }] },
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["show", "T-1", "--json"],
-    "expect": { "json": [{ "id": "T-1", "name": "Old", "status": "done" }] }
+    "args": ["show", "T-1", "T-2", "--json"],
+    "expect": {
+      "json": [
+        { "id": "T-1", "name": "Old", "status": "done", "archived": true },
+        { "id": "T-2", "name": "New", "status": "todo" }
+      ]
+    }
+  },
+  {
+    "name": "show of an archived task says so in its header (T-353)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [] },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "name": "Old", "status": "done", "type": "feature" }]
+        }
+      }
+    },
+    "args": ["show", "T-1"],
+    "expect": { "stdout": "T-1  Old\n  done · backlog · archived · feature · P2\n" }
   },
   {
     "name": "a status change on an archived task says how to bring it back",

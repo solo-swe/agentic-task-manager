@@ -109,9 +109,13 @@ def describe_task(data, task):
         if d not in by_id and archived_task(d):
             by_id[d] = {**archived_task(d), "status": archived_task(d).get("status") + ", archived"}
     labels = task.get("labels") or []
+    # A task not in tasks.json is from the archive: say so (found in T-277, T-353)
+    archived = all(t is not task for t in data["tasks"])
     lines = [
         f"{task.get('id')}  {task.get('name', '')}",
-        f"  {task.get('status')} · {task.get('sprint') or 'backlog'} · {task.get('type')} · {priority_of(vocab, task)}"
+        f"  {task.get('status')} · {task.get('sprint') or 'backlog'}"
+        + (" · archived" if archived else "")
+        + f" · {task.get('type')} · {priority_of(vocab, task)}"
         + (f" · labels: {', '.join(labels)}" if labels else ""),
     ]
     deps = task.get("dependencies") or []
@@ -172,7 +176,9 @@ def cmd_show(args):
     data = load_tasks(paths)
     tasks = [find_task(data, task_id, archived=True) for task_id in args.ids]
     if args.json:
-        out(to_json(tasks))
+        # An archived task says so (T-353)
+        live = {id(t) for t in data["tasks"]}
+        out(to_json([t if id(t) in live else {**t, "archived": True} for t in tasks]))
     else:
         out("\n\n".join(describe_task(data, t) for t in tasks))
 

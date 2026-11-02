@@ -76,6 +76,8 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **`atm show` marks an archived task** (T-353, found in T-277): `· archived` in its header, `archived: true` in
+  `--json`; before, only its archived dependencies said so.
 - **The Projects Overview counts each project's archive** (T-355, found in T-277): its Activity, Progress and Agents
   load each project's `tasks-archive.json` with its `tasks.json` (conditionally; a missing one is empty) and count the
   history as the project's own pages do (`withArchive`: a task in both files is the live one).
