@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 344,
+    "next_id": 345,
     "labels": [
       {
         "id": "architecture",
@@ -17115,6 +17115,53 @@
           "text": "atm commit <id> --record <rev>: records an existing commit on the current branch (full SHA), refusing options, unknown revisions and commits off the branch; hint when the message lacks the ID. Used it to re-record T-341 as 8ab96f0.",
           "by": "claude:b7be7288"
         }
+      ]
+    },
+    {
+      "id": "T-344",
+      "name": "Release v0.26.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "Ship the sprint *Overview and polish* as 0.26.0, the way CLAUDE.md's *Versions* and *CI* sections describe. Work is on `dev/0.26.0` (branched from `origin/main` after PR #30).\n\n## Change\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are already `0.26.0` (T-341): check they still match.\n- `plugin/CHANGELOG.md`'s `[0.26.0]` entry: set the date to the release day (in `plugin/WHATS-NEW.md` too); merge repeated `### Added` / `### Changed` / `### Fixed` sections into one of each.\n- `plugin/WHATS-NEW.md`: rewrite the 0.26.0 entry from the changelog as 3–6 short plain-language bullets about what a user notices across the sprint, no flags or file names.\n- Release security checklist (`docs/security-architecture.md` §3): the skills, `plugin/CLAUDE.md` and atm output changed in this release (e.g. T-339's `atm sprints delete` and its skill mention) get a written review in §3.3 (no live sandbox run, no API key); check every new entry point is documented there.\n- Run the full verify (`npm run verify` in `dashboard/`).\n\n## Push\nPush with `/atm:push`: it opens the release PR from `dev/0.26.0` to `main` and watches CI. CI fails until the missing `-linux.png` screenshot baselines (T-341 deleted the graph ones) are committed: take them from this branch's run artifact as CLAUDE.md's *CI* section says, check one, and commit them. Merging the PR is the user's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-277",
+        "T-279",
+        "T-328",
+        "T-329",
+        "T-330",
+        "T-332",
+        "T-333",
+        "T-334",
+        "T-335",
+        "T-338",
+        "T-339",
+        "T-340",
+        "T-341",
+        "T-343"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-02T01:55:27Z",
+      "updated_at": "2026-11-02T01:55:27Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Overview and polish",
+          "from": "2026-11-02T01:55:27Z"
+        }
+      ],
+      "sprint": "Overview and polish",
+      "components": [
+        "docs"
       ]
     }
   ]
