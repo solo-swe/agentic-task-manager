@@ -13769,7 +13769,7 @@
       "description": "Hakan finds the social preview (logo, name, one line) too simple. The card GitHub shows when the repository is linked should say what atm is at a glance.\n\n## Content (1280×640)\n- The logo and the name, *Agentic Task Manager*, with a short line on what it does (task management for Claude Code agents, with a live dashboard).\n- **A hint of the dashboard**: a real, recognisable piece of it (e.g. a Kanban with cards, the progress ring, an agent at work), not a mock-up drawn by hand. Render it from the built dashboard (`plugin/templates/tasks-dashboard.html`) with a fixture, the way the e2e tests do, so it stays true to the product and updates when the dashboard changes; crop or scale it into the card.\n- **How to install**: the two commands (`/plugin marketplace add solo-swe/agentic-task-manager`, `/plugin install atm@solo-swe-plugins`), readable at the card's size.\n- The dark theme, the accent blue; text large enough to read in a link preview.\n\n## Made by the script\n`npm run branding` (`branding/generate.mjs`, previous task) renders it: no hand-made image. Document its inputs (the fixture, the theme) in `branding/README.md`.\n\n## Review with Hakan\nTwo or three layouts first, shown to him (rendered PNGs) before settling one; put the task in review (`atm review`) before showing them. After he approves, Hakan uploads the PNG in Settings → General → Social preview.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-278"
       ],
@@ -13779,9 +13779,9 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T08:34:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Testing together",
@@ -13797,7 +13797,9 @@
       "components": [
         "branding"
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T08:34:20Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-280",
