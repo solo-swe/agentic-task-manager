@@ -41,6 +41,12 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 - **Richer Task List cards** (T-338, `TaskCard`, `lib/cardfacts.ts`): the description's first two lines and the
   latest outcome or handoff under the chips, and a column on the right with who created it, worked on it and (when
   someone else) finished it, when it was done, started or created, and its work time. One column under 760 px.
+- **A new project card on the overview** (T-335, `ProjectCard`): some depth (a soft shadow, a light top edge, a lift on
+  hover); a title band with the name on one line, a hairline under it and the 14-day sparkline at its right; what needs
+  you as a badge on the card's top-right corner; the active sprint's ring marked; quiet labels (*Sprint*, *Now*,
+  *Next*) and the last finished task led by its time; the stats line as a caption under the sprint line. The task at
+  work (or next up) is a mini task card on a stack of tilted cards, one per other task in progress or ready (at most
+  three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it

@@ -28,14 +28,35 @@
   );
   // meta.description, only on hover over the name (T-209)
   const nameTitle = $derived([project.name, s?.description, project.path].filter(Boolean).join('\n'));
-  // What's going on, by task name (T-207): the agents' tasks, or else what the loop takes next. Two lines at most, so
-  // the cards of a row line up; more work than that ends the second line with "+N more". A server before 0.18 sends
-  // neither: the foot then counts the agents instead.
+  // What's going on, by task name (T-207): the agents' tasks, or else what the loop takes next. The first shows as a
+  // mini task card on a stack of the others (T-335: up to two cards' edges behind it, and "+N more"). A server before
+  // 0.18 sends neither: the foot then counts the agents instead.
   const working = $derived(s?.working ?? []);
   const nextUp = $derived(s?.next ?? []);
   const byName = $derived(s?.working !== undefined);
-  const workLines = $derived(working.length ? working.slice(0, 2) : nextUp.slice(0, 2));
-  const moreWork = $derived(Math.max(0, working.length - 2));
+  const queue = $derived(working.length ? working : nextUp);
+  const top = $derived(queue[0]);
+  // What else is in progress or ready, from the board's counts (the active sprint's, else every task's): the stack
+  // under the card and "+N more". A server without boards: the tasks it listed.
+  const board = $derived(s ? (s.board_active_sprint ?? s.board ?? null) : null);
+  const others = $derived(
+    Math.max(0, board ? board.active.count + board.todo.count - 1 : queue.length - 1, queue.length - 1),
+  );
+  const stack = $derived(Math.min(3, others));
+  // The cards under it, deepest first (painted first): each tilted by an angle from its task's ID, so the stack looks
+  // tossed but stays still from one refresh to the next
+  const tiltOf = (key: string) => {
+    let h = 0;
+    for (const c of key) h = (h * 31 + c.charCodeAt(0)) | 0;
+    return ((Math.abs(h) % 7) - 3) * 1.1;
+  };
+  const layers = $derived(
+    Array.from({ length: stack }, (_, i) => {
+      const depth = stack - i;
+      const t = queue[depth];
+      return { depth, tilt: tiltOf(t ? ('task' in t ? t.task : t.id) : String(depth)) || (depth % 2 ? 1.5 : -1.5) };
+    }),
+  );
   // The git line and the task finished last (T-208; absent from servers before 0.18)
   const git = $derived(s?.git);
   // Only an http(s) address becomes a link (T-225)
@@ -63,24 +84,52 @@
         >
       </h3>
     {/if}
-    {#if needItems.length}
-      <!-- The tasks, from the server's summary: one opens the project on it, several are listed under the chip -->
-      <NeedsYouMenu
-        items={needItems}
-        onopen={(task) => dashboard.openProject(project.id, { task })}
-        chipClass="project-card-need"
-        align="right"
-      />
-    {:else if need}
-      <!-- A server without the list (before 0.17): the project's Kanban, filtered to review and blocked -->
-      <button
-        class="attention-chip project-card-need"
-        title="Open its Kanban board, filtered to the tasks in review and blocked"
-        onclick={() => dashboard.openProject(project.id, { needsYou: true })}
-        >{need} need{need === 1 ? 's' : ''} you</button
-      >
-    {/if}
+    {#if s && !project.missing}{@render spark()}{/if}
   </div>
+
+  <!-- What needs you: a badge on the card's top right corner, half outside it (T-335) -->
+  {#if needItems.length || need}<div class="project-card-badge">
+      {#if needItems.length}
+        <!-- The tasks, from the server's summary: one opens the project on it, several are listed under the chip -->
+        <NeedsYouMenu
+          items={needItems}
+          onopen={(task) => dashboard.openProject(project.id, { task })}
+          chipClass="project-card-need"
+          align="right"
+        />
+      {:else if need}
+        <!-- A server without the list (before 0.17): the project's Kanban, filtered to review and blocked -->
+        <button
+          class="attention-chip project-card-need"
+          title="Open its Kanban board, filtered to the tasks in review and blocked"
+          onclick={() => dashboard.openProject(project.id, { needsYou: true })}
+          >{need} need{need === 1 ? 's' : ''} you</button
+        >
+      {/if}
+    </div>{/if}
+
+  <!-- Completions per day, at the right of the title band (T-335) -->
+  {#snippet spark()}
+    <svg
+      class="sparkline project-card-spark"
+      width={W}
+      height={H}
+      viewBox="0 0 {W} {H}"
+      role="img"
+      aria-label="Tasks completed per day, last {days.length} days: {days.join(', ')}"
+    >
+      {#each days as n, i (i)}
+        <rect
+          x={i * step + 1}
+          y={n ? H - (n / max) * (H - 2) : H - 1}
+          width={Math.max(1, step - 2)}
+          height={n ? (n / max) * (H - 2) : 1}
+          rx="1.5"
+          fill={n ? 'var(--series-remaining)' : 'var(--border)'}
+        />
+      {/each}
+    </svg>
+  {/snippet}
 
   {#if project.missing}
     <p class="project-card-note">
@@ -97,6 +146,7 @@
             {#each sprints as sp, i (sp.id)}
               <li
                 class="project-card-ring"
+                class:active={sp.state === 'active'}
                 data-sprint={sp.id}
                 title="{sp.id} ({sp.state}): {sp.done} / {sp.total} done"
               >
@@ -117,7 +167,8 @@
       </div>
       <p class="project-card-phase project-card-sprint" title={active?.goal ?? null}>
         {#if active}
-          <span class="project-card-phase-name">{active.id}</span><span class="project-card-phase-count"
+          <span class="project-card-label">Sprint</span> <span class="project-card-phase-name">{active.id}</span><span
+            class="project-card-phase-count"
             >&nbsp;— {active.done} / {active.total}{#if dueIn !== undefined}&nbsp;<span
                 class="muted"
                 class:overdue={dueIn < 0}>· {dueText(dueIn)}</span
@@ -156,25 +207,39 @@
     {/if}
 
     {#if byName}
+      <!-- The task at work (or next up) as a mini task card, on a stack of the others (T-335) -->
       <ul
         class="project-card-work"
         class:next={!working.length}
+        data-stack={stack}
         aria-label={working.length ? 'Working now' : 'Next up'}
       >
-        {#each workLines as line, i (i)}
-          {@const id = 'task' in line ? line.task : line.id}
-          {@const who = 'agent' in line ? [line.agent, line.branch].filter(Boolean).join(' · ') : 'next up'}
-          <li class="project-card-work-line" title="{id} {line.name} — {who}">
-            {#if working.length}
-              <Icon name="bot" size={13} />
-            {:else}
-              <span class="project-card-next">Next:</span>
-            {/if}
-            <span class="project-card-work-id">{id}</span>
-            <span class="project-card-work-name">{line.name}</span>
-            {#if i === 1 && moreWork}<span class="project-card-more">+{moreWork} more</span>{/if}
-          </li>
+        {#each layers as layer (layer.depth)}
+          <li
+            class="project-card-task-layer"
+            aria-hidden="true"
+            style:--depth={layer.depth}
+            style:--tilt="{layer.tilt}deg"
+          ></li>
         {/each}
+        {#if top}
+          {@const id = 'task' in top ? top.task : top.id}
+          {@const who = 'agent' in top ? [top.agent, top.branch].filter(Boolean).join(' · ') : 'next up'}
+          <li class="project-card-work-line project-card-task" title="{id} {top.name} — {who}">
+            <div class="project-card-task-top">
+              {#if working.length}
+                <span class="project-card-label">Now</span>
+                <Icon name="bot" size={13} />
+              {:else}
+                <span class="project-card-label project-card-next">Next</span>
+              {/if}
+              <span class="project-card-work-id">{id}</span>
+              {#if 'agent' in top}<span class="project-card-task-who">{top.agent}</span>{/if}
+              {#if others}<span class="project-card-more">+{others} more</span>{/if}
+            </div>
+            <div class="project-card-work-name">{top.name}</div>
+          </li>
+        {/if}
       </ul>
     {/if}
 
@@ -214,35 +279,19 @@
           class="project-card-last"
           title="Last finished: {lastDone.id} {lastDone.name}, {new Date(lastDone.completed_at).toLocaleString()}"
         >
+          <!-- When, in the quiet label style (T-335) -->
+          <span class="project-card-label project-card-last-when"
+            >{formatAgo(lastDone.completed_at, dashboard.loadedAt)}</span
+          >
           <Icon name="check" size={13} />
           <span class="project-card-work-id">{lastDone.id}</span>
           <span class="project-card-last-name">{lastDone.name}</span>
-          <span class="muted">· {formatAgo(lastDone.completed_at, dashboard.loadedAt)}</span>
         </span>
       {:else}
         <span class="project-card-last muted">
           {s.last_activity ? formatAgo(s.last_activity, dashboard.loadedAt) : 'No activity yet'}
         </span>
       {/if}
-      <svg
-        class="sparkline project-card-spark"
-        width={W}
-        height={H}
-        viewBox="0 0 {W} {H}"
-        role="img"
-        aria-label="Tasks completed per day, last {days.length} days: {days.join(', ')}"
-      >
-        {#each days as n, i (i)}
-          <rect
-            x={i * step + 1}
-            y={n ? H - (n / max) * (H - 2) : H - 1}
-            width={Math.max(1, step - 2)}
-            height={n ? (n / max) * (H - 2) : 1}
-            rx="1.5"
-            fill={n ? 'var(--series-remaining)' : 'var(--border)'}
-          />
-        {/each}
-      </svg>
     </div>
   {/if}
 </article>

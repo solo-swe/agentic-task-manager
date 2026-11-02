@@ -16833,7 +16833,7 @@
       "description": "The project card on the All projects page still looks off. Give it a clearer typographic hierarchy: a larger project name, the key figure (progress, what needs you) prominent, secondary lines smaller and muted, consistent spacing. Try a couple of variants on the dev server and choose with Hakan (with: user).\n\n## Tests\nProjectCard component tests still pass; the overview screenshots updated.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectCard.svelte",
@@ -16841,9 +16841,9 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-01T09:28:31Z",
+      "updated_at": "2026-11-02T06:01:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:9fec227a",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
@@ -16854,7 +16854,9 @@
           "from": "2026-11-01T09:28:31Z"
         }
       ],
-      "sprint": "Overview and polish"
+      "sprint": "Overview and polish",
+      "started_at": "2026-11-02T06:01:16Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-336",

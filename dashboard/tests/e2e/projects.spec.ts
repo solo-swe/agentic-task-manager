@@ -321,8 +321,8 @@ test.describe('projects', () => {
     );
   });
 
-  // T-194 review: two lines for every card's name, so a long one doesn't push its card's rings below the others'
-  test('overview cards: a long project name takes at most two lines; the rings of a row line up', async ({
+  // T-194 review, T-335: one line for every card's name, so a long one doesn't push its card's rings below the others'
+  test('overview cards: a long project name takes one line; the rings of a row line up', async ({
     page,
     tasksServer,
   }) => {
@@ -341,15 +341,15 @@ test.describe('projects', () => {
       const nameHeight = (id: string) => card(id).querySelector('.project-card-name')!.getBoundingClientRect().height;
       const ringsTop = (id: string) => card(id).querySelector('.project-card-rings')!.getBoundingClientRect().top;
       return {
-        twoLines: Math.round(nameHeight('long') / lineHeight) <= 2 && nameHeight('long') <= 2 * lineHeight + 4,
+        oneLine: nameHeight('long') <= lineHeight + 1,
         sameNameHeight: Math.round(nameHeight('long')) === Math.round(nameHeight('short')),
         ringsLevel: Math.round(ringsTop('long')) === Math.round(ringsTop('short')),
       };
     });
-    expect(geometry).toEqual({ twoLines: true, sameNameHeight: true, ringsLevel: true });
+    expect(geometry).toEqual({ oneLine: true, sameNameHeight: true, ringsLevel: true });
   });
 
-  // T-207: who works on what, by name, or what comes next; two lines on every card
+  // T-207: who works on what, by name, or what comes next; T-335: a mini task card on a stack, as tall on every card
   test('overview cards: the tasks at work or next, by name, in a section of the same height on every card', async ({
     page,
     tasksServer,
@@ -370,8 +370,9 @@ test.describe('projects', () => {
       .addProject('done', 'minimal', 'Done', summary());
     await openDashboard(page, tasksServer, 'standard');
     const work = (id: string) => page.locator(`.project-card[data-id="${id}"] .project-card-work-line`);
-    await expect(work('busy')).toHaveText([/T-1\s*Build the board/, /T-2\s*Write the tests\s*\+1 more/]);
-    await expect(work('idle')).toHaveText([/Next:\s*T-9\s*Next thing/]);
+    await expect(work('busy')).toHaveText([/Now\s*T-1\s*claude:e5ea9db0\s*\+2 more\s*Build the board/]);
+    await expect(page.locator('.project-card[data-id="busy"] .project-card-task-layer')).toHaveCount(2);
+    await expect(work('idle')).toHaveText([/Next\s*T-9\s*Next thing/]);
     await expect(work('done')).toHaveCount(0);
     const tops = await page.evaluate(() =>
       ['busy', 'idle', 'done'].map((id) => {

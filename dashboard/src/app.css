@@ -4633,41 +4633,66 @@ svg.graph-minimap.hidden {
 .project-card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-height: 220px;
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 18px 18px 16px;
+  padding: 18px 20px 16px;
+  /* Some depth (T-335): a light top edge, a soft shadow below; the card lifts a little on hover */
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--text) 3%, var(--surface)), var(--surface) 60%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
+    0 1px 2px color-mix(in srgb, var(--overlay) 30%, transparent),
+    0 4px 12px color-mix(in srgb, var(--overlay) 18%, transparent);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
 }
 .project-card:hover {
   border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent),
+    0 2px 4px color-mix(in srgb, var(--overlay) 30%, transparent),
+    0 10px 24px color-mix(in srgb, var(--overlay) 26%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .project-card:hover {
+    transform: none;
+  }
 }
 .project-card.missing {
   border-style: dashed;
 }
+/* The title band (T-335): a hairline under the name, inside the card's padding, with a soft shadow below it */
 .project-card-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
+  padding-bottom: 8px;
+  /* With the card's 12px gap: room between the title band and the rings */
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 3px 4px -2px color-mix(in srgb, var(--overlay) 30%, transparent);
 }
-/* Two lines for the name on every card, so the cards of a row line up; a longer name ends in "…" (full name on hover) */
+/* One line for the name on every card (T-335), so the hairline sits right under it and the cards of a row line up; a
+   longer name ends in "…" (full name on hover) */
 .project-card-name {
   flex: 1;
-  margin: 2px 0 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  /* Whole pixels, the logo's height */
+  line-height: 24px;
   min-width: 0;
-  min-height: 2.6em;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .project-card-open {
+  max-width: 100%;
   padding: 0;
   border: none;
   background: none;
@@ -4675,13 +4700,9 @@ svg.graph-minimap.hidden {
   font: inherit;
   text-align: left;
   cursor: pointer;
-  /* A button is one box to its parent's line clamp: it clamps its own text */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
   overflow: hidden;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .project-card-open:hover {
   color: var(--accent);
@@ -4697,7 +4718,27 @@ svg.graph-minimap.hidden {
 .project-card-progress {
   display: flex;
   align-items: center;
+  min-width: 0;
   min-height: 70px;
+}
+/* What needs you (T-335): a badge on the card's top right corner, half outside it, over the cards around it */
+.project-card {
+  position: relative;
+}
+.project-card-badge {
+  position: absolute;
+  top: 0;
+  /* Over the card's top right corner: half above its top edge, a few pixels past its right edge */
+  right: 0;
+  z-index: 5;
+  transform: translate(6px, -50%);
+}
+/* Solid, so the card's edge and its neighbours don't show through it */
+.project-card-badge .project-card-need {
+  margin-left: 0;
+  border-color: color-mix(in srgb, var(--yellow) 60%, var(--surface));
+  background: color-mix(in srgb, var(--yellow) 16%, var(--surface));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--overlay) 40%, transparent);
 }
 .project-card-progress > .project-card-note {
   color: var(--text-muted);
@@ -4705,6 +4746,8 @@ svg.graph-minimap.hidden {
 .project-card-rings {
   display: flex;
   flex: 1;
+  /* Shrinks, so the sparkline beside it stays inside the card, its right edge under the title hairline's end */
+  min-width: 0;
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -4732,6 +4775,25 @@ svg.graph-minimap.hidden {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+/* The active sprint's ring (T-335), the one the sprint line below is about: its name stands out, with a dot under it */
+.project-card-ring.active .project-card-ring-label {
+  color: var(--text);
+  font-weight: 600;
+}
+.project-card-ring.active {
+  position: relative;
+}
+/* Out of the flow, so the card's rows stay level with the cards beside it */
+.project-card-ring.active::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 /* The whole project, quietly under the rings */
 .project-card-counts {
   display: flex;
@@ -4750,46 +4812,127 @@ svg.graph-minimap.hidden {
   color: var(--text-muted);
 }
 /* One line, so the cards of a row keep their feet level: the name gives way (ellipsis), the counts don't */
+/* The card's key figure (T-335): the active sprint and how far it is, a step above the lines below */
 .project-card-phase {
   display: flex;
   min-width: 0;
   white-space: nowrap;
+  font-size: 14px;
 }
 .project-card-phase-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-weight: 600;
 }
 .project-card-phase-count {
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .project-card-sprint .overdue {
   color: var(--red);
+}
+/* A card with nothing to show (no numbers yet, a missing project): its note in the middle, so it looks empty on
+   purpose (T-335) */
+.project-card > .project-card-note {
+  margin: auto 0;
+  padding: 0 8px;
+  text-align: center;
+  line-height: 1.6;
 }
 .project-card-note code {
   color: var(--text);
 }
 /* At the bottom of the card: the cards of a row are as tall as the tallest, so their feet line up */
 /* Working now, or next up: two lines on every card, so the cards of a row line up (T-207) */
+/* The task at work (or next up) as a mini task card on a stack of the others (T-335). The same height on every card,
+   with or without a task, so the cards of a row line up (T-207): the card's two lines, its padding and the stack */
 .project-card-work {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: calc(2 * 1.4em + 4px);
+  --task-bg: color-mix(in srgb, var(--text) 4%, var(--surface));
+  --task-layer: color-mix(in srgb, var(--text) 2%, var(--surface));
+  /* The mini card (52px), the deepest card's drop (12px) and a little room */
+  min-height: 70px;
   margin: 0;
-  padding: 0;
+  padding: 2px 0 0;
   list-style: none;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 17px;
 }
-.project-card-work-line {
+.project-card-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--task-bg);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 25%, transparent);
+}
+.project-card-work.next .project-card-task {
+  border-left-color: var(--border);
+}
+/* The cards under it (up to 3): each deeper one further down and to the right, tilted, and more washed out */
+.project-card-work {
+  position: relative;
+}
+.project-card-task {
+  position: relative;
+  z-index: 1;
+}
+.project-card-task-layer {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  right: 0;
+  /* The mini card's height: two 17px lines, a 2px gap, 7px padding and the border, top and bottom */
+  height: 52px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--task-layer);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 20%, transparent);
+  transform: translate(calc(var(--depth) * 5px), calc(var(--depth) * 4px)) rotate(var(--tilt));
+  transform-origin: 30% 50%;
+  opacity: calc(1 - var(--depth) * 0.08);
+}
+.project-card-task-top {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  white-space: nowrap;
+  color: var(--text-muted);
 }
-.project-card-work-line .icon,
+.project-card-task-top .icon {
+  color: var(--accent);
+}
+.project-card-task-who {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.project-card-task .project-card-work-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+/* A quiet name for a line (T-335): "Sprint" before the active sprint, "Next" on the task the loop takes next */
+.project-card-label {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-muted) 75%, transparent);
+}
+.project-card-task-top .project-card-label,
+.project-card-last .project-card-label {
+  margin-right: 0;
+}
+.project-card-task-top .icon,
 .project-card-work-id,
 .project-card-next,
 .project-card-more {
@@ -4804,7 +4947,6 @@ svg.graph-minimap.hidden {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.project-card-next,
 .project-card-more {
   color: var(--text-muted);
 }
@@ -4814,9 +4956,12 @@ svg.graph-minimap.hidden {
 /* The branch and the latest PR (T-208) */
 /* One line of stats (T-255); on the narrowest cards it wraps rather than cut the agent time off */
 .project-card-stats {
-  margin: 0;
-  font-size: 12px;
+  /* Right under the sprint line it belongs with (T-335), in place of the card's 12px gap */
+  margin: -14px 0 0;
+  font-size: 10.5px;
+  line-height: 15px;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .project-card-git {
   display: flex;
@@ -4871,12 +5016,19 @@ a.project-card-pr {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* The task finished last, after when (T-335) */
 .project-card-foot {
   display: flex;
   align-items: center;
-  gap: 10px;
+  min-width: 0;
   margin-top: auto;
   font-size: 12px;
+}
+.project-card-foot > * {
+  max-width: 100%;
+}
+.project-card-last-when {
+  white-space: nowrap;
 }
 .project-card-agents {
   display: inline-flex;
@@ -4887,8 +5039,9 @@ a.project-card-pr {
 .project-card-last {
   white-space: nowrap;
 }
+/* At the right of the title band, where the name ends */
 .project-card-spark {
-  margin-left: auto;
+  flex-shrink: 0;
 }
 .project-card .muted {
   color: var(--text-muted);
