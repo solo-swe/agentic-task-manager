@@ -31,7 +31,10 @@
       (backlogCount && sprintCount ? ` · ${backlogCount} in the backlog` : ''),
   );
   // Tasks that need the user: in review, or blocked on a question for the user (D-3.3)
-  const needYou = $derived(needsYouItems(dashboard.tasks, dashboard.vocab));
+  // With you: only the active sprint's, ready to start (T-347), as atm's summary counts them
+  const needYou = $derived(
+    needsYouItems(dashboard.tasks, dashboard.vocab, { model: dashboard.sprints, tasks: dashboard.taskMap }),
+  );
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 

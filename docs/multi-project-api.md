@@ -190,9 +190,10 @@ logic (`query.py`). Task names in `working`, `next`, `last_done` and `needs_you_
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
 | `git.pr` | the latest PR recorded on the tasks (`atm pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm merged`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
-| `needs_you.review` | review-kind tasks |
+| `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
 | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
-| `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"` or `"blocked"` (on a question for the user). The card's "needs you" chip opens them |
+| `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
+| `needs_you_tasks` | those same tasks, in file order: `{ id, name, reason }`, `reason` being `"review"`, `"blocked"` (on a question for the user) or `"together"`. The card's "needs you" chip opens them |
 | `last_activity` | the newest of all tasks' `updated_at`, `started_at`, `completed_at`, `review_requested_at`, `blocked_at` and `skipped_at`, and of note times; `null` without any |
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |

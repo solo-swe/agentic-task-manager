@@ -3149,13 +3149,20 @@ def project_summary(paths):
                 completions[SUMMARY_DAYS - 1 - age] += 1
 
     # The tasks that need the user, as the dashboard's needsYouReason decides it: in review and waiting for the
-    # reviewer, blocked on the user, or to do together with the user (SR-6.6)
+    # reviewer, blocked on the user, or to do together with the user (SR-6.6) now: in the active sprint (any, without
+    # one) and ready, its dependencies done (T-347)
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+
+    def together_now(t):
+        in_scope = active is None or (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+        return in_scope and not unfinished_dependencies(data, t)
+
     def needs_you(t, k):
         if k == "review":
             return None if t.get("review_state") in REWORK_STATES else "review"
         if k == "blocked" and t.get("waiting_on") == "user":
             return "blocked"
-        return "together" if k == "todo" and t.get("with") == "user" else None
+        return "together" if k == "todo" and t.get("with") == "user" and together_now(t) else None
 
     needs_you_tasks = [
         {"id": t.get("id"), "name": capped(t.get("name")), "reason": needs_you(t, k)}

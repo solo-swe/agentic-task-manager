@@ -66,6 +66,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   three, from the summary's board counts), with *+ N more*. A card with nothing to show centres its note.
 
 ### Fixed
+- **“Needs you” counts only what you can take up now** (T-347): a to-do task to do with you (`with: user`) counts only
+  when it is in the active sprint (any, without one) and its dependencies are done; before, every such task did, also
+  in planned sprints and the backlog. Reviews and questions for you count as before. The same in `atm summary`
+  (`needs_you.together`, `needs_you_tasks`) and a project's title bar (`needsYouReason`'s scope).
 - **The “needs you” list on a project card stays inside the window** (T-332): lined up with the chip's right edge, it
   ran off the left of the window on cards in the first column; `NeedsYouMenu` now shifts it back in when it opens.
 

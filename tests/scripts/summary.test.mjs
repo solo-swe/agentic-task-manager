@@ -78,6 +78,48 @@ test('next: the active sprint only, even before a more urgent backlog task; none
   });
 });
 
+test('needs you: with-you tasks only in the active sprint and ready; reviews and blocks anywhere (T-347)', () => {
+  const tasks = [
+    task('W-1', 'todo', { with: 'user', sprint: 'Now' }),
+    task('W-2', 'todo', { with: 'user', sprint: 'Later' }),
+    task('W-3', 'todo', { with: 'user' }),
+    task('W-4', 'todo', { with: 'user', sprint: 'Now', dependencies: ['D-1'] }),
+    task('W-5', 'todo', { with: 'user', sprint: 'Now', dependencies: ['D-2'] }),
+    task('D-1', 'in_progress', { sprint: 'Now' }),
+    task('D-2', 'done', { sprint: 'Now' }),
+    task('R-1', 'in_review', { sprint: 'Later' }),
+    task('B-1', 'blocked', { waiting_on: 'user' }),
+  ];
+  const ids = (s) => s.needs_you_tasks.map((t) => `${t.id}:${t.reason}`);
+  withProject(
+    {
+      meta: {
+        sprints: [
+          { id: 'Now', state: 'active' },
+          { id: 'Later', state: 'planned' },
+        ],
+      },
+      tasks,
+    },
+    (root) => {
+      const s = summary(root);
+      assert.deepEqual(ids(s), ['W-1:together', 'W-5:together', 'R-1:review', 'B-1:blocked']);
+      assert.deepEqual(s.needs_you, { review: 1, blocked_on_user: 1, together: 2 });
+    },
+  );
+  // No active sprint: any sprint's, still only when ready
+  withProject({ meta: { sprints: [{ id: 'Now' }, { id: 'Later' }] }, tasks }, (root) => {
+    assert.deepEqual(ids(summary(root)), [
+      'W-1:together',
+      'W-2:together',
+      'W-3:together',
+      'W-5:together',
+      'R-1:review',
+      'B-1:blocked',
+    ]);
+  });
+});
+
 test('board_active_sprint: the board of the active sprint’s tasks only, with its own counts; null without one (T-340)', () => {
   const done = { completed_at: new Date().toISOString().replace(/\.\d+Z$/, 'Z') };
   const tasks = [
