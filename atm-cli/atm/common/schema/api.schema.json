@@ -14,9 +14,22 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377)"
-    }
+    },
+    "archive_hint": { "$ref": "#/$defs/ArchiveHint" }
   },
   "$defs": {
+    "ArchiveHint": {
+      "type": "object",
+      "description": "atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372)",
+      "required": ["bytes", "finished", "archivable", "auto", "text"],
+      "properties": {
+        "bytes": { "type": "integer", "description": "How big the working task data is" },
+        "finished": { "type": "integer", "description": "How many working tasks are finished" },
+        "archivable": { "type": "integer", "description": "How many of them `atm archive` would move" },
+        "auto": { "type": "boolean", "description": "Whether agents may archive on their own (meta.archive.auto)" },
+        "text": { "type": "string", "description": "The hint as atm says it" }
+      }
+    },
     "TaskView": {
       "type": "object",
       "description": "A task as stored, and what atm derives for it",

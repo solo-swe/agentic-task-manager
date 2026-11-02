@@ -28,6 +28,7 @@ class Working:
         self._load_archive = archive
         self._archive = None
         self._before_archive = None
+        self.archive_first = False
         self._deferred = None
         self._before_store = _stamp(claims_store)
 
@@ -37,6 +38,12 @@ class Working:
             self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
             self._before_archive = _stamp(self._archive)
         return self._archive
+
+    def moving_into_archive(self):
+        """This change moves tasks from the working tasks into the archive: a store that writes the two apart writes
+        the archive first, so a crash between leaves a task in both, never in neither (DM-5.2). Without it (a
+        restore), the working tasks go first."""
+        self.archive_first = True
 
     def archive_changed(self):
         """Whether the archive was asked for and changed: the store writes it then, and only then."""

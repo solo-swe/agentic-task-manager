@@ -19098,7 +19098,7 @@
       "description": "Step 11 of `docs/layered-architecture.md` §9: the third duplicated rule goes.\n\n## Change\n- `sprints.*` (list, add, edit, start, close, delete, move) and `releases.*` (list, add, edit, archive, notes) as atm-lib functions (§5.1); `sprints close` and `sprints delete --move-to` in one `apply`.\n- The v1 sprints and releases routes (§6.2).\n- The dashboard's effective review mode and release (`review.ts`, `releases.ts`) come from `TaskView`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; dashboard unit tests updated; `npm run test:scripts` and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-370"
       ],
@@ -19110,7 +19110,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:04:53Z",
+      "updated_at": "2026-11-02T21:13:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19134,10 +19134,20 @@
           "kind": "note",
           "text": "From T-363: `atm backlog` (in `sprints.py`) moves with this slice, not with the reads.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T21:13:37Z",
+          "kind": "review",
+          "text": "Check: `sprints` (list/add/edit/start/close/delete), `move`, `backlog` (`lib/sprints.py`) and `releases` (`lib/releases.py`) as store changes, printing in `cli/sprints.py`/`cli/releases.py`; close/delete/add-from-PR read and write the archive through `work.archive()`. Dashboard: `effectiveReview`/`effectiveRelease` take atm’s `derived` values, judging only tasks without them. 957 unit, 359 e2e, 541 atm-cli, 93 `tests/lib`.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T21:04:53Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "bdcd44d6bd8265e78e598966827994524e92da8c",
+      "completed_at": "2026-11-02T21:13:37Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-372",
@@ -19150,7 +19160,7 @@
       "description": "Step 12 of `docs/layered-architecture.md` §9: the fourth duplicated rule goes.\n\n## Change\n- `archive.archive`, `archive.unarchive` and `archive.hint` (§5.1) on the store's `archive_tasks` and `restore_tasks`, keeping the crash-safe order of `docs/v4/data-model.md` DM-5.2.\n- `GET /api/v1/projects/<p>/tasks?archived=true` and `…/archive/hint`; the dashboard loads archived tasks and its archive notice from them, not from `tasks-archive.json`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; the archive scenarios in `tests/scripts/scenarios/archive.json` and `archive.spec.ts` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-371"
       ],
@@ -19162,7 +19172,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:56Z",
+      "updated_at": "2026-11-02T21:13:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19179,7 +19189,9 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T21:13:44Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-373",

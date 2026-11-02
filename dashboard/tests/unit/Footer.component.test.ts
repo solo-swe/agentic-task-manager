@@ -16,13 +16,13 @@ describe('Footer', () => {
     expect(render(Footer).container.querySelector('#archive-notice')).toBeNull();
   });
 
-  it('says when tasks.json has grown past the archive threshold', () => {
-    loadIntoDashboard({ ...standard, meta: { ...standard.meta, archive: { threshold_tasks: 2, keep_days: 0 } } });
-    dashboard.loadedAt = Date.parse('2026-10-24T00:00:00Z');
+  it('says when tasks.json has grown past the archive threshold, as atm’s hint has it (T-372)', () => {
+    dashboard.archiveHint = { bytes: 4096, finished: 6, archivable: 6, auto: true, text: '' };
     const { container } = render(Footer);
     expect(container.querySelector('#archive-notice')).toHaveTextContent(
-      /^tasks\.json is \d+ KB: `atm archive` would move 6 finished tasks to tasks-archive\.json$/,
+      /^tasks\.json is 4 KB: `atm archive` would move 6 finished tasks to tasks-archive\.json$/,
     );
+    dashboard.archiveHint = null;
   });
 
   it('shows the copyright from plugin.json', () => {

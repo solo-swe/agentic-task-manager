@@ -268,6 +268,20 @@ export interface Task {
   duplicate_of?: string;
 }
 
+/** atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372) */
+export interface ArchiveHint {
+  /** How big the working task data is */
+  bytes: number;
+  /** How many working tasks are finished */
+  finished: number;
+  /** How many of them `atm archive` would move */
+  archivable: number;
+  /** Whether agents may archive on their own (meta.archive.auto) */
+  auto: boolean;
+  /** The hint as atm says it */
+  text: string;
+}
+
 /** A task as stored, and what atm derives for it */
 export interface TaskView {
   task: Task;
@@ -322,4 +336,5 @@ export interface TaskViewList {
   tasks: TaskView[];
   /** What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377) */
   problems?: string[];
+  archive_hint?: ArchiveHint;
 }

@@ -1,7 +1,8 @@
 // Loading from atm serve's API (docs/multi-project-api.md): the registered projects from api/projects, each project's
 // tasks from api/v1/projects/<id>/tasks, and its other files from p/<id>/. The requests go through the client layer,
 // api/http.ts; this module reads what they return.
-import { browserFetch, fetchFile, projectFileUrl, v1TasksUrl, type Fetch, type Validators } from './api/http';
+import { browserFetch, fetchFile, v1TasksUrl, type Fetch, type Validators } from './api/http';
+import type { ArchiveHint } from './generated/types';
 import type { Task, TasksFile } from './types';
 import type { NeedsYouItem } from './waiting';
 
@@ -106,9 +107,16 @@ export interface LoadedTasks {
   bytes: number;
   /** What atm finds wrong with the task file as a whole, when it reads a malformed one as far as it can (T-377) */
   problems: string[];
+  /** atm's suggestion to archive, when the task file is over meta.archive's thresholds (T-372); null otherwise */
+  archiveHint: ArchiveHint | null;
 }
 
-export function parseTasksFile(data: TasksFile, bytes = 0, problems: string[] = []): LoadedTasks {
+export function parseTasksFile(
+  data: TasksFile,
+  bytes = 0,
+  problems: string[] = [],
+  archiveHint: ArchiveHint | null = null,
+): LoadedTasks {
   const tasks = data.tasks ?? [];
   return {
     tasks,
@@ -117,8 +125,15 @@ export function parseTasksFile(data: TasksFile, bytes = 0, problems: string[] = 
     meta: data.meta,
     bytes,
     problems,
+    archiveHint,
   };
 }
+
+const isHint = (v: unknown): v is ArchiveHint =>
+  !!v &&
+  typeof v === 'object' &&
+  typeof (v as ArchiveHint).bytes === 'number' &&
+  typeof (v as ArchiveHint).archivable === 'number';
 
 /** How many problems atm finds in the project's task file: the file's own and its tasks' (T-377) */
 export function problemCount(problems: readonly string[], tasks: readonly Task[]): number {
@@ -210,6 +225,14 @@ interface TaskViewList {
   bytes?: number;
   tasks?: { task: Task; derived?: Task['derived'] }[];
   problems?: unknown;
+  archive_hint?: unknown;
+}
+
+/** The tasks of a v1 tasks response, each as stored with what atm derives for it beside its fields (T-366) */
+function viewedTasks(list: TaskViewList): Task[] {
+  return Array.isArray(list.tasks)
+    ? list.tasks.map((view) => (view.derived ? { ...view.task, derived: view.derived } : view.task))
+    : [];
 }
 
 /**
@@ -225,17 +248,14 @@ export async function loadTasks(
   const file = await fetchFile(v1TasksUrl(project), fetchFn, since);
   if (file.unchanged) return file;
   const list = JSON.parse(file.text) as TaskViewList;
-  // Each task as stored, with what atm derives for it (T-366): the dashboard takes atm's rules from there
-  const tasks = Array.isArray(list.tasks)
-    ? list.tasks.map((view) => (view.derived ? { ...view.task, derived: view.derived } : view.task))
-    : [];
   const problems = Array.isArray(list.problems) ? list.problems.filter((p): p is string => typeof p === 'string') : [];
   return {
     unchanged: false,
     loaded: parseTasksFile(
-      { meta: list.meta, tasks },
+      { meta: list.meta, tasks: viewedTasks(list) },
       typeof list.bytes === 'number' ? list.bytes : file.text.length,
       problems,
+      isHint(list.archive_hint) ? list.archive_hint : null,
     ),
     validators: file.validators,
   };
@@ -244,16 +264,15 @@ export async function loadTasks(
 export type ArchiveResult = { unchanged: true } | { unchanged: false; tasks: Task[]; validators: Validators };
 
 /**
- * Fetches a project's tasks-archive.json (DM-5), conditionally when `since` is given. A missing archive (404) is an
- * empty one; an unreadable one is an error, like tasks.json.
+ * Fetches a project's archived tasks (DM-5) from the v1 tasks route (`?archived=true`, T-372), conditionally when
+ * `since` is given. A missing archive (404) is an empty one; an unreadable one is an error, like the tasks.
  */
 export async function loadArchive(
   project: string,
   fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<ArchiveResult> {
-  const file = await fetchFile(projectFileUrl(project, 'tasks-archive.json'), fetchFn, since, '{"tasks": []}');
+  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, '{"tasks": []}');
   if (file.unchanged) return file;
-  const data = JSON.parse(file.text) as TasksFile;
-  return { unchanged: false, tasks: Array.isArray(data.tasks) ? data.tasks : [], validators: file.validators };
+  return { unchanged: false, tasks: viewedTasks(JSON.parse(file.text) as TaskViewList), validators: file.validators };
 }

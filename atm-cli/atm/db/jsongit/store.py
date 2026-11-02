@@ -7,6 +7,7 @@ import os
 
 from ...claims import locked_with_claims, read_store, write_store
 from ...core import AtmError, git, read_json, to_json, write_json_atomic, write_text_atomic
+from ...merge import ensure_archive_merge
 from ...model import archive_path, archived_task, load_archive, load_tasks, load_tasks_tolerant, vocabulary
 from ..working import Working
 
@@ -99,16 +100,26 @@ class JsonGitStore:
                 lambda: load_archive(self.paths),
             )
             result = fn(work)
-            # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and its
-            # mtime alone, so open dashboards don't reload for nothing
-            text = to_json(work.document) + "\n"
-            with open(tasks_file, encoding="utf-8") as f:
-                stored = f.read()
-            # The same data in another layout (a file edited by hand) is unchanged too
-            if stored != text and json.loads(stored) != work.document:
-                write_text_atomic(tasks_file, text)
-            if work.archive_changed():
-                write_json_atomic(archive_path(self.paths), work.archive())
+
+            def write_tasks():
+                # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and
+                # its mtime alone, so open dashboards don't reload for nothing
+                text = to_json(work.document) + "\n"
+                with open(tasks_file, encoding="utf-8") as f:
+                    stored = f.read()
+                # The same data in another layout (a file edited by hand) is unchanged too
+                if stored != text and json.loads(stored) != work.document:
+                    write_text_atomic(tasks_file, text)
+
+            def write_archive():
+                if work.archive_changed():
+                    write_json_atomic(archive_path(self.paths), work.archive())
+                    if work.archive_first:
+                        ensure_archive_merge(self.paths)  # tasks moved in: the archive merges task by task too
+
+            # A move into the archive writes it first; anything else writes tasks.json first (DM-5.2)
+            for write in (write_archive, write_tasks) if work.archive_first else (write_tasks, write_archive):
+                write()
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
         self._data = None  # this store's snapshot is out of date now

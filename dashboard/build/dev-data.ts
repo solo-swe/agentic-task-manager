@@ -26,11 +26,14 @@ function summary(root: string): Promise<unknown> {
 
 /** The project's meta, tasks with what atm derives for each, and problems (`atm list --derived --tolerant`, read as
  * atm serve's v1 route reads it, T-366, T-377); null when Python or the project can't give them */
-function taskViews(root: string): Promise<{ meta: unknown; tasks: unknown[]; problems: string[] } | null> {
+function taskViews(
+  root: string,
+  archived = false,
+): Promise<{ meta: unknown; tasks: unknown[]; problems: string[] } | null> {
   return new Promise((resolve) => {
     execFile(
       'python3',
-      [ATM, 'list', '--derived', '--tolerant'],
+      [ATM, 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])],
       { cwd: root, timeout: 10_000, maxBuffer: 64 << 20 },
       (error, stdout) => {
         try {
@@ -150,17 +153,19 @@ export function devData(defaultDir: string): Plugin {
         if (v1) {
           const project = (await devProjects(dirs)).find((p) => p.id === decodeURIComponent(v1[1]));
           if (!project) return json(404, { error: 'unknown project' });
+          // ?archived=true: the archive's tasks (T-372), keyed to the archive file
+          const archived = new URL(req.url ?? '', 'http://x').searchParams.get('archived') === 'true';
           try {
-            const file = path.join(project.dir, 'tasks.json');
+            const file = path.join(project.dir, archived ? 'tasks-archive.json' : 'tasks.json');
             const { size, mtimeMs } = await stat(file);
-            const etag = `"v1-${size.toString(16)}-${Math.round(mtimeMs * 1e6).toString(16)}"`;
+            const etag = `"v1-${archived ? 'a' : 't'}-${size.toString(16)}-${Math.round(mtimeMs * 1e6).toString(16)}"`;
             res.setHeader('ETag', etag);
             if (req.headers['if-none-match'] === etag) {
               res.statusCode = 304;
               res.end();
               return;
             }
-            const read = await taskViews(path.dirname(project.dir));
+            const read = await taskViews(path.dirname(project.dir), archived);
             if (!read) return json(500, { error: 'atm could not read the task file' });
             json(200, { generated_at: new Date().toISOString(), bytes: size, ...read });
           } catch {

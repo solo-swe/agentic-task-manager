@@ -41,6 +41,7 @@ from ..logo import find_logo
 from ..migrate import HEAD_BYTES, TEMPLATE, dashboard_head, describe_migration, migrate, page_tags
 from ..paths import find_paths
 from ..boot.open import project_at
+from ..lib.archive import archive_hint_now
 from ..lib.query import Filters, list_claims, project_summary, read_problems, search_tasks, task_views
 from ..registry import (
     REGISTRY_FILE,
@@ -505,6 +506,9 @@ def api_v1_tasks(summaries, entry, query):
             "tasks": views,
             "problems": read_problems(project),
         }
+        hint = archive_hint_now(project) if not task_filters(query).archived else None
+        if hint:
+            snapshot["archive_hint"] = hint  # atm's suggestion to archive: the dashboard's footer notice (T-372)
         return to_json(snapshot).encode("utf-8")
 
     return body, etag

@@ -124,6 +124,10 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   problem is said, in `atm check`'s words: a task's in its `derived.problems` (it isn't `ready` then), the file's in
   the response's `problems`. The dashboard shows a notice and each task's problems in its details. A file that isn't
   a task file at all still gets an error.
+- **The archive** (T-372): `?archived=true` gives the archive's tasks, as views; the dashboard loads its archive from
+  here, no longer from `tasks-archive.json` (a project without one: `404`, an empty archive). Without it, the response
+  carries `archive_hint` when atm suggests archiving (its `bytes`, `finished`, `archivable`, `auto` and `text`, as
+  `atm status --json` has it): the dashboard's footer notice.
 - **Filters**, as `atm list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
   `type`, `priority`, `agent`, `release`, `component`; the flags `backlog`, `ready`, `blocked`, `in_pr`, `with_user`
   and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.

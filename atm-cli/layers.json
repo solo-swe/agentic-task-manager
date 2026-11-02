@@ -1,7 +1,6 @@
 {
   "_comment": "The ratchet of docs/layered-architecture.md §9. legacy: the flat modules from before the layers. exceptions: imports from a layered module that break the layer rule, by importer. atm-cli/build.py refuses anything missing here and any entry no longer needed: each migration step removes its slice's entries, and the migration is done when both lists are empty.",
   "legacy": [
-    "archive",
     "claims",
     "components",
     "core",
@@ -21,7 +20,6 @@
     "boot.open": ["paths"],
     "cli.main": [
       "api.server",
-      "archive",
       "core",
       "git_ops",
       "lock",
@@ -33,6 +31,7 @@
       "registry",
       "repository"
     ],
+    "cli.archive": ["core"],
     "cli.claims": ["claims", "core", "paths", "registry"],
     "cli.components": ["core"],
     "cli.edit": ["claims", "components", "core"],
@@ -42,8 +41,9 @@
     "cli.render": ["model"],
     "cli.show": ["core"],
     "cli.status": ["claims", "core"],
-    "db.jsongit.store": ["claims", "core", "model"],
+    "db.jsongit.store": ["claims", "core", "merge", "model"],
     "db.memory": ["model"],
+    "lib.archive": ["core", "model"],
     "lib.claims": ["claims", "core", "model"],
     "lib.components": ["components", "model"],
     "lib.edit": ["components", "core", "model"],

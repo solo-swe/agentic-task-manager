@@ -352,6 +352,24 @@ Task = TypedDict(
     total=False,
 )
 
+# atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372)
+ArchiveHint = TypedDict(
+    "ArchiveHint",
+    {
+        # required; How big the working task data is
+        "bytes": int,
+        # required; How many working tasks are finished
+        "finished": int,
+        # required; How many of them `atm archive` would move
+        "archivable": int,
+        # required; Whether agents may archive on their own (meta.archive.auto)
+        "auto": bool,
+        # required; The hint as atm says it
+        "text": str,
+    },
+    total=False,
+)
+
 # A task as stored, and what atm derives for it
 TaskView = TypedDict(
     "TaskView",
@@ -433,6 +451,7 @@ TaskViewList = TypedDict(
         "tasks": List["TaskView"],
         # What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377)
         "problems": List[str],
+        "archive_hint": "ArchiveHint",
     },
     total=False,
 )

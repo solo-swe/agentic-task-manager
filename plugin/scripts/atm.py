@@ -2054,6 +2054,24 @@ Task = TypedDict(
     total=False,
 )
 
+# atm's suggestion to archive (CLI-5.1), present when the working tasks are over meta.archive's thresholds (T-372)
+ArchiveHint = TypedDict(
+    "ArchiveHint",
+    {
+        # required; How big the working task data is
+        "bytes": int,
+        # required; How many working tasks are finished
+        "finished": int,
+        # required; How many of them `atm archive` would move
+        "archivable": int,
+        # required; Whether agents may archive on their own (meta.archive.auto)
+        "auto": bool,
+        # required; The hint as atm says it
+        "text": str,
+    },
+    total=False,
+)
+
 # A task as stored, and what atm derives for it
 TaskView = TypedDict(
     "TaskView",
@@ -2135,6 +2153,7 @@ TaskViewList = TypedDict(
         "tasks": List["TaskView"],
         # What atm finds wrong with the task file as a whole: entries left out, vocabularies that fell back to their defaults (T-377)
         "problems": List[str],
+        "archive_hint": "ArchiveHint",
     },
     total=False,
 )
@@ -2571,6 +2590,425 @@ def cmd_logo(args):
     out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
 
 
+# ==== merge.py ====
+# Merging tasks.json, and `atm init`.
+#
+# Registered as a git merge driver (`tasks.json merge=atm`), so branches that changed tasks.json merge task by task
+# instead of line by line. Design: docs/parallel-agents-design.md, option E and layer L3.
+
+# What `atm` means is not in this file: git config can't be committed, so each clone registers the driver in its own
+# .git/config (merge.atm.driver), which the atm skills do on every run. A clone without it merges tasks.json normally.
+GITATTRIBUTES_LINES = (
+    "# 'atm' is defined in each clone's git config (merge.atm.driver), registered by the atm plugin on every run.\n"
+    "# Without it, git merges tasks.json line by line as usual.\n"
+    "tasks.json merge=atm\n"
+)
+# Fields that move with the status: they come from the side whose progress wins
+PROGRESS_FIELDS = (
+    "status",
+    "updated_at",
+    "started_at",
+    "completed_at",
+    "skipped_at",
+    "last_failure",
+    "agent",
+    "started_by",
+    "completed_by",
+    "updated_by",
+    "commit",
+    "review_requested_at",
+    "review_state",
+    "reviewed_at",
+    "sprint_review",
+    "waiting_on",
+    "questions",
+    "blocked_at",
+)
+# How far along a status's kind is (DM-3.3); a status without a kind ranks like todo
+KIND_RANK = {"todo": 0, "active": 1, "blocked": 1, "review": 1, "done": 2, "skipped": 2}
+MISSING = object()
+
+
+def merge_vocabulary(*versions):
+    """The vocabulary to rank statuses by: this branch's, else the other's, else the defaults. A merge never fails
+    over a vocabulary; the next atm command reports it."""
+    for data in versions:
+        try:
+            return vocabulary(data)
+        except AtmError:
+            continue
+    return vocabulary({})
+
+
+def merge_value(base, ours, theirs):
+    """Three-way merge of one value: (value, conflict). On conflict, ours is kept."""
+    if ours == theirs:
+        return ours, False
+    if ours == base:
+        return theirs, False
+    if theirs == base:
+        return ours, False
+    return ours, True
+
+
+def progress_winner(ours, theirs, vocab):
+    """Both sides moved a task along: the one further along wins, then the newer update, then ours."""
+    rank = lambda task: KIND_RANK.get(kind_of(vocab, task.get("status")), 0)
+    rank_o, rank_t = rank(ours), rank(theirs)
+    if rank_o != rank_t:
+        return ours if rank_o > rank_t else theirs
+    return theirs if str(theirs.get("updated_at", "")) > str(ours.get("updated_at", "")) else ours
+
+
+def merge_notes(ours, theirs):
+    """Notes only grow: both sides' notes, each once, oldest first."""
+    merged = list(ours) + [n for n in theirs if n not in ours]
+    return sorted(merged, key=lambda n: str(n.get("at", "")) if isinstance(n, dict) else "")
+
+
+def merge_intervals(ours, theirs):
+    """Past blocks and reviews only grow: both sides', one per start, oldest first."""
+    starts = {i.get("from") for i in ours if isinstance(i, dict)}
+    merged = list(ours) + [i for i in theirs if isinstance(i, dict) and i.get("from") not in starts]
+    return sorted(merged, key=lambda i: str(i.get("from", "")) if isinstance(i, dict) else "")
+
+
+def merge_history(ours, theirs):
+    """A task's sprint_history only grows: one entry per start (`from`); an entry ended on either side (`to`) is kept
+    ended, so a sprint change on one branch closes the entry the other branch still has open."""
+    by_start = {}
+    for entry in list(ours) + list(theirs):
+        if not isinstance(entry, dict):
+            continue
+        known = by_start.get(entry.get("from"))
+        if known is None or ("to" in entry and "to" not in known):
+            by_start[entry.get("from")] = entry
+    return sorted(by_start.values(), key=lambda e: str(e.get("from", "")))
+
+
+# meta lists merged item by item, by ID, like tasks (docs/sprints-and-releases-design.md SR-2.4), with how far along
+# each state is: changed on both sides, the further state wins
+META_LISTS = {
+    "sprints": {"planned": 0, "active": 1, "closed": 2},
+    "releases": {"planned": 0, "released": 1, "archived": 2},
+    "components": None,
+}
+# Sprints are named, and two names that differ only in case are the same sprint (SR-2.3)
+item_key = lambda name, item: (
+    item.get("id").casefold() if name == "sprints" and isinstance(item.get("id"), str) else item.get("id")
+)
+
+
+def merge_items(name, base, ours, theirs):
+    """Merge three versions of a meta list of {id, ...} items. Returns (items, conflict descriptions)."""
+    rank = META_LISTS[name]
+    keyed = lambda items: {item_key(name, i): i for i in items if isinstance(i, dict)} if isinstance(items, list) else {}
+    b, o, t = keyed(base), keyed(ours), keyed(theirs)
+    items, conflicts = [], []
+    for key, item in o.items():
+        if key not in b:
+            other = t.get(key)
+            if other is not None and other != item:
+                conflicts.append(f"meta.{name}: {item.get('id')!r} was added on both branches, differently")
+            items.append(item)
+        elif key not in t:
+            if item != b[key]:
+                conflicts.append(f"meta.{name}: {item.get('id')!r} changed on this branch, deleted on the other")
+                items.append(item)
+        else:
+            merged, fields = merge_item(b[key], item, t[key], rank)
+            items.append(merged)
+            if fields:
+                conflicts.append(f"meta.{name}: both branches changed {item.get('id')!r} ({', '.join(fields)})")
+    for key, item in t.items():
+        if key not in o and (key not in b or item != b[key]):
+            if key in b:
+                conflicts.append(f"meta.{name}: {item.get('id')!r} deleted on this branch, changed on the other")
+            items.append(item)
+    return items, conflicts
+
+
+def merge_item(base, ours, theirs, rank):
+    """One sprint, release or component changed on both sides: field by field; where both changed a field and both
+    changed the state, the side further along wins it (a sprint closed on one branch stays closed with its report);
+    otherwise ours, as a conflict. Returns (item, names of conflicting fields)."""
+    winner = None
+    if rank and ours.get("state") != base.get("state") and theirs.get("state") != base.get("state"):
+        ours_rank, theirs_rank = rank.get(ours.get("state"), 0), rank.get(theirs.get("state"), 0)
+        if ours_rank != theirs_rank:
+            winner = ours if ours_rank > theirs_rank else theirs
+    merged, conflicts = {}, []
+    for key in list(ours) + [k for k in theirs if k not in ours] + [k for k in base if k not in ours and k not in theirs]:
+        value, conflict = merge_value(base.get(key, MISSING), ours.get(key, MISSING), theirs.get(key, MISSING))
+        if conflict and winner is not None:
+            value, conflict = winner.get(key, MISSING), False
+        if conflict:
+            conflicts.append(key)
+        if value is not MISSING:
+            merged[key] = value
+    return merged, conflicts
+
+
+def merge_set(base, ours, theirs):
+    """A list merged as a set (`related`, SR-2.8): what either side added stays, what either side removed goes, in
+    ours' order, then theirs' additions. MISSING when nothing is left."""
+    as_list = lambda v: v if isinstance(v, list) else []
+    base, ours, theirs = as_list(base), as_list(ours), as_list(theirs)
+    removed = (set(base) - set(ours)) | (set(base) - set(theirs))
+    merged = [v for v in ours if v not in removed]
+    merged += [v for v in theirs if v not in removed and v not in merged]
+    return merged or MISSING
+
+
+def merge_task(base, ours, theirs, vocab):
+    """Merge one task changed on both sides. Returns (task, names of conflicting fields)."""
+    changed = lambda side: any(side.get(f, MISSING) != base.get(f, MISSING) for f in PROGRESS_FIELDS)
+    if not changed(theirs):
+        progress = ours
+    elif not changed(ours):
+        progress = theirs
+    else:
+        progress = progress_winner(ours, theirs, vocab)
+    keys = list(ours) + [k for k in theirs if k not in ours] + [k for k in base if k not in ours and k not in theirs]
+    merged, conflicts = {}, []
+    for key in keys:
+        if key in PROGRESS_FIELDS:
+            value = progress.get(key, MISSING)
+        elif key == "notes":
+            value = merge_notes(ours.get(key, []), theirs.get(key, []))
+        elif key in ("blocks", "reviews"):
+            value = merge_intervals(ours.get(key, []), theirs.get(key, []))
+        elif key == "sprint_history":
+            value = merge_history(ours.get(key, []), theirs.get(key, []))
+        elif key == "related":
+            value = merge_set(base.get(key, []), ours.get(key, []), theirs.get(key, []))
+        else:
+            value, conflict = merge_value(base.get(key, MISSING), ours.get(key, MISSING), theirs.get(key, MISSING))
+            if conflict and key == "phase" and ("sprint" in ours or "sprint" in theirs):
+                # One side has been migrated to sprints (SR-8.5): its sprint stands for the phase
+                value, conflict = MISSING, False
+            if conflict:
+                conflicts.append(key)
+        if value is not MISSING:
+            merged[key] = value
+    return merged, conflicts
+
+
+def next_free_id(task_id, used):
+    parts = split_id(task_id)
+    if not parts:
+        n = 2
+        while f"{task_id}-{n}" in used:
+            n += 1
+        return f"{task_id}-{n}"
+    prefix, digits = parts
+    numbers = [int(x[len(prefix) :]) for x in used if x.startswith(prefix) and x[len(prefix) :].isdigit()]
+    return prefix + str(max(numbers) + 1).zfill(len(digits))
+
+
+def merge_task_files(base, ours, theirs):
+    """Merge three versions of tasks.json. Returns (merged data, list of conflict descriptions)."""
+    by_id = lambda data: {t.get("id"): t for t in data.get("tasks", [])}
+    vocab = merge_vocabulary(ours, theirs)
+    base_tasks, our_tasks, their_tasks = by_id(base), by_id(ours), by_id(theirs)
+    used = set(base_tasks) | set(our_tasks) | set(their_tasks)
+    conflicts, merged_tasks, renamed, theirs_new = [], [], {}, []
+
+    for task in ours.get("tasks", []):
+        task_id = task.get("id")
+        b, t = base_tasks.get(task_id), their_tasks.get(task_id)
+        if b is None:
+            merged_tasks.append(task)  # added here (if added there too, theirs is renumbered below)
+        elif t is None:
+            if task != b:
+                conflicts.append(f"{task_id}: changed on this branch, deleted on the other")
+                merged_tasks.append(task)
+        else:
+            merged, fields = merge_task(b, task, t, vocab)
+            merged_tasks.append(merged)
+            if fields:
+                conflicts.append(f"{task_id}: both branches changed {', '.join(fields)}")
+
+    for task in theirs.get("tasks", []):
+        task_id = task.get("id")
+        if task_id in base_tasks:
+            if task_id not in our_tasks and task != base_tasks[task_id]:
+                conflicts.append(f"{task_id}: deleted on this branch, changed on the other")
+                merged_tasks.append(task)
+            continue
+        if task_id in our_tasks:
+            if our_tasks[task_id] == task:
+                continue  # the same task added on both sides
+            new_id = next_free_id(task_id, used)
+            used.add(new_id)
+            renamed[task_id] = new_id
+            task = {**task, "id": new_id}
+        theirs_new.append(task)
+    for task in theirs_new:
+        if renamed and task.get("dependencies"):
+            task = {**task, "dependencies": [renamed.get(d, d) for d in task["dependencies"]]}
+        merged_tasks.append(task)
+
+    result = {}
+    for key in list(ours) + [k for k in theirs if k not in ours]:
+        if key == "tasks":
+            result[key] = merged_tasks
+        elif key == "meta" and isinstance(ours.get(key), dict) and isinstance(theirs.get(key), dict):
+            b, o, t = base.get(key) or {}, ours[key], theirs[key]
+            meta = {}
+            for k in list(o) + [k for k in t if k not in o]:
+                if k in META_LISTS:
+                    value, item_conflicts = merge_items(k, b.get(k, []), o.get(k, []), t.get(k, []))
+                    conflicts.extend(item_conflicts)
+                else:
+                    value, _ = merge_value(b.get(k, MISSING), o.get(k, MISSING), t.get(k, MISSING))
+                if value is not MISSING:
+                    meta[k] = value
+            if "sprints" in meta:
+                meta.pop("phases", None)  # a project migrated on either side has no phases left (SR-8.5)
+            result[key] = meta
+        else:
+            result[key] = ours.get(key, theirs.get(key))
+    return result, conflicts
+
+
+def cmd_merge_driver(args):
+    base_path, ours_path, theirs_path = args.base, args.ours, args.theirs
+    versions = [read_json(p) for p in (base_path, ours_path, theirs_path)]
+    if versions[0] is None and os.path.exists(base_path) and os.path.getsize(base_path) == 0:
+        versions[0] = {"tasks": []}  # the file was added on both branches
+    if not all(isinstance(v, dict) and isinstance(v.get("tasks", []), list) for v in versions):
+        raise AtmError("tasks.json merge: one side is not valid JSON; resolve the conflict by hand")
+    merged, conflicts = merge_task_files(*versions)
+    write_json_atomic(ours_path, merged)
+    if args.json:
+        out(to_json({"conflicts": conflicts}))
+    if conflicts:
+        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
+        for conflict in conflicts:
+            sys.stderr.write(f"  {conflict}\n")
+        raise AtmExit(1)
+
+
+def launcher_command():
+    launcher = os.path.join(SCRIPT_DIR, "atm").replace("'", "'\\''")
+    return f"'{launcher}' merge-driver %O %A %B"
+
+
+def ensure_merge_driver(paths):
+    """In git: `tasks.json merge=atm` in the task folder's .gitattributes (staged when added), and the driver
+    registered in the clone's config, pointing at this plugin's launcher. Returns True if .gitattributes changed."""
+    root = paths["root"]
+    if not in_git(root):
+        return False
+    for key, value in (("merge.atm.name", "atm: merge tasks.json task by task"), ("merge.atm.driver", launcher_command())):
+        if git(["config", "--get", key], root) != value:
+            git(["config", key, value], root)
+    attributes = os.path.join(paths["dir"], ".gitattributes")
+    try:
+        with open(attributes, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    if "tasks.json merge=atm" in text.splitlines():
+        return False
+    os.makedirs(paths["dir"], exist_ok=True)
+    with open(attributes, "w", encoding="utf-8") as f:
+        f.write(text + ("" if not text or text.endswith("\n") else "\n") + GITATTRIBUTES_LINES)
+    git(["add", "--", rel(root, attributes)], root)
+    return True
+
+
+ARCHIVE_ATTRIBUTES_LINE = "tasks-archive.json merge=atm\n"
+
+
+def ensure_archive_merge(paths):
+    """In git: the archive merges task by task too. Added when a project first archives, so projects that never do
+    see no change. Returns True if .gitattributes changed (staged)."""
+    root = paths["root"]
+    if not in_git(root):
+        return False
+    ensure_merge_driver(paths)  # the driver itself, and the tasks.json line
+    attributes = os.path.join(paths["dir"], ".gitattributes")
+    with open(attributes, encoding="utf-8") as f:
+        text = f.read()
+    if ARCHIVE_ATTRIBUTES_LINE.strip() in text.splitlines():
+        return False
+    with open(attributes, "w", encoding="utf-8") as f:
+        f.write(text + ("" if text.endswith("\n") else "\n") + ARCHIVE_ATTRIBUTES_LINE)
+    git(["add", "--", rel(root, attributes)], root)
+    return True
+
+
+def ensure_project_id(paths):
+    """Give tasks.json a meta.id if it has none: the dashboard keeps each project's saved view under it (projects
+    served from the same port share browser storage). Returns the new id, or None if there was one already."""
+    if not os.path.isfile(paths["tasks"]):
+        return None
+    with locked(paths["dir"]):
+        data = load_tasks(paths)
+        meta = data.get("meta")
+        if not isinstance(meta, dict):
+            meta = data["meta"] = {}
+        if isinstance(meta.get("id"), str) and meta["id"]:
+            return None
+        meta["id"] = os.urandom(4).hex()
+        write_json_atomic(paths["tasks"], data)
+    return meta["id"]
+
+
+def apply_meta(paths, meta_file):
+    """`init --meta-file F`: merge F's keys into tasks.json's meta (project, description, phases, vocabularies),
+    creating tasks.json if there is none, so /atm:create-tasks never writes the file itself. The vocabularies are
+    checked before anything is written; meta.id is kept. Returns (created, keys)."""
+    new = read_json(meta_file)
+    if not isinstance(new, dict):
+        raise AtmError(f"{meta_file} must hold a JSON object: the meta keys to set", 2)
+    new.pop("id", None)
+    with locked(paths["dir"]) if os.path.isdir(paths["dir"]) else contextlib.nullcontext():
+        created = not os.path.isfile(paths["tasks"])
+        data = {"meta": {"created": now().strftime("%Y-%m-%d")}, "tasks": []} if created else load_tasks(paths)
+        if not isinstance(data.get("meta"), dict):
+            data["meta"] = {}
+        data["meta"].update(new)
+        vocabulary(data)  # raises, naming the problem, before anything is written
+        os.makedirs(paths["dir"], exist_ok=True)
+        write_json_atomic(paths["tasks"], data)
+    return created, sorted(new)
+
+
+def cmd_init(args):
+    paths = find_paths(os.getcwd())
+    if args.meta_file:
+        created, keys = apply_meta(paths, args.meta_file)
+        paths = find_paths(os.getcwd())
+        if not args.json:
+            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
+    project_id = ensure_project_id(paths)
+    repository = ensure_repository(paths)
+    register(paths)  # the dashboard lists every project atm runs in
+    git_repo = in_git(paths["root"])
+    changed = ensure_merge_driver(paths) if git_repo else False
+    if args.json:
+        out(
+            to_json(
+                {"project_id": project_id, "repository": repository, "git": git_repo, "gitattributes_added": changed}
+            )
+        )
+        return
+    if project_id:
+        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
+    if repository:
+        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
+    if not git_repo:
+        out("Not in a git repository: there is no merge driver to set up.")
+        return
+    out(
+        "Registered the tasks.json merge driver (git config merge.atm)"
+        + (" and added .agentic-task-manager/.gitattributes (staged)." if changed else "; .gitattributes already set.")
+    )
+
+
 # ==== claims.py ====
 # Claims: which agent works on which task, until when (the lease); and `next`.
 #
@@ -2943,6 +3381,7 @@ class Working:
         self._load_archive = archive
         self._archive = None
         self._before_archive = None
+        self.archive_first = False
         self._deferred = None
         self._before_store = _stamp(claims_store)
 
@@ -2952,6 +3391,12 @@ class Working:
             self._archive = self._load_archive() if self._load_archive else {"meta": {}, "tasks": []}
             self._before_archive = _stamp(self._archive)
         return self._archive
+
+    def moving_into_archive(self):
+        """This change moves tasks from the working tasks into the archive: a store that writes the two apart writes
+        the archive first, so a crash between leaves a task in both, never in neither (DM-5.2). Without it (a
+        restore), the working tasks go first."""
+        self.archive_first = True
 
     def archive_changed(self):
         """Whether the archive was asked for and changed: the store writes it then, and only then."""
@@ -3100,16 +3545,26 @@ class JsonGitStore:
                 lambda: load_archive(self.paths),
             )
             result = fn(work)
-            # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and its
-            # mtime alone, so open dashboards don't reload for nothing
-            text = to_json(work.document) + "\n"
-            with open(tasks_file, encoding="utf-8") as f:
-                stored = f.read()
-            # The same data in another layout (a file edited by hand) is unchanged too
-            if stored != text and json.loads(stored) != work.document:
-                write_text_atomic(tasks_file, text)
-            if work.archive_changed():
-                write_json_atomic(archive_path(self.paths), work.archive())
+
+            def write_tasks():
+                # Written only when its text changed: a read-only change (atm next, a heartbeat) leaves the file and
+                # its mtime alone, so open dashboards don't reload for nothing
+                text = to_json(work.document) + "\n"
+                with open(tasks_file, encoding="utf-8") as f:
+                    stored = f.read()
+                # The same data in another layout (a file edited by hand) is unchanged too
+                if stored != text and json.loads(stored) != work.document:
+                    write_text_atomic(tasks_file, text)
+
+            def write_archive():
+                if work.archive_changed():
+                    write_json_atomic(archive_path(self.paths), work.archive())
+                    if work.archive_first:
+                        ensure_archive_merge(self.paths)  # tasks moved in: the archive merges task by task too
+
+            # A move into the archive writes it first; anything else writes tasks.json first (DM-5.2)
+            for write in (write_archive, write_tasks) if work.archive_first else (write_tasks, write_archive):
+                write()
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
         self._data = None  # this store's snapshot is out of date now
@@ -5450,6 +5905,148 @@ def release_notes(project, release_id):
     return {"release": release, "groups": groups, "open": open_tasks}
 
 
+# ==== lib/archive.py ====
+# atm-lib: the archive (docs/v4/data-model.md §5; docs/layered-architecture.md §5.1): finished tasks moved out of the
+# working tasks into the archive, so the working file stays small, and brought back.
+#
+# A move is one store change that tells the store it moves tasks into the archive (`work.moving_into_archive()`): the
+# JSON-in-git store writes the archive first, then tasks.json; a restore the other way round. A task found in both
+# keeps its working copy and loses the archive's: an archive that crashed halfway simply hasn't happened, an unarchive
+# that crashed halfway is complete, and no task is ever lost.
+
+def drop_duplicates(data, archive):
+    """Tasks in both files keep their tasks.json copy (see the module docstring). Returns the dropped IDs."""
+    ids = {t.get("id") for t in data["tasks"]}
+    dropped = [t.get("id") for t in archive["tasks"] if t.get("id") in ids]
+    archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in ids]
+    return dropped
+
+
+def kept_finished(data, moving, before, keep, sprints):
+    """The finished tasks that stay in tasks.json, and why (T-352), as archivable() decides: in an open PR, finished
+    in the last keep days, not before --before, not in the --sprint chosen. [{id, reason}], in file order."""
+    vocab = vocabulary(data)
+    days = archive_settings(data)["keep_days"] if keep is None else keep
+    recent = now() - timedelta(days=days)
+    moved = {t.get("id") for t in moving}
+    kept = []
+    for t in data["tasks"]:
+        if not isinstance(t, dict) or t.get("id") in moved:
+            continue
+        if kind_of(vocab, t.get("status")) not in ("done", "skipped"):
+            continue
+        finished = finished_at(t)
+        if isinstance(t.get("pr"), dict) and not t.get("merged_at"):
+            reason = f"in open PR #{t['pr'].get('number')}"
+        elif finished is not None and finished > recent:
+            reason = f"finished in the last {days} days"
+        elif before is not None and (finished is None or finished >= before):
+            reason = f"finished on or after {before.date().isoformat()}"
+        elif sprints is not None:
+            reason = "not in the sprints chosen"
+        else:
+            continue
+        kept.append({"id": t.get("id"), "reason": reason})
+    return kept
+
+
+def parse_before(before):
+    """--before as a time: a date (2026-05-01) or a full ISO time; None without one."""
+    if not before:
+        return None
+    try:
+        return parse_iso(before if "T" in before else before + "T00:00:00Z")
+    except ValueError:
+        raise Invalid(f"--before {before}: use a date like 2026-05-01")
+
+
+def plan_archive(data, archive, sprints, before, keep_days):
+    """What an archive would do: (moving, dropped, kept, names). Changes `archive` (drops its duplicates)."""
+    dropped = drop_duplicates(data, archive)
+    moving = archivable(data, before, keep_days)
+    names = None
+    if sprints:
+        vocab = vocabulary(data)
+        names = set()
+        for name in sprints:
+            sprint = find_sprint(vocab, name)
+            if sprint is None:
+                raise NotFound(f"no sprint {name!r}", 2)
+            names.add(sprint["id"])
+        moving = [t for t in moving if (find_sprint(vocab, t.get("sprint")) or {}).get("id") in names]
+    return moving, dropped, kept_finished(data, moving, before, keep_days, names)
+
+
+def archive_finished(project, sprints=None, before=None, keep_days=None, dry_run=False):
+    """`atm archive`: move the finished tasks (DM-5.1) to the archive, those of `sprints` only and finished before
+    `before` if given, keeping those finished in the last `keep_days`. With `dry_run`, only what it would do. Returns
+    {moved, dry_run, duplicates_dropped, kept, sizes}."""
+    before = parse_before(before)
+    if dry_run:
+        # Nothing changes: worked out on copies of what the store reads
+        data = {"meta": project.store.document().get("meta"), "tasks": list(project.store.list_tasks())}
+        archive = {"meta": {}, "tasks": list(project.store.list_archived())}
+        moving, dropped, kept = plan_archive(data, archive, sprints, before, keep_days)
+        ids = [t.get("id") for t in moving]
+        return {"moved": ids, "dry_run": True, "duplicates_dropped": dropped, "kept": kept, "sizes": project.store.sizes()}
+
+    def change(work):
+        data, archive = work.document, work.archive()
+        moving, dropped, kept = plan_archive(data, archive, sprints, before, keep_days)
+        ids = [t.get("id") for t in moving]
+        if moving or dropped:
+            work.moving_into_archive()
+            # New IDs must never come back to an archived ID (DM-2.3)
+            if not isinstance(data.get("meta"), dict):
+                data["meta"] = {}
+            data["meta"]["next_id"] = next_number(data)
+            archive.setdefault("meta", {})["archived_at"] = now_iso()
+            archive["tasks"].extend(moving)
+            moved = set(ids)
+            data["tasks"] = [t for t in data["tasks"] if t.get("id") not in moved]
+            # The dashboard shows the count without loading the archive (dashboard D-5.4)
+            data["meta"]["archived"] = len(archive["tasks"])
+        return {"moved": ids, "dry_run": False, "duplicates_dropped": dropped, "kept": kept}
+
+    result = project.store.change(change)
+    return {**result, "sizes": project.store.sizes()}
+
+
+def unarchive_tasks(project, ids):
+    """`atm unarchive`: bring archived tasks back. Returns {restored, moves_back}: those the next archive would move
+    straight back (finished and old, T-357)."""
+
+    def change(work):
+        data, archive = work.document, work.archive()
+        drop_duplicates(data, archive)
+        by_id = {t.get("id"): t for t in archive["tasks"]}
+        missing = [i for i in ids if i not in by_id]
+        if missing:
+            # Already back, or never there at all: two different mistakes (T-357)
+            live = {t.get("id") for t in data["tasks"]}
+            here = [i for i in missing if i in live]
+            unknown = [i for i in missing if i not in live]
+            parts = ([f"{', '.join(here)} (already in tasks.json)"] if here else []) + (
+                [f"{', '.join(unknown)} (no such task)"] if unknown else []
+            )
+            raise NotFound(f"not in the archive: {'; '.join(parts)}")
+        data["tasks"].extend(by_id[i] for i in ids)
+        # Still finished and old: the next atm archive would move it straight back (T-357)
+        again = [t.get("id") for t in archivable(data, None, None) if t.get("id") in ids]
+        if not isinstance(data.get("meta"), dict):
+            data["meta"] = {}
+        data["meta"]["archived"] = len(archive["tasks"]) - len(set(ids))
+        archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in ids]
+        return {"restored": list(ids), "moves_back": again}
+
+    return project.store.change(change)
+
+
+def archive_hint_now(project):
+    """The suggestion to archive (CLI-5.1), or None: when the working tasks are over the threshold."""
+    return archive_hint_for(project.store.document(), project.store.sizes()["tasks"])
+
+
 # ==== boot/open.py ====
 # Opening a project: its task files (the JSON-in-git store) and git.
 
@@ -5548,589 +6145,6 @@ def render_task(view):
         failure = task["last_failure"]
         lines.append(f"  last failure: {failure.get('at')}: {failure.get('reason')}")
     return "\n".join(lines)
-
-
-# ==== merge.py ====
-# Merging tasks.json, and `atm init`.
-#
-# Registered as a git merge driver (`tasks.json merge=atm`), so branches that changed tasks.json merge task by task
-# instead of line by line. Design: docs/parallel-agents-design.md, option E and layer L3.
-
-# What `atm` means is not in this file: git config can't be committed, so each clone registers the driver in its own
-# .git/config (merge.atm.driver), which the atm skills do on every run. A clone without it merges tasks.json normally.
-GITATTRIBUTES_LINES = (
-    "# 'atm' is defined in each clone's git config (merge.atm.driver), registered by the atm plugin on every run.\n"
-    "# Without it, git merges tasks.json line by line as usual.\n"
-    "tasks.json merge=atm\n"
-)
-# Fields that move with the status: they come from the side whose progress wins
-PROGRESS_FIELDS = (
-    "status",
-    "updated_at",
-    "started_at",
-    "completed_at",
-    "skipped_at",
-    "last_failure",
-    "agent",
-    "started_by",
-    "completed_by",
-    "updated_by",
-    "commit",
-    "review_requested_at",
-    "review_state",
-    "reviewed_at",
-    "sprint_review",
-    "waiting_on",
-    "questions",
-    "blocked_at",
-)
-# How far along a status's kind is (DM-3.3); a status without a kind ranks like todo
-KIND_RANK = {"todo": 0, "active": 1, "blocked": 1, "review": 1, "done": 2, "skipped": 2}
-MISSING = object()
-
-
-def merge_vocabulary(*versions):
-    """The vocabulary to rank statuses by: this branch's, else the other's, else the defaults. A merge never fails
-    over a vocabulary; the next atm command reports it."""
-    for data in versions:
-        try:
-            return vocabulary(data)
-        except AtmError:
-            continue
-    return vocabulary({})
-
-
-def merge_value(base, ours, theirs):
-    """Three-way merge of one value: (value, conflict). On conflict, ours is kept."""
-    if ours == theirs:
-        return ours, False
-    if ours == base:
-        return theirs, False
-    if theirs == base:
-        return ours, False
-    return ours, True
-
-
-def progress_winner(ours, theirs, vocab):
-    """Both sides moved a task along: the one further along wins, then the newer update, then ours."""
-    rank = lambda task: KIND_RANK.get(kind_of(vocab, task.get("status")), 0)
-    rank_o, rank_t = rank(ours), rank(theirs)
-    if rank_o != rank_t:
-        return ours if rank_o > rank_t else theirs
-    return theirs if str(theirs.get("updated_at", "")) > str(ours.get("updated_at", "")) else ours
-
-
-def merge_notes(ours, theirs):
-    """Notes only grow: both sides' notes, each once, oldest first."""
-    merged = list(ours) + [n for n in theirs if n not in ours]
-    return sorted(merged, key=lambda n: str(n.get("at", "")) if isinstance(n, dict) else "")
-
-
-def merge_intervals(ours, theirs):
-    """Past blocks and reviews only grow: both sides', one per start, oldest first."""
-    starts = {i.get("from") for i in ours if isinstance(i, dict)}
-    merged = list(ours) + [i for i in theirs if isinstance(i, dict) and i.get("from") not in starts]
-    return sorted(merged, key=lambda i: str(i.get("from", "")) if isinstance(i, dict) else "")
-
-
-def merge_history(ours, theirs):
-    """A task's sprint_history only grows: one entry per start (`from`); an entry ended on either side (`to`) is kept
-    ended, so a sprint change on one branch closes the entry the other branch still has open."""
-    by_start = {}
-    for entry in list(ours) + list(theirs):
-        if not isinstance(entry, dict):
-            continue
-        known = by_start.get(entry.get("from"))
-        if known is None or ("to" in entry and "to" not in known):
-            by_start[entry.get("from")] = entry
-    return sorted(by_start.values(), key=lambda e: str(e.get("from", "")))
-
-
-# meta lists merged item by item, by ID, like tasks (docs/sprints-and-releases-design.md SR-2.4), with how far along
-# each state is: changed on both sides, the further state wins
-META_LISTS = {
-    "sprints": {"planned": 0, "active": 1, "closed": 2},
-    "releases": {"planned": 0, "released": 1, "archived": 2},
-    "components": None,
-}
-# Sprints are named, and two names that differ only in case are the same sprint (SR-2.3)
-item_key = lambda name, item: (
-    item.get("id").casefold() if name == "sprints" and isinstance(item.get("id"), str) else item.get("id")
-)
-
-
-def merge_items(name, base, ours, theirs):
-    """Merge three versions of a meta list of {id, ...} items. Returns (items, conflict descriptions)."""
-    rank = META_LISTS[name]
-    keyed = lambda items: {item_key(name, i): i for i in items if isinstance(i, dict)} if isinstance(items, list) else {}
-    b, o, t = keyed(base), keyed(ours), keyed(theirs)
-    items, conflicts = [], []
-    for key, item in o.items():
-        if key not in b:
-            other = t.get(key)
-            if other is not None and other != item:
-                conflicts.append(f"meta.{name}: {item.get('id')!r} was added on both branches, differently")
-            items.append(item)
-        elif key not in t:
-            if item != b[key]:
-                conflicts.append(f"meta.{name}: {item.get('id')!r} changed on this branch, deleted on the other")
-                items.append(item)
-        else:
-            merged, fields = merge_item(b[key], item, t[key], rank)
-            items.append(merged)
-            if fields:
-                conflicts.append(f"meta.{name}: both branches changed {item.get('id')!r} ({', '.join(fields)})")
-    for key, item in t.items():
-        if key not in o and (key not in b or item != b[key]):
-            if key in b:
-                conflicts.append(f"meta.{name}: {item.get('id')!r} deleted on this branch, changed on the other")
-            items.append(item)
-    return items, conflicts
-
-
-def merge_item(base, ours, theirs, rank):
-    """One sprint, release or component changed on both sides: field by field; where both changed a field and both
-    changed the state, the side further along wins it (a sprint closed on one branch stays closed with its report);
-    otherwise ours, as a conflict. Returns (item, names of conflicting fields)."""
-    winner = None
-    if rank and ours.get("state") != base.get("state") and theirs.get("state") != base.get("state"):
-        ours_rank, theirs_rank = rank.get(ours.get("state"), 0), rank.get(theirs.get("state"), 0)
-        if ours_rank != theirs_rank:
-            winner = ours if ours_rank > theirs_rank else theirs
-    merged, conflicts = {}, []
-    for key in list(ours) + [k for k in theirs if k not in ours] + [k for k in base if k not in ours and k not in theirs]:
-        value, conflict = merge_value(base.get(key, MISSING), ours.get(key, MISSING), theirs.get(key, MISSING))
-        if conflict and winner is not None:
-            value, conflict = winner.get(key, MISSING), False
-        if conflict:
-            conflicts.append(key)
-        if value is not MISSING:
-            merged[key] = value
-    return merged, conflicts
-
-
-def merge_set(base, ours, theirs):
-    """A list merged as a set (`related`, SR-2.8): what either side added stays, what either side removed goes, in
-    ours' order, then theirs' additions. MISSING when nothing is left."""
-    as_list = lambda v: v if isinstance(v, list) else []
-    base, ours, theirs = as_list(base), as_list(ours), as_list(theirs)
-    removed = (set(base) - set(ours)) | (set(base) - set(theirs))
-    merged = [v for v in ours if v not in removed]
-    merged += [v for v in theirs if v not in removed and v not in merged]
-    return merged or MISSING
-
-
-def merge_task(base, ours, theirs, vocab):
-    """Merge one task changed on both sides. Returns (task, names of conflicting fields)."""
-    changed = lambda side: any(side.get(f, MISSING) != base.get(f, MISSING) for f in PROGRESS_FIELDS)
-    if not changed(theirs):
-        progress = ours
-    elif not changed(ours):
-        progress = theirs
-    else:
-        progress = progress_winner(ours, theirs, vocab)
-    keys = list(ours) + [k for k in theirs if k not in ours] + [k for k in base if k not in ours and k not in theirs]
-    merged, conflicts = {}, []
-    for key in keys:
-        if key in PROGRESS_FIELDS:
-            value = progress.get(key, MISSING)
-        elif key == "notes":
-            value = merge_notes(ours.get(key, []), theirs.get(key, []))
-        elif key in ("blocks", "reviews"):
-            value = merge_intervals(ours.get(key, []), theirs.get(key, []))
-        elif key == "sprint_history":
-            value = merge_history(ours.get(key, []), theirs.get(key, []))
-        elif key == "related":
-            value = merge_set(base.get(key, []), ours.get(key, []), theirs.get(key, []))
-        else:
-            value, conflict = merge_value(base.get(key, MISSING), ours.get(key, MISSING), theirs.get(key, MISSING))
-            if conflict and key == "phase" and ("sprint" in ours or "sprint" in theirs):
-                # One side has been migrated to sprints (SR-8.5): its sprint stands for the phase
-                value, conflict = MISSING, False
-            if conflict:
-                conflicts.append(key)
-        if value is not MISSING:
-            merged[key] = value
-    return merged, conflicts
-
-
-def next_free_id(task_id, used):
-    parts = split_id(task_id)
-    if not parts:
-        n = 2
-        while f"{task_id}-{n}" in used:
-            n += 1
-        return f"{task_id}-{n}"
-    prefix, digits = parts
-    numbers = [int(x[len(prefix) :]) for x in used if x.startswith(prefix) and x[len(prefix) :].isdigit()]
-    return prefix + str(max(numbers) + 1).zfill(len(digits))
-
-
-def merge_task_files(base, ours, theirs):
-    """Merge three versions of tasks.json. Returns (merged data, list of conflict descriptions)."""
-    by_id = lambda data: {t.get("id"): t for t in data.get("tasks", [])}
-    vocab = merge_vocabulary(ours, theirs)
-    base_tasks, our_tasks, their_tasks = by_id(base), by_id(ours), by_id(theirs)
-    used = set(base_tasks) | set(our_tasks) | set(their_tasks)
-    conflicts, merged_tasks, renamed, theirs_new = [], [], {}, []
-
-    for task in ours.get("tasks", []):
-        task_id = task.get("id")
-        b, t = base_tasks.get(task_id), their_tasks.get(task_id)
-        if b is None:
-            merged_tasks.append(task)  # added here (if added there too, theirs is renumbered below)
-        elif t is None:
-            if task != b:
-                conflicts.append(f"{task_id}: changed on this branch, deleted on the other")
-                merged_tasks.append(task)
-        else:
-            merged, fields = merge_task(b, task, t, vocab)
-            merged_tasks.append(merged)
-            if fields:
-                conflicts.append(f"{task_id}: both branches changed {', '.join(fields)}")
-
-    for task in theirs.get("tasks", []):
-        task_id = task.get("id")
-        if task_id in base_tasks:
-            if task_id not in our_tasks and task != base_tasks[task_id]:
-                conflicts.append(f"{task_id}: deleted on this branch, changed on the other")
-                merged_tasks.append(task)
-            continue
-        if task_id in our_tasks:
-            if our_tasks[task_id] == task:
-                continue  # the same task added on both sides
-            new_id = next_free_id(task_id, used)
-            used.add(new_id)
-            renamed[task_id] = new_id
-            task = {**task, "id": new_id}
-        theirs_new.append(task)
-    for task in theirs_new:
-        if renamed and task.get("dependencies"):
-            task = {**task, "dependencies": [renamed.get(d, d) for d in task["dependencies"]]}
-        merged_tasks.append(task)
-
-    result = {}
-    for key in list(ours) + [k for k in theirs if k not in ours]:
-        if key == "tasks":
-            result[key] = merged_tasks
-        elif key == "meta" and isinstance(ours.get(key), dict) and isinstance(theirs.get(key), dict):
-            b, o, t = base.get(key) or {}, ours[key], theirs[key]
-            meta = {}
-            for k in list(o) + [k for k in t if k not in o]:
-                if k in META_LISTS:
-                    value, item_conflicts = merge_items(k, b.get(k, []), o.get(k, []), t.get(k, []))
-                    conflicts.extend(item_conflicts)
-                else:
-                    value, _ = merge_value(b.get(k, MISSING), o.get(k, MISSING), t.get(k, MISSING))
-                if value is not MISSING:
-                    meta[k] = value
-            if "sprints" in meta:
-                meta.pop("phases", None)  # a project migrated on either side has no phases left (SR-8.5)
-            result[key] = meta
-        else:
-            result[key] = ours.get(key, theirs.get(key))
-    return result, conflicts
-
-
-def cmd_merge_driver(args):
-    base_path, ours_path, theirs_path = args.base, args.ours, args.theirs
-    versions = [read_json(p) for p in (base_path, ours_path, theirs_path)]
-    if versions[0] is None and os.path.exists(base_path) and os.path.getsize(base_path) == 0:
-        versions[0] = {"tasks": []}  # the file was added on both branches
-    if not all(isinstance(v, dict) and isinstance(v.get("tasks", []), list) for v in versions):
-        raise AtmError("tasks.json merge: one side is not valid JSON; resolve the conflict by hand")
-    merged, conflicts = merge_task_files(*versions)
-    write_json_atomic(ours_path, merged)
-    if args.json:
-        out(to_json({"conflicts": conflicts}))
-    if conflicts:
-        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
-        for conflict in conflicts:
-            sys.stderr.write(f"  {conflict}\n")
-        raise AtmExit(1)
-
-
-def launcher_command():
-    launcher = os.path.join(SCRIPT_DIR, "atm").replace("'", "'\\''")
-    return f"'{launcher}' merge-driver %O %A %B"
-
-
-def ensure_merge_driver(paths):
-    """In git: `tasks.json merge=atm` in the task folder's .gitattributes (staged when added), and the driver
-    registered in the clone's config, pointing at this plugin's launcher. Returns True if .gitattributes changed."""
-    root = paths["root"]
-    if not in_git(root):
-        return False
-    for key, value in (("merge.atm.name", "atm: merge tasks.json task by task"), ("merge.atm.driver", launcher_command())):
-        if git(["config", "--get", key], root) != value:
-            git(["config", key, value], root)
-    attributes = os.path.join(paths["dir"], ".gitattributes")
-    try:
-        with open(attributes, encoding="utf-8") as f:
-            text = f.read()
-    except OSError:
-        text = ""
-    if "tasks.json merge=atm" in text.splitlines():
-        return False
-    os.makedirs(paths["dir"], exist_ok=True)
-    with open(attributes, "w", encoding="utf-8") as f:
-        f.write(text + ("" if not text or text.endswith("\n") else "\n") + GITATTRIBUTES_LINES)
-    git(["add", "--", rel(root, attributes)], root)
-    return True
-
-
-ARCHIVE_ATTRIBUTES_LINE = "tasks-archive.json merge=atm\n"
-
-
-def ensure_archive_merge(paths):
-    """In git: the archive merges task by task too. Added when a project first archives, so projects that never do
-    see no change. Returns True if .gitattributes changed (staged)."""
-    root = paths["root"]
-    if not in_git(root):
-        return False
-    ensure_merge_driver(paths)  # the driver itself, and the tasks.json line
-    attributes = os.path.join(paths["dir"], ".gitattributes")
-    with open(attributes, encoding="utf-8") as f:
-        text = f.read()
-    if ARCHIVE_ATTRIBUTES_LINE.strip() in text.splitlines():
-        return False
-    with open(attributes, "w", encoding="utf-8") as f:
-        f.write(text + ("" if text.endswith("\n") else "\n") + ARCHIVE_ATTRIBUTES_LINE)
-    git(["add", "--", rel(root, attributes)], root)
-    return True
-
-
-def ensure_project_id(paths):
-    """Give tasks.json a meta.id if it has none: the dashboard keeps each project's saved view under it (projects
-    served from the same port share browser storage). Returns the new id, or None if there was one already."""
-    if not os.path.isfile(paths["tasks"]):
-        return None
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        meta = data.get("meta")
-        if not isinstance(meta, dict):
-            meta = data["meta"] = {}
-        if isinstance(meta.get("id"), str) and meta["id"]:
-            return None
-        meta["id"] = os.urandom(4).hex()
-        write_json_atomic(paths["tasks"], data)
-    return meta["id"]
-
-
-def apply_meta(paths, meta_file):
-    """`init --meta-file F`: merge F's keys into tasks.json's meta (project, description, phases, vocabularies),
-    creating tasks.json if there is none, so /atm:create-tasks never writes the file itself. The vocabularies are
-    checked before anything is written; meta.id is kept. Returns (created, keys)."""
-    new = read_json(meta_file)
-    if not isinstance(new, dict):
-        raise AtmError(f"{meta_file} must hold a JSON object: the meta keys to set", 2)
-    new.pop("id", None)
-    with locked(paths["dir"]) if os.path.isdir(paths["dir"]) else contextlib.nullcontext():
-        created = not os.path.isfile(paths["tasks"])
-        data = {"meta": {"created": now().strftime("%Y-%m-%d")}, "tasks": []} if created else load_tasks(paths)
-        if not isinstance(data.get("meta"), dict):
-            data["meta"] = {}
-        data["meta"].update(new)
-        vocabulary(data)  # raises, naming the problem, before anything is written
-        os.makedirs(paths["dir"], exist_ok=True)
-        write_json_atomic(paths["tasks"], data)
-    return created, sorted(new)
-
-
-def cmd_init(args):
-    paths = find_paths(os.getcwd())
-    if args.meta_file:
-        created, keys = apply_meta(paths, args.meta_file)
-        paths = find_paths(os.getcwd())
-        if not args.json:
-            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
-    project_id = ensure_project_id(paths)
-    repository = ensure_repository(paths)
-    register(paths)  # the dashboard lists every project atm runs in
-    git_repo = in_git(paths["root"])
-    changed = ensure_merge_driver(paths) if git_repo else False
-    if args.json:
-        out(
-            to_json(
-                {"project_id": project_id, "repository": repository, "git": git_repo, "gitattributes_added": changed}
-            )
-        )
-        return
-    if project_id:
-        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
-    if repository:
-        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
-    if not git_repo:
-        out("Not in a git repository: there is no merge driver to set up.")
-        return
-    out(
-        "Registered the tasks.json merge driver (git config merge.atm)"
-        + (" and added .agentic-task-manager/.gitattributes (staged)." if changed else "; .gitattributes already set.")
-    )
-
-
-# ==== archive.py ====
-# The archive: finished tasks moved out of tasks.json into tasks-archive.json, so the working file stays small
-# (docs/v4/data-model.md §5). Both files stay readable JSON in the same format, merged by the same driver.
-#
-# A move writes one file, then the other. A task found in both files keeps its tasks.json copy and loses the
-# archive's: an archive that crashed halfway simply hasn't happened, an unarchive that crashed halfway is complete, and
-# no task is ever lost.
-
-def drop_duplicates(data, archive):
-    """Tasks in both files keep their tasks.json copy (see the module docstring). Returns the dropped IDs."""
-    ids = {t.get("id") for t in data["tasks"]}
-    dropped = [t.get("id") for t in archive["tasks"] if t.get("id") in ids]
-    archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in ids]
-    return dropped
-
-
-def size_kb(p):
-    return os.path.getsize(p) // 1024 if os.path.isfile(p) else 0
-
-
-def describe_ids(ids, limit=12):
-    return ", ".join(ids[:limit]) + (f" and {len(ids) - limit} more" if len(ids) > limit else "")
-
-
-def kept_finished(data, moving, before, keep, sprints):
-    """The finished tasks that stay in tasks.json, and why (T-352), as archivable() decides: in an open PR, finished
-    in the last keep days, not before --before, not in the --sprint chosen. [{id, reason}], in file order."""
-    vocab = vocabulary(data)
-    days = archive_settings(data)["keep_days"] if keep is None else keep
-    recent = now() - timedelta(days=days)
-    moved = {t.get("id") for t in moving}
-    kept = []
-    for t in data["tasks"]:
-        if not isinstance(t, dict) or t.get("id") in moved:
-            continue
-        if kind_of(vocab, t.get("status")) not in ("done", "skipped"):
-            continue
-        finished = finished_at(t)
-        if isinstance(t.get("pr"), dict) and not t.get("merged_at"):
-            reason = f"in open PR #{t['pr'].get('number')}"
-        elif finished is not None and finished > recent:
-            reason = f"finished in the last {days} days"
-        elif before is not None and (finished is None or finished >= before):
-            reason = f"finished on or after {before.date().isoformat()}"
-        elif sprints is not None:
-            reason = "not in the sprints chosen"
-        else:
-            continue
-        kept.append({"id": t.get("id"), "reason": reason})
-    return kept
-
-
-def describe_kept(kept):
-    """ "T-010 (in open PR #1); T-011, T-012 (finished in the last 14 days)": grouped by reason, in first-seen order"""
-    groups = {}
-    for k in kept:
-        groups.setdefault(k["reason"], []).append(k["id"])
-    return "; ".join(f"{describe_ids(ids)} ({reason})" for reason, ids in groups.items())
-
-
-def cmd_archive(args):
-    before = None
-    if args.before:
-        try:
-            before = parse_iso(args.before if "T" in args.before else args.before + "T00:00:00Z")
-        except ValueError:
-            raise AtmError(f"--before {args.before}: use a date like 2026-05-01", 2)
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive = load_archive(paths)
-        dropped = drop_duplicates(data, archive)
-        moving = archivable(data, before, args.keep_days)
-        names = None
-        if args.sprint:
-            vocab = vocabulary(data)
-            names = set()
-            for name in args.sprint:
-                sprint = find_sprint(vocab, name)
-                if sprint is None:
-                    raise AtmError(f"no sprint {name!r}", 2)
-                names.add(sprint["id"])
-            moving = [t for t in moving if (find_sprint(vocab, t.get("sprint")) or {}).get("id") in names]
-        ids = [t.get("id") for t in moving]
-        kept = kept_finished(data, moving, before, args.keep_days, names)
-        if not args.dry_run and (moving or dropped):
-            # New IDs must never come back to an archived ID (DM-2.3)
-            if not isinstance(data.get("meta"), dict):
-                data["meta"] = {}
-            data["meta"]["next_id"] = next_number(data)
-            archive.setdefault("meta", {})["archived_at"] = now_iso()
-            archive["tasks"].extend(moving)
-            write_json_atomic(archive_path(paths), archive)
-            moved = set(ids)
-            data["tasks"] = [t for t in data["tasks"] if t.get("id") not in moved]
-            # The dashboard shows the count without loading the archive (dashboard D-5.4)
-            data["meta"]["archived"] = len(archive["tasks"])
-            write_json_atomic(paths["tasks"], data)
-            ensure_archive_merge(paths)
-    result = {
-        "moved": ids,
-        "dry_run": bool(args.dry_run),
-        "tasks_kb": size_kb(paths["tasks"]),
-        "archive_kb": size_kb(archive_path(paths)),
-        "duplicates_dropped": dropped,
-        "kept": kept,
-    }
-    if args.json:
-        out(to_json(result))
-        return
-    if dropped and not args.dry_run:
-        out(f"Kept {describe_ids(dropped)} in tasks.json and dropped the archive's copy (an interrupted move).")
-    if not ids:
-        out("Nothing to archive.")
-    elif args.dry_run:
-        out(f"Would archive {len(ids)} task(s): {describe_ids(ids)}.")
-    else:
-        out(
-            f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
-            f"tasks.json is now {result['tasks_kb']} KB, tasks-archive.json {result['archive_kb']} KB."
-        )
-    # What stays, and why (T-352)
-    if kept:
-        out(f"{'Would keep' if args.dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}.")
-
-
-def cmd_unarchive(args):
-    paths = find_paths(os.getcwd())
-    with locked(paths["dir"]):
-        data = load_tasks(paths)
-        archive = load_archive(paths)
-        drop_duplicates(data, archive)
-        by_id = {t.get("id"): t for t in archive["tasks"]}
-        missing = [i for i in args.ids if i not in by_id]
-        if missing:
-            # Already back, or never there at all: two different mistakes (T-357)
-            live = {t.get("id") for t in data["tasks"]}
-            here = [i for i in missing if i in live]
-            unknown = [i for i in missing if i not in live]
-            parts = ([f"{', '.join(here)} (already in tasks.json)"] if here else []) + (
-                [f"{', '.join(unknown)} (no such task)"] if unknown else []
-            )
-            raise AtmError(f"not in the archive: {'; '.join(parts)}")
-        # tasks.json first: a crash here leaves the task in both files, and it stays in tasks.json
-        data["tasks"].extend(by_id[i] for i in args.ids)
-        # Still finished and old: the next atm archive would move it straight back (T-357)
-        again = [t.get("id") for t in archivable(data, None, None) if t.get("id") in args.ids]
-        if not isinstance(data.get("meta"), dict):
-            data["meta"] = {}
-        data["meta"]["archived"] = len(archive["tasks"]) - len(set(args.ids))
-        write_json_atomic(paths["tasks"], data)
-        archive["tasks"] = [t for t in archive["tasks"] if t.get("id") not in args.ids]
-        write_json_atomic(archive_path(paths), archive)
-    if args.json:
-        out(to_json({"restored": args.ids, "moves_back": again}))
-    else:
-        out(f"Brought back {', '.join(args.ids)} from the archive.")
-        if again:
-            out(
-                f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
-                f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
-            )
 
 
 # ==== git_ops.py ====
@@ -7323,6 +7337,9 @@ def api_v1_tasks(summaries, entry, query):
             "tasks": views,
             "problems": read_problems(project),
         }
+        hint = archive_hint_now(project) if not task_filters(query).archived else None
+        if hint:
+            snapshot["archive_hint"] = hint  # atm's suggestion to archive: the dashboard's footer notice (T-372)
         return to_json(snapshot).encode("utf-8")
 
     return body, etag
@@ -7592,7 +7609,11 @@ def cmd_list(args):
             project = open_project(os.getcwd(), tolerant=True)
             views = task_views(project, args)
             meta = project.store.document().get("meta") or {}  # without what doesn't work, as atm serve sends it
-            out(to_json({"meta": meta, "tasks": views, "problems": read_problems(project)}))
+            read = {"meta": meta, "tasks": views, "problems": read_problems(project)}
+            hint = archive_hint_now(project) if not args.archived else None
+            if hint:
+                read["archive_hint"] = hint
+            out(to_json(read))
         else:
             out(to_json(task_views(open_project(os.getcwd()), args)))
         return
@@ -8205,6 +8226,65 @@ def cmd_releases(args):
             return
         for line in describe_notes(notes):
             out(line)
+
+
+# ==== cli/archive.py ====
+# `atm archive` and `atm unarchive`, through atm-lib (docs/layered-architecture.md §9, step 12).
+
+def describe_ids(ids, limit=12):
+    return ", ".join(ids[:limit]) + (f" and {len(ids) - limit} more" if len(ids) > limit else "")
+
+
+def describe_kept(kept):
+    """ "T-010 (in open PR #1); T-011, T-012 (finished in the last 14 days)": grouped by reason, in first-seen order"""
+    groups = {}
+    for k in kept:
+        groups.setdefault(k["reason"], []).append(k["id"])
+    return "; ".join(f"{describe_ids(ids)} ({reason})" for reason, ids in groups.items())
+
+
+def cmd_archive(args):
+    result = archive_finished(open_project(os.getcwd()), args.sprint, args.before, args.keep_days, args.dry_run)
+    ids, dropped, kept, sizes = result["moved"], result["duplicates_dropped"], result["kept"], result["sizes"]
+    shown = {
+        "moved": ids,
+        "dry_run": bool(args.dry_run),
+        "tasks_kb": sizes["tasks"] // 1024,
+        "archive_kb": sizes["archive"] // 1024,
+        "duplicates_dropped": dropped,
+        "kept": kept,
+    }
+    if args.json:
+        out(to_json(shown))
+        return
+    if dropped and not args.dry_run:
+        out(f"Kept {describe_ids(dropped)} in tasks.json and dropped the archive's copy (an interrupted move).")
+    if not ids:
+        out("Nothing to archive.")
+    elif args.dry_run:
+        out(f"Would archive {len(ids)} task(s): {describe_ids(ids)}.")
+    else:
+        out(
+            f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
+            f"tasks.json is now {shown['tasks_kb']} KB, tasks-archive.json {shown['archive_kb']} KB."
+        )
+    # What stays, and why (T-352)
+    if kept:
+        out(f"{'Would keep' if args.dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}.")
+
+
+def cmd_unarchive(args):
+    result = unarchive_tasks(open_project(os.getcwd()), args.ids)
+    again = result["moves_back"]
+    if args.json:
+        out(to_json(result))
+        return
+    out(f"Brought back {', '.join(args.ids)} from the archive.")
+    if again:
+        out(
+            f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
+            f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
+        )
 
 
 # ==== cli/show.py ====

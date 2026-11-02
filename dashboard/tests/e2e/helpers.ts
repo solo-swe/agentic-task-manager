@@ -31,31 +31,41 @@ const viewCache = new Map<string, string>();
  * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
  * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
  */
-function asTaskViews(body: string, archive: string | null = null): string {
-  const key = JSON.stringify([body, archive]);
+function asTaskViews(body: string, archive: string | null = null, archived = false): string {
+  const key = JSON.stringify([body, archive, archived]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
-  const read = atmViews(body, archive);
+  const read = atmViews(body, archive, archived);
   if (!read) return body;
   const views = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', bytes: body.length, ...read });
   viewCache.set(key, views);
   return views;
 }
 
-/** atm's tolerant read of the files (`atm list --derived --tolerant`: meta, tasks, problems), or null when even that
- * refuses them (not a task file) */
-function atmViews(body: string, archive: string | null): Record<string, unknown> | null {
+/** atm's tolerant read of the files (`atm list --derived --tolerant`: meta, tasks, problems; with `archived`, the
+ * archive's tasks, T-372), or null when even that refuses them (not a task file) */
+function atmViews(body: string, archive: string | null, archived = false): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
-    const r = spawnSync('python3', [ATM, 'list', '--derived', '--tolerant'], {
+    const r = spawnSync('python3', [ATM, 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])], {
       cwd: dir,
       encoding: 'utf8',
+      maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
       env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
-    return r.status === 0 ? (JSON.parse(r.stdout) as Record<string, unknown>) : null;
+    if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
+    // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
+    let data: unknown = null;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return null;
+    }
+    if (!data || typeof data !== 'object' || !Array.isArray((data as TasksData).tasks)) return null;
+    throw new Error(`atm list --derived failed: ${r.error?.message ?? r.stderr}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -232,9 +242,21 @@ export class TasksServer {
       return route.fulfill({ status: this.status, contentType: 'application/json', body, headers });
     };
     await this.page.route(TASKS_JSON, (route) => answerTasks(route, TASKS_JSON, (body) => body));
-    await this.page.route(V1_TASKS, (route) =>
-      answerTasks(route, V1_TASKS, (body) => asTaskViews(body, body === this.body ? this.archiveBody : null)),
-    );
+    await this.page.route(V1_TASKS, (route) => {
+      // ?archived=true: the archive's tasks (T-372), as tasks-archive.json was served: counted, a 404 without one
+      if (new URL(route.request().url()).searchParams.get('archived') === 'true') {
+        const mine = decodeURIComponent(V1_TASKS.exec(route.request().url())![1]) === this.projectId;
+        if (mine) this.archiveRequests++;
+        return this.archiveBody === null || !mine || this.body === null
+          ? route.fulfill({ status: 404, body: 'not found' })
+          : route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: asTaskViews(this.body, this.archiveBody, true),
+            });
+      }
+      return answerTasks(route, V1_TASKS, (body) => asTaskViews(body, body === this.body ? this.archiveBody : null));
+    });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
       const mine = isDefault(route.request().url(), ARCHIVE_JSON);
@@ -365,6 +387,7 @@ export class TasksServer {
   /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
   private warm() {
     if (this.body !== null) asTaskViews(this.body, this.archiveBody);
+    if (this.body !== null && this.archiveBody !== null) asTaskViews(this.body, this.archiveBody, true);
   }
 
   fail(status = 404) {

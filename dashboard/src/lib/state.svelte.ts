@@ -127,6 +127,8 @@ export class DashboardState {
   tasksBytes = $state(0);
   /** What atm finds wrong with the task file as a whole, read as far as it can be (T-377) */
   fileProblems = $state<string[]>([]);
+  /** atm's suggestion to archive, when tasks.json is over meta.archive's thresholds (T-372) */
+  archiveHint = $state<LoadedTasks['archiveHint']>(null);
   /**
    * tasks-archive.json's tasks (DM-5), loaded only once a view needs history (D-5.2: wantArchive); empty until then,
    * and when there is no archive. A task in both files is shown from tasks.json (DM-5.2).
@@ -694,6 +696,7 @@ export class DashboardState {
   private apply(loaded: LoadedTasks, claims: ClaimMap) {
     this.tasksBytes = loaded.bytes;
     this.fileProblems = loaded.problems ?? [];
+    this.archiveHint = loaded.archiveHint ?? null;
     this.meta = loaded.meta;
     this.vocab = resolveVocabulary(loaded.meta);
     this.#mainTasks = loaded.tasks;

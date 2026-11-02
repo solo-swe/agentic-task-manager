@@ -213,10 +213,11 @@ describe('loadTasks', () => {
 });
 
 describe('loadArchive', () => {
-  it("fetches the project's tasks-archive.json, conditionally once it has validators", async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(archive), { headers: { ETag: '"a1"' } }));
+  it("fetches the project's archived tasks from the v1 route (T-372), conditionally once it has validators", async () => {
+    const response = new Response(JSON.stringify(asTaskViews(archive)), { headers: { ETag: '"a1"' } });
+    const fetchFn = vi.fn().mockResolvedValue(response);
     const result = await loadArchive('p1', fetchFn);
-    expect(fetchFn).toHaveBeenCalledWith('p/p1/tasks-archive.json', { cache: 'no-store', headers: {} });
+    expect(fetchFn).toHaveBeenCalledWith(`${v1Tasks('p1')}?archived=true`, { cache: 'no-store', headers: {} });
     expect(!result.unchanged && result.tasks.map((t) => t.id)).toEqual(['T-090', 'T-091', 'T-092']);
     expect(!result.unchanged && result.validators).toEqual({ etag: '"a1"' });
     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));

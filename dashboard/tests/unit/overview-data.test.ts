@@ -247,13 +247,13 @@ describe('loadProjectSources', () => {
     let archiveRequests = 0;
     const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const u = String(url);
-      if (u.startsWith(v1Tasks('a'))) return json(asTaskViews({ meta: { project: 'A' }, tasks: [live] }), '"t1"');
-      if (u.startsWith('p/a/tasks-archive.json')) {
+      if (u === `${v1Tasks('a')}?archived=true`) {
         archiveRequests++;
         if ((init?.headers as Record<string, string>)['If-None-Match'] === '"a1"')
           return new Response(null, { status: 304 });
-        return json({ tasks: archived }, '"a1"');
+        return json(asTaskViews({ tasks: archived }), '"a1"');
       }
+      if (u.startsWith(v1Tasks('a'))) return json(asTaskViews({ meta: { project: 'A' }, tasks: [live] }), '"t1"');
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
     const [first] = await loadProjectSources([project('a')], [], fetchFn);

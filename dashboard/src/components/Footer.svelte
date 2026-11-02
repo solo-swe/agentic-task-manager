@@ -5,10 +5,8 @@
   import { dashboard } from '../lib/state.svelte';
   import Logo from './Logo.svelte';
 
-  // tasks.json has grown past the archive threshold (D-5.4); agents act on the same hint from atm
-  const notice = $derived(
-    archiveNotice(dashboard.tasks, dashboard.meta, dashboard.tasksBytes, dashboard.loadedAt, dashboard.vocab),
-  );
+  // tasks.json has grown past the archive threshold (D-5.4): atm's own hint, the one agents act on (T-372)
+  const notice = $derived(archiveNotice(dashboard.archiveHint));
   // A malformed tasks.json, shown as far as atm could read it (T-377): how much is wrong, the file's own problems in
   // the tooltip (each task's are in its details)
   const problems = $derived(problemCount(dashboard.fileProblems, dashboard.tasks));

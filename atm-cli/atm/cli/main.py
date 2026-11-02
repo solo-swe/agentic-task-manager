@@ -19,8 +19,8 @@ from ..logo import cmd_logo
 from ..registry import cmd_projects
 from ..repository import cmd_repository
 from ..api.server import DEFAULT_PORT, cmd_serve, cmd_serve_child, refresh_server
-from ..archive import cmd_archive, cmd_unarchive
 from ..git_ops import cmd_commit, cmd_merged, cmd_pr, cmd_workflow
+from .archive import cmd_archive, cmd_unarchive
 from .claims import cmd_claims, cmd_heartbeat, cmd_next, cmd_run
 from .components import cmd_components
 from .releases import cmd_releases
