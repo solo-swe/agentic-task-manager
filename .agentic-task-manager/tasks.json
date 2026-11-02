@@ -18805,7 +18805,7 @@
       "description": "Step 6 of `docs/layered-architecture.md` §9: the first duplicated rule goes.\n\n## Change\n- The dashboard's own computation of which tasks are ready and what they wait for (`waiting.ts`, `work.ts`) is replaced by `TaskView`'s `ready`, `waiting_for` and `waiting_on`.\n- Remove the code that is no longer used, and its unit tests (replaced by tests on the API's values).\n\n## Tests\n- Unit and component tests updated; the Kanban, List and graph specs and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-365"
       ],
@@ -18815,7 +18815,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:35:05Z",
+      "updated_at": "2026-11-02T19:45:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18838,10 +18838,20 @@
           "kind": "note",
           "text": "From T-365: the e2e fixture (`tests/e2e/helpers.ts` `asTaskViews`) and the dev server (`build/dev-data.ts`) answer the v1 tasks route with empty `derived` values. Before the dashboard reads them, have the fixture take atm’s own (as it does for summaries with `atm summary`), e.g. via a read command that prints the task views.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:45:10Z",
+          "kind": "review",
+          "text": "Check: the Kanban’s readiness (`kanban.ts`) and the together-now rule (`waiting.ts`) take atm’s `derived.ready`/`waiting_for` (fixes: an archived dependency no longer shows as waiting); fallback only for tasks without them (worktree copies, note on T-374). New `atm list --derived` (JSON views); the e2e fixture and dev server use it, so the dashboard is tested against atm’s rule. 954 unit, 357 e2e, 540 atm-cli pass.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T19:35:05Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "2bf9488b567797518c95bd4928163b5e0af4b1bd",
+      "completed_at": "2026-11-02T19:45:10Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-367",
@@ -18854,7 +18864,7 @@
       "description": "Step 7 of `docs/layered-architecture.md` §9: the second duplicated rule goes.\n\n## Change\n- `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive settings) and the vocabulary defaults (statuses and their kinds, types, priorities, the default priority) as data in common, generated for Python and TypeScript.\n- `model.py`'s defaults and the dashboard's `vocab.ts` both use the generated defaults; neither keeps its own copy.\n\n## Tests\n- The fixtures validate against the schema; `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet shrinks.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-366"
       ],
@@ -18866,7 +18876,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:34:43Z",
+      "updated_at": "2026-11-02T19:45:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18891,7 +18901,9 @@
           "text": "Carried from T-363/T-365: `ProjectSummary` and `StatusReport` aren’t in `api.schema.json` yet (the dashboard’s `ProjectSummary` in `load.ts` is still hand-written); add them with `meta.schema.json` here.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T19:45:20Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-368",
@@ -19163,7 +19175,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:08:28Z",
+      "updated_at": "2026-11-02T19:45:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19187,6 +19199,12 @@
           "at": "2026-11-02T19:08:28Z",
           "kind": "note",
           "text": "From T-363: `atm projects` (the registry, `registry.py`: list, add, remove, prune) moves here, behind the `Registry` interface of §3.2.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:45:10Z",
+          "kind": "note",
+          "text": "From T-366: the dashboard still judges readiness itself for tasks that come without atm’s `derived` values, i.e. a linked worktree’s copies (`worktrees.json`, `kanban.ts` `readiness` fallback, `waiting.ts` `togetherNow`). When worktrees move into the store here, give those copies their derived values too and drop the fallbacks.",
           "by": "claude:b7be7288"
         }
       ]
@@ -19254,7 +19272,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:59Z",
+      "updated_at": "2026-11-02T19:48:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19271,7 +19289,15 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:48:40Z",
+          "kind": "note",
+          "text": "Carried from T-367: `ProjectSummary` (api/projects) and `StatusReport` (atm status --json) aren’t in `api.schema.json` yet; the dashboard’s `ProjectSummary` in `load.ts` is hand-written. The generator needs nullable types (`[\"string\", \"null\"]`) for them.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

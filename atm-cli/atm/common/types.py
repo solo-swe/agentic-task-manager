@@ -2,7 +2,187 @@
 `npm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 no typing.Required)."""
 
-from typing import List, TypedDict
+from typing import List, Literal, TypedDict
+
+StatusEntry = TypedDict(
+    "StatusEntry",
+    {
+        # required
+        "id": str,
+        "label": str,
+        # required; What the status means
+        "kind": Literal['todo', 'active', 'review', 'blocked', 'done', 'skipped'],
+    },
+    total=False,
+)
+
+VocabularyTerm = TypedDict(
+    "VocabularyTerm",
+    {
+        # required
+        "id": str,
+        "label": str,
+    },
+    total=False,
+)
+
+LabelEntry = TypedDict(
+    "LabelEntry",
+    {
+        # required
+        "id": str,
+        "label": str,
+        "description": str,
+    },
+    total=False,
+)
+
+PhaseEntry = TypedDict(
+    "PhaseEntry",
+    {
+        # required
+        "id": float,
+        "name": str,
+    },
+    total=False,
+)
+
+# How the project pushes (docs/v4/skills-and-workflows.md §1)
+Workflow = TypedDict(
+    "Workflow",
+    {
+        # direct or pull-request
+        "type": str,
+        "base": str,
+        "verify": bool,
+        "max_rounds": int,
+        "commit_template": str,
+        # "forbid" or "none", or {"require": [the lines]}: what commit messages end with
+        "trailers": object,
+    },
+    total=False,
+)
+
+# When atm suggests archiving, and whether agents may do it (DM-5)
+ArchiveSettings = TypedDict(
+    "ArchiveSettings",
+    {
+        "threshold_kb": float,
+        "threshold_tasks": float,
+        "keep_days": float,
+        "auto": bool,
+    },
+    total=False,
+)
+
+Sprint = TypedDict(
+    "Sprint",
+    {
+        # required; The sprint's name
+        "id": str,
+        "goal": str,
+        "state": Literal['planned', 'active', 'closed'],
+        "release": str,
+        # ISO 8601 UTC
+        "start": str,
+        # ISO 8601 UTC
+        "end": str,
+        # YYYY-MM-DD
+        "due": str,
+        "report": "SprintReport",
+    },
+    total=False,
+)
+
+# What a closed sprint did (SR-2.3)
+SprintReport = TypedDict(
+    "SprintReport",
+    {
+        # The tasks done in it
+        "done": List[str],
+        # The unfinished tasks carried on
+        "carried": List[str],
+        # Where the carried tasks went
+        "to": str,
+    },
+    total=False,
+)
+
+Release = TypedDict(
+    "Release",
+    {
+        # required
+        "id": str,
+        "name": str,
+        "state": Literal['planned', 'released', 'archived'],
+        # YYYY-MM-DD
+        "target": str,
+        # ISO 8601 UTC
+        "released_at": str,
+    },
+    total=False,
+)
+
+Component = TypedDict(
+    "Component",
+    {
+        # required
+        "id": str,
+        "label": str,
+        # Globs over its files
+        "paths": List[str],
+        # Its tasks' default review mode
+        "review": str,
+    },
+    total=False,
+)
+
+# A project's meta in tasks.json: its settings, vocabularies, sprints, releases and components (docs/v4/data-model.md §2). Every key is optional and falls back to its default.
+Meta = TypedDict(
+    "Meta",
+    {
+        # The project's ID (8 hex characters, set by atm init)
+        "id": str,
+        # The project's name
+        "project": str,
+        # One line about the project
+        "description": str,
+        "created": str,
+        # The repository's web address, for commit and PR links
+        "repository": str,
+        # github, gitlab, bitbucket or gitea, for a host whose name doesn't say
+        "repository_type": str,
+        # The project's logo, relative to its root
+        "logo": str,
+        # How long a claim lasts without a heartbeat
+        "lease_minutes": float,
+        "statuses": List["StatusEntry"],
+        "types": List["VocabularyTerm"],
+        # Most urgent first
+        "priorities": List["VocabularyTerm"],
+        # The priority of tasks without one
+        "default_priority": str,
+        "labels": List["LabelEntry"],
+        # Before sprints (atm migrate turns them into sprints)
+        "phases": List["PhaseEntry"],
+        "workflow": "Workflow",
+        "archive": "ArchiveSettings",
+        # How many tasks tasks-archive.json holds (DM-5.4)
+        "archived": int,
+        # The number the next new task gets
+        "next_id": int,
+        # In order
+        "sprints": List["Sprint"],
+        # In order
+        "releases": List["Release"],
+        "components": List["Component"],
+        # How a sprint created without a name is named: people or time
+        "sprint_names": str,
+        # The project's default review mode: blocker, async, batch or none
+        "review": str,
+    },
+    total=False,
+)
 
 Note = TypedDict(
     "Note",
@@ -243,8 +423,8 @@ TaskViewList = TypedDict(
     {
         # required; ISO 8601 UTC
         "generated_at": str,
-        # required; The project's meta as stored (settings, vocabularies, sprints, releases, components), in the same snapshot
-        "meta": dict,
+        # required
+        "meta": "Meta",
         # required; How big the project's working task data is (tasks.json), for the archive notice
         "bytes": int,
         # required

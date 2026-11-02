@@ -38,6 +38,7 @@ TS_TYPES = os.path.join(os.path.dirname(HERE), "dashboard", "src", "lib", "gener
 # Dependency order: a module may only import from modules before it. A dotted name is a module in a layer's folder.
 MODULES = [
     "common.errors",
+    "common.vocabularies",
     "core",
     "paths",
     "lock",
@@ -319,7 +320,10 @@ def property_type(prop, where, ts):
         values = [f"'{v}'" for v in prop["enum"]]
         return " | ".join(values) if ts else f"Literal[{', '.join(values)}]"
     kind = prop.get("type")
-    scalars = {"string": ("string", "str"), "integer": ("number", "int"), "number": ("number", "float"), "boolean": ("boolean", "bool")}
+    if kind is None:
+        # A value of more than one shape (the schema says which in its description)
+        return "unknown" if ts else "object"
+    scalars ={"string": ("string", "str"), "integer": ("number", "int"), "number": ("number", "float"), "boolean": ("boolean", "bool")}
     if kind in scalars:
         return scalars[kind][0 if ts else 1]
     if kind == "array":
@@ -379,10 +383,74 @@ def generated_python(types):
     return "\n".join(header + body) + "\n"
 
 
+VOCABULARIES = os.path.join(SCHEMA_DIR, "vocabularies.json")
+PY_VOCABULARIES = os.path.join(PACKAGE, "common", "vocabularies.py")
+TS_VOCABULARIES = os.path.join(os.path.dirname(TS_TYPES), "vocabularies.ts")
+VOCABULARY_NAMES = (  # key in vocabularies.json -> the constant's name in both languages
+    ("kinds", "KINDS"),
+    ("statuses", "DEFAULT_STATUSES"),
+    ("types", "DEFAULT_TYPES"),
+    ("priorities", "DEFAULT_PRIORITIES"),
+    ("default_priority", "DEFAULT_PRIORITY"),
+)
+
+
+def vocabulary_data():
+    with open(VOCABULARIES, encoding="utf-8") as f:
+        data = json.load(f)
+    missing = [key for key, _ in VOCABULARY_NAMES if key not in data]
+    if missing:
+        raise BuildError(f"common/schema/vocabularies.json: missing {', '.join(missing)}")
+    return data
+
+
+def generated_python_vocabularies(data):
+    lines = [
+        '"""The status kinds and the default vocabularies, generated from common/schema/vocabularies.json by',
+        f'atm-cli/build.py: don\'t edit it, change that file and run {GENERATED_HOW}"""',
+        "",
+    ]
+    for key, name in VOCABULARY_NAMES:
+        value = tuple(data[key]) if key == "kinds" else data[key]
+        lines.append(f"{name} = {json.dumps(value, indent=4, ensure_ascii=False) if not isinstance(value, tuple) else repr(value)}")
+    return "\n".join(lines) + "\n"
+
+
+def generated_typescript_vocabularies(data):
+    kinds = " | ".join(f"'{k}'" for k in data["kinds"])
+    term = lambda t: "{ " + ", ".join(f"{k}: '{v}'" for k, v in t.items()) + " }"
+    lines = [
+        "// The status kinds and the default vocabularies, generated from atm-cli/atm/common/schema/vocabularies.json by",
+        f"// atm-cli/build.py: don't edit it, change that file and run {GENERATED_HOW}",
+        "",
+        "/** What a status means; everything acts on kinds, never on status names. */",
+        f"export type StatusKind = {kinds};",
+        "export const KINDS: readonly StatusKind[] = [" + ", ".join(f"'{k}'" for k in data["kinds"]) + "];",
+        "",
+        "export const DEFAULT_STATUSES: { id: string; label: string; kind: StatusKind }[] = [",
+        *[f"  {term(s)}," for s in data["statuses"]],
+        "];",
+        "export const DEFAULT_TYPES: { id: string; label: string }[] = [",
+        *[f"  {term(t)}," for t in data["types"]],
+        "];",
+        "export const DEFAULT_PRIORITIES: { id: string; label: string }[] = [",
+        *[f"  {term(p)}," for p in data["priorities"]],
+        "];",
+        f"export const DEFAULT_PRIORITY = '{data['default_priority']}';",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def generated_files():
-    """The files generated from the schemas, by path."""
+    """The files generated from the schemas and the vocabularies, by path."""
     types = schema_types()
-    return {PY_TYPES: generated_python(types), TS_TYPES: generated_typescript(types)}
+    vocabularies = vocabulary_data()
+    return {
+        PY_TYPES: generated_python(types),
+        TS_TYPES: generated_typescript(types),
+        PY_VOCABULARIES: generated_python_vocabularies(vocabularies),
+        TS_VOCABULARIES: generated_typescript_vocabularies(vocabularies),
+    }
 
 
 def read_text(path):

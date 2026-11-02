@@ -7,10 +7,7 @@
   "required": ["generated_at", "meta", "bytes", "tasks"],
   "properties": {
     "generated_at": { "type": "string", "description": "ISO 8601 UTC" },
-    "meta": {
-      "type": "object",
-      "description": "The project's meta as stored (settings, vocabularies, sprints, releases, components), in the same snapshot"
-    },
+    "meta": { "$ref": "meta.schema.json" },
     "bytes": { "type": "integer", "description": "How big the project's working task data is (tasks.json), for the archive notice" },
     "tasks": { "type": "array", "items": { "$ref": "#/$defs/TaskView" } }
   },

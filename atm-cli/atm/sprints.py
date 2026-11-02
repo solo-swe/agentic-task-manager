@@ -8,9 +8,9 @@ from .claims import agent_identity
 from .core import AtmError, now_iso, out, to_json, write_json_atomic
 from .edit import open_sprint
 from .lock import locked
+from .common.vocabularies import KINDS
 from .model import (
     DATE,
-    KINDS,
     MAX_SPRINT_NAME,
     find_sprint,
     find_task,

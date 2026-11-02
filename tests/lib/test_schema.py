@@ -11,6 +11,7 @@ from schema_check import load_schema, problems
 from support import REPO
 
 TASK = load_schema("task.schema.json")
+META = load_schema("meta.schema.json")
 
 
 def tasks_in(document):
@@ -29,7 +30,32 @@ class TaskSchema(unittest.TestCase):
         self.assertTrue(files)
         for path in files:
             with open(path, encoding="utf-8") as f:
-                self.assert_fits(tasks_in(json.load(f)), os.path.basename(path))
+                document = json.load(f)
+            self.assert_fits(tasks_in(document), os.path.basename(path))
+            if isinstance(document, dict) and isinstance(document.get("meta"), dict):
+                self.assertEqual(problems(document["meta"], META), [], f"{os.path.basename(path)}: meta")
+
+    def test_the_meta_the_scenarios_expect(self):
+        checked = 0
+        for path in glob.glob(os.path.join(REPO, "tests", "scripts", "scenarios", "*.json")):
+            with open(path, encoding="utf-8") as f:
+                scenarios = json.load(f)
+            for scenario in scenarios if isinstance(scenarios, list) else []:
+                if (scenario.get("expect") or {}).get("exit", 0) != 0:
+                    continue  # a file atm refuses, kept as it was on purpose
+                for name, content in ((scenario.get("expect") or {}).get("files") or {}).items():
+                    if name.endswith("tasks.json") and isinstance(content, dict) and isinstance(content.get("meta"), dict):
+                        source = f"{os.path.basename(path)}: {scenario.get('name')}"
+                        self.assertEqual(problems(content["meta"], META, required=False), [], source)
+                        checked += 1
+        self.assertGreater(checked, 0)
+
+    def test_the_default_vocabularies_fit_meta(self):
+        with open(os.path.join(REPO, "atm-cli", "atm", "common", "schema", "vocabularies.json"), encoding="utf-8") as f:
+            defaults = json.load(f)
+        meta = {k: defaults[k] for k in ("statuses", "types", "priorities", "default_priority")}
+        self.assertEqual(problems(meta, META), [])
+        self.assertEqual([s["kind"] for s in defaults["statuses"]], defaults["kinds"])
 
     def test_the_task_files_the_scenarios_expect(self):
         checked = 0

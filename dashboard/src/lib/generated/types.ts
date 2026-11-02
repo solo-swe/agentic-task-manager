@@ -1,6 +1,136 @@
 // Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
 // `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
 
+export interface StatusEntry {
+  id: string;
+  label?: string;
+  /** What the status means */
+  kind: 'todo' | 'active' | 'review' | 'blocked' | 'done' | 'skipped';
+}
+
+export interface VocabularyTerm {
+  id: string;
+  label?: string;
+}
+
+export interface LabelEntry {
+  id: string;
+  label?: string;
+  description?: string;
+}
+
+export interface PhaseEntry {
+  id: number;
+  name?: string;
+}
+
+/** How the project pushes (docs/v4/skills-and-workflows.md §1) */
+export interface Workflow {
+  /** direct or pull-request */
+  type?: string;
+  base?: string;
+  verify?: boolean;
+  max_rounds?: number;
+  commit_template?: string;
+  /** "forbid" or "none", or {"require": [the lines]}: what commit messages end with */
+  trailers?: unknown;
+}
+
+/** When atm suggests archiving, and whether agents may do it (DM-5) */
+export interface ArchiveSettings {
+  threshold_kb?: number;
+  threshold_tasks?: number;
+  keep_days?: number;
+  auto?: boolean;
+}
+
+export interface Sprint {
+  /** The sprint's name */
+  id: string;
+  goal?: string;
+  state?: 'planned' | 'active' | 'closed';
+  release?: string;
+  /** ISO 8601 UTC */
+  start?: string;
+  /** ISO 8601 UTC */
+  end?: string;
+  /** YYYY-MM-DD */
+  due?: string;
+  report?: SprintReport;
+}
+
+/** What a closed sprint did (SR-2.3) */
+export interface SprintReport {
+  /** The tasks done in it */
+  done?: string[];
+  /** The unfinished tasks carried on */
+  carried?: string[];
+  /** Where the carried tasks went */
+  to?: string;
+}
+
+export interface Release {
+  id: string;
+  name?: string;
+  state?: 'planned' | 'released' | 'archived';
+  /** YYYY-MM-DD */
+  target?: string;
+  /** ISO 8601 UTC */
+  released_at?: string;
+}
+
+export interface Component {
+  id: string;
+  label?: string;
+  /** Globs over its files */
+  paths?: string[];
+  /** Its tasks' default review mode */
+  review?: string;
+}
+
+/** A project's meta in tasks.json: its settings, vocabularies, sprints, releases and components (docs/v4/data-model.md §2). Every key is optional and falls back to its default. */
+export interface Meta {
+  /** The project's ID (8 hex characters, set by atm init) */
+  id?: string;
+  /** The project's name */
+  project?: string;
+  /** One line about the project */
+  description?: string;
+  created?: string;
+  /** The repository's web address, for commit and PR links */
+  repository?: string;
+  /** github, gitlab, bitbucket or gitea, for a host whose name doesn't say */
+  repository_type?: string;
+  /** The project's logo, relative to its root */
+  logo?: string;
+  /** How long a claim lasts without a heartbeat */
+  lease_minutes?: number;
+  statuses?: StatusEntry[];
+  types?: VocabularyTerm[];
+  /** Most urgent first */
+  priorities?: VocabularyTerm[];
+  /** The priority of tasks without one */
+  default_priority?: string;
+  labels?: LabelEntry[];
+  /** Before sprints (atm migrate turns them into sprints) */
+  phases?: PhaseEntry[];
+  workflow?: Workflow;
+  archive?: ArchiveSettings;
+  /** How many tasks tasks-archive.json holds (DM-5.4) */
+  archived?: number;
+  /** The number the next new task gets */
+  next_id?: number;
+  /** In order */
+  sprints?: Sprint[];
+  /** In order */
+  releases?: Release[];
+  components?: Component[];
+  /** How a sprint created without a name is named: people or time */
+  sprint_names?: string;
+  /** The project's default review mode: blocker, async, batch or none */
+  review?: string;
+}
+
 export interface Note {
   /** ISO 8601 UTC */
   at: string;
@@ -184,8 +314,7 @@ export interface DepsResult {
 export interface TaskViewList {
   /** ISO 8601 UTC */
   generated_at: string;
-  /** The project's meta as stored (settings, vocabularies, sprints, releases, components), in the same snapshot */
-  meta: Record<string, unknown>;
+  meta: Meta;
   /** How big the project's working task data is (tasks.json), for the archive notice */
   bytes: number;
   tasks: TaskView[];

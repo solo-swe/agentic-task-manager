@@ -6,9 +6,9 @@ import os
 
 from .core import AtmError, out, parse_iso, to_json, write_json_atomic
 from .lock import locked
+from .common.vocabularies import KINDS
 from .model import (
     DATE,
-    KINDS,
     RELEASE_ID,
     archive_path,
     effective_release,

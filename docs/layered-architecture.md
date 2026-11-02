@@ -305,8 +305,10 @@ unions):
 - **TypeScript** for the Dashboard (`dashboard/src/lib/generated/types.ts`, formatted as Prettier wants it), which
   `src/lib/types.ts` builds on;
 - **Python** `TypedDict`s (`atm-cli/atm/common/types.py`, the functional form, since keys such as `from` are
-  keywords) and, later, the **vocabulary defaults** (statuses and kinds, types, priorities), so `atm.py` stays
-  standard-library only;
+  keywords), so `atm.py` stays standard-library only;
+- **the kinds and the default vocabularies** (statuses, types, priorities, the default priority) as data,
+  `atm-cli/atm/common/schema/vocabularies.json`, generated into `common/vocabularies.py` and
+  `dashboard/src/lib/generated/vocabularies.ts`: atm-cli's `model.py` and the dashboard's `vocab.ts` keep no copy;
 - **checks:** the Python validators (`check_*` in `model.py`) stay hand-written (the standard library has no schema
   validator); the test suite validates every fixture, every scenario's output and every API response against the
   schemas, so code and schemas can't drift;

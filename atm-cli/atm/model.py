@@ -8,27 +8,10 @@ import os
 import re
 from datetime import timedelta
 
+from .common.vocabularies import DEFAULT_PRIORITIES, DEFAULT_PRIORITY, DEFAULT_STATUSES, DEFAULT_TYPES, KINDS
 from .core import AtmError, now, now_iso, parse_iso, read_json
 
-KINDS = ("todo", "active", "review", "blocked", "done", "skipped")
-DEFAULT_STATUSES = [
-    {"id": "todo", "label": "To Do", "kind": "todo"},
-    {"id": "in_progress", "label": "In Progress", "kind": "active"},
-    {"id": "in_review", "label": "In Review", "kind": "review"},
-    {"id": "blocked", "label": "Blocked", "kind": "blocked"},
-    {"id": "done", "label": "Done", "kind": "done"},
-    {"id": "skipped", "label": "Skipped", "kind": "skipped"},
-]
-DEFAULT_TYPES = [
-    {"id": t, "label": t.capitalize()} for t in ("feature", "bugfix", "test", "infra", "docs", "refactor", "polish")
-]
-DEFAULT_PRIORITIES = [
-    {"id": "P0", "label": "Critical"},
-    {"id": "P1", "label": "High"},
-    {"id": "P2", "label": "Medium"},
-    {"id": "P3", "label": "Low"},
-]
-DEFAULT_PRIORITY = "P2"
+# The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
 # command: (kinds a task may be in, kind it moves to)
