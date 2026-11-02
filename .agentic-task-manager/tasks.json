@@ -18443,16 +18443,16 @@
       "labels": [
         "architecture"
       ],
-      "description": "Write a design for splitting atm into clear layers, so each part has one job and the dependencies between them run one way. Design only: no code moves in this task; the design ends with the follow-up tasks that carry it out.\n\n## Layers\n- **cli**: argument parsing and output (text and `--json`) for the `atm` commands; no direct file access.\n- **rest api**: the HTTP routes `atm serve` offers (`docs/multi-project-api.md`), a thin layer over the same operations the cli uses.\n- **client**: the dashboard's data access (`dashboard/src/lib/load.ts`, `projects.ts`, `archive.ts`, …): how it fetches from the rest api, apart from the views.\n- **db**: reading and writing `tasks.json`, `tasks-archive.json`, the registry and claims, with the locking (`lock.py`, `paths.py`, `registry.py`, `claims.py`, parts of `core.py`).\n- **common**: the data model, vocabularies and rules shared by all (`model.py`, statuses and kinds, validation); for the dashboard, the shared types (`types.ts`, `vocab.ts`).\n\n## What the design covers\n1. Where each module of `atm-cli/atm/` and `dashboard/src/lib/` belongs today, and which ones mix layers (e.g. commands that read files themselves, `server.py` reaching into storage).\n2. The allowed dependencies between layers (cli → operations → db → common; rest api → operations; client → rest api over HTTP only) and how they are checked (a test that fails on an import against the rule; for `atm-cli/build.py`, the `MODULES` order).\n3. Constraints that stay: atm-cli is one standard-library Python 3.9 file built from modules; the dashboard is one self-contained HTML file; the security invariants in `docs/security-architecture.md`.\n4. A migration plan in small steps, each leaving the tests green, written as proposed follow-up tasks.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.",
+      "description": "Write a design for splitting atm into clear layers, so each part has one job and dependencies run one way. Design only: no code moves in this task; it ends with the follow-up tasks that carry it out.\n\n## Layers (agreed with Hakan)\n- **Dashboard**: talks to the REST API only.\n- **REST API** and **CLI**: both thin, on top of **atm-lib**; other tools (an MCP server, scripts) may use atm-lib too.\n- **atm-lib**: all business logic; a library others can use.\n- **db**: one interface for data access, so the storage can move to another model later (e.g. a cloud DB); today's JSON files in git are its first implementation.\n- **vcs**: the code's version control (git), apart from git's role as the task store.\n- **common**: the data model and shared rules; the dashboard's TypeScript types are generated from it.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-02T17:34:03Z",
+      "updated_at": "2026-11-02T18:02:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18465,7 +18465,9 @@
           "from": "2026-11-02T17:34:03Z"
         }
       ],
-      "sprint": "Layered Architecture"
+      "sprint": "Layered Architecture",
+      "started_at": "2026-11-02T17:36:21Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }
