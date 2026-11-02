@@ -18446,13 +18446,13 @@
       "description": "Write a design for splitting atm into clear layers, so each part has one job and dependencies run one way. Design only: no code moves in this task; it ends with the follow-up tasks that carry it out.\n\n## Layers (agreed with Hakan)\n- **Dashboard**: talks to the REST API only.\n- **REST API** and **CLI**: both thin, on top of **atm-lib**; other tools (an MCP server, scripts) may use atm-lib too.\n- **atm-lib**: all business logic; a library others can use.\n- **db**: one interface for data access, so the storage can move to another model later (e.g. a cloud DB); today's JSON files in git are its first implementation.\n- **vcs**: the code's version control (git), apart from git's role as the task store.\n- **common**: the data model and shared rules; the dashboard's TypeScript types are generated from it.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-02T18:02:36Z",
+      "updated_at": "2026-11-02T18:29:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18466,17 +18466,28 @@
         }
       ],
       "sprint": "Layered Architecture",
-      "started_at": "2026-11-02T17:36:21Z",
+      "started_at": "2026-11-02T18:29:37Z",
       "started_by": "claude:b7be7288",
-      "commit": "b127ce7a478f9327c91e4deaa9e009a54e64e66d",
-      "review_requested_at": "2026-11-02T18:02:36Z",
-      "review_state": "waiting",
+      "commit": "95f71209af18f66a7f7e466c6d16adc9181cc6b0",
       "notes": [
         {
           "at": "2026-11-02T18:02:36Z",
           "kind": "review",
           "text": "Review `docs/layered-architecture.md`: the layers and the dependency rule (§1), git’s two roles (§2), the store interface (§3), the schema as common’s source (§4), the migration plan (§9) and the open questions (§10). Once approved, the §9 steps become tasks via `/atm:create-tasks`.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T18:29:34Z",
+          "kind": "note",
+          "text": "Approved: Design approved in Crit (2 rounds, 11 comments). Left: the §9 migration steps as tasks, via `/atm:create-tasks`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T18:02:36Z",
+          "to": "2026-11-02T18:29:34Z",
+          "outcome": "approved"
         }
       ]
     }

@@ -556,38 +556,46 @@ atm-cli/atm/
 
 ## 9. Migration plan
 
-Each step leaves every test green and ships nothing users notice; they can be spread over several sprints. Proposed
-as tasks:
+**Slices, not layers.** Building the layers one at a time (all of the store, then all of atm-lib, then the API)
+would leave the new layers unused until the last step. Instead, a thin skeleton comes first, and then each step
+takes **one slice of atm's functionality through every layer**: its common types, store operations, atm-lib
+functions, CLI renderer, API route and, where it has one, the Dashboard's use of it. The slice's old code path is
+removed in the same step.
 
-1. **Layer folders and the import rule.** Create the folders, teach `build.py` layers and the rule, move modules
-   unchanged where they already fit (`cli.py`, `sprint_names.py`), and list the current violations as allowed
-   exceptions that later steps remove. A test fails on a new violation.
-2. **common.** Move the pure parts of `core.py` and `model.py` there; typed errors; drop the `archived_task` global.
-3. **The db interface and the JSON-in-git store.** The entities and operations of §3 behind `Store` and `Registry`:
-   `paths`, `lock`, loading and saving, the archive file, the claims store, `registry`, the merge driver and
-   `migrate`'s old layouts move into the JSON-in-git store; conditional writes and `apply`; the in-memory store and
-   a contract test suite run against both.
-4. **The vcs interface and git.** Move commit, ancestry, base branch, branch and remote address out of `git_ops.py`,
-   `core.py`, `query.py` and `repository.py`; `files_for_commit` decides what `atm commit` adds.
-5. **atm-lib, one area per task** (§5.1): status changes; claims and next; queries and the overview; add, edit and
-   check; sprints; releases; components; the archive; code and PRs; settings; projects. Each splits its `cmd_*` into
-   an atm-lib function and a CLI renderer, with Python unit tests on the in-memory store (new: `tests/lib/`, standard
-   `unittest`).
-6. **The REST API on atm-lib.** `server.py`'s handlers call atm-lib; the v1 routes (§6.2) beside today's;
-   `docs/multi-project-api.md` updated.
-7. **The schemas and the generators.** The JSON Schemas (§4.1); the TypeScript and Python generators in the build;
-   fixtures, outputs and responses validated against them; CI's staleness check.
-8. **The Dashboard's client layer.** All requests in `src/lib/api/`, typed by the generated types; the ESLint rule.
-9. **The Dashboard without rules.** Replace each duplicated rule with the v1 routes' derived values, one area per
-   task (readiness and waiting, kinds and defaults, review and release, archive hints); then drop the raw file
-   routes. Forecasts, velocity and burndown stay in the Dashboard.
-10. **One API implementation in development.** The dev server runs the real REST API instead of `dev-data.ts`.
-11. **atm-lib for others.** The public module (`atm.lib`) and its documentation; using it from the repository. No
-    published package yet.
-12. **Documentation.** `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout, `docs/security-architecture.md`'s components.
+**Every step:**
 
-Steps 1–2 come first; 3 and 4 can run in parallel; 5 needs 3 and 4; 6 needs 5; 7 can start after 2; 8 after 7;
-9 after 6 and 8; 10 after 6; 11 after 5; 12 at the end.
+- leaves every test green: the 530 atm-cli tests and the e2e suite prove users see no change (same commands,
+  output, exit codes and files);
+- adds atm-lib unit tests on the in-memory store (`tests/lib/`, standard `unittest`) and contract tests for the store
+  operations it adds, run against both stores;
+- **shrinks the ratchet.** Step 1 makes `build.py` enforce the layer rule (§8) and records today's violations as an
+  allowed list. A test fails if the list grows, and every step removes its slice's entries. The list's length is the
+  migration's progress; when it is empty, the migration is done.
+
+The JSON-in-git store starts as a wrapper around today's loading, locking and saving code (step 1), so no step
+switches storage in one go: the code moves into the store as its slices do.
+
+| # | Step | Afterwards, end to end |
+|---|---|---|
+| 1 | **The skeleton.** The layer folders, the rule and the ratchet in `build.py`, `Project`, the `Store` and `Vcs` interfaces; the JSON-in-git store wrapping today's code; the in-memory store and the contract test harness. First slice: `atm show` | `show`: CLI → atm-lib → store |
+| 2 | **The schema's seed.** `task.schema.json`, the TypeScript and Python generators, CI's staleness check; the Dashboard uses the generated `Task` type instead of its hand-written one | one type, generated for both sides |
+| 3 | **The reads.** `list`, `deps`, `status`, `backlog`, `summary` and `projects` through atm-lib; typed errors and the CLI's mapping to exit codes; their result types in the schema | every read command on the new path |
+| 4 | **The REST API on atm-lib.** Today's routes answered through atm-lib; `GET /api/v1/projects/<p>/tasks` with the tasks' derived values (`TaskView`); `docs/multi-project-api.md` | the server holds no logic |
+| 5 | **The Dashboard's client.** All requests in `src/lib/api/`, the ESLint rule, tasks loaded from v1; the views unchanged | Dashboard → API → atm-lib |
+| 6 | **Dashboard rule: readiness and waiting**, from `TaskView` (`waiting.ts`, `work.ts`) | the first duplicated rule gone |
+| 7 | **The vocabularies.** Kinds and defaults generated from common; the Dashboard's `vocab.ts` uses them | the second rule gone |
+| 8 | **The status changes.** Conditional writes and `apply` in both stores; start, review, done, reject, approve, request-changes, block, unblock, reopen, skip, fail, release, note; claims created and dropped with the status | the first writes on the new path |
+| 9 | **Claims and next.** `next` (with `--claim`), `heartbeat`, `claims`; `run` on `claims.heartbeat` | the loop's core |
+| 10 | **Definitions.** `add`, `edit`, `check`, `components` | tasks and components defined on the new path |
+| 11 | **Sprints and releases.** `sprints`, `move`, `releases`; the Dashboard's effective review and release from `TaskView` (`review.ts`, `releases.ts`) | the third rule gone |
+| 12 | **The archive.** `archive`, `unarchive`, the hint; the v1 archive route; the Dashboard stops reading `tasks-archive.json` itself | the fourth rule gone |
+| 13 | **Code, PRs and settings.** The vcs interface in full: `commit` (and `--record`), `pr`, `merged`, `workflow`, `repository`, `logo`, `init` | git's two roles apart |
+| 14 | **The store's own parts.** The merge driver, migrations, paths and worktrees inside the JSON-in-git store; the raw file routes dropped; the ratchet's list empty and its exception mechanism removed | the layer rule with no exceptions |
+| 15 | **One API in development.** The dev server runs the real REST API; `dev-data.ts` goes | one API implementation |
+| 16 | **atm-lib for others, and the docs.** The public module (`atm.lib`) and its documentation, used from the repository (no published package yet); `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout, `docs/security-architecture.md` | done |
+
+Each step depends on the one before it. Steps 9–13 could run in parallel after 8, but they all touch the store, so
+they go in order.
 
 ## 10. Decisions
 
