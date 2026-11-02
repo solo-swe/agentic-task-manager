@@ -18864,7 +18864,7 @@
       "description": "Step 7 of `docs/layered-architecture.md` §9: the second duplicated rule goes.\n\n## Change\n- `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive settings) and the vocabulary defaults (statuses and their kinds, types, priorities, the default priority) as data in common, generated for Python and TypeScript.\n- `model.py`'s defaults and the dashboard's `vocab.ts` both use the generated defaults; neither keeps its own copy.\n\n## Tests\n- The fixtures validate against the schema; `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet shrinks.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-366"
       ],
@@ -18876,7 +18876,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:45:20Z",
+      "updated_at": "2026-11-02T19:53:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18900,10 +18900,20 @@
           "kind": "note",
           "text": "Carried from T-363/T-365: `ProjectSummary` and `StatusReport` aren’t in `api.schema.json` yet (the dashboard’s `ProjectSummary` in `load.ts` is still hand-written); add them with `meta.schema.json` here.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:53:12Z",
+          "kind": "review",
+          "text": "Check: `common/schema/vocabularies.json` (kinds, default statuses, types, priorities) generated into `common/vocabularies.py` and `generated/vocabularies.ts`; `model.py` and `vocab.ts` keep no copy. `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive), the v1 response’s `meta` typed by it; fixtures and scenarios validated (caught report.done and trailers shapes). `ProjectSummary`/`StatusReport` schemas → note on T-376. 955 unit, 357 e2e, 540 atm-cli pass.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T19:45:20Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "85e5c31ec446ea89fe881909f3dcd97573507cf6",
+      "completed_at": "2026-11-02T19:53:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-368",
@@ -18916,7 +18926,7 @@
       "description": "Step 8 of `docs/layered-architecture.md` §9: the first writes on the new path (§3.3).\n\n## Change\n- Conditional writes (`update_task(…, expect=version)`, `Conflict` on a stale version) and `apply(writes)` (all or nothing) in both stores; the JSON-in-git store's `apply` is today's lock, read, write.\n- `start`, `review`, `done`, `reject`, `approve`, `request-changes`, `block`, `unblock`, `reopen`, `skip`, `fail`, `release` and `note` as atm-lib functions (§5.1); the claim created or dropped in the same `apply`; atm-lib retries on `Conflict`.\n- `tasks.py`'s direct locking and writing goes; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests for each function, including a race (two starts of one task: one wins, the other gets `claimed`); contract tests for conditional writes and `apply` on both stores.\n- `npm run test:scripts` (the concurrency tests included) and `npm run test:e2e` pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-367"
       ],
@@ -18926,7 +18936,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:36:46Z",
+      "updated_at": "2026-11-02T19:53:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18942,7 +18952,14 @@
       "related": [
         "T-360"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-02T19:53:17Z",
+      "started_by": "claude:b7be7288",
+      "waiting_on": "user",
+      "questions": [
+        "Status changes vs §3.3: (A) rework them into entity writes (task update + claim create/drop) with versions, `apply`, retry on `Conflict` — the design’s contract now, a bigger change; or (B) a transitional store operation running today’s locked read-modify-write (like `document()`), conditional writes in a later step — smaller, but the generic transaction the design rejected, for a while. Which?"
+      ],
+      "blocked_at": "2026-11-02T19:53:43Z"
     },
     {
       "id": "T-369",
