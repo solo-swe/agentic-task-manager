@@ -115,26 +115,43 @@ export function projectProgress({ project, tasks, vocab, meta }: ProjectSource, 
   };
 }
 
-const WEEK = 7 * 86_400_000;
+/** The velocity's period (T-329): a bar per day, week or month, the last few, the last one ending now */
+export type VelocityUnit = 'day' | 'week' | 'month';
+export const VELOCITY_UNITS: { unit: VelocityUnit; label: string; ms: number; count: number }[] = [
+  { unit: 'day', label: 'Day', ms: 86_400_000, count: 14 },
+  { unit: 'week', label: 'Week', ms: 7 * 86_400_000, count: 10 },
+  { unit: 'month', label: 'Month', ms: 30 * 86_400_000, count: 6 },
+];
+
+export interface VelocityBar {
+  start: number;
+  /** Tasks done in it, per source (in the sources' order) */
+  byProject: number[];
+  total: number;
+}
 
 /**
- * Tasks done per week over the last `weeks` weeks, oldest first (the last one ends now), and their average: the
- * velocity across projects, whose sprints don't line up (T-329). `tasks` as mergedTasks gives them.
+ * Tasks done per period across projects, whose sprints don't line up (T-329): a bar per period, oldest first, split by
+ * project so the chart stacks them, and the average per period.
  */
-export function weeklyVelocity(
-  tasks: readonly Task[],
+export function velocityByPeriod(
+  sources: readonly ProjectSource[],
   now: number,
-  weeks = 10,
-): { weeks: { start: number; done: number }[]; average: number } {
-  const done = tasks
-    .filter((t) => kindOf(DEFAULT_VOCABULARY, t.status) === 'done')
-    .map((t) => Date.parse(t.completed_at ?? ''))
-    .filter((t) => !Number.isNaN(t));
-  const buckets = Array.from({ length: weeks }, (_, i) => {
-    const start = now - (weeks - i) * WEEK;
-    return { start, done: done.filter((t) => t > start && t <= start + WEEK).length };
+  unit: VelocityUnit = 'week',
+): { bars: VelocityBar[]; average: number } {
+  const { ms, count } = VELOCITY_UNITS.find((u) => u.unit === unit)!;
+  const done = sources.map(({ tasks, vocab }) =>
+    tasks
+      .filter((t) => kindOf(vocab, t.status) === 'done')
+      .map((t) => Date.parse(t.completed_at ?? ''))
+      .filter((t) => !Number.isNaN(t)),
+  );
+  const bars = Array.from({ length: count }, (_, i) => {
+    const start = now - (count - i) * ms;
+    const byProject = done.map((times) => times.filter((t) => t > start && t <= start + ms).length);
+    return { start, byProject, total: byProject.reduce((n, c) => n + c, 0) };
   });
-  return { weeks: buckets, average: buckets.reduce((n, b) => n + b.done, 0) / weeks };
+  return { bars, average: bars.reduce((n, b) => n + b.total, 0) / count };
 }
 
 /** How many tasks each source finished in `period` (all time without one), most first; none left out */

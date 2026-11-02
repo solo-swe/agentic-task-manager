@@ -1,12 +1,19 @@
 <script lang="ts">
   // The overview's Progress tab (T-329): each shown project's done of total, its active sprint and open releases (a row
-  // opens the project's own Progress tab), then every project's tasks together in one burndown, and tasks done per
-  // week (their sprints don't line up, so velocity is by week here)
+  // opens the project's own Progress tab), then every project's tasks together in one burndown, and tasks done per day,
+  // week or month, stacked by project (their sprints don't line up, so velocity is by period here)
   import { burndown } from '../lib/burndown';
   import { forecastSprints } from '../lib/forecast';
   import { formatDate } from '../lib/timeline';
   import type { ProjectEntry } from '../lib/load';
-  import { mergedTasks, projectProgress, weeklyVelocity } from '../lib/overview-data';
+  import {
+    mergedTasks,
+    projectProgress,
+    velocityByPeriod,
+    VELOCITY_UNITS,
+    type VelocityUnit,
+  } from '../lib/overview-data';
+  import { phaseColor } from '../lib/theme';
   import { dueText, NO_SPRINTS } from '../lib/sprints';
   import { dashboard } from '../lib/state.svelte';
   import { DEFAULT_VOCABULARY } from '../lib/vocab';
@@ -35,9 +42,11 @@
       NO_SPRINTS,
     ),
   );
-  const velocity = $derived(weeklyVelocity(merged.tasks, now));
-  const maxWeek = $derived(Math.max(1, ...velocity.weeks.map((w) => w.done)));
-  const height = (n: number) => `${(n / maxWeek) * 100}%`;
+  // Tasks done per day, week or month (the projects' sprints don't line up), stacked by project
+  let unit = $state<VelocityUnit>('week');
+  const velocity = $derived(velocityByPeriod(sources, now, unit));
+  const maxBar = $derived(Math.max(1, ...velocity.bars.map((b) => b.total)));
+  const height = (n: number) => `${(n / maxBar) * 100}%`;
   const average = $derived(Math.round(velocity.average * 10) / 10);
   const pct = (done: number, total: number) => (total ? Math.round((100 * done) / total) : 0);
 </script>
@@ -108,28 +117,57 @@
     {/if}
 
     <section class="velocity" id="overview-velocity" aria-label="Velocity">
-      <h3 class="burndown-title">
-        Velocity <span class="velocity-sub"
-          >tasks done per week, the last {velocity.weeks.length} · average {average}</span
-        >
-      </h3>
+      <div class="burndown-scope-row">
+        <h3 class="burndown-title">
+          Velocity <span class="velocity-sub"
+            >tasks done per {unit}, the last {velocity.bars.length} · average {average}</span
+          >
+        </h3>
+        <span class="activity-range burndown-range" id="overview-velocity-unit" role="group" aria-label="Per">
+          {#each VELOCITY_UNITS as u (u.unit)}
+            <button
+              class:active={unit === u.unit}
+              aria-pressed={unit === u.unit}
+              data-unit={u.unit}
+              onclick={() => (unit = u.unit)}>{u.label}</button
+            >
+          {/each}
+        </span>
+      </div>
+      <!-- A colour per project, stacked in the projects' order (T-329 review) -->
+      <div class="velocity-legend" aria-hidden="true">
+        {#each sources as s, i (s.project.id)}
+          <span><span class="legend-swatch" style:background={phaseColor(i)}></span>{s.project.name}</span>
+        {/each}
+      </div>
       <div
         class="velocity-plot"
         role="img"
-        aria-label="Tasks done per week: {velocity.weeks.map((w) => w.done).join(', ')}; average {average}"
+        aria-label="Tasks done per {unit}: {velocity.bars.map((b) => b.total).join(', ')}; average {average}"
       >
         <div class="velocity-average" style:bottom={height(velocity.average)} aria-hidden="true">
           <span>avg {average}</span>
         </div>
-        {#each velocity.weeks as w (w.start)}
-          <div class="velocity-column" title="The week from {formatDate(w.start)}: {w.done} done">
-            <span class="velocity-bar" style:height={height(w.done)}></span>
-            <span class="velocity-value" style:bottom={height(w.done)}>{w.done}</span>
+        {#each velocity.bars as b (b.start)}
+          <div
+            class="velocity-column"
+            title="{unit === 'day'
+              ? formatDate(b.start + 1)
+              : `From ${formatDate(b.start)}`}: {b.total} done{b.byProject
+              .map((n, i) => (n ? `\n${sources[i].project.name}: ${n}` : ''))
+              .join('')}"
+          >
+            <span class="velocity-stack" style:height={height(b.total)}>
+              {#each b.byProject as n, i (i)}
+                {#if n}<span class="velocity-segment" style:flex-grow={n} style:background={phaseColor(i)}></span>{/if}
+              {/each}
+            </span>
+            <span class="velocity-value" style:bottom={height(b.total)}>{b.total}</span>
           </div>
         {/each}
       </div>
       <div class="velocity-names" aria-hidden="true">
-        {#each velocity.weeks as w (w.start)}<span>{formatDate(w.start)}</span>{/each}
+        {#each velocity.bars as b (b.start)}<span>{formatDate(b.start + (unit === 'day' ? 1 : 0))}</span>{/each}
       </div>
     </section>
   {/if}

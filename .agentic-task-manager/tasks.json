@@ -16564,7 +16564,7 @@
       "description": "A Progress tab on the Projects Overview, next to Projects and Omniboard: every project's done of total and its active sprint (goal, due date, progress), a combined burndown and velocity, and each project's open releases. Clicking a project opens its own Progress tab.\n\n## Data\nFrom `api/projects`' summaries (`active_sprint`, `recent_sprints`, `stats`); what velocity or the burndown need beyond them (e.g. closed sprints' reports, completion times) is added to the summary, not fetched per project; then `docs/multi-project-api.md` and `docs/security-architecture.md` §3.3 are updated.\n\n## Tests\nUnit tests for the aggregation, e2e on a two-project fixture (`addProject`), screenshots.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/components/ProjectsOverview.svelte",
@@ -16572,7 +16572,7 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T06:55:06Z",
+      "updated_at": "2026-11-02T07:13:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16586,17 +16586,28 @@
         }
       ],
       "sprint": "Overview and polish",
-      "started_at": "2026-11-02T06:50:51Z",
+      "started_at": "2026-11-02T07:13:17Z",
       "started_by": "claude:b7be7288",
       "commit": "c0470e16d4af7b2c9ea024b5bc3673547232e19a",
-      "review_requested_at": "2026-11-02T06:55:06Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-02T06:55:06Z",
           "kind": "review",
           "text": "Check the overview’s **Progress** tab: a row per project (done/total, active sprint and due date, open releases; click opens its Progress tab), the burndown of all projects (14 days / all time), tasks done per week (not per sprint: sprints don’t line up). Data from each project’s `tasks.json`, as in T-328. **Bundle ~430 bytes under the guardrail**: T-342 is needed next. Screenshots left for T-345.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T07:13:17Z",
+          "kind": "rejection",
+          "text": "Velocity: a colour per project, stacked; per day, week or month (an option)",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T06:55:06Z",
+          "to": "2026-11-02T07:13:17Z",
+          "outcome": "changes_requested"
         }
       ]
     },
@@ -17418,7 +17429,7 @@
       "description": "The \"N need you\" count (project cards, the overview badge, a project's title bar) counts every to-do task marked `with: user`, wherever it is: also tasks in a planned sprint or the backlog, and tasks whose dependencies aren't done (here T-336, T-337). It should say what needs the user **now**.\n\n## Rule\n- In review (not approved or with changes asked for): counted, as now.\n- Blocked on a question for the user: counted, as now.\n- To do with `with: user`: counted only when it is in the active sprint (in a project without an active sprint: any) **and** its dependencies are done (archived ones count as done).\n\n## Change\nThe same rule in atm-cli's summary (`needs_you`, `needs_you_tasks` in `query.py`) and the dashboard (`needsYouReason` in `lib/waiting.ts`, which needs the sprint model and the done IDs). `docs/multi-project-api.md` §3.2 says the rule.\n\n## Tests\nScenarios or `summary.test.mjs` for the summary; `waiting.test.ts` for the dashboard.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -17426,7 +17437,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T06:55:54Z",
-      "updated_at": "2026-11-02T06:55:58Z",
+      "updated_at": "2026-11-02T07:04:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17443,7 +17454,18 @@
         "docs"
       ],
       "started_at": "2026-11-02T06:55:58Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "8eb4c58cec709879153193ab07b919562b992736",
+      "completed_at": "2026-11-02T07:04:37Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-02T07:04:37Z",
+          "kind": "outcome",
+          "text": "“Needs you” counts a with-you task only in the active sprint (any, without one) and ready, in `atm summary` and the title bar; here 7 → 5",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

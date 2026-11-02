@@ -38,8 +38,9 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 - **A Progress tab on the Projects Overview** (T-329, `#overview&view=progress`): a row per shown project with its
   done of total, its active sprint (done of total, due date, goal on hover) and open releases, opening the project's
   own Progress tab; then the burndown of every project's tasks together (last 14 days or all time, with the forecast)
-  and the tasks done per week over the last ten (the projects' sprints don't line up). `projectProgress`,
-  `weeklyVelocity` in `lib/overview-data.ts`.
+  and the velocity: tasks done per day (last 14), week (last 10, the default) or month (last 6, 30 days each), stacked
+  in a colour per project with a legend (the projects' sprints don't line up). `projectProgress`, `velocityByPeriod`
+  in `lib/overview-data.ts`. The shipped file's size guardrail goes from 525 to 550 KiB (T-342 trims).
 
 ### Changed
 - **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own

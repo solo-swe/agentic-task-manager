@@ -7,7 +7,7 @@ import {
   loadProjectSources,
   mergedTasks,
   projectProgress,
-  weeklyVelocity,
+  velocityByPeriod,
   type ProjectSource,
 } from '../../src/lib/overview-data';
 import type { Task } from '../../src/lib/types';
@@ -175,18 +175,30 @@ describe('projectProgress and weeklyVelocity (T-329)', () => {
     expect([plain.sprint, plain.releases]).toEqual([undefined, []]);
   });
 
-  it('weeklyVelocity: done per week, the last one ending now, oldest first, with the average', () => {
-    const day = (d: number) => new Date(NOW - d * 86_400_000).toISOString();
-    const tasks = [
-      task('T-1', 'Ada', day(1), day(1)),
-      task('T-2', 'Ada', day(2), day(2)),
-      task('T-3', 'Ada', day(9), day(9)),
-      task('T-4', 'Ada', day(1), null),
+  it('velocityByPeriod: done per day, week or month, split by project, the last bar ending now (T-329 review)', () => {
+    const day = (d: number) => new Date(NOW - d * 86_400_000 + 60_000).toISOString();
+    const sources = [
+      source(project('a'), [task('T-1', 'Ada', day(1), day(1)), task('T-2', 'Ada', day(9), day(9))]),
+      source(project('b'), [
+        task('T-1', 'Bo', day(1), day(1)),
+        task('T-2', 'Bo', day(1), day(1)),
+        task('T-3', 'Bo', day(40), day(40)),
+        task('T-4', 'Bo', day(1), null),
+      ]),
     ];
-    const v = weeklyVelocity(tasks, NOW, 3);
-    expect(v.weeks.map((w) => w.done)).toEqual([0, 1, 2]);
-    expect(v.weeks[2].start).toBe(NOW - 7 * 86_400_000);
-    expect(v.average).toBe(1);
+    const week = velocityByPeriod(sources, NOW, 'week');
+    expect(week.bars).toHaveLength(10);
+    expect(week.bars.slice(-2).map((b) => b.byProject)).toEqual([
+      [1, 0],
+      [1, 2],
+    ]);
+    expect(week.bars[9]).toMatchObject({ start: NOW - 7 * 86_400_000, total: 3 });
+    // 5 done in the 10 weeks (the one 40 days ago too)
+    expect(week.average).toBe(0.5);
+    const days = velocityByPeriod(sources, NOW, 'day');
+    expect([days.bars.length, days.bars[13].total]).toEqual([14, 3]);
+    const months = velocityByPeriod(sources, NOW, 'month');
+    expect(months.bars.map((b) => b.total)).toEqual([0, 0, 0, 0, 1, 4]);
   });
 });
 

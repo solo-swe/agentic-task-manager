@@ -7,9 +7,10 @@ const PLUGIN_JSON = new URL('../../../plugin/.claude-plugin/plugin.json', import
 // 500 KiB = 512,000 bytes (Vite's build output counts kB as 1,000 bytes, so it shows this as 512 kB). Raised from
 // 400 KiB in 0.23.0 for dagre, the dependency graph's layout (about 48 kB; the file is served locally, 134 kB gzipped),
 // then from 450 KiB in 0.24.0 for the sprint and release views (decided with Hakan in sprint planning, T-305/T-309),
-// then from 500 KiB in 0.26.0 for the graph's auto-fit and animated fits (decided with Hakan, T-341; T-342 looks
-// for what makes the file grow)
-const MAX_BYTES = 525 * 1024;
+// then from 500 KiB in 0.26.0 for the graph's auto-fit and animated fits (decided with Hakan, T-341), and from 525 KiB
+// in 0.26.0 for the overview's Agents, Activity and Progress (decided with Hakan, T-329); T-342 looks for what makes
+// the file grow, to trim it
+const MAX_BYTES = 550 * 1024;
 
 test.describe('shipped dashboard file', () => {
   const html = () => readFileSync(BUILT, 'utf8');

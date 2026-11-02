@@ -1646,6 +1646,38 @@ button.menu-trigger:hover,
 .velocity-column:hover .velocity-bar {
   filter: brightness(1.15);
 }
+/* The overview's velocity (T-329): a column stacked by project, oldest project at the bottom, a colour each */
+.velocity-stack {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  display: flex;
+  flex-direction: column-reverse;
+  width: min(60%, 36px);
+  transform: translateX(-50%);
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+.velocity-segment {
+  flex-basis: 0;
+  min-height: 2px;
+}
+.velocity-column:hover .velocity-stack {
+  filter: brightness(1.15);
+}
+.velocity-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.velocity-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .velocity-value {
   position: absolute;
   left: 50%;
