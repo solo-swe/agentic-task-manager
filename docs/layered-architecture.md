@@ -1,6 +1,12 @@
 # Layered architecture for atm
 
-**Status:** draft, for review · **Date:** 2026-11-02 · **Task:** T-360 (sprint *Layered Architecture*)
+**Status:** done: approved (T-360, reviewed with Hakan in Crit), and carried out in the 16 steps of §9 (T-361 to
+T-376, with T-377) · **Date:** 2026-11-02 · **Sprint:** *Layered Architecture*
+
+Where the code ended up differs from the design in a few places, each said where it applies: the **app** layer on top
+(§1, §8), what only one store has reached through boot (§1, §3.2), the store's stamps for the REST API's ETags, and
+the one global hook left in common (§8). Still open: the worktree copies come without atm's derived values, so the
+Dashboard keeps its fallbacks for them; and `ProjectSummary` and `StatusReport` aren't in `api.schema.json` yet.
 
 atm grew command by command: each `cmd_*` function parses its arguments, locks and reads `tasks.json`, applies the
 rules, writes the file back and prints the result. That was the fastest way to build it, and it works. It also means
@@ -345,12 +351,15 @@ atm-lib is usable by others, so it is an API with a version:
   or exit;
 - failures are typed errors (`ErrorCode`, §4.2), which the CLI maps to its exit codes (today 1, 2, 3 and 4) and the
   REST API to HTTP statuses;
-- no module-level state (today's `archived_task` cache, `model.py:501`, goes); everything goes through a `Project`,
-  which holds the store, the vcs and the actor:
+- no module-level state (the `archived_task` cache became a lookup the store sets, the one hook left, §8);
+  everything goes through a `Project`, which holds the store, the vcs and the actor:
 
 ```python
-project = open_project(path, actor="claude:b7be7288")   # boot: picks the store (JSON-in-git) and the vcs (git)
-start_task(project, "T-360")
+from atm.boot import open_project                       # boot: picks the store (JSON-in-git) and the vcs (git)
+from atm.lib import change_task_status
+
+project = open_project(path, actor="claude:b7be7288")
+change_task_status(project, "start", "T-360")
 ```
 
 - **names unique across atm:** the build puts every module into one namespace (`plugin/scripts/atm.py`), so a
@@ -358,8 +367,10 @@ start_task(project, "T-360")
   this rule;
 
 - **delivery:** the plugin keeps the one-file `atm.py`, built from the same modules. Other tools import atm-lib from
-  the repository's `atm-cli/` for now; a published package can come later. Its public surface is one module
-  (`atm.lib`), versioned with the plugin; everything else is internal.
+  the repository's `atm-cli/` for now; a published package can come later. Its public surface is `atm.lib` (what
+  `atm/lib/__init__.py` exports in `__all__`, with how to use it) and `atm.boot`'s `open_project` and
+  `open_registry`, which open the stores atm-lib may not know (T-376); versioned with the plugin, a change to it in
+  `plugin/CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py` uses only that surface.
 
 ### 5.1 The functions
 

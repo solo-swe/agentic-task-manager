@@ -19343,7 +19343,7 @@
       "description": "Step 15 of `docs/layered-architecture.md` §9.\n\n## Change\n- `npm run dev` serves the API from this checkout's atm-cli (the REST API layer) instead of reimplementing it in `dashboard/build/dev-data.ts`; `ATM_DEV_DATA` keeps working.\n- `dev-data.ts` goes; `CLAUDE.md`'s description of `npm run dev` updated.\n\n## Tests\n- `npm run dev` shows this repository's project with live data; `npm run check` and unit tests pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-374"
       ],
@@ -19353,7 +19353,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:32:50Z",
+      "updated_at": "2026-11-02T22:46:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19377,10 +19377,20 @@
           "kind": "note",
           "text": "From T-374 (carried from T-366): give the worktree copies (`worktrees.json`, now `lib/worktrees.py`) atm’s derived values too, and drop the dashboard’s own fallbacks for tasks without `derived` (`kanban.ts` readiness, `waiting.ts` togetherNow). T-374 moved the copies into atm-lib but left their shape as it was.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:46:15Z",
+          "kind": "review",
+          "text": "Batch review: `npm run dev` runs this checkout’s REST API (`atm _serve-child` on a temporary `ATM_HOME`, the projects listed there with `atm projects add`); `build/dev-api.ts` forwards `api/`, `p/`, `__atm/`; `dev-data.ts` is gone. Checked by hand: `api/projects` and v1 tasks through Vite, the API stops with Vite. Also: a serve test no longer leaks its server on failure. The worktree-derived item went to T-376 for the review.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T22:32:50Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "6e4fa2af25210dcbe08117e9474515ffaab2d402",
+      "completed_at": "2026-11-02T22:46:15Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-376",
@@ -19393,7 +19403,7 @@
       "description": "Step 16 of `docs/layered-architecture.md` §9.\n\n## Change\n- The public module `atm.lib` (§5): what other tools may import, from the repository's `atm-cli/`; its documentation and how it is versioned. No published package.\n- Update `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout and atm-cli sections, and `docs/security-architecture.md`'s components; mark `docs/layered-architecture.md` as done.\n\n## Tests\n- A `tests/lib/` test that imports only `atm.lib` and runs a task from start to done on the in-memory store.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-375"
       ],
@@ -19405,7 +19415,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:48:40Z",
+      "updated_at": "2026-11-02T22:46:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19429,8 +19439,16 @@
           "kind": "note",
           "text": "Carried from T-367: `ProjectSummary` (api/projects) and `StatusReport` (atm status --json) aren’t in `api.schema.json` yet; the dashboard’s `ProjectSummary` in `load.ts` is hand-written. The generator needs nullable types (`[\"string\", \"null\"]`) for them.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:46:14Z",
+          "kind": "note",
+          "text": "Open from T-375 (carried from T-366): the worktree copies still come without atm’s `derived` values, so the dashboard keeps its fallbacks for them (`kanban.ts` readiness, `waiting.ts` togetherNow). Raise it in the sprint review as a follow-up task.",
+          "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-02T22:46:22Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-377",

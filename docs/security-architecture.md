@@ -327,6 +327,24 @@ None of it tells agents anything new to do. New entry points: `atm --dir` and
 `--record` (above); no new route, task-folder file or CI permission. As for 0.24.0 and 0.25.0, no API key is used
 for the sandbox, so no live run: this written review takes its place.
 
+**The layered architecture (T-360 to T-376).** atm-cli's code moved into layers (`docs/layered-architecture.md`):
+common, db (the JSON-in-git store, the registry), vcs (git for code), atm-lib, boot, the CLI, the REST API, and app
+(the `atm` command). What a user and an agent see is unchanged: the same commands, output, exit codes and files (the
+atm-cli suite proves it at every step), and no skill or `plugin/CLAUDE.md` text changed, so there is no agent sandbox
+run. What changes for these invariants:
+- **The REST API reads only through atm-lib (B3).** The server no longer sends `tasks.json` and `tasks-archive.json`
+  as stored: those two routes are gone (T-374), so there are fewer entry points, and a project's tasks come only from
+  the v1 route. Every request opens the project through boot, which runs the task folder's symlink checks
+  (`check_task_folder`, F7 and F8) each time; a folder with a linked file is refused whole, even when the link
+  appeared after the server started (`serve.test.mjs` "a task file that is a symlink is never read…"). I11 says so.
+- **The dev server runs the real API (T-375)** on a private, temporary `ATM_HOME`, from this checkout: development
+  only, nothing shipped; the Host check, the read-only routes and the symlink checks are atm serve's own.
+- **atm-lib's public surface (`atm.lib`, with `atm.boot.open_project`, T-376)** is for tools on the user's machine
+  that import atm from the repository; it takes what the CLI takes (task IDs, values, a project folder) and applies
+  the same checks (the lock, the vocabularies, the ID rules, the folder's symlink checks). It is a Python import, not
+  a new route, file or command, and is no more trusted than the CLI.
+- **No new route, task-folder file, field or CI permission.** The written review above takes the sandbox's place.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

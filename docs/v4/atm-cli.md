@@ -27,27 +27,29 @@ Two constraints stay: **one file in the plugin** (users install by cloning, noth
 (dev only, not shipped); `atm-cli/build.py` (standard library) writes `plugin/scripts/atm.py`:
 - a "generated from atm-cli/atm/ by atm-cli/build.py — don't edit" header;
 - standard-library imports, deduplicated and hoisted;
-- each module in dependency order under a banner (`# ==== lock.py ====`), its intra-package imports removed;
-- an `ast` check that no top-level name is defined in two modules.
+- each module in dependency order under a banner (`# ==== db/jsongit/lock.py ====`), its intra-package imports
+  removed;
+- an `ast` check that no top-level name is defined in two modules;
+- the layer rule: every module is in a layer's folder, and an import the rule forbids fails the build
+  ([layered architecture](../layered-architecture.md) §1, §8).
+
+The layout since the layered architecture (T-360 to T-376; the flat modules this section first listed are gone):
 
 ```
 atm-cli/
-  build.py
+  build.py        # the build, the layer rule, the type generators
   atm/
-    core.py       # constants, errors, output (text and --json), git(), time helpers, atomic writes
-    paths.py      # project root, task folder, legacy locations
-    model.py      # loading and validating tasks.json and the archive, vocabularies, kinds, next_id
-    lock.py       # the lock directory
-    tasks.py      # status changes, notes
-    query.py      # show, list, status, deps
-    edit.py       # add, edit, check
-    archive.py    # archive, unarchive, the size hint
-    claims.py     # claims store, leases, next
-    git_ops.py    # commit, pr, merged
-    merge.py      # the merge driver, init
-    migrate.py    # migrate, the dashboard copy and build ID
-    server.py     # serve
-    cli.py        # argparse commands, main()
+    common/       # errors, core helpers, the task rules (model.py), vocabularies, components, repository addresses,
+                  # sprint names; schema/ and the types generated from it
+    db/           # interface.py (Store, Registry), working.py (one change), memory.py (the in-memory store),
+                  # registry.py (the user's projects), jsongit/ (the JSON-in-git store: files, paths, lock, claims
+                  # store, worktrees, logo, merge driver, migrations, store.py)
+    vcs/          # interface.py (Vcs) and git.py (git as the code's version control)
+    lib/          # atm-lib: every business action and query; __init__.py is its public surface
+    boot/         # opening a project (picks the store and the vcs), the actor, what only the JSON-in-git store has
+    cli/          # argparse (main.py) and one module per area of commands, rendering text and --json
+    api/          # the REST API: server.py (atm serve, its routes) and dashboard.py (the page's tags)
+    app/          # main.py: the `atm` command, the CLI with the API's server commands handed to it
 ```
 
 **Options considered:** Python's `zipapp` (one file, but a zip archive nobody can read); shipping the package folder
@@ -56,7 +58,7 @@ atm-cli/
 **argparse, not click.** click isn't in the standard library: users would have to `pip install` it (a second
 requirement, refused by PEP 668 system Pythons), or we'd vendor about 10,000 lines (8× atm-cli; click 8.2+ also
 needs Python 3.10). argparse gives subcommands, per-command help, typed and required arguments and choices, declared
-together in `cli.py`.
+together in `cli/main.py`.
 
 | ID | P | Requirement |
 |---|---|---|
