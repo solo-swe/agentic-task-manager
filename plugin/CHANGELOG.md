@@ -25,6 +25,10 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
   backlog` or `--to active` (`hint` in `--json`), moving nothing. `/atm:plan-sprint` shows them first as candidates.
 
 ### Changed
+- **The Omniboard shows the active sprints by default** (T-340): each project's active sprint's tasks, with their own
+  counts and *+ N more*, from the new `board_active_sprint` in `api/projects` summaries (`null` without an active
+  sprint; `atm summary` too). *All tasks* (`#board-scope`, remembered as `boardScope`) shows every task, as before; a
+  note names the projects without an active sprint. An older server's summary falls back to the whole board.
 - **Graph toolbar** (T-341, `.graph-toolbar`): grouped, with segmented switches and a compact zoom; under 920 px the
   hint hides and the toolbar wraps. e2e runs with `reducedMotion: 'reduce'`; `openDashboard(…, { graphAutoFit:
   false })` opens a project without auto-fit. The shipped file's size guardrail goes from 500 to 525 KiB (T-342 looks

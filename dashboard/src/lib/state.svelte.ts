@@ -31,6 +31,7 @@ import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
 import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
 import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
 import { formatHash, hashParams } from './hash';
+import type { BoardScope } from './allboard';
 import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
@@ -82,6 +83,8 @@ export class DashboardState {
   boardGroupByProject = $state(getPref('boardGroupByProject', false));
   /** The All projects board's search (T-261), over every project's tasks through api/search; remembered per browser */
   boardQuery = $state(getPref('boardQuery', ''));
+  /** The All projects board: the active sprints' tasks (the default) or every task (T-340); remembered per browser */
+  boardScope = $state<BoardScope>(getPref('boardScope', 'active') === 'all' ? 'all' : 'active');
   tasks = $state.raw<Task[]>([]);
   // Never mutated, only replaced on (re)load, so a plain Map in $state.raw is reactive enough
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -464,6 +467,11 @@ export class DashboardState {
   setBoardGroupByProject(on: boolean) {
     this.boardGroupByProject = on;
     setPref('boardGroupByProject', on);
+  }
+
+  setBoardScope(scope: BoardScope) {
+    this.boardScope = scope;
+    setPref('boardScope', scope);
   }
 
   setBoardQuery(query: string) {

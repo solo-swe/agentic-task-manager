@@ -2,7 +2,14 @@
   // The All projects board (T-259, docs/all-projects-kanban-proposal.md §3): what's happening now, everywhere. Cards
   // like a project's Kanban cards, each with its project's chip; a card opens the task in its project, the chip the
   // project, "+ N more" the project's Kanban. Grouped by project, a lane per project instead of the chips.
-  import { allBoard, allBoardLanes, type AllBoardCard, type AllBoardColumn, type BoardMatch } from '../lib/allboard';
+  import {
+    allBoard,
+    allBoardLanes,
+    boardOf,
+    type AllBoardCard,
+    type AllBoardColumn,
+    type BoardMatch,
+  } from '../lib/allboard';
   import { formatAgo, shortAgent } from '../lib/claims';
   import { searchProjects, type ProjectEntry } from '../lib/load';
   import { dashboard } from '../lib/state.svelte';
@@ -19,9 +26,13 @@
   // typing, and again when the board's cards change (not on every poll)
   const SEARCH_PAUSE_MS = 300;
   let match = $state<BoardMatch>(null);
+  // The active sprints' board or the whole one (T-340)
+  const scope = $derived(dashboard.boardScope);
   const boardCards = $derived(
     projects
-      .flatMap((p) => Object.values(p.summary?.board ?? {}).flatMap((c) => c.cards.map((card) => `${p.id}/${card.id}`)))
+      .flatMap((p) =>
+        Object.values(boardOf(p, scope) ?? {}).flatMap((c) => c.cards.map((card) => `${p.id}/${card.id}`)),
+      )
       .join(' '),
   );
   $effect(() => {
@@ -46,8 +57,8 @@
   });
 
   // Grouped by project (T-260): a lane per project with something on the board, the most recently active first
-  const columns = $derived(dashboard.boardGroupByProject ? [] : allBoard(projects, undefined, match));
-  const lanes = $derived(dashboard.boardGroupByProject ? allBoardLanes(projects, undefined, match) : []);
+  const columns = $derived(dashboard.boardGroupByProject ? [] : allBoard(projects, undefined, match, scope));
+  const lanes = $derived(dashboard.boardGroupByProject ? allBoardLanes(projects, undefined, match, scope) : []);
   const KINDS = { todo: 'todo', active: 'active', review: 'review', blocked: 'blocked', done: 'done' } as const;
   const LABELS_SHOWN = 2;
 
@@ -189,7 +200,9 @@
       <p class="kanban-empty" id="all-board-empty">
         {match
           ? 'No card on the board matches the search'
-          : 'Nothing on the board: no task ready, at work, waiting or done lately'}
+          : scope === 'active'
+            ? 'Nothing on the board in the active sprints: no task ready, at work, waiting or done lately'
+            : 'Nothing on the board: no task ready, at work, waiting or done lately'}
       </p>
     {/each}
   </div>

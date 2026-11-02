@@ -295,6 +295,11 @@ tasks first as candidates and moves one only once the user agrees (I22); its *Ta
 so a task's name or a note asking to be pulled in is still data. No new entry point, no live sandbox run (no API
 key): this review takes its place.
 
+**The Omniboard's active sprints (T-340).** `api/projects` summaries gain `board_active_sprint`, the same cards as
+`board` (§3.3 of `docs/multi-project-api.md`) for the active sprint's tasks only: no new route, nothing the page
+writes, and the cards are shown as text (Svelte escapes them, I15) like `board`'s. The *Active sprints / All tasks*
+choice is a per-browser preference, never sent anywhere.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

@@ -16989,7 +16989,7 @@
       "description": "The All Projects Board (`dashboard/src/components/AllProjectsBoard.svelte`, `dashboard/src/lib/allboard.ts`) shows, per project, the ready tasks of the loop's selection, everything in progress, in review and blocked, and what was finished in the last 24 hours, whatever sprint those tasks are in. Make **Active sprints** the default: every column shows only tasks in the project's active sprint. Today's rules stay available as an option (e.g. a toggle *Active sprints* / *All tasks* in the board's toolbar), remembered like the board's other view settings.\n\n## Server\nCounts and caps are computed per project by `board()` in `atm-cli/atm/query.py`, so filtering the capped cards in the browser would make the totals and \"+ N more\" wrong. Have the board summary carry the active-sprint view as well (the same five columns limited to tasks whose `sprint` is the project's active sprint, with their own counts), or another way that keeps counts right; document the shape in `docs/multi-project-api.md`.\n\n## Rules\n- A project with no active sprint shows nothing in the Active sprints view; the board says so (e.g. in its lane or as a note: \"N projects have no active sprint\"), so the board isn't mysteriously empty.\n- Search, grouping by project and the \"N of M\" totals work in both views.\n\n## Tests\n- atm-cli: a scenario in `tests/scripts/scenarios/` for the board summary's active-sprint columns (tasks in the active sprint, in a planned sprint, in the backlog; a project without an active sprint).\n- Unit tests in `dashboard/tests/unit/allboard.test.ts` for both views.\n- An e2e spec for the toggle and its default; update the visual baselines if the toolbar changes.\n\n## Docs\nEntries in `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/query.py",
@@ -17002,7 +17002,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:59:28Z",
-      "updated_at": "2026-11-01T09:59:32Z",
+      "updated_at": "2026-11-02T02:17:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17017,7 +17017,9 @@
         "cli",
         "api",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-02T02:17:35Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-341",

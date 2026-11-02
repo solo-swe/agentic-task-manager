@@ -227,6 +227,8 @@ describe('serve', () => {
         },
         done: { count: 1, cards: [{ ...card('T-1'), completed_at: '2026-03-15T10:00:00Z' }] },
       },
+      // No sprints, so no active sprint's board (T-340)
+      board_active_sprint: null,
       // The card's line (T-255): no creation times, no work recorded
       stats: { started: null, tasks: 8, agent_minutes: 0 },
     });

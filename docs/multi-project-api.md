@@ -193,6 +193,7 @@ logic (`query.py`). Task names in `working`, `next`, `last_done` and `needs_you_
 | `last_activity` | the newest of all tasks' `updated_at`, `started_at`, `completed_at`, `review_requested_at`, `blocked_at` and `skipped_at`, and of note times; `null` without any |
 | `completions_14d` | 14 integers, oldest first, ending with today: done-kind tasks by the UTC day of `completed_at` (tasks without `completed_at` aren't counted) |
 | `board` | the cards for the All projects board (§3.3) |
+| `board_active_sprint` | the same columns, of the active sprint's tasks only, with their own counts: the board's default view (T-340, §3.3); `null` without an active sprint. Absent before 0.26, when the dashboard shows `board` |
 | `stats` | the overview card's line (T-255), archived tasks included (a task in both files counted once, from `tasks.json`; an unreadable archive left out): `started`, the earliest `created_at` (else `meta.created`, else `null`); `tasks`, how many; `agent_minutes`, the agent time as the Project tab counts it: the work (`started_at` until the review request or completion, until now while active) of tasks an agent (`claude:…`) or nobody recorded started, each agent's spans merged, added up. Computed when the summary is (a change to `tasks.json` or the claims), so a running task's time grows between changes only then |
 
 ### 3.3 The board
@@ -213,6 +214,9 @@ above, the priority the project's default when a task has none), plus `by` (the 
 `active`; `since` (`started_at`, `review_requested_at` or `blocked_at`, else `updated_at`, else `null`) on `active`,
 `review` and `blocked`;
 `waiting_on` and `questions` (how many) on `blocked`; `completed_at` on `done`.
+
+`board_active_sprint` follows the same rules over the tasks in the active sprint only (T-340), so its counts and
+*+ N more* are the active sprint's: the board shows it by default (*Active sprints*) and `board` with *All tasks*.
 
 ## 4. `GET /__atm/whoami`
 

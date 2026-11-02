@@ -78,6 +78,44 @@ test('next: the active sprint only, even before a more urgent backlog task; none
   });
 });
 
+test('board_active_sprint: the board of the active sprint’s tasks only, with its own counts; null without one (T-340)', () => {
+  const done = { completed_at: new Date().toISOString().replace(/\.\d+Z$/, 'Z') };
+  const tasks = [
+    task('T-1', 'todo', { sprint: 'Now' }),
+    task('T-2', 'in_progress', { sprint: 'Now' }),
+    task('T-3', 'blocked', { sprint: 'Later', waiting_on: 'user' }),
+    task('T-4', 'in_review'),
+    task('T-5', 'done', { sprint: 'Now', ...done }),
+    task('T-6', 'done', done),
+  ];
+  const sprints = [
+    { id: 'Now', state: 'active' },
+    { id: 'Later', state: 'planned' },
+  ];
+  const ids = (board) =>
+    Object.fromEntries(Object.entries(board).map(([column, c]) => [column, [c.count, c.cards.map((x) => x.id)]]));
+  withProject({ meta: { sprints }, tasks }, (root) => {
+    const s = summary(root);
+    assert.deepEqual(ids(s.board_active_sprint), {
+      todo: [1, ['T-1']],
+      active: [1, ['T-2']],
+      review: [0, []],
+      blocked: [0, []],
+      done: [1, ['T-5']],
+    });
+    // The whole board stays as it was: every sprint and the backlog
+    assert.deepEqual(ids(s.board).blocked, [1, ['T-3']]);
+    assert.deepEqual(ids(s.board).review, [1, ['T-4']]);
+    assert.equal(s.board.done.count, 2);
+  });
+  withProject({ meta: { sprints: [{ id: 'Now' }] }, tasks }, (root) => {
+    assert.equal(summary(root).board_active_sprint, null);
+  });
+  withProject({ tasks }, (root) => {
+    assert.equal(summary(root).board_active_sprint, null);
+  });
+});
+
 test("a project's own priorities and statuses; a phase left from before sprints doesn't count", () => {
   const meta = {
     statuses: [

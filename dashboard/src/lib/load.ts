@@ -53,6 +53,8 @@ export interface ProjectSummary {
   completions_14d: number[];
   /** The project's cards for the All projects board (absent before 0.20; lib/allboard.ts) */
   board?: ProjectBoard;
+  /** The same, of the active sprint's tasks only; null without an active sprint (absent before 0.26; T-340) */
+  board_active_sprint?: ProjectBoard | null;
   /** The overview card's line, archived tasks included (absent before 0.20; lib/projects.ts statsLine) */
   stats?: { started: string | null; tasks: number; agent_minutes: number };
 }

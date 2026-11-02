@@ -2,6 +2,7 @@
   // All projects at a glance (docs/multi-project-dashboard-proposal.md 3.5): a card per project, those that need you
   // first; or, on the Omniboard tab, every project's tasks in one board (T-259, T-266). "Active only" hides projects with no open
   // work and nothing done lately, on both tabs.
+  import { BOARD_SCOPES, withoutActiveSprint } from '../lib/allboard';
   import { ACTIVE_DAYS, isActive, orderProjects } from '../lib/projects';
   import { OVERVIEW_TABS, type OverviewTab } from '../lib/routes';
   import { dashboard } from '../lib/state.svelte';
@@ -16,6 +17,7 @@
   );
   const hidden = $derived(ordered.length - shown.length);
   const tab = $derived(dashboard.overviewTab);
+  const noSprint = $derived(withoutActiveSprint(shown, dashboard.boardScope));
 
   // The board tab is called Omniboard (T-266); its id stays "board", so #view=board links and the saved tab still work
   const LABELS: Record<OverviewTab, string> = { projects: 'Projects', board: 'Omniboard' };
@@ -76,10 +78,28 @@
           has beyond them.
         </p>
         <p>
+          <em>Active sprints</em> shows only the tasks in each project's active sprint; <em>All tasks</em>, every sprint
+          and the backlog.
+        </p>
+        <p>
           Each project's full details are on its own Kanban board: a card opens its task there, the project chip or
           <em>+ N more</em> opens the project.
         </p>
       </InfoTip>
+      <!-- The active sprints' tasks (the default) or every task, as before (T-340) -->
+      <span class="board-scope" role="group" aria-label="Which tasks the board shows" id="board-scope">
+        {#each BOARD_SCOPES as scope (scope)}
+          <button
+            class:active={dashboard.boardScope === scope}
+            aria-pressed={dashboard.boardScope === scope}
+            data-scope={scope}
+            title={scope === 'active'
+              ? "Only the tasks in each project's active sprint"
+              : 'Every task: all sprints and the backlog'}
+            onclick={() => dashboard.setBoardScope(scope)}>{scope === 'active' ? 'Active sprints' : 'All tasks'}</button
+          >
+        {/each}
+      </span>
       <label class="projects-active-only"
         ><input
           type="checkbox"
@@ -101,6 +121,12 @@
     >
     {#if hidden}
       <span class="projects-hidden" id="projects-hidden">{hidden} inactive project{hidden === 1 ? '' : 's'} hidden</span
+      >
+    {/if}
+    {#if tab === 'board' && noSprint.length}
+      <!-- So the board isn't empty without a word: these projects have nothing in the active sprints view -->
+      <span class="projects-hidden" id="board-no-active-sprint" title={noSprint.map((p) => p.name).join(', ')}
+        >{noSprint.length} project{noSprint.length === 1 ? ' has' : 's have'} no active sprint</span
       >
     {/if}
   </div>

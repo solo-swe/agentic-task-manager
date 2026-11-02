@@ -4445,6 +4445,36 @@ svg.graph-minimap.hidden {
   font-size: 13px;
   color: var(--text-muted);
 }
+/* The Omniboard's Active sprints / All tasks switch (T-340), like the graph toolbar's switches */
+.board-scope {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.board-scope button {
+  height: 24px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.board-scope button:hover {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.board-scope button.active {
+  background: var(--surface2);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 35%, transparent);
+}
 .projects-active-only {
   display: inline-flex;
   align-items: center;

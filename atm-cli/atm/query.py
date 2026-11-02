@@ -581,8 +581,29 @@ def project_summary(paths):
         "last_activity": last.strftime("%Y-%m-%dT%H:%M:%SZ") if last else None,
         "completions_14d": completions,
         "board": board(data, store, tasks, kinds, ready, vocab, current, live),
+        "board_active_sprint": active_sprint_board(data, store, tasks, kinds, ready, vocab, current, live),
         "stats": project_stats(paths, data, vocab, tasks, current),
     }
+
+
+def active_sprint_board(data, store, tasks, kinds, ready, vocab, current, live):
+    """The All projects board's default view (T-340): the same columns, of the active sprint's tasks only, with their
+    own counts; None without an active sprint (the board says so)."""
+    active = next((s for s in vocab["sprints"] if s["state"] == "active"), None)
+    if active is None:
+        return None
+    in_sprint = lambda t: (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
+    pairs = [(t, k) for t, k in zip(tasks, kinds) if in_sprint(t)]
+    return board(
+        data,
+        store,
+        [t for t, _ in pairs],
+        [k for _, k in pairs],
+        [t for t in ready if in_sprint(t)],
+        vocab,
+        current,
+        live,
+    )
 
 
 def cmd_summary(args):
