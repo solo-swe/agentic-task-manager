@@ -818,10 +818,40 @@
       },
       {
         "id": "Document Viewer",
-        "state": "active",
+        "state": "closed",
         "goal": "Open the documents and files a task refers to inside the dashboard, rendered with CompMD",
         "release": "0.29.0",
-        "start": "2026-11-03T18:13:58Z"
+        "start": "2026-11-03T18:13:58Z",
+        "end": "2026-11-03T23:30:16Z",
+        "report": {
+          "done": [
+            "T-391",
+            "T-392",
+            "T-393",
+            "T-394",
+            "T-395",
+            "T-396",
+            "T-398",
+            "T-399",
+            "T-400",
+            "T-401",
+            "T-402",
+            "T-403",
+            "T-404",
+            "T-407"
+          ],
+          "carried": [],
+          "added": [
+            "T-398",
+            "T-399",
+            "T-400",
+            "T-401",
+            "T-402",
+            "T-403",
+            "T-404",
+            "T-407"
+          ]
+        }
       }
     ],
     "releases": [
@@ -20659,7 +20689,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T20:42:47Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20684,7 +20714,7 @@
       "commit": "2d0f72d40ad74ac43bb7ee0a6bd47e7ef3a218fe",
       "completed_at": "2026-11-03T19:53:41Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T19:53:41Z",
@@ -20692,7 +20722,11 @@
           "text": "Text-fragment links open the document at the text, marked (CSS Custom Highlight API, CompMD’s page untouched); `requirements`/`use_cases` entries may be links. Check the skills’ wording on references (create-tasks, do-task, loop-tasks, plugin/CLAUDE.md) and the §3.3 written review. e2e 401, unit 1010; single file 554 kB.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-392",
@@ -20715,7 +20749,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:02:41Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20739,7 +20773,7 @@
       "commit": "cc7bf7b4560b775eb8f43f416d14a42c9011fd04",
       "completed_at": "2026-11-03T19:02:41Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T19:02:41Z",
@@ -20747,7 +20781,11 @@
           "text": "Routes `documents?path=` and `files?path=` through `lib/documents.py` (path rules, kinds, wrapping) and the vcs (reading, `ignored`, `tracked`, `head`). Check: `serve.test.mjs` \"a project’s files for the document viewer\"; note the ignore check fails closed (it first failed open: `check-ignore` refuses `--literal-pathspecs`). atm-cli 552 pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-393",
@@ -20773,7 +20811,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:26:47Z",
+      "updated_at": "2026-11-03T23:25:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20815,7 +20853,11 @@
         }
       ],
       "completed_at": "2026-11-03T19:26:47Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-394",
@@ -20839,7 +20881,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:42:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20875,7 +20917,11 @@
       "commit": "17faece19bdde384dbab4f3ff15c3dd5fa12e711",
       "completed_at": "2026-11-03T19:42:17Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-395",
@@ -20900,7 +20946,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:47:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20922,7 +20968,7 @@
       "commit": "a8156772938dad303224d804c27858d4b2908286",
       "completed_at": "2026-11-03T19:47:17Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T19:47:17Z",
@@ -20930,7 +20976,11 @@
           "text": "Relative links in task text (from the root) and in documents (from their folder) open the viewer, at `#L…` lines or a heading; Files entries are links (folders stay text). Check: T-394’s description links now open in place. e2e 398, unit 1007; single file 550.8 kB (guardrail 550 KiB = 563.2 kB).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-396",
@@ -20953,7 +21003,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:55:32Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20976,7 +21026,7 @@
       "commit": "34e36c0ea1b54a81c4cb8270941ad8f8fc0d9c5a",
       "completed_at": "2026-11-03T19:55:32Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T19:55:32Z",
@@ -20984,7 +21034,11 @@
           "text": "Help gains a Documents section (what opens the viewer, where, what it shows, the window). The `/atm:create-tasks` line on relative links and the §3.3 review went in with T-391. Check Help’s wording.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-397",
@@ -21072,7 +21126,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T18:14:19Z",
-      "updated_at": "2026-11-03T22:42:21Z",
+      "updated_at": "2026-11-03T23:25:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21100,7 +21154,11 @@
           "text": "CompMD 0.4.0: math typesets, code highlighted (task text and the viewer), CSP unchanged; llms.txt at v0.4.0 (body unchanged). Reviewed live by Hakan with the Try it section. Runtime folder 11 → 18 MB (Shiki shipped twice, CompMD’s packaging).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-399",
@@ -21121,7 +21179,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-03T18:39:17Z",
-      "updated_at": "2026-11-03T19:57:06Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21153,8 +21211,12 @@
       "started_by": "claude:b7be7288",
       "completed_at": "2026-11-03T19:56:50Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
-      "commit": "647769d7fc7659dffbff356c2014d0263cb61659"
+      "sprint_review": "reviewed",
+      "commit": "647769d7fc7659dffbff356c2014d0263cb61659",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-400",
@@ -21179,7 +21241,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T19:37:33Z",
-      "updated_at": "2026-11-03T22:59:05Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21228,7 +21290,11 @@
       "commit": "86755c25b686c92cfa65bd6ccc32156b40742147",
       "completed_at": "2026-11-03T22:59:05Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-401",
@@ -21256,7 +21322,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T20:37:46Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21281,7 +21347,7 @@
       "commit": "a5617d8d9629b40a22407e2ef749274b90380b40",
       "completed_at": "2026-11-03T20:37:46Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T20:37:46Z",
@@ -21289,7 +21355,11 @@
           "text": "Check: `atm edit --add-requirement`/`--remove-requirement`, `--add-use-case`/`--remove-use-case` (IDs or text-fragment links; duplicates skipped; empty refused). Scenarios in `edit.json`, unit test in `tests/lib/test_edit.py`; public surface updated; skills and §3.3 review.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-402",
@@ -21310,7 +21380,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T20:12:54Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21332,7 +21402,7 @@
       "commit": "b1b5c306ac8426fe2f56a36e7aafa5a2c985d57f",
       "completed_at": "2026-11-03T20:08:35Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T20:08:35Z",
@@ -21346,7 +21416,11 @@
           "text": "Review changes (Hakan): the contents moved to the page’s top left, and the button grows into the list so the pointer stays inside it (reduced motion: at once). Guardrail raised to 600 KiB in the same commit.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-403",
@@ -21367,7 +21441,7 @@
         "dashboard/tests/unit/DetailPanel.component.test.ts"
       ],
       "created_at": "2026-11-03T20:46:10Z",
-      "updated_at": "2026-11-03T20:49:15Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21389,7 +21463,7 @@
       "commit": "c22eeb630093e2d4b5c80ed662528eb53ff60a72",
       "completed_at": "2026-11-03T20:49:15Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T20:49:15Z",
@@ -21397,7 +21471,11 @@
           "text": "Check: Requirements and Use Cases one entry a line in the details panel, links styled as file links, bare IDs text (T-391 has both); cards unchanged. Details-panel screenshots change at the release.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-404",
@@ -21424,7 +21502,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-03T21:16:10Z",
-      "updated_at": "2026-11-03T21:22:56Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21446,7 +21524,7 @@
       "commit": "b2ff02689baa0f0db521e018af48016b68883e7a",
       "completed_at": "2026-11-03T21:22:56Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T21:22:56Z",
@@ -21454,7 +21532,11 @@
           "text": "Check the look of each style (GitHub, Docs, Magazine) in light and dark, over Hand-drawn and Sticky Notes too, on a Markdown document and a code file; Settings › Document style. Single file 571 kB.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-405",
@@ -21550,7 +21632,7 @@
       "description": "The release of the sprint *Document Viewer*, as the project's `CLAUDE.md` (*Versions*, *CI*) says.\n\n## Steps\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.29.0`.\n- `plugin/CHANGELOG.md`: `[Unreleased]` becomes `[0.29.0]` with today's date; `plugin/WHATS-NEW.md`: an entry of 3–6 plain bullets from it (`npm run check` fails without either).\n- The Linux screenshot baselines, in Docker: `npm run test:e2e:visual:update` regenerates the changed ones (the details panel's references, the document viewer); look at a few before committing; delete a baseline whose test is gone.\n- `npm run verify`.\n- The security checklist (`docs/security-architecture.md` §3): the skills changed (T-391, T-396, T-398, T-401), so their written reviews in §3.3 stand in for the agent sandbox (no API key); the new entry points (the documents and files routes, T-392) are in the document.\n- Push and the one combined PR from `dev/0.29.0` to `main` with `/atm:push`, watching CI.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -21561,7 +21643,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-03T23:18:35Z",
-      "updated_at": "2026-11-03T23:25:24Z",
+      "updated_at": "2026-11-03T23:30:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21574,7 +21656,21 @@
       "review": "none",
       "started_at": "2026-11-03T23:18:46Z",
       "started_by": "claude:b7be7288",
-      "commit": "545808bb627adf1b5b08c98c75ac0377382b9334"
+      "commit": "545808bb627adf1b5b08c98c75ac0377382b9334",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      },
+      "completed_at": "2026-11-03T23:30:15Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T23:30:15Z",
+          "kind": "outcome",
+          "text": "Released 0.29.0: versions, changelog, What’s new, 8 Linux baselines (details panel, Help, settings menu); `npm run verify` passed; PR #35, CI green first try.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
