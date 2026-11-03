@@ -44,6 +44,8 @@ The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`doc
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
 
 ### Fixed
+- **An ⓘ explanation near a popup's right edge was cut off** (Activity's *Where the time went*): the popover now moves
+  left to fit inside what clips it (`InfoTip.svelte`).
 - **`atm serve` lost track of running servers** (T-390): `stop` removed the server's record after five seconds even
   when the server was still running, and two `atm serve` at once (two sessions' hooks) could each start one, the
   second record replacing the first; the lost servers kept running, unseen by `status` and `stop`. Now `stop` ends a
