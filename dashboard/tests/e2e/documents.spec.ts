@@ -380,12 +380,55 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     expect(Math.abs(covered.bottom)).toBeLessThan(2);
   });
 
-  test('a Markdown document has no gutter yet (T-400: its lines come from CompMD)', async ({ page, tasksServer }) => {
-    tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
+  // T-400: a Markdown document's lines, each block's first source line from CompMD (origins, the view's rectsAt)
+  const MARKDOWN =
+    '---\ntitle: Spec\n---\n# The spec\n\nA paragraph\nover two lines.\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n\n' +
+    Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 16}.`).join('\n\n') +
+    '\n\n## The end\n\nThe last words.\n';
+
+  test('a Markdown document: each block’s first line in the gutter, beside the block, counted from the file’s first', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(projectDocument('docs/spec.md', MARKDOWN));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/design.md:L3'));
-    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
-    await expect(page.locator('#doc-gutter')).toHaveCount(0);
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md'));
+    const numbers = page.locator('#doc-gutter div');
+    // The frontmatter's three lines count: the title is line 4
+    await expect(numbers.first()).toHaveText('4');
+    await expect(numbers.nth(1)).toHaveText('6');
+    await expect(numbers.nth(2)).toHaveText('9');
+    await expect(numbers.nth(3)).toHaveText('12');
+    // Each number at the top of the block it numbers
+    const offsets = await page.locator('#doc-viewer').evaluate((el) => {
+      const blocks = [...el.querySelectorAll('.compmd-page > *')].slice(0, 4).map((b) => b.getBoundingClientRect().top);
+      const rows = [...el.querySelectorAll('#doc-gutter div')].slice(0, 4).map((d) => d.getBoundingClientRect().top);
+      return rows.map((top, i) => top - blocks[i]);
+    });
+    for (const offset of offsets) expect(Math.abs(offset)).toBeLessThan(3);
+  });
+
+  test('#L in a Markdown document: scrolls to the blocks its lines fall in and marks them', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(projectDocument('docs/spec.md', MARKDOWN));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    // Line 7 is the paragraph's second line, 9 the list's first: both blocks
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7-L9'));
+    await expect(page.locator('#doc-gutter .marked')).toHaveText(['6', '9']);
+    const covered = await page.locator('#doc-viewer').evaluate((el) => {
+      const m = el.querySelector('#doc-line-mark')!.getBoundingClientRect();
+      const [p, ul] = [el.querySelector('.compmd-page > p')!, el.querySelector('.compmd-page > ul')!];
+      return { top: m.top - p.getBoundingClientRect().top, bottom: m.bottom - ul.getBoundingClientRect().bottom };
+    });
+    expect(Math.abs(covered.top)).toBeLessThan(3);
+    expect(Math.abs(covered.bottom)).toBeLessThan(3);
+    // A line far down (the last of the 40 paragraphs, every other line from 16): the viewer scrolls to its block
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L94'));
+    await expect(page.locator('#doc-gutter .marked')).toHaveText(['94']);
+    await expect(page.locator('#doc-line-mark')).toBeInViewport();
+    await expect.poll(() => page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBeGreaterThan(300);
   });
 
   test('a changed file re-renders where the reader is, not at the top', async ({ page, tasksServer }) => {

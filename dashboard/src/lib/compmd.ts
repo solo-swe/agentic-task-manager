@@ -88,7 +88,68 @@ export function documentRequest(
     tz: timeZone,
     allowedOrigins: [] as string[],
     host: {},
+    // Each node carries the source range it came from (spec §12.3): the gutter's line numbers for a Markdown document
+    // come from it, through the view's rectsAt (T-400)
+    origins: true,
   };
+}
+
+/** Where a top-level block came from in a document's text: its first and last source line, and the code-point offset
+ * of its start (what the view's rectsAt takes) */
+export interface BlockSource {
+  line: number;
+  endLine: number;
+  offset: number;
+  /** Where it ends, in code points (after its last character) */
+  endOffset: number;
+}
+
+interface SourcePoint {
+  line?: number;
+  offset?: number;
+}
+
+/** A block where it was drawn: its source lines, and its box's top and bottom in the viewport */
+export interface PlacedBlock extends BlockSource {
+  top: number;
+  bottom: number;
+}
+
+/** The blocks of `sources` placed by the boxes `rectsAt` gives at each one's first and last offset: it answers for the
+ * innermost node there (a list's first offset is its first item's), so the two together span the block, from its
+ * first line to its last; a block that drew nothing is left out */
+export async function placeBlocks(
+  sources: readonly BlockSource[],
+  rectsAt: (offset: number) => Promise<readonly { top: number; bottom: number }[]>,
+): Promise<PlacedBlock[]> {
+  const boxes = await Promise.all(
+    sources.map(async (s) => [...(await rectsAt(s.offset)), ...(await rectsAt(Math.max(s.offset, s.endOffset - 1)))]),
+  );
+  return sources.flatMap((source, i) => {
+    const rects = boxes[i].filter((r) => r.bottom > r.top);
+    if (!rects.length) return [];
+    return [{ ...source, top: Math.min(...rects.map((r) => r.top)), bottom: Math.max(...rects.map((r) => r.bottom)) }];
+  });
+}
+
+/** The top-level blocks of a tree processed with `origins`, in order, each with its source lines (T-400). Blocks
+ * without an origin (none, as CompMD makes them) are left out; so are definitions, which draw nothing. */
+export function blockSources(tree: unknown): BlockSource[] {
+  const children = (tree as { children?: unknown[] } | null)?.children ?? [];
+  const blocks: BlockSource[] = [];
+  for (const child of children) {
+    const node = child as { type?: string; origin?: { start?: SourcePoint; end?: SourcePoint } };
+    const start = node.origin?.start;
+    const end = node.origin?.end;
+    if (node.type === 'definition' || !start?.line || start.offset === undefined) continue;
+    blocks.push({
+      line: start.line,
+      endLine: end?.line ?? start.line,
+      offset: start.offset,
+      endOffset: end?.offset ?? start.offset + 1,
+    });
+  }
+  return blocks;
 }
 
 function localTimeZone(): string {
@@ -122,6 +183,8 @@ export interface CompmdModule {
     ): {
       render(tree: unknown): void;
       scheme(): void;
+      /** The boxes of what the source at `offset` drew, in the viewport (CompMD 0.4.0) */
+      rectsAt(offset: number): Promise<DOMRect[]>;
       on(type: 'rendered' | 'error', listener: (event: unknown) => void): void;
       destroy(): void;
     };

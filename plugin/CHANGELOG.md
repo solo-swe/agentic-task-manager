@@ -38,6 +38,12 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   one inside a document is resolved from its folder; one leaving the project stays text. `#L…` opens at the lines,
   another fragment at the heading with that slug (Copy path keeps it). Every file in the details panel's Files list
   is a link (a folder stays text). Help and What's new come with the plugin: their relative links stay text.
+- **Line numbers in Markdown documents** (T-400): the viewer's gutter numbers each top-level block of a Markdown
+  document with its first source line, counted from the file's first (a frontmatter's lines too), beside where the
+  block was drawn; `#doc=…:L<n>-L<m>` scrolls to and marks the blocks those lines fall in. The mapping is CompMD
+  0.4.0's: the document's request asks for `origins`, and the view's `rectsAt` places each block, measured at its first
+  and last offset (`blockSources`, `placeBlocks` in `lib/compmd.ts`; `CompMd`'s `onblocks`). Every line numbered, as an
+  editor does, waits for CompMD 0.5.0's text-precise positions (T-406).
 - **Text-fragment links** (T-391): a link ending in `#:~:text=…` ([text fragments](https://web.dev/articles/text-fragments))
   opens the document at the first match, marked (the CSS Custom Highlight API), until the next click; prefix, suffix
   and ranges work, and text it doesn't find opens the document at the top with a note. A `requirements` or `use_cases`

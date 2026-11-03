@@ -14,6 +14,7 @@ import {
   frontmatter,
   FRONTMATTER_LINES,
   loadCompmd,
+  placeBlocks,
   resetCompmd,
   safeHref,
   secureLinks,
@@ -121,6 +122,33 @@ describe('what CompMD is given', () => {
     const request = compmdRequest(base, '# Help', undefined);
     expect(request.files['task.comp.md']).toBe(text + '# Help');
     expect(request.host).toEqual({});
+  });
+});
+
+describe('placing a document’s blocks (T-400)', () => {
+  it('a block spans the boxes at its first and last offset; one that drew nothing is left out', async () => {
+    // rectsAt answers for the innermost node: a list's first offset gives its first item, its last its last item
+    const boxes: Record<number, { top: number; bottom: number }[]> = {
+      0: [{ top: 10, bottom: 30 }],
+      19: [{ top: 10, bottom: 30 }],
+      20: [{ top: 40, bottom: 60 }],
+      39: [
+        { top: 80, bottom: 100 },
+        { top: 90, bottom: 90 },
+      ],
+    };
+    const placed = await placeBlocks(
+      [
+        { line: 1, endLine: 1, offset: 0, endOffset: 20 },
+        { line: 3, endLine: 5, offset: 20, endOffset: 40 },
+        { line: 7, endLine: 7, offset: 50, endOffset: 60 },
+      ],
+      async (offset) => boxes[offset] ?? [],
+    );
+    expect(placed.map(({ line, top, bottom }) => [line, top, bottom])).toEqual([
+      [1, 10, 30],
+      [3, 40, 100],
+    ]);
   });
 });
 

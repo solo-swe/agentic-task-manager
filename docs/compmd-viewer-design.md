@@ -31,8 +31,8 @@ backlog tasks of §9.
   open (`#doc=<path>`, with `:L<n>` for a line, beside the task's), so a link can be shared and Reload keeps it.
 - **V2a. Line numbers** on the left, as in an editor: every line of code and text; for a Markdown document, the
   source line each block starts on, beside the block. A `#L<n>` link scrolls to the line. Which source lines a
-  rendered block came from is CompMD's to say: its renderer is getting an API for it (Hakan, while building T-394),
-  so the Markdown half waits for that release (T-400).
+  rendered block came from is CompMD's to say: CompMD 0.4.0's origins and `rectsAt` give it per block (T-400); every
+  line, at its place in the text, comes with CompMD 0.5.0's text-precise positions (T-406).
 - **V2b. The reader keeps their place.** The open document refreshes on the dashboard's poll; a change re-renders it
   where the reader is (the block at the top of the window stays there), never back at the top.
 - **V3. Only the project's own files, read-only.** The server reads a file only from inside the project's folder,

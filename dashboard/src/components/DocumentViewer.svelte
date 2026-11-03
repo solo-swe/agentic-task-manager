@@ -17,7 +17,7 @@
   } from '../lib/documents';
   import { getPref, setPref } from '../lib/prefs';
   import { fileRef } from '../lib/repo';
-  import { slug } from '../lib/compmd';
+  import { slug, type PlacedBlock } from '../lib/compmd';
   import { compactAt } from '../lib/scroll';
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
@@ -97,10 +97,50 @@
   };
 
   // A code or text file's lines (V2a): CompMD renders it as one code block, its lines never wrapping, so the gutter
-  // numbers them at the block's top and line height, measured after each render and on resize. Markdown documents
-  // get theirs from CompMD's renderer (T-400).
+  // numbers them at the block's top and line height, measured after each render and on resize. A Markdown document's
+  // come from CompMD (T-400): each top-level block's first source line, beside where it was drawn (its origins and the
+  // view's rectsAt), measured the same way.
   let pageEl = $state<HTMLElement>();
   let lineLayout = $state<{ top: number; lineHeight: number; fontSize: number } | null>(null);
+  /** A Markdown document's blocks: their source lines, and their top and height in the page */
+  let blocks = $state.raw<{ line: number; endLine: number; top: number; height: number }[]>([]);
+  let measureBlocks: (() => Promise<PlacedBlock[]>) | null = null;
+  /** The last measurement asked for: an older answer that comes in after it is dropped */
+  let blocksAsked = 0;
+
+  async function placeMarkdownLines() {
+    const el = pageEl;
+    if (!el || doc?.kind !== 'markdown' || !measureBlocks) {
+      if (blocks.length) blocks = [];
+      return;
+    }
+    const asked = ++blocksAsked;
+    const placed = await measureBlocks();
+    if (asked !== blocksAsked || el !== pageEl) return;
+    const origin = el.getBoundingClientRect().top;
+    const next = placed.map((b) => ({
+      line: b.line,
+      endLine: b.endLine,
+      top: Math.round(b.top - origin),
+      height: Math.round(b.bottom - b.top),
+    }));
+    if (JSON.stringify(next) !== JSON.stringify(blocks)) blocks = next;
+    scrollToBlocks();
+  }
+
+  /** The blocks a `:L<n>-L<m>` link's lines fall in */
+  const markedBlocks = $derived(
+    ref?.lines ? blocks.filter((b) => b.line <= ref.lines![1] && b.endLine >= ref.lines![0]) : [],
+  );
+
+  /** `#L<n>` in a Markdown document: the first block its lines fall in, a little below the window's top (once) */
+  function scrollToBlocks() {
+    if (!ref?.lines || !pageEl || !markedBlocks.length) return;
+    const key = `${ref.path}:${ref.lines.join('-')}`;
+    if (key === scrolledTo) return;
+    scrolledTo = key;
+    pageEl.closest('.doc-body')?.scrollTo({ top: Math.max(0, pageEl.offsetTop + markedBlocks[0].top - 48) });
+  }
   /** The file and lines last scrolled to, so a refresh doesn't scroll again */
   let scrolledTo = '';
 
@@ -215,6 +255,7 @@
     readHeadings();
     scrollToHeading();
     showTextFragment();
+    void placeMarkdownLines();
     const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
     if (!pageEl || !code || !doc || (doc.kind !== 'code' && doc.kind !== 'text')) {
       lineLayout = null;
@@ -491,8 +532,42 @@
               ></div>
             {/if}
           {/if}
+          {#if doc.kind === 'markdown' && blocks.length}
+            <!-- A Markdown document's line numbers (T-400): each block's first source line, beside where CompMD drew
+                 it; the blocks a link's lines fall in, marked -->
+            <div class="doc-gutter doc-gutter-blocks" id="doc-gutter" aria-hidden="true">
+              {#each blocks as block (block.line)}
+                <div
+                  class:marked={markedBlocks.includes(block)}
+                  data-line={block.line}
+                  style:top="{block.top}px"
+                  style:height="{block.height}px"
+                >
+                  {block.line}
+                </div>
+              {/each}
+            </div>
+            {#if markedBlocks.length}
+              <div
+                class="doc-line-mark"
+                id="doc-line-mark"
+                style:top="{markedBlocks[0].top}px"
+                style:height="{markedBlocks[markedBlocks.length - 1].top +
+                  markedBlocks[markedBlocks.length - 1].height -
+                  markedBlocks[0].top}px"
+              ></div>
+            {/if}
+          {/if}
           {#key `${ref.path}`}
-            <CompMd text={doc.document} path={doc.path} {localImage} />
+            <CompMd
+              text={doc.document}
+              path={doc.path}
+              {localImage}
+              onblocks={(measure) => {
+                measureBlocks = measure;
+                void placeMarkdownLines();
+              }}
+            />
           {/key}
         </article>
       {:else if error}

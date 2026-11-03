@@ -5,7 +5,14 @@ import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { initSync, OpenDocument, process } from '@compmd/processor';
 import { request as base } from 'virtual:compmd';
-import { compmdRequest, FRONTMATTER_LINES, packComponents, safeTree } from '../../src/lib/compmd';
+import {
+  blockSources,
+  compmdRequest,
+  documentRequest,
+  FRONTMATTER_LINES,
+  packComponents,
+  safeTree,
+} from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
 
 const WASM = new URL('../../node_modules/@compmd/processor/pkg/compmd_wasm_bg.wasm', import.meta.url);
@@ -37,6 +44,28 @@ function textOf(node: unknown): string {
   return (typeof n.value === 'string' ? n.value : '') + (n.children ?? []).map(textOf).join('');
 }
 const codes = (r: ReturnType<typeof run>) => r.diagnostics.map((d) => d.code);
+
+describe('a document’s blocks and their source lines (T-400)', () => {
+  it('each top-level block has its first and last line in the file, a frontmatter counted', () => {
+    const text =
+      '---\ntitle: X\n---\n# Title\n\nA paragraph\nover two lines.\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n';
+    const tree = new OpenDocument(documentRequest(base, 'docs/x.md', text, NOW, 'UTC')).expanded;
+    expect(blockSources(tree).map(({ line, endLine }) => [line, endLine])).toEqual([
+      [4, 4],
+      [6, 7],
+      [9, 11], // CompMD's range for a list takes in the blank line after it
+      [12, 14],
+    ]);
+    // An offset in code points, where the block's text starts
+    expect(blockSources(tree)[0].offset).toBe(text.indexOf('# Title'));
+    // safeTree keeps the origins
+    expect(blockSources(safeTree(tree))).toEqual(blockSources(tree));
+  });
+
+  it('no origins, no blocks: task text is processed without them', () => {
+    expect(blockSources(run('# Title\n\nText.').expanded)).toEqual([]);
+  });
+});
 
 describe('task text through the real processor', () => {
   it('plain Markdown and GFM render with no diagnostics', () => {

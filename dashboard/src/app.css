@@ -2439,6 +2439,20 @@ button.repo-ref {
   opacity: 1;
   font-weight: 600;
 }
+/* A Markdown document's line numbers (T-400): one per block, at the block's top, in the page's left margin */
+.doc-gutter-blocks {
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 30px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.doc-gutter-blocks div {
+  position: absolute;
+  right: 0;
+  padding-top: 0.2em;
+}
 /* The contents (T-402): one box at the page's top left that stays in view as the document scrolls (sticky, taking no
    room). Closed, it is a faint button, brighter while the pointer is over the window; hovered or focused, the box
    itself grows from the button into the list (down and to the right), so the pointer is inside it all along */
