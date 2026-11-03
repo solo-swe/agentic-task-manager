@@ -1585,6 +1585,84 @@ DepsResult = TypedDict(
     total=False,
 )
 
+# Who works on a task, from which working copy, until when
+Claim = TypedDict(
+    "Claim",
+    {
+        # required
+        "task": str,
+        # required
+        "agent": str,
+        "branch": Optional[str],
+        "worktree": Optional[str],
+        # required
+        "claimed_at": str,
+        # required
+        "lease_expires_at": str,
+        "renewed_at": str,
+    },
+    total=False,
+)
+
+ShownDependency = TypedDict(
+    "ShownDependency",
+    {
+        # required
+        "id": str,
+        # required; null: no such task
+        "status": Optional[str],
+        # required
+        "archived": bool,
+    },
+    total=False,
+)
+
+# A task in full, as atm show gives it (show_tasks): with its effective priority, its dependencies' statuses, the tasks related to it either way and those that duplicate it
+TaskShown = TypedDict(
+    "TaskShown",
+    {
+        # required
+        "task": "Task",
+        # required
+        "archived": bool,
+        # required
+        "priority": Optional[str],
+        # required
+        "started_by": Optional[str],
+        # required
+        "dependencies": List["ShownDependency"],
+        # required
+        "related": List[str],
+        # required
+        "duplicated_by": List[str],
+    },
+    total=False,
+)
+
+# What a status change (start_task, done_task, ...) answers
+StatusChange = TypedDict(
+    "StatusChange",
+    {
+        # required
+        "task": "Task",
+        # required; Its status before
+        "previous": Optional[str],
+        # required; Its claim now: the new one after start, else null
+        "claim": Optional["Claim"],
+        # required; After done: the tasks now ready
+        "unblocked": List[str],
+        # required; After done: the archive hint, at most once a day
+        "hint": Optional["ArchiveHint"],
+        # required; After reopen in a closed sprint: where it is now open, and how to move it (T-330)
+        "stranded": Optional[str],
+        # required; The claims whose lease ran out on the way (their tasks back to to do)
+        "expired": List["Claim"],
+        # required
+        "view": "TaskShown",
+    },
+    total=False,
+)
+
 # A sprint as the overview shows it: done of its tasks but the skipped
 SprintNumbers = TypedDict(
     "SprintNumbers",
@@ -2344,8 +2422,9 @@ class Vcs(Protocol):
         """Whether the project's folder is under version control at all."""
         ...
 
-    def paths(self, files: List[str], cwd: str) -> List[str]:
-        """The files to commit, relative to the repository, from names relative to `cwd`; refuses a name that would
+    def paths(self, files: List[str], cwd: Optional[str] = None) -> List[str]:
+        """The files to commit, relative to the repository, from names relative to `cwd` (None: to the repository
+        itself); refuses a name that would
         commit more than one file (the whole tree, a directory, a pattern) or a file outside the repository."""
         ...
 
@@ -4306,14 +4385,14 @@ class GitVcs:
         """The origin remote's address, as git has it (atm repository turns it into a web address)."""
         return ask_git(["remote", "get-url", "origin"], self.root)
 
-    def paths(self, files, cwd):
-        """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
-        would stage more than the files named, and a missing file git doesn't track."""
+    def paths(self, files, cwd=None):
+        """The files to commit, relative to the repository, from names relative to `cwd` (None: the repository);
+        refuses anything that would stage more than the files named, and a missing file git doesn't track."""
         picked = []
         for name in files:
             if name in WHOLE_TREE or name.startswith(":"):
                 raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
-            full = os.path.realpath(os.path.join(cwd, name))
+            full = os.path.realpath(os.path.join(cwd or self.root, name))
             relative = os.path.relpath(full, self.root)
             if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
                 raise Invalid(f"{name} is outside the repository")
@@ -4431,7 +4510,7 @@ def lease_until(data):
     return (now() + timedelta(minutes=lease_minutes(data))).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def expire_claims(data, claims):
+def drop_expired_claims(data, claims):
     """Drop claims whose lease ran out; their tasks in this worktree go back to todo. Returns the expired claims."""
     current = now()
     vocab = vocabulary(data)
@@ -5494,7 +5573,7 @@ def change_task_status(project, command, task_id, **options):
         data, store, archived = work.document, work.claims(), archived_in(work)
         claims = store["claims"]
         here = work.here()["worktree"]
-        expired = expire_claims(data, claims)
+        expired = drop_expired_claims(data, claims)
         apply_resolutions(here, data, store, archived)
         task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
@@ -5565,6 +5644,7 @@ def change_task_status(project, command, task_id, **options):
             sprint = find_sprint(vocabulary(data), task.get("sprint"))
             if sprint and sprint["state"] == "closed":
                 stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
+        from_archive = all(t is not task for t in data["tasks"])
         return {
             "task": task,
             "previous": previous,
@@ -5573,11 +5653,96 @@ def change_task_status(project, command, task_id, **options):
             "hint": hint,
             "stranded": stranded,
             "expired": expired,
-            "document": data,
-            "archived": archived,  # the lookup of this project's archived tasks, for showing the task
+            # The task as `atm show` gives it (show_tasks), so a front end can show it without reading the project
+            "view": view_task(task, from_archive, data["tasks"], archived, vocabulary(data)),
         }
 
     return project.store.change(change)
+
+
+# One function per status change (§5.1, T-383), each with the parameters its command takes. `status` picks the status
+# when the project has several of the target kind. Each returns a StatusChange (api.schema.json): the task after it,
+# its status before (`previous`), its claim now, the tasks now ready (`unblocked`, after done), the archive hint (at
+# most once a day), `stranded` (reopened in a closed sprint) and the claims that `expired` on the way.
+
+
+def start_task(project, task_id, status=None):
+    """To do -> in progress, claimed by `project.actor`; its dependencies must be done."""
+    return change_task_status(project, "start", task_id, status=status)
+
+
+def review_task(project, task_id, note=None, status=None):
+    """Asks for a review (`note`: what the reviewer should check); the claim is released."""
+    return change_task_status(project, "review", task_id, note=note, status=status)
+
+
+def done_task(project, task_id, note=None, commit=None, resolution=None, status=None):
+    """Done (or waiting for the sprint review, by its review mode); the claim dropped."""
+    return change_task_status(project, "done", task_id, note=note, commit=commit, resolution=resolution, status=status)
+
+
+def reject_task(project, task_id, reason, status=None):
+    """A task in review back to to do, for anyone."""
+    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+
+
+def approve_task(project, task_id, note=None, status=None):
+    """Approves a review; it stays in review until its agent takes it back."""
+    return change_task_status(project, "approve", task_id, note=note, status=status)
+
+
+def request_changes(project, task_id, reason, status=None):
+    """Asks for changes; its agent gets it back first."""
+    return change_task_status(project, "request-changes", task_id, reason=reason, status=status)
+
+
+def block_task(project, task_id, on, questions, reason=None, status=None):
+    """Blocked on a decision by `on` (user or agent), with its questions; the claim released."""
+    return change_task_status(project, "block", task_id, on=on, questions=questions, reason=reason, status=status)
+
+
+def unblock_task(project, task_id, answers, status=None):
+    """Back to to do, with the answers (one per question) as a note."""
+    return change_task_status(project, "unblock", task_id, answers=answers, status=status)
+
+
+def reopen_task(project, task_id, reason, status=None):
+    """A done or skipped task back to to do."""
+    return change_task_status(project, "reopen", task_id, reason=reason, status=status)
+
+
+def skip_task(project, task_id, reason, resolution=None, duplicate_of=None, status=None):
+    """Not needed: skipped (a to-do or blocked task)."""
+    return change_task_status(
+        project, "skip", task_id, reason=reason, resolution=resolution, duplicate_of=duplicate_of, status=status
+    )
+
+
+def fail_task(project, task_id, reason=None, status=None):
+    """In progress back to to do, with a failure note."""
+    return change_task_status(project, "fail", task_id, reason=reason, status=status)
+
+
+def release_task(project, task_id, note=None, status=None):
+    """In progress back to to do, with a handoff note."""
+    return change_task_status(project, "release", task_id, note=note, status=status)
+
+
+# Each command's function, for a front end that takes the command's name (the CLI)
+STATUS_FUNCTIONS = {
+    "start": start_task,
+    "review": review_task,
+    "done": done_task,
+    "reject": reject_task,
+    "approve": approve_task,
+    "request-changes": request_changes,
+    "block": block_task,
+    "unblock": unblock_task,
+    "reopen": reopen_task,
+    "skip": skip_task,
+    "fail": fail_task,
+    "release": release_task,
+}
 
 
 def add_task_note(project, task_id, text):
@@ -5615,7 +5780,7 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
     def change(work):
         data, store, archived = work.document, work.claims(), archived_in(work)
-        expired = expire_claims(data, store["claims"])
+        expired = drop_expired_claims(data, store["claims"])
         apply_resolutions(work.here()["worktree"], data, store, archived)
         task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user, archived=archived)
         new = None
@@ -5647,7 +5812,7 @@ def renew_lease(project, task_id, expire=True):
             claim["lease_expires_at"] = lease_until(data)
             claim["renewed_at"] = now_iso()
             return {"claim": claim, "minutes": lease_minutes(data), "expired": []}
-        expired = expire_claims(data, claims)
+        expired = drop_expired_claims(data, claims)
         claim = claims.get(task_id)
         if not claim:
             own = own_lease_expired(expired, data, task_id, agent, None)
@@ -5697,12 +5862,13 @@ def renew_due_claims(project):
     return project.store.change(change)
 
 
-def live_claims(project):
-    """The live claims, by task, with the expired ones dropped (their tasks back to todo). Returns {claims, expired}."""
+def expire_claims(project):
+    """Drops the claims whose lease ran out (their tasks back to todo), and gives the live ones, by task (`atm
+    claims`; `list_claims` only reads). Returns {claims, expired}."""
 
     def change(work):
         claims = work.claims()["claims"]
-        expired = expire_claims(work.document, claims)
+        expired = drop_expired_claims(work.document, claims)
         return {"claims": sorted(claims.values(), key=lambda c: c["task"]), "expired": expired}
 
     return project.store.change(change)
@@ -5913,10 +6079,9 @@ def add_new_tasks(project, entries):
     return project.store.change(change)
 
 
-class Changes:
-    """What `atm edit` changes (its options' names: name, description, sprint, backlog, type, priority, release, review,
-    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing. The CLI
-    passes its parsed arguments, which have these names."""
+class TaskEdit:
+    """What edit_task applies, as attributes (name, description, sprint, backlog, type, priority, release, review,
+    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing."""
 
     def __init__(self, **given):
         self.__dict__.update(given)
@@ -5925,9 +6090,57 @@ class Changes:
         return [] if name.startswith(("add_", "remove_")) else None
 
 
-def edit_existing_task(project, task_id, changes):
-    """`atm edit`: change a task's definition (never its status), as `project.actor`. Returns {task, changed, vocab}:
-    `changed` the names of the fields that changed (nothing is written when none did)."""
+def edit_existing_task(
+    project,
+    task_id,
+    *,
+    name=None,
+    description=None,
+    sprint=None,
+    backlog=False,
+    task_type=None,
+    priority=None,
+    release=None,
+    review=None,
+    with_=None,
+    components=None,
+    add_files=(),
+    remove_files=(),
+    add_dependencies=(),
+    remove_dependencies=(),
+    add_labels=(),
+    remove_labels=(),
+    add_components=(),
+    remove_components=(),
+    add_related=(),
+    remove_related=(),
+):
+    """`atm edit`: change a task's definition (never its status), as `project.actor`. None (or an empty list) leaves
+    a field as it is; an empty `release`, `review` or `with_` removes it; `backlog` takes it out of its sprint;
+    `components="auto"` adds the components its files are in. Returns {task, changed, vocab}: `changed` the names of
+    the fields that changed (nothing is written when none did)."""
+    changes = TaskEdit(
+        name=name,
+        description=description,
+        sprint=sprint,
+        backlog=backlog,
+        type=task_type,
+        priority=priority,
+        release=release,
+        review=review,
+        with_=with_,
+        components=components,
+        add_file=list(add_files),
+        remove_file=list(remove_files),
+        add_dep=list(add_dependencies),
+        remove_dep=list(remove_dependencies),
+        add_label=list(add_labels),
+        remove_label=list(remove_labels),
+        add_component=list(add_components),
+        remove_component=list(remove_components),
+        add_related=list(add_related),
+        remove_related=list(remove_related),
+    )
 
     def change(work):
         archived = archived_in(work)
@@ -6266,9 +6479,7 @@ def edit_component(project, component_id, label=None, add_paths=(), review=None,
 # atm-lib: sprints and the backlog (docs/sprints-and-releases-design.md §3.1; docs/layered-architecture.md §5.1):
 # list, add, edit, start, close and delete sprints (meta.sprints), move tasks between sprints and the backlog, list the
 # backlog. Each write is one store change; a task's sprint changes only through set_sprint, which keeps its history.
-#
-# The options are named as atm's command line names them (goal, release, due, after, carry_to, new_name, reviewed,
-# move_to, force): the CLI passes its parsed arguments; any object with those attributes does.
+# The functions take keyword parameters (T-383).
 
 def sprint_overview(data, archived, include_closed):
     """The sprints in order, each with its task counts by kind (tasks.json and the archive): {..., tasks, by_kind}."""
@@ -6311,12 +6522,12 @@ def check_due(due):
     return due
 
 
-def apply_fields(sprint, options, vocab):
-    """goal, release and due on a sprint; an empty value removes the field; a release must be one of meta.releases
-    (SR-2.2). Returns the names changed."""
+def apply_fields(sprint, vocab, goal, release, due):
+    """goal, release and due on a sprint (None leaves one as it is); an empty value removes the field; a release must
+    be one of meta.releases (SR-2.2). Returns the names changed."""
     changed = []
-    release = known_release(vocab, options.release) if options.release else options.release
-    for key, value in (("goal", options.goal), ("release", release), ("due", check_due(options.due))):
+    release = known_release(vocab, release) if release else release
+    for key, value in (("goal", goal), ("release", release), ("due", check_due(due))):
         if value is None:
             continue
         if value == "":
@@ -6354,30 +6565,30 @@ def backlog_tasks(project, finished=False):
     return {"tasks": [t for t in data["tasks"] if in_backlog(vocab, t, finished=finished)], "vocab": vocab}
 
 
-def add_sprint(project, options):
-    """A planned sprint, named `options.name` (generated without one), after `options.after` (default: last), with
-    its goal, release and due date. Returns the sprint."""
+def add_sprint(project, name=None, goal=None, release=None, due=None, after=None):
+    """A planned sprint, named `name` (generated without one), after the sprint `after` (default: last), with its
+    goal, release and due date. Returns the sprint."""
 
     def change(work):
         data = work.document
         vocab = vocabulary(data)
-        name = (options.name or "").strip() or generate_sprint_name(
+        sprint_name = (name or "").strip() or generate_sprint_name(
             vocab["sprint_names"], taken_names(data, work.archive()["tasks"])
         )
-        if find_sprint(vocab, name):
-            raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
-        if len(name) > MAX_SPRINT_NAME:
+        if find_sprint(vocab, sprint_name):
+            raise Invalid(f"there is already a sprint {find_sprint(vocab, sprint_name)['id']!r}")
+        if len(sprint_name) > MAX_SPRINT_NAME:
             raise Invalid(f"a sprint name is at most {MAX_SPRINT_NAME} characters")
-        sprint = {"id": name, "state": "planned"}
-        apply_fields(sprint, options, vocab)
+        sprint = {"id": sprint_name, "state": "planned"}
+        apply_fields(sprint, vocab, goal, release, due)
         meta = data.setdefault("meta", {})
         sprints = list(meta.get("sprints") or [])
         position = len(sprints)
-        if options.after:
-            after = find_sprint(vocab, options.after)
-            if after is None:
-                raise NotFound(f"no sprint {options.after!r} to add it after", 2)
-            position = next(i for i, s in enumerate(sprints) if s.get("id") == after["id"]) + 1
+        if after:
+            previous = find_sprint(vocab, after)
+            if previous is None:
+                raise NotFound(f"no sprint {after!r} to add it after", 2)
+            position = next(i for i, s in enumerate(sprints) if s.get("id") == previous["id"]) + 1
         sprints.insert(position, sprint)
         meta["sprints"] = sprints
         vocabulary(data)
@@ -6396,12 +6607,13 @@ def stored_sprint(data, name):
     return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
 
 
-def edit_sprint(project, name, options):
-    """Change a sprint's goal, release or due date (an empty value removes it). Returns {sprint, changed}."""
+def edit_sprint(project, name, goal=None, release=None, due=None):
+    """Change a sprint's goal, release or due date (None leaves it, an empty value removes it). Returns {sprint,
+    changed}."""
 
     def change(work):
         sprint = stored_sprint(work.document, name)
-        changed = apply_fields(sprint, options, vocabulary(work.document))
+        changed = apply_fields(sprint, vocabulary(work.document), goal, release, due)
         if changed:
             vocabulary(work.document)
         return {"sprint": sprint, "changed": changed}
@@ -6451,16 +6663,15 @@ def added_mid_sprint(task, sprint):
     return bool(entries and start and isinstance(entries[-1].get("from"), str) and entries[-1]["from"] > start)
 
 
-def carry_target(data, vocab, sprint, options, taken):
-    """Where carry_to sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint (added
-    to meta.sprints after the one closing). Returns (target, created sprint or None)."""
-    to = options.carry_to
-    if options.new_name and to != "new":
+def carry_target(data, vocab, sprint, to, new_name, taken):
+    """Where `to` (carry_to) sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint
+    (named `new_name`, added to meta.sprints after the one closing). Returns (target, created sprint or None)."""
+    if new_name and to != "new":
         raise Invalid("--name names a new sprint: use it with --carry-to new")
     if to == "backlog":
         return None, None
     if to == "new":
-        name = (options.new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
+        name = (new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
         if find_sprint(vocab, name):
             raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
         if len(name) > MAX_SPRINT_NAME:
@@ -6475,10 +6686,10 @@ def carry_target(data, vocab, sprint, options, taken):
     return target, None
 
 
-def close_sprint(project, name, options):
-    """Close a sprint (SR-4.3): its unfinished tasks go to options.carry_to, keeping their status and history (SR-4.5);
-    the sprint gets `end` and its report {done, carried, added, to}; with options.reviewed its batch tasks are marked
-    reviewed (SR-4.4). Returns {sprint, created, target, was_active}."""
+def close_sprint(project, name, carry_to=None, new_name=None, reviewed=False):
+    """Close a sprint (SR-4.3): its unfinished tasks go to `carry_to` (a sprint, `new`, named `new_name`, or
+    `backlog`), keeping their status and history (SR-4.5); the sprint gets `end` and its report {done, carried, added,
+    to}; with `reviewed` its batch tasks are marked reviewed (SR-4.4). Returns {sprint, created, target, was_active}."""
     actor = project.actor
 
     def change(work):
@@ -6502,14 +6713,14 @@ def close_sprint(project, name, options):
             )
         # Batch tasks wait for the end-of-sprint review (SR-4.4): /atm:close-sprint reviews them, then --reviewed
         pending = [t for t in own if t.get("sprint_review") == "pending"]
-        if pending and not options.reviewed:
+        if pending and not reviewed:
             ids = ", ".join(t["id"] for t in pending)
             raise Invalid(
                 f"{ids} {'waits' if len(pending) == 1 else 'wait'} for the end-of-sprint review: review "
                 f"{'it' if len(pending) == 1 else 'them'} with the user (/atm:close-sprint), then close with --reviewed"
             )
         unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
-        if unfinished and not options.carry_to:
+        if unfinished and not carry_to:
             ids = ", ".join(t["id"] for t in unfinished)
             raise Invalid(
                 f"{ids} {'is' if len(unfinished) == 1 else 'are'}n't finished: say where "
@@ -6517,7 +6728,7 @@ def close_sprint(project, name, options):
             )
         target, created = (None, None)
         if unfinished:
-            target, created = carry_target(data, vocab, sprint, options, taken_names(data, archived))
+            target, created = carry_target(data, vocab, sprint, carry_to, new_name, taken_names(data, archived))
         stamp = now_iso()
         report = {
             "done": [t["id"] for t in own + own_archived if kind(t) == "done"],
@@ -6550,10 +6761,10 @@ def mentions_sprint(task, sprint):
     )
 
 
-def delete_sprint(project, name, options):
+def delete_sprint(project, name, move_to=None, force=False):
     """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
-    state; an open one's unfinished tasks go to options.move_to (the backlog by default); one that tasks finished in
-    or moved on from needs options.force when open, and a closed one with any history stays (its record and report).
+    state; an open one's unfinished tasks go to `move_to` (the backlog by default); one that tasks finished in or
+    moved on from needs `force` when open, and a closed one with any history stays (its record and report).
     Returns {sprint, state, moved, target}."""
     actor = project.actor
 
@@ -6588,17 +6799,17 @@ def delete_sprint(project, name, options):
                 f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
                 "stay; only an empty sprint can be deleted"
             )
-        if history and not options.force:
+        if history and not force:
             raise Invalid(
                 f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
                 "with --force to drop that record (its tasks go to --move-to, the backlog by default)"
             )
-        to = options.move_to or "backlog"
+        to = move_to or "backlog"
         target = None if to == "backlog" else open_sprint(vocab, to)
         if target is not None and target.casefold() == sprint["id"].casefold():
             raise Invalid(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})")
         # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
-        moving = own if options.force else unfinished
+        moving = own if force else unfinished
         stamp = now_iso()
         for task in moving:
             set_sprint(task, target, stamp)
@@ -6667,9 +6878,8 @@ def move_tasks(project, ids, to):
 # ==== lib/releases.py ====
 # atm-lib: releases (docs/sprints-and-releases-design.md §3.3, SR-2.2; docs/layered-architecture.md §5.1): list them
 # with their tasks by kind and stage, add one (with PRs, giving it their tasks, archived ones too), edit and archive one,
-# and draft its notes. A task's release is its own, else its sprint's. Each write is one store change.
-#
-# The options are named as atm's command line names them (title for --name, target, pr, released_at).
+# and draft its notes. A task's release is its own, else its sprint's. Each write is one store change; the functions
+# take keyword parameters (T-383).
 
 STAGES = ("done", "in_pr", "merged")
 
@@ -6729,10 +6939,11 @@ def check_target(target):
     return target
 
 
-def release_fields(release, options):
-    """name (options.title) and target on a release; an empty value removes the field. Returns the names changed."""
+def release_fields(release, name, target):
+    """name and target on a release (None leaves one as it is); an empty value removes the field. Returns the names
+    changed."""
     changed = []
-    for key, value in (("name", options.title), ("target", check_target(options.target))):
+    for key, value in (("name", name), ("target", check_target(target))):
         if value is None:
             continue
         if value == "":
@@ -6758,19 +6969,19 @@ def stored_release(data, release_id):
     return next(r for r in data["meta"]["releases"] if r.get("id") == release_id)
 
 
-def add_release(project, release_id, options):
-    """A planned release; with options.pr (pull request numbers) every task of those PRs, in both files, goes into
-    it; with options.released_at it shipped already. Returns {release, tasks}: the tasks given to it."""
+def add_release(project, release_id, name=None, target=None, prs=(), released_at=None):
+    """A planned release; with `prs` (pull request numbers) every task of those PRs, in both files, goes into it;
+    with `released_at` it shipped already. Returns {release, tasks}: the tasks given to it."""
     if not RELEASE_ID.fullmatch(release_id):
         raise Invalid(f"{release_id!r}: a release ID is letters, digits, '.', '-' and '_' (at most 64)")
-    prs = options.pr or []
+    prs = list(prs or [])
     if any(n <= 0 for n in prs):
         raise Invalid("--pr needs a pull request number")
-    if options.released_at is not None:
+    if released_at is not None:
         try:
-            parse_iso(options.released_at)
+            parse_iso(released_at)
         except ValueError:
-            raise Invalid(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {options.released_at!r}")
+            raise Invalid(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {released_at!r}")
 
     def change(work):
         data, archive_data = work.document, work.archive()
@@ -6778,7 +6989,7 @@ def add_release(project, release_id, options):
         if find_release(vocab, release_id):
             raise Invalid(f"there is already a release {release_id!r}")
         release = {"id": release_id, "state": "planned"}
-        release_fields(release, options)
+        release_fields(release, name, target)
         given = []
         # A release recovered from pull requests (SR-8.2): their tasks, in both files, go into it; the release records
         # the last PR given (the one that shipped it)
@@ -6794,10 +7005,10 @@ def add_release(project, release_id, options):
             if not own:
                 raise Invalid(f"no task is in pull request #{number}")
             given += own
-        if options.released_at is not None:
+        if released_at is not None:
             # One that shipped already: released at that time (its PR's merge, for one recovered from PRs)
             release["state"] = "released"
-            release["released_at"] = options.released_at
+            release["released_at"] = released_at
         meta = data.setdefault("meta", {})
         meta["releases"] = list(meta.get("releases") or []) + [release]
         vocabulary(data)
@@ -6806,12 +7017,12 @@ def add_release(project, release_id, options):
     return project.store.change(change)
 
 
-def edit_release(project, release_id, options):
-    """Change a release's name or target (an empty value removes it). Returns {release, changed}."""
+def edit_release(project, release_id, name=None, target=None):
+    """Change a release's name or target (None leaves it, an empty value removes it). Returns {release, changed}."""
 
     def change(work):
         release = stored_release(work.document, release_id)
-        changed = release_fields(release, options)
+        changed = release_fields(release, name, target)
         if changed:
             vocabulary(work.document)
         return {"release": release, "changed": changed}
@@ -7041,7 +7252,7 @@ HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
 CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
 
 
-def workflow_settings(project):
+def get_workflow(project):
     """The project's workflow (meta.workflow with its defaults), or None when none is set."""
     return workflow_of({"meta": project.store.get_settings()})
 
@@ -7104,9 +7315,19 @@ def record_on_task(project, task_id, sha):
     return project.store.change(change)
 
 
-def commit_task(project, task_id, files, cwd, message=None):
-    """`atm commit`: commit exactly `files` (named relative to `cwd`) plus the task data that travels with code commits,
-    with the workflow's message, then record the commit on the task. Returns {task, commit, message, files}."""
+def repository_paths(project, files, cwd):
+    """The files named relative to `cwd`, relative to the repository instead (what commit_task takes), checked as a
+    commit checks them: no directory, no pattern, nothing outside the repository."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    return vcs.paths(files, cwd)
+
+
+def commit_task(project, task_id, files, message=None):
+    """`atm commit`: commit exactly `files` (relative to the repository; repository_paths turns names relative to a
+    folder into these) plus the task data that travels with code commits, with the workflow's message, then record
+    the commit on the task. Returns {task, commit, message, files}."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
         raise AtmFailure("atm commit needs a git repository")
@@ -7122,7 +7343,7 @@ def commit_task(project, task_id, files, cwd, message=None):
     text = commit_message(text, workflow.get("trailers"))
     if not text.strip():
         raise Invalid("the commit message is empty")
-    picked = vcs.paths(files, cwd)
+    picked = vcs.paths(files)
     picked += [f for f in project.store.files_for_commit() if f not in picked]
     sha = vcs.commit(picked, text)
     task = record_on_task(project, task_id, sha)
@@ -7570,30 +7791,42 @@ def report_expired(expired):
         sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
 
 
-def list_lines(vocab, tasks):
-    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
-    id_width = max(len(str(t.get("id"))) for t in tasks)
-    status_width = max(len(str(t.get("status"))) for t in tasks)
-    for t in tasks:
+def view_row(view):
+    """The fields `atm list` shows of a task, from atm-lib's view of it (task_views), as a dict for --json."""
+    task, derived = view["task"], view["derived"]
+    fields = {
+        "id": task.get("id"),
+        "status": task.get("status"),
+        "kind": derived.get("kind"),
+        "sprint": task.get("sprint"),
+        "priority": derived.get("priority"),
+        "labels": task.get("labels", []),
+        "name": task.get("name", ""),
+    }
+    if isinstance(task.get("pr"), dict):
+        fields["pr"] = task["pr"]
+        fields["merged_at"] = task.get("merged_at")
+    return fields
+
+
+def list_lines(rows):
+    """One line per task, as `atm list` prints them: ID, status, priority, labels, name (rows as view_row gives
+    them, or atm-lib's `summary`)."""
+    id_width = max(len(str(t.get("id"))) for t in rows)
+    status_width = max(len(str(t.get("status"))) for t in rows)
+    for t in rows:
         labels = t.get("labels") or []
         yield (
             f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
-            f"{priority_of(vocab, t)}  "
+            f"{t.get('priority')}  "
             + (f"[{', '.join(labels)}] " if labels else "")
             + str(t.get("name", ""))
         )
 
 
-def describe_task(data, task, archived_lookup):
-    """A task in full, as text, as a status change prints the task it starts: the same text as `atm show`, from
-    atm-lib's view of it. `archived_lookup` is the project's lookup of archived tasks (its dependencies may be)."""
-    # A task not in tasks.json is from the archive
-    archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_lookup, vocabulary(data)))
-
-
 def render_task(view):
-    """A task in full, as text (from atm-lib's `view_task`): what an agent needs to work on it."""
+    """A task in full, as text (atm-lib's view of it: `show_tasks`, or a status change's `view`): what an agent needs
+    to work on it. `atm start` prints the same text as `atm show`."""
     task = view["task"]
     labels = task.get("labels") or []
     lines = [
@@ -7659,26 +7892,49 @@ def render_task(view):
 #
 # Text output is short and stable, for agents to read; --json is for anything that parses it (CLI-3.3).
 
+FILTER_OPTIONS = (
+    "sprint",
+    "backlog",
+    "release",
+    "component",
+    "status",
+    "type",
+    "priority",
+    "label",
+    "agent",
+    "ready",
+    "blocked",
+    "in_pr",
+    "with_user",
+    "archived",
+)
+
+
+def filters_of(args):
+    """atm list's options as atm-lib's Filters (atm-lib never takes the parsed arguments themselves, §5)."""
+    return Filters(**{name: getattr(args, name, None) for name in FILTER_OPTIONS})
+
+
 def cmd_list(args):
+    filters = filters_of(args)
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
         if args.tolerant:
             # As atm serve's v1 route reads it (the dev server and the e2e fixture take it from here)
-            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), args)
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), filters)
             snapshot.pop("bytes")
             out(to_json(snapshot))
         else:
-            out(to_json(task_views(open_project(os.getcwd()), args)))
+            out(to_json(task_views(open_project(os.getcwd()), filters)))
         return
-    found = list_matching(open_project(os.getcwd()), args)
-    vocab, tasks = found["vocab"], found["tasks"]
+    rows = [view_row(v) for v in task_views(open_project(os.getcwd()), filters)]
     if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
+        out(to_json(rows))
         return
-    if not tasks:
+    if not rows:
         out("No tasks match.")
         return
-    for line in list_lines(vocab, tasks):
+    for line in list_lines(rows):
         out(line)
 
 
@@ -7756,23 +8012,32 @@ def cmd_status(args):
 # ==== cli/status.py ====
 # The status commands and `atm note`, through atm-lib (docs/layered-architecture.md §9, step 8).
 
+# Each command's options, as its atm-lib function names them (§5.1): (parameter, the parsed argument)
+COMMAND_OPTIONS = {
+    "start": (),
+    "review": (("note", "note"),),
+    "done": (("note", "note"), ("commit", "commit"), ("resolution", "resolution")),
+    "reject": (("reason", "reason"),),
+    "approve": (("note", "note"),),
+    "request-changes": (("reason", "reason"),),
+    "block": (("on", "on"), ("questions", "question"), ("reason", "reason")),
+    "unblock": (("answers", "answer"),),
+    "reopen": (("reason", "reason"),),
+    "skip": (("reason", "reason"), ("resolution", "resolution"), ("duplicate_of", "duplicate_of")),
+    "fail": (("reason", "reason"),),
+    "release": (("note", "note"),),
+}
+LIST_OPTIONS = ("questions", "answers")
+
+
 def cmd_status_change(command):
     def run(args):
         project = open_project(os.getcwd(), agent_identity(args.agent))
-        result = change_task_status(
-            project,
-            command,
-            args.id,
-            status=args.status,
-            note=getattr(args, "note", None),
-            reason=getattr(args, "reason", None),
-            commit=getattr(args, "commit", None),
-            on=getattr(args, "on", None),
-            questions=getattr(args, "question", None) or [],
-            answers=getattr(args, "answer", None) or [],
-            resolution=getattr(args, "resolution", None),
-            duplicate_of=getattr(args, "duplicate_of", None),
-        )
+        options = {
+            parameter: getattr(args, name, None) or ([] if parameter in LIST_OPTIONS else None)
+            for parameter, name in COMMAND_OPTIONS[command]
+        }
+        result = STATUS_FUNCTIONS[command](project, args.id, status=args.status, **options)
         report_expired(result["expired"])
         task, hint, stranded = result["task"], result["hint"], result["stranded"]
         if args.json:
@@ -7788,7 +8053,7 @@ def cmd_status_change(command):
         if stranded:
             out(f"  {stranded}")
         if command == "start":
-            out(describe_task(result["document"], task, result["archived"]))
+            out(render_task(result["view"]))
         if result["unblocked"]:
             out("Now ready: " + ", ".join(result["unblocked"]))
         if hint:
@@ -7916,7 +8181,7 @@ def cmd_run(args):
 
 
 def cmd_claims(args):
-    result = live_claims(open_project(os.getcwd()))
+    result = expire_claims(open_project(os.getcwd()))
     live = result["claims"]
     if args.json:
         out(to_json(live))
@@ -7996,8 +8261,30 @@ def cmd_add(args):
 
 
 def cmd_edit(args):
-    changes = Changes(**{**vars(args), "description": description_of(args)})
-    result = edit_existing_task(open_project(os.getcwd(), agent_identity(args.agent)), args.id, changes)
+    result = edit_existing_task(
+        open_project(os.getcwd(), agent_identity(args.agent)),
+        args.id,
+        name=args.name,
+        description=description_of(args),
+        sprint=args.sprint,
+        backlog=args.backlog,
+        task_type=args.type,
+        priority=args.priority,
+        release=args.release,
+        review=args.review,
+        with_=args.with_,
+        components=args.components,
+        add_files=args.add_file or [],
+        remove_files=args.remove_file or [],
+        add_dependencies=args.add_dep or [],
+        remove_dependencies=args.remove_dep or [],
+        add_labels=args.add_label or [],
+        remove_labels=args.remove_label or [],
+        add_components=args.add_component or [],
+        remove_components=args.remove_component or [],
+        add_related=args.add_related or [],
+        remove_related=args.remove_related or [],
+    )
     task, changed = result["task"], result["changed"]
     if args.json:
         out(to_json(task))
@@ -8157,13 +8444,13 @@ def cmd_sprints(args):
         show_sprints(project, args.all, args.json)
         return
     if args.action == "add":
-        sprint = add_sprint(project, args)
+        sprint = add_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due, after=args.after)
         out(to_json(sprint) if args.json else f"Added the sprint “{sprint['id']}” (planned).")
         return
     if not args.name:
         raise Invalid(f"atm sprints {args.action} needs a sprint name")
     if args.action == "edit":
-        result = edit_sprint(project, args.name, args)
+        result = edit_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due)
         sprint, changed = result["sprint"], result["changed"]
         if args.json:
             out(to_json(sprint))
@@ -8173,9 +8460,12 @@ def cmd_sprints(args):
         sprint = start_sprint(project, args.name)
         out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
     elif args.action == "close":
-        show_close(close_sprint(project, args.name, args), args.json)
+        closed = close_sprint(
+            project, args.name, carry_to=args.carry_to, new_name=args.new_name, reviewed=args.reviewed
+        )
+        show_close(closed, args.json)
     else:
-        show_delete(delete_sprint(project, args.name, args), args.json)
+        show_delete(delete_sprint(project, args.name, move_to=args.move_to, force=args.force), args.json)
 
 
 def cmd_move(args):
@@ -8190,13 +8480,13 @@ def cmd_move(args):
 
 def cmd_backlog(args):
     found = backlog_tasks(open_project(os.getcwd()), finished=args.all)
-    vocab, tasks = found["vocab"], found["tasks"]
+    rows = [summary(found["vocab"], t) for t in found["tasks"]]
     if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
-    elif not tasks:
+        out(to_json(rows))
+    elif not rows:
         out("The backlog is empty.")
     else:
-        for line in list_lines(vocab, tasks):
+        for line in list_lines(rows):
             out(line)
 
 
@@ -8257,7 +8547,9 @@ def cmd_releases(args):
     if args.released_at is not None and args.action != "add":
         raise Invalid("--released-at is for atm releases add")
     if args.action == "add":
-        result = add_release(project, args.id, args)
+        result = add_release(
+            project, args.id, name=args.title, target=args.target, prs=args.pr or [], released_at=args.released_at
+        )
         if args.json:
             out(to_json(result))
             return
@@ -8268,7 +8560,7 @@ def cmd_releases(args):
             line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
         out(line + ".")
     elif args.action == "edit":
-        result = edit_release(project, args.id, args)
+        result = edit_release(project, args.id, name=args.title, target=args.target)
         release, changed = result["release"], result["changed"]
         if args.json:
             out(to_json(release))
@@ -8383,7 +8675,7 @@ def describe_workflow(workflow, base_default):
 def cmd_workflow(args):
     project = open_project(os.getcwd())
     if args.action is None:
-        workflow = workflow_settings(project)
+        workflow = get_workflow(project)
     else:
         workflow = set_workflow(
             project,
@@ -8416,7 +8708,9 @@ def cmd_commit(args):
         if result["hint"]:
             out(f"  {result['hint']}")
         return
-    result = commit_task(project, args.id, args.file, os.getcwd(), args.message)
+    # The files are named from the current folder; atm-lib takes them relative to the repository
+    files = repository_paths(project, args.file or [], os.getcwd())
+    result = commit_task(project, args.id, files, args.message)
     if args.json:
         out(to_json(result))
     else:

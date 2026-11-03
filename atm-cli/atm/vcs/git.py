@@ -65,14 +65,14 @@ class GitVcs:
         """The origin remote's address, as git has it (atm repository turns it into a web address)."""
         return ask_git(["remote", "get-url", "origin"], self.root)
 
-    def paths(self, files, cwd):
-        """The files to commit, relative to the repository, from names relative to `cwd`; refuses anything that
-        would stage more than the files named, and a missing file git doesn't track."""
+    def paths(self, files, cwd=None):
+        """The files to commit, relative to the repository, from names relative to `cwd` (None: the repository);
+        refuses anything that would stage more than the files named, and a missing file git doesn't track."""
         picked = []
         for name in files:
             if name in WHOLE_TREE or name.startswith(":"):
                 raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
-            full = os.path.realpath(os.path.join(cwd, name))
+            full = os.path.realpath(os.path.join(cwd or self.root, name))
             relative = os.path.relpath(full, self.root)
             if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
                 raise Invalid(f"{name} is outside the repository")

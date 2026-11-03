@@ -7,38 +7,52 @@ import os
 from ..boot.open import open_project
 from ..lib.archive import task_snapshot
 from ..common.core import out, to_json
-from ..lib.query import (
-    Filters,
-    list_matching,
-    project_summary,
-    status_report,
-    summary,
-    task_dependencies,
-    task_views,
+from ..lib.query import Filters, project_summary, status_report, task_dependencies, task_views
+from .render import list_lines, view_row
+
+FILTER_OPTIONS = (
+    "sprint",
+    "backlog",
+    "release",
+    "component",
+    "status",
+    "type",
+    "priority",
+    "label",
+    "agent",
+    "ready",
+    "blocked",
+    "in_pr",
+    "with_user",
+    "archived",
 )
-from .render import list_lines
+
+
+def filters_of(args):
+    """atm list's options as atm-lib's Filters (atm-lib never takes the parsed arguments themselves, §5)."""
+    return Filters(**{name: getattr(args, name, None) for name in FILTER_OPTIONS})
 
 
 def cmd_list(args):
+    filters = filters_of(args)
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
         if args.tolerant:
             # As atm serve's v1 route reads it (the dev server and the e2e fixture take it from here)
-            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), args)
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), filters)
             snapshot.pop("bytes")
             out(to_json(snapshot))
         else:
-            out(to_json(task_views(open_project(os.getcwd()), args)))
+            out(to_json(task_views(open_project(os.getcwd()), filters)))
         return
-    found = list_matching(open_project(os.getcwd()), args)
-    vocab, tasks = found["vocab"], found["tasks"]
+    rows = [view_row(v) for v in task_views(open_project(os.getcwd()), filters)]
     if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
+        out(to_json(rows))
         return
-    if not tasks:
+    if not rows:
         out("No tasks match.")
         return
-    for line in list_lines(vocab, tasks):
+    for line in list_lines(rows):
         out(line)
 
 

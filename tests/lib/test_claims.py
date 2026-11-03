@@ -6,7 +6,7 @@ from support import task
 
 from atm.common.errors import AtmFailure
 from atm.db.memory import MemoryStore
-from atm.lib.claims import live_claims, next_task_for, renew_due_claims, renew_lease, selection
+from atm.lib.claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
 from atm.lib.project import Project
 
 PAST, FUTURE = "2000-01-01T00:00:00Z", "2999-01-01T00:00:00Z"
@@ -70,7 +70,7 @@ class Leases(unittest.TestCase):
     def test_the_live_claims_without_the_expired(self):
         claims = {"claims": {"T-2": claim("T-2", "b"), "T-1": claim("T-1", "a", PAST)}}
         s = MemoryStore(tasks=[task("T-1", status="in_progress"), task("T-2", status="in_progress")], claims=claims)
-        result = live_claims(Project(s))
+        result = expire_claims(Project(s))
         self.assertEqual([c["task"] for c in result["claims"]], ["T-2"])
         self.assertEqual(s.tasks[0]["status"], "todo")  # its lease ran out
 

@@ -437,6 +437,84 @@ DepsResult = TypedDict(
     total=False,
 )
 
+# Who works on a task, from which working copy, until when
+Claim = TypedDict(
+    "Claim",
+    {
+        # required
+        "task": str,
+        # required
+        "agent": str,
+        "branch": Optional[str],
+        "worktree": Optional[str],
+        # required
+        "claimed_at": str,
+        # required
+        "lease_expires_at": str,
+        "renewed_at": str,
+    },
+    total=False,
+)
+
+ShownDependency = TypedDict(
+    "ShownDependency",
+    {
+        # required
+        "id": str,
+        # required; null: no such task
+        "status": Optional[str],
+        # required
+        "archived": bool,
+    },
+    total=False,
+)
+
+# A task in full, as atm show gives it (show_tasks): with its effective priority, its dependencies' statuses, the tasks related to it either way and those that duplicate it
+TaskShown = TypedDict(
+    "TaskShown",
+    {
+        # required
+        "task": "Task",
+        # required
+        "archived": bool,
+        # required
+        "priority": Optional[str],
+        # required
+        "started_by": Optional[str],
+        # required
+        "dependencies": List["ShownDependency"],
+        # required
+        "related": List[str],
+        # required
+        "duplicated_by": List[str],
+    },
+    total=False,
+)
+
+# What a status change (start_task, done_task, ...) answers
+StatusChange = TypedDict(
+    "StatusChange",
+    {
+        # required
+        "task": "Task",
+        # required; Its status before
+        "previous": Optional[str],
+        # required; Its claim now: the new one after start, else null
+        "claim": Optional["Claim"],
+        # required; After done: the tasks now ready
+        "unblocked": List[str],
+        # required; After done: the archive hint, at most once a day
+        "hint": Optional["ArchiveHint"],
+        # required; After reopen in a closed sprint: where it is now open, and how to move it (T-330)
+        "stranded": Optional[str],
+        # required; The claims whose lease ran out on the way (their tasks back to to do)
+        "expired": List["Claim"],
+        # required
+        "view": "TaskShown",
+    },
+    total=False,
+)
+
 # A sprint as the overview shows it: done of its tasks but the skipped
 SprintNumbers = TypedDict(
     "SprintNumbers",

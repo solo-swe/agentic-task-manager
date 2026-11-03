@@ -326,6 +326,53 @@ export interface DepsResult {
   waited_on_by: DependencyItem[];
 }
 
+/** Who works on a task, from which working copy, until when */
+export interface Claim {
+  task: string;
+  agent: string;
+  branch?: string | null;
+  worktree?: string | null;
+  claimed_at: string;
+  lease_expires_at: string;
+  renewed_at?: string;
+}
+
+export interface ShownDependency {
+  id: string;
+  /** null: no such task */
+  status: string | null;
+  archived: boolean;
+}
+
+/** A task in full, as atm show gives it (show_tasks): with its effective priority, its dependencies' statuses, the tasks related to it either way and those that duplicate it */
+export interface TaskShown {
+  task: Task;
+  archived: boolean;
+  priority: string | null;
+  started_by: string | null;
+  dependencies: ShownDependency[];
+  related: string[];
+  duplicated_by: string[];
+}
+
+/** What a status change (start_task, done_task, ...) answers */
+export interface StatusChange {
+  task: Task;
+  /** Its status before */
+  previous: string | null;
+  /** Its claim now: the new one after start, else null */
+  claim: Claim | null;
+  /** After done: the tasks now ready */
+  unblocked: string[];
+  /** After done: the archive hint, at most once a day */
+  hint: ArchiveHint | null;
+  /** After reopen in a closed sprint: where it is now open, and how to move it (T-330) */
+  stranded: string | null;
+  /** The claims whose lease ran out on the way (their tasks back to to do) */
+  expired: Claim[];
+  view: TaskShown;
+}
+
 /** A sprint as the overview shows it: done of its tasks but the skipped */
 export interface SprintNumbers {
   id: string;

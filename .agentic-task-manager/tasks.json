@@ -19757,7 +19757,7 @@
       "description": "`docs/layered-architecture.md` §11.10 B.\n\n## Change\n- The type generator in `atm-cli/build.py` supports a field that may be `null` (`\"type\": [\"string\", \"null\"]`, and a `$ref` or object that may be null): `Optional[...]` in Python, `T | null` in TypeScript.\n- `api.schema.json` gets `ProjectSummary` (what `api/projects` gives per project: totals, sprints, board, stats, git, needs you, …) and `StatusReport` (`atm status --json`).\n- The dashboard's hand-written `ProjectSummary` (`dashboard/src/lib/load.ts`) is replaced by the generated type.\n- Update §4.1, §4.2, §11.10 B (settled).\n\n## Tests\n- A build test for nullable fields in both languages.\n- A test validates a real `atm summary` and `atm status --json` and the e2e fixture's summary against the schema (as the fixtures are validated today).\n- `npm run check`, the unit tests, `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/build.py",
@@ -19770,7 +19770,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:49:12Z",
+      "updated_at": "2026-11-03T01:06:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19787,7 +19787,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T00:49:12Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "1bdc5b1990a3fbdcf74af89bdb393e0cc3017b2d",
+      "completed_at": "2026-11-03T01:06:59Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T01:06:59Z",
+          "kind": "review",
+          "text": "The generator takes nullable types (`[T, \"null\"]`, `anyOf` with null) and maps; `api.schema.json` has `ProjectSummary` and `StatusReport`; the Dashboard re-exports the generated types. `tests/lib/test_schema.py` checks real summaries and status reports (busy, empty, every fixture). Check: the older-server fallbacks are left (§11.10 B).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-383",
@@ -19800,7 +19812,7 @@
       "description": "`docs/layered-architecture.md` §11.7.\n\n## Change\n- A function per status change, each with its own parameters: `start_task(project, id, status=None)`, `review_task`, `done_task(project, id, note=None, commit=None, resolution=None, status=None)`, `reject_task(project, id, reason)`, `approve_task`, `request_changes`, `block_task`, `unblock_task`, `reopen_task`, `skip_task`, `fail_task`, `release_task`. `change_task_status` becomes internal.\n- Keyword parameters instead of `Changes` for sprints, releases, components and editing a task.\n- `commit_task` takes paths relative to the repository; the CLI resolves them from the current folder.\n- One naming scheme: claims as `list_claims` (reads) and `expire_claims`/`renew_*` (writes), settings as `get_*`/`set_*` (`workflow_settings` → `get_workflow`), one of `list_matching`/`task_views`.\n- Results typed in the schema where they cross to the CLI or API (`TaskView`; the status changes' answers), using the nullable types of the task before.\n- The CLI moves onto them; its output and exit codes stay as they are.\n- Update §5.1's tables to the code, `atm/lib/__init__.py`'s `__all__`, §11.7 (settled).\n\n## Tests\n- `tests/lib/` for the new functions; `npm run test:scripts` unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-381",
         "T-382"
@@ -19814,7 +19826,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:48Z",
+      "updated_at": "2026-11-03T01:07:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19828,7 +19840,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T01:07:03Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-384",

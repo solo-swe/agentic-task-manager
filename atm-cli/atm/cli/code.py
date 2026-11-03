@@ -6,7 +6,7 @@ from ..boot.open import open_project
 from ..boot.identity import agent_identity
 from ..common.errors import Invalid
 from ..common.core import out, to_json
-from ..lib.code import commit_task, record_commit, record_merge, record_pr, set_workflow, workflow_settings
+from ..lib.code import commit_task, get_workflow, record_commit, record_merge, record_pr, repository_paths, set_workflow
 
 
 def describe_workflow(workflow, base_default):
@@ -32,7 +32,7 @@ def describe_workflow(workflow, base_default):
 def cmd_workflow(args):
     project = open_project(os.getcwd())
     if args.action is None:
-        workflow = workflow_settings(project)
+        workflow = get_workflow(project)
     else:
         workflow = set_workflow(
             project,
@@ -65,7 +65,9 @@ def cmd_commit(args):
         if result["hint"]:
             out(f"  {result['hint']}")
         return
-    result = commit_task(project, args.id, args.file, os.getcwd(), args.message)
+    # The files are named from the current folder; atm-lib takes them relative to the repository
+    files = repository_paths(project, args.file or [], os.getcwd())
+    result = commit_task(project, args.id, files, args.message)
     if args.json:
         out(to_json(result))
     else:

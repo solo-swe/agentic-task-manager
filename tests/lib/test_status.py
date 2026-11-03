@@ -7,7 +7,21 @@ from support import task
 from atm.common.errors import AtmFailure
 from atm.db.memory import MemoryStore
 from atm.lib.project import Project
-from atm.lib.status import add_task_note, change_task_status
+from atm.lib.status import (
+    add_task_note,
+    approve_task,
+    block_task,
+    done_task,
+    fail_task,
+    reject_task,
+    release_task,
+    reopen_task,
+    request_changes,
+    review_task,
+    skip_task,
+    start_task,
+    unblock_task,
+)
 
 
 def store(*tasks):
@@ -17,24 +31,25 @@ def store(*tasks):
 class StatusChanges(unittest.TestCase):
     def test_start_claims_the_task_in_the_same_change(self):
         s = store(task("T-1"))
-        result = change_task_status(Project(s, actor="claude:a"), "start", "T-1")
+        result = start_task(Project(s, actor="claude:a"), "T-1")
         self.assertEqual((result["previous"], result["task"]["status"]), ("todo", "in_progress"))
+        self.assertEqual(result["view"]["task"]["id"], "T-1")  # as atm show gives it
         self.assertEqual(s.claims["claims"]["T-1"]["agent"], "claude:a")
         self.assertEqual({(c["entity"], c["id"]) for c in s.changes}, {("task", "T-1"), ("claim", "T-1")})
 
     def test_two_agents_one_task_the_second_is_refused(self):
         s = store(task("T-1"))
-        change_task_status(Project(s, actor="claude:a"), "start", "T-1")
+        start_task(Project(s, actor="claude:a"), "T-1")
         with self.assertRaises(AtmFailure) as refused:
-            change_task_status(Project(s, actor="claude:b"), "done", "T-1")
+            done_task(Project(s, actor="claude:b"), "T-1")
         self.assertEqual(refused.exception.code, 4)  # claimed by another agent
         self.assertEqual(s.tasks[0]["status"], "in_progress")  # nothing changed
 
     def test_done_drops_the_claim_and_names_what_is_now_ready(self):
         s = store(task("T-1"), task("T-2", dependencies=["T-1"]))
         a = Project(s, actor="claude:a")
-        change_task_status(a, "start", "T-1")
-        result = change_task_status(a, "done", "T-1", note="Shipped")
+        start_task(a, "T-1")
+        result = done_task(a, "T-1", note="Shipped")
         self.assertEqual(result["unblocked"], ["T-2"])
         self.assertNotIn("T-1", s.claims["claims"])
         self.assertIn("T-1", s.claims["completed"])
@@ -42,14 +57,40 @@ class StatusChanges(unittest.TestCase):
 
     def test_block_records_the_wait_for_every_worktree(self):
         s = store(task("T-1"))
-        change_task_status(Project(s, actor="claude:a"), "block", "T-1", on="user", questions=["Which one?"])
+        block_task(Project(s, actor="claude:a"), "T-1", on="user", questions=["Which one?"])
         self.assertEqual(s.tasks[0]["questions"], ["Which one?"])
         self.assertEqual(s.claims["waiting"]["T-1"]["waiting_on"], "user")
+        unblock_task(Project(s, actor="Ada"), "T-1", answers=["That one"])
+        self.assertEqual(s.tasks[0]["status"], "todo")
+        self.assertNotIn("T-1", s.claims["waiting"])
+
+    def test_every_status_change_has_its_own_function(self):
+        s = store(task("T-1"), task("T-2"), task("T-3"))
+        a = Project(s, actor="claude:a")
+        status = lambda i: s.tasks[i]["status"]
+        start_task(a, "T-1")
+        self.assertEqual(review_task(a, "T-1", note="Check the tests")["claim"], None)
+        request_changes(Project(s, actor="Ada"), "T-1", reason="Name it better")
+        self.assertEqual(s.tasks[0]["review_state"], "changes_requested")
+        reject_task(Project(s, actor="Ada"), "T-1", reason="Start over")
+        self.assertEqual(status(0), "todo")
+        start_task(a, "T-2")
+        release_task(a, "T-2", note="Half done")
+        start_task(a, "T-2")
+        fail_task(a, "T-2", reason="Tests fail")
+        self.assertEqual((status(1), s.tasks[1]["notes"][-1]["kind"]), ("todo", "failure"))
+        skip_task(a, "T-3", reason="Not needed", resolution="wont_do")
+        reopen_task(a, "T-3", reason="Needed after all")
+        self.assertEqual(status(2), "todo")
+        start_task(a, "T-3")
+        review_task(a, "T-3")
+        approve_task(Project(s, actor="Ada"), "T-3", note="Good")
+        self.assertEqual(s.tasks[2]["review_state"], "approved")
 
     def test_a_refused_change_changes_nothing(self):
         s = store(task("T-1", status="done"))
         with self.assertRaises(AtmFailure):
-            change_task_status(Project(s, actor="claude:a"), "start", "T-1")
+            start_task(Project(s, actor="claude:a"), "T-1")
         self.assertEqual(s.tasks[0]["status"], "done")
         self.assertEqual(s.claims["claims"], {})
 

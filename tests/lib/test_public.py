@@ -12,7 +12,10 @@ import support  # noqa: F401 - atm-cli on the import path
 import atm.lib as atm_lib
 from atm.boot import open_project
 from atm.db.memory import MemoryStore
-from atm.lib import Project, add_new_tasks, change_task_status, next_task_for, selection, show_tasks
+from atm.lib import Project, add_new_tasks, done_task, next_task_for, selection, show_tasks, start_task
+from schema_check import load_schema, problems
+
+API = load_schema("api.schema.json")
 
 
 class PublicSurface(unittest.TestCase):
@@ -20,13 +23,23 @@ class PublicSurface(unittest.TestCase):
         missing = [name for name in atm_lib.__all__ if not hasattr(atm_lib, name)]
         self.assertEqual(missing, [])
 
+    def test_one_function_per_status_change_and_no_command_names(self):
+        # §5.1, T-383: change_task_status(project, "done", ...) is internal; so are the CLI-shaped option objects
+        self.assertFalse({"change_task_status", "Changes", "list_matching", "live_claims"} & set(atm_lib.__all__))
+
+    def test_a_status_change_answers_as_the_schema_says(self):
+        project = Project(MemoryStore(tasks=[]), actor="tool")
+        task_id = add_new_tasks(project, [{"name": "Write it", "type": "feature"}])["tasks"][0]["id"]
+        for result in (start_task(project, task_id), done_task(project, task_id, note="Written")):
+            self.assertEqual(problems(result, API["$defs"]["StatusChange"], API), [])
+
     def test_a_task_from_start_to_done_on_the_in_memory_store(self):
         project = Project(MemoryStore(tasks=[]), actor="tool")
         added = add_new_tasks(project, [{"id": "new-1", "name": "Write it", "type": "feature"}])
         task_id = added["tasks"][0]["id"]
         claimed = next_task_for(project, selection(), claim=True)
         self.assertEqual((claimed["task"]["id"], claimed["claim"]["agent"]), (task_id, "tool"))
-        change_task_status(project, "done", task_id, note="Written")
+        done_task(project, task_id, note="Written")
         task = show_tasks(project, [task_id])[0]["task"]
         self.assertEqual((task["status"], task["updated_by"]), ("done", "tool"))
         nothing = next_task_for(project, selection(), claim=True)
@@ -38,8 +51,8 @@ class PublicSurface(unittest.TestCase):
         os.makedirs(os.path.join(root, ".agentic-task-manager"))
         with open(os.path.join(root, ".agentic-task-manager", "tasks.json"), "w", encoding="utf-8") as f:
             json.dump({"meta": {"project": "Tool"}, "tasks": [{"id": "T-1", "name": "One", "type": "feature", "status": "todo"}]}, f)
-        change_task_status(open_project(root, actor="tool"), "start", "T-1")
-        change_task_status(open_project(root, actor="tool"), "done", "T-1")
+        start_task(open_project(root, actor="tool"), "T-1")
+        done_task(open_project(root, actor="tool"), "T-1")
         with open(os.path.join(root, ".agentic-task-manager", "tasks.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["tasks"][0]["status"], "done")
 

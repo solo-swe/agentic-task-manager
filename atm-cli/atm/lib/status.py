@@ -19,8 +19,9 @@ from ..common.model import (
     touch,
     vocabulary,
 )
-from .loop import apply_resolutions, archived_in, check_holder, expire_claims, lease_until, own_lease_expired
+from .loop import apply_resolutions, archived_in, check_holder, drop_expired_claims, lease_until, own_lease_expired
 from .query import ready_tasks
+from .tasks import view_task
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
 OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
@@ -102,7 +103,7 @@ def change_task_status(project, command, task_id, **options):
         data, store, archived = work.document, work.claims(), archived_in(work)
         claims = store["claims"]
         here = work.here()["worktree"]
-        expired = expire_claims(data, claims)
+        expired = drop_expired_claims(data, claims)
         apply_resolutions(here, data, store, archived)
         task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
@@ -173,6 +174,7 @@ def change_task_status(project, command, task_id, **options):
             sprint = find_sprint(vocabulary(data), task.get("sprint"))
             if sprint and sprint["state"] == "closed":
                 stranded = f"{task['id']} is now open in {move_out_hint(task['id'], sprint['id'])}"
+        from_archive = all(t is not task for t in data["tasks"])
         return {
             "task": task,
             "previous": previous,
@@ -181,11 +183,96 @@ def change_task_status(project, command, task_id, **options):
             "hint": hint,
             "stranded": stranded,
             "expired": expired,
-            "document": data,
-            "archived": archived,  # the lookup of this project's archived tasks, for showing the task
+            # The task as `atm show` gives it (show_tasks), so a front end can show it without reading the project
+            "view": view_task(task, from_archive, data["tasks"], archived, vocabulary(data)),
         }
 
     return project.store.change(change)
+
+
+# One function per status change (§5.1, T-383), each with the parameters its command takes. `status` picks the status
+# when the project has several of the target kind. Each returns a StatusChange (api.schema.json): the task after it,
+# its status before (`previous`), its claim now, the tasks now ready (`unblocked`, after done), the archive hint (at
+# most once a day), `stranded` (reopened in a closed sprint) and the claims that `expired` on the way.
+
+
+def start_task(project, task_id, status=None):
+    """To do -> in progress, claimed by `project.actor`; its dependencies must be done."""
+    return change_task_status(project, "start", task_id, status=status)
+
+
+def review_task(project, task_id, note=None, status=None):
+    """Asks for a review (`note`: what the reviewer should check); the claim is released."""
+    return change_task_status(project, "review", task_id, note=note, status=status)
+
+
+def done_task(project, task_id, note=None, commit=None, resolution=None, status=None):
+    """Done (or waiting for the sprint review, by its review mode); the claim dropped."""
+    return change_task_status(project, "done", task_id, note=note, commit=commit, resolution=resolution, status=status)
+
+
+def reject_task(project, task_id, reason, status=None):
+    """A task in review back to to do, for anyone."""
+    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+
+
+def approve_task(project, task_id, note=None, status=None):
+    """Approves a review; it stays in review until its agent takes it back."""
+    return change_task_status(project, "approve", task_id, note=note, status=status)
+
+
+def request_changes(project, task_id, reason, status=None):
+    """Asks for changes; its agent gets it back first."""
+    return change_task_status(project, "request-changes", task_id, reason=reason, status=status)
+
+
+def block_task(project, task_id, on, questions, reason=None, status=None):
+    """Blocked on a decision by `on` (user or agent), with its questions; the claim released."""
+    return change_task_status(project, "block", task_id, on=on, questions=questions, reason=reason, status=status)
+
+
+def unblock_task(project, task_id, answers, status=None):
+    """Back to to do, with the answers (one per question) as a note."""
+    return change_task_status(project, "unblock", task_id, answers=answers, status=status)
+
+
+def reopen_task(project, task_id, reason, status=None):
+    """A done or skipped task back to to do."""
+    return change_task_status(project, "reopen", task_id, reason=reason, status=status)
+
+
+def skip_task(project, task_id, reason, resolution=None, duplicate_of=None, status=None):
+    """Not needed: skipped (a to-do or blocked task)."""
+    return change_task_status(
+        project, "skip", task_id, reason=reason, resolution=resolution, duplicate_of=duplicate_of, status=status
+    )
+
+
+def fail_task(project, task_id, reason=None, status=None):
+    """In progress back to to do, with a failure note."""
+    return change_task_status(project, "fail", task_id, reason=reason, status=status)
+
+
+def release_task(project, task_id, note=None, status=None):
+    """In progress back to to do, with a handoff note."""
+    return change_task_status(project, "release", task_id, note=note, status=status)
+
+
+# Each command's function, for a front end that takes the command's name (the CLI)
+STATUS_FUNCTIONS = {
+    "start": start_task,
+    "review": review_task,
+    "done": done_task,
+    "reject": reject_task,
+    "approve": approve_task,
+    "request-changes": request_changes,
+    "block": block_task,
+    "unblock": unblock_task,
+    "reopen": reopen_task,
+    "skip": skip_task,
+    "fail": fail_task,
+    "release": release_task,
+}
 
 
 def add_task_note(project, task_id, text):

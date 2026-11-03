@@ -10,7 +10,7 @@ from ..boot.jsongit import hook_project
 from ..boot.open import open_project
 from ..common.errors import AtmFailure, Invalid
 from ..common.core import AtmExit, format_duration, now, out, parse_iso, to_json
-from ..lib.claims import live_claims, next_task_for, renew_due_claims, renew_lease, selection
+from ..lib.claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
 from .render import report_expired
 
 
@@ -121,7 +121,7 @@ def cmd_run(args):
 
 
 def cmd_claims(args):
-    result = live_claims(open_project(os.getcwd()))
+    result = expire_claims(open_project(os.getcwd()))
     live = result["claims"]
     if args.json:
         out(to_json(live))

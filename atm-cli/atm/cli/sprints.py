@@ -84,13 +84,13 @@ def cmd_sprints(args):
         show_sprints(project, args.all, args.json)
         return
     if args.action == "add":
-        sprint = add_sprint(project, args)
+        sprint = add_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due, after=args.after)
         out(to_json(sprint) if args.json else f"Added the sprint “{sprint['id']}” (planned).")
         return
     if not args.name:
         raise Invalid(f"atm sprints {args.action} needs a sprint name")
     if args.action == "edit":
-        result = edit_sprint(project, args.name, args)
+        result = edit_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due)
         sprint, changed = result["sprint"], result["changed"]
         if args.json:
             out(to_json(sprint))
@@ -100,9 +100,12 @@ def cmd_sprints(args):
         sprint = start_sprint(project, args.name)
         out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
     elif args.action == "close":
-        show_close(close_sprint(project, args.name, args), args.json)
+        closed = close_sprint(
+            project, args.name, carry_to=args.carry_to, new_name=args.new_name, reviewed=args.reviewed
+        )
+        show_close(closed, args.json)
     else:
-        show_delete(delete_sprint(project, args.name, args), args.json)
+        show_delete(delete_sprint(project, args.name, move_to=args.move_to, force=args.force), args.json)
 
 
 def cmd_move(args):
@@ -117,11 +120,11 @@ def cmd_move(args):
 
 def cmd_backlog(args):
     found = backlog_tasks(open_project(os.getcwd()), finished=args.all)
-    vocab, tasks = found["vocab"], found["tasks"]
+    rows = [summary(found["vocab"], t) for t in found["tasks"]]
     if args.json:
-        out(to_json([summary(vocab, t) for t in tasks]))
-    elif not tasks:
+        out(to_json(rows))
+    elif not rows:
         out("The backlog is empty.")
     else:
-        for line in list_lines(vocab, tasks):
+        for line in list_lines(rows):
             out(line)

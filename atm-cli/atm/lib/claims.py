@@ -12,7 +12,7 @@ from .loop import (
     apply_resolutions,
     archived_in,
     check_holder,
-    expire_claims,
+    drop_expired_claims,
     lease_minutes,
     lease_until,
     next_task,
@@ -37,7 +37,7 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
     def change(work):
         data, store, archived = work.document, work.claims(), archived_in(work)
-        expired = expire_claims(data, store["claims"])
+        expired = drop_expired_claims(data, store["claims"])
         apply_resolutions(work.here()["worktree"], data, store, archived)
         task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user, archived=archived)
         new = None
@@ -69,7 +69,7 @@ def renew_lease(project, task_id, expire=True):
             claim["lease_expires_at"] = lease_until(data)
             claim["renewed_at"] = now_iso()
             return {"claim": claim, "minutes": lease_minutes(data), "expired": []}
-        expired = expire_claims(data, claims)
+        expired = drop_expired_claims(data, claims)
         claim = claims.get(task_id)
         if not claim:
             own = own_lease_expired(expired, data, task_id, agent, None)
@@ -119,12 +119,13 @@ def renew_due_claims(project):
     return project.store.change(change)
 
 
-def live_claims(project):
-    """The live claims, by task, with the expired ones dropped (their tasks back to todo). Returns {claims, expired}."""
+def expire_claims(project):
+    """Drops the claims whose lease ran out (their tasks back to todo), and gives the live ones, by task (`atm
+    claims`; `list_claims` only reads). Returns {claims, expired}."""
 
     def change(work):
         claims = work.claims()["claims"]
-        expired = expire_claims(work.document, claims)
+        expired = drop_expired_claims(work.document, claims)
         return {"claims": sorted(claims.values(), key=lambda c: c["task"]), "expired": expired}
 
     return project.store.change(change)

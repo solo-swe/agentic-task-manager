@@ -8,7 +8,7 @@ from ..boot.identity import agent_identity
 from ..common.errors import Invalid
 from ..common.components import suggest_components
 from ..common.core import AtmExit, out, read_json, to_json
-from ..lib.edit import Changes, add_new_tasks, check_project, edit_existing_task
+from ..lib.edit import add_new_tasks, check_project, edit_existing_task
 
 
 def suggestion_line(vocab, task):
@@ -73,8 +73,30 @@ def cmd_add(args):
 
 
 def cmd_edit(args):
-    changes = Changes(**{**vars(args), "description": description_of(args)})
-    result = edit_existing_task(open_project(os.getcwd(), agent_identity(args.agent)), args.id, changes)
+    result = edit_existing_task(
+        open_project(os.getcwd(), agent_identity(args.agent)),
+        args.id,
+        name=args.name,
+        description=description_of(args),
+        sprint=args.sprint,
+        backlog=args.backlog,
+        task_type=args.type,
+        priority=args.priority,
+        release=args.release,
+        review=args.review,
+        with_=args.with_,
+        components=args.components,
+        add_files=args.add_file or [],
+        remove_files=args.remove_file or [],
+        add_dependencies=args.add_dep or [],
+        remove_dependencies=args.remove_dep or [],
+        add_labels=args.add_label or [],
+        remove_labels=args.remove_label or [],
+        add_components=args.add_component or [],
+        remove_components=args.remove_component or [],
+        add_related=args.add_related or [],
+        remove_related=args.remove_related or [],
+    )
     task, changed = result["task"], result["changed"]
     if args.json:
         out(to_json(task))

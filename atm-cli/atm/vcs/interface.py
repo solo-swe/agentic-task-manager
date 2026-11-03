@@ -9,8 +9,9 @@ class Vcs(Protocol):
         """Whether the project's folder is under version control at all."""
         ...
 
-    def paths(self, files: List[str], cwd: str) -> List[str]:
-        """The files to commit, relative to the repository, from names relative to `cwd`; refuses a name that would
+    def paths(self, files: List[str], cwd: Optional[str] = None) -> List[str]:
+        """The files to commit, relative to the repository, from names relative to `cwd` (None: to the repository
+        itself); refuses a name that would
         commit more than one file (the whole tree, a directory, a pattern) or a file outside the repository."""
         ...
 

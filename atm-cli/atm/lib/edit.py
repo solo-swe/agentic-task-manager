@@ -226,10 +226,9 @@ def add_new_tasks(project, entries):
     return project.store.change(change)
 
 
-class Changes:
-    """What `atm edit` changes (its options' names: name, description, sprint, backlog, type, priority, release, review,
-    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing. The CLI
-    passes its parsed arguments, which have these names."""
+class TaskEdit:
+    """What edit_task applies, as attributes (name, description, sprint, backlog, type, priority, release, review,
+    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing."""
 
     def __init__(self, **given):
         self.__dict__.update(given)
@@ -238,9 +237,57 @@ class Changes:
         return [] if name.startswith(("add_", "remove_")) else None
 
 
-def edit_existing_task(project, task_id, changes):
-    """`atm edit`: change a task's definition (never its status), as `project.actor`. Returns {task, changed, vocab}:
-    `changed` the names of the fields that changed (nothing is written when none did)."""
+def edit_existing_task(
+    project,
+    task_id,
+    *,
+    name=None,
+    description=None,
+    sprint=None,
+    backlog=False,
+    task_type=None,
+    priority=None,
+    release=None,
+    review=None,
+    with_=None,
+    components=None,
+    add_files=(),
+    remove_files=(),
+    add_dependencies=(),
+    remove_dependencies=(),
+    add_labels=(),
+    remove_labels=(),
+    add_components=(),
+    remove_components=(),
+    add_related=(),
+    remove_related=(),
+):
+    """`atm edit`: change a task's definition (never its status), as `project.actor`. None (or an empty list) leaves
+    a field as it is; an empty `release`, `review` or `with_` removes it; `backlog` takes it out of its sprint;
+    `components="auto"` adds the components its files are in. Returns {task, changed, vocab}: `changed` the names of
+    the fields that changed (nothing is written when none did)."""
+    changes = TaskEdit(
+        name=name,
+        description=description,
+        sprint=sprint,
+        backlog=backlog,
+        type=task_type,
+        priority=priority,
+        release=release,
+        review=review,
+        with_=with_,
+        components=components,
+        add_file=list(add_files),
+        remove_file=list(remove_files),
+        add_dep=list(add_dependencies),
+        remove_dep=list(remove_dependencies),
+        add_label=list(add_labels),
+        remove_label=list(remove_labels),
+        add_component=list(add_components),
+        remove_component=list(remove_components),
+        add_related=list(add_related),
+        remove_related=list(remove_related),
+    )
 
     def change(work):
         archived = archived_in(work)

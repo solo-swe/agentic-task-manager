@@ -5,27 +5,35 @@ import os
 from ..boot.identity import agent_identity
 from ..boot.open import open_project
 from ..common.core import out, to_json
-from ..lib.status import add_task_note, change_task_status
-from .render import describe_task, report_expired
+from ..lib.status import STATUS_FUNCTIONS, add_task_note
+from .render import render_task, report_expired
+
+# Each command's options, as its atm-lib function names them (§5.1): (parameter, the parsed argument)
+COMMAND_OPTIONS = {
+    "start": (),
+    "review": (("note", "note"),),
+    "done": (("note", "note"), ("commit", "commit"), ("resolution", "resolution")),
+    "reject": (("reason", "reason"),),
+    "approve": (("note", "note"),),
+    "request-changes": (("reason", "reason"),),
+    "block": (("on", "on"), ("questions", "question"), ("reason", "reason")),
+    "unblock": (("answers", "answer"),),
+    "reopen": (("reason", "reason"),),
+    "skip": (("reason", "reason"), ("resolution", "resolution"), ("duplicate_of", "duplicate_of")),
+    "fail": (("reason", "reason"),),
+    "release": (("note", "note"),),
+}
+LIST_OPTIONS = ("questions", "answers")
 
 
 def cmd_status_change(command):
     def run(args):
         project = open_project(os.getcwd(), agent_identity(args.agent))
-        result = change_task_status(
-            project,
-            command,
-            args.id,
-            status=args.status,
-            note=getattr(args, "note", None),
-            reason=getattr(args, "reason", None),
-            commit=getattr(args, "commit", None),
-            on=getattr(args, "on", None),
-            questions=getattr(args, "question", None) or [],
-            answers=getattr(args, "answer", None) or [],
-            resolution=getattr(args, "resolution", None),
-            duplicate_of=getattr(args, "duplicate_of", None),
-        )
+        options = {
+            parameter: getattr(args, name, None) or ([] if parameter in LIST_OPTIONS else None)
+            for parameter, name in COMMAND_OPTIONS[command]
+        }
+        result = STATUS_FUNCTIONS[command](project, args.id, status=args.status, **options)
         report_expired(result["expired"])
         task, hint, stranded = result["task"], result["hint"], result["stranded"]
         if args.json:
@@ -41,7 +49,7 @@ def cmd_status_change(command):
         if stranded:
             out(f"  {stranded}")
         if command == "start":
-            out(describe_task(result["document"], task, result["archived"]))
+            out(render_task(result["view"]))
         if result["unblocked"]:
             out("Now ready: " + ", ".join(result["unblocked"]))
         if hint:

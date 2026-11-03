@@ -390,10 +390,10 @@ atm-lib is usable by others, so it is an API with a version:
 
 ```python
 from atm.boot import open_project                       # boot: picks the store (JSON-in-git) and the vcs (git)
-from atm.lib import change_task_status
+from atm.lib import start_task
 
 project = open_project(path, actor="claude:b7be7288")
-change_task_status(project, "start", "T-360")
+start_task(project, "T-360")
 ```
 
 - **names unique across atm:** the build puts every module into one namespace (`plugin/scripts/atm.py`), so a
@@ -408,110 +408,115 @@ change_task_status(project, "start", "T-360")
 
 ### 5.1 The functions
 
-Every function takes the `project` first; those that write record `project.actor`. `status` (where a function takes
-one) picks a status when the project has several of the target kind. The CLI command each one serves is in the last
-column.
+Every function takes the `project` first; those that write record `project.actor`. Optional parameters (`?`) are
+keywords. `status` (where a function takes one; every status change does) picks a status when the project has
+several of the target kind. The CLI command each one serves is in the last column. These are `atm.lib`'s names
+(T-383); a type in `code` is generated from `api.schema.json` (§4).
 
-**Tasks: status changes**
+**Tasks: status changes** (each returns a `StatusChange`: the task, its status before, its claim, the tasks now
+ready, the archive hint, `stranded`, the claims that expired, and `view`, the task as `show_tasks` gives it)
 
-| Function | Parameters | Returns | Does | CLI |
-|---|---|---|---|---|
-| `tasks.start` | `id`, `status?` | `TaskView` | to do → in progress, claimed; its dependencies must be done | `start` |
-| `tasks.review` | `id`, `note?`, `status?` | `TaskView` | asks for a review; the claim is released | `review` |
-| `tasks.done` | `id`, `note?`, `commit?`, `resolution?`, `status?` | `TaskView`, now ready | done (or waits for the sprint review, by its review mode); the claim dropped | `done` |
-| `tasks.reject` | `id`, `reason` | `TaskView` | a task in review back to to do | `reject` |
-| `tasks.approve` | `id`, `note?` | `TaskView` | approves a review; it stays in review until its agent takes it back | `approve` |
-| `tasks.request_changes` | `id`, `reason` | `TaskView` | asks for changes; its agent gets it back first | `request-changes` |
-| `tasks.block` | `id`, `on` (`user`/`agent`), `questions[]`, `reason?` | `TaskView` | blocked on a decision; the claim released | `block` |
-| `tasks.unblock` | `id`, `answers[]` | `TaskView` | back to to do with the answers as a note | `unblock` |
-| `tasks.reopen` | `id`, `reason` | `TaskView` | a done or skipped task back to to do | `reopen` |
-| `tasks.skip` | `id`, `reason`, `resolution?`, `duplicate_of?` | `TaskView` | not needed: skipped | `skip` |
-| `tasks.fail` | `id`, `reason?` | `TaskView` | in progress back to to do, with a failure note | `fail` |
-| `tasks.release` | `id`, `note?` | `TaskView` | in progress back to to do, with a handoff note | `release` |
-| `tasks.note` | `id`, `text` | `TaskView` | adds a note (at most 500 characters) | `note` |
+| Function | Parameters | Does | CLI |
+|---|---|---|---|
+| `start_task` | `id`, `status?` | to do → in progress, claimed; its dependencies must be done | `start` |
+| `review_task` | `id`, `note?` | asks for a review; the claim is released | `review` |
+| `done_task` | `id`, `note?`, `commit?`, `resolution?` | done (or waits for the sprint review, by its review mode); the claim dropped | `done` |
+| `reject_task` | `id`, `reason` | a task in review back to to do | `reject` |
+| `approve_task` | `id`, `note?` | approves a review; it stays in review until its agent takes it back | `approve` |
+| `request_changes` | `id`, `reason` | asks for changes; its agent gets it back first | `request-changes` |
+| `block_task` | `id`, `on` (`user`/`agent`), `questions[]`, `reason?` | blocked on a decision; the claim released | `block` |
+| `unblock_task` | `id`, `answers[]` | back to to do with the answers as a note | `unblock` |
+| `reopen_task` | `id`, `reason` | a done or skipped task back to to do | `reopen` |
+| `skip_task` | `id`, `reason`, `resolution?`, `duplicate_of?` | not needed: skipped | `skip` |
+| `fail_task` | `id`, `reason?` | in progress back to to do, with a failure note | `fail` |
+| `release_task` | `id`, `note?` | in progress back to to do, with a handoff note | `release` |
+| `add_task_note` | `id`, `text` | adds a note (at most 500 characters); returns the task | `note` |
 
 **Tasks: definitions and queries**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `tasks.add` | `drafts[]` (name, type, sprint, release, priority, labels, description, dependencies, files, requirements, components or `auto`, review, related, with; placeholder IDs) | `TaskView[]`, component hints | adds tasks with the next IDs, all or none | `add` |
-| `tasks.edit` | `id`, `changes` (name, description, sprint or backlog, type, priority, release, review, with; add/remove files, dependencies, labels, components, related; components `auto`) | `TaskView`, hints | changes a definition, never the status | `edit` |
-| `tasks.show` | `ids[]` | `TaskView[]` | tasks in full, archived ones too | `show` |
-| `tasks.list` | `filter` (statuses, type, priority, labels, agent, sprints or backlog, release, component, ready, blocked, in_pr, with_user, archived) | `TaskView[]` | the tasks that match | `list` |
-| `tasks.deps` | `id` | `DepsResult` | what it waits for, and what waits for it (archived ones too) | `deps` |
-| `tasks.search` | `query` | IDs | the tasks matching every word | (API: search) |
-| `tasks.check` | `files?` | `CheckReport` | the schema, vocabularies, dependencies; with `files`, missing files of finished tasks | `check` |
+| `add_new_tasks` | `drafts[]` (name, type, sprint, release, priority, labels, description, dependencies, files, requirements, components or `auto`, review, related, with; placeholder IDs) | the tasks, the vocabularies | adds tasks with the next IDs, all or none | `add` |
+| `edit_existing_task` | `id`; `name?`, `description?`, `sprint?`, `backlog?`, `task_type?`, `priority?`, `release?`, `review?`, `with_?` (empty removes), `components?` (`auto`), `add_`/`remove_` `files`, `dependencies`, `labels`, `components`, `related` | the task, what changed | changes a definition, never the status | `edit` |
+| `show_tasks` | `ids[]` | `TaskShown[]` | tasks in full, archived ones too | `show` |
+| `task_views` | `Filters` (status, type, priority, label, agent, sprint or backlog, release, component, ready, blocked, in_pr, with_user, archived) | `TaskView[]` | the tasks that match, with their derived values | `list` |
+| `task_dependencies` | `id` | `DepsResult` | what it waits for, and what waits for it (archived ones too) | `deps` |
+| `search_tasks` | `query`, `also?` | IDs | the tasks matching every word | (API: search) |
+| `check_project` | `files?` | `CheckReport` | the schema, vocabularies, dependencies; with `files`, missing files of finished tasks | `check` |
 
-**Claims and the loop**
+**Claims and the loop** (`list_claims` reads; `expire_claims` and `renew_*` write)
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `claims.next` | `selection` (sprints, tasks, all or backlog), `type?`, `with_user?`, `claim?`, `status?` | `NextResult` (the task, or why there is none) | the task the loop takes next; with `claim`, starts and claims it atomically | `next` |
-| `claims.heartbeat` | `id` | `Claim` | renews the actor's lease | `heartbeat` |
-| `claims.heartbeat_due` | — | `Claim[]` | renews the actor's claims whose last renewal is ten minutes old | `heartbeat --auto` |
-| `claims.list` | — | `Claim[]` | the live claims, from every working copy | `claims` |
+| `next_task_for` | `selection(...)` (sprints, tasks, all or backlog, type), `with_user?`, `claim?`, `status?` | the task, or why there is none | the task the loop takes next; with `claim`, starts and claims it atomically | `next` |
+| `renew_lease` | `id`, `expire?` | the `Claim` | renews the actor's lease | `heartbeat`, `run` |
+| `renew_due_claims` | — | `Claim[]` | renews the actor's claims whose last renewal is ten minutes old | `heartbeat --auto` |
+| `list_claims` | — | `Claim[]` | the claims, from every working copy | (API: claims) |
+| `expire_claims` | — | the live `Claim[]`, the expired | drops the expired claims (their tasks back to to do) | `claims` |
 
 **Overview**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `project.status` | `scope?` (sprints, backlog, release, component) | `StatusReport` | counts, in progress, in review, blocked, next, hints | `status` |
-| `project.summary` | — | `ProjectSummary` | the numbers the dashboard's cards show | `summary` |
-| `project.backlog` | `all?` | `TaskView[]` | the tasks in no sprint | `backlog` |
+| `status_report` | `Filters` (sprint, backlog, release, component) | `StatusReport` | counts, in progress, in review, blocked, next, hints | `status` |
+| `project_summary` | — | `ProjectSummary` | the numbers the dashboard's cards show | `summary` |
+| `backlog_tasks` | `finished?` | the tasks | the tasks in no sprint | `backlog` |
 
 **Sprints, releases, components**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `sprints.list` | `all?` | `Sprint[]` with counts | the sprints in order | `sprints` |
-| `sprints.add` | `name?`, `goal?`, `release?`, `due?`, `after?` | `Sprint` | a planned sprint (a name generated without one) | `sprints add` |
-| `sprints.edit` | `name`, `goal?`, `release?`, `due?` (empty removes) | `Sprint` | changes a sprint | `sprints edit` |
-| `sprints.start` | `name` | `Sprint` | makes it the active one | `sprints start` |
-| `sprints.close` | `name`, `carry_to?` (a sprint, `new` or `backlog`), `new_name?`, `reviewed?` | `SprintCloseReport` | closes it; unfinished tasks carried | `sprints close` |
-| `sprints.delete` | `name`, `move_to?`, `force?` | — | deletes it; its tasks moved | `sprints delete` |
-| `sprints.move` | `ids[]`, `to` (a sprint, `next`, `active`, `backlog`) | `TaskView[]` | moves tasks between sprints | `move` |
-| `releases.list` | `all?` | `Release[]` with tasks by kind and stage | the releases in order | `releases` |
-| `releases.add` | `id`, `name?`, `target?`, `prs[]?`, `released_at?` | `Release` | a release (with the tasks of those PRs) | `releases add` |
-| `releases.edit` | `id`, `name?`, `target?` | `Release` | changes one | `releases edit` |
-| `releases.archive` | `id` | `Release` | archives it | `releases archive` |
-| `releases.notes` | `id` | `ReleaseNotes` (Markdown) | a draft of its changes | `releases notes` |
-| `components.list` | — | `Component[]` with counts | the components | `components` |
-| `components.add` | `id`, `label?`, `paths[]`, `review?`, `from_label?`, `assign?` | `Component` | a component; with `from_label` or `assign`, given to tasks | `components add` |
-| `components.edit` | `id`, `label?`, `add_paths[]?`, `review?`, `from_label?`, `assign?` | `Component` | changes one | `components edit` |
+| `list_sprints` | `include_closed?` | `Sprint[]` with counts | the sprints in order | `sprints` |
+| `add_sprint` | `name?`, `goal?`, `release?`, `due?`, `after?` | `Sprint` | a planned sprint (a name generated without one) | `sprints add` |
+| `edit_sprint` | `name`, `goal?`, `release?`, `due?` (empty removes) | the sprint, what changed | changes a sprint | `sprints edit` |
+| `start_sprint` | `name` | `Sprint` | makes it the active one | `sprints start` |
+| `close_sprint` | `name`, `carry_to?` (a sprint, `new` or `backlog`), `new_name?`, `reviewed?` | the sprint (with its report), the sprint created | closes it; unfinished tasks carried | `sprints close` |
+| `delete_sprint` | `name`, `move_to?`, `force?` | the sprint, the tasks moved | deletes it; its tasks moved | `sprints delete` |
+| `move_tasks` | `ids[]`, `to` (a sprint, `next`, `active`, `backlog`) | the moves | moves tasks between sprints | `move` |
+| `list_releases` | `include_archived?` | `Release[]` with tasks by kind and stage | the releases in order | `releases` |
+| `add_release` | `id`, `name?`, `target?`, `prs[]?`, `released_at?` | the release, the tasks given to it | a release (with the tasks of those PRs) | `releases add` |
+| `edit_release` | `id`, `name?`, `target?` | the release, what changed | changes one | `releases edit` |
+| `archive_release` | `id` | `Release` | archives it | `releases archive` |
+| `release_notes` | `id` | the draft | a draft of its changes | `releases notes` |
+| `list_components` | — | `Component[]` with counts | the components | `components` |
+| `add_component` | `id`, `label?`, `paths[]`, `review?`, `from_label?`, `assign?` | `Component` | a component; with `from_label` or `assign`, given to tasks | `components add` |
+| `edit_component` | `id`, `label?`, `add_paths[]?`, `review?`, `from_label?`, `assign?` | `Component` | changes one | `components edit` |
 
 **The archive**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `archive.archive` | `sprints[]?`, `before?`, `keep_days?`, `dry_run?` | `ArchiveReport` (moved, kept and why) | moves finished tasks to the archive | `archive` |
-| `archive.unarchive` | `ids[]` | `TaskView[]`, those the next archive moves back | brings tasks back | `unarchive` |
-| `archive.hint` | — | the hint, or none | whether archiving would help now | (in `status`, `done`) |
+| `archive_finished` | `sprints[]?`, `before?`, `keep_days?`, `dry_run?` | moved, kept and why | moves finished tasks to the archive | `archive` |
+| `unarchive_tasks` | `ids[]` | the tasks, those the next archive moves back | brings tasks back | `unarchive` |
+| `archive_hint_now` | — | `ArchiveHint`, or none | whether archiving would help now | (in `status`, `done`) |
 
 **Code, PRs and the project's settings**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `code.commit` | `id`, `files[]`, `message?` | the SHA | commits exactly those files (plus the store's `files_for_commit`) and records it on the task | `commit` |
-| `code.record_commit` | `id`, `rev` | the SHA | records an existing commit in the history | `commit --record` |
-| `code.pr` | `ids[]`, `number`, `url` | `TaskView[]` | records the PR containing the tasks | `pr` |
-| `code.merged` | `pr`, `at?` | the tasks, the release released (or what keeps it planned) | records a merge | `merged` |
-| `settings.init` | `meta?` | `Settings` | gives the project an ID; sets settings and vocabularies | `init` |
-| `settings.workflow` / `set_workflow` | `type`, `base?`, `verify?`, `max_rounds?`, `commit_template?`, `trailers?`, `trailer[]?` | `Workflow` | reads or sets the workflow | `workflow` |
-| `settings.repository` / `set_repository` | `url`, `from?` | the address | reads or sets it (moving recorded PR links) | `repository` |
-| `settings.logo` / `set_logo` / `unset_logo` | `path` | the logo's path | reads, sets or removes the logo | `logo` |
+| `repository_paths` | `files[]`, `cwd` | paths relative to the repository | turns names relative to a folder into what `commit_task` takes | `commit` |
+| `commit_task` | `id`, `files[]` (relative to the repository), `message?` | the SHA, the files | commits exactly those files (plus the store's `files_for_commit`) and records it on the task | `commit` |
+| `record_commit` | `id`, `rev` | the SHA | records an existing commit in the history | `commit --record` |
+| `record_pr` | `ids[]`, `number`, `url` | the tasks | records the PR containing the tasks | `pr` |
+| `record_merge` | `pr`, `at?` | the tasks, the release released (or what keeps it planned) | records a merge | `merged` |
+| `init_meta` | `meta` | `Settings` | gives the project an ID; sets settings and vocabularies | `init` |
+| `get_workflow` / `set_workflow` | `type`, `base?`, `verify?`, `max_rounds?`, `commit_template?`, `trailers?`, `trailer[]?` | `Workflow` | reads or sets the workflow | `workflow` |
+| `get_repository` / `set_repository` | `url`, `previous?` | the address | reads or sets it (moving recorded PR links) | `repository` |
+| `get_logo` / `set_logo` / `unset_logo` | `path` | the logo's path | reads, sets or removes the logo | `logo` |
 
 **Projects (the registry)**
 
 | Function | Parameters | Returns | Does | CLI |
 |---|---|---|---|---|
-| `projects.list` | — | `ProjectInfo[]` | the registered projects, with their summaries | `projects`, (API: projects) |
-| `projects.add` | `path` | `ProjectEntry` | registers a project | `projects add` |
-| `projects.remove` | `id` or `path` | — | unregisters one | `projects remove` |
-| `projects.prune` | — | the removed ones | drops projects whose folder is gone | `projects prune` |
+| `list_projects` | — | `ProjectInfo[]` | the registered projects, with their summaries | `projects`, (API: projects) |
+| `add_project` | `path` | `ProjectEntry` | registers a project | `projects add` |
+| `remove_project` | `id` or `path` | — | unregisters one | `projects remove` |
+| `prune_projects` | — | the removed ones | drops projects whose folder is gone | `projects prune` |
+| `worktree_copies` | — | the worktrees' differing tasks | a project's working copies | (API: worktrees) |
 
 **Not in atm-lib** (they are about processes or one store, not business logic): `version` and `help` (CLI);
 `serve` (the CLI starts, stops and refreshes the server process, `plugin/scripts/atm-serve`, which is the REST API); `run` (the CLI keeps a claim alive around a child process with
-`claims.heartbeat`); `merge-driver`, `migrate` and `paths` (the JSON-in-git store, §3.2); `_lock-test` (a test hook
+`renew_lease`); `merge-driver`, `migrate` and `paths` (the JSON-in-git store, §3.2); `_lock-test` (a test hook
 of that store).
 
 ## 6. The REST API
@@ -836,6 +841,16 @@ are unchanged (the atm-cli suite, at every step).
   `Changes`, repository-relative paths in `commit_task` (the CLI resolves the current folder), one naming scheme, and
   results typed in the schema (§11.10). The CLI moves onto them, unchanged for users. §5.1 then matches the code.
   Before §11.6's frozen signatures.
+- **Settled (T-383):** `start_task` … `release_task`, one per status change, each returning a `StatusChange`
+  (`api.schema.json`, with `Claim` and `TaskShown`; its `view` is what `atm start` prints, so the CLI no longer
+  gets the document); `change_task_status` is internal. Sprints, releases and task edits take keyword parameters
+  (`Changes` is gone; `edit_existing_task(project, id, name=…, add_labels=[…])`); `commit_task` takes paths
+  relative to the repository, and `repository_paths` resolves names from a folder; `live_claims` is
+  `expire_claims` (the internal rule it used is `drop_expired_claims`), `workflow_settings` is `get_workflow`,
+  `list_matching` is internal and `atm list` reads `task_views`. The CLI builds `Filters` from its options instead of
+  passing them. §5.1 lists the functions as built; the changelog says what changed. Left: `add_new_tasks` still takes
+  draft dicts (they are the task's own fields), and the results that stay in the CLI (sprints, releases, the
+  archive) aren't in the schema yet.
 
 ### 11.8 Git run in two places; "the branch" three ways (T-385)
 

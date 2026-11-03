@@ -1,9 +1,7 @@
 """atm-lib: sprints and the backlog (docs/sprints-and-releases-design.md §3.1; docs/layered-architecture.md §5.1):
 list, add, edit, start, close and delete sprints (meta.sprints), move tasks between sprints and the backlog, list the
 backlog. Each write is one store change; a task's sprint changes only through set_sprint, which keeps its history.
-
-The options are named as atm's command line names them (goal, release, due, after, carry_to, new_name, reviewed,
-move_to, force): the CLI passes its parsed arguments; any object with those attributes does."""
+The functions take keyword parameters (T-383)."""
 
 from ..common.errors import Invalid, NotFound
 from ..common.vocabularies import KINDS
@@ -65,12 +63,12 @@ def check_due(due):
     return due
 
 
-def apply_fields(sprint, options, vocab):
-    """goal, release and due on a sprint; an empty value removes the field; a release must be one of meta.releases
-    (SR-2.2). Returns the names changed."""
+def apply_fields(sprint, vocab, goal, release, due):
+    """goal, release and due on a sprint (None leaves one as it is); an empty value removes the field; a release must
+    be one of meta.releases (SR-2.2). Returns the names changed."""
     changed = []
-    release = known_release(vocab, options.release) if options.release else options.release
-    for key, value in (("goal", options.goal), ("release", release), ("due", check_due(options.due))):
+    release = known_release(vocab, release) if release else release
+    for key, value in (("goal", goal), ("release", release), ("due", check_due(due))):
         if value is None:
             continue
         if value == "":
@@ -108,30 +106,30 @@ def backlog_tasks(project, finished=False):
     return {"tasks": [t for t in data["tasks"] if in_backlog(vocab, t, finished=finished)], "vocab": vocab}
 
 
-def add_sprint(project, options):
-    """A planned sprint, named `options.name` (generated without one), after `options.after` (default: last), with
-    its goal, release and due date. Returns the sprint."""
+def add_sprint(project, name=None, goal=None, release=None, due=None, after=None):
+    """A planned sprint, named `name` (generated without one), after the sprint `after` (default: last), with its
+    goal, release and due date. Returns the sprint."""
 
     def change(work):
         data = work.document
         vocab = vocabulary(data)
-        name = (options.name or "").strip() or generate_sprint_name(
+        sprint_name = (name or "").strip() or generate_sprint_name(
             vocab["sprint_names"], taken_names(data, work.archive()["tasks"])
         )
-        if find_sprint(vocab, name):
-            raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
-        if len(name) > MAX_SPRINT_NAME:
+        if find_sprint(vocab, sprint_name):
+            raise Invalid(f"there is already a sprint {find_sprint(vocab, sprint_name)['id']!r}")
+        if len(sprint_name) > MAX_SPRINT_NAME:
             raise Invalid(f"a sprint name is at most {MAX_SPRINT_NAME} characters")
-        sprint = {"id": name, "state": "planned"}
-        apply_fields(sprint, options, vocab)
+        sprint = {"id": sprint_name, "state": "planned"}
+        apply_fields(sprint, vocab, goal, release, due)
         meta = data.setdefault("meta", {})
         sprints = list(meta.get("sprints") or [])
         position = len(sprints)
-        if options.after:
-            after = find_sprint(vocab, options.after)
-            if after is None:
-                raise NotFound(f"no sprint {options.after!r} to add it after", 2)
-            position = next(i for i, s in enumerate(sprints) if s.get("id") == after["id"]) + 1
+        if after:
+            previous = find_sprint(vocab, after)
+            if previous is None:
+                raise NotFound(f"no sprint {after!r} to add it after", 2)
+            position = next(i for i, s in enumerate(sprints) if s.get("id") == previous["id"]) + 1
         sprints.insert(position, sprint)
         meta["sprints"] = sprints
         vocabulary(data)
@@ -150,12 +148,13 @@ def stored_sprint(data, name):
     return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
 
 
-def edit_sprint(project, name, options):
-    """Change a sprint's goal, release or due date (an empty value removes it). Returns {sprint, changed}."""
+def edit_sprint(project, name, goal=None, release=None, due=None):
+    """Change a sprint's goal, release or due date (None leaves it, an empty value removes it). Returns {sprint,
+    changed}."""
 
     def change(work):
         sprint = stored_sprint(work.document, name)
-        changed = apply_fields(sprint, options, vocabulary(work.document))
+        changed = apply_fields(sprint, vocabulary(work.document), goal, release, due)
         if changed:
             vocabulary(work.document)
         return {"sprint": sprint, "changed": changed}
@@ -205,16 +204,15 @@ def added_mid_sprint(task, sprint):
     return bool(entries and start and isinstance(entries[-1].get("from"), str) and entries[-1]["from"] > start)
 
 
-def carry_target(data, vocab, sprint, options, taken):
-    """Where carry_to sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint (added
-    to meta.sprints after the one closing). Returns (target, created sprint or None)."""
-    to = options.carry_to
-    if options.new_name and to != "new":
+def carry_target(data, vocab, sprint, to, new_name, taken):
+    """Where `to` (carry_to) sends the unfinished tasks: a sprint ID, None for the backlog, or a new planned sprint
+    (named `new_name`, added to meta.sprints after the one closing). Returns (target, created sprint or None)."""
+    if new_name and to != "new":
         raise Invalid("--name names a new sprint: use it with --carry-to new")
     if to == "backlog":
         return None, None
     if to == "new":
-        name = (options.new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
+        name = (new_name or "").strip() or generate_sprint_name(vocab["sprint_names"], taken)
         if find_sprint(vocab, name):
             raise Invalid(f"there is already a sprint {find_sprint(vocab, name)['id']!r}")
         if len(name) > MAX_SPRINT_NAME:
@@ -229,10 +227,10 @@ def carry_target(data, vocab, sprint, options, taken):
     return target, None
 
 
-def close_sprint(project, name, options):
-    """Close a sprint (SR-4.3): its unfinished tasks go to options.carry_to, keeping their status and history (SR-4.5);
-    the sprint gets `end` and its report {done, carried, added, to}; with options.reviewed its batch tasks are marked
-    reviewed (SR-4.4). Returns {sprint, created, target, was_active}."""
+def close_sprint(project, name, carry_to=None, new_name=None, reviewed=False):
+    """Close a sprint (SR-4.3): its unfinished tasks go to `carry_to` (a sprint, `new`, named `new_name`, or
+    `backlog`), keeping their status and history (SR-4.5); the sprint gets `end` and its report {done, carried, added,
+    to}; with `reviewed` its batch tasks are marked reviewed (SR-4.4). Returns {sprint, created, target, was_active}."""
     actor = project.actor
 
     def change(work):
@@ -256,14 +254,14 @@ def close_sprint(project, name, options):
             )
         # Batch tasks wait for the end-of-sprint review (SR-4.4): /atm:close-sprint reviews them, then --reviewed
         pending = [t for t in own if t.get("sprint_review") == "pending"]
-        if pending and not options.reviewed:
+        if pending and not reviewed:
             ids = ", ".join(t["id"] for t in pending)
             raise Invalid(
                 f"{ids} {'waits' if len(pending) == 1 else 'wait'} for the end-of-sprint review: review "
                 f"{'it' if len(pending) == 1 else 'them'} with the user (/atm:close-sprint), then close with --reviewed"
             )
         unfinished = [t for t in own if kind(t) not in ("done", "skipped")]
-        if unfinished and not options.carry_to:
+        if unfinished and not carry_to:
             ids = ", ".join(t["id"] for t in unfinished)
             raise Invalid(
                 f"{ids} {'is' if len(unfinished) == 1 else 'are'}n't finished: say where "
@@ -271,7 +269,7 @@ def close_sprint(project, name, options):
             )
         target, created = (None, None)
         if unfinished:
-            target, created = carry_target(data, vocab, sprint, options, taken_names(data, archived))
+            target, created = carry_target(data, vocab, sprint, carry_to, new_name, taken_names(data, archived))
         stamp = now_iso()
         report = {
             "done": [t["id"] for t in own + own_archived if kind(t) == "done"],
@@ -304,10 +302,10 @@ def mentions_sprint(task, sprint):
     )
 
 
-def delete_sprint(project, name, options):
+def delete_sprint(project, name, move_to=None, force=False):
     """Delete a sprint created by mistake (T-339). An empty one (no task in it, none ever) goes at once, whatever its
-    state; an open one's unfinished tasks go to options.move_to (the backlog by default); one that tasks finished in
-    or moved on from needs options.force when open, and a closed one with any history stays (its record and report).
+    state; an open one's unfinished tasks go to `move_to` (the backlog by default); one that tasks finished in or
+    moved on from needs `force` when open, and a closed one with any history stays (its record and report).
     Returns {sprint, state, moved, target}."""
     actor = project.actor
 
@@ -342,17 +340,17 @@ def delete_sprint(project, name, options):
                 f"the sprint {sprint['id']!r} is closed and had tasks ({', '.join(history)}): its record and report "
                 "stay; only an empty sprint can be deleted"
             )
-        if history and not options.force:
+        if history and not force:
             raise Invalid(
                 f"tasks finished in the sprint {sprint['id']!r} or moved on from it ({', '.join(history)}): delete it "
                 "with --force to drop that record (its tasks go to --move-to, the backlog by default)"
             )
-        to = options.move_to or "backlog"
+        to = move_to or "backlog"
         target = None if to == "backlog" else open_sprint(vocab, to)
         if target is not None and target.casefold() == sprint["id"].casefold():
             raise Invalid(f"the tasks can't move to the sprint being deleted ({sprint['id']!r})")
         # With --force, the finished tasks still in it move too, so no task names a sprint that is gone
-        moving = own if options.force else unfinished
+        moving = own if force else unfinished
         stamp = now_iso()
         for task in moving:
             set_sprint(task, target, stamp)

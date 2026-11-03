@@ -62,7 +62,9 @@ def cmd_releases(args):
     if args.released_at is not None and args.action != "add":
         raise Invalid("--released-at is for atm releases add")
     if args.action == "add":
-        result = add_release(project, args.id, args)
+        result = add_release(
+            project, args.id, name=args.title, target=args.target, prs=args.pr or [], released_at=args.released_at
+        )
         if args.json:
             out(to_json(result))
             return
@@ -73,7 +75,7 @@ def cmd_releases(args):
             line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
         out(line + ".")
     elif args.action == "edit":
-        result = edit_release(project, args.id, args)
+        result = edit_release(project, args.id, name=args.title, target=args.target)
         release, changed = result["release"], result["changed"]
         if args.json:
             out(to_json(release))

@@ -77,7 +77,7 @@ def lease_until(data):
     return (now() + timedelta(minutes=lease_minutes(data))).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def expire_claims(data, claims):
+def drop_expired_claims(data, claims):
     """Drop claims whose lease ran out; their tasks in this worktree go back to todo. Returns the expired claims."""
     current = now()
     vocab = vocabulary(data)

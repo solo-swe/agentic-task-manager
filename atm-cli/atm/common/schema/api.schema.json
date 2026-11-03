@@ -86,6 +86,75 @@
         "waited_on_by": { "type": "array", "items": { "$ref": "#/$defs/DependencyItem" } }
       }
     },
+    "Claim": {
+      "type": "object",
+      "description": "Who works on a task, from which working copy, until when",
+      "required": ["task", "agent", "claimed_at", "lease_expires_at"],
+      "properties": {
+        "task": { "type": "string" },
+        "agent": { "type": "string" },
+        "branch": { "type": ["string", "null"] },
+        "worktree": { "type": ["string", "null"] },
+        "claimed_at": { "type": "string" },
+        "lease_expires_at": { "type": "string" },
+        "renewed_at": { "type": "string" }
+      }
+    },
+    "ShownDependency": {
+      "type": "object",
+      "required": ["id", "status", "archived"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "type": ["string", "null"], "description": "null: no such task" },
+        "archived": { "type": "boolean" }
+      }
+    },
+    "TaskShown": {
+      "type": "object",
+      "description": "A task in full, as atm show gives it (show_tasks): with its effective priority, its dependencies' statuses, the tasks related to it either way and those that duplicate it",
+      "required": ["task", "archived", "priority", "started_by", "dependencies", "related", "duplicated_by"],
+      "properties": {
+        "task": { "$ref": "task.schema.json" },
+        "archived": { "type": "boolean" },
+        "priority": { "type": ["string", "null"] },
+        "started_by": { "type": ["string", "null"] },
+        "dependencies": { "type": "array", "items": { "$ref": "#/$defs/ShownDependency" } },
+        "related": { "type": "array", "items": { "type": "string" } },
+        "duplicated_by": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "StatusChange": {
+      "type": "object",
+      "description": "What a status change (start_task, done_task, ...) answers",
+      "required": ["task", "previous", "claim", "unblocked", "hint", "stranded", "expired", "view"],
+      "properties": {
+        "task": { "$ref": "task.schema.json" },
+        "previous": { "type": ["string", "null"], "description": "Its status before" },
+        "claim": {
+          "anyOf": [{ "$ref": "#/$defs/Claim" }, { "type": "null" }],
+          "description": "Its claim now: the new one after start, else null"
+        },
+        "unblocked": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "After done: the tasks now ready"
+        },
+        "hint": {
+          "anyOf": [{ "$ref": "#/$defs/ArchiveHint" }, { "type": "null" }],
+          "description": "After done: the archive hint, at most once a day"
+        },
+        "stranded": {
+          "type": ["string", "null"],
+          "description": "After reopen in a closed sprint: where it is now open, and how to move it (T-330)"
+        },
+        "expired": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Claim" },
+          "description": "The claims whose lease ran out on the way (their tasks back to to do)"
+        },
+        "view": { "$ref": "#/$defs/TaskShown" }
+      }
+    },
     "SprintNumbers": {
       "type": "object",
       "description": "A sprint as the overview shows it: done of its tasks but the skipped",

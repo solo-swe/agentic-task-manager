@@ -2,10 +2,6 @@
 
 import sys
 
-from ..common.fields import priority_of
-from ..lib.tasks import view_task
-from ..common.model import vocabulary
-
 
 def report_expired(expired):
     """On stderr, the claims a command found expired (their tasks went back to todo)."""
@@ -13,30 +9,42 @@ def report_expired(expired):
         sys.stderr.write(f"atm: lease of {claim['task']} by {claim.get('agent')} expired; it is available again\n")
 
 
-def list_lines(vocab, tasks):
-    """One line per task, as `atm list` prints them: ID, status, priority, labels, name."""
-    id_width = max(len(str(t.get("id"))) for t in tasks)
-    status_width = max(len(str(t.get("status"))) for t in tasks)
-    for t in tasks:
+def view_row(view):
+    """The fields `atm list` shows of a task, from atm-lib's view of it (task_views), as a dict for --json."""
+    task, derived = view["task"], view["derived"]
+    fields = {
+        "id": task.get("id"),
+        "status": task.get("status"),
+        "kind": derived.get("kind"),
+        "sprint": task.get("sprint"),
+        "priority": derived.get("priority"),
+        "labels": task.get("labels", []),
+        "name": task.get("name", ""),
+    }
+    if isinstance(task.get("pr"), dict):
+        fields["pr"] = task["pr"]
+        fields["merged_at"] = task.get("merged_at")
+    return fields
+
+
+def list_lines(rows):
+    """One line per task, as `atm list` prints them: ID, status, priority, labels, name (rows as view_row gives
+    them, or atm-lib's `summary`)."""
+    id_width = max(len(str(t.get("id"))) for t in rows)
+    status_width = max(len(str(t.get("status"))) for t in rows)
+    for t in rows:
         labels = t.get("labels") or []
         yield (
             f"{str(t.get('id')).ljust(id_width)}  {str(t.get('status')).ljust(status_width)}  "
-            f"{priority_of(vocab, t)}  "
+            f"{t.get('priority')}  "
             + (f"[{', '.join(labels)}] " if labels else "")
             + str(t.get("name", ""))
         )
 
 
-def describe_task(data, task, archived_lookup):
-    """A task in full, as text, as a status change prints the task it starts: the same text as `atm show`, from
-    atm-lib's view of it. `archived_lookup` is the project's lookup of archived tasks (its dependencies may be)."""
-    # A task not in tasks.json is from the archive
-    archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_lookup, vocabulary(data)))
-
-
 def render_task(view):
-    """A task in full, as text (from atm-lib's `view_task`): what an agent needs to work on it."""
+    """A task in full, as text (atm-lib's view of it: `show_tasks`, or a status change's `view`): what an agent needs
+    to work on it. `atm start` prints the same text as `atm show`."""
     task = view["task"]
     labels = task.get("labels") or []
     lines = [

@@ -1,8 +1,7 @@
 """atm-lib: releases (docs/sprints-and-releases-design.md §3.3, SR-2.2; docs/layered-architecture.md §5.1): list them
 with their tasks by kind and stage, add one (with PRs, giving it their tasks, archived ones too), edit and archive one,
-and draft its notes. A task's release is its own, else its sprint's. Each write is one store change.
-
-The options are named as atm's command line names them (title for --name, target, pr, released_at)."""
+and draft its notes. A task's release is its own, else its sprint's. Each write is one store change; the functions
+take keyword parameters (T-383)."""
 
 from ..common.errors import Invalid, NotFound
 from ..common.vocabularies import KINDS
@@ -67,10 +66,11 @@ def check_target(target):
     return target
 
 
-def release_fields(release, options):
-    """name (options.title) and target on a release; an empty value removes the field. Returns the names changed."""
+def release_fields(release, name, target):
+    """name and target on a release (None leaves one as it is); an empty value removes the field. Returns the names
+    changed."""
     changed = []
-    for key, value in (("name", options.title), ("target", check_target(options.target))):
+    for key, value in (("name", name), ("target", check_target(target))):
         if value is None:
             continue
         if value == "":
@@ -96,19 +96,19 @@ def stored_release(data, release_id):
     return next(r for r in data["meta"]["releases"] if r.get("id") == release_id)
 
 
-def add_release(project, release_id, options):
-    """A planned release; with options.pr (pull request numbers) every task of those PRs, in both files, goes into
-    it; with options.released_at it shipped already. Returns {release, tasks}: the tasks given to it."""
+def add_release(project, release_id, name=None, target=None, prs=(), released_at=None):
+    """A planned release; with `prs` (pull request numbers) every task of those PRs, in both files, goes into it;
+    with `released_at` it shipped already. Returns {release, tasks}: the tasks given to it."""
     if not RELEASE_ID.fullmatch(release_id):
         raise Invalid(f"{release_id!r}: a release ID is letters, digits, '.', '-' and '_' (at most 64)")
-    prs = options.pr or []
+    prs = list(prs or [])
     if any(n <= 0 for n in prs):
         raise Invalid("--pr needs a pull request number")
-    if options.released_at is not None:
+    if released_at is not None:
         try:
-            parse_iso(options.released_at)
+            parse_iso(released_at)
         except ValueError:
-            raise Invalid(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {options.released_at!r}")
+            raise Invalid(f"--released-at needs a time like 2026-10-24T18:00:00Z, not {released_at!r}")
 
     def change(work):
         data, archive_data = work.document, work.archive()
@@ -116,7 +116,7 @@ def add_release(project, release_id, options):
         if find_release(vocab, release_id):
             raise Invalid(f"there is already a release {release_id!r}")
         release = {"id": release_id, "state": "planned"}
-        release_fields(release, options)
+        release_fields(release, name, target)
         given = []
         # A release recovered from pull requests (SR-8.2): their tasks, in both files, go into it; the release records
         # the last PR given (the one that shipped it)
@@ -132,10 +132,10 @@ def add_release(project, release_id, options):
             if not own:
                 raise Invalid(f"no task is in pull request #{number}")
             given += own
-        if options.released_at is not None:
+        if released_at is not None:
             # One that shipped already: released at that time (its PR's merge, for one recovered from PRs)
             release["state"] = "released"
-            release["released_at"] = options.released_at
+            release["released_at"] = released_at
         meta = data.setdefault("meta", {})
         meta["releases"] = list(meta.get("releases") or []) + [release]
         vocabulary(data)
@@ -144,12 +144,12 @@ def add_release(project, release_id, options):
     return project.store.change(change)
 
 
-def edit_release(project, release_id, options):
-    """Change a release's name or target (an empty value removes it). Returns {release, changed}."""
+def edit_release(project, release_id, name=None, target=None):
+    """Change a release's name or target (None leaves it, an empty value removes it). Returns {release, changed}."""
 
     def change(work):
         release = stored_release(work.document, release_id)
-        changed = release_fields(release, options)
+        changed = release_fields(release, name, target)
         if changed:
             vocabulary(work.document)
         return {"release": release, "changed": changed}

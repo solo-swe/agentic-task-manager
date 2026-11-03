@@ -16,7 +16,7 @@ HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
 CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
 
 
-def workflow_settings(project):
+def get_workflow(project):
     """The project's workflow (meta.workflow with its defaults), or None when none is set."""
     return workflow_of({"meta": project.store.get_settings()})
 
@@ -79,9 +79,19 @@ def record_on_task(project, task_id, sha):
     return project.store.change(change)
 
 
-def commit_task(project, task_id, files, cwd, message=None):
-    """`atm commit`: commit exactly `files` (named relative to `cwd`) plus the task data that travels with code commits,
-    with the workflow's message, then record the commit on the task. Returns {task, commit, message, files}."""
+def repository_paths(project, files, cwd):
+    """The files named relative to `cwd`, relative to the repository instead (what commit_task takes), checked as a
+    commit checks them: no directory, no pattern, nothing outside the repository."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    return vcs.paths(files, cwd)
+
+
+def commit_task(project, task_id, files, message=None):
+    """`atm commit`: commit exactly `files` (relative to the repository; repository_paths turns names relative to a
+    folder into these) plus the task data that travels with code commits, with the workflow's message, then record
+    the commit on the task. Returns {task, commit, message, files}."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
         raise AtmFailure("atm commit needs a git repository")
@@ -97,7 +107,7 @@ def commit_task(project, task_id, files, cwd, message=None):
     text = commit_message(text, workflow.get("trailers"))
     if not text.strip():
         raise Invalid("the commit message is empty")
-    picked = vcs.paths(files, cwd)
+    picked = vcs.paths(files)
     picked += [f for f in project.store.files_for_commit() if f not in picked]
     sha = vcs.commit(picked, text)
     task = record_on_task(project, task_id, sha)
