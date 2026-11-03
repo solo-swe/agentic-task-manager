@@ -76,6 +76,7 @@ MODULES = [
     "lib.projects",
     "lib.settings",
     "lib.worktrees",
+    "lib.documents",
     "boot.identity",
     "boot.open",
     "boot.jsongit",

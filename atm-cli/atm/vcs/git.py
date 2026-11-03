@@ -4,7 +4,7 @@ history, the base branch, the remote. Git's other role, carrying the task files,
 import os
 
 from ..common.errors import Invalid, NotFound
-from ..host.git import checked_out_branch, git, in_git, run_git
+from ..host.git import checked_out_branch, git, git_exit, in_git, run_git
 
 # Pathspecs that stage more than the files named: another agent's work can be in the same tree
 WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
@@ -87,3 +87,49 @@ class GitVcs:
 
     def message(self, sha):
         return run_git(["log", "-1", "--format=%B", sha], self.root)
+
+    # The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-lib checks the path
+    # first (lib/documents.py); these read only below the root, through no symbolic link
+
+    def _file(self, relative):
+        """The file's absolute path, or None when a segment from the root down is a symbolic link or it isn't a
+        regular file."""
+        current = self.root
+        for segment in relative.split("/"):
+            current = os.path.join(current, segment)
+            if os.path.islink(current):
+                return None
+        return current if os.path.isfile(current) else None
+
+    def file_stamp(self, relative):
+        path = self._file(relative)
+        if path is None:
+            return None
+        try:
+            st = os.stat(path)
+        except OSError:
+            return None
+        return (st.st_size, st.st_mtime_ns)
+
+    def read_file(self, relative):
+        path = self._file(relative)
+        if path is None:
+            raise NotFound(f"{relative}: no such file")
+        with open(path, "rb") as f:
+            return f.read()
+
+    def ignored(self, relative):
+        """git's ignore rules, as `git status` applies them: a file git tracks is never ignored. check-ignore takes
+        paths, not patterns (and refuses --literal-pathspecs). It fails closed: only git's "not ignored" (exit 1)
+        lets a file through; an error counts as ignored."""
+        if not self.in_repository():
+            return False
+        return git_exit(["check-ignore", "-q", "--", relative], self.root) != 1
+
+    def tracked(self, relative):
+        if not self.in_repository():
+            return None
+        return git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is not None
+
+    def head(self):
+        return self.resolve("HEAD") if self.in_repository() else None

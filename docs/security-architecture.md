@@ -73,8 +73,8 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…" |
-| I12 | **Only the registered projects' task data is served**, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores, under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…", "a project's files for the document viewer…"; `tests/lib/test_documents.py` |
+| I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
 ### Dashboard (B4)
@@ -445,6 +445,26 @@ same way as task text (`safeTree`, `secureLinks`, no `host:` data), and the dash
 `Markdown.svelte`) is gone. Both texts come with the plugin, so nothing untrusted is added; CompMD loads only when one
 of them is first opened. Tooltips and card excerpts still show text without markup (`plain-text.ts`): it only takes
 marks away and renders nothing, through Svelte's escaping. No new route, input or permission.
+
+**A project's files for the document viewer (T-392, `docs/compmd-viewer-design.md` §4).** Two read-only routes give
+the dashboard files of a registered project's working copy: `documents?path=` as JSON (what the file is, and the
+CompMD document atm wraps it in) and `files?path=` (an image's bytes, for an `<img>`). The path is untrusted input
+(it comes from task text and documents), so:
+- **atm-lib checks it before anything is read** (`lib/documents.py`): relative, `/`-separated, normalized (no `..`,
+  `.` or empty part), no NUL or backslash, at most 512 characters; no hidden segment, which keeps out `.git`, `.env`
+  and atm's own folder; no key file by name (`*.pem`, `*.key`, `id_rsa*`, …).
+- **The version control reads it** (`vcs/git.py`): a regular file below the project's root, with no symbolic link on
+  the way (a linked folder pointing outside is refused), and not a file git ignores, where secrets usually are
+  (`.env.local`, credentials, build output). The ignore check **fails closed**: only git's explicit "not ignored"
+  lets a file through, so a git error refuses it. (The first version asked with `--literal-pathspecs`, which
+  `check-ignore` refuses; the failure read as "not ignored" and served an ignored file. The test that caught it
+  stays.)
+- **Sizes and types:** a document up to 1 MB, an image up to 5 MB (413 above). `files` serves only PNG, JPEG, GIF,
+  WebP and SVG whose bytes match their name, with `nosniff`, CORP same-origin and a sandboxing CSP, so an SVG opened
+  on its own runs nothing (in an `<img>` it never does). A file named `.png` that isn't one is shown as binary.
+- **What is left:** a file in the working tree that git doesn't ignore and that holds a secret (a token pasted into
+  `notes.txt`) can be shown, to the same user on the same machine, who can read it anyway; the dashboard shows it
+  only when a link names it. No new permission; the page's CSP is unchanged (`img-src 'self'`).
 
 ## 4. Keeping it current
 

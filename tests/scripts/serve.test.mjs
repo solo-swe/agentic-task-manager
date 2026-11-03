@@ -569,6 +569,100 @@ describe('serve', () => {
     atm(['serve', 'stop'], withLogo);
   });
 
+  test("a project's files for the document viewer: documents and files, read-only, with their checks (T-392)", async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project(
+      { meta: { id: 'docs0001', project: 'Docs' }, tasks: [] },
+      {
+        'docs/x.md': '# The design\n\nBody.\n',
+        'src/app.ts': 'export const a = `x`;\n',
+        '.gitignore': 'secrets/\n',
+        'secrets/creds.json': '{"token": "nope"}',
+        '.env': 'TOKEN=nope',
+        'certs/server.pem': 'nope',
+        'big.md': 'x'.repeat(1_000_001),
+      },
+    );
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
+    fs.mkdirSync(path.join(root, 'img'));
+    fs.writeFileSync(path.join(root, 'img/a.png'), png);
+    git(['add', 'docs/x.md'], root);
+    git(['commit', '-q', '-m', 'docs'], root);
+    const head = git(['rev-parse', 'HEAD'], root).trim();
+    // A folder that is a symlink to outside the project: nothing under it is read
+    const elsewhere = tempDir('atm-elsewhere-');
+    cleanups.push(() => removeDir(elsewhere));
+    fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
+    fs.symlinkSync(elsewhere, path.join(root, 'linked'));
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const base = `http://localhost:${port}/api/v1/projects/docs0001`;
+    const get = (route, file, headers = {}) => fetch(`${base}/${route}?path=${encodeURIComponent(file)}`, { headers });
+
+    // A Markdown document as it is; tracked, at the current commit
+    const doc = await get('documents', 'docs/x.md');
+    assert.equal(doc.status, 200);
+    const body = await doc.json();
+    assert.deepEqual(
+      [body.kind, body.document, body.line_offset, body.lines, body.tracked, body.commit],
+      ['markdown', '# The design\n\nBody.\n', 0, 3, true, head],
+    );
+    // Unchanged: a 304 without reading it again; changed: a new ETag
+    const again = await get('documents', 'docs/x.md', { 'If-None-Match': doc.headers.get('etag') });
+    assert.equal(again.status, 304);
+    fs.writeFileSync(path.join(root, 'docs/x.md'), '# Changed\n');
+    const changed = await get('documents', 'docs/x.md', { 'If-None-Match': doc.headers.get('etag') });
+    assert.equal(changed.status, 200);
+
+    // Code in a fence of its language, untracked
+    const code = await (await get('documents', 'src/app.ts')).json();
+    assert.deepEqual(
+      [code.kind, code.language, code.document, code.line_offset, code.tracked],
+      ['code', 'ts', '```ts\nexport const a = `x`;\n```\n', 1, false],
+    );
+
+    // An image: a Markdown image in documents, its bytes from files, sandboxed and never sniffed
+    assert.equal((await (await get('documents', 'img/a.png')).json()).document, '![a.png](a.png)\n');
+    const image = await get('files', 'img/a.png');
+    assert.equal(image.status, 200);
+    assert.equal(image.headers.get('content-type'), 'image/png');
+    assert.equal(image.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(image.headers.get('cross-origin-resource-policy'), 'same-origin');
+    assert.match(image.headers.get('content-security-policy'), /default-src 'none'.*sandbox/);
+    assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
+    assert.equal((await get('files', 'img/a.png', { 'If-None-Match': image.headers.get('etag') })).status, 304);
+    // files serves images only
+    assert.equal((await get('files', 'docs/x.md')).status, 403);
+
+    // Refused, with what the viewer says: missing 404, not shown 403, too large 413, a bad path 400
+    const refusals = [
+      ['nothing/here.md', 404],
+      ['linked/outside.md', 404],
+      ['secrets/creds.json', 403],
+      ['.env', 403],
+      ['.agentic-task-manager/tasks.json', 403],
+      ['.git/config', 403],
+      ['certs/server.pem', 403],
+      ['big.md', 413],
+      ['../outside.md', 400],
+      ['/etc/passwd', 400],
+      ['docs/../docs/x.md', 400],
+      ['', 400],
+    ];
+    for (const [file, status] of refusals) {
+      const r = await get('documents', file);
+      assert.deepEqual([file, r.status], [file, status]);
+      const answer = await r.json();
+      assert.ok(answer.error && !answer.document, file);
+    }
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents?path=docs/x.md`)).status, 404);
+    // Read-only, like every route
+    assert.equal((await fetch(`${base}/documents?path=docs/x.md`, { method: 'POST' })).status, 405);
+    atm(['serve', 'stop'], root);
+  });
+
   test('tasks and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);

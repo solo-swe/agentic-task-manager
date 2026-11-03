@@ -4,6 +4,19 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [Unreleased]
+
+The sprint *Document Viewer* (release 0.29.0): open the documents and files a task refers to inside the dashboard
+(`docs/compmd-viewer-design.md`).
+
+### Added
+- **A project's files for the document viewer** (T-392): `atm serve` answers
+  `api/v1/projects/<id>/documents?path=` (what the file is, and the CompMD document atm wraps it in: Markdown as it
+  is, code in a fence of its language, an image as a Markdown image) and `…/files?path=` (an image's bytes). Read-only
+  and checked by atm-lib (`lib/documents.py`): a relative path without hidden parts, no key files, no file git
+  ignores, no symlink on the way, 1 MB at most (5 MB for an image). The version control gains `file_stamp`,
+  `read_file`, `ignored`, `tracked` and `head`.
+
 ## [0.28.0] - 2026-11-03
 
 The sprint *Rich Markdown* (T-284 to T-397): task text renders with CompMD (`docs/compmd-rendering-design.md`). Also
