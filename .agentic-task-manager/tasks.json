@@ -17295,7 +17295,7 @@
       "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-284"
       ],
@@ -17303,7 +17303,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T16:53:57Z",
+      "updated_at": "2026-11-03T16:55:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17323,7 +17323,7 @@
       "sprint": "Rich Markdown",
       "started_at": "2026-11-03T16:53:57Z",
       "started_by": "claude:b7be7288",
-      "commit": "a2977693437d4f2016b2e6b4343b19264c1a5a0e",
+      "commit": "4856644b61429fd7c847ca9f4eeb0f5fecf6f21d",
       "notes": [
         {
           "at": "2026-11-03T10:16:06Z",
@@ -17336,6 +17336,12 @@
           "kind": "note",
           "text": "Approved: Design approved in Crit (3 rounds). Left: the follow-up tasks of §9, through `/atm:create-tasks`.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T16:55:39Z",
+          "kind": "outcome",
+          "text": "Design approved: `docs/compmd-viewer-design.md`. Follow-ups in the backlog: T-392–T-396 (routes, window, rendering, links, docs) and T-391 (requirement IDs, after T-393).",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -17344,7 +17350,9 @@
           "to": "2026-11-03T16:53:56Z",
           "outcome": "approved"
         }
-      ]
+      ],
+      "completed_at": "2026-11-03T16:55:39Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-337",
