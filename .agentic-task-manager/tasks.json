@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 390,
+    "next_id": 391,
     "labels": [
       {
         "id": "architecture",
@@ -20357,6 +20357,33 @@
       "updated_by": "claude:b7be7288",
       "components": [
         "docs"
+      ]
+    },
+    {
+      "id": "T-390",
+      "name": "atm serve loses track of a running server: stop and status miss it, and it keeps running",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "Found 2026-11-03: two dashboard servers kept running on ports 8765 and 8766, serving the real `~/.agentic-task-manager`. They were started on Nov 2, 8 minutes apart, from the repository checkout's `atm.py` (`_serve-child`, before T-379). `atm serve stop` and `atm serve status` said no server was running, because the server record (`SERVER_RECORD` in the user's atm folder) named another server, which had been stopped. The two had to be stopped by hand.\n\n## Likely causes (check each with a test first)\n- `stop_server` in `atm-cli/atm/cli/serve.py` sends SIGTERM, waits until a deadline, then removes the record **whether or not the process exited**. A server that outlives the wait (as during a `--refresh` restart) is left running with no record, and the new server takes the next free port.\n- Two `ensure_server` calls at once (two sessions' SessionStart hooks, or the hook and `/atm:serve`) both find no live record, and each starts a server; the second overwrites the record.\n- Servers from another plugin root (a checkout versus the installed plugin) share one record.\n\n## Change\n- `stop_server`: if the process is still alive after the wait, escalate (SIGKILL) or keep the record and report it, never forget a live server.\n- Starting: hold a lock in the atm folder across \"is one running?\" → start → write the record, so only one server is started.\n- `atm serve status` and `stop`: also find an atm server that answers `whoami` on the usual ports (8765 upward) for this atm folder but isn't the recorded one, report it, and let `stop` stop it (it is ours: `whoami` says `atm: true` and gives its pid).\n\n## Tests\n`tests/scripts/serve.test.mjs`: a server that ignores the first SIGTERM is still stopped (or reported) by `stop`; two `atm serve start` at once leave one server; `stop` finds and stops a server whose record was overwritten.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/serve.py",
+        "tests/scripts/serve.test.mjs",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T07:22:15Z",
+      "updated_at": "2026-11-03T07:22:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "cli",
+        "api"
       ]
     }
   ]
