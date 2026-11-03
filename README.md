@@ -12,6 +12,21 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 ---
 
+## Tenets
+
+- **The data lives with the project.** Tasks are a file in your repository (`.agentic-task-manager/`), versioned with
+  your code by your own version control: branches, pull requests and history work for tasks as they do for code
+  ([Project files](#project-files)).
+- **One skill install.** Installing the plugin is all it takes: no service, no account, no database. It needs only
+  Python 3, which macOS and Linux already have ([Prerequisites](#prerequisites)).
+- **Actions through agents.** Every change to the tasks is made by an agent running a skill, or by `atm`, the command
+  the skills use; never by editing the files by hand. That keeps the file valid, locked and merged task by task
+  ([Running agents in parallel](#running-agents-in-parallel)).
+- **Visibility through the dashboard.** The dashboard shows everything, across all your projects, and changes
+  nothing: it is read-only, so what you see is always what the agents wrote ([Dashboard](#dashboard)).
+
+---
+
 ## What It Does
 
 1. **Decompose requirements into tasks** — Point the agent at your PRD, use cases, ADRs, or just describe what you need. It creates a `tasks.json` file with granular, dependency-aware tasks.
@@ -238,7 +253,9 @@ one watches CI and fixes failures.
 
 **Commit message format:** `feat(T-001): Short task name`
 
-**The loop re-reads tasks.json every iteration**, so you can edit tasks, change priorities, or mark tasks as done/skipped from the dashboard or another editor while the agent runs.
+**The loop re-reads tasks.json every iteration**, so you can change tasks while the agent runs: ask another agent
+session, or run `atm` yourself (`atm edit T-005 --priority P0`, `atm skip T-007 --reason '…'`), and the loop picks
+it up with its next task.
 
 ### `/atm:plan-sprint`
 
@@ -363,9 +380,9 @@ it runs there (both were never committed).
 
 ### tasks.json format
 
-`tasks.json` is plain, indented JSON you can read and edit by hand. Agents never touch it directly: they read and
-change it through `atm` (see [atm-cli's commands](#atm-clis-commands)), which locks it, checks it against the
-project's vocabularies and keeps the timestamps and actors right.
+`tasks.json` is plain, indented JSON you can read, and review in a diff like any file. Nobody edits it directly:
+agents, and you, change it through `atm` (see [atm-cli's commands](#atm-clis-commands)), which locks it, checks it
+against the project's vocabularies and keeps the timestamps and actors right.
 
 ```json
 {
@@ -554,13 +571,13 @@ Use dependencies to enforce execution order. A task won't be picked up until all
 Use phases to group related work. Phase 0 is typically setup/foundation. Higher phases build on earlier ones. The loop processes lower phases first.
 
 ### Manual intervention
-You can edit `tasks.json` while the loop runs. Changes are picked up on the next iteration. Edit task definitions
-freely, but change statuses with atm-cli (`atm start|done|fail|release <id>`), which locks the file
-so your change and an agent's can't overwrite each other. Use this to:
-- Mark a task as `skipped` if it's no longer needed
-- Mark a task as `blocked` to prevent the agent from picking it up
-- Add new tasks mid-loop
-- Change task descriptions or dependencies
+You can change tasks while the loop runs: ask an agent in another session, or run `atm` yourself, which locks the
+file so your change and an agent's can't overwrite each other. Changes are picked up on the next iteration. Use this
+to:
+- Skip a task that's no longer needed (`atm skip <id> --reason '…'`)
+- Block a task so the agent doesn't pick it up (`atm block <id> --on user --question '…'`)
+- Add new tasks mid-loop (`/atm:create-tasks`)
+- Change a task's description or dependencies (`atm edit <id> --description … --add-dep …`)
 
 ### Multiple agents
 See [Running agents in parallel](#running-agents-in-parallel).
