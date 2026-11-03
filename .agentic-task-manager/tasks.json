@@ -19923,7 +19923,7 @@
       "description": "`docs/layered-architecture.md` §11.8.\n\n## Change\n- A new layer `host/` below db and vcs, allowed I/O: the subprocess runner (`db/jsongit/gitrun.py`'s `git` and `vcs/git.py`'s `ask_git`/`run_git`) and the HEAD reader (`db/jsongit/worktrees.py`'s `head_branch`, `GitVcs.branch`'s copy). db and vcs import it; nothing else does. Add it to the build's layer rule.\n- One meaning of \"the branch\": the store's `here()` reads HEAD the same way (a detached HEAD gives the short SHA everywhere, not `HEAD` in a claim).\n- One way to ask whether a folder is in git.\n- Update §1's diagram and table, §2, §8, §11.8 (settled).\n\n## Tests\n- A detached HEAD: a claim's branch, the project card's and the worktree list agree (`tests/scripts/`).\n- A build test that only db and vcs may import `host`.\n- `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/host/",
@@ -19935,7 +19935,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:30:52Z",
+      "updated_at": "2026-11-03T01:46:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19951,7 +19951,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T01:30:52Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "381124639edfdebdeb61ba9683e93a5e64c055a4",
+      "completed_at": "2026-11-03T01:46:14Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T01:46:14Z",
+          "kind": "review",
+          "text": "New layer `host/git.py` (`git`, `run_git`, `in_git`, `head_branch`, `checked_out_branch`), used by db and vcs only (build rule and test). The branch is read from HEAD everywhere: a detached HEAD is the short SHA in claims, the card and the worktree list (serve test). Check: a claim before the first commit now says `main`, not null.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-386",
@@ -19964,7 +19976,7 @@
       "description": "`docs/layered-architecture.md` §11.9.\n\n## Change\n- `dashboard/build/dev-api.ts` watches `plugin/scripts/atm.py` and restarts the API server when it changes, so `npm run build:cli` is enough (no Vite restart).\n- A folder in `ATM_DEV_DATA` without a task file is listed as missing, as the old dev server did.\n- The dev page's Content-Security-Policy matches the server's (`build/security-headers.ts` against `api/server.py`'s `page_csp`).\n- Update `CLAUDE.md`'s `npm run dev` line, §11.9 (settled).\n\n## Tests\n- A test that starts `vite dev` on a temporary project and reads `api/projects` and the v1 tasks through it, then stops it and finds no server left.\n- The CSP check as a unit test.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/build/dev-api.ts",
@@ -19974,7 +19986,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:50Z",
+      "updated_at": "2026-11-03T01:46:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19988,7 +20000,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T01:46:15Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-387",

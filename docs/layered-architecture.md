@@ -898,6 +898,14 @@ are unchanged (the atm-cli suite, at every step).
 - **Decision:** the dev API restarts when `plugin/scripts/atm.py` changes; folders without a task file are listed as
   missing; the dev page's CSP is checked against the server's; a test starts `vite dev` and reads `api/projects`
   through it.
+- **Settled (T-386):** `dev-api.ts` watches `atm.py` and restarts the API server on a rebuild (once the writes have
+  settled), lists a folder without a task file as missing (an entry in its private registry, as `atm serve` lists a
+  gone folder), and logs its `ATM_HOME`. `build/security-headers.ts` exports `devCsp`, the server's policy plus
+  `DEV_ADDITIONS` (Vite's own scripts and styles, its WebSocket); `tests/unit/security-headers.test.ts` reads
+  `page_csp` from `server.py` and holds the two to exactly that. `tests/scripts/dev-api.test.mjs` starts `vite dev`
+  on a temporary project and a folder without one (on a copy of the plugin, `ATM_DEV_SCRIPTS`), reads `api/projects`
+  and the v1 tasks through it, rebuilds, and stops it: no server, no home left. Left: a hard kill of Vite
+  (`SIGKILL`) still leaves the API server running; nothing in the process can catch it.
 
 ### 11.10 Still open: worktree copies' derived values; two answers outside the schema
 
