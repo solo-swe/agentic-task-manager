@@ -8,7 +8,7 @@ import os
 
 from ...common.core import AtmError, read_json, to_json, write_json_atomic, write_text_atomic
 from ...common.errors import Conflict
-from ...common.model import vocabulary
+from ...common.model import settings_of, vocabulary
 from ..working import Working
 from .claims import claims_store_path, locked_with_claims, read_store, write_store
 from .files import archive_of, archive_path, load_archive, load_tasks, load_tasks_tolerant
@@ -54,6 +54,18 @@ class JsonGitStore:
 
     def get_vocabularies(self):
         return vocabulary(self._loaded())
+
+    def get_settings(self):
+        return settings_of(self._loaded().get("meta"))
+
+    def list_sprints(self):
+        return self.get_vocabularies()["sprints"]
+
+    def list_releases(self):
+        return self.get_vocabularies()["releases"]
+
+    def list_components(self):
+        return self.get_vocabularies()["components"]
 
     def list_tasks(self):
         return self._loaded()["tasks"]

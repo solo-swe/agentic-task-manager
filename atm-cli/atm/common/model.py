@@ -242,6 +242,17 @@ def check_setting(meta, key, choices, default):
     return value
 
 
+# The lists in meta (each its own entity in the store's interface, docs/layered-architecture.md §3.1): what isn't one of
+# them is a setting (project, description, id, repository, logo, workflow, review, archive, …)
+LIST_KEYS = ("statuses", "types", "priorities", "sprints", "releases", "components", "labels", "phases")
+
+
+def settings_of(meta):
+    """The project's settings: meta without its lists (LIST_KEYS)."""
+    meta = meta if isinstance(meta, dict) else {}
+    return {k: v for k, v in meta.items() if k not in LIST_KEYS}
+
+
 def workflow_of(data):
     """The project's workflow with its defaults filled in, or None when it has none."""
     meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}

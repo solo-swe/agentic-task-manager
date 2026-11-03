@@ -113,6 +113,13 @@ describe('layers', () => {
     assert.match(back.stderr, /api\/server\.py imports from cli\.render, which the api layer may not use/);
   });
 
+  test("the CLI and the REST API never reach a project's store: only atm-lib does", () => {
+    const peek = '\n\ndef peek(project):\n    return project.store.document()\n';
+    const { code, stderr } = brokenBuild((cli) => fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), peek));
+    assert.equal(code, 1);
+    assert.match(stderr, /cli\/show\.py:\d+ reaches a project's store \(\.store\): the cli layer reads and changes/);
+  });
+
   test('the built file ends in the one entry: --server is the REST API’s server, anything else the CLI', () => {
     const built = fs.readFileSync(path.join(REPO, 'plugin/scripts/atm.py'), 'utf8');
     assert.match(

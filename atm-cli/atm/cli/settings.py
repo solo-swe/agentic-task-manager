@@ -107,8 +107,6 @@ def cmd_logo(args):
         return
     if args.path is None:
         raise Invalid("atm logo set needs a path")
-    # The path is relative to where atm runs, like every path atm takes; it is kept relative to the project root
-    root = project.store.working_copy()
-    relative = os.path.relpath(os.path.abspath(args.path), os.path.realpath(root)).replace(os.sep, "/")
-    set_logo(project, relative)
+    # The path is relative to where atm runs, like every path atm takes; atm-lib keeps it relative to the project
+    relative = set_logo(project, args.path)
     out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")

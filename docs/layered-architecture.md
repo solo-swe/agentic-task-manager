@@ -256,6 +256,18 @@ class Registry(Protocol):                                               # the us
     def open(self, id: str) -> Store: ...
 ```
 
+**As built (T-368 to T-381, decided in the review, §11.3):** the write path is one operation, `change(fn)`: atm-lib
+changes a working copy (`db/working.py` `Working`) inside `fn`, under the store's isolation (the JSON-in-git store:
+its lock), and the store writes what changed; `work.changes()` lists each task and claim before and after, which a
+database store can turn into conditional writes. That replaces the per-entity writes and `apply` above, by design:
+the rules change several entities at once (a status, its claim, the worktrees' records) and one change keeps them
+together. The reads are per entity where atm-lib needs only one kind (`get_settings`, `get_vocabularies`,
+`list_sprints`, `list_releases`, `list_components`, `list_tasks`, `get_task`, `get_archived_task`, `list_archived`,
+`read_claims`), and the whole document (`document()`) where a rule takes it whole (§11.3). Besides: `sizes`,
+`problems` and `raw` (`atm check`, tolerant reads), `files_for_commit`, `working_copy`, `exists` and `create`
+(`atm init`), `stamp` (the REST API's ETags), `logo` and `check_logo`, `working_copies` and `copy_tasks` (the worktrees'
+copies). Only atm-lib and boot reach a project's store: the build refuses `.store` in the CLI and the REST API.
+
 `TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
 `with`); what is derived (ready, waiting, effective review) is atm-lib's. The JSON-in-git store filters in memory.
 
@@ -749,6 +761,20 @@ are unchanged (the atm-cli suite, at every step).
   move off `document()` to per-entity reads (`list_sprints`, `list_releases`, `list_components`, `get_settings`),
   area by area; `document()` remains only as `work.document` inside a change. `Project`'s store is private
   (`project._store`), and a build check refuses `.store.` outside `lib/` and `boot/`.
+- **Settled (T-381), with what is left:**
+  - §3.2 and §3.3 say `change(fn)` is the write path by design.
+  - The stores have `get_settings`, `list_sprints`, `list_releases` and `list_components` (contract-tested on both).
+    The workflow, the repository, the logo and `commit_task` read through them.
+  - The REST API and the CLI no longer touch `project.store`: what they read is atm-lib's (`task_snapshot` for the
+    v1 route and `atm list --derived --tolerant`, `project_stamp`, `working_copies`, `set_logo` taking the path as
+    given). The build refuses a `.store` or `._store` attribute in `cli/` and `api/` (checked on the syntax tree). The
+    attribute keeps its name, `store`: the check is what keeps it private, and atm-lib and boot may use it.
+  - **Left:** about a dozen of atm-lib's reads still take `document()`, because the rules they feed take the task
+    file's whole shape: `vocabulary(data)`, `unfinished_dependencies(data, …)`, `archivable(data)`,
+    `archive_hint_for(data, …)`, `release_with_merge(data, …)`, `change_status(task, data, …)`, the sprint and
+    release overviews, `project_summary`, `status_report`. Moving them off it means rewriting those rules to take
+    entities (the vocabularies, the tasks), which is option (b) of the review, not chosen. So `document()` stays in
+    the interface for them.
 
 ### 11.4 The global archive lookup in common (T-378, before the merge)
 

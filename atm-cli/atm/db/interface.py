@@ -13,6 +13,23 @@ class Store(Protocol):
         """The project's statuses, types, priorities and the rest of its vocabularies, with the defaults filled in."""
         ...
 
+    def get_settings(self) -> dict:
+        """The project's settings: meta without its lists (project, description, id, repository, logo, workflow,
+        review, archive, …)."""
+        ...
+
+    def list_sprints(self) -> List[dict]:
+        """The sprints, in order, checked (each with its state)."""
+        ...
+
+    def list_releases(self) -> List[dict]:
+        """The releases, in order, checked."""
+        ...
+
+    def list_components(self) -> List[dict]:
+        """The components, with their globs, checked."""
+        ...
+
     def list_tasks(self) -> List[dict]:
         """The working tasks (not the archived ones), in the project's order."""
         ...

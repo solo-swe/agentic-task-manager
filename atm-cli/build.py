@@ -255,6 +255,15 @@ def build():
                 continue
             drop.update(range(node.lineno, node.end_lineno + 1))
 
+        # The CLI and the REST API reach the data only through atm-lib: never a project's store (§11.3)
+        if layer_of(name) in ("cli", "api"):
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Attribute) and node.attr in ("store", "_store"):
+                    raise BuildError(
+                        f"{module_file(name)}:{node.lineno} reaches a project's store (.{node.attr}): the "
+                        f"{layer_of(name)} layer reads and changes data only through atm-lib (docs/layered-architecture.md §11.3)"
+                    )
+
         for defined_name in top_level_names(tree):
             if defined_name in defined:
                 raise BuildError(

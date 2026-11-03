@@ -5,7 +5,7 @@ import copy
 import json
 
 from ..common.errors import Conflict, Invalid
-from ..common.model import vocabulary
+from ..common.model import settings_of, vocabulary
 from .working import Working
 
 
@@ -31,6 +31,18 @@ class MemoryStore:
 
     def get_vocabularies(self):
         return vocabulary(self.document())
+
+    def get_settings(self):
+        return settings_of(self.meta)
+
+    def list_sprints(self):
+        return self.get_vocabularies()["sprints"]
+
+    def list_releases(self):
+        return self.get_vocabularies()["releases"]
+
+    def list_components(self):
+        return self.get_vocabularies()["components"]
 
     def list_tasks(self):
         return self.tasks

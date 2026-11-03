@@ -102,6 +102,24 @@ class StoreContract:
         views = {v["task"]["id"]: v["derived"] for v in task_views(Project(self.store), Filters())}
         self.assertEqual((views["T-2"]["ready"], views["T-2"]["waiting_for"]), (True, []))
 
+    def test_settings_and_the_meta_lists_are_read_apart(self):
+        def plan(work):
+            work.document["meta"].update(
+                sprints=[{"id": "S1", "state": "planned"}],
+                releases=[{"id": "1.0", "state": "planned"}],
+                components=[{"id": "ui", "paths": ["ui/**"]}],
+                repository="https://example.test/o/r",
+            )
+
+        self.store.change(plan)
+        again = self.reopen()
+        settings = again.get_settings()
+        self.assertEqual((settings["project"], settings["repository"]), ("Contract", "https://example.test/o/r"))
+        self.assertFalse({"sprints", "releases", "components", "statuses"} & set(settings))
+        self.assertEqual([s["id"] for s in again.list_sprints()], ["S1"])
+        self.assertEqual([r["id"] for r in again.list_releases()], ["1.0"])
+        self.assertEqual([c["id"] for c in again.list_components()], ["ui"])
+
     def test_it_exists_and_refuses_to_be_created_again(self):
         self.assertTrue(self.store.exists())
         with self.assertRaises(Conflict):

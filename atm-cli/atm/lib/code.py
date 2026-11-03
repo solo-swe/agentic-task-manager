@@ -18,7 +18,7 @@ CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
 
 def workflow_settings(project):
     """The project's workflow (meta.workflow with its defaults), or None when none is set."""
-    return workflow_of(project.store.document())
+    return workflow_of({"meta": project.store.get_settings()})
 
 
 def set_workflow(project, workflow_type, base=None, verify=None, max_rounds=None, commit_template=None, trailers=None, trailer=()):
@@ -87,9 +87,10 @@ def commit_task(project, task_id, files, cwd, message=None):
         raise AtmFailure("atm commit needs a git repository")
     if not files:
         raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
-    data = project.store.document()
-    task = find_task(data, task_id, project.store.get_archived_task)
-    workflow = workflow_of(data) or WORKFLOW_DEFAULTS
+    store = project.store
+    # The one task, or the error find_task gives (saying when it is archived)
+    task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)
+    workflow = workflow_of({"meta": store.get_settings()}) or WORKFLOW_DEFAULTS
     text = message if message is not None else workflow["commit_template"]
     for key in ("id", "name", "phase", "type"):
         text = text.replace("{" + key + "}", str(task.get(key, "")))

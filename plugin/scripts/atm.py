@@ -605,6 +605,17 @@ def check_setting(meta, key, choices, default):
     return value
 
 
+# The lists in meta (each its own entity in the store's interface, docs/layered-architecture.md §3.1): what isn't one of
+# them is a setting (project, description, id, repository, logo, workflow, review, archive, …)
+LIST_KEYS = ("statuses", "types", "priorities", "sprints", "releases", "components", "labels", "phases")
+
+
+def settings_of(meta):
+    """The project's settings: meta without its lists (LIST_KEYS)."""
+    meta = meta if isinstance(meta, dict) else {}
+    return {k: v for k, v in meta.items() if k not in LIST_KEYS}
+
+
 def workflow_of(data):
     """The project's workflow with its defaults filled in, or None when it has none."""
     meta = data.get("meta") if isinstance(data.get("meta"), dict) else {}
@@ -1770,6 +1781,23 @@ def move_pr_links(tasks, old, new):
 class Store(Protocol):
     def get_vocabularies(self) -> dict:
         """The project's statuses, types, priorities and the rest of its vocabularies, with the defaults filled in."""
+        ...
+
+    def get_settings(self) -> dict:
+        """The project's settings: meta without its lists (project, description, id, repository, logo, workflow,
+        review, archive, …)."""
+        ...
+
+    def list_sprints(self) -> List[dict]:
+        """The sprints, in order, checked (each with its state)."""
+        ...
+
+    def list_releases(self) -> List[dict]:
+        """The releases, in order, checked."""
+        ...
+
+    def list_components(self) -> List[dict]:
+        """The components, with their globs, checked."""
         ...
 
     def list_tasks(self) -> List[dict]:
@@ -3521,6 +3549,18 @@ class JsonGitStore:
     def get_vocabularies(self):
         return vocabulary(self._loaded())
 
+    def get_settings(self):
+        return settings_of(self._loaded().get("meta"))
+
+    def list_sprints(self):
+        return self.get_vocabularies()["sprints"]
+
+    def list_releases(self):
+        return self.get_vocabularies()["releases"]
+
+    def list_components(self):
+        return self.get_vocabularies()["components"]
+
     def list_tasks(self):
         return self._loaded()["tasks"]
 
@@ -3690,6 +3730,18 @@ class MemoryStore:
 
     def get_vocabularies(self):
         return vocabulary(self.document())
+
+    def get_settings(self):
+        return settings_of(self.meta)
+
+    def list_sprints(self):
+        return self.get_vocabularies()["sprints"]
+
+    def list_releases(self):
+        return self.get_vocabularies()["releases"]
+
+    def list_components(self):
+        return self.get_vocabularies()["components"]
 
     def list_tasks(self):
         return self.tasks
@@ -6533,6 +6585,28 @@ def archive_hint_now(project):
     return archive_hint_for(project.store.document(), project.store.sizes()["tasks"])
 
 
+def task_snapshot(project, filters):
+    """The project's tasks as the REST API's v1 route gives them (docs/multi-project-api.md §2.5), in one snapshot:
+    `meta` (as read: a tolerant read leaves out what doesn't work), `bytes` (how big the task data is), `tasks` (each
+    with what atm derives for it, `task_views`), `problems` (what a tolerant read found wrong with the file) and, for
+    the working tasks, `archive_hint` when atm suggests archiving (T-372)."""
+    snapshot = {
+        "meta": project.store.document().get("meta") or {},
+        "bytes": project.store.sizes()["tasks"],
+        "tasks": task_views(project, filters),
+        "problems": read_problems(project),
+    }
+    hint = archive_hint_now(project) if not filters.archived else None
+    if hint:
+        snapshot["archive_hint"] = hint
+    return snapshot
+
+
+def project_stamp(project):
+    """What changes when the project's data does ({tasks, archive, claims, head, copies}), for the REST API's ETags."""
+    return project.store.stamp()
+
+
 # ==== lib/code.py ====
 # atm-lib: the project's workflow (meta.workflow: direct or pull-request, docs/v4/skills-and-workflows.md §1) and the
 # code side of tasks: committing a task's files and recording the commit, the PR that contains tasks, its merge
@@ -6547,7 +6621,7 @@ CO_AUTHORED = re.compile(r"^co-authored-by:", re.IGNORECASE)
 
 def workflow_settings(project):
     """The project's workflow (meta.workflow with its defaults), or None when none is set."""
-    return workflow_of(project.store.document())
+    return workflow_of({"meta": project.store.get_settings()})
 
 
 def set_workflow(project, workflow_type, base=None, verify=None, max_rounds=None, commit_template=None, trailers=None, trailer=()):
@@ -6616,9 +6690,10 @@ def commit_task(project, task_id, files, cwd, message=None):
         raise AtmFailure("atm commit needs a git repository")
     if not files:
         raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
-    data = project.store.document()
-    task = find_task(data, task_id, project.store.get_archived_task)
-    workflow = workflow_of(data) or WORKFLOW_DEFAULTS
+    store = project.store
+    # The one task, or the error find_task gives (saying when it is archived)
+    task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)
+    workflow = workflow_of({"meta": store.get_settings()}) or WORKFLOW_DEFAULTS
     text = message if message is not None else workflow["commit_template"]
     for key in ("id", "name", "phase", "type"):
         text = text.replace("{" + key + "}", str(task.get(key, "")))
@@ -6833,7 +6908,7 @@ def ensure_repository(project):
 
 def get_repository(project):
     """meta.repository, or None."""
-    return (project.store.document().get("meta") or {}).get("repository") or None
+    return project.store.get_settings().get("repository") or None
 
 
 def set_repository(project, url, previous=None):
@@ -6865,12 +6940,15 @@ def set_repository(project, url, previous=None):
 def get_logo(project):
     """The project's logo: {logo: its path in the project, source: "set" or "found", file, type} or None (store's
     `logo`), and `set`, what meta.logo says."""
-    meta = project.store.document().get("meta") or {}
-    return {"found": project.store.logo(meta), "set": meta.get("logo")}
+    settings = project.store.get_settings()
+    return {"found": project.store.logo(settings), "set": settings.get("logo")}
 
 
-def set_logo(project, relative):
-    """Set meta.logo to the image at `relative` (a path in the project); the store refuses one it can't serve."""
+def set_logo(project, path):
+    """Set meta.logo to the image at `path` (absolute, or relative to where atm runs): kept relative to the project's
+    working copy; the store refuses one it can't serve. Returns the path kept."""
+    root = project.store.working_copy()
+    relative = os.path.relpath(os.path.abspath(path), os.path.realpath(root)).replace(os.sep, "/") if root else path
     project.store.check_logo(relative)
 
     def change(work):
@@ -6888,6 +6966,11 @@ def unset_logo(project):
 # ==== lib/worktrees.py ====
 # atm-lib: a project's working copies (git worktrees, for the JSON-in-git store; docs/layered-architecture.md §3.2):
 # the dashboard shows them on one board, each task from the working copy where it got furthest.
+
+def working_copies(project):
+    """The project's working copies, main first ([{path, branch, main}]); [] for a store without them."""
+    return project.store.working_copies()
+
 
 def worktree_copies(project):
     """The project's working copies, main first ([{path, branch, main}]), and for each other one the tasks whose copy
@@ -7158,14 +7241,10 @@ def cmd_list(args):
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
         if args.tolerant:
-            project = open_project(os.getcwd(), tolerant=True)
-            views = task_views(project, args)
-            meta = project.store.document().get("meta") or {}  # without what doesn't work, as atm serve sends it
-            read = {"meta": meta, "tasks": views, "problems": read_problems(project)}
-            hint = archive_hint_now(project) if not args.archived else None
-            if hint:
-                read["archive_hint"] = hint
-            out(to_json(read))
+            # As atm serve's v1 route reads it (the dev server and the e2e fixture take it from here)
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), args)
+            snapshot.pop("bytes")
+            out(to_json(snapshot))
         else:
             out(to_json(task_views(open_project(os.getcwd()), args)))
         return
@@ -8091,10 +8170,8 @@ def cmd_logo(args):
         return
     if args.path is None:
         raise Invalid("atm logo set needs a path")
-    # The path is relative to where atm runs, like every path atm takes; it is kept relative to the project root
-    root = project.store.working_copy()
-    relative = os.path.relpath(os.path.abspath(args.path), os.path.realpath(root)).replace(os.sep, "/")
-    set_logo(project, relative)
+    # The path is relative to where atm runs, like every path atm takes; atm-lib keeps it relative to the project
+    relative = set_logo(project, args.path)
     out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
 
 
@@ -9035,7 +9112,7 @@ class Summaries:
     def data_stamp(self, entry):
         """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""
         try:
-            stamp = self.project(entry).store.stamp()
+            stamp = project_stamp(self.project(entry))
         except AtmFailure:
             return None
         return stamp if stamp["tasks"] is not None else None
@@ -9080,7 +9157,7 @@ def api_projects(registry, summaries):
     entries = registry.entries()
     stamps = [quietly(lambda e=e: summaries.stamp(e), None) for e in entries]
     trees = [
-        quietly(lambda e=e: summaries.project(e).store.working_copies(), []) if stamp else []
+        quietly(lambda e=e: working_copies(summaries.project(e)), []) if stamp else []
         for e, stamp in zip(entries, stamps)
     ]
     logos = [quietly(lambda e=e: project_logo(summaries, e), None) if stamp else None for e, stamp in zip(entries, stamps)]
@@ -9178,19 +9255,8 @@ def api_v1_tasks(summaries, entry, query, stamp):
 
     def body():
         # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
-        project = summaries.project(entry, tolerant=True)
-        views = task_views(project, task_filters(query))
-        snapshot = {
-            "generated_at": now_iso(),
-            "meta": project.store.document().get("meta") or {},
-            "bytes": project.store.sizes()["tasks"],
-            "tasks": views,
-            "problems": read_problems(project),
-        }
-        hint = archive_hint_now(project) if not task_filters(query).archived else None
-        if hint:
-            snapshot["archive_hint"] = hint  # atm's suggestion to archive: the dashboard's footer notice (T-372)
-        return to_json(snapshot).encode("utf-8")
+        snapshot = task_snapshot(summaries.project(entry, tolerant=True), task_filters(query))
+        return to_json({"generated_at": now_iso(), **snapshot}).encode("utf-8")
 
     return body, etag
 

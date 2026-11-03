@@ -5,13 +5,12 @@ Text output is short and stable, for agents to read; --json is for anything that
 import os
 
 from ..boot.open import open_project
-from ..lib.archive import archive_hint_now
+from ..lib.archive import task_snapshot
 from ..common.core import out, to_json
 from ..lib.query import (
     Filters,
     list_matching,
     project_summary,
-    read_problems,
     status_report,
     summary,
     task_dependencies,
@@ -24,14 +23,10 @@ def cmd_list(args):
     if args.derived:
         # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
         if args.tolerant:
-            project = open_project(os.getcwd(), tolerant=True)
-            views = task_views(project, args)
-            meta = project.store.document().get("meta") or {}  # without what doesn't work, as atm serve sends it
-            read = {"meta": meta, "tasks": views, "problems": read_problems(project)}
-            hint = archive_hint_now(project) if not args.archived else None
-            if hint:
-                read["archive_hint"] = hint
-            out(to_json(read))
+            # As atm serve's v1 route reads it (the dev server and the e2e fixture take it from here)
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), args)
+            snapshot.pop("bytes")
+            out(to_json(snapshot))
         else:
             out(to_json(task_views(open_project(os.getcwd()), args)))
         return

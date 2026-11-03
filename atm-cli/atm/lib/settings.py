@@ -71,7 +71,7 @@ def ensure_repository(project):
 
 def get_repository(project):
     """meta.repository, or None."""
-    return (project.store.document().get("meta") or {}).get("repository") or None
+    return project.store.get_settings().get("repository") or None
 
 
 def set_repository(project, url, previous=None):
@@ -103,12 +103,15 @@ def set_repository(project, url, previous=None):
 def get_logo(project):
     """The project's logo: {logo: its path in the project, source: "set" or "found", file, type} or None (store's
     `logo`), and `set`, what meta.logo says."""
-    meta = project.store.document().get("meta") or {}
-    return {"found": project.store.logo(meta), "set": meta.get("logo")}
+    settings = project.store.get_settings()
+    return {"found": project.store.logo(settings), "set": settings.get("logo")}
 
 
-def set_logo(project, relative):
-    """Set meta.logo to the image at `relative` (a path in the project); the store refuses one it can't serve."""
+def set_logo(project, path):
+    """Set meta.logo to the image at `path` (absolute, or relative to where atm runs): kept relative to the project's
+    working copy; the store refuses one it can't serve. Returns the path kept."""
+    root = project.store.working_copy()
+    relative = os.path.relpath(os.path.abspath(path), os.path.realpath(root)).replace(os.sep, "/") if root else path
     project.store.check_logo(relative)
 
     def change(work):

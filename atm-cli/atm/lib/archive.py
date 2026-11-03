@@ -13,6 +13,7 @@ from ..common.errors import Invalid, NotFound
 from ..common.core import now, now_iso, parse_iso
 from ..common.model import archivable, archive_hint_for, archive_settings, find_sprint, finished_at, kind_of, vocabulary
 from .edit import next_number
+from .query import read_problems, task_views
 
 
 def drop_duplicates(data, archive):
@@ -146,3 +147,25 @@ def unarchive_tasks(project, ids):
 def archive_hint_now(project):
     """The suggestion to archive (CLI-5.1), or None: when the working tasks are over the threshold."""
     return archive_hint_for(project.store.document(), project.store.sizes()["tasks"])
+
+
+def task_snapshot(project, filters):
+    """The project's tasks as the REST API's v1 route gives them (docs/multi-project-api.md §2.5), in one snapshot:
+    `meta` (as read: a tolerant read leaves out what doesn't work), `bytes` (how big the task data is), `tasks` (each
+    with what atm derives for it, `task_views`), `problems` (what a tolerant read found wrong with the file) and, for
+    the working tasks, `archive_hint` when atm suggests archiving (T-372)."""
+    snapshot = {
+        "meta": project.store.document().get("meta") or {},
+        "bytes": project.store.sizes()["tasks"],
+        "tasks": task_views(project, filters),
+        "problems": read_problems(project),
+    }
+    hint = archive_hint_now(project) if not filters.archived else None
+    if hint:
+        snapshot["archive_hint"] = hint
+    return snapshot
+
+
+def project_stamp(project):
+    """What changes when the project's data does ({tasks, archive, claims, head, copies}), for the REST API's ETags."""
+    return project.store.stamp()

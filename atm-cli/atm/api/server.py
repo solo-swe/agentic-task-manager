@@ -22,10 +22,10 @@ from ..boot.open import open_registry, project_opener
 from ..common.core import PLUGIN_ROOT, WHOAMI, now, now_iso, read_json, to_json, write_json_atomic
 from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, page_tags
 from ..common.errors import AtmFailure
-from ..lib.archive import archive_hint_now
-from ..lib.query import Filters, list_claims, project_summary, read_problems, search_tasks, task_views
+from ..lib.archive import project_stamp, task_snapshot
+from ..lib.query import Filters, list_claims, project_summary, search_tasks
 from ..lib.settings import get_logo
-from ..lib.worktrees import worktree_copies
+from ..lib.worktrees import working_copies, worktree_copies
 
 PORT_TRIES = 100
 # Computed from the project's data, under the paths the dashboard has always used (docs/multi-project-api.md)
@@ -132,7 +132,7 @@ class Summaries:
     def data_stamp(self, entry):
         """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""
         try:
-            stamp = self.project(entry).store.stamp()
+            stamp = project_stamp(self.project(entry))
         except AtmFailure:
             return None
         return stamp if stamp["tasks"] is not None else None
@@ -177,7 +177,7 @@ def api_projects(registry, summaries):
     entries = registry.entries()
     stamps = [quietly(lambda e=e: summaries.stamp(e), None) for e in entries]
     trees = [
-        quietly(lambda e=e: summaries.project(e).store.working_copies(), []) if stamp else []
+        quietly(lambda e=e: working_copies(summaries.project(e)), []) if stamp else []
         for e, stamp in zip(entries, stamps)
     ]
     logos = [quietly(lambda e=e: project_logo(summaries, e), None) if stamp else None for e, stamp in zip(entries, stamps)]
@@ -275,19 +275,8 @@ def api_v1_tasks(summaries, entry, query, stamp):
 
     def body():
         # Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377)
-        project = summaries.project(entry, tolerant=True)
-        views = task_views(project, task_filters(query))
-        snapshot = {
-            "generated_at": now_iso(),
-            "meta": project.store.document().get("meta") or {},
-            "bytes": project.store.sizes()["tasks"],
-            "tasks": views,
-            "problems": read_problems(project),
-        }
-        hint = archive_hint_now(project) if not task_filters(query).archived else None
-        if hint:
-            snapshot["archive_hint"] = hint  # atm's suggestion to archive: the dashboard's footer notice (T-372)
-        return to_json(snapshot).encode("utf-8")
+        snapshot = task_snapshot(summaries.project(entry, tolerant=True), task_filters(query))
+        return to_json({"generated_at": now_iso(), **snapshot}).encode("utf-8")
 
     return body, etag
 

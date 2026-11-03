@@ -19645,7 +19645,7 @@
       "description": "`docs/layered-architecture.md` §11.2.\n\n## Change\n- `boot/open.py` keeps what every store has: opening a project, opening the registry; the actor stays in `boot/identity.py`.\n- A new `boot/jsongit.py` takes what only the JSON-in-git store has: `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test`, and registering by folder (`register_project`, `dashboard_id`, `hook_project`).\n- `cli/store.py` (paths, migrate, merge-driver, the lock test) imports only `boot/jsongit.py`; say in its docstring that these commands exist for the JSON-in-git store.\n- `lib/projects.py` stays (the rules about projects a second registry will need).\n- Update §1, §3.2, §11.2 (settled).\n\n## Tests\n- `npm run test:scripts` passes unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/boot/open.py",
@@ -19657,7 +19657,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:34:39Z",
+      "updated_at": "2026-11-03T00:40:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19673,7 +19673,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T00:34:39Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "2234e8b304561b2096cbbbf1a737edd52e2a79a7",
+      "completed_at": "2026-11-03T00:40:31Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T00:40:31Z",
+          "kind": "review",
+          "text": "boot is split: `boot/open.py` (any store: `open_project`, `open_registry`, `project_opener` for atm serve) and `boot/jsongit.py` (this store only: paths, migrate, merge driver, setup, lock test, registering by folder). `cli/store.py` imports only `boot/jsongit.py`; the REST API only `boot/open.py`. 541 + 126 pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-381",
@@ -19686,7 +19698,7 @@
       "description": "`docs/layered-architecture.md` §11.3.\n\n## Change\n- §3.2 and §3.3 say what is built: `store.change(fn)` with the `Working` copy and its change list is the write path (no per-entity writes, no `apply`); list the interface as it is.\n- Add per-entity reads to the Store interface and both stores: `list_sprints`, `list_releases`, `list_components`, `get_settings` (meta without the lists).\n- Move atm-lib's reads off `store.document()` area by area (sprints, releases, components, settings, code, query); `document()` remains only as `work.document` inside a change, then goes from the interface.\n- `Project`'s store becomes private (`project._store`); the REST API and the CLI get what they read from atm-lib functions (the v1 route's meta, the server's stamps and working copies, `atm logo`'s working copy).\n- A build check refuses `.store.` / `._store` outside `lib/` and `boot/`.\n- Update §3.2, §3.3, §11.3 (settled).\n\n## Tests\n- Contract tests for each new read on both stores; a build test for the `.store` check; `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-378"
       ],
@@ -19704,7 +19716,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:47Z",
+      "updated_at": "2026-11-03T00:40:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19718,7 +19730,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T00:40:32Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-382",

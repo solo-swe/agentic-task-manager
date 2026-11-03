@@ -2,6 +2,11 @@
 the dashboard shows them on one board, each task from the working copy where it got furthest."""
 
 
+def working_copies(project):
+    """The project's working copies, main first ([{path, branch, main}]); [] for a store without them."""
+    return project.store.working_copies()
+
+
 def worktree_copies(project):
     """The project's working copies, main first ([{path, branch, main}]), and for each other one the tasks whose copy
     there differs from the main one's (or that only it has), under `tasks`. A copy of a task decided in another
