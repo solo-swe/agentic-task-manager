@@ -825,6 +825,14 @@ are unchanged (the atm-cli suite, at every step).
   get the reload offer (the server's build changed); what it shows until then hasn't been checked.
 - **Decision:** the routes stay removed. The release task checks a 0.26.0 page left open across the update; if it
   shows an error rather than the reload offer, a small fix makes its 404s lead to the reload.
+- **Settled (T-388):** checked with Hakan, no fix needed. A 0.26.0 page was opened on the released 0.26.0 server
+  (temporary `ATM_HOME`), the server was replaced by this branch's on the same port (`--refresh` skips it while
+  both say 0.26.0, so it was stopped and started by hand, as `--refresh` does), and the page was left open. Its
+  next poll showed the reload bar (`api/projects` and `__atm/whoami` still answer, and the build differs). The
+  board kept its tasks with no error: a failed `tasks.json` fetch during a poll is only logged. Task details and
+  the other tabs worked, and the reload brought up the new dashboard normally. Both raw routes answer 404. Not
+  tried live, because the project had no archive: from 0.26.0's `loadArchive`, a 404 archive reads as an empty one,
+  so archived tasks would just disappear until the reload.
 
 ### 11.6 The public surface is two modules (T-384)
 

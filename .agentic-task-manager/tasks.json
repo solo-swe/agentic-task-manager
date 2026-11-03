@@ -20027,7 +20027,7 @@
       "description": "`docs/layered-architecture.md` §11.10 A.\n\n## Change\n- `lib/worktrees.py` opens each linked worktree's own store and returns its differing tasks as views, `{task, derived}`, computed on that worktree's data: what `atm next` would do there (a dependency done in another worktree counts once the branches merge).\n- `worktrees.json` gives those views; `docs/multi-project-api.md` §2.2 says so.\n- The dashboard takes a copy's derived values from it and drops its own rules for copies: the readiness fallback in `kanban.ts`, together-now in `waiting.ts`, the effective-review fallback in `review.ts` (`hasDerived`).\n- Update §11.10 A (settled).\n\n## Tests\n- The serve test on worktrees checks the derived values of a copy.\n- The e2e specs for linked worktrees; the unit tests of the three modules; `npm run check`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-378",
         "T-381"
@@ -20046,7 +20046,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:52:47Z",
+      "updated_at": "2026-11-03T02:06:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20064,7 +20064,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T01:52:47Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "85bb722f66a9ed9c9d14e4582e1354757fa4040f",
+      "completed_at": "2026-11-03T02:06:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T02:06:12Z",
+          "kind": "review",
+          "text": "`worktrees.json` gives each linked worktree’s differing tasks as views, derived on that worktree’s own store (`copy_store`, tolerant, symlink-checked). The dashboard reads them and its readiness, together-now and effective review take atm’s word only. Check: `effectiveRelease` keeps its fallback (§11.10 A); 359 e2e pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-388",
@@ -20077,13 +20089,13 @@
       "description": "`docs/layered-architecture.md` §11.5. Part of the next release's checks, done together with Hakan.\n\n## Check\n- Serve a project with the released 0.26.0 plugin and open its dashboard; update to this branch's plugin so the server restarts with the new dashboard; look at the page left open.\n- It should show the reload offer (the server's build changed) and nothing broken until the reload; the removed raw routes (`p/<id>/tasks.json`, `p/<id>/tasks-archive.json`) answer 404.\n\n## If it shows an error instead\nA small fix in the dashboard so a 404 from a removed route leads to the reload offer, with a unit test.\n\nUpdate §11.5 (settled) with what was found.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:52Z",
+      "updated_at": "2026-11-03T06:34:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20097,7 +20109,9 @@
       "with": "user",
       "components": [
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T06:34:43Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-389",
