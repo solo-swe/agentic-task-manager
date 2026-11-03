@@ -328,8 +328,11 @@ None of it tells agents anything new to do. New entry points: `atm --dir` and
 for the sandbox, so no live run: this written review takes its place.
 
 **The layered architecture (T-360 to T-376).** atm-cli's code moved into layers (`docs/layered-architecture.md`):
-common, db (the JSON-in-git store, the registry), vcs (git for code), atm-lib, boot, the CLI, the REST API, and app
-(the `atm` command). What a user and an agent see is unchanged: the same commands, output, exit codes and files (the
+common, db (the JSON-in-git store, the registry), vcs (git for code), atm-lib, boot, the CLI and the REST API; the
+CLI and the server are two processes (T-379): `atm serve` starts the server with the plugin's new internal launcher
+`plugin/scripts/atm-serve` (this Python, the same `atm.py`, entered with `--server`), as it started `atm _serve-child`
+before. The launcher is atm's own, run only by `atm serve` and the dev server; no skill or permission names it, and it
+takes what `_serve-child` took (the user's atm folder and a port). What a user and an agent see is unchanged: the same commands, output, exit codes and files (the
 atm-cli suite proves it at every step), and no skill or `plugin/CLAUDE.md` text changed, so there is no agent sandbox
 run. What changes for these invariants:
 - **The REST API reads only through atm-lib (B3).** The server no longer sends `tasks.json` and `tasks-archive.json`

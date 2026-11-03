@@ -37,6 +37,7 @@ MODULES = [
     "common.errors",
     "common.vocabularies",
     "common.core",
+    "common.dashboard",
     "common.model",
     "common.fields",
     "common.types",
@@ -77,8 +78,6 @@ MODULES = [
     "boot.identity",
     "boot.open",
     "cli.render",
-    "api.dashboard",
-    "api.server",
     "cli.query",
     "cli.status",
     "cli.claims",
@@ -92,13 +91,23 @@ MODULES = [
     "cli.projects",
     "cli.settings",
     "cli.store",
+    "cli.serve",
     "cli.main",
-    "app.main",
+    "api.server",
 ]
 
+# The end of the built file: the one entry, as a process starts it. `--server` (plugin/scripts/atm-serve) runs the
+# REST API's server process; anything else is the CLI (plugin/scripts/atm). Every module is in one namespace there,
+# so this is the only place the two meet, and neither imports the other (docs/layered-architecture.md §11.1).
+ENTRY = """
+if __name__ == "__main__":
+    if sys.argv[1:2] == [SERVER_ENTRY]:
+        sys.exit(serve_main(sys.argv[2:]))
+    sys.exit(main(sys.argv[1:]))
+"""
+
 # The layers a layer may import from (docs/layered-architecture.md §1). `boot` is where a project is opened: the one
-# place that picks the store and the version control, so atm-lib knows only their interfaces. `app` is the `atm`
-# command itself, the one place that hands the REST API's server commands to the CLI (the two never import each other).
+# place that picks the store and the version control, so atm-lib knows only their interfaces.
 ALLOWED = {
     "common": {"common"},
     "db-interface": {"common", "db-interface"},
@@ -109,7 +118,6 @@ ALLOWED = {
     "boot": {"common", "db-interface", "db", "vcs-interface", "vcs", "lib", "boot"},
     "cli": {"common", "lib", "boot", "cli"},
     "api": {"common", "lib", "boot", "api"},
-    "app": {"cli", "api", "app"},
 }
 
 
@@ -229,6 +237,9 @@ def build():
                 )
             elif isinstance(node, ast.ImportFrom):
                 source_module = resolve(name, node)
+                # The layer rule first: a forbidden import is that, wherever the two modules are in the order
+                if source_module in MODULES:
+                    check_layers({name: {source_module}})
                 if source_module not in MODULES[:index]:
                     raise BuildError(f"{module_file(name)} imports from {source_module}, which isn't an earlier module")
                 module_imports[name].add(source_module)
@@ -262,7 +273,10 @@ def build():
     imports = [f"import {name}" for name in sorted(plain_imports)]
     imports += [f"from {module} import {', '.join(sorted(names))}" for module, names in sorted(from_imports.items())]
     docstring = '"""' + package_doc.value.value + '"""'
-    return HEADER + docstring + "\n\n" + "\n".join(imports) + "\n\n\n" + "\n\n\n".join(sections) + "\n"
+    for name in ("SERVER_ENTRY", "serve_main", "main"):
+        if name not in defined:
+            raise BuildError(f"the entry needs {name}, which no module defines")
+    return HEADER + docstring + "\n\n" + "\n".join(imports) + "\n\n\n" + "\n\n\n".join(sections) + "\n\n" + ENTRY
 
 
 GENERATED = "Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run"

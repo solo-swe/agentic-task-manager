@@ -21,7 +21,9 @@ from .edit import cmd_add, cmd_check, cmd_edit
 from .query import cmd_deps, cmd_list, cmd_status, cmd_summary
 from .status import cmd_note, cmd_status_change
 from .show import cmd_show
+from ..common.dashboard import DEFAULT_PORT
 from .projects import cmd_projects
+from .serve import cmd_serve, refresh_server
 from .settings import cmd_init, cmd_logo, cmd_repository
 from .store import cmd_lock_test, cmd_merge_driver, cmd_migrate, cmd_paths
 
@@ -148,18 +150,9 @@ Every command takes --json, and `atm <command> --help` describes it.
 """
 
 
-# Commands that don't check for an outdated dashboard server first: serve does it itself, the server process is the
-# server, and git runs the merge driver in the middle of a merge
-NO_REFRESH = ("serve", "_serve-child", "merge-driver", "_lock-test", "help", "version")
-
-
-class Serving:
-    """The REST API's server commands, which the CLI runs but doesn't import (the two are siblings on atm-lib,
-    docs/layered-architecture.md §1): `atm serve`, the server process itself, and the refresh of a server whose
-    dashboard is older than this plugin's. app/main.py hands them over."""
-
-    def __init__(self, serve, serve_child, refresh, default_port):
-        self.serve, self.serve_child, self.refresh, self.default_port = serve, serve_child, refresh, default_port
+# Commands that don't check for an outdated dashboard server first: serve does it itself, and git runs the merge
+# driver in the middle of a merge (the server process isn't a CLI command: atm.py --server, plugin/scripts/atm-serve)
+NO_REFRESH = ("serve", "merge-driver", "_lock-test", "help", "version")
 
 
 class Parser(argparse.ArgumentParser):
@@ -180,7 +173,7 @@ def cmd_help(args):
         sys.stdout.write(USAGE)
 
 
-def build_parser(serving):
+def build_parser():
     parser = Parser(prog="atm", add_help=False)
     commands = parser.add_subparsers(dest="command", parser_class=Parser)
 
@@ -205,7 +198,7 @@ def build_parser(serving):
     command("paths", cmd_paths, "print where this project's task files are")
     command("migrate", cmd_migrate, "move an old tasks.json into .agentic-task-manager/ and set the folder up")
 
-    serve = command("serve", serving.serve, "run the dashboard server, one for all your projects, in the background")
+    serve = command("serve", cmd_serve, "run the dashboard server, one for all your projects, in the background")
     serve.add_argument("action", nargs="?", default="start", choices=["start", "stop", "status"])
     serve.add_argument("--open", action="store_true", help="also open the dashboard in the browser")
     serve.add_argument("--all", action="store_true", help="show the overview of all projects, not this project")
@@ -214,7 +207,7 @@ def build_parser(serving):
         action="store_true",
         help="only restart a running server that has an older dashboard than this plugin (the SessionStart hook)",
     )
-    serve.add_argument("--port", type=int, default=serving.default_port, help="the port to try first")
+    serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="the port to try first")
     serve.add_argument("--dir", metavar="PATH", help="the project to show (default: the current directory's)")
 
     for name, description in (
@@ -563,9 +556,6 @@ def build_parser(serving):
     projects.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "prune"])
     projects.add_argument("target", nargs="?", help="add: the project's folder (default: here); remove: its ID or path")
 
-    child = command("_serve-child", serving.serve_child, "the detached server process", hidden=True)
-    child.add_argument("home")
-    child.add_argument("port", type=int)
     lock_test = command("_lock-test", cmd_lock_test, "test hook: hold the lock", hidden=True)
     lock_test.add_argument("seconds", type=float, nargs="?", default=0.0)
     return parser, commands.choices
@@ -588,7 +578,7 @@ def leading_dir(argv):
     return None, argv
 
 
-def main(argv, serving):
+def main(argv):
     target, argv = leading_dir(argv)
     if target is not None:
         # As if started in that folder: the project is found from there, and relative paths count from there
@@ -599,7 +589,7 @@ def main(argv, serving):
     if not argv or argv[0] in ("-h", "--help"):
         sys.stdout.write(USAGE)
         return 0
-    parser, commands = build_parser(serving)
+    parser, commands = build_parser()
     # `atm run <id> -- <command>`: what follows -- is the command to run, never atm's own options
     child = None
     if argv[0] == "run" and "--" in argv:
@@ -620,7 +610,7 @@ def main(argv, serving):
             commands[argv[0]].error(f"unrecognized arguments: {' '.join(extra)}")
         if argv[0] not in NO_REFRESH:
             try:
-                serving.refresh()  # after a plugin update, the first atm command brings the dashboard server along
+                refresh_server()  # after a plugin update, the first atm command brings the dashboard server along
             except Exception:
                 pass  # never in the way of the command itself
         args.run(args)

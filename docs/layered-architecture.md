@@ -28,9 +28,8 @@ flowchart TD
     Tools["Other tools<br/><i>MCP server, scripts</i>"]
 
     subgraph Python["atm (Python)"]
-        App["app<br/><i>the atm command: hands the API's<br/>server commands to the CLI</i>"]
-        API["REST API<br/><i>atm serve</i>"]
-        CLI["CLI<br/><i>atm …</i>"]
+        API["REST API<br/><i>the server process,<br/>plugin/scripts/atm-serve</i>"]
+        CLI["CLI<br/><i>atm …, plugin/scripts/atm;<br/>atm serve starts the server</i>"]
         Boot["boot<br/><i>opens a project: picks the store<br/>and the vcs; the actor</i>"]
         Lib["atm-lib<br/><i>all business logic</i>"]
         DbI["db interface"]
@@ -46,8 +45,7 @@ flowchart TD
     end
 
     Dashboard -- "HTTP only" --> API
-    App --> CLI
-    App --> API
+    CLI -. "starts and stops<br/>the process" .-> API
     API --> Lib
     CLI --> Lib
     API --> Boot
@@ -70,10 +68,12 @@ flowchart TD
     style Shared fill:none,stroke:none
 ```
 
-The layers as built (T-361 to T-376). Every layer inside *atm (Python)* may use common; the Dashboard uses only the
-types generated from it. The arrows are the build's layer rule (`ALLOWED` in `atm-cli/build.py`): nothing else may
-import across layers. **app** and the reach of **boot** are the code's, not the first design's; §11 says where the
-code differs from the design and what follows (the `app` layer is to give way to two launchers, §11.1).
+The layers as built (T-361 to T-376, and the follow-ups of §11). Every layer inside *atm (Python)* may use common;
+the Dashboard uses only the types generated from it. The solid arrows are the build's layer rule (`ALLOWED` in
+`atm-cli/build.py`): nothing else may import across layers. The dashed arrow between the CLI and the REST API is
+between processes, not an import: the CLI starts, stops and refreshes the server process (`plugin/scripts/atm-serve`),
+and the built `atm.py` enters as one or the other (§11.1). The reach of **boot** is the code's, not the first
+design's; §11 says where the code differs from the design and what follows.
 
 **What implements the interfaces:**
 
@@ -99,7 +99,6 @@ flowchart TD
 |---|---|---|
 | **Dashboard** | Shows projects; fetches from the REST API; computes what is presentation (charts, forecasts, velocity, burndown, groupings, layout) | Reads files; holds business rules (what is ready, archivable, waiting on whom) |
 | **Generated TS types** | The types of the API's responses, generated from common's schema; the Dashboard imports them | Is edited by hand |
-| **app** | The `atm` command: the CLI, with the REST API's server commands (`serve`, the server process, the refresh) handed to it (`app/main.py`) | Holds logic; is imported by anything |
 | **REST API** | Maps HTTP requests to atm-lib calls and results to JSON; the HTTP concerns (Host check, ETags, sizes, caching) | Holds logic; touches storage |
 | **CLI** | Maps arguments to atm-lib calls and results to text or `--json`; exit codes | Holds logic; touches storage |
 | **boot** | Opens a project: picks the store and the vcs; works out the actor; reaches what only the JSON-in-git store has (paths, migrations, the merge driver, the registry by folder) | Holds business rules |
@@ -118,9 +117,11 @@ flowchart TD
 - the db and vcs implementations depend on their interfaces;
 - every Python layer may use common.
 
-Nothing depends upward, and the CLI and REST API never call each other. The `atm` command is both (`atm serve` starts
-the REST API's server; every command first restarts a server older than the plugin): **app** (`app/main.py`), on top,
-hands the API's server commands to the CLI's parser, so neither imports the other (T-374).
+Nothing depends upward, and the CLI and REST API never call each other. They are two processes: the CLI
+(`plugin/scripts/atm`) starts, stops and refreshes the server (`plugin/scripts/atm-serve`, the REST API) as a process,
+through its record and pid; what both know about the server (its record, the dashboard file's tags) is common's
+(`common/dashboard.py`). The one built `atm.py` ends in a single entry the build writes: `--server` runs the server,
+anything else the CLI (T-379, §11.1).
 
 What a store alone has (the JSON-in-git store's paths, lock, merge driver and migrations; the user's registry of
 projects) is reached through boot, by the commands about it (`atm paths`, `migrate`, `merge-driver`, `init`'s merge
@@ -493,7 +494,7 @@ column.
 | `projects.prune` | — | the removed ones | drops projects whose folder is gone | `projects prune` |
 
 **Not in atm-lib** (they are about processes or one store, not business logic): `version` and `help` (CLI);
-`serve` and `_serve-child` (the REST API's launcher); `run` (the CLI keeps a claim alive around a child process with
+`serve` (the CLI starts, stops and refreshes the server process, `plugin/scripts/atm-serve`, which is the REST API); `run` (the CLI keeps a claim alive around a child process with
 `claims.heartbeat`); `merge-driver`, `migrate` and `paths` (the JSON-in-git store, §3.2); `_lock-test` (a test hook
 of that store).
 
@@ -596,7 +597,6 @@ atm-cli/atm/
   boot/          opening a project: picks the store and the vcs; the actor; what is the JSON-in-git store's alone
   cli/           argparse, renderers (text, --json), exit codes
   api/           the REST API: routes, HTTP handling, the launcher
-  app/           the `atm` command: the CLI with the API's server commands handed to it
 ```
 
 - `atm-cli/build.py` already refuses an import from a module later in `MODULES`. It gets layers: each module's layer
@@ -701,6 +701,13 @@ are unchanged (the atm-cli suite, at every step).
   dispatch in the one built file). The CLI manages the server as a process (spawn, signal, read its record); the
   cheap refresh check stays in-process, with the server record's format and the dashboard's version tags in common.
   `atm serve` and every skill, hook and permission stay as they are. The `app` layer goes.
+- **Settled (T-379):** `cli/serve.py` has `atm serve` (start, stop, status, refresh) and the refresh every command
+  runs first; it starts the server with `common/dashboard.py`'s `server_command` (this Python, the built `atm.py`
+  with `--server`). `api/server.py` is the server process only, entered with `serve_main`. `common/dashboard.py`
+  holds the dashboard file's tags and the server record's names. The build appends the one entry (`ENTRY` in
+  `atm-cli/build.py`) and checks the layer rule on each import before the module order, so an import between the CLI
+  and the API is refused as such either way. `plugin/scripts/atm-serve` is the server's launcher (the dev API uses
+  it); the hidden `_serve-child` command, `app/` and `Serving` are gone. Users, skills and hooks see no change.
 
 ### 11.2 What only one store has, through boot (T-380)
 
@@ -811,7 +818,7 @@ are unchanged (the atm-cli suite, at every step).
 
 - **Design:** step 15: the dev server runs the real REST API; `dev-data.ts` goes. Done.
 - **Built (T-375):** `dashboard/build/dev-api.ts` lists the `ATM_DEV_DATA` projects in a temporary `ATM_HOME`, starts
-  this checkout's `atm _serve-child` on the first free port from 8865, and forwards `api/`, `p/` and `__atm/` to it
+  this checkout's server (`atm _serve-child`; since T-379 `plugin/scripts/atm-serve`) on the first free port from 8865, and forwards `api/`, `p/` and `__atm/` to it
   (rewriting `Host`, so the DNS-rebinding check is Vite's own host check); it stops with Vite.
 - **Problems:** an atm-cli change needs a Vite restart; a folder without a task file isn't listed (before: listed as
   missing); the dev page's CSP isn't checked against the server's; nothing tests it; a hard kill of Vite leaves the

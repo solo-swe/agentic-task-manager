@@ -102,11 +102,26 @@ describe('layers', () => {
     assert.match(stderr, /cli\/show\.py imports from db\.memory, which the cli layer may not use/);
   });
 
-  test('the CLI and the REST API never import each other: app/ puts them together', () => {
+  test('the CLI and the REST API never import each other: the built file’s entry puts them together', () => {
     const { stderr } = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), '\nfrom ..api.server import DEFAULT_PORT\n'),
+      fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), '\nfrom ..api.server import PORT_TRIES\n'),
     );
     assert.match(stderr, /cli\/show\.py imports from api\.server, which the cli layer may not use/);
+    const back = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/api/server.py'), '\nfrom ..cli.render import report_expired\n'),
+    );
+    assert.match(back.stderr, /api\/server\.py imports from cli\.render, which the api layer may not use/);
+  });
+
+  test('the built file ends in the one entry: --server is the REST API’s server, anything else the CLI', () => {
+    const built = fs.readFileSync(path.join(REPO, 'plugin/scripts/atm.py'), 'utf8');
+    assert.match(
+      built,
+      /if __name__ == "__main__":\n {4}if sys\.argv\[1:2\] == \[SERVER_ENTRY\]:\n {8}sys\.exit\(serve_main\(sys\.argv\[2:\]\)\)\n {4}sys\.exit\(main\(sys\.argv\[1:\]\)\)\n$/,
+    );
+    const launcher = fs.readFileSync(path.join(REPO, 'plugin/scripts/atm-serve'), 'utf8');
+    assert.match(launcher, /exec python3 "\$dir\/atm\.py" --server "\$@"/);
+    assert.ok(fs.statSync(path.join(REPO, 'plugin/scripts/atm-serve')).mode & 0o111, 'atm-serve is executable');
   });
 
   test('a module outside the layers is refused', () => {

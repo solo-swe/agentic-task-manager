@@ -1,0 +1,10 @@
+#!/bin/sh
+# atm-serve: the dashboard server process (atm's REST API), internal: `atm serve` starts it, with the user's atm
+# folder and the first port to try. Runs atm.py (standard library only) entered as the server, with Python 3.9+.
+dir=$(cd "$(dirname "$0")" && pwd)
+
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+  exec python3 "$dir/atm.py" --server "$@"
+fi
+echo "atm-serve: needs Python 3.9 or newer (python3). Install it and try again." >&2
+exit 127

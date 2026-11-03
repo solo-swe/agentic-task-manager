@@ -37,7 +37,7 @@ not `npm install`: it installs exactly the locked versions and never updates the
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):
-- `npm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`atm _serve-child` on a
+- `npm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
   temporary `ATM_HOME`, so your own `atm serve` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
   to it) for this repo's `.agentic-task-manager/`, or for other folders with
   `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev`. Rebuild atm-cli (`npm run build:cli`) and
@@ -64,7 +64,8 @@ earlier ones, and no two modules may define the same top-level name). The pre-co
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 
 **Layers** (`docs/layered-architecture.md`): every module is in a layer's folder (`common/`, `db/`, `vcs/`, `lib/`,
-`boot/`, `cli/`, `api/`, and `app/`, the `atm` command that puts the CLI and the REST API together), and the build
+`boot/`, `cli/`, `api/`; the CLI and the REST API are two processes, `plugin/scripts/atm` and the internal
+`plugin/scripts/atm-serve`, and never import each other), and the build
 refuses an import the layer rule forbids, with no exceptions. atm-lib's public surface, for other tools, is `atm.lib`
 (`atm/lib/__init__.py`, its `__all__`) with `atm.boot.open_project`; a change to it goes in the changelog. atm-lib's
 unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `npm run test:scripts`).

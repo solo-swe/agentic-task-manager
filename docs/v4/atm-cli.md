@@ -48,9 +48,12 @@ atm-cli/
     lib/          # atm-lib: every business action and query; __init__.py is its public surface
     boot/         # opening a project (picks the store and the vcs), the actor, what only the JSON-in-git store has
     cli/          # argparse (main.py) and one module per area of commands, rendering text and --json
-    api/          # the REST API: server.py (atm serve, its routes) and dashboard.py (the page's tags)
-    app/          # main.py: the `atm` command, the CLI with the API's server commands handed to it
+    api/          # the REST API: server.py, the server process (its routes), run by plugin/scripts/atm-serve
 ```
+
+The built `atm.py` ends in one entry: `--server` runs the server process (what `plugin/scripts/atm-serve` passes),
+anything else the CLI (`plugin/scripts/atm`). `atm serve` (`cli/serve.py`) starts, stops and refreshes the server
+as a process.
 
 **Options considered:** Python's `zipapp` (one file, but a zip archive nobody can read); shipping the package folder
 (no build, but about 15 files in the plugin).

@@ -15,6 +15,8 @@ import type { Plugin } from 'vite';
 
 /** This checkout's atm-cli, as the plugin ships it */
 const ATM = fileURLToPath(new URL('../../plugin/scripts/atm.py', import.meta.url));
+/** The server process's launcher (the REST API), as `atm serve` starts it */
+const ATM_SERVE = fileURLToPath(new URL('../../plugin/scripts/atm-serve', import.meta.url));
 /** The paths atm serve answers (docs/multi-project-api.md §2); the rest is the dev server's own */
 const API_PATHS = /^\/(api\/|p\/|__atm\/)/;
 /** Where the dev API server starts looking for a free port: away from atm serve's 8765 */
@@ -31,7 +33,7 @@ function startApi(dirs: string[], log: (line: string) => void): { port: () => nu
       log(`  atm: can't list ${dir}: ${String((e as { stderr?: Buffer }).stderr ?? e).trim()}`);
     }
   }
-  const child: ChildProcess = spawn('python3', [ATM, '_serve-child', home, String(FIRST_PORT)], {
+  const child: ChildProcess = spawn(ATM_SERVE, [home, String(FIRST_PORT)], {
     env,
     stdio: ['ignore', 'ignore', 'inherit'],
   });
