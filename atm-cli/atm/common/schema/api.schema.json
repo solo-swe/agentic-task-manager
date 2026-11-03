@@ -85,6 +85,360 @@
         "waits_for": { "type": "array", "items": { "$ref": "#/$defs/DependencyItem" } },
         "waited_on_by": { "type": "array", "items": { "$ref": "#/$defs/DependencyItem" } }
       }
+    },
+    "SprintNumbers": {
+      "type": "object",
+      "description": "A sprint as the overview shows it: done of its tasks but the skipped",
+      "required": ["id", "state", "due", "release", "done", "total", "percent"],
+      "properties": {
+        "id": { "type": "string" },
+        "state": { "enum": ["planned", "active", "closed"] },
+        "due": { "type": ["string", "null"] },
+        "release": { "type": ["string", "null"] },
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "Its tasks but the skipped" },
+        "percent": { "type": "integer" }
+      }
+    },
+    "ActiveSprint": {
+      "type": "object",
+      "description": "The active sprint for the overview's cards (SR-7.7), with its progress",
+      "required": ["id", "state", "due", "release", "done", "total", "percent", "goal"],
+      "properties": {
+        "id": { "type": "string" },
+        "state": { "enum": ["planned", "active", "closed"] },
+        "due": { "type": ["string", "null"] },
+        "release": { "type": ["string", "null"] },
+        "done": { "type": "integer" },
+        "total": { "type": "integer", "description": "Its tasks but the skipped" },
+        "percent": { "type": "integer" },
+        "goal": { "type": ["string", "null"] }
+      }
+    },
+    "WorkingClaim": {
+      "type": "object",
+      "description": "A live claim: who works on what",
+      "required": ["task", "name", "agent", "branch"],
+      "properties": {
+        "task": { "type": "string" },
+        "name": { "type": "string", "description": "The task's name, capped at 80 characters" },
+        "agent": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"] }
+      }
+    },
+    "TaskName": {
+      "type": "object",
+      "description": "A task by its ID and name (capped at 80 characters in a summary)",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "LastDone": {
+      "type": "object",
+      "description": "The task completed last",
+      "required": ["id", "name", "completed_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "completed_at": { "type": "string" }
+      }
+    },
+    "NeedsYou": {
+      "type": "object",
+      "description": "How many tasks need the user, by why",
+      "required": ["review", "blocked_on_user", "together"],
+      "properties": {
+        "review": { "type": "integer", "description": "In review, waiting for the reviewer" },
+        "blocked_on_user": { "type": "integer" },
+        "together": { "type": "integer", "description": "To do with the user now (SR-6.6)" }
+      }
+    },
+    "NeedsYouItem": {
+      "type": "object",
+      "description": "A task that needs the user, and why: what the \"need you\" chips list",
+      "required": ["id", "name", "reason"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "reason": { "enum": ["review", "blocked", "together"] }
+      }
+    },
+    "GitPr": {
+      "type": "object",
+      "description": "The latest PR recorded on the tasks (atm pr)",
+      "required": ["number", "url", "state"],
+      "properties": {
+        "number": { "type": "integer" },
+        "url": { "type": ["string", "null"], "description": "Only a web address (docs/security-review.md F9)" },
+        "state": { "enum": ["open", "merged"] }
+      }
+    },
+    "GitSummary": {
+      "type": "object",
+      "description": "The project's git line for its card (T-206)",
+      "required": ["branch", "pr"],
+      "properties": {
+        "branch": { "type": ["string", "null"], "description": "The main worktree's branch" },
+        "pr": { "anyOf": [{ "$ref": "#/$defs/GitPr" }, { "type": "null" }] }
+      }
+    },
+    "BoardCard": {
+      "type": "object",
+      "description": "A card on the All projects board: what a project's Kanban card shows, plus its column's fields",
+      "required": ["id", "name", "type", "sprint", "priority", "labels"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": ["string", "null"] },
+        "sprint": { "type": ["string", "null"], "description": "The task's sprint; null in the backlog" },
+        "priority": { "type": ["string", "null"] },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "by": { "type": ["string", "null"], "description": "In progress: who works on it" },
+        "since": { "type": ["string", "null"], "description": "In progress, review, blocked: since when" },
+        "waiting_on": { "type": ["string", "null"], "description": "Blocked: who decides" },
+        "questions": { "type": "integer", "description": "Blocked: how many questions" },
+        "completed_at": { "type": ["string", "null"], "description": "Done: when" },
+        "with_user": { "type": "boolean", "description": "To do (T-349): done with the user" },
+        "waiting_for": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "To do (T-349): the dependencies it waits for"
+        }
+      }
+    },
+    "BoardColumn": {
+      "type": "object",
+      "description": "A project's column: its first cards, and how many there are in all",
+      "required": ["count", "cards"],
+      "properties": {
+        "count": { "type": "integer" },
+        "cards": { "type": "array", "items": { "$ref": "#/$defs/BoardCard" } }
+      }
+    },
+    "ProjectBoard": {
+      "type": "object",
+      "description": "The project's cards for the All projects board (T-257), by column",
+      "required": ["todo", "active", "review", "blocked", "done"],
+      "properties": {
+        "todo": { "$ref": "#/$defs/BoardColumn" },
+        "active": { "$ref": "#/$defs/BoardColumn" },
+        "review": { "$ref": "#/$defs/BoardColumn" },
+        "blocked": { "$ref": "#/$defs/BoardColumn" },
+        "done": { "$ref": "#/$defs/BoardColumn" }
+      }
+    },
+    "ProjectStats": {
+      "type": "object",
+      "description": "The overview card's line, archived tasks included (T-255)",
+      "required": ["started", "tasks", "agent_minutes"],
+      "properties": {
+        "started": { "type": ["string", "null"] },
+        "tasks": { "type": "integer" },
+        "agent_minutes": { "type": "integer" }
+      }
+    },
+    "ProjectSummary": {
+      "type": "object",
+      "description": "A project's numbers for the overview and the project selector (api/projects' summary, atm summary)",
+      "required": [
+        "total",
+        "done",
+        "skipped",
+        "percent",
+        "active_sprint",
+        "recent_sprints",
+        "agents_working",
+        "working",
+        "next",
+        "last_done",
+        "needs_you",
+        "needs_you_tasks",
+        "git",
+        "description",
+        "last_activity",
+        "completions_14d",
+        "board",
+        "board_active_sprint",
+        "stats"
+      ],
+      "properties": {
+        "total": { "type": "integer" },
+        "done": { "type": "integer" },
+        "skipped": { "type": "integer" },
+        "percent": { "type": "integer", "description": "done / (total - skipped)" },
+        "active_sprint": {
+          "anyOf": [{ "$ref": "#/$defs/ActiveSprint" }, { "type": "null" }],
+          "description": "null when none is active"
+        },
+        "recent_sprints": {
+          "type": ["array", "null"],
+          "items": { "$ref": "#/$defs/SprintNumbers" },
+          "description": "Up to 4 sprints with tasks, in the project's order: the open ones, then the latest closed; null without sprints"
+        },
+        "agents_working": { "type": "integer" },
+        "working": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WorkingClaim" },
+          "description": "Live claims, oldest first"
+        },
+        "next": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TaskName" },
+          "description": "Up to 2 tasks the loop takes next, in its order"
+        },
+        "last_done": { "anyOf": [{ "$ref": "#/$defs/LastDone" }, { "type": "null" }] },
+        "needs_you": { "$ref": "#/$defs/NeedsYou" },
+        "needs_you_tasks": { "type": "array", "items": { "$ref": "#/$defs/NeedsYouItem" } },
+        "git": { "$ref": "#/$defs/GitSummary" },
+        "description": { "type": ["string", "null"], "description": "meta.description, capped at 200 characters" },
+        "last_activity": { "type": ["string", "null"] },
+        "completions_14d": { "type": "array", "items": { "type": "integer" }, "description": "Oldest day first" },
+        "board": { "$ref": "#/$defs/ProjectBoard" },
+        "board_active_sprint": {
+          "anyOf": [{ "$ref": "#/$defs/ProjectBoard" }, { "type": "null" }],
+          "description": "The same, of the active sprint's tasks only; null without an active sprint (T-340)"
+        },
+        "stats": { "$ref": "#/$defs/ProjectStats" }
+      }
+    },
+    "StatusSprint": {
+      "type": "object",
+      "description": "atm status: the active sprint and its progress",
+      "required": ["done", "tasks", "review_pending"],
+      "properties": {
+        "id": { "type": "string" },
+        "goal": { "type": "string" },
+        "due": { "type": "string" },
+        "release": { "type": "string" },
+        "start": { "type": "string" },
+        "done": { "type": "integer" },
+        "tasks": { "type": "integer", "description": "Its tasks but the skipped" },
+        "review_pending": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Batch tasks waiting for the end-of-sprint review (SR-4.4)"
+        }
+      }
+    },
+    "InProgressItem": {
+      "type": "object",
+      "required": ["id", "name", "by"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "by": { "type": ["string", "null"], "description": "The agent holding its claim, else who started it" }
+      }
+    },
+    "InReviewItem": {
+      "type": "object",
+      "required": ["id", "name", "since"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "since": { "type": ["string", "null"] },
+        "branch": { "type": ["string", "null"], "description": "In review in another worktree, on this branch (T-204)" }
+      }
+    },
+    "BlockedItem": {
+      "type": "object",
+      "required": ["id", "name", "waiting_on", "questions"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "waiting_on": { "type": ["string", "null"] },
+        "questions": { "type": "array", "items": { "type": "string" } },
+        "branch": { "type": ["string", "null"], "description": "Blocked in another worktree, on this branch (T-204)" }
+      }
+    },
+    "WaitingItem": {
+      "type": "object",
+      "required": ["id", "name", "on"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "on": { "type": "array", "items": { "type": "string" }, "description": "Its dependencies not done yet" }
+      }
+    },
+    "LargestTask": {
+      "type": "object",
+      "required": ["id", "bytes"],
+      "properties": {
+        "id": { "type": "string" },
+        "bytes": { "type": "integer" }
+      }
+    },
+    "OpenInClosedSprint": {
+      "type": "object",
+      "description": "An unfinished task whose sprint is closed (T-330)",
+      "required": ["id", "name", "status", "sprint"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "sprint": { "type": "string" }
+      }
+    },
+    "StatusSuggestions": {
+      "type": "object",
+      "required": ["archive"],
+      "properties": {
+        "archive": { "$ref": "#/$defs/ArchiveHint" }
+      }
+    },
+    "StatusReport": {
+      "type": "object",
+      "description": "atm status --json: the overview, in the scope's tasks",
+      "required": [
+        "sprint",
+        "tasks",
+        "by_status",
+        "by_sprint",
+        "by_type",
+        "by_label",
+        "in_progress",
+        "in_review",
+        "blocked",
+        "waiting_on_dependencies",
+        "next",
+        "next_reason",
+        "file_bytes",
+        "largest_tasks",
+        "archived",
+        "archive_bytes"
+      ],
+      "properties": {
+        "sprint": {
+          "anyOf": [{ "$ref": "#/$defs/StatusSprint" }, { "type": "null" }],
+          "description": "null when none is active"
+        },
+        "tasks": { "type": "integer" },
+        "by_status": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "by_sprint": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "By sprint ID; backlog for the tasks in none"
+        },
+        "by_type": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "by_label": { "type": "object", "additionalProperties": { "type": "integer" } },
+        "in_progress": { "type": "array", "items": { "$ref": "#/$defs/InProgressItem" } },
+        "in_review": { "type": "array", "items": { "$ref": "#/$defs/InReviewItem" } },
+        "blocked": { "type": "array", "items": { "$ref": "#/$defs/BlockedItem" } },
+        "waiting_on_dependencies": { "type": "array", "items": { "$ref": "#/$defs/WaitingItem" } },
+        "next": { "anyOf": [{ "$ref": "#/$defs/TaskName" }, { "type": "null" }] },
+        "next_reason": { "type": ["string", "null"], "description": "Why there is no next task, as atm next says it" },
+        "file_bytes": { "type": "integer" },
+        "largest_tasks": { "type": "array", "items": { "$ref": "#/$defs/LargestTask" } },
+        "archived": { "type": "integer", "description": "How many tasks the archive holds" },
+        "archive_bytes": { "type": "integer" },
+        "open_in_closed_sprints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/OpenInClosedSprint" },
+          "description": "Unfinished tasks left in closed sprints, whatever the scope; absent without any"
+        },
+        "suggest": { "$ref": "#/$defs/StatusSuggestions" }
+      }
     }
   }
 }

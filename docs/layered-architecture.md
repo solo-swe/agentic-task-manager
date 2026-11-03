@@ -351,14 +351,16 @@ unions):
 | Documents | `TasksDocument`, `ArchiveDocument`, `ClaimsStore`, `RegistryDocument`, `ProjectEntry` |
 | Claims | `Claim`, `ClaimResolution`, `Actor` |
 | atm-lib results | `TaskView` (a task with its derived values: `kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`, `archived`), `StatusReport`, `NextResult`, `DepsResult`, `CheckReport`, `ArchiveReport`, `SprintCloseReport`, `ReleaseNotes` |
-| API | `ProjectList`, `ProjectInfo`, `ProjectSummary`, `SprintSummary`, `Board`, `BoardColumn`, `Card`, `Worktree`, `WorktreeList`, `ClaimList`, `SearchResult`, `WhoAmI`, `ApiError` |
+| API | `ProjectList`, `ProjectInfo`, `ProjectSummary` (generated, T-382, with `SprintNumbers`, `ActiveSprint`, `ProjectBoard`, `BoardColumn`, `BoardCard`, `GitSummary`, `NeedsYouItem`, `ProjectStats`), `Worktree`, `WorktreeList`, `ClaimList`, `SearchResult`, `WhoAmI`, `ApiError` |
 | Errors | `ErrorCode`: `not_found`, `invalid`, `conflict`, `claimed`, `lease_expired`, `not_allowed`, `nothing_to_do` |
 
 ### 4.3 How they are made and checked
 
 - **one generator for both languages**, in `atm-cli/build.py` (standard library, no npm dependency): the schemas use
-  a small subset of JSON Schema (scalar types, arrays, string enums, `$ref`s to `$defs`), and every object type is
-  defined in `$defs` or is a file's own type;
+  a small subset of JSON Schema (scalar types, arrays, string enums, `$ref`s to `$defs`, maps with
+  `additionalProperties` of one type, and any of these that may be null: `"type": [T, "null"]` or `anyOf` with
+  `{"type": "null"}`, generated as `Optional[...]` and `T | null`; T-382), and every object type is defined in
+  `$defs` or is a file's own type;
 - **TypeScript** for the Dashboard (`dashboard/src/lib/generated/types.ts`, formatted as Prettier wants it), which
   `src/lib/types.ts` builds on;
 - **Python** `TypedDict`s (`atm-cli/atm/common/types.py`, the functional form, since keys such as `from` are
@@ -871,3 +873,10 @@ are unchanged (the atm-cli suite, at every step).
   `api.schema.json`; the Dashboard's `ProjectSummary` is written by hand. The generator can't express a field that
   may be `null`. **Decision:** the generator learns nullable types (`Optional[...]`, `T | null`); both schemas are
   written and the hand-written type replaced; a test validates a real summary and the e2e fixture against them.
+  **Settled (T-382):** the generator takes `"type": [T, "null"]`, `anyOf` with null and maps
+  (`additionalProperties`); `api.schema.json` defines `ProjectSummary` and `StatusReport` with their parts, and the
+  Dashboard's `load.ts` and `waiting.ts` re-export the generated types. `tests/lib/test_schema.py` checks
+  `project_summary` and `status_report` against them, on a project with every part filled in, an empty one and every
+  Dashboard fixture (what the e2e suite's `api/projects` serves). Left: the Dashboard still copes with summaries from
+  servers before 0.26 (fields the schema now requires, absent), and the e2e suite's hand-made `summary()` leaves such
+  fields out; both can go, since the Dashboard is always served by its own version's server.

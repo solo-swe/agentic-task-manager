@@ -2,87 +2,18 @@
 // tasks from api/v1/projects/<id>/tasks, and its other files from p/<id>/. The requests go through the client layer,
 // api/http.ts; this module reads what they return.
 import { browserFetch, fetchFile, v1TasksUrl, type Fetch, type Validators } from './api/http';
-import type { ArchiveHint } from './generated/types';
+import type { ArchiveHint, ProjectBoard, ProjectSummary } from './generated/types';
 import type { Task, TasksFile } from './types';
-import type { NeedsYouItem } from './waiting';
 
 export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
 
 export const DEFAULT_PROJECT_NAME = 'Task Dashboard';
 export const PROJECTS_URL = 'api/projects';
 
-/** A sprint as the server's summary gives it */
-export interface SprintNumbers {
-  id: string;
-  state: 'planned' | 'active' | 'closed';
-  due: string | null;
-  release: string | null;
-  done: number;
-  total: number;
-  percent: number;
-}
+// A project's summary, as the server computes it (api.schema.json, generated: T-382)
+export type { BoardCard, ProjectBoard, ProjectSummary, SprintNumbers } from './generated/types';
 
-/** A project's numbers for the overview and the project selector, computed by the server */
-export interface ProjectSummary {
-  total: number;
-  done: number;
-  skipped: number;
-  percent: number;
-  /** The active sprint with its progress (SR-7.7); null when none is active; absent from servers before 0.24 */
-  active_sprint?: (SprintNumbers & { goal: string | null }) | null;
-  /** Up to 4 sprints with tasks, in the project's order: the open ones, then the latest closed; null without sprints */
-  recent_sprints?: SprintNumbers[] | null;
-  agents_working: number;
-  /** Live claims, oldest first: who works on what (absent from servers before 0.18; names capped at 80 characters) */
-  working?: { task: string; name: string; agent: string; branch: string | null }[];
-  /** Up to 2 tasks the loop takes next, in its order (absent before 0.18) */
-  next?: { id: string; name: string }[];
-  /** The task completed last (absent before 0.18) */
-  last_done?: { id: string; name: string; completed_at: string } | null;
-  /** meta.description, capped at 200 characters; null without one (absent before 0.18) */
-  description?: string | null;
-  /** The main worktree's branch and the latest PR recorded on the tasks (absent before 0.18) */
-  git?: { branch: string | null; pr: { number: number; url: string | null; state: 'open' | 'merged' } | null };
-  /** `together`: to do with the user (absent from servers before 0.24) */
-  needs_you: { review: number; blocked_on_user: number; together?: number };
-  /** The tasks behind needs_you (absent from servers before 0.17) */
-  needs_you_tasks?: NeedsYouItem[];
-  last_activity: string | null;
-  completions_14d: number[];
-  /** The project's cards for the All projects board (absent before 0.20; lib/allboard.ts) */
-  board?: ProjectBoard;
-  /** The same, of the active sprint's tasks only; null without an active sprint (absent before 0.26; T-340) */
-  board_active_sprint?: ProjectBoard | null;
-  /** The overview card's line, archived tasks included (absent before 0.20; lib/projects.ts statsLine) */
-  stats?: { started: string | null; tasks: number; agent_minutes: number };
-}
-
-/** A card on the All projects board: what a project's Kanban card shows, plus its column's fields */
-export interface BoardCard {
-  id: string;
-  name: string;
-  type: string;
-  /** The task's sprint; null in the backlog */
-  sprint: string | null;
-  priority: string | null;
-  labels: string[];
-  /** In progress: who works on it */
-  by?: string | null;
-  /** In progress, review, blocked: since when */
-  since?: string | null;
-  /** Blocked: who decides, and how many questions */
-  waiting_on?: string | null;
-  questions?: number;
-  /** Done: when */
-  completed_at?: string | null;
-  /** To do (T-349): done with the user, or the dependencies it waits for */
-  with_user?: boolean;
-  waiting_for?: string[];
-}
-
-export type BoardColumnId = 'todo' | 'active' | 'review' | 'blocked' | 'done';
-/** A project's column: its first cards, and how many there are in all */
-export type ProjectBoard = Record<BoardColumnId, { count: number; cards: BoardCard[] }>;
+export type BoardColumnId = keyof ProjectBoard;
 
 /** A registered project, as api/projects lists it */
 export interface ProjectEntry {

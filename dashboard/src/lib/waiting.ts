@@ -1,5 +1,6 @@
 // Tasks waiting on someone rather than on agent work (docs/v4/dashboard.md section 3): how long, and what was said.
 import { formatMinutes } from './format';
+import type { NeedsYouItem } from './generated/types';
 import { activeSprint, type SprintModel } from './sprints';
 import type { Note, Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';
@@ -113,11 +114,7 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
 }
 
 /** A task that needs the user, and why: what the "need you" chips list (also atm serve's `needs_you_tasks`) */
-export interface NeedsYouItem {
-  id: string;
-  name: string;
-  reason: 'review' | 'blocked' | 'together';
-}
+export type { NeedsYouItem };
 
 /** needingUser as the chips list it */
 export function needsYouItems(

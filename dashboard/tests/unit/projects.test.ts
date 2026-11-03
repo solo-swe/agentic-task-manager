@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { idHash, isActive, monogram, needsYou, openTasks, orderProjects, statsLine } from '../../src/lib/projects';
+import { summary } from './summary.helpers';
 
 describe('statsLine (T-255)', () => {
   const now = new Date(2026, 9, 26, 12).getTime();
@@ -46,26 +47,17 @@ describe('monogram and idHash', () => {
 const NOW = Date.parse('2026-03-01T12:00:00Z');
 
 function project(id: string, fields: Partial<ProjectSummary> | null = {}, missing = false): ProjectEntry {
-  const summary: ProjectSummary | null =
+  const numbers =
     fields === null
       ? null
-      : {
-          total: 10,
-          done: 5,
-          skipped: 0,
-          percent: 50,
-          agents_working: 0,
-          needs_you: { review: 0, blocked_on_user: 0 },
-          last_activity: '2026-03-01T10:00:00Z',
-          completions_14d: [],
-          ...fields,
-        };
-  return { id, name: id, path: `/${id}`, missing, summary };
+      : summary({ total: 10, done: 5, percent: 50, last_activity: '2026-03-01T10:00:00Z', ...fields });
+  return { id, name: id, path: `/${id}`, missing, summary: numbers };
 }
 
 describe('needsYou and openTasks', () => {
   it('count reviews and questions for the user; open work is neither done nor skipped', () => {
-    const p = project('a', { total: 10, done: 4, skipped: 3, needs_you: { review: 2, blocked_on_user: 1 } });
+    const needs_you = { review: 2, blocked_on_user: 1, together: 0 };
+    const p = project('a', { total: 10, done: 4, skipped: 3, needs_you });
     expect([needsYou(p), openTasks(p)]).toEqual([3, 3]);
     expect([needsYou(project('b', null)), openTasks(project('b', null))]).toEqual([0, 0]);
   });
@@ -89,10 +81,11 @@ describe('isActive', () => {
 
 describe('orderProjects', () => {
   it('needs you first, then the most recent activity, then the name; gone ones last', () => {
+    const asking = summary().needs_you;
     const list = [
       project('gone', null, true),
       project('old', { last_activity: '2026-01-01T00:00:00Z' }),
-      project('asks', { needs_you: { review: 1, blocked_on_user: 0 }, last_activity: '2025-12-01T00:00:00Z' }),
+      project('asks', { needs_you: { ...asking, review: 1 }, last_activity: '2025-12-01T00:00:00Z' }),
       project('new', { last_activity: '2026-02-28T00:00:00Z' }),
       project('b-quiet', { last_activity: null }),
       project('a-quiet', { last_activity: null }),

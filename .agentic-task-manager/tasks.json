@@ -19698,7 +19698,7 @@
       "description": "`docs/layered-architecture.md` §11.3.\n\n## Change\n- §3.2 and §3.3 say what is built: `store.change(fn)` with the `Working` copy and its change list is the write path (no per-entity writes, no `apply`); list the interface as it is.\n- Add per-entity reads to the Store interface and both stores: `list_sprints`, `list_releases`, `list_components`, `get_settings` (meta without the lists).\n- Move atm-lib's reads off `store.document()` area by area (sprints, releases, components, settings, code, query); `document()` remains only as `work.document` inside a change, then goes from the interface.\n- `Project`'s store becomes private (`project._store`); the REST API and the CLI get what they read from atm-lib functions (the v1 route's meta, the server's stamps and working copies, `atm logo`'s working copy).\n- A build check refuses `.store.` / `._store` outside `lib/` and `boot/`.\n- Update §3.2, §3.3, §11.3 (settled).\n\n## Tests\n- Contract tests for each new read on both stores; a build test for the `.store` check; `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-378"
       ],
@@ -19716,7 +19716,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:40:32Z",
+      "updated_at": "2026-11-03T00:49:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19732,7 +19732,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T00:40:32Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "34d7e4d7d86475d2c30de6811f5de2827be12bc5",
+      "completed_at": "2026-11-03T00:49:11Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T00:49:11Z",
+          "kind": "review",
+          "text": "change(fn) is the write path by design (§3.2/3.3). New per-entity reads (settings, sprints, releases, components) on both stores; the CLI and REST API no longer touch `project.store` (`task_snapshot`, `project_stamp`, `working_copies`), and the build refuses `.store` there. Left, by the review’s choice: ~12 reads still take `document()` because the rules take the whole file (§11.3). 542 pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-382",
@@ -19745,7 +19757,7 @@
       "description": "`docs/layered-architecture.md` §11.10 B.\n\n## Change\n- The type generator in `atm-cli/build.py` supports a field that may be `null` (`\"type\": [\"string\", \"null\"]`, and a `$ref` or object that may be null): `Optional[...]` in Python, `T | null` in TypeScript.\n- `api.schema.json` gets `ProjectSummary` (what `api/projects` gives per project: totals, sprints, board, stats, git, needs you, …) and `StatusReport` (`atm status --json`).\n- The dashboard's hand-written `ProjectSummary` (`dashboard/src/lib/load.ts`) is replaced by the generated type.\n- Update §4.1, §4.2, §11.10 B (settled).\n\n## Tests\n- A build test for nullable fields in both languages.\n- A test validates a real `atm summary` and `atm status --json` and the e2e fixture's summary against the schema (as the fixtures are validated today).\n- `npm run check`, the unit tests, `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/build.py",
@@ -19758,7 +19770,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:48Z",
+      "updated_at": "2026-11-03T00:49:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19773,7 +19785,9 @@
         "dashboard",
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T00:49:12Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-383",

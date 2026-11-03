@@ -326,6 +326,251 @@ export interface DepsResult {
   waited_on_by: DependencyItem[];
 }
 
+/** A sprint as the overview shows it: done of its tasks but the skipped */
+export interface SprintNumbers {
+  id: string;
+  state: 'planned' | 'active' | 'closed';
+  due: string | null;
+  release: string | null;
+  done: number;
+  /** Its tasks but the skipped */
+  total: number;
+  percent: number;
+}
+
+/** The active sprint for the overview's cards (SR-7.7), with its progress */
+export interface ActiveSprint {
+  id: string;
+  state: 'planned' | 'active' | 'closed';
+  due: string | null;
+  release: string | null;
+  done: number;
+  /** Its tasks but the skipped */
+  total: number;
+  percent: number;
+  goal: string | null;
+}
+
+/** A live claim: who works on what */
+export interface WorkingClaim {
+  task: string;
+  /** The task's name, capped at 80 characters */
+  name: string;
+  agent: string | null;
+  branch: string | null;
+}
+
+/** A task by its ID and name (capped at 80 characters in a summary) */
+export interface TaskName {
+  id: string;
+  name: string;
+}
+
+/** The task completed last */
+export interface LastDone {
+  id: string;
+  name: string;
+  completed_at: string;
+}
+
+/** How many tasks need the user, by why */
+export interface NeedsYou {
+  /** In review, waiting for the reviewer */
+  review: number;
+  blocked_on_user: number;
+  /** To do with the user now (SR-6.6) */
+  together: number;
+}
+
+/** A task that needs the user, and why: what the "need you" chips list */
+export interface NeedsYouItem {
+  id: string;
+  name: string;
+  reason: 'review' | 'blocked' | 'together';
+}
+
+/** The latest PR recorded on the tasks (atm pr) */
+export interface GitPr {
+  number: number;
+  /** Only a web address (docs/security-review.md F9) */
+  url: string | null;
+  state: 'open' | 'merged';
+}
+
+/** The project's git line for its card (T-206) */
+export interface GitSummary {
+  /** The main worktree's branch */
+  branch: string | null;
+  pr: GitPr | null;
+}
+
+/** A card on the All projects board: what a project's Kanban card shows, plus its column's fields */
+export interface BoardCard {
+  id: string;
+  name: string;
+  type: string | null;
+  /** The task's sprint; null in the backlog */
+  sprint: string | null;
+  priority: string | null;
+  labels: string[];
+  /** In progress: who works on it */
+  by?: string | null;
+  /** In progress, review, blocked: since when */
+  since?: string | null;
+  /** Blocked: who decides */
+  waiting_on?: string | null;
+  /** Blocked: how many questions */
+  questions?: number;
+  /** Done: when */
+  completed_at?: string | null;
+  /** To do (T-349): done with the user */
+  with_user?: boolean;
+  /** To do (T-349): the dependencies it waits for */
+  waiting_for?: string[];
+}
+
+/** A project's column: its first cards, and how many there are in all */
+export interface BoardColumn {
+  count: number;
+  cards: BoardCard[];
+}
+
+/** The project's cards for the All projects board (T-257), by column */
+export interface ProjectBoard {
+  todo: BoardColumn;
+  active: BoardColumn;
+  review: BoardColumn;
+  blocked: BoardColumn;
+  done: BoardColumn;
+}
+
+/** The overview card's line, archived tasks included (T-255) */
+export interface ProjectStats {
+  started: string | null;
+  tasks: number;
+  agent_minutes: number;
+}
+
+/** A project's numbers for the overview and the project selector (api/projects' summary, atm summary) */
+export interface ProjectSummary {
+  total: number;
+  done: number;
+  skipped: number;
+  /** done / (total - skipped) */
+  percent: number;
+  /** null when none is active */
+  active_sprint: ActiveSprint | null;
+  /** Up to 4 sprints with tasks, in the project's order: the open ones, then the latest closed; null without sprints */
+  recent_sprints: SprintNumbers[] | null;
+  agents_working: number;
+  /** Live claims, oldest first */
+  working: WorkingClaim[];
+  /** Up to 2 tasks the loop takes next, in its order */
+  next: TaskName[];
+  last_done: LastDone | null;
+  needs_you: NeedsYou;
+  needs_you_tasks: NeedsYouItem[];
+  git: GitSummary;
+  /** meta.description, capped at 200 characters */
+  description: string | null;
+  last_activity: string | null;
+  /** Oldest day first */
+  completions_14d: number[];
+  board: ProjectBoard;
+  /** The same, of the active sprint's tasks only; null without an active sprint (T-340) */
+  board_active_sprint: ProjectBoard | null;
+  stats: ProjectStats;
+}
+
+/** atm status: the active sprint and its progress */
+export interface StatusSprint {
+  id?: string;
+  goal?: string;
+  due?: string;
+  release?: string;
+  start?: string;
+  done: number;
+  /** Its tasks but the skipped */
+  tasks: number;
+  /** Batch tasks waiting for the end-of-sprint review (SR-4.4) */
+  review_pending: string[];
+}
+
+export interface InProgressItem {
+  id: string;
+  name: string;
+  /** The agent holding its claim, else who started it */
+  by: string | null;
+}
+
+export interface InReviewItem {
+  id: string;
+  name: string;
+  since: string | null;
+  /** In review in another worktree, on this branch (T-204) */
+  branch?: string | null;
+}
+
+export interface BlockedItem {
+  id: string;
+  name: string;
+  waiting_on: string | null;
+  questions: string[];
+  /** Blocked in another worktree, on this branch (T-204) */
+  branch?: string | null;
+}
+
+export interface WaitingItem {
+  id: string;
+  name: string;
+  /** Its dependencies not done yet */
+  on: string[];
+}
+
+export interface LargestTask {
+  id: string;
+  bytes: number;
+}
+
+/** An unfinished task whose sprint is closed (T-330) */
+export interface OpenInClosedSprint {
+  id: string;
+  name: string;
+  status: string;
+  sprint: string;
+}
+
+export interface StatusSuggestions {
+  archive: ArchiveHint;
+}
+
+/** atm status --json: the overview, in the scope's tasks */
+export interface StatusReport {
+  /** null when none is active */
+  sprint: StatusSprint | null;
+  tasks: number;
+  by_status: Record<string, number>;
+  /** By sprint ID; backlog for the tasks in none */
+  by_sprint: Record<string, number>;
+  by_type: Record<string, number>;
+  by_label: Record<string, number>;
+  in_progress: InProgressItem[];
+  in_review: InReviewItem[];
+  blocked: BlockedItem[];
+  waiting_on_dependencies: WaitingItem[];
+  next: TaskName | null;
+  /** Why there is no next task, as atm next says it */
+  next_reason: string | null;
+  file_bytes: number;
+  largest_tasks: LargestTask[];
+  /** How many tasks the archive holds */
+  archived: number;
+  archive_bytes: number;
+  /** Unfinished tasks left in closed sprints, whatever the scope; absent without any */
+  open_in_closed_sprints?: OpenInClosedSprint[];
+  suggest?: StatusSuggestions;
+}
+
 /** GET /api/v1/projects/<p>/tasks: the tasks the query's filters keep, each with its derived values (docs/layered-architecture.md §6.2) */
 export interface TaskViewList {
   /** ISO 8601 UTC */

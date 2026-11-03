@@ -330,7 +330,23 @@ def schema_types():
 
 def property_type(prop, where, ts):
     """A property's type in TypeScript (`ts`) or Python. The schemas use a small subset of JSON Schema: the scalar
-    types, arrays, string enums and $refs to the types the schemas define."""
+    types, arrays, string enums, $refs to the types the schemas define, maps (`additionalProperties` of one type), and
+    any of these that may be null (`"type": [T, "null"]`, or `"anyOf": [<one of these>, {"type": "null"}]`)."""
+    kinds = prop.get("type")
+    alternatives = prop.get("anyOf")
+    if isinstance(kinds, list) or alternatives is not None:
+        if isinstance(kinds, list):
+            others = [k for k in kinds if k != "null"]
+            if len(kinds) != 2 or len(others) != 1:
+                raise BuildError(f"common/schema: {where}: a list of types is one type and null")
+            inner = {**prop, "type": others[0]}
+        else:
+            others = [a for a in alternatives if a != {"type": "null"}]
+            if len(alternatives) != 2 or len(others) != 1:
+                raise BuildError(f"common/schema: {where}: anyOf is one type and {{'type': 'null'}}")
+            inner = others[0]
+        inner_type = property_type(inner, where, ts)
+        return f"{inner_type} | null" if ts else f"Optional[{inner_type}]"
     if "$ref" in prop:
         ref = prop["$ref"]
         if not ref.startswith("#"):
@@ -355,6 +371,11 @@ def property_type(prop, where, ts):
         item = property_type(prop.get("items", {}), where, ts)
         return (f"({item})[]" if " | " in item else f"{item}[]") if ts else f"List[{item}]"
     if kind == "object" and "properties" not in prop:
+        values = prop.get("additionalProperties")
+        if isinstance(values, dict):
+            # A map from open keys to values of one type (atm status's counts by status, sprint, type and label)
+            value = property_type(values, where, ts)
+            return f"Record<string, {value}>" if ts else f"Dict[str, {value}]"
         # An object whose keys the schema leaves open (meta, which its own schema will describe)
         return "Record<string, unknown>" if ts else "dict"
     raise BuildError(f"common/schema: {where} has a type the generator doesn't know (define objects in $defs)")
@@ -390,7 +411,7 @@ def generated_python(types):
         required = set(definition.get("required", []))
         for prop, spec in definition.get("properties", {}).items():
             annotation = property_type(spec, f"{name}.{prop}", False)
-            used.update(t for t in ("List", "Literal") if t + "[" in annotation)
+            used.update(t for t in ("Dict", "List", "Literal", "Optional") if t + "[" in annotation)
             notes = (["required"] if prop in required else []) + ([spec["description"]] if spec.get("description") else [])
             if notes:
                 body.append(f"        # {'; '.join(notes)}")

@@ -5,6 +5,7 @@
   import {
     allBoard,
     allBoardLanes,
+    BOARD_COLUMNS,
     boardOf,
     type AllBoardCard,
     type AllBoardColumn,
@@ -31,7 +32,7 @@
   const boardCards = $derived(
     projects
       .flatMap((p) =>
-        Object.values(boardOf(p, scope) ?? {}).flatMap((c) => c.cards.map((card) => `${p.id}/${card.id}`)),
+        BOARD_COLUMNS.flatMap(({ id }) => boardOf(p, scope)?.[id].cards.map((card) => `${p.id}/${card.id}`) ?? []),
       )
       .join(' '),
   );
@@ -109,7 +110,7 @@
       <KanbanScroll>
         {#each column.cards as item (item.project.id + '/' + item.card.id)}
           {@const card = item.card}
-          {@const ts = typeStyle(card.type)}
+          {@const ts = typeStyle(card.type ?? '')}
           {@const line = status(item, column.id)}
           <div
             class="kanban-card board-card"

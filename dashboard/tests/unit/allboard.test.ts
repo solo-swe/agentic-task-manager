@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { allBoard, allBoardLanes, BOARD_COLUMNS, boardOf, withoutActiveSprint } from '../../src/lib/allboard';
-import type { BoardCard, BoardColumnId, ProjectBoard, ProjectEntry, ProjectSummary } from '../../src/lib/load';
+import type { BoardCard, BoardColumnId, ProjectEntry } from '../../src/lib/load';
+import { emptyBoard, olderServer, summary } from './summary.helpers';
 
 const card = (id: string, fields: Partial<BoardCard> = {}): BoardCard => ({
   id,
@@ -19,15 +20,16 @@ function project(
   counts: Partial<Record<BoardColumnId, number>> = {},
   extra: Partial<ProjectEntry> = {},
 ): ProjectEntry {
-  const board = Object.fromEntries(
-    BOARD_COLUMNS.map(({ id: c }) => [c, { count: counts[c] ?? (columns[c] ?? []).length, cards: columns[c] ?? [] }]),
-  ) as ProjectBoard;
+  const board = emptyBoard();
+  for (const { id: c } of BOARD_COLUMNS) {
+    board[c] = { count: counts[c] ?? (columns[c] ?? []).length, cards: columns[c] ?? [] };
+  }
   return {
     id,
     name: id,
     path: `/${id}`,
     missing: false,
-    summary: { last_activity: lastActivity, board } as ProjectSummary,
+    summary: summary({ last_activity: lastActivity, board }),
     ...extra,
   };
 }
@@ -122,10 +124,10 @@ describe('allBoard', () => {
     ]);
   });
 
-  it('projects without a board (gone, or an older server) add nothing', () => {
+  it('projects without a board (gone, or not summarized) add nothing', () => {
     const gone = project('g', null, { todo: [card('G-1')] }, {}, { missing: true });
-    const older = { ...project('o', null, {}), summary: { last_activity: null } as ProjectSummary };
-    expect(allBoard([gone, older]).every((c) => c.cards.length === 0 && c.more.length === 0)).toBe(true);
+    const unsummarized = { ...project('o', null, {}), summary: null };
+    expect(allBoard([gone, unsummarized]).every((c) => c.cards.length === 0 && c.more.length === 0)).toBe(true);
   });
 });
 
@@ -167,7 +169,8 @@ describe('the active sprints or all tasks (T-340)', () => {
   });
 
   it('an older server without the active sprint’s board shows the whole board, and is not listed as without one', () => {
-    const older = project('o', null, { todo: [card('O-1')] });
+    const full = project('o', null, { todo: [card('O-1')] });
+    const older = { ...full, summary: olderServer(full.summary!, 'board_active_sprint') };
     expect(boardOf(older, 'active')).toBe(older.summary!.board);
     expect(withoutActiveSprint([older], 'active')).toEqual([]);
     expect(boardOf({ ...older, missing: true }, 'active')).toBeNull();

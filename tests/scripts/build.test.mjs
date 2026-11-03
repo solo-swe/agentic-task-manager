@@ -171,4 +171,31 @@ describe('generated types', () => {
     assert.match(typescript, /\n {2}notes\?: Note\[\];/);
     assert.match(typescript, /\n {2}pr\?: PullRequest;/);
   });
+
+  test('a field that may be null, and a map, in both languages (T-382)', () => {
+    const python = fs.readFileSync(path.join(REPO, 'atm-cli/atm/common/types.py'), 'utf8');
+    const typescript = fs.readFileSync(path.join(REPO, 'dashboard/src/lib/generated/types.ts'), 'utf8');
+    assert.match(python, /"active_sprint": Optional\["ActiveSprint"\],/); // anyOf with null
+    assert.match(python, /"recent_sprints": Optional\[List\["SprintNumbers"\]\],/); // a list of types with null
+    assert.match(python, /"by_status": Dict\[str, int\],/);
+    assert.match(python, /^from typing import Dict, List, Literal, Optional, TypedDict$/m);
+    assert.match(typescript, /\n {2}active_sprint: ActiveSprint \| null;/);
+    assert.match(typescript, /\n {2}recent_sprints: SprintNumbers\[\] \| null;/);
+    assert.match(typescript, /\n {2}by_status: Record<string, number>;/);
+  });
+
+  test('a list of types that is not one type and null is refused', () => {
+    const dir = copyOfSources();
+    try {
+      const file = path.join(dir, 'atm-cli/atm/common/schema/task.schema.json');
+      const schema = JSON.parse(fs.readFileSync(file, 'utf8'));
+      schema.properties.estimate = { type: ['integer', 'string'] };
+      fs.writeFileSync(file, JSON.stringify(schema));
+      const { code, stderr } = runBuild(['--output', path.join(dir, 'atm.py')], path.join(dir, 'atm-cli/build.py'));
+      assert.equal(code, 1);
+      assert.match(stderr, /Task\.estimate: a list of types is one type and null/);
+    } finally {
+      removeDir(dir);
+    }
+  });
 });

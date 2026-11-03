@@ -2,7 +2,7 @@
 `npm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 no typing.Required)."""
 
-from typing import List, Literal, TypedDict
+from typing import Dict, List, Literal, Optional, TypedDict
 
 StatusEntry = TypedDict(
     "StatusEntry",
@@ -433,6 +433,428 @@ DepsResult = TypedDict(
         "waits_for": List["DependencyItem"],
         # required
         "waited_on_by": List["DependencyItem"],
+    },
+    total=False,
+)
+
+# A sprint as the overview shows it: done of its tasks but the skipped
+SprintNumbers = TypedDict(
+    "SprintNumbers",
+    {
+        # required
+        "id": str,
+        # required
+        "state": Literal['planned', 'active', 'closed'],
+        # required
+        "due": Optional[str],
+        # required
+        "release": Optional[str],
+        # required
+        "done": int,
+        # required; Its tasks but the skipped
+        "total": int,
+        # required
+        "percent": int,
+    },
+    total=False,
+)
+
+# The active sprint for the overview's cards (SR-7.7), with its progress
+ActiveSprint = TypedDict(
+    "ActiveSprint",
+    {
+        # required
+        "id": str,
+        # required
+        "state": Literal['planned', 'active', 'closed'],
+        # required
+        "due": Optional[str],
+        # required
+        "release": Optional[str],
+        # required
+        "done": int,
+        # required; Its tasks but the skipped
+        "total": int,
+        # required
+        "percent": int,
+        # required
+        "goal": Optional[str],
+    },
+    total=False,
+)
+
+# A live claim: who works on what
+WorkingClaim = TypedDict(
+    "WorkingClaim",
+    {
+        # required
+        "task": str,
+        # required; The task's name, capped at 80 characters
+        "name": str,
+        # required
+        "agent": Optional[str],
+        # required
+        "branch": Optional[str],
+    },
+    total=False,
+)
+
+# A task by its ID and name (capped at 80 characters in a summary)
+TaskName = TypedDict(
+    "TaskName",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+    },
+    total=False,
+)
+
+# The task completed last
+LastDone = TypedDict(
+    "LastDone",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "completed_at": str,
+    },
+    total=False,
+)
+
+# How many tasks need the user, by why
+NeedsYou = TypedDict(
+    "NeedsYou",
+    {
+        # required; In review, waiting for the reviewer
+        "review": int,
+        # required
+        "blocked_on_user": int,
+        # required; To do with the user now (SR-6.6)
+        "together": int,
+    },
+    total=False,
+)
+
+# A task that needs the user, and why: what the "need you" chips list
+NeedsYouItem = TypedDict(
+    "NeedsYouItem",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "reason": Literal['review', 'blocked', 'together'],
+    },
+    total=False,
+)
+
+# The latest PR recorded on the tasks (atm pr)
+GitPr = TypedDict(
+    "GitPr",
+    {
+        # required
+        "number": int,
+        # required; Only a web address (docs/security-review.md F9)
+        "url": Optional[str],
+        # required
+        "state": Literal['open', 'merged'],
+    },
+    total=False,
+)
+
+# The project's git line for its card (T-206)
+GitSummary = TypedDict(
+    "GitSummary",
+    {
+        # required; The main worktree's branch
+        "branch": Optional[str],
+        # required
+        "pr": Optional["GitPr"],
+    },
+    total=False,
+)
+
+# A card on the All projects board: what a project's Kanban card shows, plus its column's fields
+BoardCard = TypedDict(
+    "BoardCard",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "type": Optional[str],
+        # required; The task's sprint; null in the backlog
+        "sprint": Optional[str],
+        # required
+        "priority": Optional[str],
+        # required
+        "labels": List[str],
+        # In progress: who works on it
+        "by": Optional[str],
+        # In progress, review, blocked: since when
+        "since": Optional[str],
+        # Blocked: who decides
+        "waiting_on": Optional[str],
+        # Blocked: how many questions
+        "questions": int,
+        # Done: when
+        "completed_at": Optional[str],
+        # To do (T-349): done with the user
+        "with_user": bool,
+        # To do (T-349): the dependencies it waits for
+        "waiting_for": List[str],
+    },
+    total=False,
+)
+
+# A project's column: its first cards, and how many there are in all
+BoardColumn = TypedDict(
+    "BoardColumn",
+    {
+        # required
+        "count": int,
+        # required
+        "cards": List["BoardCard"],
+    },
+    total=False,
+)
+
+# The project's cards for the All projects board (T-257), by column
+ProjectBoard = TypedDict(
+    "ProjectBoard",
+    {
+        # required
+        "todo": "BoardColumn",
+        # required
+        "active": "BoardColumn",
+        # required
+        "review": "BoardColumn",
+        # required
+        "blocked": "BoardColumn",
+        # required
+        "done": "BoardColumn",
+    },
+    total=False,
+)
+
+# The overview card's line, archived tasks included (T-255)
+ProjectStats = TypedDict(
+    "ProjectStats",
+    {
+        # required
+        "started": Optional[str],
+        # required
+        "tasks": int,
+        # required
+        "agent_minutes": int,
+    },
+    total=False,
+)
+
+# A project's numbers for the overview and the project selector (api/projects' summary, atm summary)
+ProjectSummary = TypedDict(
+    "ProjectSummary",
+    {
+        # required
+        "total": int,
+        # required
+        "done": int,
+        # required
+        "skipped": int,
+        # required; done / (total - skipped)
+        "percent": int,
+        # required; null when none is active
+        "active_sprint": Optional["ActiveSprint"],
+        # required; Up to 4 sprints with tasks, in the project's order: the open ones, then the latest closed; null without sprints
+        "recent_sprints": Optional[List["SprintNumbers"]],
+        # required
+        "agents_working": int,
+        # required; Live claims, oldest first
+        "working": List["WorkingClaim"],
+        # required; Up to 2 tasks the loop takes next, in its order
+        "next": List["TaskName"],
+        # required
+        "last_done": Optional["LastDone"],
+        # required
+        "needs_you": "NeedsYou",
+        # required
+        "needs_you_tasks": List["NeedsYouItem"],
+        # required
+        "git": "GitSummary",
+        # required; meta.description, capped at 200 characters
+        "description": Optional[str],
+        # required
+        "last_activity": Optional[str],
+        # required; Oldest day first
+        "completions_14d": List[int],
+        # required
+        "board": "ProjectBoard",
+        # required; The same, of the active sprint's tasks only; null without an active sprint (T-340)
+        "board_active_sprint": Optional["ProjectBoard"],
+        # required
+        "stats": "ProjectStats",
+    },
+    total=False,
+)
+
+# atm status: the active sprint and its progress
+StatusSprint = TypedDict(
+    "StatusSprint",
+    {
+        "id": str,
+        "goal": str,
+        "due": str,
+        "release": str,
+        "start": str,
+        # required
+        "done": int,
+        # required; Its tasks but the skipped
+        "tasks": int,
+        # required; Batch tasks waiting for the end-of-sprint review (SR-4.4)
+        "review_pending": List[str],
+    },
+    total=False,
+)
+
+InProgressItem = TypedDict(
+    "InProgressItem",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required; The agent holding its claim, else who started it
+        "by": Optional[str],
+    },
+    total=False,
+)
+
+InReviewItem = TypedDict(
+    "InReviewItem",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "since": Optional[str],
+        # In review in another worktree, on this branch (T-204)
+        "branch": Optional[str],
+    },
+    total=False,
+)
+
+BlockedItem = TypedDict(
+    "BlockedItem",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "waiting_on": Optional[str],
+        # required
+        "questions": List[str],
+        # Blocked in another worktree, on this branch (T-204)
+        "branch": Optional[str],
+    },
+    total=False,
+)
+
+WaitingItem = TypedDict(
+    "WaitingItem",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required; Its dependencies not done yet
+        "on": List[str],
+    },
+    total=False,
+)
+
+LargestTask = TypedDict(
+    "LargestTask",
+    {
+        # required
+        "id": str,
+        # required
+        "bytes": int,
+    },
+    total=False,
+)
+
+# An unfinished task whose sprint is closed (T-330)
+OpenInClosedSprint = TypedDict(
+    "OpenInClosedSprint",
+    {
+        # required
+        "id": str,
+        # required
+        "name": str,
+        # required
+        "status": str,
+        # required
+        "sprint": str,
+    },
+    total=False,
+)
+
+StatusSuggestions = TypedDict(
+    "StatusSuggestions",
+    {
+        # required
+        "archive": "ArchiveHint",
+    },
+    total=False,
+)
+
+# atm status --json: the overview, in the scope's tasks
+StatusReport = TypedDict(
+    "StatusReport",
+    {
+        # required; null when none is active
+        "sprint": Optional["StatusSprint"],
+        # required
+        "tasks": int,
+        # required
+        "by_status": Dict[str, int],
+        # required; By sprint ID; backlog for the tasks in none
+        "by_sprint": Dict[str, int],
+        # required
+        "by_type": Dict[str, int],
+        # required
+        "by_label": Dict[str, int],
+        # required
+        "in_progress": List["InProgressItem"],
+        # required
+        "in_review": List["InReviewItem"],
+        # required
+        "blocked": List["BlockedItem"],
+        # required
+        "waiting_on_dependencies": List["WaitingItem"],
+        # required
+        "next": Optional["TaskName"],
+        # required; Why there is no next task, as atm next says it
+        "next_reason": Optional[str],
+        # required
+        "file_bytes": int,
+        # required
+        "largest_tasks": List["LargestTask"],
+        # required; How many tasks the archive holds
+        "archived": int,
+        # required
+        "archive_bytes": int,
+        # Unfinished tasks left in closed sprints, whatever the scope; absent without any
+        "open_in_closed_sprints": List["OpenInClosedSprint"],
+        "suggest": "StatusSuggestions",
     },
     total=False,
 )

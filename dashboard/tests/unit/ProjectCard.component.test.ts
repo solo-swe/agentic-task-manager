@@ -3,23 +3,14 @@ import { describe, expect, it } from 'vitest';
 import ProjectCard from '../../src/components/ProjectCard.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
+import { olderServer, summary } from './summary.helpers';
 
 const card = (): ProjectEntry => ({
   id: 'p1',
   name: 'Project',
   path: '/work/p1',
   missing: false,
-  summary: {
-    total: 20,
-    done: 9,
-    skipped: 2,
-    percent: 50,
-    recent_sprints: null,
-    agents_working: 0,
-    needs_you: { review: 0, blocked_on_user: 0 },
-    last_activity: null,
-    completions_14d: [],
-  } as ProjectSummary,
+  summary: summary({ total: 20, done: 9, skipped: 2, percent: 50 }),
 });
 
 const rings = (container: HTMLElement) => [...container.querySelectorAll('.project-card-ring')];
@@ -191,7 +182,8 @@ describe('ProjectCard: working now, or next up, by task name (T-207)', () => {
   });
 
   it('an older server (no working list): the agent count, as before', () => {
-    const { container } = render(ProjectCard, { project: withWork({ agents_working: 2 }) });
+    const older = olderServer(summary({ agents_working: 2 }), 'working', 'next');
+    const { container } = render(ProjectCard, { project: { ...card(), summary: older } });
     expect(container.querySelector('.project-card-work')).toBeNull();
     expect(container.querySelector('.project-card-agents')).toHaveTextContent('2 agents working');
   });
@@ -233,7 +225,7 @@ describe('ProjectCard: the git line and the task finished last (T-208)', () => {
     expect(text(none.container.querySelector('.project-card-git'))).toBe('');
     expect(none.container.querySelector('.project-card-git .icon')).toBeNull();
     // An older server (no git field): no row at all
-    const older = render(ProjectCard, { project: card() });
+    const older = render(ProjectCard, { project: { ...card(), summary: olderServer(summary(), 'git') } });
     expect(older.container.querySelector('.project-card-git')).toBeNull();
   });
 
