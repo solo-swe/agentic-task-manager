@@ -14262,7 +14262,7 @@
         "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T09:14:43Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14310,7 +14310,11 @@
         }
       ],
       "completed_at": "2026-11-03T09:14:43Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-285",
@@ -14339,7 +14343,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T10:02:10Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14368,7 +14372,11 @@
           "text": "Mermaid via `@compmd/vite` (pack pinned 0.1.1, ambient, strict). Check: the diagrams in T-285’s sample content in the browser, light and dark; e2e 371, unit 982, atm-cli 548 pass; timings 1 diagram ~300 ms, 5 ~400 ms. Math waits on the CompMD host-mode fix.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-286",
@@ -14394,7 +14402,7 @@
         "plugin/docs/compmd-llms.txt"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T10:06:12Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14421,7 +14429,11 @@
           "text": "Skills, `plugin/CLAUDE.md` and Help say what task text renders; `plugin/docs/compmd-llms.txt` is CompMD’s llms.txt at v0.3.0, read in full (§3.3 review, no sandbox run). Check the skill wording; changelog and What’s new are under `[Unreleased]` for the release task to date as 0.28.0.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-287",
@@ -17320,7 +17332,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T16:55:39Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17369,7 +17381,11 @@
         }
       ],
       "completed_at": "2026-11-03T16:55:39Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-337",
@@ -17654,7 +17670,7 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-03T10:19:05Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17679,7 +17695,11 @@
           "text": "Measured with the new `npm run size`: Svelte 161 KB and dagre 63 KB dominate (needed); Help and What’s new were embedded as parsed trees. Now embedded as text and parsed at load: 549,210 → 542,431 bytes (−6.8 KB, offsetting this sprint’s CompMD growth). Guardrail kept at 550 KiB: ~20 KB room, as at the sprint’s start, and Hakan expects to push it for CompMD.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-343",
@@ -20502,7 +20522,7 @@
         "README.md"
       ],
       "created_at": "2026-11-03T01:25:18Z",
-      "updated_at": "2026-11-03T09:07:49Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20527,7 +20547,11 @@
           "text": "README has a Tenets section after the intro (data with the project, one skill install, actions through agents, read-only dashboard), each linking to its details. Three passages that said to edit tasks.json or the dashboard by hand now say to use an agent or `atm`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-390",
@@ -20548,7 +20572,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T07:22:15Z",
-      "updated_at": "2026-11-03T10:15:12Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20574,7 +20598,11 @@
           "text": "Fixed all three causes, each with a test: `stop` escalates to SIGKILL and drops the record only once the server is gone; starting holds `ATM_HOME/server.lock`; `status`/`stop` find this folder’s unrecorded servers on 20 ports from `--port` via `home` in whoami (a path hash). atm-cli 551 pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-391",
@@ -20800,7 +20828,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T17:19:48Z",
-      "updated_at": "2026-11-03T17:33:59Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20826,7 +20854,11 @@
           "text": "Released as 0.28.0: version bump, CHANGELOG and WHATS-NEW dated, What’s new shows the newest 10 releases with a link to the rest, 10 screenshot baselines regenerated, §3.3 checklist. Verified: e2e 374, unit 981 (97%), atm-cli 551, visual 84.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     }
   ]
 }
