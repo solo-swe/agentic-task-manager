@@ -53,6 +53,10 @@ tasks T-391 to T-396).
   text and parsed when the page loads.
 - **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
+- **Development dependencies:** `minimatch` (used by ESLint and typescript-eslint) is pinned to 11.0.1 through
+  `overrides` in `dashboard/package.json`, for GHSA-g3hv-75wg-m249 (a denial of service through crafted patterns).
+  `deepmerge` 4.3.1 (used by `@sveltejs/vite-plugin-svelte` on its own configuration) has GHSA-gcqx-w48m-w2h4 and no
+  fixed release yet; neither ships with the plugin.
 
 ### Fixed
 - **An ⓘ explanation near a popup's right edge was cut off** (Activity's *Where the time went*): the popover now moves
