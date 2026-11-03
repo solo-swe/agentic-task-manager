@@ -21,6 +21,7 @@ const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
+const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
 
 /** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
 export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
@@ -213,6 +214,15 @@ export class TasksServer {
     this.documents.set(doc.path, { status: 200, body: doc, version });
   }
 
+  /** The default project's image files the files route serves, by path; the paths it was asked for, in order */
+  private images = new Map<string, { contentType: string; body: Buffer }>();
+  fileRequests: string[] = [];
+
+  /** Serve an image of the default project through the files route */
+  setImage(path: string, contentType: string, body: Buffer) {
+    this.images.set(path, { contentType, body });
+  }
+
   /** Answer the documents route for `path` with an error, as atm serve refuses a file */
   refuseDocument(path: string, status: number, error: string) {
     this.documents.set(path, { status, body: { error }, version: 0 });
@@ -334,6 +344,14 @@ export class TasksServer {
         body: JSON.stringify(found.body),
         headers: found.status === 200 ? { ETag: etag } : undefined,
       });
+    });
+    await this.page.route(V1_FILES, (route) => {
+      const path = new URL(route.request().url()).searchParams.get('path') ?? '';
+      this.fileRequests.push(path);
+      const image = isDefault(route.request().url(), V1_FILES) ? this.images.get(path) : undefined;
+      return image
+        ? route.fulfill({ status: 200, contentType: image.contentType, body: image.body })
+        : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "not in the project"}' });
     });
     await this.page.route(LOGO, (route) => {
       const svg = this.logos.get(decodeURIComponent(LOGO.exec(route.request().url())![1]));

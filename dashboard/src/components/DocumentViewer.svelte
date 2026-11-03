@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { browserFetch, type Validators } from '../lib/api/http';
+  import { browserFetch, v1FileUrl, type Validators } from '../lib/api/http';
   import {
     clampGeometry,
     defaultGeometry,
@@ -7,6 +7,7 @@
     isGeometry,
     loadDocument,
     pathToCopy,
+    resolvePath,
     VIEWER_NARROW,
     type DocumentError,
     type ProjectDocument,
@@ -84,6 +85,65 @@
   const repoFile = $derived(
     doc?.tracked && doc.commit && ref ? fileRef(dashboard.meta, doc.commit, ref.path, ref.lines) : null,
   );
+
+  /** A relative image in the document, resolved from its folder, loads from this server's files route (V5); any
+   * other image shows its alt text */
+  const localImage = (url: string): string | null => {
+    const resolved = doc && project ? resolvePath(url, doc.path) : null;
+    return resolved && project ? v1FileUrl(project, resolved) : null;
+  };
+
+  // A code or text file's lines (V2a): CompMD renders it as one code block, its lines never wrapping, so the gutter
+  // numbers them at the block's top and line height, measured after each render and on resize. Markdown documents
+  // get theirs from CompMD's renderer (T-400).
+  let pageEl = $state<HTMLElement>();
+  let lineLayout = $state<{ top: number; lineHeight: number; fontSize: number } | null>(null);
+  /** The file and lines last scrolled to, so a refresh doesn't scroll again */
+  let scrolledTo = '';
+
+  function measureLines() {
+    const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
+    if (!pageEl || !code || !doc || (doc.kind !== 'code' && doc.kind !== 'text')) {
+      lineLayout = null;
+      return;
+    }
+    const style = getComputedStyle(code);
+    const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.6;
+    // The code is a block (app.css), so its top is its first line's
+    const top = code.getBoundingClientRect().top - pageEl.getBoundingClientRect().top;
+    const next = { top, lineHeight, fontSize: parseFloat(style.fontSize) };
+    if (JSON.stringify(next) !== JSON.stringify(lineLayout)) lineLayout = next;
+    scrollToLines();
+  }
+
+  /** `#L<n>`: once the lines are laid out, scroll them a little below the window's top (once per file and lines) */
+  function scrollToLines() {
+    if (!ref?.lines || !lineLayout || !pageEl) return;
+    const key = `${ref.path}:${ref.lines.join('-')}`;
+    if (key === scrolledTo) return;
+    scrolledTo = key;
+    const body = pageEl.closest('.doc-body');
+    if (!body) return;
+    const target = pageEl.offsetTop + lineLayout.top + (ref.lines[0] - 1) * lineLayout.lineHeight;
+    body.scrollTo({ top: Math.max(0, target - 48) });
+  }
+
+  const lineNumbers = $derived(Array.from({ length: doc?.lines ?? 0 }, (_, i) => i + 1));
+  const isMarked = (line: number) => !!ref?.lines && line >= ref.lines[0] && line <= ref.lines[1];
+
+  $effect(() => {
+    const el = pageEl;
+    if (!el || !doc) return;
+    measureLines();
+    const resize = new ResizeObserver(measureLines);
+    resize.observe(el);
+    const rendered = new MutationObserver(measureLines);
+    rendered.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-compmd'] });
+    return () => {
+      resize.disconnect();
+      rendered.disconnect();
+    };
+  });
 
   /** The document has scrolled: the title bar compacts, as the dashboard's and the dialogs' do (lib/scroll.ts) */
   let scrolled = $state(false);
@@ -235,9 +295,30 @@
     <div class="doc-body" id="doc-body" onscroll={(e) => (scrolled = compactAt(e.currentTarget.scrollTop))}>
       {#if doc}
         <!-- A page on the desk: each theme may give it its own paper (--doc-page-*, themes/*.css) -->
-        <article class="doc-page" data-kind={doc.kind}>
+        <article class="doc-page" data-kind={doc.kind} bind:this={pageEl}>
+          {#if lineLayout}
+            <!-- The code's line numbers and the lines the link names: the viewer's own, beside CompMD's block -->
+            <div
+              class="doc-gutter"
+              id="doc-gutter"
+              aria-hidden="true"
+              style:top="{lineLayout.top}px"
+              style:line-height="{lineLayout.lineHeight}px"
+              style:font-size="{lineLayout.fontSize}px"
+            >
+              {#each lineNumbers as line (line)}<div class:marked={isMarked(line)}>{line}</div>{/each}
+            </div>
+            {#if ref.lines}
+              <div
+                class="doc-line-mark"
+                id="doc-line-mark"
+                style:top="{lineLayout.top + (ref.lines[0] - 1) * lineLayout.lineHeight}px"
+                style:height="{(Math.min(ref.lines[1], doc.lines) - ref.lines[0] + 1) * lineLayout.lineHeight}px"
+              ></div>
+            {/if}
+          {/if}
           {#key `${ref.path}`}
-            <CompMd text={doc.document} path={doc.path} />
+            <CompMd text={doc.document} path={doc.path} {localImage} />
           {/key}
         </article>
       {:else if error}

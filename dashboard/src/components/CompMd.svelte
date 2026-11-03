@@ -1,6 +1,15 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { loadCompmd, processText, safeHref, secureLinks, slug, taskData, type CompmdModule } from '../lib/compmd';
+  import {
+    dashboardHash,
+    loadCompmd,
+    processText,
+    safeHref,
+    secureLinks,
+    slug,
+    taskData,
+    type CompmdModule,
+  } from '../lib/compmd';
   import { scrollBehavior } from '../lib/scroll';
   import type { Task } from '../lib/types';
 
@@ -10,7 +19,20 @@
   // CompMD has loaded the place is empty; if it can't load or the text can't be processed, the text shows as written
   // (R2). CompMD's diagnostics are never shown here (R2a). With `path`, `text` is a file of the project in the document
   // viewer: a document of its own, under that path, with its own frontmatter (docs/compmd-viewer-design.md §5).
-  let { text, task, path, inline = false }: { text: string; task?: Task; path?: string; inline?: boolean } = $props();
+  // `localImage`, in the document viewer: a relative image's address on this server (null: shown as its alt text).
+  let {
+    text,
+    task,
+    path,
+    localImage,
+    inline = false,
+  }: {
+    text: string;
+    task?: Task;
+    path?: string;
+    localImage?: (url: string) => string | null;
+    inline?: boolean;
+  } = $props();
 
   type View = ReturnType<ReturnType<CompmdModule['createSandbox']>['open']>;
 
@@ -33,7 +55,7 @@
     loadCompmd()
       .then((compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
-        const { tree, components } = processText(compmd, text, task, path);
+        const { tree, components } = processText(compmd, text, task, path, localImage);
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
           // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)
@@ -78,6 +100,13 @@
         (h) => slug(h.textContent ?? '') === wanted,
       );
       heading?.scrollIntoView({ behavior: scrollBehavior(), block: 'start' });
+      return;
+    }
+    // A link to the dashboard itself (a task's or a document's URL) opens here, a new history entry for Back
+    const hash = dashboardHash(href);
+    if (hash !== null) {
+      e.preventDefault();
+      location.hash = hash;
       return;
     }
     a.setAttribute('target', '_blank');

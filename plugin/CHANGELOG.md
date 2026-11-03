@@ -28,6 +28,14 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   the document's first heading and path, **Copy path** (with `#L<n>`) and **Open on GitHub** (or GitLab, Bitbucket,
   Gitea: the file at the current commit, for a file git tracks). The file is asked for again on the dashboard's
   refresh, a 304 while unchanged; a missing file says "Not in the project", one atm doesn't show "Can't be shown here".
+- **Lines and images in the viewer** (T-394): a code or text file has its line numbers in a gutter (its lines don't
+  wrap; the block scrolls sideways), and `#doc=…:L40` or `:L40-L45` scrolls to the lines and marks them. A changed file
+  re-renders where the reader is. A relative image in a document loads from the files route (resolved from the
+  document's folder); any other image still shows its alt text. Markdown documents get their line numbers from
+  CompMD's renderer once it gives them (T-400, blocked on that release).
+- **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a
+  document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
+  opens in a new tab, without access to the page.
 
 ## [0.28.0] - 2026-11-03
 

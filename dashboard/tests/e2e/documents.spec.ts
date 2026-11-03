@@ -256,3 +256,117 @@ test.describe('the document viewer', () => {
     expect(await page_.locator('.compmd').evaluate((el) => getComputedStyle(el).lineHeight)).toBe('26px');
   });
 });
+
+// T-394: a code or text file's line numbers, #L links, images, refreshing in place, links to the dashboard
+test.describe('the document viewer: lines, images, refreshing', () => {
+  const CODE = Array.from({ length: 120 }, (_, i) => `const line${i + 1} = ${i + 1};`).join('\n') + '\n';
+  const codeDoc = (text = CODE) =>
+    projectDocument('src/app.ts', text, {
+      kind: 'code',
+      language: 'ts',
+      document: '```ts\n' + text + '```\n',
+      line_offset: 1,
+      lines: text.split('\n').length - 1,
+    });
+
+  test('a code file: a number per line in a gutter as tall as the code, each beside its line', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(codeDoc());
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    const gutter = page.locator('#doc-gutter');
+    await expect(gutter.locator('div')).toHaveCount(120);
+    const sizes = await page.locator('#doc-viewer').evaluate((el) => {
+      const g = el.querySelector('#doc-gutter')!.getBoundingClientRect();
+      const code = el.querySelector('.compmd-page pre code')!.getBoundingClientRect();
+      return { gutterTop: g.top, gutterHeight: g.height, codeTop: code.top, codeHeight: code.height };
+    });
+    expect(Math.abs(sizes.gutterTop - sizes.codeTop)).toBeLessThan(2);
+    expect(Math.abs(sizes.gutterHeight - sizes.codeHeight)).toBeLessThan(2);
+  });
+
+  test('#L40 opens at line 40, marked; a range marks its lines', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(codeDoc());
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts:L40-L42'));
+    const mark = page.locator('#doc-line-mark');
+    await expect(mark).toBeInViewport();
+    await expect.poll(() => page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBeGreaterThan(200);
+    await expect(page.locator('#doc-gutter .marked')).toHaveText(['40', '41', '42']);
+    // The mark covers lines 40 to 42 of the code
+    const covered = await page.locator('#doc-viewer').evaluate((el) => {
+      const m = el.querySelector('#doc-line-mark')!.getBoundingClientRect();
+      const rows = [...el.querySelectorAll('#doc-gutter div')].map((d) => d.getBoundingClientRect());
+      return { top: m.top - rows[39].top, bottom: m.bottom - rows[41].bottom };
+    });
+    expect(Math.abs(covered.top)).toBeLessThan(2);
+    expect(Math.abs(covered.bottom)).toBeLessThan(2);
+  });
+
+  test('a Markdown document has no gutter yet (T-400: its lines come from CompMD)', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/design.md:L3'));
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(page.locator('#doc-gutter')).toHaveCount(0);
+  });
+
+  test('a changed file re-renders where the reader is, not at the top', async ({ page, tasksServer }) => {
+    await page.clock.install();
+    tasksServer.setDocument(codeDoc());
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list', autoRefresh: true });
+    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    await expect(page.locator('#doc-gutter div')).toHaveCount(120);
+    await page.locator('#doc-body').evaluate((el) => el.scrollTo({ top: 600 }));
+    const before = await page.locator('#doc-body').evaluate((el) => el.scrollTop);
+    tasksServer.setDocument(codeDoc(CODE.replace('const line50 = 50;', 'const line50 = 5000;')));
+    await page.clock.runFor(5_000);
+    await expect(page.locator('#doc-viewer .compmd-page code')).toContainText('5000');
+    expect(await page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBe(before);
+  });
+
+  test('a relative image loads from this server’s files route; one from elsewhere shows its alt text', async ({
+    page,
+    tasksServer,
+  }) => {
+    const png = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
+    );
+    tasksServer.setImage('docs/img/flow.png', 'image/png', png);
+    tasksServer.setDocument(
+      projectDocument(
+        'docs/design.md',
+        '# Design\n\n![the flow](img/flow.png)\n\n![a badge](https://example.com/b.svg)\n',
+      ),
+    );
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/design.md'));
+    const img = viewer(page).locator('.compmd-page img');
+    await expect(img).toHaveCount(1);
+    await expect(img).toHaveAttribute('src', /api\/v1\/projects\/[^/]+\/files\?path=docs%2Fimg%2Fflow\.png$/);
+    await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBe(1);
+    expect(tasksServer.fileRequests).toEqual(['docs/img/flow.png']);
+    await expect(viewer(page).locator('.compmd-page')).toContainText('a badge');
+  });
+
+  test('a link to the dashboard itself opens here, not in a new tab', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    const here = page.url().split('#')[0];
+    tasksServer.setDocument(
+      projectDocument('docs/index.md', `# Index\n\n[the design](${here}#view=list&doc=docs/design.md)\n`),
+    );
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/index.md'));
+    const link = viewer(page).locator('.compmd-page a');
+    await expect(link).toHaveText('the design');
+    await expect(link).not.toHaveAttribute('target', '_blank');
+    await link.click();
+    await expect(page.locator('#doc-title')).toHaveText('The design');
+    expect(page.context().pages()).toHaveLength(1);
+    await page.goBack();
+    await expect(page.locator('#doc-title')).toHaveText('Index');
+  });
+});

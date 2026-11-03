@@ -138,11 +138,17 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string) {
+export function processText(
+  compmd: CompmdModule,
+  text: string,
+  task?: Task,
+  path?: string,
+  localImage?: (url: string) => string | null,
+) {
   const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
   const document = new compmd.OpenDocument(request);
   try {
-    return { tree: safeTree(document.expanded), components: packComponents(document.components) };
+    return { tree: safeTree(document.expanded, localImage), components: packComponents(document.components) };
   } finally {
     document.free();
   }
@@ -187,9 +193,11 @@ const RAW_IMAGE = /<\s*img\b/i;
  * The expanded tree with what task text mustn't do taken out before it renders (§3), so the browser never even asks:
  * an image that isn't a `data:` image (Markdown's, a reference's, or raw `<img>`) shows its text, since an image from
  * anywhere else would be a request outside the dashboard (the page's CSP refuses it too, noisily); a link atm
- * wouldn't follow becomes its text. secureLinks checks the rendered links again.
+ * wouldn't follow becomes its text. secureLinks checks the rendered links again. In the document viewer, `localImage`
+ * gives a relative image's address on this server (the files route), or null for one it won't load: such an image
+ * loads from there (docs/compmd-viewer-design.md V5).
  */
-export function safeTree<T>(tree: T): T {
+export function safeTree<T>(tree: T, localImage?: (url: string) => string | null): T {
   const root = tree as TreeNode;
   const definitions = new Map<string, string>();
   const collect = (node: TreeNode) => {
@@ -200,10 +208,17 @@ export function safeTree<T>(tree: T): T {
   const asText = (value: unknown): TreeNode[] => (value ? [{ type: 'text', value: String(value) }] : []);
   const visit = (node: TreeNode): TreeNode[] => {
     switch (node.type) {
-      case 'image':
-        return DATA_IMAGE.test(node.url ?? '') ? [node] : asText(node.alt);
-      case 'imageReference':
-        return DATA_IMAGE.test(definitions.get(node.identifier ?? '') ?? '') ? [node] : asText(node.alt);
+      case 'image': {
+        if (DATA_IMAGE.test(node.url ?? '')) return [node];
+        const local = localImage?.(node.url ?? '');
+        return local ? [{ ...node, url: local }] : asText(node.alt);
+      }
+      case 'imageReference': {
+        const url = definitions.get(node.identifier ?? '') ?? '';
+        if (DATA_IMAGE.test(url)) return [node];
+        const local = localImage?.(url);
+        return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
+      }
       case 'link':
         if (!safeHref(node.url ?? '')) return (node.children ?? []).flatMap(visit);
         break;
@@ -214,6 +229,21 @@ export function safeTree<T>(tree: T): T {
     return node.children ? [{ ...node, children: node.children.flatMap(visit) }] : [node];
   };
   return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
+}
+
+/** The hash of a web link to this dashboard itself (the page's own address, with a `#…`: a task or a document
+ * linked by its URL), which the dashboard follows in place; null for any other link */
+export function dashboardHash(href: string, page: string = location.href): string | null {
+  let url: URL;
+  let here: URL;
+  try {
+    url = new URL(href.trim());
+    here = new URL(page);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(url.protocol) || url.origin !== here.origin || url.pathname !== here.pathname) return null;
+  return url.hash.length > 1 ? url.hash : null;
 }
 
 /**
@@ -228,7 +258,7 @@ export function secureLinks(root: ParentNode) {
       a.replaceWith(...a.childNodes);
       continue;
     }
-    if (href.trim().startsWith('#')) continue;
+    if (href.trim().startsWith('#') || dashboardHash(href) !== null) continue;
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
   }

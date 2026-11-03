@@ -2407,9 +2407,46 @@ button.repo-ref {
   color: var(--doc-page-ink);
   box-sizing: border-box;
 }
-/* A code or text file: less margin, the code is the page */
+/* A code or text file: the code is the page, its line numbers in a gutter on the left; its lines never wrap (the
+   block scrolls sideways), so each number sits beside its line */
+.doc-page {
+  position: relative;
+}
 .doc-page:is([data-kind='code'], [data-kind='text']) {
-  padding: 20px 24px;
+  padding: 20px 24px 20px 64px;
+}
+.doc-page:is([data-kind='code'], [data-kind='text']) .compmd-page pre {
+  white-space: pre;
+  overflow-x: auto;
+}
+/* A block, so its box is its lines' boxes: the gutter measures where they start */
+.doc-page:is([data-kind='code'], [data-kind='text']) .compmd-page pre > code {
+  display: block;
+}
+.doc-gutter {
+  position: absolute;
+  left: 8px;
+  width: 44px;
+  text-align: right;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  color: var(--text-muted);
+  opacity: 0.7;
+  user-select: none;
+  pointer-events: none;
+}
+.doc-gutter .marked {
+  color: var(--accent);
+  opacity: 1;
+  font-weight: 600;
+}
+/* The lines a #L link names, marked across the page */
+.doc-line-mark {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: color-mix(in srgb, var(--yellow) 18%, transparent);
+  border-left: 3px solid var(--yellow);
+  pointer-events: none;
 }
 .doc-viewer.narrow .doc-body {
   padding: 12px;

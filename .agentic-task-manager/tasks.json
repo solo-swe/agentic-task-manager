@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 400,
+    "next_id": 401,
     "labels": [
       {
         "id": "architecture",
@@ -20742,7 +20742,7 @@
       "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6. **Reviewed live with Hakan on the dev server** before the tasks that build on it (review mode `blocker`).\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- **The title bar:** the document's first heading (else its file name), its path under it, and two actions (decided with Hakan):\n  - **Copy path**: copies the path from the project root, with `#L<n>` (or `#L<n>-L<m>`) when a line or range is selected, for pasting to an agent; says \"Copied\" for a moment.\n  - **Open on GitHub**: the file in the repository's web view (`meta.repository`, the same address rules as commit links), at the HEAD commit the documents route gives (`commit`), with the selected line; in a new tab, without access to the page. Shown only when the project has a repository address and git tracks the file (`tracked`).\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash, the GitHub address); e2e: open, move, resize, Back, Reload keeps it, Copy path (with a line), Open on GitHub (shown or not), a missing file, a refused file.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "T-392"
       ],
@@ -20755,7 +20755,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:11:51Z",
+      "updated_at": "2026-11-03T19:26:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20774,17 +20774,30 @@
       "review": "blocker",
       "started_at": "2026-11-03T19:02:46Z",
       "started_by": "claude:b7be7288",
-      "commit": "325a903ab545e3063ac99414807825351cda24f2",
+      "commit": "5e94bf3fe99922dbd9789b316ebfdeaa68e0d8fc",
       "review_requested_at": "2026-11-03T19:11:51Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-03T19:11:51Z",
           "kind": "review",
           "text": "Live review on the dev server: open `#doc=docs/compmd-viewer-design.md` with the task panel open; move by the title bar, resize from the corner, Reload, Back, Escape, Copy path (`:L3`), Open on GitHub, a narrow window. e2e 386, unit 1001 pass.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:26:47Z",
+          "kind": "outcome",
+          "text": "Passed Hakan’s live review: page on a desk with theme papers, compacting title bar, a small × in the corner. Line links (scroll and mark) are T-394.",
+          "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-03T19:11:51Z",
+          "to": "2026-11-03T19:26:47Z"
+        }
+      ],
+      "completed_at": "2026-11-03T19:26:47Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-394",
@@ -20794,10 +20807,10 @@
       "labels": [
         "compmd"
       ],
-      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Not here\nRendering content: CompMD renders the whole document, code blocks and their highlighting included (it takes care of\nhighlighting itself); atm only wraps a file into a CompMD document (the server, T-392). The gutter, the line-range\nmark and the scroll position are the viewer's own UI around CompMD's output; add no renderer or highlighter.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.\n",
+      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left of a `code` or `text` file: a number per line of `text` (its lines never wrap on screen: the block scrolls sideways). `#L<n>` scrolls to the line; `#L<n>-L<m>` marks the range. Markdown documents are T-400: their blocks' source lines come from CompMD's renderer, through an API it is adding.\n- **Links to the dashboard itself** (its own address with a `#…`, e.g. a document's URL) open in place instead of in a new tab (Hakan, while trying this task's links).\n- **Refreshing in place:** a changed file re-renders where the reader is, never back at the top. A 304 changes nothing.\n- **Images:** a relative Markdown image becomes the files route's URL for the path resolved from the document's folder; `data:` stays; any other image shows its alt text.\n\n## Not here\nRendering content: CompMD renders the whole document, code blocks and their highlighting included (it takes care of highlighting itself); atm only wraps a file into a CompMD document (the server, T-392). The gutter, the line-range mark and the scroll position are the viewer's own UI around CompMD's output; add no renderer or highlighter.\n\n## Try it\nOn the dev server (`npm run dev` in `dashboard/`), these open in a new tab; once T-395 is done, the relative links below open the viewer in place.\n\n| What | Dev server | In the dashboard (T-395) |\n|---|---|---|\n| A design, lines 14–20 marked | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=docs/compmd-viewer-design.md:L14-L20) | [docs/compmd-viewer-design.md#L14-L20](docs/compmd-viewer-design.md#L14-L20) |\n| Code, line 40 | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=atm-cli/atm/lib/documents.py:L40) | [atm-cli/atm/lib/documents.py#L40](atm-cli/atm/lib/documents.py#L40) |\n| Code, a range | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=dashboard/src/lib/documents.ts:L44-L60) | [dashboard/src/lib/documents.ts#L44-L60](dashboard/src/lib/documents.ts#L44-L60) |\n| An image | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/atm-logo.png) | [branding/atm-logo.png](branding/atm-logo.png) |\n| A document in another folder | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/README.md) | [branding/README.md](branding/README.md) |\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40 and marks it; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't; a link to the dashboard opens in place.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-393"
       ],
@@ -20808,7 +20821,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:49:21Z",
+      "updated_at": "2026-11-03T19:37:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20824,7 +20837,17 @@
         }
       ],
       "sprint": "Document Viewer",
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-03T19:25:38Z",
+          "kind": "note",
+          "text": "From T-393’s live review (Hakan): a `#doc=…:L14-L20` link must scroll to those lines and mark them, in a Markdown document too (the blocks the lines fall in).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-03T19:26:48Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-395",
@@ -21042,6 +21065,58 @@
       "review": "batch",
       "related": [
         "T-391"
+      ]
+    },
+    {
+      "id": "T-400",
+      "name": "Document viewer: line numbers and #L links in Markdown documents, from CompMD's renderer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The Markdown half of T-394's line work (`docs/compmd-viewer-design.md` V2a), split off because it needs what only CompMD knows: which source lines each rendered block came from. CompMD's renderer will give it through an API (Hakan, 2026-11-03); this task waits for that release (T-398 upgrades CompMD).\n\n## Change\n- The gutter beside a Markdown document: each top-level block's first source line (less `line_offset`, 0 for Markdown), aligned with the block's rendered top, measured after CompMD's `rendered` and on resize; through CompMD's API, never by guessing which element came from which node.\n- `#doc=…:L<n>` and `:L<n>-L<m>` in a Markdown document: scroll to the block the line is in and mark the blocks the range falls in, as T-394 does for code.\n- Copy path and Open on GitHub with the selected lines, as for code.\n\n## Not here\nAny rendering of our own: CompMD renders, and gives the mapping; the gutter and the mark are the viewer's UI around its output.\n\n## Tests\ne2e: the gutter's numbers sit beside their blocks; `:L14-L20` in a Markdown document scrolls to and marks its blocks; a document with a frontmatter counts its lines from the file's first.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "blocked",
+      "dependencies": [
+        "T-394",
+        "T-398"
+      ],
+      "files": [
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T19:37:33Z",
+      "updated_at": "2026-11-03T19:37:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T19:37:33Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "related": [
+        "T-394"
+      ],
+      "waiting_on": "user",
+      "questions": [],
+      "blocked_at": "2026-11-03T19:37:37Z",
+      "notes": [
+        {
+          "at": "2026-11-03T19:37:37Z",
+          "kind": "note",
+          "text": "Waits for CompMD’s renderer API giving each rendered block’s source lines (Hakan is adding it); unblock when that release is out.",
+          "by": "claude:b7be7288"
+        }
       ]
     }
   ]

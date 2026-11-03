@@ -81,7 +81,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only sets the page's hash (`dashboardHash`, T-394); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the built-in icons and the bundled logo | `security-invariants.test.ts` (`{@html}` only in `Icon.svelte` and `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
