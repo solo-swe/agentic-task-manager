@@ -577,7 +577,10 @@
       },
       {
         "id": "Rich Markdown",
-        "state": "planned"
+        "state": "active",
+        "goal": "Rich task text: CompMD and Mermaid in task details",
+        "release": "0.28.0",
+        "start": "2026-11-03T07:29:42Z"
       },
       {
         "id": "Sprints and releases",
@@ -955,6 +958,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
         },
         "released_at": "2026-11-02T10:46:35Z"
+      },
+      {
+        "id": "0.28.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -14212,7 +14219,7 @@
       "name": "Task details: render descriptions and notes with CompMD",
       "type": "feature",
       "priority": "P2",
-      "description": "Render a task's description and its notes in the details panel with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`. CompMD is CommonMark + GFM with components, so tables and the rest of GFM render too.\n\n## Packages\n`@compmd/processor` (WebAssembly; `init()`, `process({ path, files, now })`) and `@compmd/render` (`createPage(element).render(expanded)`), from npm, pinned to exact versions in `dashboard/package.json` and installed with `npm ci`. If they aren't on npm yet when this starts, block the task on the user; don't vendor them from the repository.\n\n## Shipping: separate files, not in the dashboard\nThe processor is about 808 KB gzipped, and the dashboard has a 400 KiB budget (`tests/e2e/guardrails.spec.ts`; 379 KB today). Keep the dashboard one file within that budget and ship CompMD beside it:\n- the build copies the packages' browser files into `plugin/assets/compmd/` (committed build artifacts, like `tasks-dashboard.html`: CI fails when they are stale);\n- `atm serve` serves `plugin/assets/` under a fixed path (e.g. `/assets/...`), read-only, only files under that folder (no `..`, no symlinks out), with correct content types (`application/wasm` for `.wasm`); the Vite dev server and the e2e `tasksServer` fixture serve the same path;\n- the dashboard loads them lazily, the first time a details panel opens, and keeps them loaded.\nThe guardrail test still holds: no request leaves localhost.\n\n## Untrusted text\nTask text comes from anyone who can change `tasks.json` (a collaborator, a merged PR, an agent). Configure CompMD for a document its user doesn't trust:\n- no raw HTML (shown as text, or sanitized with its allowlist; no scripts, styles or event attributes);\n- no remote data: no origin allowed (`from: https://…` fails);\n- no custom code components (JSX, TSX, Svelte, JS), no `host:` data, no inputs that change anything;\n- links only `https:`, `http:`, `mailto:` and `#` (as `safeHref` today), opened as today.\n\n## Scope\n- The details panel's description and notes only. Help, What's new and the card tooltips (`markdownPlainText`) keep `markdown.ts`.\n- The output follows the theme and light/dark mode through the CSS tokens (`no-hardcoded-colours.test.ts` still passes); headings, lists, code, quotes and tables look like today's.\n- While CompMD loads, or if it fails to load, the panel renders with `markdown.ts`, so a description never shows blank.\n- The section rail and its ▲/▼ hints keep working with the new content (T-280).\n\n## Security document\n`docs/security-architecture.md` in the same PR: the new route serving `plugin/assets/`, and CompMD as the renderer of untrusted task text, with the settings above and the checks that prove them.\n\n## Tests\n- atm-cli (`tests/scripts/`): the asset route serves a file with its content type, refuses `..` and paths outside the folder, and 404s a missing file.\n- e2e: a description with a table and a task list renders; raw HTML (`<img onerror>`, `<script>`) shows as text and runs nothing; a `javascript:` link isn't a link; a remote-data component makes no request; the fallback renders when the asset route fails; the details panel's screenshot baselines updated.\n- Unit: the configuration passed to CompMD (untrusted settings).",
+      "description": "Render a task's description and its notes in the details panel with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`. CompMD is CommonMark + GFM with components, so tables and the rest of GFM render too.\n\n## Packages\n`@compmd/processor` (WebAssembly; `init()`, `process({ path, files, now })`) and `@compmd/render` (`createPage(element).render(expanded)`), from npm (both 0.3.0 as of 2026-11-03), pinned to exact versions in `dashboard/package.json` and installed with `npm ci`. Don't vendor them from the repository.\n\n## Shipping: separate files, not in the dashboard\nThe processor is about 808 KB gzipped. The dashboard is one file with a size guardrail of 550 KiB (`tests/e2e/guardrails.spec.ts`; 543 kB as of 0.27.0, so about 20 KB of room; T-342 in this sprint looks for savings). Keep the dashboard one file within that guardrail and ship CompMD beside it:\n- the build copies the packages' browser files into `plugin/assets/compmd/` (committed build artifacts, like `tasks-dashboard.html`: CI fails when they are stale);\n- `atm serve` serves `plugin/assets/` under a fixed path (e.g. `/assets/...`), read-only, only files under that folder (no `..`, no symlinks out), with correct content types (`application/wasm` for `.wasm`). The route belongs to the REST API's layer, `atm-cli/atm/api/server.py` (`docs/layered-architecture.md`; it reads files from the plugin, not task data, so it doesn't go through atm-lib);\n- the dev server forwards that path to the real API like `api/`, `p/` and `__atm/` (`dashboard/build/dev-api.ts`), and the e2e `tasksServer` fixture (`tests/e2e/helpers.ts`) serves the same path;\n- the dashboard loads them lazily, the first time a details panel opens, and keeps them loaded. Its requests go through `src/lib/api/http.ts`, the only module allowed to call `fetch` (ESLint); load the assets through it, or through a dynamic `import()` of the served module if that is what CompMD needs, and say which in the code.\n\nThe guardrail test still holds: no request leaves localhost. The page's Content-Security-Policy (`page_csp` in `api/server.py`, mirrored by `build/security-headers.ts` for the dev server) must allow exactly what loading CompMD needs, nothing broader: today `script-src` lists only the page's own script hashes and nothing allows WebAssembly, so expect `'wasm-unsafe-eval'` and the asset path's scripts (e.g. `'self'` limited to `/assets/`, if CSP paths fit, else the files' hashes); `tests/unit/security-headers.test.ts` keeps the two in step.\n\n## Untrusted text\nTask text comes from anyone who can change `tasks.json` (a collaborator, a merged PR, an agent). Configure CompMD for a document its user doesn't trust:\n- no raw HTML (shown as text, or sanitized with its allowlist; no scripts, styles or event attributes);\n- no remote data: no origin allowed (`from: https://…` fails);\n- no custom code components (JSX, TSX, Svelte, JS), no `host:` data, no inputs that change anything;\n- links only `https:`, `http:`, `mailto:` and `#` (as `safeHref` today), opened as today.\n\n## Scope\n- The details panel's description and notes only. Help, What's new and the card tooltips (`markdownPlainText`) keep `markdown.ts`.\n- The output follows the theme and light/dark mode through the CSS tokens (`no-hardcoded-colours.test.ts` still passes); headings, lists, code, quotes and tables look like today's.\n- While CompMD loads, or if it fails to load, the panel renders with `markdown.ts`, so a description never shows blank.\n- The section rail and its ▲/▼ hints keep working with the new content (T-280).\n\n## Security document\n`docs/security-architecture.md` in the same PR: the new route serving `plugin/assets/` (I11's list of routes), the CSP change, and CompMD as the renderer of untrusted task text, with the settings above and the checks that prove them.\n\n## Tests\n- atm-cli (`tests/scripts/serve.test.mjs`): the asset route serves a file with its content type, refuses `..` and paths outside the folder, and 404s a missing file.\n- e2e: a description with a table and a task list renders; raw HTML (`<img onerror>`, `<script>`) shows as text and runs nothing; a `javascript:` link isn't a link; a remote-data component makes no request; the fallback renders when the asset route fails; the details panel's screenshot baselines updated.\n- Unit: the configuration passed to CompMD (untrusted settings).\n- `tests/scripts/dev-api.test.mjs`: the dev server forwards the asset path.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -14221,23 +14228,26 @@
         "dashboard/package.json",
         "dashboard/package-lock.json",
         "dashboard/vite.config.ts",
-        "dashboard/build/dev-data.ts",
         "dashboard/src/components/DetailPanel.svelte",
         "dashboard/src/components/CompMd.svelte",
         "dashboard/src/lib/compmd.ts",
         "dashboard/src/app.css",
-        "atm-cli/atm/server.py",
         "plugin/assets/compmd/",
         "docs/security-architecture.md",
         "dashboard/tests/e2e/helpers.ts",
         "dashboard/tests/e2e/detail.spec.ts",
         "dashboard/tests/unit/compmd.test.ts",
-        "tests/scripts/"
+        "tests/scripts/",
+        "atm-cli/atm/api/server.py",
+        "plugin/scripts/atm.py",
+        "dashboard/build/dev-api.ts",
+        "dashboard/build/security-headers.ts",
+        "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T07:28:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -14258,7 +14268,7 @@
       "name": "An ambient Mermaid pack: mermaid code blocks render as diagrams in task details",
       "type": "feature",
       "priority": "P2",
-      "description": "atm's own ambient CompMD pack (spec §6.3: a pack the processor provides to every document without an import) that renders fenced code blocks with the language `mermaid` as diagrams, in the task details' descriptions and notes (new-1).\n\n## Pack\n- Lives in the dashboard (`src/lib/compmd-packs/`), registered with CompMD's processor as ambient; documents may also import it explicitly (spec §6.3). Name it for atm (e.g. `@atm/mermaid`).\n- Mermaid from npm (`mermaid`, pinned exactly), shipped like CompMD in new-1: copied to `plugin/assets/mermaid/` by the build, served by `atm serve`, and loaded only when a document has a `mermaid` block.\n- Untrusted text: Mermaid's `securityLevel: 'strict'` (no HTML in labels, no click handlers or links that run code), `startOnLoad: false`, no external fonts or images.\n- Theme: the diagram follows light/dark mode and the dashboard theme (Mermaid `themeVariables` from the CSS tokens), and is re-rendered when the mode or theme changes.\n- A diagram that doesn't parse shows as its code block with Mermaid's error message under it, never a blank space.\n- A wide diagram scrolls inside its block or fits the panel width; it doesn't widen the panel.\n\n## Tests\n- e2e: a flowchart renders as SVG; a broken diagram shows the code and the error; a diagram in dark mode uses dark colours; a label with `<script>` or `<img onerror>` runs nothing; nothing loads from outside localhost; Mermaid isn't loaded for a task without a `mermaid` block.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: Mermaid's settings as part of the untrusted-text renderer.",
+      "description": "atm's own ambient CompMD pack (spec §6.3: a pack the processor provides to every document without an import) that renders fenced code blocks with the language `mermaid` as diagrams, in the task details' descriptions and notes (T-284).\n\n## Pack\n- Lives in the dashboard (`src/lib/compmd-packs/`), registered with CompMD's processor as ambient; documents may also import it explicitly (spec §6.3). Name it for atm (e.g. `@atm/mermaid`).\n- Mermaid from npm (`mermaid`, pinned exactly), shipped like CompMD in T-284: copied to `plugin/assets/mermaid/` by the build, served by `atm serve`'s asset route, and loaded only when a document has a `mermaid` block.\n- Untrusted text: Mermaid's `securityLevel: 'strict'` (no HTML in labels, no click handlers or links that run code), `startOnLoad: false`, no external fonts or images.\n- Theme: the diagram follows light/dark mode and the dashboard theme (Mermaid `themeVariables` from the CSS tokens), and is re-rendered when the mode or theme changes.\n- A diagram that doesn't parse shows as its code block with Mermaid's error message under it, never a blank space.\n- A wide diagram scrolls inside its block or fits the panel width; it doesn't widen the panel.\n\n## Tests\n- e2e: a flowchart renders as SVG; a broken diagram shows the code and the error; a diagram in dark mode uses dark colours; a label with `<script>` or `<img onerror>` runs nothing; nothing loads from outside localhost; Mermaid isn't loaded for a task without a `mermaid` block.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: Mermaid's settings as part of the untrusted-text renderer, and any change to the page's CSP it needs.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -14278,9 +14288,9 @@
         "dashboard/tests/fixtures/standard.json"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T07:29:26Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -14299,7 +14309,7 @@
       "name": "Tell agents what task text can use: CompMD and Mermaid diagrams",
       "type": "docs",
       "priority": "P2",
-      "description": "Once the details panel renders CompMD with the Mermaid pack (new-1, new-2), the places that tell agents and users what task text may contain are out of date.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes: GFM including tables, and `mermaid` code blocks as diagrams; raw HTML shows as text. Suggest a diagram only where it helps (a flow, a state machine), not by default.\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, briefly.\n- `plugin/CLAUDE.md`: one line on what task text renders.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for the release that ships new-1 and new-2.\n\n## Before merging\nA skill changes, so the agent sandbox runs before the PR merges (`CLAUDE.md`, Security): `tests/sandbox/run.mjs` with Docker. Ask the user to run it (it needs their API key).",
+      "description": "Once the details panel renders CompMD with the Mermaid pack (T-284, T-285), the places that tell agents and users what task text may contain are out of date.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes: GFM including tables, and `mermaid` code blocks as diagrams; raw HTML shows as text. Suggest a diagram only where it helps (a flow, a state machine), not by default.\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, briefly.\n- `plugin/CLAUDE.md`: one line on what task text renders.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for 0.28.0, the release that ships T-284 and T-285.\n\n## Security review\nSkills and `plugin/CLAUDE.md` change, so the release needs the agent-facing review (`CLAUDE.md`, Security; `docs/security-architecture.md` §3). No API key is used for the agent sandbox: write the review of these skill changes in §3.3 instead of a live run, as for the earlier releases (what the new text tells agents, and that it adds nothing for them to run or fetch).\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -14313,12 +14323,13 @@
         "plugin/CLAUDE.md",
         "docs/help.md",
         "plugin/CHANGELOG.md",
-        "plugin/WHATS-NEW.md"
+        "plugin/WHATS-NEW.md",
+        "docs/security-architecture.md"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T07:29:07Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -17229,9 +17240,9 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-03T07:28:11Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "docs",
         "compmd"
@@ -17239,7 +17250,14 @@
       "with": "user",
       "related": [
         "T-284"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown"
     },
     {
       "id": "T-337",
@@ -17512,7 +17530,7 @@
       "labels": [
         "ux"
       ],
-      "description": "In 0.26.0 the shipped single-file dashboard went over its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`), which was raised from 500 to 525 KiB (T-341). This task was created assuming the whole `plugin/CHANGELOG.md` is embedded; it isn't: `dashboard/vite.config.ts` embeds only `plugin/WHATS-NEW.md` (`changelogModule(whatsNew)`, for What's new), and reads `CHANGELOG.md` only for the copyright year (`pluginInfoModule`). What's New adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail back accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
+      "description": "The shipped single-file dashboard keeps nearing its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`, `MAX_BYTES`), which has been raised several times, most recently to 550 KiB; 0.27.0 ships 543 kB, so about 20 KB of room is left, and T-284 and T-285 in this sprint add a loader and a pack to it. Only `plugin/WHATS-NEW.md` is embedded (`changelogModule(whatsNew)` in `dashboard/vite.config.ts`, for What's new; `CHANGELOG.md` is read only for the copyright year in `pluginInfoModule`). What's new adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -17524,12 +17542,19 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-02T02:16:50Z",
+      "updated_at": "2026-11-03T07:29:27Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown"
     },
     {
       "id": "T-343",
@@ -20352,12 +20377,19 @@
         "README.md"
       ],
       "created_at": "2026-11-03T01:25:18Z",
-      "updated_at": "2026-11-03T01:25:23Z",
+      "updated_at": "2026-11-03T07:28:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown"
     },
     {
       "id": "T-390",
@@ -20378,13 +20410,20 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T07:22:15Z",
-      "updated_at": "2026-11-03T07:22:19Z",
+      "updated_at": "2026-11-03T07:28:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "cli",
         "api"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown"
     }
   ]
 }
