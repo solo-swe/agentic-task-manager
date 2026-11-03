@@ -121,8 +121,16 @@ test.describe('themes', () => {
     await expect(page.getByLabel('Theme', { exact: true })).toHaveValue('noctis');
     await expect(page.locator('.theme-picker .theme-swatch span')).toHaveCount(4);
     // One line, not a list of every theme
-    const height = (await page.locator('.theme-picker').boundingBox())!.height;
+    const picker = page.locator('.theme-picker:has(#theme-select)');
+    const height = (await picker.boundingBox())!.height;
     expect(height).toBeLessThan(40);
+    // The document style below it (T-404): the same combo box, a sample of its type where the theme has its swatch,
+    // its select as wide as the theme's
+    const docStyle = page.locator('.doc-style-picker');
+    await expect(page.getByLabel('Document style', { exact: true })).toHaveValue('auto');
+    await expect(docStyle.locator('.doc-style-sample')).toHaveText('Aa');
+    const [a, b] = [await picker.locator('select').boundingBox(), await docStyle.locator('select').boundingBox()];
+    expect([b!.x, b!.width]).toEqual([a!.x, a!.width]);
   });
 
   test('a separator line sets the themes that draw the board apart, before Sticky notes', async ({

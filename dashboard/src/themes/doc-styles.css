@@ -1,0 +1,374 @@
+/* Document styles (T-404): how the document viewer's page looks when the reader picks one in Settings, instead of the
+   theme's page (Auto, which sets no data-doc-style). They are host styles: the page CompMD renders into is the
+   dashboard's, so the dashboard styles it, after the ideas of CompMD's editor's own (its frame.css host themes),
+   in its own CSS. Each comes in the dashboard's dark mode and its light one.
+
+   A style sets the page's variables (--doc-*, app.css), the colours the rendered text uses (--text, --border,
+   --surface2, --accent, as Sticky Notes' sheet does) and, for a Markdown document, its type. A code or text file keeps
+   its gutter and padding (app.css); only its paper and colours change. Fonts are the system's: the page's CSP loads
+   none from elsewhere. */
+
+/* ---- GitHub: the README look ---- */
+.doc-viewer[data-doc-style='github'] {
+  --doc-desk: #010409;
+  --doc-page: #0d1117;
+  --doc-page-border: 1px solid #30363d;
+  --doc-page-radius: 6px;
+  --doc-page-shadow: none;
+  --doc-page-padding: 32px 40px 40px;
+  --doc-page-ink: #e6edf3;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='github'] {
+  --doc-desk: #f6f8fa;
+  --doc-page: #ffffff;
+  --doc-page-border: 1px solid #d1d9e0;
+  --doc-page-ink: #1f2328;
+}
+.doc-viewer[data-doc-style='github'] .doc-page {
+  max-width: 980px;
+  --text: #e6edf3;
+  --text-muted: #9198a1;
+  --border: #3d444d;
+  --surface2: #151b23;
+  --accent: #4493f8;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='github'] .doc-page {
+  --text: #1f2328;
+  --text-muted: #59636e;
+  --border: #d1d9e0;
+  --surface2: #f6f8fa;
+  --accent: #0969da;
+}
+.doc-viewer[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.doc-viewer[data-doc-style='github'] .doc-page[data-kind='markdown'] .compmd-page {
+  :is(h1, h2, h3, h4, h5, h6) {
+    margin: 24px 0 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--text);
+  }
+  :is(h1, h2) {
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 {
+    font-size: 2em;
+  }
+  h2 {
+    font-size: 1.5em;
+  }
+  h3 {
+    font-size: 1.25em;
+  }
+  :is(h4, h5, h6) {
+    font-size: 1em;
+  }
+  :is(p, ul, ol, pre, blockquote, table, .compmd-alert) {
+    margin: 0 0 16px;
+  }
+  :is(ul, ol) {
+    padding-left: 2em;
+  }
+  li + li {
+    margin-top: 0.25em;
+  }
+  a {
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  code {
+    font-size: 85%;
+    padding: 0.2em 0.4em;
+    border-radius: 6px;
+  }
+  pre {
+    padding: 16px;
+    border-radius: 6px;
+    line-height: 1.45;
+  }
+  pre code {
+    font-size: 85%;
+    padding: 0;
+  }
+  blockquote {
+    padding: 0 1em;
+    color: var(--text-muted);
+    border-left: 0.25em solid var(--border);
+  }
+  table {
+    font-size: inherit;
+  }
+  :is(th, td) {
+    padding: 6px 13px;
+  }
+  tr:nth-child(2n) td {
+    background: var(--surface2);
+  }
+  th {
+    background: none;
+  }
+  hr {
+    height: 0.25em;
+    margin: 24px 0;
+    border: 0;
+    background: var(--border);
+  }
+}
+
+/* ---- Docs: a narrow column of serif text, for reading ---- */
+.doc-viewer[data-doc-style='docs'] {
+  --doc-desk: #16181c;
+  --doc-page: #1d2026;
+  --doc-page-border: none;
+  --doc-page-radius: 2px;
+  --doc-page-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --doc-page-padding: 48px 56px 56px;
+  --doc-page-ink: #dcdfe4;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='docs'] {
+  --doc-desk: #eef0f3;
+  --doc-page: #fdfdfc;
+  --doc-page-shadow: 0 1px 3px rgba(20, 30, 50, 0.12);
+  --doc-page-ink: #22262e;
+}
+.doc-viewer[data-doc-style='docs'] .doc-page {
+  --text: #dcdfe4;
+  --text-muted: #9aa1ad;
+  --border: #383d47;
+  --surface2: #262a32;
+  --accent: #7fb0ff;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='docs'] .doc-page {
+  --text: #22262e;
+  --text-muted: #5d6573;
+  --border: #d9dde3;
+  --surface2: #f1f3f6;
+  --accent: #2357c5;
+}
+/* The column is the measure (44rem of text), the page around it */
+.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] {
+  max-width: calc(44rem + 112px);
+}
+.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd {
+  font-family: Charter, 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 18px;
+  line-height: 1.7;
+}
+.doc-viewer[data-doc-style='docs'] .doc-page[data-kind='markdown'] .compmd-page {
+  :is(h1, h2, h3, h4, h5, h6) {
+    margin: 1.6em 0 0.4em;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--text);
+  }
+  h1 {
+    font-size: 1.9em;
+    margin-top: 0;
+  }
+  h2 {
+    font-size: 1.35em;
+  }
+  h3 {
+    font-size: 1.1em;
+  }
+  :is(h4, h5, h6) {
+    font-size: 1em;
+    color: var(--text-muted);
+  }
+  :is(p, ul, ol, pre, blockquote, table, .compmd-alert) {
+    margin: 0 0 1em;
+  }
+  :is(ul, ol) {
+    padding-left: 1.4em;
+  }
+  li {
+    margin-bottom: 0.3em;
+  }
+  a {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+  code {
+    font-size: 0.8em;
+  }
+  pre {
+    padding: 14px 16px;
+    line-height: 1.5;
+  }
+  blockquote {
+    margin-left: 0;
+    padding-left: 1em;
+    border-left: 3px solid var(--accent);
+    font-style: italic;
+  }
+  table {
+    font-size: 0.85em;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+}
+
+/* ---- Magazine: display headings, a drop cap, one red accent ---- */
+.doc-viewer[data-doc-style='magazine'] {
+  --doc-desk: #0e0d0c;
+  --doc-page: #171514;
+  --doc-page-border: none;
+  --doc-page-radius: 0;
+  --doc-page-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  --doc-page-padding: 56px 64px 64px;
+  --doc-page-ink: #ece6dc;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='magazine'] {
+  --doc-desk: #e7e2d9;
+  --doc-page: #fffdf8;
+  --doc-page-shadow: 0 1px 4px rgba(40, 30, 20, 0.18);
+  --doc-page-ink: #1c1a17;
+}
+.doc-viewer[data-doc-style='magazine'] .doc-page {
+  --text: #ece6dc;
+  --text-muted: #a69e92;
+  --border: #3b3631;
+  --surface2: #221f1c;
+  --accent: #ff5a4f;
+}
+:root[data-mode='light'] .doc-viewer[data-doc-style='magazine'] .doc-page {
+  --text: #1c1a17;
+  --text-muted: #6b645a;
+  --border: #ddd5c8;
+  --surface2: #f4efe6;
+  --accent: #c8102e;
+}
+.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] {
+  max-width: 760px;
+}
+.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 17px;
+  line-height: 1.65;
+}
+.doc-viewer[data-doc-style='magazine'] .doc-page[data-kind='markdown'] .compmd-page {
+  :is(h1, h2, h3, h4, h5, h6) {
+    font-family: Didot, 'Bodoni 72', 'Bodoni MT', 'Playfair Display', Georgia, serif;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--text);
+    margin: 1.8em 0 0.5em;
+  }
+  h1 {
+    margin-top: 0;
+    padding-bottom: 0.35em;
+    font-size: 2.6em;
+    letter-spacing: -0.01em;
+    border-bottom: 3px double var(--text);
+  }
+  h2 {
+    font-size: 1.6em;
+  }
+  h3 {
+    font-size: 1.15em;
+    font-style: italic;
+    font-weight: 400;
+  }
+  :is(h4, h5, h6) {
+    font-family: inherit;
+    font-size: 0.8em;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  /* The drop cap: the first letter after the title */
+  h1 + p::first-letter {
+    float: left;
+    margin: 0.06em 0.1em 0 0;
+    font-family: Didot, 'Bodoni 72', 'Bodoni MT', Georgia, serif;
+    font-size: 3.6em;
+    line-height: 0.85;
+    color: var(--accent);
+  }
+  :is(p, ul, ol, pre, table, .compmd-alert) {
+    margin: 0 0 1em;
+  }
+  li {
+    margin-bottom: 0.3em;
+  }
+  li::marker {
+    color: var(--accent);
+  }
+  a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  a:hover {
+    border-bottom-color: var(--accent);
+  }
+  /* A pull quote */
+  blockquote {
+    margin: 1.4em 2em;
+    padding: 0.4em 0;
+    font-size: 1.25em;
+    font-style: italic;
+    line-height: 1.45;
+    text-align: center;
+    color: var(--text);
+    border-top: 1px solid var(--accent);
+    border-bottom: 1px solid var(--accent);
+  }
+  code {
+    font-size: 0.78em;
+  }
+  pre {
+    padding: 14px 16px;
+    border-radius: 0;
+    border-left: 3px solid var(--accent);
+  }
+  hr {
+    width: 30%;
+    margin: 2em auto;
+    border-top-color: var(--accent);
+  }
+  table {
+    font-size: 0.85em;
+  }
+  th {
+    background: none;
+    border-bottom: 2px solid var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.85em;
+  }
+}
+
+/* The sample beside the select in Settings: "Aa" in the style's type, where the theme picker has its swatch */
+.doc-style-sample {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 18px;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.doc-style-sample[data-doc-style='github'] {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-weight: 600;
+}
+.doc-style-sample[data-doc-style='docs'] {
+  font-family: Charter, 'Iowan Old Style', Georgia, serif;
+}
+.doc-style-sample[data-doc-style='magazine'] {
+  font-family: Didot, 'Bodoni 72', 'Bodoni MT', Georgia, serif;
+  font-weight: 700;
+  color: var(--red);
+}

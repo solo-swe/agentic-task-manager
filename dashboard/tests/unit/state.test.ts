@@ -366,4 +366,13 @@ describe('DashboardState appearance', () => {
     next.setTheme('vaporwave');
     expect(next.theme).toBe('default');
   });
+
+  it('remembers the document style; an unknown one is Auto (T-404)', () => {
+    const first = new DashboardState();
+    expect(first.docStyle).toBe('auto');
+    first.setDocStyle('docs');
+    expect(new DashboardState().docStyle).toBe('docs');
+    first.setDocStyle('terminal');
+    expect(new DashboardState().docStyle).toBe('auto');
+  });
 });

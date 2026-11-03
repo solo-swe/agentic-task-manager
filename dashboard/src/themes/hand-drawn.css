@@ -124,8 +124,9 @@
 }
 
 /* The document viewer's page (DocumentViewer.svelte): the same notebook page, held upright, the binding holes down its
-   left edge, the margin line, and the text written on the rules (26px apart) */
-:root[data-theme='hand-drawn'] .doc-viewer {
+   left edge, the margin line, and the text written on the rules (26px apart). Only for the Auto document style: another
+   (themes/doc-styles.css) is a page of its own */
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) {
   --doc-page:
     radial-gradient(circle at 13px 50%, var(--bg) 0 5px, transparent 5.6px) 0 8px / 26px 34px repeat-y,
     linear-gradient(90deg, transparent 44px, rgba(230, 100, 100, 0.4) 44px 45.5px, transparent 45.5px),
@@ -137,7 +138,7 @@
   --doc-page-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
   --doc-page-padding: 30px 32px 52px 64px;
 }
-:root[data-theme='hand-drawn'][data-mode='light'] .doc-viewer {
+:root[data-theme='hand-drawn'][data-mode='light'] .doc-viewer:not([data-doc-style]) {
   --doc-page:
     radial-gradient(circle at 13px 50%, var(--bg) 0 5px, transparent 5.6px) 0 8px / 26px 34px repeat-y,
     linear-gradient(90deg, transparent 44px, rgba(205, 70, 70, 0.55) 44px 45.5px, transparent 45.5px),
@@ -147,25 +148,29 @@
   --doc-page-shadow: 0 1px 2px rgba(60, 50, 30, 0.25), 0 4px 12px rgba(60, 50, 30, 0.18);
 }
 /* Written on the rules: every line and gap a rule's height; the headings in the handwriting */
-:root[data-theme='hand-drawn'] .doc-page .compmd {
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd {
   line-height: 26px;
 }
-:root[data-theme='hand-drawn'] .doc-page .compmd-page :is(p, ul, ol, blockquote, table, pre, .compmd-alert) {
+:root[data-theme='hand-drawn']
+  .doc-viewer:not([data-doc-style])
+  .doc-page
+  .compmd-page
+  :is(p, ul, ol, blockquote, table, pre, .compmd-alert) {
   margin: 0 0 26px;
 }
-:root[data-theme='hand-drawn'] .doc-page .compmd-page li {
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page li {
   margin: 0;
 }
-:root[data-theme='hand-drawn'] .doc-page .compmd-page :is(h1, h2, h3, h4, h5, h6) {
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page :is(h1, h2, h3, h4, h5, h6) {
   margin: 26px 0 0;
   line-height: 26px;
   font-family: var(--board-font);
 }
-:root[data-theme='hand-drawn'] .doc-page .compmd-page h1 {
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page h1 {
   margin-top: 0;
   font-size: 22px;
 }
-:root[data-theme='hand-drawn'] .doc-page .compmd-page h2 {
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page h2 {
   font-size: 18px;
 }
 

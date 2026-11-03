@@ -26,7 +26,8 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
   task and idle stretches, for a period you choose.
 - **N need you** — tasks waiting for your review or for your answer. Click it for the Kanban board.
 - **Refresh** — reload now, or change how often the dashboard reloads by itself.
-- **Appearance** — light or dark mode, and one of 11 themes, picked from a drop-down list.
+- **Appearance** — light or dark mode, one of 11 themes, picked from a drop-down list, and the document viewer's
+  style.
 
 ## Views
 
@@ -136,7 +137,10 @@ A task's files and the documents it refers to open in the **document viewer**, a
   shown;
 - **The window** — drag its title bar to move it and its corner to resize it (or the arrow keys, Shift to resize); it
   keeps its place. **Copy path** copies the file's path with its lines, for an agent; **Open on GitHub** shows the
-  file in the repository. **‹** goes back to the document before, **×** closes it.
+  file in the repository. **‹** goes back to the document before, **×** closes it;
+- **Its look** — **Document style** in the settings menu, under the theme: **Auto** writes the document on the
+  theme's own page, **GitHub** as a README, **Docs** in a narrow serif column for reading, **Magazine** with display
+  headings and a drop cap. Each follows light and dark mode.
 
 ## Workflows and stages
 

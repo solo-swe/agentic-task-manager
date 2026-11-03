@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, openDashboard, projectDocument, test, type TasksServer } from './helpers';
+import { expect, openDashboard, openMenu, projectDocument, test, type TasksServer } from './helpers';
 
 // The document viewer (T-393, docs/compmd-viewer-design.md §2, §6): a window over the details panel that shows a
 // file of the project through the documents route, rendered by CompMD. Opened here by the URL hash (#doc=), as a
@@ -254,6 +254,52 @@ test.describe('the document viewer', () => {
     const page_ = viewer(page).locator('.doc-page');
     expect(await page_.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('repeating-linear-gradient');
     expect(await page_.locator('.compmd').evaluate((el) => getComputedStyle(el).lineHeight)).toBe('26px');
+  });
+
+  test('a document style from Settings gives the page its own type and column, over the theme’s page (T-404)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.addInitScript(() => {
+      if (!sessionStorage.getItem('seeded')) {
+        sessionStorage.setItem('seeded', '1');
+        localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', autoRefresh: false }));
+      }
+    });
+    await openWithDocument(page, tasksServer, 'view=list&doc=docs/design.md');
+    const page_ = viewer(page).locator('.doc-page');
+    const style = (prop: 'fontFamily' | 'fontSize' | 'maxWidth' | 'backgroundImage', sel = '.compmd') =>
+      (sel ? page_.locator(sel) : page_).evaluate((el, p) => getComputedStyle(el)[p], prop);
+    await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
+    await openMenu(page, '#settings-btn');
+    await expect(page.locator('#doc-style-select')).toHaveValue('auto');
+    await expect(page.locator('#doc-style-select option')).toHaveText([
+      'Auto (the theme’s page)',
+      'GitHub',
+      'Docs',
+      'Magazine',
+    ]);
+    for (const [id, font, size, width] of [
+      ['github', 'Segoe UI', '16px', '980px'],
+      ['docs', 'Charter', '18px', '816px'],
+      ['magazine', 'Bodoni', '17px', '760px'],
+    ]) {
+      await page.locator('#doc-style-select').selectOption(id);
+      await expect(viewer(page)).toHaveAttribute('data-doc-style', id);
+      expect(await style('fontSize')).toBe(size);
+      expect(await style('maxWidth', '')).toBe(width);
+      // The theme's notebook page gives way to the style's own
+      expect(await style('backgroundImage', '')).toBe('none');
+      const heading = await page_.locator('h1').evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(id === 'magazine' ? heading : await style('fontFamily')).toContain(font);
+    }
+    await page.reload();
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(viewer(page)).toHaveAttribute('data-doc-style', 'magazine');
+    await openMenu(page, '#settings-btn');
+    await page.locator('#doc-style-select').selectOption('auto');
+    await expect(viewer(page)).not.toHaveAttribute('data-doc-style');
+    expect(await style('backgroundImage', '')).toContain('repeating-linear-gradient');
   });
 });
 

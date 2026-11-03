@@ -163,20 +163,21 @@
   --card-shadow: 0 10px 16px -6px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* The document viewer (DocumentViewer.svelte): a white sheet taped to the board, written in the notes' dark inks */
-:root[data-theme='sticky-notes'] .doc-viewer {
+/* The document viewer (DocumentViewer.svelte): a white sheet taped to the board, written in the notes' dark inks.
+   Only for the Auto document style: another (themes/doc-styles.css) is a page of its own */
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) {
   --doc-desk: #23302a;
   --doc-page: #fbfaf5;
   --doc-page-border: none;
   --doc-page-radius: 1px;
   --doc-page-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 22px -8px rgba(0, 0, 0, 0.55);
 }
-:root[data-theme='sticky-notes'][data-mode='light'] .doc-viewer {
+:root[data-theme='sticky-notes'][data-mode='light'] .doc-viewer:not([data-doc-style]) {
   --doc-desk: #e9ecee;
   --doc-page: #ffffff;
   --doc-page-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), 0 8px 18px -8px rgba(0, 0, 0, 0.3);
 }
-:root[data-theme='sticky-notes'] .doc-page {
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) .doc-page {
   position: relative;
   --doc-page-ink: var(--note-ink);
   --text: var(--note-ink);
@@ -193,7 +194,7 @@
   --cyan: #0f666b;
 }
 /* The tape at the top */
-:root[data-theme='sticky-notes'] .doc-page::before {
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) .doc-page::before {
   content: '';
   position: absolute;
   top: -9px;

@@ -59,6 +59,14 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
 - **Requirements and use cases one a line** (T-403): the details panel lists them as it lists Files (`.detail-refs`,
   sharing `.detail-files`' styles), one entry a line; an entry written as a link looks like a file link, a bare ID is
   text. Cards keep their badges.
+- **Document styles** (T-404): **Document style** in the ⋯ menu, under Theme (`#doc-style-select`, the `docStyle`
+  preference, `DOC_STYLES` in `lib/appearance.ts`): **Auto** (the theme's page, as before), **GitHub** (a README:
+  sans-serif, 980px, ruled `h1`/`h2`, striped tables), **Docs** (an 18px serif column 44rem wide) or **Magazine**
+  (Didot/Bodoni headings, a double rule under the title, a drop cap, pull quotes, one red accent), each in light and
+  dark. They are host styles, the dashboard's own (`themes/doc-styles.css`, after the ideas of CompMD's editor's
+  `frame.css`), set on the viewer as `data-doc-style`; the themes' pages (Hand-drawn, Sticky Notes) apply to Auto
+  only. A code or text file keeps its gutter and only takes the style's paper and colours. The single file grows by
+  11 kB, to 571 kB.
 - **The single file's guardrail goes from 550 to 600 KiB** (`tests/e2e/guardrails.spec.ts`, decided with Hakan): the
   document viewer took it to 559 kB, and CompMD's coming upgrade needs room.
 - **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a

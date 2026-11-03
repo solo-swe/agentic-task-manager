@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 404,
+    "next_id": 405,
     "labels": [
       {
         "id": "architecture",
@@ -21324,7 +21324,7 @@
       "description": "Since T-391 a `requirements` or `use_cases` entry may be a link whose text is anything (a phrase too), so the details panel's row of badges wraps badly and makes a link look like a bare ID. List them one per line instead, as the Files list does.\n\n## Change\n- `dashboard/src/components/DetailPanel.svelte`, the `badges` snippet: each entry on its own line. An entry written as a link renders inline with CompMD (as now) and looks like a file link (`.detail-files .file-link`); a bare ID stays plain text. None still says *None*.\n- `dashboard/src/app.css`: the list's styles, shared with `.detail-files` where they match; drop what the details panel no longer uses of `.req-badge` / `.uc-badge`.\n- Cards keep their compact badges (`markdownPlainText`): unchanged.\n\n## Tests\nA component test in `tests/unit/DetailPanel.component.test.ts` (one element per entry, a link entry is a link, a bare one text); the details-panel e2e specs (`npx playwright test detail documents`). The details-panel screenshots change: regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/DetailPanel.svelte",
@@ -21332,7 +21332,7 @@
         "dashboard/tests/unit/DetailPanel.component.test.ts"
       ],
       "created_at": "2026-11-03T20:46:10Z",
-      "updated_at": "2026-11-03T20:46:22Z",
+      "updated_at": "2026-11-03T20:49:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21350,6 +21350,63 @@
         "dashboard"
       ],
       "started_at": "2026-11-03T20:46:22Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c22eeb630093e2d4b5c80ed662528eb53ff60a72",
+      "completed_at": "2026-11-03T20:49:15Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T20:49:15Z",
+          "kind": "review",
+          "text": "Check: Requirements and Use Cases one entry a line in the details panel, links styled as file links, bare IDs text (T-391 has both); cards unchanged. Details-panel screenshots change at the release.",
+          "by": "claude:b7be7288"
+        }
+      ]
+    },
+    {
+      "id": "T-404",
+      "name": "Document style: Auto, GitHub, Docs or Magazine for the document viewer's page",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A **Document style** setting in the ⋯ menu, under Theme: how the document viewer's page looks. Decided with Hakan: these are **host styles**, so atm defines them (CompMD's editor has its own, in its `frame.css`, as `host=github`, `host=docs`, `host=magazine`: atm's take after their ideas, not a copy) and gives the renderer one when needed; CompMD renders the content as before.\n\n## Styles\n| Style | Look |\n|---|---|\n| Auto (the default) | The theme's page, as now (the page on a desk; Hand-drawn's notebook, Sticky Notes' sheet) |\n| GitHub | System sans-serif, a 980px column, `h1`/`h2` with a rule under them, bordered tables and blockquotes, GitHub's link blue |\n| Docs | A serif reading font at 18px / 1.7, a narrow 44rem column, tighter heading spacing |\n| Magazine | Didot / Bodoni headings, a double rule under the `h1`, a drop cap on the paragraph after it, one red accent, centred italic pull quotes |\n\nEach in light and dark (the dashboard's mode); code keeps the viewer's gutter, line marks, highlights and contents button.\n\n## Change\n- `dashboard/src/lib/appearance.ts`: the styles (`DOC_STYLES`, `knownDocStyle`); the choice is a browser preference (`docStyle`, `lib/prefs.ts`) like the theme, kept by `state.svelte.ts`.\n- `SettingsMenu.svelte`: a Document style select under Theme.\n- `DocumentViewer.svelte`: `data-doc-style` on `.doc-viewer` when it isn't Auto.\n- `dashboard/src/themes/doc-styles.css`: the three styles, scoped to `.doc-viewer[data-doc-style=…] .doc-page`; the themes' paper (`hand-drawn.css`, `sticky-notes.css`) applies only to Auto.\n- Help's Documents section and the changelog.\n\n## Tests\nUnit tests for the preference; a component test for the menu; e2e: choosing a style sets it on the viewer and survives a reload, and each style's page has its font and column. The viewer's screenshots get one per style at the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/appearance.ts",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/SettingsMenu.svelte",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/themes/doc-styles.css",
+        "dashboard/src/themes/hand-drawn.css",
+        "dashboard/src/themes/sticky-notes.css",
+        "docs/help.md"
+      ],
+      "created_at": "2026-11-03T21:16:10Z",
+      "updated_at": "2026-11-03T21:16:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T21:16:10Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "related": [
+        "T-393"
+      ],
+      "started_at": "2026-11-03T21:16:19Z",
       "started_by": "claude:b7be7288"
     }
   ]

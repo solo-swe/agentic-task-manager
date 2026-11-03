@@ -367,6 +367,7 @@
     role="dialog"
     aria-label="Document: {title}"
     data-kind={doc?.kind ?? ''}
+    data-doc-style={dashboard.docStyle === 'auto' ? null : dashboard.docStyle}
     style:left={narrow ? null : `${placed.x}px`}
     style:top={narrow ? null : `${placed.y}px`}
     style:width={narrow ? null : `${placed.w}px`}

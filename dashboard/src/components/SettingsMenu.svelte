@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../lib/appearance';
+  import { DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../lib/appearance';
   import type { IconName } from '../lib/icons';
   import { dashboard } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
@@ -96,6 +96,20 @@
             {#if i > 0 && theme.group !== THEMES[i - 1].group}<hr />{/if}
             <option value={theme.id}>{theme.name}</option>
           {/each}
+        </select>
+      </div>
+      <!-- How the document viewer's page looks (T-404): the theme's page, or a style of its own -->
+      <label class="menu-label" for="doc-style-select">Document style</label>
+      <div class="theme-picker doc-style-picker">
+        <!-- A sample in the style's type, where the theme has its swatch -->
+        <span class="doc-style-sample" data-doc-style={dashboard.docStyle} aria-hidden="true">Aa</span>
+        <span class="select-chevron"><Icon name="chevron-down" size={14} /></span>
+        <select
+          id="doc-style-select"
+          value={dashboard.docStyle}
+          onchange={(e) => dashboard.setDocStyle((e.currentTarget as HTMLSelectElement).value)}
+        >
+          {#each DOC_STYLES as style (style.id)}<option value={style.id}>{style.name}</option>{/each}
         </select>
       </div>
       <!-- Forgets the project's saved view (filters, search, tab, each tab's options and zoom): how this page looks,

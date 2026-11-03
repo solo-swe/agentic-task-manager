@@ -15,6 +15,8 @@ export interface Prefs {
   mode: string;
   /** Theme id (see appearance.ts) */
   theme: string;
+  /** How the document viewer's page looks: a document style id (see appearance.ts DOC_STYLES) */
+  docStyle: string;
   /** The overview shows only active projects (lib/projects.ts) */
   overviewActiveOnly: boolean;
   /** The overview's tab: 'projects' or 'board' (lib/routes.ts) */

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { applyAppearance, isModePref, knownTheme, resolveMode, THEMES } from '../../src/lib/appearance';
+import {
+  applyAppearance,
+  DOC_STYLES,
+  isModePref,
+  knownDocStyle,
+  knownTheme,
+  resolveMode,
+  THEMES,
+} from '../../src/lib/appearance';
 
 describe('appearance', () => {
   it('System follows the OS; Light and Dark override it', () => {
@@ -21,6 +29,12 @@ describe('appearance', () => {
     expect(THEMES[0]).toMatchObject({ id: 'default', name: 'Default' });
     // Each theme shows a preview in the menu: background, accent, green, red
     for (const t of THEMES) expect(t.swatch).toHaveLength(4);
+  });
+
+  it('document styles: Auto first, then GitHub, Docs and Magazine; an unknown one is Auto (T-404)', () => {
+    expect(DOC_STYLES.map((s) => s.id)).toEqual(['auto', 'github', 'docs', 'magazine']);
+    expect(knownDocStyle('magazine')).toBe('magazine');
+    for (const bad of ['terminal', '', null, 3]) expect(knownDocStyle(bad)).toBe('auto');
   });
 
   it('applies theme and mode as attributes on the root element', () => {

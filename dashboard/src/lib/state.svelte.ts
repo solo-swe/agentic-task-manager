@@ -15,7 +15,15 @@ import { compareVersions } from './changelog';
 import { projectComponents } from './components';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
-import { isModePref, knownTheme, resolveMode, type Mode, type ModePref } from './appearance';
+import {
+  isModePref,
+  knownDocStyle,
+  knownTheme,
+  resolveMode,
+  type DocStyle,
+  type Mode,
+  type ModePref,
+} from './appearance';
 import {
   emptyFilters,
   FILTER_GROUPS,
@@ -256,6 +264,8 @@ export class DashboardState {
     isModePref(getPref('mode', 'system')) ? (getPref('mode', 'system') as ModePref) : 'system',
   );
   theme = $state(knownTheme(getPref('theme', 'default')));
+  /** The document viewer's page (T-404), per browser like the theme */
+  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
   systemPrefersLight = $state(prefersLight());
   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
 
@@ -538,6 +548,11 @@ export class DashboardState {
   setTheme(id: string) {
     this.theme = knownTheme(id);
     setPref('theme', this.theme);
+  }
+
+  setDocStyle(id: string) {
+    this.docStyle = knownDocStyle(id);
+    setPref('docStyle', this.docStyle);
   }
 
   setAutoRefreshSeconds(seconds: number) {
