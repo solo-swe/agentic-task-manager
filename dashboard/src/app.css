@@ -369,9 +369,35 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: padding-top 0.2s ease;
+}
+#help-panel.scrolled {
+  padding-top: 16px;
 }
 .help-scroll {
   flex: 1 1 auto;
+}
+/* A hairline under the title; once the text scrolls, the title compacts as the dashboard's title bar does */
+#help-panel > h3 {
+  margin: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  transition:
+    font-size 0.2s ease,
+    padding 0.2s ease;
+}
+#help-panel.scrolled > h3 {
+  font-size: 16px;
+  padding-bottom: 8px;
+}
+#help-panel > .detail-close {
+  transition: top 0.2s ease;
+}
+#help-panel.scrolled > .detail-close {
+  top: 10px;
+}
+#help-panel .help-scroll .hint-scroll-body {
+  padding-top: 14px;
 }
 .help .kanban-more.bottom {
   border-radius: 0;

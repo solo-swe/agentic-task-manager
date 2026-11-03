@@ -11,7 +11,16 @@
     outer = '',
     body = '',
     id,
-  }: { children: Snippet; item: string; outer?: string; body?: string; id?: string } = $props();
+    onscrolled,
+  }: {
+    children: Snippet;
+    item: string;
+    outer?: string;
+    body?: string;
+    id?: string;
+    /** Told how far the content has scrolled, on every scroll (Help shrinks its title once it has) */
+    onscrolled?: (scrollTop: number) => void;
+  } = $props();
   let el = $state<HTMLElement>();
   let above = $state(0);
   let below = $state(0);
@@ -42,7 +51,15 @@
     <button class="kanban-more top" aria-label="Scroll up: {above} more" onclick={() => page(-1)}>▲ {above} more</button
     >
   {/if}
-  <div class="hint-scroll-body {body}" {id} bind:this={el} onscroll={update}>
+  <div
+    class="hint-scroll-body {body}"
+    {id}
+    bind:this={el}
+    onscroll={() => {
+      update();
+      if (el) onscrolled?.(el.scrollTop);
+    }}
+  >
     {@render children()}
   </div>
   {#if below}

@@ -11,12 +11,14 @@
   $effect(() => {
     if (open) opened = true;
   });
+  /** The text has scrolled: the title compacts (as the dashboard's title bar does once the page scrolls) */
+  let scrolled = $state(false);
 </script>
 
 <!-- docs/help.md, embedded at build time (build/help.ts), rendered by CompMD. Like What's new, the title stays and the
      text scrolls below it without a scrollbar, the hints counting the sections above and below -->
-<Dialog id="help" title="Help" {open} onclose={() => dashboard.closeDialog()}>
-  <HintScroll item=".compmd-page > h2" outer="help-scroll" id="help-body">
+<Dialog id="help" title="Help" {open} {scrolled} onclose={() => dashboard.closeDialog()}>
+  <HintScroll item=".compmd-page > h2" outer="help-scroll" id="help-body" onscrolled={(top) => (scrolled = top > 8)}>
     {#if opened}<CompMd text={help} />{/if}
   </HintScroll>
 </Dialog>

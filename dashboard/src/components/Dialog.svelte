@@ -8,9 +8,11 @@
     open: boolean;
     onclose: () => void;
     children: Snippet;
+    /** Its content has scrolled: the title compacts, as the dashboard's title bar does */
+    scrolled?: boolean;
   }
 
-  let { id, title, open, onclose, children }: Props = $props();
+  let { id, title, open, onclose, children, scrolled = false }: Props = $props();
 
   let closeButton = $state<HTMLButtonElement>();
 
@@ -35,7 +37,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Escape closes, see above) -->
 <div class="detail-overlay" class:open id="{id}-overlay" onclick={onOverlayClick}>
-  <div class="detail-panel {id}" id="{id}-panel" role="dialog" aria-modal="true" aria-label={title}>
+  <div class="detail-panel {id}" class:scrolled id="{id}-panel" role="dialog" aria-modal="true" aria-label={title}>
     <button bind:this={closeButton} class="detail-close" aria-label="Close" onclick={onclose}>&times;</button>
     <h3>{title}</h3>
     {@render children()}
