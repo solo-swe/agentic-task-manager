@@ -23,6 +23,16 @@ export function v1TasksUrl(project: string): string {
   return `api/v1/projects/${encodeURIComponent(project)}/tasks`;
 }
 
+/** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
+export function v1DocumentUrl(project: string, path: string): string {
+  return `api/v1/projects/${encodeURIComponent(project)}/documents?path=${encodeURIComponent(path)}`;
+}
+
+/** An image file of the project, its bytes, for an <img> (T-392) */
+export function v1FileUrl(project: string, path: string): string {
+  return `api/v1/projects/${encodeURIComponent(project)}/files?path=${encodeURIComponent(path)}`;
+}
+
 /** What the server said identifies this version of a file, sent back to ask "has it changed?" */
 export interface Validators {
   etag?: string;

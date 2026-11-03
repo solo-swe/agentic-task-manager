@@ -25,6 +25,8 @@ export interface Prefs {
   boardQuery: string;
   /** The All projects board shows the active sprints' tasks ('active', the default) or every task ('all'; T-340) */
   boardScope: string;
+  /** Where the document viewer is and how big (lib/documents.ts ViewerGeometry), or null for its default */
+  documentViewer: { x: number; y: number; w: number; h: number } | null;
 }
 
 function storage(): Storage | null {

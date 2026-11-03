@@ -8,8 +8,9 @@
   // is untrusted, or a text that comes with the plugin (Help, What's new; no `task`). Processed with the dashboard's
   // frontmatter and the task's own data, rendered in the dashboard's page by CompMD's sandbox in host mode. Until
   // CompMD has loaded the place is empty; if it can't load or the text can't be processed, the text shows as written
-  // (R2). CompMD's diagnostics are never shown here (R2a).
-  let { text, task, inline = false }: { text: string; task?: Task; inline?: boolean } = $props();
+  // (R2). CompMD's diagnostics are never shown here (R2a). With `path`, `text` is a file of the project in the document
+  // viewer: a document of its own, under that path, with its own frontmatter (docs/compmd-viewer-design.md §5).
+  let { text, task, path, inline = false }: { text: string; task?: Task; path?: string; inline?: boolean } = $props();
 
   type View = ReturnType<ReturnType<CompmdModule['createSandbox']>['open']>;
 
@@ -25,14 +26,14 @@
 
   $effect(() => {
     const data = task ? taskData(task) : null;
-    const key = text + '\u0000' + JSON.stringify(data);
+    const key = text + '\u0000' + JSON.stringify(data) + '\u0000' + (path ?? '');
     const target = host;
     if (!target || key === rendered) return;
     rendered = key;
     loadCompmd()
       .then((compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
-        const { tree, components } = processText(compmd, text, task);
+        const { tree, components } = processText(compmd, text, task, path);
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
           // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)

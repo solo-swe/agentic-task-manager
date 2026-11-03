@@ -29,6 +29,7 @@ import {
   type ListSort,
 } from './filters';
 import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
+import { parseDocHash, withDocHash, type DocumentRef } from './documents';
 import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
 import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
 import { formatHash, hashParams } from './hash';
@@ -236,6 +237,9 @@ export class DashboardState {
   whatsNewOpen = $state(false);
   /** The open About or Help dialog; mirrored in the URL hash ("#about") so it can be linked */
   dialog = $state<DialogId | null>(parseDialogHash(location.hash));
+  /** The file open in the document viewer, from the URL hash (#doc=<path>:L<n>), so it can be linked and Reload
+   * keeps it (docs/compmd-viewer-design.md V2) */
+  docRef = $state.raw<DocumentRef | null>(parseDocHash(location.hash));
   /** "New" on the version until this version's release notes are opened once (FR-1.5). Without working storage
    * it could never be cleared, so it is not shown at all. */
   releaseNotesUnseen = $state(releaseNotesUnseen());
@@ -391,6 +395,7 @@ export class DashboardState {
   /** The URL changed (a link, Back): pick up the dialog, and the page when it names another one. */
   onHashChange() {
     this.dialog = parseDialogHash(location.hash);
+    this.docRef = parseDocHash(location.hash);
     // An overview tab from the URL (Back, a link) is the last one shown, so it is remembered too
     const overviewTab = parseOverviewTab(location.hash);
     if (overviewTab) {
@@ -588,6 +593,24 @@ export class DashboardState {
   closeDialog() {
     this.dialog = null;
     history.replaceState(null, '', withDialogHash(location.hash, null));
+  }
+
+  /** Opens a file of the project in the document viewer: a new history entry, marked as the viewer's, so the
+   * browser's Back (and the viewer's) returns to the previous document or to the task */
+  openDocument(ref: DocumentRef) {
+    this.docRef = ref;
+    history.pushState({ atmDocument: true }, '', withDocHash(location.hash, ref));
+  }
+
+  /** The viewer's Back (its button, Escape): the previous history entry when this one was the viewer's own; for a
+   * document opened from a link or a reload, closes it without a new history entry */
+  documentBack() {
+    if ((history.state as { atmDocument?: boolean } | null)?.atmDocument) {
+      history.back();
+      return;
+    }
+    this.docRef = null;
+    history.replaceState(null, '', withDocHash(location.hash, null));
   }
 
   selectTab(tab: ViewId) {

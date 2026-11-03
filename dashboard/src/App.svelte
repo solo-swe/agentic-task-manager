@@ -6,6 +6,7 @@
   import ViewPanel from './components/ViewPanel.svelte';
   import LoadError from './components/LoadError.svelte';
   import DetailPanel from './components/DetailPanel.svelte';
+  import DocumentViewer from './components/DocumentViewer.svelte';
   import WhatsNew from './components/WhatsNew.svelte';
   import Footer from './components/Footer.svelte';
   import AboutDialog from './components/AboutDialog.svelte';
@@ -43,6 +44,7 @@
 <Footer />
 <LoadError />
 <DetailPanel />
+<DocumentViewer />
 <WhatsNew />
 <AboutDialog />
 <HelpDialog />

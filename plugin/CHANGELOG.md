@@ -16,6 +16,14 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   and checked by atm-lib (`lib/documents.py`): a relative path without hidden parts, no key files, no file git
   ignores, no symlink on the way, 1 MB at most (5 MB for an image). The version control gains `file_stamp`,
   `read_file`, `ignored`, `tracked` and `head`.
+- **The document viewer's window** (T-393): `#doc=<path>[:L<n>[-L<m>]]` in the URL opens a file of the project in a
+  window over the details panel, rendered by CompMD from the document atm wraps it in (`DocumentViewer.svelte`,
+  `lib/documents.ts`). It moves by its title bar and resizes from a corner grip (the arrow keys too: Shift resizes),
+  stays inside the window and keeps where it was (`documentViewer` preference); on a window narrower than 720 px it
+  fills it. Back (its button, Escape, the browser's) returns to the document before, or closes it. The title bar has
+  the document's first heading and path, **Copy path** (with `#L<n>`) and **Open on GitHub** (or GitLab, Bitbucket,
+  Gitea: the file at the current commit, for a file git tracks). The file is asked for again on the dashboard's
+  refresh, a 304 while unchanged; a missing file says "Not in the project", one atm doesn't show "Can't be shown here".
 
 ## [0.28.0] - 2026-11-03
 

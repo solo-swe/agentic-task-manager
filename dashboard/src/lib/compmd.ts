@@ -69,6 +69,28 @@ export function compmdRequest(
   };
 }
 
+/** What CompMD's processor is given for a file of the project in the document viewer (docs/compmd-viewer-design.md
+ * §5): the document as atm wrapped it, under its own path, with its own frontmatter (none of the dashboard's), and the
+ * rest as for task text: the plugin's packs, only this file (its imports of other files fail and show their
+ * fallbacks), no remote data, no `host:` data */
+export function documentRequest(
+  base: BaseRequest,
+  path: string,
+  text: string,
+  now = new Date(),
+  timeZone = localTimeZone(),
+) {
+  return {
+    ...base,
+    path,
+    files: { [path]: text },
+    now: now.toISOString(),
+    tz: timeZone,
+    allowedOrigins: [] as string[],
+    host: {},
+  };
+}
+
 function localTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -86,7 +108,7 @@ export function compmdAssetUrl(file: string, origin = location.origin): string {
 /** What the served module gives (dashboard/compmd/entry.ts) */
 export interface CompmdModule {
   init(): Promise<unknown>;
-  OpenDocument: new (request: ReturnType<typeof compmdRequest>) => {
+  OpenDocument: new (request: ReturnType<typeof compmdRequest> | ReturnType<typeof documentRequest>) => {
     readonly expanded: unknown;
     readonly components: readonly unknown[];
     free(): void;
@@ -116,8 +138,9 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(compmd: CompmdModule, text: string, task?: Task) {
-  const document = new compmd.OpenDocument(compmdRequest(compmd.request, text, task));
+export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string) {
+  const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
+  const document = new compmd.OpenDocument(request);
   try {
     return { tree: safeTree(document.expanded), components: packComponents(document.components) };
   } finally {
