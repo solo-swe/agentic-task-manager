@@ -17295,7 +17295,7 @@
       "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-284"
       ],
@@ -17303,7 +17303,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T07:28:11Z",
+      "updated_at": "2026-11-03T10:15:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17320,7 +17320,9 @@
           "from": "2026-11-03T07:28:11Z"
         }
       ],
-      "sprint": "Rich Markdown"
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T10:15:18Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-337",
@@ -20478,7 +20480,7 @@
       "description": "Found 2026-11-03: two dashboard servers kept running on ports 8765 and 8766, serving the real `~/.agentic-task-manager`. They were started on Nov 2, 8 minutes apart, from the repository checkout's `atm.py` (`_serve-child`, before T-379). `atm serve stop` and `atm serve status` said no server was running, because the server record (`SERVER_RECORD` in the user's atm folder) named another server, which had been stopped. The two had to be stopped by hand.\n\n## Likely causes (check each with a test first)\n- `stop_server` in `atm-cli/atm/cli/serve.py` sends SIGTERM, waits until a deadline, then removes the record **whether or not the process exited**. A server that outlives the wait (as during a `--refresh` restart) is left running with no record, and the new server takes the next free port.\n- Two `ensure_server` calls at once (two sessions' SessionStart hooks, or the hook and `/atm:serve`) both find no live record, and each starts a server; the second overwrites the record.\n- Servers from another plugin root (a checkout versus the installed plugin) share one record.\n\n## Change\n- `stop_server`: if the process is still alive after the wait, escalate (SIGKILL) or keep the record and report it, never forget a live server.\n- Starting: hold a lock in the atm folder across \"is one running?\" → start → write the record, so only one server is started.\n- `atm serve status` and `stop`: also find an atm server that answers `whoami` on the usual ports (8765 upward) for this atm folder but isn't the recorded one, report it, and let `stop` stop it (it is ours: `whoami` says `atm: true` and gives its pid).\n\n## Tests\n`tests/scripts/serve.test.mjs`: a server that ignores the first SIGTERM is still stopped (or reported) by `stop`; two `atm serve start` at once leave one server; `stop` finds and stops a server whose record was overwritten.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/serve.py",
@@ -20486,7 +20488,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T07:22:15Z",
-      "updated_at": "2026-11-03T10:06:17Z",
+      "updated_at": "2026-11-03T10:15:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20501,7 +20503,18 @@
       ],
       "sprint": "Rich Markdown",
       "started_at": "2026-11-03T10:06:17Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "f36f4645338864373d774609e61b959382bd070f",
+      "completed_at": "2026-11-03T10:15:12Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:15:12Z",
+          "kind": "outcome",
+          "text": "Fixed all three causes, each with a test: `stop` escalates to SIGKILL and drops the record only once the server is gone; starting holds `ATM_HOME/server.lock`; `status`/`stop` find this folder’s unrecorded servers on 20 ports from `--port` via `home` in whoami (a path hash). atm-cli 551 pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
