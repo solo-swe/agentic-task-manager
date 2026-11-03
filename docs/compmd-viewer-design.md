@@ -12,8 +12,8 @@ backlog tasks of §9.
 ## 1. Requirements
 
 - **V1. What opens.** Any file of the task's project, shown by what it is (§4a): a Markdown document rendered; source
-  code as code (plain monospace until CompMD ships its highlighter); an image as an image; other text as text; a
-  binary file says it is binary.
+  code as code; an image as an image; other text as text; a binary file says it is binary. atm only wraps a file
+  into a CompMD document (§4a); CompMD renders all of it, code highlighting included.
   - **V1a.** A relative link in task text (`[the design](docs/x.md)`, `docs/x.md#3-routes`, `src/app.ts#L40`),
     resolved from the **project root** (task text has no folder of its own).
   - **V1b.** A task's `files` entries: the Files list shows each as a link.
