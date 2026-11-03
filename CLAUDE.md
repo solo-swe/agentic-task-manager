@@ -37,9 +37,13 @@ not `npm install`: it installs exactly the locked versions and never updates the
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):
-- `npm run dev` — Vite dev server; like `atm serve`, it serves the API the dashboard loads (`api/projects`,
-  `p/<id>/tasks.json`, …; see `docs/multi-project-api.md`) for this repo's `.agentic-task-manager/`, or for other
-  folders with `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (`build/dev-data.ts`)
+- `npm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
+  temporary `ATM_HOME`, so your own `atm serve` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
+  to it) for this repo's `.agentic-task-manager/`, or for other folders with
+  `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (a folder without a task file is listed as
+  missing). `npm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
+  The dev page runs under the server's Content-Security-Policy plus what Vite needs (`build/security-headers.ts`);
+  `tests/scripts/dev-api.test.mjs` starts `vite dev` and checks all of this
 - `npm run build` — single-file build
 - `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `npm run test:e2e` — build, then the Playwright e2e suite without the screenshots
@@ -61,6 +65,15 @@ one runtime requirement; why there is a single implementation is in `docs/helper
 earlier ones, and no two modules may define the same top-level name). The pre-commit hook rebuilds it when `atm-cli/`
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 
+**Layers** (`docs/layered-architecture.md`): every module is in a layer's folder (`common/`, `db/`, `vcs/`, `lib/`,
+`boot/`, `cli/`, `api/`; the CLI and the REST API are two processes, `plugin/scripts/atm` and the internal
+`plugin/scripts/atm-serve`, and never import each other), and the build
+refuses an import the layer rule forbids, with no exceptions. atm-lib's public surface, for other tools, is two
+modules: `atm.lib` (`atm/lib/__init__.py`, its `__all__`) and `atm.boot` (`open_project`, `open_memory_project`,
+`open_registry`). Their names and signatures are frozen in `tests/lib/public-surface.json`: a change fails
+`test_public.py` until that list is updated, and goes in the changelog. atm-lib's
+unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `npm run test:scripts`).
+
 Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `npm run test:scripts`) drive the built atm-cli
 through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of
 `scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
@@ -69,7 +82,8 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
   `tasksServer` fixture (`openDashboard(page, tasksServer, 'standard')` or an inline object), which plays atm serve's
-  API: `api/projects` lists one project (`FIXTURE_PROJECT`) and its files are served under `p/<id>/`;
+  API: `api/projects` lists one project (`FIXTURE_PROJECT`), its tasks are served by the v1 route the dashboard loads
+  (`api/v1/projects/<id>/tasks`, the fixture's data as views) and its files under `p/<id>/`;
   `addProject(id, data)` adds more, `noProjects()` lists none. It can also swap the response or return an error. Any
   non-localhost request fails the test.
 - Fixtures live in `tests/fixtures/*.json`.

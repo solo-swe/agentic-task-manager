@@ -53,7 +53,14 @@ test.describe('Kanban board', () => {
     tasksServer,
   }) => {
     const tasks = loadFixture('kanban').tasks;
-    const copy = (id: string, fields: Record<string, unknown>) => ({ ...tasks.find((t) => t.id === id)!, ...fields });
+    // A linked worktree's copies come as views, with atm's derived values from that worktree (T-387)
+    const view = (task: Record<string, unknown>, kind: string) => ({
+      task,
+      derived: { kind, ready: kind === 'todo', waiting_for: [], priority: 'P2', archived: false },
+    });
+    const copy = (id: string, kind: string, fields: Record<string, unknown>) =>
+      view({ ...tasks.find((t) => t.id === id)!, ...fields }, kind);
+    const onlyHere = { id: 'T-099', name: 'Only here', phase: 1, type: 'feature', description: '', status: 'todo' };
     tasksServer.worktrees([
       { path: '/projects/fixture', branch: 'main', main: true },
       {
@@ -61,10 +68,10 @@ test.describe('Kanban board', () => {
         branch: 'agent-2',
         main: false,
         tasks: [
-          copy('T-029', { status: 'in_progress', started_at: '2026-01-02T00:00:00Z' }),
-          copy('T-027', { status: 'done', completed_at: '2026-04-05T00:00:00Z' }), // the newest, so the first shown
-          copy('T-024', { status: 'todo' }), // behind the main worktree: not shown
-          { id: 'T-099', name: 'Only on the branch', phase: 1, type: 'feature', description: '', status: 'todo' },
+          copy('T-029', 'active', { status: 'in_progress', started_at: '2026-01-02T00:00:00Z' }),
+          copy('T-027', 'done', { status: 'done', completed_at: '2026-04-05T00:00:00Z' }), // the newest: shown first
+          copy('T-024', 'todo', { status: 'todo' }), // behind the main worktree: not shown
+          view(onlyHere, 'todo'),
         ],
       },
     ]);
@@ -72,6 +79,8 @@ test.describe('Kanban board', () => {
     await expect(column(page, 'in_progress').locator('.kanban-card[data-id="T-029"]')).toBeVisible();
     await expect(column(page, 'done').locator('.kanban-card[data-id="T-027"]')).toBeVisible();
     await expect(column(page, 'todo').locator('.kanban-card[data-id="T-099"]')).toBeVisible();
+    // Ready as atm says it in that worktree
+    await expect(card(page, 'T-099').locator('.kanban-readiness')).toHaveText('Ready');
     for (const id of ['T-029', 'T-027', 'T-099']) {
       await expect(card(page, id).locator('.branch-chip')).toHaveText('agent-2');
     }

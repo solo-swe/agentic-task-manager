@@ -1,90 +1,19 @@
-// Loading from atm serve's API (docs/multi-project-api.md): the registered projects from api/projects, and each
-// project's files from p/<id>/. URLs are relative to the page, which the server serves at /.
+// Loading from atm serve's API (docs/multi-project-api.md): the registered projects from api/projects, each project's
+// tasks from api/v1/projects/<id>/tasks, and its other files from p/<id>/. The requests go through the client layer,
+// api/http.ts; this module reads what they return.
+import { browserFetch, fetchFile, v1TasksUrl, type Fetch, type Validators } from './api/http';
+import type { ArchiveHint, ProjectBoard, ProjectSummary } from './generated/types';
 import type { Task, TasksFile } from './types';
-import type { NeedsYouItem } from './waiting';
+
+export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
 
 export const DEFAULT_PROJECT_NAME = 'Task Dashboard';
 export const PROJECTS_URL = 'api/projects';
 
-export type ProjectFile = 'tasks.json' | 'claims.json' | 'tasks-archive.json' | 'worktrees.json';
+// A project's summary, as the server computes it (api.schema.json, generated: T-382)
+export type { BoardCard, ProjectBoard, ProjectSummary, SprintNumbers } from './generated/types';
 
-/** Where a project's file is served */
-export function projectFileUrl(project: string, file: ProjectFile): string {
-  return `p/${encodeURIComponent(project)}/${file}`;
-}
-
-/** A sprint as the server's summary gives it */
-export interface SprintNumbers {
-  id: string;
-  state: 'planned' | 'active' | 'closed';
-  due: string | null;
-  release: string | null;
-  done: number;
-  total: number;
-  percent: number;
-}
-
-/** A project's numbers for the overview and the project selector, computed by the server */
-export interface ProjectSummary {
-  total: number;
-  done: number;
-  skipped: number;
-  percent: number;
-  /** The active sprint with its progress (SR-7.7); null when none is active; absent from servers before 0.24 */
-  active_sprint?: (SprintNumbers & { goal: string | null }) | null;
-  /** Up to 4 sprints with tasks, in the project's order: the open ones, then the latest closed; null without sprints */
-  recent_sprints?: SprintNumbers[] | null;
-  agents_working: number;
-  /** Live claims, oldest first: who works on what (absent from servers before 0.18; names capped at 80 characters) */
-  working?: { task: string; name: string; agent: string; branch: string | null }[];
-  /** Up to 2 tasks the loop takes next, in its order (absent before 0.18) */
-  next?: { id: string; name: string }[];
-  /** The task completed last (absent before 0.18) */
-  last_done?: { id: string; name: string; completed_at: string } | null;
-  /** meta.description, capped at 200 characters; null without one (absent before 0.18) */
-  description?: string | null;
-  /** The main worktree's branch and the latest PR recorded on the tasks (absent before 0.18) */
-  git?: { branch: string | null; pr: { number: number; url: string | null; state: 'open' | 'merged' } | null };
-  /** `together`: to do with the user (absent from servers before 0.24) */
-  needs_you: { review: number; blocked_on_user: number; together?: number };
-  /** The tasks behind needs_you (absent from servers before 0.17) */
-  needs_you_tasks?: NeedsYouItem[];
-  last_activity: string | null;
-  completions_14d: number[];
-  /** The project's cards for the All projects board (absent before 0.20; lib/allboard.ts) */
-  board?: ProjectBoard;
-  /** The same, of the active sprint's tasks only; null without an active sprint (absent before 0.26; T-340) */
-  board_active_sprint?: ProjectBoard | null;
-  /** The overview card's line, archived tasks included (absent before 0.20; lib/projects.ts statsLine) */
-  stats?: { started: string | null; tasks: number; agent_minutes: number };
-}
-
-/** A card on the All projects board: what a project's Kanban card shows, plus its column's fields */
-export interface BoardCard {
-  id: string;
-  name: string;
-  type: string;
-  /** The task's sprint; null in the backlog */
-  sprint: string | null;
-  priority: string | null;
-  labels: string[];
-  /** In progress: who works on it */
-  by?: string | null;
-  /** In progress, review, blocked: since when */
-  since?: string | null;
-  /** Blocked: who decides, and how many questions */
-  waiting_on?: string | null;
-  questions?: number;
-  /** Done: when */
-  completed_at?: string | null;
-  /** To do (T-349): done with the user, or the dependencies it waits for */
-  with_user?: boolean;
-  waiting_for?: string[];
-}
-
-export type BoardColumnId = 'todo' | 'active' | 'review' | 'blocked' | 'done';
-/** A project's column: its first cards, and how many there are in all */
-export type ProjectBoard = Record<BoardColumnId, { count: number; cards: BoardCard[] }>;
+export type BoardColumnId = keyof ProjectBoard;
 
 /** A registered project, as api/projects lists it */
 export interface ProjectEntry {
@@ -107,9 +36,18 @@ export interface LoadedTasks {
   meta: TasksFile['meta'];
   /** The file's size, in characters (≈ bytes: task files are mostly ASCII), for the archive notice (D-5.4) */
   bytes: number;
+  /** What atm finds wrong with the task file as a whole, when it reads a malformed one as far as it can (T-377) */
+  problems: string[];
+  /** atm's suggestion to archive, when the task file is over meta.archive's thresholds (T-372); null otherwise */
+  archiveHint: ArchiveHint | null;
 }
 
-export function parseTasksFile(data: TasksFile, bytes = 0): LoadedTasks {
+export function parseTasksFile(
+  data: TasksFile,
+  bytes = 0,
+  problems: string[] = [],
+  archiveHint: ArchiveHint | null = null,
+): LoadedTasks {
   const tasks = data.tasks ?? [];
   return {
     tasks,
@@ -117,53 +55,20 @@ export function parseTasksFile(data: TasksFile, bytes = 0): LoadedTasks {
     projectName: data.meta?.project || DEFAULT_PROJECT_NAME,
     meta: data.meta,
     bytes,
+    problems,
+    archiveHint,
   };
 }
 
-/** What the server said identifies this version of a file, sent back to ask "has it changed?" */
-export interface Validators {
-  etag?: string;
-  lastModified?: string;
-}
+const isHint = (v: unknown): v is ArchiveHint =>
+  !!v &&
+  typeof v === 'object' &&
+  typeof (v as ArchiveHint).bytes === 'number' &&
+  typeof (v as ArchiveHint).archivable === 'number';
 
-type FileResult = { unchanged: true } | { unchanged: false; text: string; validators: Validators };
-
-/**
- * Fetches a file from the server (D-5.1). With the validators of the last load, the request is conditional
- * (If-None-Match / If-Modified-Since): a 304 means unchanged. The browser's cache is bypassed so the 304 reaches us
- * instead of a cached copy; atm serve and the Vite dev server both answer it. `missing` is returned for a 404 when
- * given; other error responses reject with "HTTP <status>".
- */
-async function fetchFile(
-  url: string,
-  fetchFn: typeof fetch,
-  since?: Validators,
-  missing?: string,
-): Promise<FileResult> {
-  const headers: Record<string, string> = {};
-  if (since?.etag) headers['If-None-Match'] = since.etag;
-  if (since?.lastModified) headers['If-Modified-Since'] = since.lastModified;
-  const resp = await fetchFn(url, { cache: 'no-store', headers });
-  if (resp.status === 304 && since) return { unchanged: true };
-  if (resp.status === 404 && missing !== undefined) return { unchanged: false, text: missing, validators: {} };
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  const validators: Validators = {};
-  const etag = resp.headers.get('ETag');
-  const lastModified = resp.headers.get('Last-Modified');
-  if (etag) validators.etag = etag;
-  if (lastModified) validators.lastModified = lastModified;
-  return { unchanged: false, text: await resp.text(), validators };
-}
-
-/** fetchFile for a project's file (p/<id>/<file>) */
-export function fetchProjectFile(
-  project: string,
-  file: ProjectFile,
-  fetchFn: typeof fetch,
-  since?: Validators,
-  missing?: string,
-): Promise<FileResult> {
-  return fetchFile(projectFileUrl(project, file), fetchFn, since, missing);
+/** How many problems atm finds in the project's task file: the file's own and its tasks' (T-377) */
+export function problemCount(problems: readonly string[], tasks: readonly Task[]): number {
+  return problems.length + tasks.reduce((n, t) => n + (t.derived?.problems?.length ?? 0), 0);
 }
 
 /** A project's logo, as api/projects gives it: p/<id>/logo, relative to the dashboard */
@@ -179,7 +84,7 @@ export type ProjectsResult =
  * Fetches api/projects, conditionally when `since` is given. Entries without an id are left out; a missing name falls
  * back to the id. Rejects with "HTTP <status>" for error responses and with the JSON error for invalid content.
  */
-export async function loadProjects(fetchFn: typeof fetch = fetch, since?: Validators): Promise<ProjectsResult> {
+export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
   const file = await fetchFile(PROJECTS_URL, fetchFn, since);
   if (file.unchanged) return file;
   const list = (JSON.parse(file.text) as { projects?: unknown }).projects;
@@ -206,7 +111,7 @@ export const SEARCH_URL = 'api/search';
  * The tasks matching `query` in every project (api/search, T-258): their IDs per project id. Anything unexpected in
  * the answer is left out; a failed request throws.
  */
-export async function searchProjects(query: string, fetchFn: typeof fetch = fetch): Promise<Map<string, Set<string>>> {
+export async function searchProjects(query: string, fetchFn: Fetch = browserFetch): Promise<Map<string, Set<string>>> {
   const res = await fetchFn(`${SEARCH_URL}?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
   if (!res.ok) throw new Error(`${SEARCH_URL}: HTTP ${res.status}`);
   const data: unknown = await res.json();
@@ -223,7 +128,7 @@ export const WHOAMI_URL = '__atm/whoami';
  * The build of the dashboard the server holds now (its /__atm/whoami), or null when it doesn't say (a server or dev
  * server without it, or any failure): a new plugin version restarts the server with a new build.
  */
-export async function serverBuild(fetchFn: typeof fetch = fetch): Promise<string | null> {
+export async function serverBuild(fetchFn: Fetch = browserFetch): Promise<string | null> {
   try {
     const resp = await fetchFn(WHOAMI_URL, { cache: 'no-store' });
     if (!resp.ok) return null;
@@ -244,20 +149,45 @@ export function newBuildReady(pageBuild: string | undefined, server: string | nu
 
 export type LoadResult = { unchanged: true } | { unchanged: false; loaded: LoadedTasks; validators: Validators };
 
+/** GET api/v1/projects/<id>/tasks (docs/multi-project-api.md §2.5): the tasks, each with what atm derives for it,
+ * and the project's meta and size, one snapshot */
+interface TaskViewList {
+  meta?: TasksFile['meta'];
+  bytes?: number;
+  tasks?: { task: Task; derived?: Task['derived'] }[];
+  problems?: unknown;
+  archive_hint?: unknown;
+}
+
+/** The tasks of a v1 tasks response, each as stored with what atm derives for it beside its fields (T-366) */
+function viewedTasks(list: TaskViewList): Task[] {
+  return Array.isArray(list.tasks)
+    ? list.tasks.map((view) => (view.derived ? { ...view.task, derived: view.derived } : view.task))
+    : [];
+}
+
 /**
- * Fetches a project's tasks.json, conditionally when `since` is given: a 304 means unchanged, and nothing is parsed.
- * Rejects with "HTTP <status>" for error responses and with the JSON error for invalid content.
+ * Fetches a project's tasks (from the v1 route, with its meta), conditionally when `since` is given: a 304 means
+ * unchanged, and nothing is parsed. Rejects with "HTTP <status>" for error responses and with the JSON error for
+ * invalid content.
  */
 export async function loadTasks(
   project: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<LoadResult> {
-  const file = await fetchFile(projectFileUrl(project, 'tasks.json'), fetchFn, since);
+  const file = await fetchFile(v1TasksUrl(project), fetchFn, since);
   if (file.unchanged) return file;
+  const list = JSON.parse(file.text) as TaskViewList;
+  const problems = Array.isArray(list.problems) ? list.problems.filter((p): p is string => typeof p === 'string') : [];
   return {
     unchanged: false,
-    loaded: parseTasksFile(JSON.parse(file.text), file.text.length),
+    loaded: parseTasksFile(
+      { meta: list.meta, tasks: viewedTasks(list) },
+      typeof list.bytes === 'number' ? list.bytes : file.text.length,
+      problems,
+      isHint(list.archive_hint) ? list.archive_hint : null,
+    ),
     validators: file.validators,
   };
 }
@@ -265,16 +195,15 @@ export async function loadTasks(
 export type ArchiveResult = { unchanged: true } | { unchanged: false; tasks: Task[]; validators: Validators };
 
 /**
- * Fetches a project's tasks-archive.json (DM-5), conditionally when `since` is given. A missing archive (404) is an
- * empty one; an unreadable one is an error, like tasks.json.
+ * Fetches a project's archived tasks (DM-5) from the v1 tasks route (`?archived=true`, T-372), conditionally when
+ * `since` is given. A missing archive (404) is an empty one; an unreadable one is an error, like the tasks.
  */
 export async function loadArchive(
   project: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: Fetch = browserFetch,
   since?: Validators,
 ): Promise<ArchiveResult> {
-  const file = await fetchFile(projectFileUrl(project, 'tasks-archive.json'), fetchFn, since, '{"tasks": []}');
+  const file = await fetchFile(`${v1TasksUrl(project)}?archived=true`, fetchFn, since, '{"tasks": []}');
   if (file.unchanged) return file;
-  const data = JSON.parse(file.text) as TasksFile;
-  return { unchanged: false, tasks: Array.isArray(data.tasks) ? data.tasks : [], validators: file.validators };
+  return { unchanged: false, tasks: viewedTasks(JSON.parse(file.text) as TaskViewList), validators: file.validators };
 }

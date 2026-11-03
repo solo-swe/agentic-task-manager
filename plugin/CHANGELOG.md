@@ -4,6 +4,72 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.27.0] - 2026-11-03
+
+The sprint *Layered Architecture* (T-360 to T-388): atm-cli rebuilt in layers (`docs/layered-architecture.md`).
+Commands, their output, exit codes and files are unchanged unless listed below; the atm-cli suite checked that at
+every step.
+
+### Added
+- **A malformed task file no longer blanks the dashboard** (T-377): the dashboard reads the project leniently and
+  shows what atm finds wrong in a footer notice, with the details in a list. Entries that aren't tasks are left out,
+  tasks with bad IDs stay, a dependency list that isn't a list shows as the IDs it can read, and unusable vocabulary
+  lists fall back to the defaults. A task with a problem is never *ready* (`derived.problems`, and `problems` on the
+  response). Commands still refuse such a file. `atm list --derived [--tolerant]` prints the same views as JSON.
+- **`GET api/v1/projects/<id>/tasks`** (T-364, T-365, T-372): a project's tasks as views `{task, derived}`, where
+  `derived` holds atm's own kind, readiness, `waiting_for`, effective review mode and release, stage and problems.
+  Also returns `meta` and `bytes`. Filters are query parameters; `?archived=true` returns the archive. Answers 304
+  with an ETag, and 400, 404 or 413 on errors. The dashboard loads tasks and the archive only from this route.
+- **atm-lib, a Python surface for tools** (T-376, T-383, T-384): `atm.lib` (its `__all__`) and `atm.boot`
+  (`open_project`, `open_memory_project`, `open_registry`), imported from the repository's `atm-cli/`, not from the
+  shipped `atm.py`. There is one function per status change (`start_task`, `review_task`, `done_task`,
+  `reject_task`, `approve_task`, `request_changes`, `block_task`, `unblock_task`, `reopen_task`, `skip_task`,
+  `fail_task`, `release_task`). Sprint, release and task edits take keyword arguments (`add_sprint`, `edit_sprint`,
+  `close_sprint`, `delete_sprint`, `add_release`, `edit_release`, `edit_existing_task`). `commit_task` takes
+  repository-relative paths. Also `expire_claims`, `get_workflow` and `task_views`. The names and signatures are
+  frozen in `tests/lib/public-surface.json`.
+- **Schemas for atm's data and answers** (T-362, T-367, T-382): in `atm-cli/atm/common/schema/`, generated into
+  Python TypedDicts and the dashboard's TypeScript types. They include nullable fields, maps, the project summary
+  and the `atm status` report.
+
+### Changed
+- **atm-cli is built in layers** (T-361 to T-376, T-378 to T-381, T-385): common, host, db, vcs, atm-lib, boot, cli
+  and api, each in its own folder. The build refuses any import the layer rule forbids. Every command and the REST
+  API go through atm-lib, and only `host/` runs git.
+- **The CLI and the server are two processes** (T-379): `atm serve` starts the server through the plugin's internal
+  launcher `plugin/scripts/atm-serve` (the same `atm.py`, run with `--server`), not `atm _serve-child`. Nothing
+  changes for users, skills or permissions.
+- **The dashboard takes its rules from atm** (T-366, T-371, T-372, T-387). It used to work these out itself:
+  - a task's readiness and what it waits for;
+  - whether it can be done together with you now;
+  - its review mode and its release;
+  - the archive notice.
+
+  Worktree copies (`worktrees.json`) now give their tasks as `{task, derived}` views, computed in their own
+  worktree. Every request the dashboard makes goes through `src/lib/api/http.ts` (T-365).
+- **One meaning of "the branch"** (T-385): with a detached HEAD, the short commit ID is used wherever a branch is
+  shown: claims, the project summary's `git.branch`, `working` and the worktree list. A repository with no commit
+  yet reports its branch (e.g. `main`) instead of none.
+- **Status changes are conditional writes** (T-368): when two agents start the same task at once, one gets it and
+  the other gets *claimed*. `tasks.json` is written only when its data changed (T-369), so a read-only `atm next`
+  doesn't make open dashboards reload.
+- **The server checks the task folder's symlinks on every request** (T-374), not once at start: a file linked after
+  the server started is refused too, and a task folder with a linked file is refused whole.
+- **Development:** `npm run dev` runs the real REST API from this checkout on a temporary `ATM_HOME` (T-375, T-386).
+  It restarts when `atm.py` is rebuilt, lists a folder without a task file as missing, and serves the page under the
+  server's Content-Security-Policy plus what Vite needs.
+
+### Removed
+- **The raw routes `p/<id>/tasks.json` and `p/<id>/tasks-archive.json`** (T-374): they answer 404. A 0.26.0 page left
+  open across the update keeps its board and offers the reload (checked in T-388).
+
+### Fixed
+- **`atm serve` could judge a project by another project's archive** (T-378): the archive lookup was global. Each
+  project now uses its own.
+- **The dashboard showed a task as waiting on an archived dependency** (T-366): an archived task counts as done, as
+  it does in atm.
+- **A task file with a string where a list belongs broke the page** (T-377).
+
 ## [0.26.0] - 2026-11-02
 
 ### Added

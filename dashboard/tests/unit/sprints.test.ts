@@ -44,6 +44,14 @@ describe('a migrated project', () => {
     expect(effectiveRelease(model, byId('T-005'))).toBeUndefined();
   });
 
+  it("is atm's to say when the task comes with atm's values (T-371): none from atm is none", () => {
+    const derived = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
+    expect(effectiveRelease(model, { ...byId('T-002'), derived: { ...derived, effective_release: '2.0' } })).toBe(
+      '2.0',
+    );
+    expect(effectiveRelease(model, { ...byId('T-002'), derived })).toBeUndefined();
+  });
+
   it('added mid-sprint: joined after the sprint started', () => {
     const sprint = activeSprint(model)!;
     expect(addedMidSprint(byId('T-002'), sprint)).toBe(false);

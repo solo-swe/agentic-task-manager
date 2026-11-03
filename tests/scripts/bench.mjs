@@ -121,12 +121,38 @@ function benchCli(n) {
   }
 }
 
+/**
+ * The answer of GET api/v1/projects/<id>/tasks for a project holding `data` (docs/multi-project-api.md §2.5): its meta
+ * and size, and each task with what atm itself derives for it (`atm list --derived --tolerant`). Worked out
+ * before the clock starts: the benchmark measures the dashboard, not the server.
+ */
+function taskViews(data) {
+  const root = tempDir('atm-bench-views-');
+  try {
+    fs.mkdirSync(path.join(root, '.agentic-task-manager'));
+    const file = json(data);
+    fs.writeFileSync(path.join(root, '.agentic-task-manager', 'tasks.json'), file);
+    // --tolerant: read as atm serve's v1 route reads it, and answered in its shape (meta, tasks, problems)
+    const r = spawnSync(ATM, ['list', '--derived', '--tolerant'], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 1 << 30, // 10k tasks are tens of megabytes of views
+      env: baseEnv(),
+    });
+    if (r.status !== 0) throw new Error(`atm list --derived failed (${r.status}): ${r.stderr}`);
+    return JSON.stringify({ generated_at: at(0), bytes: file.length, ...JSON.parse(r.stdout) });
+  } finally {
+    removeDir(root);
+  }
+}
+
 async function benchDashboard(n) {
   const require = createRequire(path.join(REPO, 'dashboard/package.json'));
   const { chromium } = require('@playwright/test');
   const html = fs.readFileSync(path.join(REPO, 'plugin/templates/tasks-dashboard.html'), 'utf8');
   const data = generate(n);
-  let body = JSON.stringify(data);
+  let body = taskViews(data);
+  const emptyArchive = JSON.stringify({ generated_at: at(0), bytes: 0, tasks: [] });
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -138,19 +164,40 @@ async function benchDashboard(n) {
     await page.route('http://bench.local/**', (route) => {
       const url = new URL(route.request().url());
       if (url.pathname === '/api/projects') return route.fulfill({ body: projects, contentType: 'application/json' });
-      if (url.pathname === '/p/bench/tasks.json') return route.fulfill({ body, contentType: 'application/json' });
+      if (url.pathname === '/api/v1/projects/bench/tasks')
+        // No archive (`?archived=true`): the generated project has none
+        return route.fulfill({
+          body: url.searchParams.get('archived') === 'true' ? emptyArchive : body,
+          contentType: 'application/json',
+        });
       if (url.pathname === '/') return route.fulfill({ body: html, contentType: 'text/html' });
-      return route.fulfill({ status: 404, body: '' }); // claims.json, the archive, whoami
+      notFound.add(url.pathname);
+      return route.fulfill({ status: 404, body: '' }); // claims.json, worktrees.json, whoami
     });
+    // What went wrong, when the board never shows: the requests answered 404, and the page's errors
+    const notFound = new Set();
+    const errors = new Set();
+    page.on('pageerror', (e) => errors.add(e.message));
+    page.on('console', (m) => m.type() === 'error' && errors.add(m.text()));
     // The Kanban board: the tab people keep open while agents work
     const t = performance.now();
     await page.goto('http://bench.local/#view=kanban');
-    await page.locator('.kanban-card').first().waitFor({ timeout: 120_000 });
+    try {
+      await page.locator('.kanban-card').first().waitFor({ timeout: 120_000 });
+    } catch (e) {
+      const shown = (await page.locator('body').innerText()).slice(0, 500);
+      throw new Error(
+        `${n} tasks: no Kanban card. 404: ${[...notFound].join(', ') || 'none'}. ` +
+          `Errors: ${[...errors].join(' | ') || 'none'}. ` +
+          `The page shows: ${shown}`,
+        { cause: e },
+      );
+    }
     const load = performance.now() - t;
 
     const target = data.tasks.find((x) => x.status === 'todo');
     target.status = 'in_progress';
-    body = JSON.stringify(data);
+    body = taskViews(data);
     const reload = await page.evaluate(async (id) => {
       const start = performance.now();
       document.querySelector('#reload-btn').click();

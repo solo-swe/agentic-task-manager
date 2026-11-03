@@ -49,7 +49,7 @@
   const release = $derived(task ? effectiveRelease(dashboard.sprints, task) : undefined);
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
-  const reviewMode = $derived(task ? effectiveReview(dashboard.meta, task) : 'none');
+  const reviewMode = $derived(task ? effectiveReview(task) : 'none');
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);
@@ -181,6 +181,12 @@
         </h3>
         <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeDetail()}>&times;</button>
       </div>
+      {#if task.derived?.problems?.length}
+        <!-- A malformed task, shown as far as atm could read it (T-377) -->
+        <ul class="archive-notice" id="detail-problems" aria-label="What atm check finds wrong with this task">
+          {#each task.derived.problems as problem (problem)}<li>{problem}</li>{/each}
+        </ul>
+      {/if}
       <div class="task-meta" style="margin-bottom:12px">
         <span class="badge" style="background:{ts.bg};color:{ts.color}">{task.type}</span>
         <span class="badge" style="background:{ss.bg};color:{ss.color}"

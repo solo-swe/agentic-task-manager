@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { test as base, expect, type Page } from '@playwright/test';
+import { test as base, expect, type Page, type Route } from '@playwright/test';
 import type { FilterGroup } from '../../src/lib/filters';
 import { PREFS_KEY } from '../../src/lib/prefs';
 import type { ViewId } from '../../src/lib/tabs';
@@ -19,6 +19,57 @@ const ARCHIVE_JSON = /\/p\/([^/]+)\/tasks-archive\.json(\?.*)?$/;
 const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
+const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+
+/** Task views already worked out, by the files they are of: atm runs once per version of the data */
+const viewCache = new Map<string, string>();
+
+/**
+ * GET api/v1/projects/<id>/tasks for a project holding `body` as its tasks.json and `archive` as its archive
+ * (docs/multi-project-api.md §2.5): its meta and size, and each task with what atm-cli itself derives for it
+ * (`atm list --derived --tolerant`, read as atm serve reads it), so the dashboard is tested against atm's rules, not
+ * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
+ * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
+ */
+function asTaskViews(body: string, archive: string | null = null, archived = false): string {
+  const key = JSON.stringify([body, archive, archived]);
+  const cached = viewCache.get(key);
+  if (cached !== undefined) return cached;
+  const read = atmViews(body, archive, archived);
+  if (!read) return body;
+  const views = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', bytes: body.length, ...read });
+  viewCache.set(key, views);
+  return views;
+}
+
+/** atm's tolerant read of the files (`atm list --derived --tolerant`: meta, tasks, problems; with `archived`, the
+ * archive's tasks, T-372), or null when even that refuses them (not a task file) */
+function atmViews(body: string, archive: string | null, archived = false): Record<string, unknown> | null {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
+  try {
+    mkdirSync(path.join(dir, '.agentic-task-manager'));
+    writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
+    if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
+    const r = spawnSync('python3', [ATM, 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])], {
+      cwd: dir,
+      encoding: 'utf8',
+      maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
+      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+    });
+    if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
+    // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
+    let data: unknown = null;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      return null;
+    }
+    if (!data || typeof data !== 'object' || !Array.isArray((data as TasksData).tasks)) return null;
+    throw new Error(`atm list --derived failed: ${r.error?.message ?? r.stderr}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
@@ -170,12 +221,14 @@ export class TasksServer {
         body: JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', projects: this.projectList() }),
       }),
     );
-    await this.page.route(TASKS_JSON, (route) => {
-      const id = decodeURIComponent(TASKS_JSON.exec(route.request().url())![1]);
+    // A project's tasks: tasks.json as stored, and the v1 route the dashboard loads (docs/multi-project-api.md §2.5),
+    // the same body as views, with the same ETag, status and counters
+    const answerTasks = (route: Route, pattern: RegExp, wrap: (body: string) => string) => {
+      const id = decodeURIComponent(pattern.exec(route.request().url())![1]);
       if (id !== this.projectId) {
         const other = this.others.get(id);
         return other
-          ? route.fulfill({ status: 200, contentType: 'application/json', body: other.body })
+          ? route.fulfill({ status: 200, contentType: 'application/json', body: wrap(other.body) })
           : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "unknown project"}' });
       }
       this.requests++;
@@ -185,7 +238,24 @@ export class TasksServer {
         return route.fulfill({ status: 304, headers: { ETag: etag } });
       }
       const headers = this.status === 200 ? { ETag: etag } : undefined;
-      return route.fulfill({ status: this.status, contentType: 'application/json', body: this.body ?? '', headers });
+      const body = this.status === 200 ? wrap(this.body ?? '') : (this.body ?? '');
+      return route.fulfill({ status: this.status, contentType: 'application/json', body, headers });
+    };
+    await this.page.route(TASKS_JSON, (route) => answerTasks(route, TASKS_JSON, (body) => body));
+    await this.page.route(V1_TASKS, (route) => {
+      // ?archived=true: the archive's tasks (T-372), as tasks-archive.json was served: counted, a 404 without one
+      if (new URL(route.request().url()).searchParams.get('archived') === 'true') {
+        const mine = decodeURIComponent(V1_TASKS.exec(route.request().url())![1]) === this.projectId;
+        if (mine) this.archiveRequests++;
+        return this.archiveBody === null || !mine || this.body === null
+          ? route.fulfill({ status: 404, body: 'not found' })
+          : route.fulfill({
+              status: 200,
+              contentType: 'application/json',
+              body: asTaskViews(this.body, this.archiveBody, true),
+            });
+      }
+      return answerTasks(route, V1_TASKS, (body) => asTaskViews(body, body === this.body ? this.archiveBody : null));
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
@@ -261,6 +331,7 @@ export class TasksServer {
    * (summary() makes one) for api/projects. */
   addProject(id: string, data: string | TasksData, name = id, summary: Record<string, unknown> | null = null) {
     this.others.set(id, { name, body: toBody(data), summary });
+    asTaskViews(toBody(data)); // worked out now, not during a request
     return this;
   }
 
@@ -300,6 +371,7 @@ export class TasksServer {
   /** Serve tasks-archive.json (a fixture by name or inline tasks); null makes it a 404 (no archive) again. */
   archive(data: string | TasksData | null) {
     this.archiveBody = data === null ? null : toBody(data);
+    this.warm();
     return this;
   }
 
@@ -308,7 +380,14 @@ export class TasksServer {
     this.body = toBody(data);
     this.status = 200;
     this.version++;
+    this.warm();
     return this;
+  }
+
+  /** Work out the task views now, when the data is set, so no request waits for atm (the timing tests measure them) */
+  private warm() {
+    if (this.body !== null) asTaskViews(this.body, this.archiveBody);
+    if (this.body !== null && this.archiveBody !== null) asTaskViews(this.body, this.archiveBody, true);
   }
 
   fail(status = 404) {

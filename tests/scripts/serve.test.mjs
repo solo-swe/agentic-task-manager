@@ -82,6 +82,13 @@ function project(tasks = TASKS, files = {}) {
 
 const atmIn = (atmHome) => (args, cwd) => runAtm(args, cwd, { ATM_HOME: atmHome });
 
+/** A project's task data as the v1 route serves it, in the task file's shape: {meta, tasks} (the raw task files
+ * aren't served since T-374). */
+async function v1Tasks(port, id) {
+  const body = await (await fetch(`http://localhost:${port}/api/v1/projects/${id}/tasks`)).json();
+  return { meta: body.meta, tasks: body.tasks.map((view) => view.task) };
+}
+
 /** A GET with a chosen Host header (fetch can't set it). */
 function rawGet(port, urlPath, host) {
   return new Promise((resolve, reject) => {
@@ -114,7 +121,7 @@ describe('serve', () => {
     assert.match(dashboard.headers.get('content-type'), /^text\/html/);
     assert.equal(dashboard.headers.get('cache-control'), 'no-store');
     assert.match(await dashboard.text(), /atm-dashboard-version/);
-    assert.deepEqual(await (await fetch(`http://localhost:${port}/p/abcd1234/tasks.json?ts=1`)).json(), TASKS);
+    assert.deepEqual(await v1Tasks(port, 'abcd1234'), TASKS);
     assert.deepEqual(await (await fetch(`http://localhost:${port}/__atm/whoami`)).json(), {
       atm: true,
       pid: r.pid,
@@ -158,8 +165,7 @@ describe('serve', () => {
         ['bbbb2222', 'Second', b, false, 0],
       ],
     );
-    const secondTasks = await (await fetch(`http://localhost:${port}/p/bbbb2222/tasks.json`)).json();
-    assert.equal(secondTasks.meta.project, 'Second');
+    assert.equal((await v1Tasks(port, 'bbbb2222')).meta.project, 'Second');
     atm(['serve', 'stop'], a);
   });
 
@@ -247,8 +253,8 @@ describe('serve', () => {
     const summary = (await changed.json()).projects.find((p) => p.id === 'abcd1234').summary;
     assert.deepEqual([summary.agents_working, summary.last_activity], [1, '2026-03-15T12:00:00Z']);
     // What the agent works on, by name; nothing is left to take next
-    // (branch null: the test repository has no commit yet, so git names no branch)
-    assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: null }]);
+    // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
+    assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
     assert.deepEqual(summary.next, []);
     atm(['serve', 'stop'], root);
   });
@@ -555,16 +561,16 @@ describe('serve', () => {
     atm(['serve', 'stop'], withLogo);
   });
 
-  test('files and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
+  test('tasks and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
-    const url = `http://localhost:${port}/p/abcd1234/tasks.json`;
+    const url = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
     const first = await fetch(url);
     const etag = first.headers.get('etag');
-    assert.match(etag, /^"[0-9a-f]+-[0-9a-f]+"$/);
+    assert.match(etag, /^"[0-9a-f]+"$/);
     const unchanged = await fetch(url, { headers: { 'If-None-Match': etag } });
     assert.equal(unchanged.status, 304);
     assert.equal(unchanged.headers.get('etag'), etag);
@@ -580,6 +586,49 @@ describe('serve', () => {
     assert.equal((await fetch(apiUrl, { headers: { 'If-None-Match': apiEtag } })).status, 200);
     // Not for the dashboard
     assert.equal((await fetch(`http://localhost:${port}/`)).headers.get('etag'), null);
+    atm(['serve', 'stop'], root);
+  });
+
+  test('a detached HEAD is one branch everywhere: the claim, the project card and the worktree list (T-385)', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { id: 'dddd1234', project: 'Detached' },
+          tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo' }],
+        },
+      },
+    });
+    const linked = tempDir('atm-worktree-');
+    cleanups.push(
+      () => removeDir(root),
+      () => removeDir(linked),
+    );
+    git(['checkout', '-q', '--detach'], root);
+    git(['worktree', 'add', '-q', '--detach', linked], root);
+    const short = git(['rev-parse', '--short=7', 'HEAD'], root).trim();
+    // A claim in each worktree records the short SHA, not `HEAD`
+    assert.equal(atm(['start', 'T-1', '--agent', 'claude:main'], root).code, 0);
+    const claims = JSON.parse(atm(['claims', '--json'], root).stdout);
+    assert.deepEqual(
+      claims.map((c) => c.branch),
+      [short],
+    );
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
+    const [project] = api.projects;
+    assert.equal(project.summary.git.branch, short);
+    assert.deepEqual(
+      project.worktrees.map((w) => w.branch),
+      [short, short],
+    );
+    assert.deepEqual(
+      project.summary.working.map((w) => w.branch),
+      [short],
+    );
     atm(['serve', 'stop'], root);
   });
 
@@ -621,16 +670,21 @@ describe('serve', () => {
     assert.equal(after.status, 200);
     const changed = (await after.json()).worktrees[1].tasks;
     assert.deepEqual(
-      changed.map((t) => [t.id, t.status]),
-      [['T-1', 'in_progress']],
+      changed.map((v) => [v.task.id, v.task.status, v.derived.kind]),
+      [['T-1', 'in_progress', 'active']],
     );
+    // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
+    // which is in progress there
+    assert.equal(atm(['edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
+    const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const t2 = copies.find((v) => v.task.id === 'T-2');
+    assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
     const claims = await (await fetch(`${base}/p/abcd1234/claims.json`)).json();
     assert.deepEqual(
       claims.claims.map((c) => [c.task, c.agent, c.branch]),
       [['T-1', 'claude:tree', 'agent-2']],
     );
-    const mainTasks = await (await fetch(`${base}/p/abcd1234/tasks.json`)).json();
-    assert.equal(mainTasks.tasks[0].status, 'todo');
+    assert.equal((await v1Tasks(port, 'abcd1234')).tasks[0].status, 'todo');
 
     // T-1 is blocked in the linked worktree and answered in the main one (T-204): the linked worktree's blocked copy
     // is stale until atm runs there, so it isn't listed (it would outrank the answer on the board)
@@ -638,28 +692,43 @@ describe('serve', () => {
     assert.equal(atm(block, linked).code, 0);
     const blocked = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
     assert.deepEqual(
-      blocked.map((t) => [t.id, t.status]),
-      [['T-1', 'blocked']],
+      blocked.map((v) => [v.task.id, v.task.status, v.derived.waiting_on ?? null]),
+      [
+        ['T-1', 'blocked', 'user'],
+        ['T-2', 'todo', null],
+      ],
     );
     assert.equal(atm(['unblock', 'T-1', '--answer', 'This one'], root).code, 0);
-    assert.deepEqual((await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks, []);
+    const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    assert.deepEqual(
+      left.map((v) => v.task.id),
+      ['T-2'],
+    );
     atm(['serve', 'stop'], root);
   });
 
-  test('only the four files of registered projects are served; the rest is 404 or 405', async () => {
+  test('a registered project has its v1 tasks, claims.json and worktrees.json; no task file is served; the rest is 404 or 405', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
-    const root = project(TASKS, { '.agentic-task-manager/secret.json': { secret: true } });
+    const root = project(TASKS, {
+      '.agentic-task-manager/secret.json': { secret: true },
+      '.agentic-task-manager/tasks-archive.json': { meta: {}, tasks: [] },
+    });
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     const get = async (p, init) => {
       const r = await fetch(`http://localhost:${port}${p}`, init);
       return [r.status, (await r.json()).error];
     };
-    assert.deepEqual(await get('/p/ffff0000/tasks.json'), [404, 'unknown project']);
+    assert.deepEqual(await get('/api/v1/projects/ffff0000/tasks'), [404, 'unknown project']);
+    assert.deepEqual(await get('/p/ffff0000/claims.json'), [404, 'unknown project']);
     assert.deepEqual(await get('/p/abcd1234/secret.json'), [404, 'not found']);
-    assert.deepEqual(await get('/p/abcd1234/tasks-archive.json'), [404, 'not found']); // no archive yet
+    // The task files themselves only through atm-lib: the v1 route (T-374)
+    assert.deepEqual(await get('/p/abcd1234/tasks.json'), [404, 'not found']);
+    assert.deepEqual(await get('/p/abcd1234/tasks-archive.json'), [404, 'not found']);
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/abcd1234/tasks`)).status, 200);
     assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/claims.json`)).status, 200);
+    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/worktrees.json`)).status, 200);
     assert.deepEqual(await get('/p/abcd1234/tasks.json/x'), [404, 'not found']);
     assert.deepEqual(await get('/tasks.json'), [404, 'not found']);
     assert.deepEqual(await get('/tasks-dashboard.html'), [404, 'not found']);
@@ -677,7 +746,7 @@ describe('serve', () => {
     const body = Buffer.from(await page.arrayBuffer());
     assert.equal(page.headers.get('content-security-policy'), pageCsp(body));
     assert.match(page.headers.get('content-security-policy'), /script-src 'sha256-[^']+' 'sha256-[^']+';/);
-    for (const p of ['/', '/api/projects', '/p/abcd1234/tasks.json', '/nope']) {
+    for (const p of ['/', '/api/projects', '/api/v1/projects/abcd1234/tasks', '/p/abcd1234/claims.json', '/nope']) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
       assert.equal(r.headers.get('cross-origin-resource-policy'), 'same-origin', p);
@@ -748,6 +817,12 @@ describe('serve', () => {
   test('two projects with the same meta.id both stay reachable; ATM_HOME is private (T-227, F18)', async () => {
     const atmHome = path.join(tempDir('atm-parent-'), 'home');
     const atm = atmIn(atmHome);
+    // Stopped and removed when the tests end even if this one fails, so its server can't answer a later run's port
+    cleanups.push(() => {
+      const r = record(atmHome);
+      if (r && alive(r.pid)) process.kill(r.pid, 'SIGTERM');
+      removeDir(path.dirname(atmHome));
+    });
     const first = project(TASKS);
     const second = project({
       meta: { id: 'abcd1234', project: 'Copy' },
@@ -762,25 +837,30 @@ describe('serve', () => {
     assert.ok(ids.includes('abcd1234'));
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], first).code, 0);
-    for (const id of ids) assert.equal((await fetch(`http://localhost:${port}/p/${id}/tasks.json`)).status, 200, id);
+    for (const id of ids) {
+      assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/${id}/tasks`)).status, 200, id);
+    }
     atm(['serve', 'stop'], first);
     removeDir(path.dirname(atmHome));
   });
 
-  test('a task file that is a symlink is never served, wherever it points (T-224, F8)', async () => {
+  test('a task file that is a symlink is never read, wherever it points: the project is refused (T-224, F8)', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const root = project(TASKS);
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const v1 = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
+    assert.equal((await fetch(v1)).status, 200);
     // Linked after the server started (atm itself refuses such a folder): an archive pointing at a private file
     const secret = path.join(atmHome, 'id_rsa.json');
     fs.writeFileSync(secret, '{"tasks": [], "secret": "PRIVATE KEY"}');
     fs.symlinkSync(secret, path.join(root, '.agentic-task-manager/tasks-archive.json'));
-    const r = await fetch(`http://localhost:${port}/p/abcd1234/tasks-archive.json`);
-    assert.equal(r.status, 404);
-    assert.doesNotMatch(await r.text(), /PRIVATE KEY/);
-    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/tasks.json`)).status, 200);
+    for (const url of [`${v1}?archived=true`, v1, `http://localhost:${port}/p/abcd1234/tasks-archive.json`]) {
+      const r = await fetch(url);
+      assert.equal(r.status, 404, url);
+      assert.doesNotMatch(await r.text(), /PRIVATE KEY/, url);
+    }
     atm(['serve', 'stop'], root);
   });
 
@@ -791,7 +871,7 @@ describe('serve', () => {
     const port = ports();
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     assert.equal((await rawGet(port, '/', `127.0.0.1:${port}`)).status, 200);
-    const refused = await rawGet(port, '/p/abcd1234/tasks.json', `evil.example:${port}`);
+    const refused = await rawGet(port, '/api/v1/projects/abcd1234/tasks', `evil.example:${port}`);
     assert.equal(refused.status, 403);
     assert.deepEqual(JSON.parse(refused.body), { error: 'unexpected Host header' });
     assert.equal((await rawGet(port, '/', `localhost:${port + 1}`)).status, 403);
@@ -842,6 +922,79 @@ describe('serve', () => {
     assert.equal(refused.status, 403);
     assert.equal((await fetch(`http://localhost:${port}/api/search?q=x`, { method: 'POST' })).status, 405);
     atm(['serve', 'stop'], shop);
+  });
+
+  test('api/v1/projects/<id>/tasks: the tasks with what atm derives, filtered, conditional (T-364)', async () => {
+    const atm = atmIn(home());
+    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const root = project({
+      meta: { id: 'cccc3333', project: 'Shop', sprints: [{ id: 'One', state: 'active' }] },
+      tasks: [
+        task('T-1', { status: 'done', sprint: 'One', pr: { number: 2 } }),
+        task('T-2', { dependencies: ['T-1'], sprint: 'One' }),
+        task('T-3', { dependencies: ['T-2'] }),
+      ],
+    });
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const url = (query = '') => `http://localhost:${port}/api/v1/projects/cccc3333/tasks${query}`;
+
+    const response = await fetch(url());
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    // The project's meta and its task data's size come in the same snapshot
+    assert.equal(body.meta.project, 'Shop');
+    assert.ok(body.bytes > 0);
+    assert.deepEqual(
+      body.tasks.map((v) => [v.task.id, v.derived.kind, v.derived.ready, v.derived.waiting_for, v.derived.stage]),
+      [
+        ['T-1', 'done', false, [], 'in_pr'],
+        ['T-2', 'todo', true, [], undefined],
+        ['T-3', 'todo', false, ['T-2'], undefined],
+      ],
+    );
+    // Filters as query parameters, as atm list takes them
+    const ids = async (query) => (await (await fetch(url(query))).json()).tasks.map((v) => v.task.id);
+    assert.deepEqual(await ids('?sprint=One'), ['T-1', 'T-2']);
+    assert.deepEqual(await ids('?ready=true'), ['T-2']);
+    assert.deepEqual(await ids('?status=done&status=todo&backlog=1'), ['T-3']);
+    assert.equal((await fetch(url('?sprint=Nope'))).status, 400);
+    // Unchanged files: 304, as for every conditional route
+    const again = await fetch(url(), { headers: { 'If-None-Match': response.headers.get('etag') } });
+    assert.equal(again.status, 304);
+    // An unknown project; another Host
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/tasks`)).status, 404);
+    assert.equal((await rawGet(port, '/api/v1/projects/cccc3333/tasks', `evil.example:${port}`)).status, 403);
+    atm(['serve', 'stop'], root);
+  });
+
+  test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
+    const atm = atmIn(home());
+    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const root = project({
+      meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
+      tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
+    });
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    // Every atm command still refuses it
+    assert.notEqual(atm(['list'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const response = await fetch(`http://localhost:${port}/api/v1/projects/dddd4444/tasks`);
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.deepEqual(
+      body.tasks.map((v) => [v.task.id, v.derived.ready, v.derived.problems]),
+      [
+        ['T-1', true, undefined],
+        ['T-2', false, ["its dependencies aren't a list of task IDs (shown with the IDs that can be read)"]],
+      ],
+    );
+    assert.equal(body.problems.length, 2); // the entry left out, and the priorities
+    assert.match(body.problems.join('\n'), /isn't a task/);
+    assert.match(body.problems.join('\n'), /meta\.priorities/);
+    atm(['serve', 'stop'], root);
   });
 
   test('a busy port moves the server to the next free one', async () => {
@@ -903,7 +1056,7 @@ describe('serve', () => {
     const port = ports();
     atm(['serve', '--port', String(port)], path.join(root, 'sub'));
     removeDir(path.join(root, 'sub'));
-    assert.equal((await fetch(`http://localhost:${port}/p/abcd1234/tasks.json`)).status, 200);
+    assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/abcd1234/tasks`)).status, 200);
     atm(['serve', 'stop'], root);
   });
 

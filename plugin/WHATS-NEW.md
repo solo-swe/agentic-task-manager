@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.27.0] - 2026-11-03
+
+- A task file with mistakes in it no longer blanks the dashboard: it keeps showing your tasks, and tells you what's wrong.
+- The dashboard and atm now agree on what's ready, what waits and how each task is reviewed, also for tasks in other worktrees.
+- Tasks waiting only on archived work show as ready.
+- When two agents grab the same task at the same moment, exactly one gets it.
+- A detached checkout shows its commit wherever a branch would be, instead of nothing.
+
 ## [0.26.0] - 2026-11-02
 
 - The Projects Overview has Activity, Progress and Agents views of all your projects together, each project in its own colour.

@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DashboardState } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
+import { asTaskViews, v1Tasks } from './api.helpers';
 
 const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 const project = (id: string, missing = false) => ({ id, name: id, path: `/${id}`, missing, summary: null });
 const PROJECTS = { projects: [project('p1')] };
-/** Plays atm serve: the project list, and the standard fixture as each project's files */
+/** Plays atm serve: the project list, and the standard fixture as each project's tasks and files */
 const server = (projects: unknown = PROJECTS) =>
-  vi.fn((url: string) => ok(String(url).startsWith('api/projects') ? projects : standard));
+  vi.fn((url: string) =>
+    ok(
+      String(url).startsWith('api/projects')
+        ? projects
+        : String(url).startsWith('api/v1/')
+          ? asTaskViews(standard)
+          : standard,
+    ),
+  );
 
 describe('DashboardState', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -48,14 +57,14 @@ describe('DashboardState', () => {
     const urls = () =>
       fetchMock.mock.calls.map(([url]) => String(url).split('?')[0]).filter((u) => u !== '__atm/whoami');
 
-    it('with one project, loads the project list, then its files from p/<id>/', async () => {
+    it('with one project, loads the project list, then its tasks (v1) and its files from p/<id>/', async () => {
       fetchMock = server({ projects: [project('gone', true), project('p2')] });
       vi.stubGlobal('fetch', fetchMock);
       const s = new DashboardState();
       await s.load();
       expect(s.route).toEqual({ page: 'project', id: 'p2' });
       expect(s.projectId).toBe('p2');
-      expect(urls()).toEqual(['api/projects', 'p/p2/tasks.json', 'p/p2/claims.json', 'p/p2/worktrees.json']);
+      expect(urls()).toEqual(['api/projects', v1Tasks('p2'), 'p/p2/claims.json', 'p/p2/worktrees.json']);
     });
 
     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
@@ -69,12 +78,12 @@ describe('DashboardState', () => {
       // project opened
       expect(urls()[0]).toBe('api/projects');
       expect(urls().slice(1).sort()).toEqual([
+        v1Tasks('p2'),
+        v1Tasks('p2'), // ?archived=true: the archive (T-372)
+        v1Tasks('p3'),
+        v1Tasks('p3'),
         'p/p2/claims.json',
-        'p/p2/tasks-archive.json',
-        'p/p2/tasks.json',
         'p/p3/claims.json',
-        'p/p3/tasks-archive.json',
-        'p/p3/tasks.json',
       ]);
       expect(s.projectSources.map((p) => p.project.id)).toEqual(['p2', 'p3']);
     });
@@ -95,7 +104,7 @@ describe('DashboardState', () => {
       await vi.waitFor(() => expect(s.projectId).toBe('p2'));
       await vi.waitFor(() => expect(s.loaded).toBe(true));
       expect([s.detailOpen, s.query]).toEqual([false, '']);
-      expect(urls()).toContain('p/p2/tasks.json');
+      expect(urls()).toContain(v1Tasks('p2'));
     });
 
     it('a hash change that only switches the tab reloads nothing', async () => {
@@ -123,7 +132,7 @@ describe('DashboardState', () => {
     await s.load();
     fetchMock.mockClear();
     await s.reload();
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain('p/p1/tasks.json');
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(v1Tasks('p1'));
   });
 
   it('records an initial load failure', async () => {

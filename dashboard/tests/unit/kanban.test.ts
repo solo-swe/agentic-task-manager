@@ -23,20 +23,33 @@ const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
 });
 const ids = (tasks: { task: Task }[]) => tasks.map((c) => c.task.id);
 const all = { showSkipped: false, statusFilter: new Set<string>() };
+/** A to-do task's derived values as atm gives them: ready, or waiting for these */
+const said = (...waitingFor: string[]): Task['derived'] => ({
+  kind: 'todo',
+  ready: !waitingFor.length,
+  waiting_for: waitingFor,
+  priority: 'P2',
+  archived: false,
+});
 
-describe('readiness', () => {
-  const map = new Map([t('a', 'done'), t('b', 'todo')].map((x) => [x.id, x]));
+describe('readiness: atm’s word, for every task (T-366, T-387)', () => {
+  const said = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
 
-  it('is ready when every dependency is done', () => {
-    expect(readiness(t('x', 'todo', { dependencies: ['a'] }), map)).toEqual({ ready: true });
-    expect(readiness(t('x', 'todo'), map)).toEqual({ ready: true });
+  it('ready as atm says it: an archived dependency it can’t see is done', () => {
+    expect(readiness(t('x', 'todo', { dependencies: ['gone'], derived: said }))).toEqual({ ready: true });
   });
 
-  it('lists unfinished and missing dependencies', () => {
-    expect(readiness(t('x', 'todo', { dependencies: ['a', 'b', 'gone'] }), map)).toEqual({
+  it('waiting on the dependencies atm names', () => {
+    const waiting = { ...said, ready: false, waiting_for: ['b'] };
+    expect(readiness(t('x', 'todo', { dependencies: ['a', 'b'], derived: waiting }))).toEqual({
       ready: false,
-      waitingOn: ['b', 'gone'],
+      waitingOn: ['b'],
     });
+  });
+
+  it('a task without atm’s values is never called ready: the dashboard doesn’t judge it itself', () => {
+    expect(readiness(t('x', 'todo', { dependencies: [] }))).toEqual({ ready: false, waitingOn: [] });
+    expect(readiness(t('x', 'todo', { derived: {} as Task['derived'] }))).toEqual({ ready: false, waitingOn: [] });
   });
 });
 
@@ -108,10 +121,10 @@ describe('buildBoard', () => {
 
   it('orders Todo ready-first, then by priority and ID', () => {
     const tasks = [
-      t('T-1', 'todo', { dependencies: ['T-9'] }),
-      t('T-3', 'todo'),
-      t('T-2', 'todo'),
-      t('T-4', 'todo', { priority: 'P0' }),
+      t('T-1', 'todo', { dependencies: ['T-9'], derived: said('T-9') }),
+      t('T-3', 'todo', { derived: said() }),
+      t('T-2', 'todo', { derived: said() }),
+      t('T-4', 'todo', { priority: 'P0', derived: said() }),
       t('T-9', 'in_progress'),
     ];
     const todo = buildBoard(tasks, tasks, all)[0];
@@ -132,8 +145,8 @@ describe('buildBoard', () => {
     expect(ids(board.find((c) => c.id === 'done')!.cards)).toEqual(['d', 'c', 'e']);
   });
 
-  it('judges readiness against all tasks, not just the visible ones', () => {
-    const allTasks = [t('T-1', 'todo'), t('T-2', 'todo', { dependencies: ['T-3'] }), t('T-3', 'done')];
+  it('readiness is atm’s, whatever the filters show; so is Next up', () => {
+    const allTasks = [t('T-1', 'todo'), t('T-2', 'todo', { dependencies: ['T-3'], derived: said() }), t('T-3', 'done')];
     const todo = buildBoard([allTasks[1]], allTasks, { ...all, nextUp: 'T-1' })[0];
     expect(todo.cards[0].readiness).toEqual({ ready: true });
     // T-1 (hidden by the filter) is still the loop's next pick
@@ -153,8 +166,9 @@ describe('a custom vocabulary', () => {
   });
   const tasks = [
     t('T-1', 'shipped', { phase: 0 }),
-    t('T-2', 'backlog', { phase: 0, dependencies: ['T-1'] }),
-    t('T-3', 'backlog', { phase: 0, dependencies: ['T-4'] }),
+    // atm judges by kind: a done-kind dependency is met, a review-kind one isn't
+    t('T-2', 'backlog', { phase: 0, dependencies: ['T-1'], derived: said() }),
+    t('T-3', 'backlog', { phase: 0, dependencies: ['T-4'], derived: said('T-4') }),
     t('T-4', 'awaiting_user', { phase: 0 }),
     t('T-5', 'dropped', { phase: 0 }),
     t('T-6', 'todo', { phase: 0 }),
@@ -174,7 +188,7 @@ describe('a custom vocabulary', () => {
     expect(buildBoard(tasks, tasks, { ...options, showSkipped: true }).map((c) => c.id)).toContain('dropped');
   });
 
-  it('judges readiness by kind: done-kind meets a dependency, review-kind does not', () => {
+  it('its to-do-kind column shows atm’s readiness', () => {
     const backlog = buildBoard(tasks, tasks, options)[0];
     expect(backlog.cards.map((c) => [c.task.id, c.readiness])).toEqual([
       ['T-2', { ready: true }],

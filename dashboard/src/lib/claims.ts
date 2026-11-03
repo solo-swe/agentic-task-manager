@@ -1,7 +1,7 @@
 // Live claims (which agent works on which task), from the gitignored claims.json snapshot that `atm` writes next to
 // tasks.json, served as p/<id>/claims.json. The file is optional: a project without one simply has no claims.
 import { formatMinutes } from './format';
-import { projectFileUrl } from './load';
+import { browserFetch, projectFileUrl, type Fetch } from './api/http';
 
 export interface Claim {
   task: string;
@@ -34,7 +34,7 @@ export function parseClaims(data: unknown, now: number): Map<string, Claim> {
 /** Fetch a project's claims.json; any failure (missing file, bad JSON) means no claims rather than an error. */
 export async function loadClaims(
   project: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: Fetch = browserFetch,
   now: () => number = Date.now,
 ): Promise<Map<string, Claim>> {
   try {

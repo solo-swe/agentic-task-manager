@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 360,
+    "next_id": 390,
     "labels": [
       {
         "id": "architecture",
@@ -662,10 +662,139 @@
       },
       {
         "id": "Overview and polish",
-        "state": "active",
+        "state": "closed",
         "goal": "The Projects Overview catches up with a project’s page (Activity, Progress, Agents, a better card), with polish across the dashboard",
         "release": "0.26.0",
-        "start": "2026-11-01T09:28:31Z"
+        "start": "2026-11-01T09:28:31Z",
+        "end": "2026-11-02T10:48:52Z",
+        "report": {
+          "done": [
+            "T-277",
+            "T-279",
+            "T-328",
+            "T-329",
+            "T-330",
+            "T-332",
+            "T-333",
+            "T-334",
+            "T-335",
+            "T-338",
+            "T-339",
+            "T-340",
+            "T-341",
+            "T-343",
+            "T-344",
+            "T-345",
+            "T-346",
+            "T-347",
+            "T-348",
+            "T-349",
+            "T-350",
+            "T-351",
+            "T-352",
+            "T-353",
+            "T-354",
+            "T-355",
+            "T-356",
+            "T-357",
+            "T-358",
+            "T-359"
+          ],
+          "carried": [],
+          "added": [
+            "T-339",
+            "T-340",
+            "T-341",
+            "T-343",
+            "T-344",
+            "T-345",
+            "T-346",
+            "T-347",
+            "T-348",
+            "T-349",
+            "T-350",
+            "T-351",
+            "T-352",
+            "T-353",
+            "T-354",
+            "T-355",
+            "T-356",
+            "T-357",
+            "T-358",
+            "T-359"
+          ]
+        }
+      },
+      {
+        "id": "Layered Architecture",
+        "state": "closed",
+        "goal": "A design for clear layers in atm: cli, rest api, client, db, common",
+        "start": "2026-11-02T17:34:06Z",
+        "end": "2026-11-03T06:42:25Z",
+        "report": {
+          "done": [
+            "T-360",
+            "T-361",
+            "T-362",
+            "T-363",
+            "T-364",
+            "T-365",
+            "T-366",
+            "T-367",
+            "T-368",
+            "T-369",
+            "T-370",
+            "T-371",
+            "T-372",
+            "T-373",
+            "T-374",
+            "T-375",
+            "T-376",
+            "T-377",
+            "T-378",
+            "T-379",
+            "T-380",
+            "T-381",
+            "T-382",
+            "T-383",
+            "T-384",
+            "T-385",
+            "T-386",
+            "T-387",
+            "T-388"
+          ],
+          "carried": [],
+          "added": [
+            "T-361",
+            "T-362",
+            "T-363",
+            "T-364",
+            "T-365",
+            "T-366",
+            "T-367",
+            "T-368",
+            "T-369",
+            "T-370",
+            "T-371",
+            "T-372",
+            "T-373",
+            "T-374",
+            "T-375",
+            "T-376",
+            "T-377",
+            "T-378",
+            "T-379",
+            "T-380",
+            "T-381",
+            "T-382",
+            "T-383",
+            "T-384",
+            "T-385",
+            "T-386",
+            "T-387",
+            "T-388"
+          ]
+        }
       }
     ],
     "releases": [
@@ -819,8 +948,13 @@
       },
       {
         "id": "0.26.0",
-        "state": "planned",
-        "name": "Overview and polish"
+        "state": "released",
+        "name": "Overview and polish",
+        "pr": {
+          "number": 31,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+        },
+        "released_at": "2026-11-02T10:46:35Z"
       }
     ],
     "migrations": [
@@ -13686,7 +13820,7 @@
       ],
       "files": [],
       "created_at": "2026-10-27T09:19:02Z",
-      "updated_at": "2026-11-02T10:23:15Z",
+      "updated_at": "2026-11-02T10:47:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13719,7 +13853,12 @@
         }
       ],
       "completed_at": "2026-11-02T10:23:15Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 31,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-278",
@@ -13799,7 +13938,7 @@
         "branding/README.md"
       ],
       "created_at": "2026-10-27T16:41:57Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -13847,7 +13986,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-280",
@@ -16575,7 +16715,7 @@
         "dashboard/src/lib/insights.ts"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16651,7 +16791,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-329",
@@ -16673,7 +16814,7 @@
         "atm-cli/atm/query.py"
       ],
       "created_at": "2026-11-01T07:24:01Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16733,7 +16874,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-330",
@@ -16756,7 +16898,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-01T08:21:22Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16789,7 +16931,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-331",
@@ -16863,7 +17006,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:24:38Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16892,7 +17035,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-333",
@@ -16914,7 +17058,7 @@
         "dashboard/tests/e2e/overview.spec.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -16947,7 +17091,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-334",
@@ -16968,7 +17113,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17009,7 +17154,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-335",
@@ -17031,7 +17177,7 @@
         "dashboard/tests/unit/ProjectCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:33:56Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17061,7 +17207,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-336",
@@ -17141,7 +17288,7 @@
         "dashboard/tests/unit/TaskCard.component.test.ts"
       ],
       "created_at": "2026-11-01T08:42:49Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17171,7 +17318,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-339",
@@ -17197,7 +17345,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:50:16Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17228,7 +17376,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-340",
@@ -17255,7 +17404,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T09:59:28Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17287,7 +17436,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-341",
@@ -17311,7 +17461,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-01T22:36:01Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17351,7 +17501,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-342",
@@ -17403,7 +17554,7 @@
         "plugin/WHATS-NEW.md"
       ],
       "created_at": "2026-11-02T01:40:40Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17433,7 +17584,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-344",
@@ -17482,7 +17634,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T01:55:27Z",
-      "updated_at": "2026-11-02T10:34:24Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17511,7 +17663,8 @@
           "text": "Released as PR #31 (dev/0.26.0 → main): changelog dated, What’s new rewritten for the sprint, §3.3 reviews for `--record`, the overview’s reads and 0.26.0; verify green after regenerating 4 Linux baselines (T-354).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-345",
@@ -17534,7 +17687,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T05:44:10Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17589,7 +17742,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-346",
@@ -17609,7 +17763,7 @@
         "dashboard/src/app.css"
       ],
       "created_at": "2026-11-02T05:50:04Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17639,7 +17793,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-347",
@@ -17660,7 +17815,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T06:55:54Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17692,7 +17847,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-348",
@@ -17713,7 +17869,7 @@
         "dashboard/src/components/ProjectSelector.svelte"
       ],
       "created_at": "2026-11-02T07:45:42Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17743,7 +17899,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-349",
@@ -17766,7 +17923,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-02T07:50:39Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17798,7 +17955,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-350",
@@ -17821,7 +17979,7 @@
         "dashboard/tests/e2e/widgets.spec.ts"
       ],
       "created_at": "2026-11-02T08:39:41Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17881,7 +18039,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-351",
@@ -17903,7 +18062,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-02T09:22:58Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17933,7 +18092,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-352",
@@ -17953,7 +18113,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -17982,7 +18142,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-353",
@@ -18002,7 +18163,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18031,7 +18192,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-354",
@@ -18053,7 +18215,7 @@
         "dashboard/tests/e2e/archive.spec.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18068,7 +18230,7 @@
       ],
       "started_at": "2026-11-02T09:53:52Z",
       "started_by": "claude:b7be7288",
-      "commit": "1590af4079c0325e8a5f6109714c3a4e26135776",
+      "commit": "c0b97c042309d403a11787667a3588fd1d793134",
       "completed_at": "2026-11-02T10:03:57Z",
       "completed_by": "claude:b7be7288",
       "notes": [
@@ -18082,7 +18244,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-355",
@@ -18103,7 +18266,7 @@
         "dashboard/tests/unit/overview-data.test.ts"
       ],
       "created_at": "2026-11-02T09:45:30Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18132,7 +18295,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-356",
@@ -18152,7 +18316,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18181,7 +18345,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-357",
@@ -18201,7 +18366,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18230,7 +18395,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-358",
@@ -18250,7 +18416,7 @@
         "tests/scripts/scenarios/archive.json"
       ],
       "created_at": "2026-11-02T10:10:38Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18279,7 +18445,8 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
-      }
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
     },
     {
       "id": "T-359",
@@ -18300,7 +18467,7 @@
         "dashboard/tests/unit/TaskGrid.component.test.ts"
       ],
       "created_at": "2026-11-02T10:11:16Z",
-      "updated_at": "2026-11-02T10:34:15Z",
+      "updated_at": "2026-11-02T10:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18330,7 +18497,1838 @@
       "pr": {
         "number": 31,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
+      },
+      "merged_at": "2026-11-02T10:46:35Z"
+    },
+    {
+      "id": "T-360",
+      "name": "Design a clear layer separation in atm: cli, rest api, client, db, common",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Write a design for splitting atm into clear layers, so each part has one job and dependencies run one way. Design only: no code moves in this task; it ends with the follow-up tasks that carry it out.\n\n## Layers (agreed with Hakan)\n- **Dashboard**: talks to the REST API only.\n- **REST API** and **CLI**: both thin, on top of **atm-lib**; other tools (an MCP server, scripts) may use atm-lib too.\n- **atm-lib**: all business logic; a library others can use.\n- **db**: one interface for data access, so the storage can move to another model later (e.g. a cloud DB); today's JSON files in git are its first implementation.\n- **vcs**: the code's version control (git), apart from git's role as the task store.\n- **common**: the data model and shared rules; the dashboard's TypeScript types are generated from it.\n\n## Output\n`docs/layered-architecture.md`, reviewed with the user before it is done; the follow-up tasks are added through `/atm:create-tasks` once approved.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-02T17:33:45Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "review": "blocker",
+      "components": [
+        "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T17:34:03Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "started_at": "2026-11-02T18:29:37Z",
+      "started_by": "claude:b7be7288",
+      "commit": "6623da09e625e5f195de2f24a2dec1de3d0ab479",
+      "notes": [
+        {
+          "at": "2026-11-02T18:02:36Z",
+          "kind": "review",
+          "text": "Review `docs/layered-architecture.md`: the layers and the dependency rule (§1), git’s two roles (§2), the store interface (§3), the schema as common’s source (§4), the migration plan (§9) and the open questions (§10). Once approved, the §9 steps become tasks via `/atm:create-tasks`.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T18:29:34Z",
+          "kind": "note",
+          "text": "Approved: Design approved in Crit (2 rounds, 11 comments). Left: the §9 migration steps as tasks, via `/atm:create-tasks`.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T18:34:56Z",
+          "kind": "review",
+          "text": "Nothing left: the design is approved, §9 is now 16 vertical slices (commit 6623da0), and T-361–T-376 are in this sprint. Pass it with `atm done T-360`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-02T18:02:36Z",
+          "to": "2026-11-02T18:29:34Z",
+          "outcome": "approved"
+        },
+        {
+          "from": "2026-11-02T18:34:56Z",
+          "to": "2026-11-02T18:37:37Z"
+        }
+      ],
+      "review_requested_at": "2026-11-02T18:34:56Z",
+      "completed_at": "2026-11-02T18:37:37Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
       }
+    },
+    {
+      "id": "T-361",
+      "name": "Layers step 1: the skeleton, the layer rule's ratchet, and `atm show` on the new path",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 1 of `docs/layered-architecture.md` §9. Read §1, §3, §5 and §8 first.\n\n## Change\n- Create the layer folders in `atm-cli/atm/` (`common/`, `db/`, `vcs/`, `lib/`, `cli/`, `api/`, §8).\n- Teach `atm-cli/build.py` the layers: a module's layer is its folder; an import the dependency rule (§1) doesn't allow fails the build. The output stays one file, `plugin/scripts/atm.py`, with unique top-level names.\n- **The ratchet:** record today's violations as an allowed list beside `build.py`; a test fails if the list grows or names a violation that no longer exists.\n- `Project` (store, vcs, actor), the `Store` and `Vcs` interfaces (§3.2, §2), with only what `show` needs for now.\n- The JSON-in-git store **wraps today's code** (`load_tasks`, `load_archive`, the lock); nothing is rewritten. An in-memory store, and a contract test harness run against both.\n- First slice: `atm show` goes CLI renderer → `atm-lib` `tasks.show` → store.\n\n## Tests\n- New `tests/lib/` (standard `unittest`) with `tasks.show` on the in-memory store; the contract tests; a test for the ratchet.\n- `npm run test:scripts` and `npm run test:e2e` pass unchanged: `atm show`'s output is identical.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/build.py",
+        "atm-cli/atm/",
+        "tests/lib/",
+        "tests/scripts/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T18:37:08Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2ff6d9785d08f3d94239c75a4f97c0ac23fa3561",
+      "completed_at": "2026-11-02T18:48:50Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T18:48:50Z",
+          "kind": "review",
+          "text": "Check: the layer rule in `atm-cli/build.py` (+ `boot` layer, added to the design), the ratchet `atm-cli/layers.json`, `atm show` via `cli/show.py` → `show_tasks` → `JsonGitStore` (wraps `load_tasks`); `cli.py` moved to `cli/main.py`. 536 atm-cli tests pass (18 new in `tests/lib/`).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-362",
+      "name": "Layers step 2: the schema's seed, generated Task types for Python and the dashboard",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 2 of `docs/layered-architecture.md` §9 (see §4).\n\n## Change\n- `atm-cli/atm/common/schema/task.schema.json`: one task, every field of `docs/v4/data-model.md` §4.\n- Generators: TypeScript into `dashboard/src/lib/generated/` (a dev-only generator such as `json-schema-to-typescript`, installed with `npm ci` like the other dev dependencies); Python `TypedDict`s into `common/` by `atm-cli/build.py` (standard library only in the output).\n- The dashboard imports the generated `Task` type instead of its hand-written one in `types.ts`.\n- CI fails when a generated file is stale, as it does for `atm.py` (through the existing build check; ask the user before changing a CI workflow file).\n\n## Tests\n- Every fixture in `dashboard/tests/fixtures/` and the task files the scenario tests produce validate against the schema.\n- `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet doesn't grow.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-361"
+      ],
+      "files": [
+        "atm-cli/atm/common/schema/task.schema.json",
+        "atm-cli/build.py",
+        "dashboard/src/lib/generated/",
+        "dashboard/src/lib/types.ts",
+        "dashboard/package.json"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T18:49:06Z",
+      "started_by": "claude:b7be7288",
+      "commit": "30b70f123355da2c4e08ac6d11a4ae0cc1f2de5c",
+      "completed_at": "2026-11-02T18:58:30Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T18:58:30Z",
+          "kind": "review",
+          "text": "Check: `task.schema.json`; one stdlib generator in `build.py` writes `common/types.py` (functional TypedDicts) and `dashboard/src/lib/generated/types.ts`; no npm dependency (design §4.3 updated). Dashboard `Task` extends the generated one (keeps phase/description narrow). Fixtures and scenario task files validated. 538 atm-cli, 950 unit, 357 e2e pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-363",
+      "name": "Layers step 3: every read command through atm-lib, with typed errors",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 3 of `docs/layered-architecture.md` §9 (atm-lib functions in §5.1).\n\n## Change\n- `list`, `deps`, `status`, `backlog`, `summary` and `projects` (list, add, remove, prune; the `Registry` interface of §3.2) go CLI renderer → atm-lib → store.\n- Typed errors in common (`ErrorCode`, §4.2); the CLI maps them to today's exit codes and messages.\n- Their result types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`, …) in the schema, generated for both sides.\n- Remove the ratchet's entries for these commands.\n\n## Tests\n- `tests/lib/` tests for each function on the in-memory store; contract tests for the store reads added.\n- Output identical: `npm run test:scripts`, `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-362"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T18:58:35Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c622e1aa19969da11fb9a2e0e548e478e41d6da8",
+      "completed_at": "2026-11-02T19:08:40Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:40Z",
+          "kind": "review",
+          "text": "Check: `list`, `deps`, `status`, `summary` via `cli/query.py` → `lib/query.py` (from `query.py`) on a Project; typed errors (`common/errors.py`; `AtmError` subclasses `AtmFailure`); store adds `list_archived`, `read_claims`, `sizes`, `working_copy`, transitional `document()`; `vcs/git.py` branch. Moved on: backlog → T-371, projects → T-374, result types → T-364. 538 atm-cli tests, 40 in `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-364",
+      "name": "Layers step 4: the REST API on atm-lib, and the first v1 route",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 4 of `docs/layered-architecture.md` §9 (the API in §6).\n\n## Change\n- `server.py` moves to `api/`; `/api/projects`, `/api/search` and `claims.json` are answered through atm-lib instead of reading storage.\n- `GET /api/v1/projects/<p>/tasks`: the tasks as `TaskView`, with their derived values (`kind`, `ready`, `waiting_for`, `waiting_on`, `effective_review`, `effective_release`, `stage`), filters as query parameters (§6.2).\n- Every rule of `docs/multi-project-api.md` §1 kept (loopback, Host check, GET/HEAD only, ETags); the API stays read-only.\n- Update `docs/multi-project-api.md` with the v1 route.\n\n## Tests\n- The server's tests in `tests/scripts/` pass unchanged; new ones for the v1 route, its response validated against the schema.\n- The ratchet shrinks.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-363"
+      ],
+      "files": [
+        "atm-cli/atm/api/",
+        "atm-cli/atm/server.py",
+        "docs/multi-project-api.md",
+        "tests/scripts/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:26Z",
+          "kind": "note",
+          "text": "From T-363: the read results’ types (`TaskView`, `StatusReport`, `DepsResult`, `ProjectSummary`) aren’t in the schema yet; add them here with the API responses (`api.schema.json`).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:17:34Z",
+          "kind": "review",
+          "text": "Check: `server.py` → `api/server.py`; `api/search` and `claims.json` via atm-lib (`search_tasks`, `list_claims`); new `GET /api/v1/projects/<p>/tasks` (`task_views`: kind, ready, waiting_for, effective review/release, stage), filters as query params, ETag, 400/404/413; `api.schema.json` + cross-file `$ref` in the generator (Python forward refs); API and security docs updated. 539 atm-cli, 48 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:08:46Z",
+      "started_by": "claude:b7be7288",
+      "commit": "f11219bb9eef21d75aa6a0ae0a6e83d6abdb5c23",
+      "completed_at": "2026-11-02T19:17:34Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-365",
+      "name": "Layers step 5: the dashboard's client module, tasks loaded from v1",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 5 of `docs/layered-architecture.md` §9.\n\n## Change\n- Every request the dashboard makes (today in `load.ts`, `state.svelte.ts`, `claims.ts`, `worktrees.ts`, `overview-data.ts`) moves into `dashboard/src/lib/api/`, typed by the generated types; polling and ETags unchanged.\n- An ESLint rule: only `src/lib/api/` may call `fetch`.\n- A project's tasks load from `/api/v1/projects/<p>/tasks`. The views don't change.\n- The e2e `tasksServer` fixture and the dev server answer the v1 route too.\n\n## Tests\n- Unit tests for the client module; `npm run check`, unit tests and `npm run test:e2e` pass; bundle size checked.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-364"
+      ],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/claims.ts",
+        "dashboard/src/lib/worktrees.ts",
+        "dashboard/src/lib/overview-data.ts",
+        "dashboard/eslint.config.js",
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/build/dev-data.ts"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:17:34Z",
+          "kind": "note",
+          "text": "From T-364: v1 has only `…/tasks` (`{task, derived}` per task); the dashboard also needs `meta` (vocabularies, sprints…): add `GET /api/v1/projects/<p>` (§6.2) here. `ProjectSummary`/`StatusReport` aren’t in `api.schema.json` yet: add them when the dashboard types `/api/projects`.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:34:43Z",
+          "kind": "review",
+          "text": "Check: `src/lib/api/http.ts` is the only module that calls `fetch` (ESLint `no-restricted-globals` elsewhere in `src/`); tasks load from `api/v1/projects/<id>/tasks`, which now also returns `meta` and `bytes` (one snapshot); e2e fixture and dev server answer it (empty `derived` for now, note on T-366). Views unchanged. 951 unit, 357 e2e, 539 atm-cli pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:17:42Z",
+      "started_by": "claude:b7be7288",
+      "commit": "11dc8eca93b685b8be0eb87f6b76e041a54f095b",
+      "completed_at": "2026-11-02T19:34:43Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-366",
+      "name": "Layers step 6: the dashboard takes readiness and waiting from the API",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 6 of `docs/layered-architecture.md` §9: the first duplicated rule goes.\n\n## Change\n- The dashboard's own computation of which tasks are ready and what they wait for (`waiting.ts`, `work.ts`) is replaced by `TaskView`'s `ready`, `waiting_for` and `waiting_on`.\n- Remove the code that is no longer used, and its unit tests (replaced by tests on the API's values).\n\n## Tests\n- Unit and component tests updated; the Kanban, List and graph specs and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-365"
+      ],
+      "files": [
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/work.ts",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:34:42Z",
+          "kind": "note",
+          "text": "From T-365: the e2e fixture (`tests/e2e/helpers.ts` `asTaskViews`) and the dev server (`build/dev-data.ts`) answer the v1 tasks route with empty `derived` values. Before the dashboard reads them, have the fixture take atm’s own (as it does for summaries with `atm summary`), e.g. via a read command that prints the task views.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:45:10Z",
+          "kind": "review",
+          "text": "Check: the Kanban’s readiness (`kanban.ts`) and the together-now rule (`waiting.ts`) take atm’s `derived.ready`/`waiting_for` (fixes: an archived dependency no longer shows as waiting); fallback only for tasks without them (worktree copies, note on T-374). New `atm list --derived` (JSON views); the e2e fixture and dev server use it, so the dashboard is tested against atm’s rule. 954 unit, 357 e2e, 540 atm-cli pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:35:05Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2bf9488b567797518c95bd4928163b5e0af4b1bd",
+      "completed_at": "2026-11-02T19:45:10Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-367",
+      "name": "Layers step 7: vocabularies and kinds generated from common",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 7 of `docs/layered-architecture.md` §9: the second duplicated rule goes.\n\n## Change\n- `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive settings) and the vocabulary defaults (statuses and their kinds, types, priorities, the default priority) as data in common, generated for Python and TypeScript.\n- `model.py`'s defaults and the dashboard's `vocab.ts` both use the generated defaults; neither keeps its own copy.\n\n## Tests\n- The fixtures validate against the schema; `npm run check`, unit tests, `npm run test:scripts`, `npm run test:e2e` pass; the ratchet shrinks.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-366"
+      ],
+      "files": [
+        "atm-cli/atm/common/",
+        "atm-cli/atm/model.py",
+        "dashboard/src/lib/vocab.ts",
+        "dashboard/src/lib/generated/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:34:43Z",
+          "kind": "note",
+          "text": "Carried from T-363/T-365: `ProjectSummary` and `StatusReport` aren’t in `api.schema.json` yet (the dashboard’s `ProjectSummary` in `load.ts` is still hand-written); add them with `meta.schema.json` here.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:53:12Z",
+          "kind": "review",
+          "text": "Check: `common/schema/vocabularies.json` (kinds, default statuses, types, priorities) generated into `common/vocabularies.py` and `generated/vocabularies.ts`; `model.py` and `vocab.ts` keep no copy. `meta.schema.json` (settings, vocabularies, sprints, releases, components, workflow, archive), the v1 response’s `meta` typed by it; fixtures and scenarios validated (caught report.done and trailers shapes). `ProjectSummary`/`StatusReport` schemas → note on T-376. 955 unit, 357 e2e, 540 atm-cli pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T19:45:20Z",
+      "started_by": "claude:b7be7288",
+      "commit": "85e5c31ec446ea89fe881909f3dcd97573507cf6",
+      "completed_at": "2026-11-02T19:53:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-368",
+      "name": "Layers step 8: status changes through atm-lib, with conditional writes",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 8 of `docs/layered-architecture.md` §9: the first writes on the new path (§3.3).\n\n## Change\n- Conditional writes (`update_task(…, expect=version)`, `Conflict` on a stale version) and `apply(writes)` (all or nothing) in both stores; the JSON-in-git store's `apply` is today's lock, read, write.\n- `start`, `review`, `done`, `reject`, `approve`, `request-changes`, `block`, `unblock`, `reopen`, `skip`, `fail`, `release` and `note` as atm-lib functions (§5.1); the claim created or dropped in the same `apply`; atm-lib retries on `Conflict`.\n- `tasks.py`'s direct locking and writing goes; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests for each function, including a race (two starts of one task: one wins, the other gets `claimed`); contract tests for conditional writes and `apply` on both stores.\n- `npm run test:scripts` (the concurrency tests included) and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-367"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "blocks": [
+        {
+          "from": "2026-11-02T19:53:43Z",
+          "to": "2026-11-02T20:15:41Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-02T20:15:41Z",
+          "kind": "answer",
+          "text": "Status changes vs §3.3: (A) rework them into entity writes (task update + claim create/drop) with versions, `apply`, retry on `Conflict` — the design’s contract now, a bigger change; or (B) a transitional store operation running today’s locked read-modify-write (like `document()`), conditional writes in a later step — smaller, but the generic transaction the design rejected, for a while. Which? → B: a store `change(fn)` running the locked read-modify-write on a `Working` copy, which records what fn changed (before/after per task and claim) so a store can later turn it into conditional writes (`apply`); `work.defer(error)` for raise-after-write. Update §3.3 to say so.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T20:28:55Z",
+          "kind": "review",
+          "text": "Check: option B. `store.change(fn)` with a `Working` copy (`db/working.py`: tasks, claims, here, size, defer; `changes()` worked out only when asked, from the unwritten files), JSON store under its lock, memory store on copies; the 13 status commands and `note` in `lib/status.py`, printing in `cli/status.py`; `tasks.py` gone from the ratchet. §3.3 updated. Benchmark: 10k-task write 0.89 s, same as before (0.90 s). 540 atm-cli, 64 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T20:16:12Z",
+      "started_by": "claude:b7be7288",
+      "commit": "4e1429620b592e1620129e9ad0fc9d6ca15559cb",
+      "completed_at": "2026-11-02T20:28:55Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-369",
+      "name": "Layers step 9: claims and next through atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 9 of `docs/layered-architecture.md` §9.\n\n## Change\n- `claims.next` (with `claim`, atomic), `claims.heartbeat`, `claims.heartbeat_due` and `claims.list` (§5.1); the claims store and resolutions behind `Store` (§3.2).\n- `atm run` stays in the CLI, keeping the claim alive with `claims.heartbeat`.\n- `claims.py`'s storage code moves into the JSON-in-git store; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (selection order, `with_user`, back from review first, expiry); contract tests for claims on both stores; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-368"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T20:40:54Z",
+      "started_by": "claude:b7be7288",
+      "commit": "5ded0f50d55dd1e54211ef18ca9acad6b0de8b7e",
+      "completed_at": "2026-11-02T20:51:00Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T20:51:00Z",
+          "kind": "review",
+          "text": "Check: `next` (with `--claim` in one store change), `heartbeat` (+ `--auto`), `run`’s renewals and `claims` via `lib/claims.py`; printing, hook input and the child process in `cli/claims.py`; the loop’s rule (`next_task`, `Selection`) still claims.py’s. The JSON store writes tasks.json only when the data changed (a read-only `next` leaves its mtime: no dashboard reloads). 10k-task write 0.95 s (0.90 before). 541 atm-cli, 80 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-370",
+      "name": "Layers step 10: add, edit, check and components through atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 10 of `docs/layered-architecture.md` §9.\n\n## Change\n- `tasks.add` (IDs allocated by the store's `create_tasks`), `tasks.edit`, `tasks.check`, and `components.list/add/edit` (§5.1), on the store's task and component operations (§3.2).\n- `edit.py` and `components.py` split into atm-lib functions and CLI renderers; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests (placeholders and dependencies, a dependency on an archived task, cycles, component hints, `--from-label` on archived tasks); contract tests for `create_tasks` and components; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-369"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T20:51:09Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c5abb7566b9579742f3357d04990bd2549e510ba",
+      "completed_at": "2026-11-02T21:04:44Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T21:04:44Z",
+          "kind": "review",
+          "text": "Check: `add`, `edit`, `check` (`lib/edit.py`, from edit.py) and `components` (`lib/components.py`) as store changes; the files options name are read in the CLI (`cli/edit.py`, `cli/components.py`); `Working.archive()` (read on demand, written only if changed) for `--from-label`; `raw()` for check; archived lookups passed in, not the `archived_task` global, for these. 541 atm-cli, 88 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-371",
+      "name": "Layers step 11: sprints and releases through atm-lib; the dashboard drops its review and release rules",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 11 of `docs/layered-architecture.md` §9: the third duplicated rule goes.\n\n## Change\n- `sprints.*` (list, add, edit, start, close, delete, move) and `releases.*` (list, add, edit, archive, notes) as atm-lib functions (§5.1); `sprints close` and `sprints delete --move-to` in one `apply`.\n- The v1 sprints and releases routes (§6.2).\n- The dashboard's effective review mode and release (`review.ts`, `releases.ts`) come from `TaskView`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; dashboard unit tests updated; `npm run test:scripts` and `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-370"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "dashboard/src/lib/review.ts",
+        "dashboard/src/lib/releases.ts",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:27Z",
+          "kind": "note",
+          "text": "From T-363: `atm backlog` (in `sprints.py`) moves with this slice, not with the reads.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T21:13:37Z",
+          "kind": "review",
+          "text": "Check: `sprints` (list/add/edit/start/close/delete), `move`, `backlog` (`lib/sprints.py`) and `releases` (`lib/releases.py`) as store changes, printing in `cli/sprints.py`/`cli/releases.py`; close/delete/add-from-PR read and write the archive through `work.archive()`. Dashboard: `effectiveReview`/`effectiveRelease` take atm’s `derived` values, judging only tasks without them. 957 unit, 359 e2e, 541 atm-cli, 93 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T21:04:53Z",
+      "started_by": "claude:b7be7288",
+      "commit": "bdcd44d6bd8265e78e598966827994524e92da8c",
+      "completed_at": "2026-11-02T21:13:37Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-372",
+      "name": "Layers step 12: the archive through atm-lib; the dashboard stops reading the archive file",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 12 of `docs/layered-architecture.md` §9: the fourth duplicated rule goes.\n\n## Change\n- `archive.archive`, `archive.unarchive` and `archive.hint` (§5.1) on the store's `archive_tasks` and `restore_tasks`, keeping the crash-safe order of `docs/v4/data-model.md` DM-5.2.\n- `GET /api/v1/projects/<p>/tasks?archived=true` and `…/archive/hint`; the dashboard loads archived tasks and its archive notice from them, not from `tasks-archive.json`.\n- The ratchet shrinks.\n\n## Tests\n- `tests/lib/` and contract tests; the archive scenarios in `tests/scripts/scenarios/archive.json` and `archive.spec.ts` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-371"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "dashboard/src/lib/archive.ts",
+        "dashboard/src/lib/api/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T21:13:44Z",
+      "started_by": "claude:b7be7288",
+      "commit": "3244b8d22a953ed87733edc4062117260a03f399",
+      "completed_at": "2026-11-02T21:37:40Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T21:37:40Z",
+          "kind": "review",
+          "text": "Check: `archive`/`unarchive` via `lib/archive.py` (crash-safe order kept: `work.moving_into_archive()` makes the JSON store write the archive first; merge driver registered there); dashboard loads the archive from `v1 …/tasks?archived=true` and its notice from atm’s `archive_hint` (its own archive rule removed). Fixture: a 1 MB output cap hid a failure; it now throws instead of serving around one. 954 unit, 359 e2e, 541 atm-cli, 97 `tests/lib`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-373",
+      "name": "Layers step 13: code, PRs and settings through atm-lib; the vcs interface in full",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 13 of `docs/layered-architecture.md` §9 (§2).\n\n## Change\n- The `Vcs` interface in full, with git behind it; `code.commit` (adding the store's `files_for_commit`), `code.record_commit`, `code.pr`, `code.merged`; `settings.init`, `workflow`, `repository`, `logo` (§5.1).\n- `git_ops.py`, `repository.py` and the branch read in `query.py` split into vcs and atm-lib; the ratchet shrinks.\n\n## Tests\n- `tests/lib/` tests with a fake vcs; the git scenarios and `tests/scripts/*.test.mjs` for commit and merge pass unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-372"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "tests/lib/",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-02T21:37:47Z",
+      "started_by": "claude:b7be7288",
+      "commit": "e35c75297a6119dfb46bc673ca0a43bc71417b7e",
+      "completed_at": "2026-11-02T21:48:02Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T21:48:02Z",
+          "kind": "review",
+          "text": "Batch review: `git_ops.py` is now `lib/code.py` (workflow, commit, record, PR, merge) over the `Vcs` interface, implemented by `vcs/git.py` (`GitVcs`: paths, commit, resolve, in_history, message, default_base, remote_url); `cli/code.py` keeps the old output. Stores gain `files_for_commit()`. Check: `tests/lib/test_code.py` (fake vcs), contract tests; 541 atm-cli tests pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-374",
+      "name": "Layers step 14: the store owns its own parts; the layer rule without exceptions",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 14 of `docs/layered-architecture.md` §9.\n\n## Change\n- The merge driver (`merge.py`), the migrations of old layouts (`migrate.py`), `paths` and the worktrees' copies (`worktrees.json`) inside the JSON-in-git store (§3.2); `atm merge-driver`, `migrate` and `paths` reach that store directly.\n- The raw file routes (`/p/<id>/tasks.json`, `tasks-archive.json`) dropped once nothing reads them; `docs/multi-project-api.md` updated.\n- The ratchet's list is empty: remove its exception mechanism, so the rule holds with none.\n\n## Tests\n- The merge-driver and migrate tests pass; `npm run test:scripts`, `npm run test:e2e` pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-373"
+      ],
+      "files": [
+        "atm-cli/atm/",
+        "atm-cli/build.py",
+        "docs/multi-project-api.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:08:28Z",
+          "kind": "note",
+          "text": "From T-363: `atm projects` (the registry, `registry.py`: list, add, remove, prune) moves here, behind the `Registry` interface of §3.2.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T19:45:10Z",
+          "kind": "note",
+          "text": "From T-366: the dashboard still judges readiness itself for tasks that come without atm’s `derived` values, i.e. a linked worktree’s copies (`worktrees.json`, `kanban.ts` `readiness` fallback, `waiting.ts` `togetherNow`). When worktrees move into the store here, give those copies their derived values too and drop the fallbacks.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T21:48:07Z",
+          "kind": "note",
+          "text": "From T-373: `repository.py`, `logo.py` and `init` (merge.py) still call git directly; `GitVcs.remote_url` exists for `atm repository` to use.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:32:43Z",
+          "kind": "review",
+          "text": "Batch review: no flat modules, no `layers.json`; the build refuses any import the rule forbids. New `app/` layer hands `atm serve` to the CLI. Store owns paths, lock, claims, merge, migrations, worktrees, logo; registry in `db/registry.py`. The server reads no task file: raw `p/<id>/tasks.json` and archive routes gone. Check: the `archived_task` hook in `common/model.py` (§8). 540 + 120 + 954 unit + 359 e2e pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T21:48:13Z",
+      "started_by": "claude:b7be7288",
+      "commit": "ae6367675517619f5c0895a34ce80eaf9d943c3f",
+      "completed_at": "2026-11-02T22:32:43Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-375",
+      "name": "Layers step 15: the dev server runs the real REST API",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 15 of `docs/layered-architecture.md` §9.\n\n## Change\n- `npm run dev` serves the API from this checkout's atm-cli (the REST API layer) instead of reimplementing it in `dashboard/build/dev-data.ts`; `ATM_DEV_DATA` keeps working.\n- `dev-data.ts` goes; `CLAUDE.md`'s description of `npm run dev` updated.\n\n## Tests\n- `npm run dev` shows this repository's project with live data; `npm run check` and unit tests pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-374"
+      ],
+      "files": [
+        "dashboard/build/dev-data.ts",
+        "dashboard/vite.config.ts",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T22:21:37Z",
+          "kind": "note",
+          "text": "From T-374 (carried from T-366): give the worktree copies (`worktrees.json`, now `lib/worktrees.py`) atm’s derived values too, and drop the dashboard’s own fallbacks for tasks without `derived` (`kanban.ts` readiness, `waiting.ts` togetherNow). T-374 moved the copies into atm-lib but left their shape as it was.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:46:15Z",
+          "kind": "review",
+          "text": "Batch review: `npm run dev` runs this checkout’s REST API (`atm _serve-child` on a temporary `ATM_HOME`, the projects listed there with `atm projects add`); `build/dev-api.ts` forwards `api/`, `p/`, `__atm/`; `dev-data.ts` is gone. Checked by hand: `api/projects` and v1 tasks through Vite, the API stops with Vite. Also: a serve test no longer leaks its server on failure. The worktree-derived item went to T-376 for the review.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T22:32:50Z",
+      "started_by": "claude:b7be7288",
+      "commit": "6e4fa2af25210dcbe08117e9474515ffaab2d402",
+      "completed_at": "2026-11-02T22:46:15Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-376",
+      "name": "Layers step 16: atm-lib's public module, and the docs",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Step 16 of `docs/layered-architecture.md` §9.\n\n## Change\n- The public module `atm.lib` (§5): what other tools may import, from the repository's `atm-cli/`; its documentation and how it is versioned. No published package.\n- Update `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout and atm-cli sections, and `docs/security-architecture.md`'s components; mark `docs/layered-architecture.md` as done.\n\n## Tests\n- A `tests/lib/` test that imports only `atm.lib` and runs a task from start to done on the in-memory store.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-375"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "docs/v4/atm-cli.md",
+        "CLAUDE.md",
+        "docs/security-architecture.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-02T18:34:40Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T18:34:40Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "related": [
+        "T-360"
+      ],
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-02T19:48:40Z",
+          "kind": "note",
+          "text": "Carried from T-367: `ProjectSummary` (api/projects) and `StatusReport` (atm status --json) aren’t in `api.schema.json` yet; the dashboard’s `ProjectSummary` in `load.ts` is hand-written. The generator needs nullable types (`[\"string\", \"null\"]`) for them.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:46:14Z",
+          "kind": "note",
+          "text": "Open from T-375 (carried from T-366): the worktree copies still come without atm’s `derived` values, so the dashboard keeps its fallbacks for them (`kanban.ts` readiness, `waiting.ts` togetherNow). Raise it in the sprint review as a follow-up task.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:49:57Z",
+          "kind": "review",
+          "text": "Batch review: `atm.lib` is the public surface (`atm/lib/__init__.py`, its `__all__` and how to use it) with `atm.boot.open_project`; `tests/lib/test_public.py` runs a task start to done through it, on memory and a real folder. Docs: `docs/v4/atm-cli.md` layout, `CLAUDE.md`, the security review of the layers (§3.3), the design marked done with what differs and what is open.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-02T22:46:22Z",
+      "started_by": "claude:b7be7288",
+      "commit": "ad7444e68bf1cea445f6e88b55a067e3a5364f8a",
+      "completed_at": "2026-11-02T22:49:57Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-377",
+      "name": "Tolerant reads: the dashboard keeps showing a malformed task file, with what atm finds wrong",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "Since T-365 the dashboard loads tasks through atm-lib (`GET /api/v1/projects/<id>/tasks`), which refuses a task file every `atm` command refuses (`load_tasks` in `model.py`: an entry without a string `id`, an ID with characters atm doesn't allow, `dependencies` that aren't a list of IDs, an unusable vocabulary). The dashboard used to show such a file anyway. Keep that, as agreed with Hakan (option 1).\n\n## Change\n- A tolerant read mode in the store (`JsonGitStore`, and the in-memory store): writes stay strict, reads keep what they can. An entry that isn't a task (no string `id`) is left out; a task with a bad ID or bad `dependencies` is kept; an unusable vocabulary falls back to the defaults (as `dashboard/src/lib/vocab.ts` already does).\n- Each problem is reported: per task as `derived.problems` (a list of messages, the wording of `atm check`), and for the file as a top-level `problems` list in the v1 response (`api.schema.json`). The rules skip what they can't judge: a task with broken `dependencies` isn't `ready` and waits for nothing it can name.\n- The REST API's v1 tasks route reads tolerantly; every `atm` command stays strict.\n- The dashboard shows a notice when `problems` isn't empty (e.g. \"atm check finds 3 problems in tasks.json\"), and a task's problems in its detail panel.\n\n## Tests\n- `tests/lib/`: the tolerant read on both stores (contract tests), `task_views` with each kind of problem.\n- `tests/scripts/serve.test.mjs`: the v1 route serves a malformed file with `problems`, where `atm list` still refuses it.\n- The e2e fixture's fallback (`asTaskViews` in `tests/e2e/helpers.ts`, empty derived values when atm refuses a file) goes: it takes atm's tolerant views. Unit and e2e tests for the notice.\n- Update `docs/multi-project-api.md` §2.5 and `docs/layered-architecture.md` §3.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-368"
+      ],
+      "files": [
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/query.py",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "dashboard/src/lib/load.ts",
+        "dashboard/tests/e2e/helpers.ts",
+        "docs/multi-project-api.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-02T20:15:57Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-02T20:15:57Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-360"
+      ],
+      "started_at": "2026-11-02T20:29:01Z",
+      "started_by": "claude:b7be7288",
+      "commit": "0300c3b87f376a5ab191fdef4f5c09de5006b39f",
+      "completed_at": "2026-11-02T20:40:46Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-02T20:40:46Z",
+          "kind": "review",
+          "text": "Check: `load_tasks_tolerant` + `JsonGitStore(tolerant=True)`/`problems()`; the v1 route reads tolerantly (commands stay strict): non-task entries left out, bad IDs kept, broken deps shown with the readable IDs (every task fits the schema; a string there used to break the page), unusable vocab lists → defaults; `derived.problems` (not ready) + response `problems`. Footer notice, detail list. `atm list --derived --tolerant`. 955 unit, 359 e2e, 541 atm-cli.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-378",
+      "name": "Layers gap 11.4: pass the archive lookup to the rules; the global hook goes (fixes a server race)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.4. Before the branch is merged.\n\n## Problem\n`common/model.py`'s `use_archive`/`archived_task` is a module-global lookup the JSON-in-git store's loaders set. `atm serve` is threaded and serves many projects in one process, so a request for one project can be judged against another project's archive (a dependency only in its own archive counts as missing; a ready task shows as waiting). On the in-memory store the hook is never set.\n\n## Change\n- The rules take the lookup as a parameter: `unfinished_dependencies(data, task, archived)`, `find_task(data, id, archived=...)`, `change_status`, the checks in `lib/edit.py` and `lib/status.py`, `cli/render.py`.\n- atm-lib passes `store.get_archived_task`, or `archived_in(work)` inside a change.\n- Each store keeps its own lazy archive cache (`JsonGitStore.get_archived_task` reads its own archive).\n- `use_archive`, `_archive` and the global `archived_task` are deleted.\n- Update §11.4 (settled) and §8's paragraph on the hook.\n\n## Tests\n- `tests/lib/`: a dependency only in the archive counts as done, on both stores (contract test).\n- Two JSON-in-git projects used one after the other in one process never see each other's archives.\n- `npm run test:scripts`; the serve tests.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/common/model.py",
+        "atm-cli/atm/db/jsongit/files.py",
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/render.py",
+        "tests/lib/test_store_contract.py",
+        "docs/layered-architecture.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T00:14:47Z",
+      "started_by": "claude:b7be7288",
+      "commit": "52257997cff72c1b32906d7446d816c12adfa906",
+      "completed_at": "2026-11-03T00:24:08Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T00:24:08Z",
+          "kind": "review",
+          "text": "The global archive lookup is gone: the rules take the project’s lookup (`store.get_archived_task`, or `archived_in(work)` in a change), required where readiness depends on it; each store caches its own archive. Fixes the `atm serve` race (one project judged by another’s archive). New contract tests: archive-only dependency is done on both stores; two projects in one process. 540 + 126 pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-379",
+      "name": "Layers gap 11.1: two launchers, atm and an internal atm-serve, replace the app layer",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.1.\n\n## Change\n- `plugin/scripts/atm` runs the CLI; a new internal launcher `plugin/scripts/atm-serve` runs the REST API's server (one dispatch at the bottom of the one built `atm.py`, e.g. a `--server` entry).\n- The CLI manages the server as a process: `atm serve start|stop|status` spawn `atm-serve`, signal it and read its record; the restart after a plugin update spawns it too.\n- The cheap refresh check every command runs stays in-process: the server record's format and the dashboard's version tags (`api/dashboard.py`) move into common.\n- `app/` and `cli/main.py`'s `Serving` go; the layer rule drops `app`. The CLI never imports `api`.\n- `atm serve` and every skill, hook and permission stay exactly as they are (no new command for users or agents).\n- Update §1's diagram and table, §8's layout, §11.1 (settled), `CLAUDE.md`, `docs/v4/atm-cli.md`.\n\n## Tests\n- The serve tests pass unchanged; a build test that the CLI may not import the API stays.\n- `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/app/main.py",
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/api/dashboard.py",
+        "atm-cli/atm/common/",
+        "atm-cli/build.py",
+        "plugin/scripts/atm-serve",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md",
+        "CLAUDE.md",
+        "docs/v4/atm-cli.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T00:24:09Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c6027f5bce74c60bb8c4de114bed3653ead11a3a",
+      "completed_at": "2026-11-03T00:34:38Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T00:34:38Z",
+          "kind": "review",
+          "text": "The `app` layer is gone: the CLI (`plugin/scripts/atm`) and the server (`plugin/scripts/atm-serve`, `atm.py --server`) are two processes; `atm serve` lives in `cli/serve.py`, the server process in `api/server.py` (`serve_main`); shared tags and record names in `common/dashboard.py`; the build writes the one entry and checks layers before order. 541 tests pass; users see no change.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-380",
+      "name": "Layers gap 11.2: split boot into what every store has and what only the JSON-in-git store has",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.2.\n\n## Change\n- `boot/open.py` keeps what every store has: opening a project, opening the registry; the actor stays in `boot/identity.py`.\n- A new `boot/jsongit.py` takes what only the JSON-in-git store has: `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test`, and registering by folder (`register_project`, `dashboard_id`, `hook_project`).\n- `cli/store.py` (paths, migrate, merge-driver, the lock test) imports only `boot/jsongit.py`; say in its docstring that these commands exist for the JSON-in-git store.\n- `lib/projects.py` stays (the rules about projects a second registry will need).\n- Update §1, §3.2, §11.2 (settled).\n\n## Tests\n- `npm run test:scripts` passes unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/boot/open.py",
+        "atm-cli/atm/boot/jsongit.py",
+        "atm-cli/atm/cli/",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/build.py",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T00:34:39Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2234e8b304561b2096cbbbf1a737edd52e2a79a7",
+      "completed_at": "2026-11-03T00:40:31Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T00:40:31Z",
+          "kind": "review",
+          "text": "boot is split: `boot/open.py` (any store: `open_project`, `open_registry`, `project_opener` for atm serve) and `boot/jsongit.py` (this store only: paths, migrate, merge driver, setup, lock test, registering by folder). `cli/store.py` imports only `boot/jsongit.py`; the REST API only `boot/open.py`. 541 + 126 pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-381",
+      "name": "Layers gap 11.3: change(fn) as the write path by design; per-entity reads; the store private to atm-lib and boot",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.3.\n\n## Change\n- §3.2 and §3.3 say what is built: `store.change(fn)` with the `Working` copy and its change list is the write path (no per-entity writes, no `apply`); list the interface as it is.\n- Add per-entity reads to the Store interface and both stores: `list_sprints`, `list_releases`, `list_components`, `get_settings` (meta without the lists).\n- Move atm-lib's reads off `store.document()` area by area (sprints, releases, components, settings, code, query); `document()` remains only as `work.document` inside a change, then goes from the interface.\n- `Project`'s store becomes private (`project._store`); the REST API and the CLI get what they read from atm-lib functions (the v1 route's meta, the server's stamps and working copies, `atm logo`'s working copy).\n- A build check refuses `.store.` / `._store` outside `lib/` and `boot/`.\n- Update §3.2, §3.3, §11.3 (settled).\n\n## Tests\n- Contract tests for each new read on both stores; a build test for the `.store` check; `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-378"
+      ],
+      "files": [
+        "atm-cli/atm/db/interface.py",
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/cli/",
+        "atm-cli/build.py",
+        "tests/lib/",
+        "tests/scripts/build.test.mjs",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T00:40:32Z",
+      "started_by": "claude:b7be7288",
+      "commit": "34d7e4d7d86475d2c30de6811f5de2827be12bc5",
+      "completed_at": "2026-11-03T00:49:11Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T00:49:11Z",
+          "kind": "review",
+          "text": "change(fn) is the write path by design (§3.2/3.3). New per-entity reads (settings, sprints, releases, components) on both stores; the CLI and REST API no longer touch `project.store` (`task_snapshot`, `project_stamp`, `working_copies`), and the build refuses `.store` there. Left, by the review’s choice: ~12 reads still take `document()` because the rules take the whole file (§11.3). 542 pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-382",
+      "name": "Layers gap 11.10 B: nullable types in the generator; ProjectSummary and StatusReport in the schema",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.10 B.\n\n## Change\n- The type generator in `atm-cli/build.py` supports a field that may be `null` (`\"type\": [\"string\", \"null\"]`, and a `$ref` or object that may be null): `Optional[...]` in Python, `T | null` in TypeScript.\n- `api.schema.json` gets `ProjectSummary` (what `api/projects` gives per project: totals, sprints, board, stats, git, needs you, …) and `StatusReport` (`atm status --json`).\n- The dashboard's hand-written `ProjectSummary` (`dashboard/src/lib/load.ts`) is replaced by the generated type.\n- Update §4.1, §4.2, §11.10 B (settled).\n\n## Tests\n- A build test for nullable fields in both languages.\n- A test validates a real `atm summary` and `atm status --json` and the e2e fixture's summary against the schema (as the fixtures are validated today).\n- `npm run check`, the unit tests, `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/build.py",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "atm-cli/atm/common/types.py",
+        "dashboard/src/lib/generated/types.ts",
+        "dashboard/src/lib/load.ts",
+        "tests/lib/",
+        "tests/scripts/build.test.mjs",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T00:49:12Z",
+      "started_by": "claude:b7be7288",
+      "commit": "1bdc5b1990a3fbdcf74af89bdb393e0cc3017b2d",
+      "completed_at": "2026-11-03T01:06:59Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T01:06:59Z",
+          "kind": "review",
+          "text": "The generator takes nullable types (`[T, \"null\"]`, `anyOf` with null) and maps; `api.schema.json` has `ProjectSummary` and `StatusReport`; the Dashboard re-exports the generated types. `tests/lib/test_schema.py` checks real summaries and status reports (busy, empty, every fixture). Check: the older-server fallbacks are left (§11.10 B).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-383",
+      "name": "Layers gap 11.7: atm-lib's public functions as §5.1 lists them",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.7.\n\n## Change\n- A function per status change, each with its own parameters: `start_task(project, id, status=None)`, `review_task`, `done_task(project, id, note=None, commit=None, resolution=None, status=None)`, `reject_task(project, id, reason)`, `approve_task`, `request_changes`, `block_task`, `unblock_task`, `reopen_task`, `skip_task`, `fail_task`, `release_task`. `change_task_status` becomes internal.\n- Keyword parameters instead of `Changes` for sprints, releases, components and editing a task.\n- `commit_task` takes paths relative to the repository; the CLI resolves them from the current folder.\n- One naming scheme: claims as `list_claims` (reads) and `expire_claims`/`renew_*` (writes), settings as `get_*`/`set_*` (`workflow_settings` → `get_workflow`), one of `list_matching`/`task_views`.\n- Results typed in the schema where they cross to the CLI or API (`TaskView`; the status changes' answers), using the nullable types of the task before.\n- The CLI moves onto them; its output and exit codes stay as they are.\n- Update §5.1's tables to the code, `atm/lib/__init__.py`'s `__all__`, §11.7 (settled).\n\n## Tests\n- `tests/lib/` for the new functions; `npm run test:scripts` unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-381",
+        "T-382"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "tests/lib/",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T01:07:03Z",
+      "started_by": "claude:b7be7288",
+      "commit": "e5b4e805a587109b1a64e40c8bbf0ec801b2a4de",
+      "completed_at": "2026-11-03T01:25:01Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T01:25:01Z",
+          "kind": "review",
+          "text": "One function per status change (`start_task` … `release_task`), returning a `StatusChange` (in `api.schema.json`); keyword parameters for sprints, releases and `edit_existing_task`; `commit_task` takes repository paths (`repository_paths`); `expire_claims`, `get_workflow`; `atm list` reads `task_views`. §5.1 rewritten. Check: no changelog entry yet for this sprint’s `atm.lib` changes.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-384",
+      "name": "Layers gap 11.6: atm.lib and atm.boot as the surface, an in-memory opener, frozen signatures",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.6.\n\n## Change\n- `atm.boot` gets `open_memory_project(tasks=(), archive=(), meta=None, actor=None)`, so tools and their tests never import `atm.db`; `tests/lib/test_public.py` uses it.\n- A contract test freezes the public surface: `atm.lib.__all__` and `atm.boot.__all__`, and each exported function's signature (`inspect.signature`), compared with a committed list (`tests/lib/public-surface.json`). A change fails until the list is updated, and the changelog notes it.\n- `atm/lib/__init__.py`'s docstring says the surface is for imports from the repository's `atm-cli/`, not from the shipped `plugin/scripts/atm.py`.\n- §5 says the surface is two modules; update §11.6 (settled), `CLAUDE.md`.\n\n## Tests\n- The contract test; `test_public.py` on `open_memory_project`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-383",
+        "T-380"
+      ],
+      "files": [
+        "atm-cli/atm/boot/__init__.py",
+        "atm-cli/atm/boot/open.py",
+        "atm-cli/atm/lib/__init__.py",
+        "tests/lib/test_public.py",
+        "tests/lib/public-surface.json",
+        "docs/layered-architecture.md",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T01:25:28Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c711f10be51f96135facf4f45599bda922b87fdb",
+      "completed_at": "2026-11-03T01:30:52Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T01:30:52Z",
+          "kind": "review",
+          "text": "`atm.boot.open_memory_project`; `test_public.py` freezes both modules’ `__all__` and signatures against `tests/lib/public-surface.json` (a change fails and prints the new list). §5, §11.6, `CLAUDE.md` and both docstrings say the surface is the two modules, imported from `atm-cli/`. Check: the signatures as Python 3.9 prints them (CI).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-385",
+      "name": "Layers gap 11.8: a host layer for running git and reading HEAD; one meaning of the branch",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.8.\n\n## Change\n- A new layer `host/` below db and vcs, allowed I/O: the subprocess runner (`db/jsongit/gitrun.py`'s `git` and `vcs/git.py`'s `ask_git`/`run_git`) and the HEAD reader (`db/jsongit/worktrees.py`'s `head_branch`, `GitVcs.branch`'s copy). db and vcs import it; nothing else does. Add it to the build's layer rule.\n- One meaning of \"the branch\": the store's `here()` reads HEAD the same way (a detached HEAD gives the short SHA everywhere, not `HEAD` in a claim).\n- One way to ask whether a folder is in git.\n- Update §1's diagram and table, §2, §8, §11.8 (settled).\n\n## Tests\n- A detached HEAD: a claim's branch, the project card's and the worktree list agree (`tests/scripts/`).\n- A build test that only db and vcs may import `host`.\n- `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/host/",
+        "atm-cli/atm/db/jsongit/",
+        "atm-cli/atm/vcs/git.py",
+        "atm-cli/build.py",
+        "tests/scripts/",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ],
+      "started_at": "2026-11-03T01:30:52Z",
+      "started_by": "claude:b7be7288",
+      "commit": "381124639edfdebdeb61ba9683e93a5e64c055a4",
+      "completed_at": "2026-11-03T01:46:14Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T01:46:14Z",
+          "kind": "review",
+          "text": "New layer `host/git.py` (`git`, `run_git`, `in_git`, `head_branch`, `checked_out_branch`), used by db and vcs only (build rule and test). The branch is read from HEAD everywhere: a detached HEAD is the short SHA in claims, the card and the worktree list (serve test). Check: a claim before the first commit now says `main`, not null.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-386",
+      "name": "Layers gap 11.9: the dev API restarts on rebuild, lists missing folders, matches the CSP, and is tested",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.9.\n\n## Change\n- `dashboard/build/dev-api.ts` watches `plugin/scripts/atm.py` and restarts the API server when it changes, so `npm run build:cli` is enough (no Vite restart).\n- A folder in `ATM_DEV_DATA` without a task file is listed as missing, as the old dev server did.\n- The dev page's Content-Security-Policy matches the server's (`build/security-headers.ts` against `api/server.py`'s `page_csp`).\n- Update `CLAUDE.md`'s `npm run dev` line, §11.9 (settled).\n\n## Tests\n- A test that starts `vite dev` on a temporary project and reads `api/projects` and the v1 tasks through it, then stops it and finds no server left.\n- The CSP check as a unit test.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/build/dev-api.ts",
+        "dashboard/build/security-headers.ts",
+        "dashboard/tests/unit/",
+        "CLAUDE.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-03T01:46:15Z",
+      "started_by": "claude:b7be7288",
+      "commit": "1bfc5dde9c86e047ecee2a0c1e19e8eb2496e9f4",
+      "completed_at": "2026-11-03T01:52:46Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T01:52:46Z",
+          "kind": "review",
+          "text": "`dev-api.ts` restarts the API server when `atm.py` changes, lists a folder without a task file as missing, logs its `ATM_HOME`. `devCsp` is the server’s policy plus `DEV_ADDITIONS`, held to `page_csp` by a unit test. `tests/scripts/dev-api.test.mjs` runs `vite dev` end to end (skipped without `npm ci`). Check: a SIGKILL of Vite still leaves the server.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-387",
+      "name": "Layers gap 11.10 A: worktree copies with atm's derived values, computed in their own worktree; the dashboard's fallbacks go",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.10 A.\n\n## Change\n- `lib/worktrees.py` opens each linked worktree's own store and returns its differing tasks as views, `{task, derived}`, computed on that worktree's data: what `atm next` would do there (a dependency done in another worktree counts once the branches merge).\n- `worktrees.json` gives those views; `docs/multi-project-api.md` §2.2 says so.\n- The dashboard takes a copy's derived values from it and drops its own rules for copies: the readiness fallback in `kanban.ts`, together-now in `waiting.ts`, the effective-review fallback in `review.ts` (`hasDerived`).\n- Update §11.10 A (settled).\n\n## Tests\n- The serve test on worktrees checks the derived values of a copy.\n- The e2e specs for linked worktrees; the unit tests of the three modules; `npm run check`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-378",
+        "T-381"
+      ],
+      "files": [
+        "atm-cli/atm/lib/worktrees.py",
+        "atm-cli/atm/api/server.py",
+        "dashboard/src/lib/worktrees.ts",
+        "dashboard/src/lib/kanban.ts",
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/review.ts",
+        "dashboard/tests/",
+        "tests/scripts/serve.test.mjs",
+        "docs/multi-project-api.md",
+        "docs/layered-architecture.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "started_at": "2026-11-03T01:52:47Z",
+      "started_by": "claude:b7be7288",
+      "commit": "85bb722f66a9ed9c9d14e4582e1354757fa4040f",
+      "completed_at": "2026-11-03T02:06:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T02:06:12Z",
+          "kind": "review",
+          "text": "`worktrees.json` gives each linked worktree’s differing tasks as views, derived on that worktree’s own store (`copy_store`, tolerant, symlink-checked). The dashboard reads them and its readiness, together-now and effective review take atm’s word only. Check: `effectiveRelease` keeps its fallback (§11.10 A); 359 e2e pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-388",
+      "name": "Layers gap 11.5: check a 0.26.0 dashboard page left open across the update",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.5. Part of the next release's checks, done together with Hakan.\n\n## Check\n- Serve a project with the released 0.26.0 plugin and open its dashboard; update to this branch's plugin so the server restarts with the new dashboard; look at the page left open.\n- It should show the reload offer (the server's build changed) and nothing broken until the reload; the removed raw routes (`p/<id>/tasks.json`, `p/<id>/tasks-archive.json`) answer 404.\n\n## If it shows an error instead\nA small fix in the dashboard so a 404 from a removed route leads to the reload offer, with a unit test.\n\nUpdate §11.5 (settled) with what was found.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T06:59:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "with": "user",
+      "components": [
+        "docs"
+      ],
+      "started_at": "2026-11-03T06:34:43Z",
+      "started_by": "claude:b7be7288",
+      "commit": "1cd37cf5fb856558815a046231333c136898e44e",
+      "completed_at": "2026-11-03T06:41:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T06:41:12Z",
+          "kind": "review",
+          "text": "Checked live with Hakan: a 0.26.0 page left open across the server swap shows the reload bar, keeps its board with no error, and reloads cleanly; raw routes 404. No fix needed; §11.5 settled.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
+    },
+    {
+      "id": "T-389",
+      "name": "Add the tenets to the README",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "docs"
+      ],
+      "description": "Add a short **Tenets** section to `README.md`: the principles atm is built on, one line each with a sentence on what it means for a user.\n\n## The tenets\n- **The data lives with the project**, versioned with the project's own version control (`.agentic-task-manager/` in the repository, committed with the code).\n- **One skill install**: installing the plugin is all it takes; nothing else to set up (no service, no account, no database).\n- **Actions through agents**: every change to the tasks is made by an agent running a skill (or `atm`), not by hand in the files.\n- **Visibility through the dashboard**: the dashboard shows everything and is read-only.\n\n## Notes\nPlace it near the top, after the introduction. Keep the README's tone; don't restate details covered further down, link to them instead.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "README.md"
+      ],
+      "created_at": "2026-11-03T01:25:18Z",
+      "updated_at": "2026-11-03T01:25:23Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "docs"
+      ]
     }
   ]
 }

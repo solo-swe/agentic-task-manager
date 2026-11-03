@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task.schema.json",
+  "title": "Task",
+  "description": "One task, as tasks.json and tasks-archive.json keep it (docs/v4/data-model.md §4). Unknown fields are kept as they are.",
+  "type": "object",
+  "required": ["id", "name", "type", "status"],
+  "properties": {
+    "id": { "type": "string", "description": "Letters, digits, '.', '_' and '-' (T-001)" },
+    "name": { "type": "string" },
+    "type": { "type": "string", "description": "A type ID from the vocabulary (meta.types)" },
+    "status": { "type": "string", "description": "A status ID from the vocabulary (meta.statuses); atm acts on its kind" },
+    "description": { "type": "string", "description": "Markdown" },
+    "phase": { "type": "number", "description": "Before sprints: the task's phase (atm migrate turns phases into sprints)" },
+    "priority": {
+      "type": "string",
+      "description": "A priority ID from the vocabulary (\"P0\"…\"P3\" by default); missing means the default priority"
+    },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Free-form tags that group tasks across sprints and types, e.g. [\"spike-2\", \"ux\"] (DM-4.6)"
+    },
+    "dependencies": { "type": "array", "items": { "type": "string" }, "description": "Task IDs it waits for" },
+    "requirements": { "type": "array", "items": { "type": "string" } },
+    "use_cases": { "type": "array", "items": { "type": "string" } },
+    "files": { "type": "array", "items": { "type": "string" }, "description": "Files it creates or changes" },
+    "created_at": { "type": "string", "description": "ISO 8601 UTC" },
+    "updated_at": { "type": "string", "description": "ISO 8601 UTC" },
+    "started_at": { "type": "string", "description": "ISO 8601 UTC; set when the task moves to in progress" },
+    "completed_at": { "type": "string", "description": "ISO 8601 UTC; set when the task is done" },
+    "skipped_at": { "type": "string", "description": "ISO 8601 UTC; set when the task is skipped (atm skip)" },
+    "agent": {
+      "type": "string",
+      "description": "Before v4: the agent that started the task. Now started_by (readers fall back to it)"
+    },
+    "created_by": { "type": "string", "description": "Who created it (docs/v4/data-model.md §4.1)" },
+    "updated_by": { "type": "string", "description": "Who changed it last" },
+    "started_by": { "type": "string", "description": "Who started it: the claim's owner" },
+    "completed_by": { "type": "string", "description": "Who finished it" },
+    "commit": { "type": "string", "description": "The SHA of the task's commit" },
+    "pr": { "$ref": "#/$defs/PullRequest" },
+    "merged_at": { "type": "string", "description": "ISO 8601 UTC; when that PR was merged (atm merged)" },
+    "review_requested_at": {
+      "type": "string",
+      "description": "ISO 8601 UTC; when the task asked for a review (atm review). Its work ended here; review time isn't work"
+    },
+    "waiting_on": { "type": "string", "description": "A blocked task waits on a decision by the user or an agent (atm block --on)" },
+    "questions": { "type": "array", "items": { "type": "string" }, "description": "The open questions of a blocked task" },
+    "blocked_at": { "type": "string", "description": "ISO 8601 UTC; when it was blocked" },
+    "blocks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/BlockRound" },
+      "description": "Past blocks, oldest first, with who each waited on (T-244)"
+    },
+    "reviews": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/ReviewRound" },
+      "description": "Past reviews, oldest first"
+    },
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Note" },
+      "description": "Handoffs, outcomes, review requests, answers, rejections (docs/v4/data-model.md §4)"
+    },
+    "last_failure": { "$ref": "#/$defs/LastFailure" },
+    "sprint": {
+      "type": "string",
+      "description": "The sprint it is in (a sprint's name, meta.sprints); absent: the backlog"
+    },
+    "sprint_history": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SprintHistoryEntry" },
+      "description": "Each sprint it was in, from when to when; the open entry has no `to` (SR-2.5)"
+    },
+    "release": { "type": "string", "description": "The release it ships in; when absent, its sprint's (SR-2.6)" },
+    "components": { "type": "array", "items": { "type": "string" }, "description": "Component IDs (meta.components)" },
+    "review": { "type": "string", "description": "How it is reviewed: blocker, async, batch or none" },
+    "review_state": { "type": "string", "description": "In the review kind: waiting, changes_requested or approved (SR-6.1)" },
+    "reviewed_at": { "type": "string", "description": "ISO 8601 UTC; when the review was decided" },
+    "sprint_review": {
+      "type": "string",
+      "description": "A batch task done by an agent: pending until the end-of-sprint review, then reviewed (SR-4.4)"
+    },
+    "with": { "type": "string", "description": "`user`: the work is done together with the user (SR-6.5)" },
+    "related": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Related tasks (a link that doesn't block), stored on one side and shown on both (SR-2.8)"
+    },
+    "resolution": {
+      "type": "string",
+      "description": "How a finished task ended, when it isn't the default: wont_do, duplicate, obsolete or done (SR-2.8)"
+    },
+    "duplicate_of": { "type": "string", "description": "The task this one duplicates (with the duplicate resolution)" }
+  },
+  "$defs": {
+    "Note": {
+      "type": "object",
+      "required": ["at", "kind", "text"],
+      "properties": {
+        "at": { "type": "string", "description": "ISO 8601 UTC" },
+        "by": { "type": "string", "description": "Who wrote it" },
+        "kind": { "type": "string", "description": "handoff, outcome, review, rejection, failure, answer or note" },
+        "text": { "type": "string", "description": "Markdown, at most 500 characters" }
+      }
+    },
+    "PullRequest": {
+      "type": "object",
+      "description": "The PR that contains the task (atm pr): the task is In PR until merged_at (DM-4.3)",
+      "required": ["number"],
+      "properties": {
+        "number": { "type": "integer" },
+        "url": { "type": "string" }
+      }
+    },
+    "BlockRound": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "description": "ISO 8601 UTC" },
+        "to": { "type": "string", "description": "ISO 8601 UTC" },
+        "on": { "type": "string", "description": "user or agent" }
+      }
+    },
+    "ReviewRound": {
+      "type": "object",
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "description": "ISO 8601 UTC" },
+        "to": { "type": "string", "description": "ISO 8601 UTC" },
+        "outcome": { "type": "string" }
+      }
+    },
+    "SprintHistoryEntry": {
+      "type": "object",
+      "required": ["sprint", "from"],
+      "properties": {
+        "sprint": { "type": "string" },
+        "from": { "type": "string", "description": "ISO 8601 UTC" },
+        "to": { "type": "string", "description": "ISO 8601 UTC; absent while it is in the sprint" }
+      }
+    },
+    "LastFailure": {
+      "type": "object",
+      "description": "Before v4: the last failed attempt (now a failure note; still read)",
+      "properties": {
+        "at": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

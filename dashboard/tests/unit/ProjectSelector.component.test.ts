@@ -3,17 +3,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import ProjectSelector from '../../src/components/ProjectSelector.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
+import { summary as fullSummary } from './summary.helpers';
 
-const summary = (percent: number, review = 0, blocked = 0): ProjectSummary => ({
-  total: 10,
-  done: percent / 10,
-  skipped: 0,
-  percent,
-  agents_working: 0,
-  needs_you: { review, blocked_on_user: blocked },
-  last_activity: null,
-  completions_14d: [],
-});
+const summary = (percent: number, review = 0, blocked = 0): ProjectSummary =>
+  fullSummary({ total: 10, done: percent / 10, percent, needs_you: { review, blocked_on_user: blocked, together: 0 } });
 const project = (id: string, name: string, s: ProjectSummary | null, missing = false): ProjectEntry => ({
   id,
   name,

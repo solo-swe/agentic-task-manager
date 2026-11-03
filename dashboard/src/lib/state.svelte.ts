@@ -1,3 +1,4 @@
+import { browserFetch } from './api/http';
 import { loadClaims, type ClaimMap } from './claims';
 import {
   DEFAULT_PROJECT_NAME,
@@ -124,6 +125,10 @@ export class DashboardState {
 
   /** tasks.json's size (characters), for the archive notice */
   tasksBytes = $state(0);
+  /** What atm finds wrong with the task file as a whole, read as far as it can be (T-377) */
+  fileProblems = $state<string[]>([]);
+  /** atm's suggestion to archive, when tasks.json is over meta.archive's thresholds (T-372) */
+  archiveHint = $state<LoadedTasks['archiveHint']>(null);
   /**
    * tasks-archive.json's tasks (DM-5), loaded only once a view needs history (D-5.2: wantArchive); empty until then,
    * and when there is no archive. A task in both files is shown from tasks.json (DM-5.2).
@@ -281,7 +286,11 @@ export class DashboardState {
 
   private async refreshArchive() {
     if (!this.projectId) return;
-    const result = await loadArchive(this.projectId, fetch, this.archiveLoaded ? this.#archiveValidators : undefined);
+    const result = await loadArchive(
+      this.projectId,
+      browserFetch,
+      this.archiveLoaded ? this.#archiveValidators : undefined,
+    );
     if (!result.unchanged) {
       this.#archiveValidators = result.validators;
       this.archive = result.tasks;
@@ -313,7 +322,7 @@ export class DashboardState {
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
    * without one (the overview, how to add a project, an unknown project). */
   private async refreshProjects(): Promise<string | null> {
-    const result = await loadProjects(fetch, this.#projectsValidators);
+    const result = await loadProjects(browserFetch, this.#projectsValidators);
     if (!result.unchanged) {
       this.#projectsValidators = result.validators;
       this.projects = result.projects;
@@ -426,10 +435,10 @@ export class DashboardState {
       return;
     }
     const [result, claims, trees] = await Promise.all([
-      loadTasks(project, fetch, this.loaded ? this.#validators : undefined),
+      loadTasks(project, browserFetch, this.loaded ? this.#validators : undefined),
       loadClaims(project),
       // Worktrees are extra: a failure leaves the board on the main worktree's tasks (logged only)
-      loadWorktrees(project, fetch, this.#worktreesValidators).catch((e): WorktreesResult => {
+      loadWorktrees(project, browserFetch, this.#worktreesValidators).catch((e): WorktreesResult => {
         console.error('Loading the worktrees failed:', e);
         return { unchanged: true };
       }),
@@ -686,6 +695,8 @@ export class DashboardState {
 
   private apply(loaded: LoadedTasks, claims: ClaimMap) {
     this.tasksBytes = loaded.bytes;
+    this.fileProblems = loaded.problems ?? [];
+    this.archiveHint = loaded.archiveHint ?? null;
     this.meta = loaded.meta;
     this.vocab = resolveVocabulary(loaded.meta);
     this.#mainTasks = loaded.tasks;

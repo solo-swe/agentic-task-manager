@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "meta.schema.json",
+  "title": "Meta",
+  "description": "A project's meta in tasks.json: its settings, vocabularies, sprints, releases and components (docs/v4/data-model.md §2). Every key is optional and falls back to its default.",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "description": "The project's ID (8 hex characters, set by atm init)" },
+    "project": { "type": "string", "description": "The project's name" },
+    "description": { "type": "string", "description": "One line about the project" },
+    "created": { "type": "string" },
+    "repository": { "type": "string", "description": "The repository's web address, for commit and PR links" },
+    "repository_type": { "type": "string", "description": "github, gitlab, bitbucket or gitea, for a host whose name doesn't say" },
+    "logo": { "type": "string", "description": "The project's logo, relative to its root" },
+    "lease_minutes": { "type": "number", "description": "How long a claim lasts without a heartbeat" },
+    "statuses": { "type": "array", "items": { "$ref": "#/$defs/StatusEntry" } },
+    "types": { "type": "array", "items": { "$ref": "#/$defs/VocabularyTerm" } },
+    "priorities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/VocabularyTerm" },
+      "description": "Most urgent first"
+    },
+    "default_priority": { "type": "string", "description": "The priority of tasks without one" },
+    "labels": { "type": "array", "items": { "$ref": "#/$defs/LabelEntry" } },
+    "phases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/PhaseEntry" },
+      "description": "Before sprints (atm migrate turns them into sprints)"
+    },
+    "workflow": { "$ref": "#/$defs/Workflow" },
+    "archive": { "$ref": "#/$defs/ArchiveSettings" },
+    "archived": { "type": "integer", "description": "How many tasks tasks-archive.json holds (DM-5.4)" },
+    "next_id": { "type": "integer", "description": "The number the next new task gets" },
+    "sprints": { "type": "array", "items": { "$ref": "#/$defs/Sprint" }, "description": "In order" },
+    "releases": { "type": "array", "items": { "$ref": "#/$defs/Release" }, "description": "In order" },
+    "components": { "type": "array", "items": { "$ref": "#/$defs/Component" } },
+    "sprint_names": { "type": "string", "description": "How a sprint created without a name is named: people or time" },
+    "review": { "type": "string", "description": "The project's default review mode: blocker, async, batch or none" }
+  },
+  "$defs": {
+    "StatusEntry": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "kind": { "enum": ["todo", "active", "review", "blocked", "done", "skipped"], "description": "What the status means" }
+      }
+    },
+    "VocabularyTerm": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "LabelEntry": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "PhaseEntry": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string" }
+      }
+    },
+    "Workflow": {
+      "type": "object",
+      "description": "How the project pushes (docs/v4/skills-and-workflows.md §1)",
+      "properties": {
+        "type": { "type": "string", "description": "direct or pull-request" },
+        "base": { "type": "string" },
+        "verify": { "type": "boolean" },
+        "max_rounds": { "type": "integer" },
+        "commit_template": { "type": "string" },
+        "trailers": {
+          "description": "\"forbid\" or \"none\", or {\"require\": [the lines]}: what commit messages end with"
+        }
+      }
+    },
+    "ArchiveSettings": {
+      "type": "object",
+      "description": "When atm suggests archiving, and whether agents may do it (DM-5)",
+      "properties": {
+        "threshold_kb": { "type": "number" },
+        "threshold_tasks": { "type": "number" },
+        "keep_days": { "type": "number" },
+        "auto": { "type": "boolean" }
+      }
+    },
+    "Sprint": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "description": "The sprint's name" },
+        "goal": { "type": "string" },
+        "state": { "enum": ["planned", "active", "closed"] },
+        "release": { "type": "string" },
+        "start": { "type": "string", "description": "ISO 8601 UTC" },
+        "end": { "type": "string", "description": "ISO 8601 UTC" },
+        "due": { "type": "string", "description": "YYYY-MM-DD" },
+        "report": { "$ref": "#/$defs/SprintReport" }
+      }
+    },
+    "SprintReport": {
+      "type": "object",
+      "description": "What a closed sprint did (SR-2.3)",
+      "properties": {
+        "done": { "type": "array", "items": { "type": "string" }, "description": "The tasks done in it" },
+        "carried": { "type": "array", "items": { "type": "string" }, "description": "The unfinished tasks carried on" },
+        "to": { "type": "string", "description": "Where the carried tasks went" }
+      }
+    },
+    "Release": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "enum": ["planned", "released", "archived"] },
+        "target": { "type": "string", "description": "YYYY-MM-DD" },
+        "released_at": { "type": "string", "description": "ISO 8601 UTC" }
+      }
+    },
+    "Component": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "paths": { "type": "array", "items": { "type": "string" }, "description": "Globs over its files" },
+        "review": { "type": "string", "description": "Its tasks' default review mode" }
+      }
+    }
+  }
+}

@@ -13,17 +13,18 @@ const t = (id: string, status: string, extra: Partial<Task> = {}): Task => ({
   ...extra,
 });
 
-describe('effectiveReview (SR-2.6)', () => {
-  const meta = {
-    review: 'async',
-    components: [{ id: 'ui', review: 'batch' }, { id: 'docs' }, 'junk'],
-  };
+describe('effectiveReview (SR-2.6): atm’s to say, for every task (T-371, T-387)', () => {
+  const derived = { kind: 'todo', ready: true, waiting_for: [], priority: 'P2', archived: false };
 
-  it("the task's own mode, else its first component's that has one, else the project's, else none", () => {
-    expect(effectiveReview(meta, t('a', 'todo', { review: 'blocker' }))).toBe('blocker');
-    expect(effectiveReview(meta, t('a', 'todo', { components: ['docs', 'ui'] }))).toBe('batch');
-    expect(effectiveReview(meta, t('a', 'todo', { components: ['docs'] }))).toBe('async');
-    expect(effectiveReview({}, t('a', 'todo', { review: 'whatever' }))).toBe('none');
+  it('the mode atm worked out (its own, else its component’s, else the project’s), not the dashboard’s reading', () => {
+    // atm says batch; the task's own field would say blocker
+    const task = t('a', 'todo', { review: 'blocker', derived: { ...derived, effective_review: 'batch' } });
+    expect(effectiveReview(task)).toBe('batch');
+  });
+
+  it('none without atm’s values, or with one that isn’t a mode', () => {
+    expect(effectiveReview(t('a', 'todo', { review: 'blocker' }))).toBe('none');
+    expect(effectiveReview(t('a', 'todo', { derived: { ...derived, effective_review: 'whatever' } }))).toBe('none');
   });
 });
 

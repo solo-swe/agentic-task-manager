@@ -24,33 +24,34 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /` | the dashboard (`text/html`), from the plugin, held in memory since the server started | no |
 | `GET /api/projects` | the registered projects with their summaries (§3) | yes |
 | `GET /api/search?q=<text>` | the tasks matching a search, in every project (§2.4) | no |
-| `GET /p/<id>/tasks.json` | that project's `.agentic-task-manager/tasks.json`, as stored | yes |
 | `GET /p/<id>/claims.json` | that project's live claims, from every worktree (§2.1) | yes |
-| `GET /p/<id>/tasks-archive.json` | that project's archive, as stored | yes |
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
+| `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
 | anything else | `404` | |
 
 - `<id>` is a project id from `/api/projects` (§3.1). An unknown id gets `404` with `{"error": "unknown project"}`.
-- Only those names are served for a project: `tasks.json` and `tasks-archive.json` from its
-  `.agentic-task-manager/` folder, `claims.json` and `worktrees.json` computed, and `logo`. There is no other file, no directory
-  listing, no path segments after the name. A file that doesn't exist (no archive yet, no claims yet) gets `404` with
-  `{"error": "not found"}`. The dashboard treats a missing archive, claims or worktrees as empty.
-- A missing project (§3.1 `missing: true`) answers `404` for its files.
-- The ETag of a project file is its size and nanosecond mtime, as today's `json_etag` (`"<size hex>-<mtime_ns hex>"`).
-- Query strings are ignored, except `q` on `api/search`.
-- The Projects Overview reads every listed project's `tasks.json`, `tasks-archive.json` (T-355; a `404` is an empty
-  archive) and `claims.json` through these routes while it is shown, conditionally on each refresh (an unchanged file
-  answers `304`), for its views across projects: the
-  Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329). There is no route of their own.
+- Only those names are answered for a project: `claims.json` and `worktrees.json`, computed through atm-lib, and
+  `logo`. The task files themselves (`tasks.json`, `tasks-archive.json`) are never served: their tasks come through the
+  v1 route (§2.5), read by atm-lib (T-374; before, the server sent the files as stored). There is no other name, no
+  directory listing, no path segments after the name; anything else gets `404` with `{"error": "not found"}`.
+- A missing project (§3.1 `missing: true`), or one whose task folder atm refuses (a symlink, docs/security-review.md
+  F7, F8), answers `404` for all of these.
+- An ETag is a hash of what the answer depends on (the store's stamps: its files' sizes and nanosecond mtimes, and the
+  query), so two atm changes in the same second are two ETags.
+- Query strings are ignored, except `q` on `api/search` and the filters on the v1 route.
+- The Projects Overview reads every listed project's tasks and archive (the v1 route, with `?archived=true` for the
+  archive, T-355) and `claims.json` while it is shown, conditionally on each refresh (an unchanged answer is `304`),
+  for its views across projects: the Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329).
+  There is no route of their own.
 
 ### 2.1 `claims.json`: claims from every worktree
 
 The claims of all a clone's worktrees are in one store, in the git common directory (`.git/atm/claims.json`; outside
 git, `claims-store.json` in the task folder). The server answers from it, as `{generated_at, claims: [...]}` sorted by
-task, so an agent at work in a linked worktree shows on the project's board. Its ETag is the store's size and mtime.
-Without a store yet, the server falls back to the task folder's own snapshot (`claims.json`, which atm writes there).
+task, so an agent at work in a linked worktree shows on the project's board. Its ETag changes with the store. Before
+the first claim there is no store yet, and the answer is an empty list.
 
 ### 2.2 `worktrees.json`: the project's git worktrees
 
@@ -63,7 +64,12 @@ Without a store yet, the server falls back to the task folder's own snapshot (`c
       "path": "/Users/me/workplace/atm-agent-2",
       "branch": "agent-2",
       "main": false,
-      "tasks": [{ "id": "T-179", "status": "in_progress", "...": "the task as that worktree's tasks.json has it" }]
+      "tasks": [
+        {
+          "task": { "id": "T-179", "status": "in_progress", "...": "the task as that worktree's tasks.json has it" },
+          "derived": { "kind": "active", "ready": false, "waiting_for": [], "...": "as the v1 tasks route's (§2.5)" }
+        }
+      ]
     }
   ]
 }
@@ -75,6 +81,9 @@ Without a store yet, the server falls back to the task folder's own snapshot (`c
 - Each linked worktree lists the tasks of its own `tasks.json` that differ from the main worktree's copy, or that only
   it has; the main worktree's tasks are `tasks.json` itself. A task blocked or in review there but already decided in
   another worktree (the claims store's `resolved`) is left out: that copy is stale until atm runs there next.
+- Each is a view, `{task, derived}`, like the v1 tasks route's (`TaskView`, §2.5): the derived values worked out on
+  that worktree's own data, as `atm next` there would (a dependency done in another worktree counts once the branches
+  merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
 - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
   store does.
 - The dashboard shows all of them on one board: each task from the worktree where it got furthest (by status kind:
@@ -106,6 +115,32 @@ dashboard's own search finds them: in the ID, name, description, type, labels or
 Only the first 200 characters of `q` count, and at most 200 IDs come back per project. Like every route it is
 read-only and answers only on loopback with a matching Host (§1); other parameters are ignored. The Vite dev server
 answers the same.
+
+### 2.5 `api/v1/projects/<id>/tasks`: tasks with what atm derives
+
+The first of the v1 routes (docs/layered-architecture.md §6.2), answered by atm-lib (`task_views`): the dashboard
+takes atm's rules from here instead of applying them itself. `{ "generated_at", "tasks": [{ "task", "derived" }] }`,
+typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/generated/types.ts`): `task` as stored,
+`derived` with its `kind`, `ready`, `waiting_for` (a to-do task's unfinished dependencies), `waiting_on` (a blocked
+task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
+`in_pr`, `merged`) and `archived`; what doesn't apply is left out.
+
+- **A malformed task file is shown, not refused** (T-377): the route reads it tolerantly, as far as it can be read,
+  where every `atm` command refuses it (`atm list --derived --tolerant` prints the same). An entry that isn't a task
+  is left out; a task with an ID atm doesn't allow is kept, one whose `dependencies` aren't a list of IDs with the IDs
+  that can be read; a vocabulary `meta` can't use falls back to its default (left out of the `meta` sent). Each
+  problem is said, in `atm check`'s words: a task's in its `derived.problems` (it isn't `ready` then), the file's in
+  the response's `problems`. The dashboard shows a notice and each task's problems in its details. A file that isn't
+  a task file at all still gets an error.
+- **The archive** (T-372): `?archived=true` gives the archive's tasks, as views; the dashboard loads its archive from
+  here, no longer from `tasks-archive.json` (a project without one: `404`, an empty archive). Without it, the response
+  carries `archive_hint` when atm suggests archiving (its `bytes`, `finished`, `archivable`, `auto` and `text`, as
+  `atm status --json` has it): the dashboard's footer notice.
+- **Filters**, as `atm list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
+  `type`, `priority`, `agent`, `release`, `component`; the flags `backlog`, `ready`, `blocked`, `in_pr`, `with_user`
+  and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.
+- The ETag changes with the project's `tasks.json`, its archive and the query. A `tasks.json` over the size limit gets
+  `413`, as the raw file does; an unknown project `404`.
 
 ## 3. `GET /api/projects`
 

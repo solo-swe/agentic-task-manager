@@ -1,11 +1,13 @@
 // A project's vocabularies (docs/v4/data-model.md §2-3): statuses with kinds, phases, types and priorities, from
 // tasks.json meta, each falling back to the defaults when absent. The dashboard is lenient where atm-cli is strict: a
-// list it can't use is replaced by the default rather than reported.
+// list it can't use is replaced by the default rather than reported. The kinds and the defaults are common's, the same
+// data atm-cli uses (atm-cli/atm/common/schema/vocabularies.json, generated into generated/vocabularies.ts, T-367).
+import * as common from './generated/vocabularies';
+import type { StatusKind } from './generated/vocabularies';
 import type { TasksFile } from './types';
 
-/** What a status means; everything acts on kinds, never on status names. */
-export type StatusKind = 'todo' | 'active' | 'review' | 'blocked' | 'done' | 'skipped';
-export const KINDS: readonly StatusKind[] = ['todo', 'active', 'review', 'blocked', 'done', 'skipped'];
+export type { StatusKind } from './generated/vocabularies';
+export const KINDS = common.KINDS;
 
 export interface StatusDef {
   id: string;
@@ -29,30 +31,15 @@ export interface Vocabulary {
   labels: Term[];
 }
 
-export const DEFAULT_STATUSES: StatusDef[] = [
-  { id: 'todo', label: 'To Do', kind: 'todo' },
-  { id: 'in_progress', label: 'In Progress', kind: 'active' },
-  { id: 'in_review', label: 'In Review', kind: 'review' },
-  { id: 'blocked', label: 'Blocked', kind: 'blocked' },
-  { id: 'done', label: 'Done', kind: 'done' },
-  { id: 'skipped', label: 'Skipped', kind: 'skipped' },
-];
-export const DEFAULT_TYPES: Term[] = ['feature', 'bugfix', 'test', 'infra', 'docs', 'refactor', 'polish'].map((id) => ({
-  id,
-  label: capitalize(id),
-}));
-export const DEFAULT_PRIORITIES: Term[] = [
-  { id: 'P0', label: 'Critical' },
-  { id: 'P1', label: 'High' },
-  { id: 'P2', label: 'Medium' },
-  { id: 'P3', label: 'Low' },
-];
+export const DEFAULT_STATUSES: StatusDef[] = common.DEFAULT_STATUSES;
+export const DEFAULT_TYPES: Term[] = common.DEFAULT_TYPES;
+export const DEFAULT_PRIORITIES: Term[] = common.DEFAULT_PRIORITIES;
 
 export const DEFAULT_VOCABULARY: Vocabulary = {
   statuses: DEFAULT_STATUSES,
   types: DEFAULT_TYPES,
   priorities: DEFAULT_PRIORITIES,
-  defaultPriority: 'P2',
+  defaultPriority: common.DEFAULT_PRIORITY,
   phaseNames: new Map(),
   labels: [],
 };
@@ -100,7 +87,10 @@ export function resolveVocabulary(meta: TasksFile['meta']): Vocabulary {
   const defaultPriority =
     nonEmpty(m.default_priority) && priorities.some((p) => p.id === m.default_priority)
       ? m.default_priority
-      : (priorities.find((p) => p.id === 'P2') ?? priorities[Math.floor((priorities.length - 1) / 2)]).id;
+      : (
+          priorities.find((p) => p.id === common.DEFAULT_PRIORITY) ??
+          priorities[Math.floor((priorities.length - 1) / 2)]
+        ).id;
   return {
     statuses: statuses(m.statuses) ?? DEFAULT_STATUSES,
     types: terms(m.types) ?? DEFAULT_TYPES,
