@@ -1,5 +1,14 @@
 export const HIGHLIGHT_MS = 2000;
 
+/** How far something scrolls before its title bar compacts: the dashboard's title bar, the scrolling dialogs (Help,
+ * What's new) and the document viewer all compact at the same point */
+export const COMPACT_AFTER_PX = 8;
+
+/** Whether a title bar over content scrolled this far is compact */
+export function compactAt(scrollTop: number): boolean {
+  return scrollTop > COMPACT_AFTER_PX;
+}
+
 /** How to scroll: smoothly, but at once for someone who asked their system to reduce motion (T-345) */
 export function scrollBehavior(): ScrollBehavior {
   return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';

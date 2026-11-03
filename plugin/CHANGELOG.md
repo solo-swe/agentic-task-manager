@@ -4,6 +4,93 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.29.0] - 2026-11-03
+
+The sprint *Document Viewer* (release 0.29.0): open the documents and files a task refers to inside the dashboard
+(`docs/compmd-viewer-design.md`).
+
+### Added
+- **A project's files for the document viewer** (T-392): `atm serve` answers
+  `api/v1/projects/<id>/documents?path=` (what the file is, and the CompMD document atm wraps it in: Markdown as it
+  is, code in a fence of its language, an image as a Markdown image) and `…/files?path=` (an image's bytes). Read-only
+  and checked by atm-lib (`lib/documents.py`): a relative path without hidden parts, no key files, no file git
+  ignores, no symlink on the way, 1 MB at most (5 MB for an image). The version control gains `file_stamp`,
+  `read_file`, `ignored`, `tracked` and `head`.
+- **The document viewer's window** (T-393): `#doc=<path>[:L<n>[-L<m>]]` in the URL opens a file of the project in a
+  window over the details panel, rendered by CompMD from the document atm wraps it in (`DocumentViewer.svelte`,
+  `lib/documents.ts`). It moves by its title bar and resizes from a corner grip (the arrow keys too: Shift resizes),
+  stays inside the window and keeps where it was (`documentViewer` preference); on a window narrower than 720 px it
+  fills it. The document is a page on a desk (border, shadow, margins), which a theme may restyle (`--doc-page-*`):
+  Hand-drawn writes it on its ruled notebook page, Sticky Notes tapes a sheet to its board. Scrolled, the title bar
+  compacts, as the dashboard's and the dialogs' do (`compactAt` in `lib/scroll.ts`, shared by the three). Back (its
+  button, Escape, the browser's) returns to the document before; × closes it, back past every document opened in
+  it. The title bar has
+  the document's first heading and path, **Copy path** (with `#L<n>`) and **Open on GitHub** (or GitLab, Bitbucket,
+  Gitea: the file at the current commit, for a file git tracks). The file is asked for again on the dashboard's
+  refresh, a 304 while unchanged; a missing file says "Not in the project", one atm doesn't show "Can't be shown here".
+- **Lines and images in the viewer** (T-394): a code or text file has its line numbers in a gutter (its lines don't
+  wrap; the block scrolls sideways), and `#doc=…:L40` or `:L40-L45` scrolls to the lines and marks them. A changed file
+  re-renders where the reader is. A relative image in a document loads from the files route (resolved from the
+  document's folder); any other image still shows its alt text. Markdown documents get their line numbers from
+  CompMD's renderer once it gives them (T-400, blocked on that release).
+- **Relative links and the Files list open the viewer** (T-395): a relative link in task text (`docs/x.md`,
+  `docs/x.md#routes`, `src/app.ts#L40-L45`) opens the file in the document viewer, resolved from the project's root;
+  one inside a document is resolved from its folder; one leaving the project stays text. `#L…` opens at the lines,
+  another fragment at the heading with that slug (Copy path keeps it). Every file in the details panel's Files list
+  is a link (a folder stays text). Help and What's new come with the plugin: their relative links stay text.
+- **Line numbers in Markdown documents** (T-400): the viewer's gutter numbers each top-level block of a Markdown
+  document with its first source line, counted from the file's first (a frontmatter's lines too), beside where the
+  block was drawn; `#doc=…:L<n>-L<m>` scrolls to and marks the blocks those lines fall in. The mapping is CompMD
+  0.4.0's: the document's request asks for `origins`, and the view's `rectsAt` places each block, measured at its first
+  and last offset (`blockSources`, `placeBlocks` in `lib/compmd.ts`; `CompMd`'s `onblocks`). Every line numbered, as an
+  editor does, waits for CompMD 0.5.0's text-precise positions (T-406).
+- **Text-fragment links** (T-391): a link ending in `#:~:text=…` ([text fragments](https://web.dev/articles/text-fragments))
+  opens the document at the first match, marked (the CSS Custom Highlight API), until the next click; prefix, suffix
+  and ranges work, and text it doesn't find opens the document at the top with a note. A `requirements` or `use_cases`
+  entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`) is a link in the details panel; cards show its
+  text. `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` tell agents to write references
+  that way: relative links for files, text fragments for requirements and places in a document, with `-`, `,` and `&`
+  encoded. Help says references open the document.
+- **Contents in the viewer** (T-402): a Markdown document with two or more headings has a faint contents button at
+  its top left, in view as it scrolls; hovered or focused, the button grows into the list of headings (h1 to h3, by
+  level; at once with reduced motion), so the pointer is inside it all along, the section being read marked; a pick
+  scrolls there and the list hides, as it does when the pointer leaves or on Escape (which closes the list before
+  the viewer). Read from the headings CompMD rendered.
+- **`atm edit` changes requirements and use cases** (T-401): `--add-requirement`/`--remove-requirement` and
+  `--add-use-case`/`--remove-use-case` (each repeatable) take an ID or a Markdown link to where it is defined
+  (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`); an entry already there isn't added twice, and an empty one is refused
+  (exit 2, nothing written). atm-lib: `edit_existing_task` gains `add_requirements`, `remove_requirements`,
+  `add_use_cases` and `remove_use_cases` (`tests/lib/public-surface.json`). `/atm:create-tasks`, `/atm:do-task` and
+  `plugin/CLAUDE.md` list the flags.
+- **Requirements and use cases one a line** (T-403): the details panel lists them as it lists Files (`.detail-refs`,
+  sharing `.detail-files`' styles), one entry a line; an entry written as a link looks like a file link, a bare ID is
+  text. Cards keep their badges.
+- **Document styles** (T-404): **Document style** in the ⋯ menu, under Theme (`#doc-style-select`, the `docStyle`
+  preference, `DOC_STYLES` in `lib/appearance.ts`): **Auto** (the theme's page, as before), **GitHub** (a README:
+  sans-serif, 980px, ruled `h1`/`h2`, striped tables), **Docs** (an 18px serif column 44rem wide) or **Magazine**
+  (Didot/Bodoni headings, a double rule under the title, a drop cap, pull quotes, one red accent), each in light and
+  dark. They are host styles, the dashboard's own (`themes/doc-styles.css`, after the ideas of CompMD's editor's
+  `frame.css`), set on the viewer as `data-doc-style`; the themes' pages (Hand-drawn, Sticky Notes) apply to Auto
+  only. A code or text file keeps its gutter and only takes the style's paper and colours. The single file grows by
+  11 kB, to 571 kB.
+- **The single file's guardrail goes from 550 to 600 KiB** (`tests/e2e/guardrails.spec.ts`, decided with Hakan): the
+  document viewer took it to 559 kB, and CompMD's coming upgrade needs room.
+- **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a
+  piece of text), what it shows and how its window works.
+- **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a
+  document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
+  opens in a new tab, without access to the page.
+
+### Changed
+- **CompMD 0.4.0** (T-398): `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` 0.4.0 (the
+  Mermaid pack stays 0.1.1); the runtime is `plugin/assets/compmd/0.4.0/`. **Math typesets** (Temml, as MathML) in
+  task text, Help, What's new and documents, which 0.28.0 showed as TeX; **code blocks are highlighted** by CompMD
+  (Shiki, GitHub's light and dark, following the dashboard's mode), in task text and in the document viewer, its
+  gutter unchanged. No atm code changed for either, and the page's CSP is the same. `plugin/docs/compmd-llms.txt` is
+  CompMD's guide at `v0.4.0` (its body unchanged). The runtime folder grows from 11 to 18 MB: Shiki's grammars ship
+  in the page's runtime and again in the frames' (CompMD's packaging), each loaded only for a block of its language.
+  CompMD 0.4.0 also maps a rendered block to its source lines (`origins`), which T-400 needs.
+
 ## [0.28.0] - 2026-11-03
 
 The sprint *Rich Markdown* (T-284 to T-397): task text renders with CompMD (`docs/compmd-rendering-design.md`). Also

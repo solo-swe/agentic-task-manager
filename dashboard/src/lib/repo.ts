@@ -22,13 +22,30 @@ export function repositoryOf(meta: RepoMeta): string | null {
 export type HostKind = 'github' | 'gitlab' | 'bitbucket' | 'gitea';
 const KINDS: HostKind[] = ['github', 'gitlab', 'bitbucket', 'gitea'];
 
-/** Commit and pull (merge) request paths, after the repository's address */
-const PATHS: Record<HostKind, { commit: string; pull: string }> = {
-  github: { commit: 'commit', pull: 'pull' },
-  gitlab: { commit: '-/commit', pull: '-/merge_requests' },
-  bitbucket: { commit: 'commits', pull: 'pull-requests' },
-  gitea: { commit: 'commit', pull: 'pulls' },
+/** Commit, pull (merge) request and file paths, after the repository's address */
+const PATHS: Record<HostKind, { commit: string; pull: string; file: string }> = {
+  github: { commit: 'commit', pull: 'pull', file: 'blob' },
+  gitlab: { commit: '-/commit', pull: '-/merge_requests', file: '-/blob' },
+  bitbucket: { commit: 'commits', pull: 'pull-requests', file: 'src' },
+  gitea: { commit: 'commit', pull: 'pulls', file: 'src/commit' },
 };
+
+/** The host's name as a person says it, for "Open on …" */
+export const HOST_NAMES: Record<HostKind, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  bitbucket: 'Bitbucket',
+  gitea: 'Gitea',
+};
+
+/** A line or a range of lines, as each host's file view marks them */
+function linesFragment(kind: HostKind, lines?: [number, number]): string {
+  if (!lines) return '';
+  const [start, end] = lines;
+  if (kind === 'bitbucket') return start === end ? `#lines-${start}` : `#lines-${start}:${end}`;
+  if (kind === 'gitlab') return start === end ? `#L${start}` : `#L${start}-${end}`;
+  return start === end ? `#L${start}` : `#L${start}-L${end}`;
+}
 
 /** The host's kind from its name: the public services, and servers named after the software (gitlab.acme.com) */
 function kindOfHost(host: string): HostKind | null {
@@ -44,7 +61,12 @@ function kindOfHost(host: string): HostKind | null {
 export function repoLinks(
   repository: string,
   type?: unknown,
-): { commit: (sha: string) => string; pull: (n: number) => string } | null {
+): {
+  kind: HostKind;
+  commit: (sha: string) => string;
+  pull: (n: number) => string;
+  file: (sha: string, path: string, lines?: [number, number]) => string;
+} | null {
   let url: URL;
   try {
     url = new URL(repository);
@@ -58,9 +80,26 @@ export function repoLinks(
   if (!kind || segments.length < 2 || (kind !== 'gitlab' && segments.length !== 2)) return null;
   const paths = PATHS[kind];
   return {
+    kind,
     commit: (sha) => `${repository}/${paths.commit}/${encodeURIComponent(sha)}`,
     pull: (n) => `${repository}/${paths.pull}/${n}`,
+    file: (sha, path, lines) =>
+      `${repository}/${paths.file}/${encodeURIComponent(sha)}/${path.split('/').map(encodeURIComponent).join('/')}` +
+      linesFragment(kind, lines),
   };
+}
+
+/** Where a file of the project is in the repository's web view, at `commit`, with its lines marked; null when the
+ * repository has no address or its host isn't one atm builds links for */
+export function fileRef(
+  meta: RepoMeta,
+  commit: string,
+  path: string,
+  lines?: [number, number],
+): { href: string; host: string } | null {
+  const repository = repositoryOf(meta);
+  const links = repository ? repoLinks(repository, meta?.repository_type) : null;
+  return links ? { href: links.file(commit, path, lines), host: HOST_NAMES[links.kind] } : null;
 }
 
 function refFor(meta: RepoMeta, build: (links: NonNullable<ReturnType<typeof repoLinks>>) => string): RepoRef {

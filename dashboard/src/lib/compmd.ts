@@ -69,6 +69,89 @@ export function compmdRequest(
   };
 }
 
+/** What CompMD's processor is given for a file of the project in the document viewer (docs/compmd-viewer-design.md
+ * §5): the document as atm wrapped it, under its own path, with its own frontmatter (none of the dashboard's), and the
+ * rest as for task text: the plugin's packs, only this file (its imports of other files fail and show their
+ * fallbacks), no remote data, no `host:` data */
+export function documentRequest(
+  base: BaseRequest,
+  path: string,
+  text: string,
+  now = new Date(),
+  timeZone = localTimeZone(),
+) {
+  return {
+    ...base,
+    path,
+    files: { [path]: text },
+    now: now.toISOString(),
+    tz: timeZone,
+    allowedOrigins: [] as string[],
+    host: {},
+    // Each node carries the source range it came from (spec §12.3): the gutter's line numbers for a Markdown document
+    // come from it, through the view's rectsAt (T-400)
+    origins: true,
+  };
+}
+
+/** Where a top-level block came from in a document's text: its first and last source line, and the code-point offset
+ * of its start (what the view's rectsAt takes) */
+export interface BlockSource {
+  line: number;
+  endLine: number;
+  offset: number;
+  /** Where it ends, in code points (after its last character) */
+  endOffset: number;
+}
+
+interface SourcePoint {
+  line?: number;
+  offset?: number;
+}
+
+/** A block where it was drawn: its source lines, and its box's top and bottom in the viewport */
+export interface PlacedBlock extends BlockSource {
+  top: number;
+  bottom: number;
+}
+
+/** The blocks of `sources` placed by the boxes `rectsAt` gives at each one's first and last offset: it answers for the
+ * innermost node there (a list's first offset is its first item's), so the two together span the block, from its
+ * first line to its last; a block that drew nothing is left out */
+export async function placeBlocks(
+  sources: readonly BlockSource[],
+  rectsAt: (offset: number) => Promise<readonly { top: number; bottom: number }[]>,
+): Promise<PlacedBlock[]> {
+  const boxes = await Promise.all(
+    sources.map(async (s) => [...(await rectsAt(s.offset)), ...(await rectsAt(Math.max(s.offset, s.endOffset - 1)))]),
+  );
+  return sources.flatMap((source, i) => {
+    const rects = boxes[i].filter((r) => r.bottom > r.top);
+    if (!rects.length) return [];
+    return [{ ...source, top: Math.min(...rects.map((r) => r.top)), bottom: Math.max(...rects.map((r) => r.bottom)) }];
+  });
+}
+
+/** The top-level blocks of a tree processed with `origins`, in order, each with its source lines (T-400). Blocks
+ * without an origin (none, as CompMD makes them) are left out; so are definitions, which draw nothing. */
+export function blockSources(tree: unknown): BlockSource[] {
+  const children = (tree as { children?: unknown[] } | null)?.children ?? [];
+  const blocks: BlockSource[] = [];
+  for (const child of children) {
+    const node = child as { type?: string; origin?: { start?: SourcePoint; end?: SourcePoint } };
+    const start = node.origin?.start;
+    const end = node.origin?.end;
+    if (node.type === 'definition' || !start?.line || start.offset === undefined) continue;
+    blocks.push({
+      line: start.line,
+      endLine: end?.line ?? start.line,
+      offset: start.offset,
+      endOffset: end?.offset ?? start.offset + 1,
+    });
+  }
+  return blocks;
+}
+
 function localTimeZone(): string {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -86,7 +169,7 @@ export function compmdAssetUrl(file: string, origin = location.origin): string {
 /** What the served module gives (dashboard/compmd/entry.ts) */
 export interface CompmdModule {
   init(): Promise<unknown>;
-  OpenDocument: new (request: ReturnType<typeof compmdRequest>) => {
+  OpenDocument: new (request: ReturnType<typeof compmdRequest> | ReturnType<typeof documentRequest>) => {
     readonly expanded: unknown;
     readonly components: readonly unknown[];
     free(): void;
@@ -100,6 +183,8 @@ export interface CompmdModule {
     ): {
       render(tree: unknown): void;
       scheme(): void;
+      /** The boxes of what the source at `offset` drew, in the viewport (CompMD 0.4.0) */
+      rectsAt(offset: number): Promise<DOMRect[]>;
       on(type: 'rendered' | 'error', listener: (event: unknown) => void): void;
       destroy(): void;
     };
@@ -116,10 +201,11 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(compmd: CompmdModule, text: string, task?: Task) {
-  const document = new compmd.OpenDocument(compmdRequest(compmd.request, text, task));
+export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string, links: ProjectLinks = {}) {
+  const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
+  const document = new compmd.OpenDocument(request);
   try {
-    return { tree: safeTree(document.expanded), components: packComponents(document.components) };
+    return { tree: safeTree(document.expanded, links), components: packComponents(document.components) };
   } finally {
     document.free();
   }
@@ -147,6 +233,12 @@ export function resetCompmd() {
   loading = null;
 }
 
+/** How a project's text reaches the project's files (safeTree) */
+export interface ProjectLinks {
+  localImage?: (url: string) => string | null;
+  docLink?: (url: string) => string | null;
+}
+
 /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
 interface TreeNode {
   type: string;
@@ -164,9 +256,12 @@ const RAW_IMAGE = /<\s*img\b/i;
  * The expanded tree with what task text mustn't do taken out before it renders (§3), so the browser never even asks:
  * an image that isn't a `data:` image (Markdown's, a reference's, or raw `<img>`) shows its text, since an image from
  * anywhere else would be a request outside the dashboard (the page's CSP refuses it too, noisily); a link atm
- * wouldn't follow becomes its text. secureLinks checks the rendered links again.
+ * wouldn't follow becomes its text. secureLinks checks the rendered links again. For a project's text (task text, a
+ * document in the viewer; docs/compmd-viewer-design.md): `localImage` gives a relative image's address on this server
+ * (the files route), so it loads from there (V5); `docLink` gives a relative link's `#doc=…` link, which opens the
+ * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
  */
-export function safeTree<T>(tree: T): T {
+export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
   const root = tree as TreeNode;
   const definitions = new Map<string, string>();
   const collect = (node: TreeNode) => {
@@ -177,12 +272,23 @@ export function safeTree<T>(tree: T): T {
   const asText = (value: unknown): TreeNode[] => (value ? [{ type: 'text', value: String(value) }] : []);
   const visit = (node: TreeNode): TreeNode[] => {
     switch (node.type) {
-      case 'image':
-        return DATA_IMAGE.test(node.url ?? '') ? [node] : asText(node.alt);
-      case 'imageReference':
-        return DATA_IMAGE.test(definitions.get(node.identifier ?? '') ?? '') ? [node] : asText(node.alt);
+      case 'image': {
+        if (DATA_IMAGE.test(node.url ?? '')) return [node];
+        const local = localImage?.(node.url ?? '');
+        return local ? [{ ...node, url: local }] : asText(node.alt);
+      }
+      case 'imageReference': {
+        const url = definitions.get(node.identifier ?? '') ?? '';
+        if (DATA_IMAGE.test(url)) return [node];
+        const local = localImage?.(url);
+        return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
+      }
       case 'link':
-        if (!safeHref(node.url ?? '')) return (node.children ?? []).flatMap(visit);
+        if (!safeHref(node.url ?? '')) {
+          const viewer = docLink?.(node.url ?? '');
+          if (viewer) return [{ ...node, url: viewer, children: (node.children ?? []).flatMap(visit) }];
+          return (node.children ?? []).flatMap(visit);
+        }
         break;
       case 'html':
         if (RAW_IMAGE.test(String(node.value))) return asText(node.value);
@@ -191,6 +297,21 @@ export function safeTree<T>(tree: T): T {
     return node.children ? [{ ...node, children: node.children.flatMap(visit) }] : [node];
   };
   return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
+}
+
+/** The hash of a web link to this dashboard itself (the page's own address, with a `#…`: a task or a document
+ * linked by its URL), which the dashboard follows in place; null for any other link */
+export function dashboardHash(href: string, page: string = location.href): string | null {
+  let url: URL;
+  let here: URL;
+  try {
+    url = new URL(href.trim());
+    here = new URL(page);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(url.protocol) || url.origin !== here.origin || url.pathname !== here.pathname) return null;
+  return url.hash.length > 1 ? url.hash : null;
 }
 
 /**
@@ -205,7 +326,7 @@ export function secureLinks(root: ParentNode) {
       a.replaceWith(...a.childNodes);
       continue;
     }
-    if (href.trim().startsWith('#')) continue;
+    if (href.trim().startsWith('#') || dashboardHash(href) !== null) continue;
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
   }

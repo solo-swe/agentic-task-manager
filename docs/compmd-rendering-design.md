@@ -298,8 +298,8 @@ How the guidance is shipped:
   never send agents to fetch it from the web: a fetched text could change under us and is outside text an agent
   would act on (the security document's rule for skills).
 - **The skills say briefly what works in atm's panel,** since atm's settings (§3) refuse part of CompMD: GFM, alerts
-  (`> [!NOTE]`), the task's own values (`md.data.task`) and CompMD's core components (layout, `if`, `each`, `value`) render; math shows
-  as its TeX source (no math renderer); inputs show but change nothing; imports of packs, data from files or URLs,
+  (`> [!NOTE]`), the task's own values (`md.data.task`), math and CompMD's core components (layout, `if`, `each`,
+  `value`) render; inputs show but change nothing; imports of packs, data from files or URLs,
   `host:` data and host-language components don't render (they show their fallback text). For more, they point to
   the local `llms.txt` (33 KB, read only when an agent wants more than plain Markdown).
 
@@ -365,7 +365,10 @@ As written in T-284:
   and T-342 decide.
 - **Mermaid is the `@comp-markdown/mermaid` pack in the strict sandbox** (§3c), decided in review, with its
   runtime cost measured in T-285; building Mermaid into the dashboard (D) is to be reconsidered later.
-- **Math** shows as its TeX source for now (decided with Hakan during T-285): `@compmd/sandbox` typesets math with
-  Temml inside its frames, but its host mode passes no `math` to the page and takes none. Hakan is fixing that in
-  CompMD; atm takes the fixed version when it is published, and math renders with no atm-specific code.
+- **Math** showed as its TeX source until CompMD 0.4.0 (decided with Hakan during T-285): `@compmd/sandbox` typeset
+  math with Temml inside its frames, but its host mode passed no `math` to the page. CompMD 0.4.0 typesets it in host
+  mode too, with the same Temml, loaded into the page the first time a text has math; atm took it in T-398 with no
+  atm-specific code, and the page's CSP is unchanged (MathML, no inline styles or scripts).
+- **Code highlighting** is CompMD's from 0.4.0 (Shiki, GitHub's light and dark themes, token colours set through the
+  CSSOM, so no `style-src` change), in task text and the document viewer alike; atm adds no highlighter.
 - **Nothing is open.**

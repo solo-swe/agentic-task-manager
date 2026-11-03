@@ -73,15 +73,15 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…" |
-| I12 | **Only the registered projects' task data is served**, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores, under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…", "a project's files for the document viewer…"; `tests/lib/test_documents.py` |
+| I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
 ### Dashboard (B4)
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only sets the page's hash (`dashboardHash`, T-394), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the built-in icons and the bundled logo | `security-invariants.test.ts` (`{@html}` only in `Icon.svelte` and `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
@@ -402,6 +402,19 @@ used for the agent sandbox, so this written review takes the live run's place:
 - **What task text can do** is still bounded by the renderer (above: T-284, T-285), whatever the guide says CompMD
   can do: a text that follows the guide past what atm allows shows its fallback text, and runs nothing.
 
+**CompMD 0.4.0 (T-398).** The dashboard renders with CompMD 0.4.0, and the guide is its `llms.txt` at `v0.4.0`
+(commit `98387209`). Written review, as above:
+- **The guide** was read in full again: its body is the same as 0.3.0's, word for word; only atm's header line
+  changes, to the new version and commit.
+- **The skill text** (`/atm:create-tasks`) now says math and highlighted code render: how to write task text, nothing
+  to run, fetch or install.
+- **What the page runs** grows by two of CompMD's own renderers, both loaded from the plugin's asset folder like the
+  rest of CompMD (I-CSP holds: the CSP guard of the e2e suite saw no refusal): Temml typesets math as MathML in the
+  page, and Shiki highlights code blocks with its JavaScript regex engine (no WebAssembly), its token colours set
+  through the CSSOM, so `style-src` is unchanged. Neither takes a URL from the text. The release's other changes for
+  hosts (asking the reader before data from a new origin, `host` for trusted components, images in frame mode) don't
+  reach atm: its settings allow no data from URLs, no trusted components and no frame-mode pages.
+
 **Finding and stopping lost servers (T-390).** `whoami` now also gives `home`, a hash of the server's atm folder path
 (never the path), and `atm serve status` and `stop` ask `whoami` on the 20 ports from `--port`. They act only on a
 server whose `home` is their own folder's, and stop it with signals to its pid on this machine, as `stop` always did;
@@ -445,6 +458,48 @@ same way as task text (`safeTree`, `secureLinks`, no `host:` data), and the dash
 `Markdown.svelte`) is gone. Both texts come with the plugin, so nothing untrusted is added; CompMD loads only when one
 of them is first opened. Tooltips and card excerpts still show text without markup (`plain-text.ts`): it only takes
 marks away and renders nothing, through Svelte's escaping. No new route, input or permission.
+
+**A project's files for the document viewer (T-392, `docs/compmd-viewer-design.md` §4).** Two read-only routes give
+the dashboard files of a registered project's working copy: `documents?path=` as JSON (what the file is, and the
+CompMD document atm wraps it in) and `files?path=` (an image's bytes, for an `<img>`). The path is untrusted input
+(it comes from task text and documents), so:
+- **atm-lib checks it before anything is read** (`lib/documents.py`): relative, `/`-separated, normalized (no `..`,
+  `.` or empty part), no NUL or backslash, at most 512 characters; no hidden segment, which keeps out `.git`, `.env`
+  and atm's own folder; no key file by name (`*.pem`, `*.key`, `id_rsa*`, …).
+- **The version control reads it** (`vcs/git.py`): a regular file below the project's root, with no symbolic link on
+  the way (a linked folder pointing outside is refused), and not a file git ignores, where secrets usually are
+  (`.env.local`, credentials, build output). The ignore check **fails closed**: only git's explicit "not ignored"
+  lets a file through, so a git error refuses it. (The first version asked with `--literal-pathspecs`, which
+  `check-ignore` refuses; the failure read as "not ignored" and served an ignored file. The test that caught it
+  stays.)
+- **Sizes and types:** a document up to 1 MB, an image up to 5 MB (413 above). `files` serves only PNG, JPEG, GIF,
+  WebP and SVG whose bytes match their name, with `nosniff`, CORP same-origin and a sandboxing CSP, so an SVG opened
+  on its own runs nothing (in an `<img>` it never does). A file named `.png` that isn't one is shown as binary.
+- **What is left:** a file in the working tree that git doesn't ignore and that holds a secret (a token pasted into
+  `notes.txt`) can be shown, to the same user on the same machine, who can read it anyway; the dashboard shows it
+  only when a link names it. No new permission; the page's CSP is unchanged (`img-src 'self'`).
+
+**References as links (T-391).** `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` now
+tell agents to write references as relative links from the project root (`docs/x.md#routes`, `src/app.ts#L40`) and
+requirements or places in a document as text-fragment links (`docs/x.md#:~:text=SR%2D2.1`), also in `requirements`
+and `use_cases`. No API key is used for the agent sandbox, so this written review takes the live run's place:
+- **What the new text asks of agents:** how to write a link in task text, nothing to run, fetch or install. Every
+  example is a path inside the project; none points elsewhere.
+- **What such a link does:** in the dashboard, only what T-392 and T-395 allow: the viewer asks the documents route,
+  which checks the path again (no `..`, hidden, ignored or key files, no symlinks). The text fragment is searched for
+  in the rendered page and marked with the CSS Custom Highlight API: CompMD's page isn't changed, nothing is run, and
+  a fragment that matches nothing only shows a note.
+- **`requirements` and `use_cases` entries** may now be Markdown links: the details panel renders an entry with a
+  link through CompMD, under the same rules as task text; a card shows its text (`plain-text.ts`).
+
+**`atm edit` for requirements and use cases (T-401).** `/atm:create-tasks`, `/atm:do-task` and `plugin/CLAUDE.md`
+list `atm edit`'s new `--add-requirement`, `--remove-requirement`, `--add-use-case` and `--remove-use-case`. Written
+review in place of the live sandbox run:
+- **What the new text asks of agents:** to change a task's definition with atm, as they already do for files, labels
+  and dependencies; nothing to run, fetch or install.
+- **The flags** only add or remove strings in a task's own lists, under atm's lock, like `--add-label`: no path is
+  read, no URL fetched, and no new entry point (atm-cli reads nothing outside `tasks.json`). An entry is shown as
+  `requirements` entries already were (T-391: through CompMD in the details panel, as text on a card).
 
 ## 4. Keeping it current
 

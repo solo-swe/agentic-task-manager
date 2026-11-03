@@ -16,6 +16,14 @@ def git(args, cwd):
     return result.stdout.strip() if result.returncode == 0 else None
 
 
+def git_exit(args, cwd):
+    """Run git for its exit code alone (a command that answers yes or no that way); None if git isn't installed."""
+    try:
+        return subprocess.run(["git"] + args, cwd=cwd, capture_output=True).returncode
+    except OSError:
+        return None
+
+
 def run_git(args, cwd):
     """Run git as a step that must work: return stdout stripped, or raise with git's own message."""
     try:

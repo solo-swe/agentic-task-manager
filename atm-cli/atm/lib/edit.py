@@ -228,7 +228,8 @@ def add_new_tasks(project, entries):
 
 class TaskEdit:
     """What edit_task applies, as attributes (name, description, sprint, backlog, type, priority, release, review,
-    with_, components; add_/remove_ file, dep, label, component, related); what isn't given changes nothing."""
+    with_, components; add_/remove_ file, dep, label, component, related, requirement, use_case); what isn't given
+    changes nothing."""
 
     def __init__(self, **given):
         self.__dict__.update(given)
@@ -261,6 +262,10 @@ def edit_existing_task(
     remove_components=(),
     add_related=(),
     remove_related=(),
+    add_requirements=(),
+    remove_requirements=(),
+    add_use_cases=(),
+    remove_use_cases=(),
 ):
     """`atm edit`: change a task's definition (never its status), as `project.actor`. None (or an empty list) leaves
     a field as it is; an empty `release`, `review` or `with_` removes it; `backlog` takes it out of its sprint;
@@ -287,6 +292,10 @@ def edit_existing_task(
         remove_component=list(remove_components),
         add_related=list(add_related),
         remove_related=list(remove_related),
+        add_requirement=list(add_requirements),
+        remove_requirement=list(remove_requirements),
+        add_use_case=list(add_use_cases),
+        remove_use_case=list(remove_use_cases),
     )
 
     def change(work):
@@ -337,6 +346,14 @@ def edit_task(data, task, args, archived):
         set_field("priority", args.priority)
     edit_list("files", args.add_file, args.remove_file)
     edit_list("labels", check_labels(args.add_label), args.remove_label)
+    # An entry is an ID or a Markdown link to where it is defined (T-391): any text but an empty one
+    for key, add, remove in (
+        ("requirements", args.add_requirement, args.remove_requirement),
+        ("use_cases", args.add_use_case, args.remove_use_case),
+    ):
+        if any(not isinstance(v, str) or not v.strip() for v in add):
+            raise AtmError(f"an empty {key[:-1].replace('_', ' ')} can't be added", 2)
+        edit_list(key, add, remove)
     for key, value, check in (
         ("release", args.release, lambda v: known_release(vocab, v)),
         ("review", args.review, check_review),

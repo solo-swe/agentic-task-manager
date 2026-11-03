@@ -10,9 +10,11 @@ import { request as base, sandbox } from 'virtual:compmd';
 import {
   compmdAssetUrl,
   compmdRequest,
+  dashboardHash,
   frontmatter,
   FRONTMATTER_LINES,
   loadCompmd,
+  placeBlocks,
   resetCompmd,
   safeHref,
   secureLinks,
@@ -123,6 +125,33 @@ describe('what CompMD is given', () => {
   });
 });
 
+describe('placing a document’s blocks (T-400)', () => {
+  it('a block spans the boxes at its first and last offset; one that drew nothing is left out', async () => {
+    // rectsAt answers for the innermost node: a list's first offset gives its first item, its last its last item
+    const boxes: Record<number, { top: number; bottom: number }[]> = {
+      0: [{ top: 10, bottom: 30 }],
+      19: [{ top: 10, bottom: 30 }],
+      20: [{ top: 40, bottom: 60 }],
+      39: [
+        { top: 80, bottom: 100 },
+        { top: 90, bottom: 90 },
+      ],
+    };
+    const placed = await placeBlocks(
+      [
+        { line: 1, endLine: 1, offset: 0, endOffset: 20 },
+        { line: 3, endLine: 5, offset: 20, endOffset: 40 },
+        { line: 7, endLine: 7, offset: 50, endOffset: 60 },
+      ],
+      async (offset) => boxes[offset] ?? [],
+    );
+    expect(placed.map(({ line, top, bottom }) => [line, top, bottom])).toEqual([
+      [1, 10, 30],
+      [3, 40, 100],
+    ]);
+  });
+});
+
 describe('links', () => {
   it('only web and mail addresses and anchors in the page are followed', () => {
     expect(['https://a', 'http://a', 'mailto:a@b', '#x', ' #x'].map(safeHref)).toEqual([true, true, true, true, true]);
@@ -154,6 +183,22 @@ describe('the links CompMD renders', () => {
       expect(a.getAttribute('target')).toBe('_blank');
       expect(a.getAttribute('rel')).toBe('noopener noreferrer');
     }
+  });
+
+  it('a link to the dashboard itself opens in place: its hash; any other address opens in a new tab', () => {
+    const page = 'http://localhost:8765/';
+    expect(dashboardHash('http://localhost:8765/#project=p1&doc=docs/x.md:L3', page)).toBe(
+      '#project=p1&doc=docs/x.md:L3',
+    );
+    expect(dashboardHash('http://localhost:8765/', page)).toBeNull(); // no hash: nothing to open in place
+    expect(dashboardHash('http://localhost:9999/#doc=x.md', page)).toBeNull(); // another server
+    expect(dashboardHash('http://localhost:8765/other#doc=x.md', page)).toBeNull(); // another page
+    expect(dashboardHash('https://example.com/#doc=x.md', page)).toBeNull();
+    expect(dashboardHash('mailto:a@b.c', page)).toBeNull();
+    expect(dashboardHash('not a url', page)).toBeNull();
+    const here = `${location.origin}${location.pathname}#doc=docs/x.md`;
+    const a = rendered(`<a href="${here}">the design</a>`).querySelector('a');
+    expect(a?.getAttribute('target')).toBeNull();
   });
 
   it('a # link stays, for the panel to scroll', () => {

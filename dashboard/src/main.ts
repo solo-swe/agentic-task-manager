@@ -13,6 +13,7 @@ import './themes/sublime-material.css';
 import './themes/high-contrast.css';
 import './themes/sticky-notes.css';
 import './themes/hand-drawn.css';
+import './themes/doc-styles.css';
 import App from './App.svelte';
 
 // Mount straight into <body> so the DOM matches the legacy dashboard (no wrapper element).

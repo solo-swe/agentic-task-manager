@@ -23,6 +23,14 @@ class Invalid(AtmFailure):
     code = 2
 
 
+class Refused(AtmFailure):
+    """The thing exists but atm won't hand it out: a project file it doesn't show (hidden, ignored, a key file)."""
+
+
+class TooLarge(Refused):
+    """Larger than atm hands out."""
+
+
 class Conflict(AtmFailure):
     """The data changed since it was read, or the change isn't possible in the task's state."""
 

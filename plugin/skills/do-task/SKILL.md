@@ -131,7 +131,7 @@ command, so it goes through the same permission check as the command itself.
 While you work:
 - **A later task needs to change** (what you built changes its scope, its files or its dependencies): update it with
   `atm edit <id>` (`--description`, or `--description-file <file>` for several lines, `--add-dep`/`--remove-dep`,
-  `--add-file`/`--remove-file`, `--add-label`, ...). Descriptions are Markdown, as `/atm:create-tasks` writes them.
+  `--add-file`/`--remove-file`, `--add-label`, `--add-requirement`, `--add-use-case`, ...). Descriptions are Markdown, as `/atm:create-tasks` writes them.
   Its status changes only through the status commands.
 - **You can't go on without a decision** (two reasonable designs, a missing requirement, a credential): ask instead of
   guessing. `atm block $TASK_ID --on user --question '<one question>' [--question ...]` releases your claim and shows
@@ -147,7 +147,9 @@ Notes, questions, answers and reasons (`--note`, `--question`, `--answer`, `--re
 dashboard as Markdown: put paths, commands and identifiers in `` `code` `` and use `*italics*` or `**bold**` where
 they help; keep them short, without headings. The dashboard renders task text with CompMD (tables, task lists,
 ` ```mermaid ` diagrams, the task's own data as `md.data.task`); `/atm:create-tasks` lists what renders, and the
-plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest. Never fetch it from the web.
+plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest. Never fetch it from the web. Link files and
+documents with relative links from the project root (`docs/x.md#routes`, `src/app.ts#L40`), and a requirement or a
+place in a document with a text fragment (`docs/x.md#:~:text=SR%2D2.1`): `/atm:create-tasks` says how.
 
 **Quote that text in single quotes** (`` --note 'Ran `npm test`' ``), never double quotes: inside double quotes the shell
 runs backticks and `$(…)`, so a note mentioning `` `npm test` `` would run it, and text copied from a task could run

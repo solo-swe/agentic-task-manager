@@ -1,7 +1,7 @@
 """The code's version control, as atm-lib uses it (docs/layered-architecture.md §2). Git's other role, carrying the
 task files, belongs to the JSON-in-git store, not here. vcs/git.py implements it with git."""
 
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Tuple
 
 
 class Vcs(Protocol):
@@ -41,4 +41,25 @@ class Vcs(Protocol):
 
     def branch(self) -> Optional[str]:
         """The checked-out branch."""
+        ...
+
+    def file_stamp(self, relative: str) -> Optional[Tuple[int, int]]:
+        """(size, nanosecond mtime) of the working copy's file at `relative` (a checked, `/`-separated path), or None
+        when it isn't a regular file reached through no symbolic link from the project's root."""
+        ...
+
+    def read_file(self, relative: str) -> bytes:
+        """The bytes of that file (NotFound when file_stamp would say None)."""
+        ...
+
+    def ignored(self, relative: str) -> bool:
+        """Whether version control ignores the file (git's ignore rules; a tracked file never is); False outside it."""
+        ...
+
+    def tracked(self, relative: str) -> Optional[bool]:
+        """Whether version control tracks the file; None outside it."""
+        ...
+
+    def head(self) -> Optional[str]:
+        """The current commit's SHA; None outside version control or before the first commit."""
         ...

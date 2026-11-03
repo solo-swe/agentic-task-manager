@@ -4,6 +4,7 @@
   // its filters (a second row) through snippets.
   import type { Snippet } from 'svelte';
   import { dashboardVersion } from '../lib/release-notes';
+  import { compactAt } from '../lib/scroll';
   import { dashboard } from '../lib/state.svelte';
   import ProjectLogo from './ProjectLogo.svelte';
   import ProjectSelector from './ProjectSelector.svelte';
@@ -37,7 +38,7 @@
   let scrolled = $state(false);
 </script>
 
-<svelte:window onscroll={() => (scrolled = window.scrollY > 8)} />
+<svelte:window onscroll={() => (scrolled = compactAt(window.scrollY))} />
 
 <header class="topbar" class:scrolled>
   <div class="title-block">

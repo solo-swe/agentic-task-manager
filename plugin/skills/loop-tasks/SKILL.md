@@ -135,7 +135,9 @@ errors (the message says what).
    runs backticks and `$(…)` (write an apostrophe as `’`). A later task's description (`atm edit <id> --description-file <file>`) is
    Markdown too, as `/atm:create-tasks` writes it. The dashboard renders task text with CompMD (tables, task lists,
    ` ```mermaid ` diagrams, the task's own data as `md.data.task`): `/atm:create-tasks` lists what renders, and the
-   plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest; never fetch it from the web.
+   plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest; never fetch it from the web. Link files
+   and documents with relative links from the project root (`docs/x.md#routes`, `src/app.ts#L40`), and a requirement
+   or a place in a document with a text fragment (`docs/x.md#:~:text=SR%2D2.1`), as `/atm:create-tasks` says.
 6. **Statuses have kinds.** A project may name its own statuses; each has one of six kinds (`todo`, `active`,
    `review`, `blocked`, `done`, `skipped`) and atm works by kind, so "to do", "in review" and "done" below mean any
    status of that kind. When a kind has several statuses (e.g. `awaiting_user` and `awaiting_agent`, both `review`),

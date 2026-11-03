@@ -20,6 +20,26 @@ const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
+const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
+const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
+
+/** A file as the documents route answers it (docs/multi-project-api.md §2.6): Markdown by default, as it is */
+export function projectDocument(path: string, text: string, fields: Record<string, unknown> = {}) {
+  return {
+    path,
+    kind: 'markdown',
+    language: null,
+    text,
+    document: text,
+    line_offset: 0,
+    lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0),
+    bytes: text.length,
+    modified_at: '2026-01-01T00:00:00Z',
+    tracked: true,
+    commit: 'c0ffee'.padEnd(40, '0'),
+    ...fields,
+  };
+}
 
 /** Task views already worked out, by the files they are of: atm runs once per version of the data */
 const viewCache = new Map<string, string>();
@@ -182,6 +202,31 @@ export class TasksServer {
   notModified = 0;
   /** The queries api/search was asked, in order */
   searches: string[] = [];
+  /** The default project's files for the document viewer, by path: the documents route's answer, or a refusal */
+  private documents = new Map<string, { status: number; body: unknown; version: number }>();
+  /** The paths the documents route was asked for, in order, and how many were answered 304 */
+  documentRequests: string[] = [];
+  documentsNotModified = 0;
+
+  /** Serve a file of the default project through the documents route (a new version when it is set again) */
+  setDocument(doc: { path: string } & Record<string, unknown>) {
+    const version = (this.documents.get(doc.path)?.version ?? 0) + 1;
+    this.documents.set(doc.path, { status: 200, body: doc, version });
+  }
+
+  /** The default project's image files the files route serves, by path; the paths it was asked for, in order */
+  private images = new Map<string, { contentType: string; body: Buffer }>();
+  fileRequests: string[] = [];
+
+  /** Serve an image of the default project through the files route */
+  setImage(path: string, contentType: string, body: Buffer) {
+    this.images.set(path, { contentType, body });
+  }
+
+  /** Answer the documents route for `path` with an error, as atm serve refuses a file */
+  refuseDocument(path: string, status: number, error: string) {
+    this.documents.set(path, { status, body: { error }, version: 0 });
+  }
 
   constructor(private page: Page) {}
 
@@ -279,6 +324,34 @@ export class TasksServer {
       const q = new URL(route.request().url()).searchParams.get('q') ?? '';
       this.searches.push(q);
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(this.search(q)) });
+    });
+    await this.page.route(V1_DOCUMENTS, (route) => {
+      const url = new URL(route.request().url());
+      const path = url.searchParams.get('path') ?? '';
+      this.documentRequests.push(path);
+      const found = isDefault(route.request().url(), V1_DOCUMENTS) ? this.documents.get(path) : undefined;
+      if (!found) {
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "not in the project"}' });
+      }
+      const etag = `"d${found.version}"`;
+      if (found.status === 200 && route.request().headers()['if-none-match'] === etag) {
+        this.documentsNotModified++;
+        return route.fulfill({ status: 304, headers: { ETag: etag } });
+      }
+      return route.fulfill({
+        status: found.status,
+        contentType: 'application/json',
+        body: JSON.stringify(found.body),
+        headers: found.status === 200 ? { ETag: etag } : undefined,
+      });
+    });
+    await this.page.route(V1_FILES, (route) => {
+      const path = new URL(route.request().url()).searchParams.get('path') ?? '';
+      this.fileRequests.push(path);
+      const image = isDefault(route.request().url(), V1_FILES) ? this.images.get(path) : undefined;
+      return image
+        ? route.fulfill({ status: 200, contentType: image.contentType, body: image.body })
+        : route.fulfill({ status: 404, contentType: 'application/json', body: '{"error": "not in the project"}' });
     });
     await this.page.route(LOGO, (route) => {
       const svg = this.logos.get(decodeURIComponent(LOGO.exec(route.request().url())![1]));

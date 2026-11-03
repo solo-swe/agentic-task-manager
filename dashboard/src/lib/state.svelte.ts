@@ -15,7 +15,15 @@ import { compareVersions } from './changelog';
 import { projectComponents } from './components';
 import { getPref, setPref, storageAvailable } from './prefs';
 import { dashboardBuild, dashboardVersion } from './release-notes';
-import { isModePref, knownTheme, resolveMode, type Mode, type ModePref } from './appearance';
+import {
+  isModePref,
+  knownDocStyle,
+  knownTheme,
+  resolveMode,
+  type DocStyle,
+  type Mode,
+  type ModePref,
+} from './appearance';
 import {
   emptyFilters,
   FILTER_GROUPS,
@@ -29,6 +37,14 @@ import {
   type ListSort,
 } from './filters';
 import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
+import { parseDocHash, withDocHash, type DocumentRef } from './documents';
+
+/** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
+function documentDepth(): number {
+  const state = history.state as { atmDocument?: boolean; atmDocumentDepth?: number } | null;
+  if (!state?.atmDocument) return 0;
+  return typeof state.atmDocumentDepth === 'number' && state.atmDocumentDepth > 0 ? state.atmDocumentDepth : 1;
+}
 import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
 import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
 import { formatHash, hashParams } from './hash';
@@ -236,6 +252,9 @@ export class DashboardState {
   whatsNewOpen = $state(false);
   /** The open About or Help dialog; mirrored in the URL hash ("#about") so it can be linked */
   dialog = $state<DialogId | null>(parseDialogHash(location.hash));
+  /** The file open in the document viewer, from the URL hash (#doc=<path>:L<n>), so it can be linked and Reload
+   * keeps it (docs/compmd-viewer-design.md V2) */
+  docRef = $state.raw<DocumentRef | null>(parseDocHash(location.hash));
   /** "New" on the version until this version's release notes are opened once (FR-1.5). Without working storage
    * it could never be cleared, so it is not shown at all. */
   releaseNotesUnseen = $state(releaseNotesUnseen());
@@ -245,6 +264,8 @@ export class DashboardState {
     isModePref(getPref('mode', 'system')) ? (getPref('mode', 'system') as ModePref) : 'system',
   );
   theme = $state(knownTheme(getPref('theme', 'default')));
+  /** The document viewer's page (T-404), per browser like the theme */
+  docStyle = $state<DocStyle>(knownDocStyle(getPref('docStyle', 'auto')));
   systemPrefersLight = $state(prefersLight());
   mode = $derived<Mode>(resolveMode(this.modePref, this.systemPrefersLight));
 
@@ -391,6 +412,7 @@ export class DashboardState {
   /** The URL changed (a link, Back): pick up the dialog, and the page when it names another one. */
   onHashChange() {
     this.dialog = parseDialogHash(location.hash);
+    this.docRef = parseDocHash(location.hash);
     // An overview tab from the URL (Back, a link) is the last one shown, so it is remembered too
     const overviewTab = parseOverviewTab(location.hash);
     if (overviewTab) {
@@ -528,6 +550,11 @@ export class DashboardState {
     setPref('theme', this.theme);
   }
 
+  setDocStyle(id: string) {
+    this.docStyle = knownDocStyle(id);
+    setPref('docStyle', this.docStyle);
+  }
+
   setAutoRefreshSeconds(seconds: number) {
     this.autoRefreshSeconds = seconds;
     setPref('autoRefreshSeconds', seconds);
@@ -588,6 +615,37 @@ export class DashboardState {
   closeDialog() {
     this.dialog = null;
     history.replaceState(null, '', withDialogHash(location.hash, null));
+  }
+
+  /** Opens a file of the project in the document viewer: a new history entry, marked as the viewer's, so the
+   * browser's Back (and the viewer's) returns to the previous document or to the task */
+  openDocument(ref: DocumentRef) {
+    this.docRef = ref;
+    // How many of the viewer's entries lead here, so Close can go back past all of them
+    const depth = documentDepth() + 1;
+    history.pushState({ atmDocument: true, atmDocumentDepth: depth }, '', withDocHash(location.hash, ref));
+  }
+
+  /** The viewer's Back (its button, Escape): the previous history entry when this one was the viewer's own; for a
+   * document opened from a link or a reload, closes it without a new history entry */
+  documentBack() {
+    if (documentDepth() > 0) {
+      history.back();
+      return;
+    }
+    this.closeDocument();
+  }
+
+  /** The viewer's Close: back past every document opened in it, to where the first was opened from (so the browser's
+   * Back doesn't bring one back); a document opened from a link or a reload closes without a new history entry */
+  closeDocument() {
+    const depth = documentDepth();
+    if (depth > 0) {
+      history.go(-depth);
+      return;
+    }
+    this.docRef = null;
+    history.replaceState(null, '', withDocHash(location.hash, null));
   }
 
   selectTab(tab: ViewId) {

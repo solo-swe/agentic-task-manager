@@ -78,6 +78,75 @@
     }
   },
   {
+    "name": "edit adds and removes requirements and use cases: an ID, or a link to where it is defined",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "todo", "requirements": ["FR-1", "FR-2"], "use_cases": ["UC-1"] }]
+        }
+      }
+    },
+    "args": [
+      "edit",
+      "T-1",
+      "--add-requirement",
+      "[SR-2.1](docs/design.md#:~:text=SR%2D2.1)",
+      "--remove-requirement",
+      "FR-1",
+      "--add-requirement",
+      "FR-2",
+      "--add-use-case",
+      "UC-2",
+      "--remove-use-case",
+      "UC-1"
+    ],
+    "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
+    "expect": {
+      "stdout": "T-1: changed requirements, use_cases\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "requirements": ["FR-2", "[SR-2.1](docs/design.md#:~:text=SR%2D2.1)"],
+              "use_cases": ["UC-2"],
+              "updated_at": "2026-05-01T10:00:00Z",
+              "updated_by": "alice"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "edit: a requirement already there, or a use case that isn't, changes nothing",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "requirements": ["FR-1"] }] }
+      }
+    },
+    "args": ["edit", "T-1", "--add-requirement", "FR-1", "--remove-use-case", "UC-9"],
+    "expect": {
+      "stdout": "T-1: nothing changed\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "requirements": ["FR-1"] }] }
+      }
+    }
+  },
+  {
+    "name": "edit refuses an empty requirement, and nothing changes",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } }
+    },
+    "args": ["edit", "T-1", "--add-use-case", "UC-1", "--add-requirement", "  "],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["atm: an empty requirement can't be added"],
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } }
+    }
+  },
+  {
     "name": "edit refuses a dependency that would make a cycle, and nothing changes",
     "setup": {
       "files": {

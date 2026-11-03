@@ -31,8 +31,8 @@ test.describe('detail panel', () => {
     await openFromCard(page, 'T-004');
     await expect(panel(page).locator('.task-meta > *')).toHaveText(['feature', 'Done', 'Phase 1', 'P2']);
     await expect(section(page, 'Description').locator('.value')).toHaveText('Description of T-004: User login.');
-    await expect(section(page, 'Use Cases').locator('.uc-badge')).toHaveText(['UC-001']);
-    await expect(section(page, 'Requirements').locator('.req-badge')).toHaveText(['FR-1.1', 'FR-1.2']);
+    await expect(section(page, 'Use Cases').locator('.detail-ref')).toHaveText(['UC-001']);
+    await expect(section(page, 'Requirements').locator('.detail-ref')).toHaveText(['FR-1.1', 'FR-1.2']);
     await expect(section(page, 'Timestamps')).toContainText('Created: 3/31/2026, 8:00:00 AM');
     await expect(section(page, 'Timestamps')).toContainText('Updated: 4/3/2026, 11:00:00 AM');
     await expect(section(page, 'Files').locator('.detail-files div')).toHaveText(['src/auth/login.ts']);
@@ -82,8 +82,8 @@ test.describe('detail panel', () => {
 
   test('placeholders for missing optional fields', async ({ page }) => {
     await openFromCard(page, 'T-009');
-    await expect(section(page, 'Use Cases').locator('.value')).toHaveText('None');
-    await expect(section(page, 'Requirements').locator('.value')).toHaveText('None');
+    await expect(section(page, 'Use Cases').locator('.detail-refs')).toHaveText('None');
+    await expect(section(page, 'Requirements').locator('.detail-refs')).toHaveText('None');
     await expect(section(page, 'Files').locator('.detail-files')).toHaveText('None specified');
     await expect(section(page, 'Timestamps')).toHaveCount(0);
   });
@@ -234,6 +234,18 @@ test.describe('task text with CompMD', () => {
     await expect(description(page).locator('del')).toHaveText('old idea');
     // md.data.task carries atm's derived values (from the v1 route): T-1 has no dependencies, so it is ready
     await expect(description(page)).toContainText('This is T-1, ready: true.');
+  });
+
+  test('math typesets, inline and as a block, not as its TeX (CompMD 0.4.0, T-398)', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, withText('Area $x^2$ of a square.\n\n$$\n\\frac{a}{b}\n$$\n'), {
+      tab: 'list',
+    });
+    await openFromCard(page, 'T-1');
+    await expect(description(page).locator('math')).toHaveCount(2);
+    await expect(description(page).locator('math[display="block"] mfrac')).toHaveCount(1);
+    await expect(description(page).locator('math').first().locator('msup')).toHaveCount(1);
+    await expect(description(page)).not.toContainText('$x^2$');
+    await expect(description(page)).not.toContainText('\\frac');
   });
 
   test('raw HTML, scripts and javascript: links run nothing', async ({ page, tasksServer }) => {

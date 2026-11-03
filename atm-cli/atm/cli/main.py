@@ -372,6 +372,8 @@ def build_parser():
         ("label", "a label"),
         ("component", "a component"),
         ("related", "a related task"),
+        ("requirement", "a requirement: its ID, or a link to where it is defined"),
+        ("use-case", "a use case: its ID, or a link to where it is defined"),
     ):
         edit.add_argument(f"--add-{option}", action="append", default=[], metavar="VALUE", help=f"add {help_text}")
         edit.add_argument(f"--remove-{option}", action="append", default=[], metavar="VALUE", help=f"remove {help_text}")

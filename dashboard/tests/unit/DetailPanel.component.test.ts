@@ -288,6 +288,25 @@ describe('DetailPanel', () => {
     expect(desc).toHaveTextContent('<i>not italic</i>');
   });
 
+  it('lists use cases and requirements one a line; one written as a link is a link, a bare ID text (T-403)', async () => {
+    const container = open({
+      use_cases: [],
+      requirements: ['[the phrase that defines it](docs/x.md#:~:text=SR%2D2.1)', 'SR-9'],
+    });
+    await compmdSettled();
+    const entries = (label: string) => {
+      const section = [...container.querySelectorAll('.detail-section')].find(
+        (s) => s.querySelector('.label')?.textContent === label,
+      )!;
+      return [...section.querySelectorAll('.detail-refs > .detail-ref')];
+    };
+    expect(entries('Requirements').map((e) => e.textContent?.trim())).toEqual(['the phrase that defines it', 'SR-9']);
+    expect(entries('Requirements')[0].querySelector('a')).toHaveTextContent('the phrase that defines it');
+    expect(entries('Requirements')[1].querySelector('a')).toBeNull();
+    expect(entries('Use Cases')).toEqual([]);
+    expect(container.querySelector('.req-badge, .uc-badge')).toBeNull();
+  });
+
   it('the task’s own data is md.data.task (T-284)', async () => {
     // Its derived values too, which come with the v1 route's tasks (lib/compmd's tests); these come from a fixture
     const container = open({ description: 'This is {{md.data.task.id}}, {{md.data.task.status}}.', status: 'todo' });

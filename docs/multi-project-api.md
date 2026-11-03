@@ -28,6 +28,8 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /p/<id>/worktrees.json` | that project's git worktrees and their changed tasks (§2.2) | yes |
 | `GET /p/<id>/logo` | that project's logo image (§2.3) | yes |
 | `GET /api/v1/projects/<id>/tasks` | that project's tasks, each with what atm derives for it (§2.5) | yes |
+| `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6) | yes |
+| `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
 | anything else | `404` | |
 
@@ -40,7 +42,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
   F7, F8), answers `404` for all of these.
 - An ETag is a hash of what the answer depends on (the store's stamps: its files' sizes and nanosecond mtimes, and the
   query), so two atm changes in the same second are two ETags.
-- Query strings are ignored, except `q` on `api/search` and the filters on the v1 route.
+- Query strings are ignored, except `q` on `api/search`, the filters on the v1 route and `path` on the file routes.
 - The Projects Overview reads every listed project's tasks and archive (the v1 route, with `?archived=true` for the
   archive, T-355) and `claims.json` while it is shown, conditionally on each refresh (an unchanged answer is `304`),
   for its views across projects: the Agents tab (T-333), the title bar's Activity (T-328) and the Progress tab (T-329).
@@ -141,6 +143,23 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
   and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.
 - The ETag changes with the project's `tasks.json`, its archive and the query. A `tasks.json` over the size limit gets
   `413`, as the raw file does; an unknown project `404`.
+
+### 2.6 `documents` and `files`: a project's files for the document viewer
+
+The document viewer's routes (T-392, docs/compmd-viewer-design.md §4), answered by atm-lib (`lib/documents.py`), which
+reads the working copy through the version control. `path` is relative to the project's root, `/`-separated.
+
+- `documents?path=` answers `{path, kind, language, text, document, line_offset, lines, bytes, modified_at, tracked,
+  commit}`. `kind` is `markdown`, `code` (with its fence `language`), `image`, `binary` or `text`; `document` is the
+  CompMD document the dashboard renders: a Markdown file as it is, code and text in a fence (`line_offset` 1, the
+  lines the wrapping adds before the file's first), an image as a Markdown image of its own name, a binary file as a
+  line saying so. `text` is the file as it is (`null` for an image or a binary file), `lines` its line count.
+  `tracked` and `commit` (the HEAD commit) are `null` outside git. The ETag is the file's size, mtime and the commit.
+- `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
+  `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
+- Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
+  folder, a key file (`*.pem`, `id_rsa*`, …) or one git ignores `403`; a missing file, or one reached through a
+  symlink, `404`; over 1 MB (5 MB for an image) `413`. Each with `{"error": …}`.
 
 ## 3. `GET /api/projects`
 

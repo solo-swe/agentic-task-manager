@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 398,
+    "next_id": 408,
     "labels": [
       {
         "id": "architecture",
@@ -815,6 +815,43 @@
             "T-388"
           ]
         }
+      },
+      {
+        "id": "Document Viewer",
+        "state": "closed",
+        "goal": "Open the documents and files a task refers to inside the dashboard, rendered with CompMD",
+        "release": "0.29.0",
+        "start": "2026-11-03T18:13:58Z",
+        "end": "2026-11-03T23:30:16Z",
+        "report": {
+          "done": [
+            "T-391",
+            "T-392",
+            "T-393",
+            "T-394",
+            "T-395",
+            "T-396",
+            "T-398",
+            "T-399",
+            "T-400",
+            "T-401",
+            "T-402",
+            "T-403",
+            "T-404",
+            "T-407"
+          ],
+          "carried": [],
+          "added": [
+            "T-398",
+            "T-399",
+            "T-400",
+            "T-401",
+            "T-402",
+            "T-403",
+            "T-404",
+            "T-407"
+          ]
+        }
       }
     ],
     "releases": [
@@ -978,6 +1015,15 @@
       },
       {
         "id": "0.28.0",
+        "state": "released",
+        "pr": {
+          "number": 33,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+        },
+        "released_at": "2026-11-03T18:10:34Z"
+      },
+      {
+        "id": "0.29.0",
         "state": "planned"
       }
     ],
@@ -14262,7 +14308,7 @@
         "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14314,7 +14360,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-285",
@@ -14343,7 +14390,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14376,7 +14423,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-286",
@@ -14402,7 +14450,7 @@
         "plugin/docs/compmd-llms.txt"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14433,7 +14481,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-287",
@@ -17332,7 +17381,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17385,7 +17434,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-337",
@@ -17395,7 +17445,7 @@
       "labels": [
         "code-review"
       ],
-      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today (I11: nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in `docs/security-architecture.md` change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text (I1), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.",
+      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP): nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -17404,9 +17454,9 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-03T19:56:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "docs",
         "dashboard",
@@ -17670,7 +17720,7 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17699,7 +17749,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-343",
@@ -20522,7 +20573,7 @@
         "README.md"
       ],
       "created_at": "2026-11-03T01:25:18Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20551,7 +20602,8 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-390",
@@ -20572,7 +20624,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T07:22:15Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20602,43 +20654,79 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
-      }
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
     },
     {
       "id": "T-391",
-      "name": "Requirement and use-case IDs open the document that defines them",
+      "name": "Text-fragment links: references open the document at the text, and agents write them that way",
       "type": "feature",
       "priority": "P2",
       "labels": [
         "compmd"
       ],
-      "description": "A task's `requirements` and `use_cases` (`SR-7.6`, `UC-001`) open the document that defines each ID, at its line, in the document viewer of `docs/compmd-viewer-design.md` (requirement **V1d**; it opens files at `#L<n>`).\n\n## To settle first\natm has no map from an ID to the document that defines it. Options: a `meta.documents.requirements` setting naming the documents (or globs) that define IDs, and the server finding the first heading or line in them that starts with the ID; or an index atm builds from those documents. Agree the choice with Hakan before building.\n\n## Change\n- atm-lib: find an ID's document and line among the configured documents, through the same checks as the documents route (inside the project, no symlinks, not ignored).\n- A REST route (or a field of the documents route) answering an ID with `{path, line}`; 404 when no document defines it.\n- The details panel: each requirement and use-case ID becomes a link that opens the viewer at that line; an ID nothing defines stays text.\n- `docs/security-architecture.md` for the route, and Help.\n\n## Tests\natm-lib unit tests and `serve.test.mjs` for the lookup and its checks; a component test for the links; an e2e test opening an ID at its line.",
-      "requirements": [],
+      "description": "References to a requirement, a use case or any place in a document are **links with a text fragment** (decided with Hakan while planning; no ID index): `[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`. The viewer opens the document at the first match and highlights it; GitHub and browsers understand the same links.\n\n## Text fragments\nThe [text fragment](https://web.dev/articles/text-fragments#text_fragments) syntax: `#:~:text=[prefix-,]textStart[,textEnd][,-suffix]`, each part percent-encoded. `-`, `,` and `&` are part of the syntax, so in the text they are `%2D`, `%2C` and `%26` (an ID `SR-2.1` is `SR%2D2.1`). `textStart,textEnd` matches a range; `prefix-,` and `,-suffix` only narrow which match is meant. Several `text=` directives may follow, joined by `&`.\n\n## Change\n- `dashboard/src/lib/documents.ts`: parse a link's `#:~:text=…` (alone, or after a `#heading` fragment, which then gives way to it): decode the parts, find the first match in the rendered document's text (case-insensitive, across inline elements, whitespace collapsed; `textEnd` the end of the range; prefix and suffix checked around it), scroll to it and mark it (a highlight in the theme's colours, gone at the next click). No match: open at the top, with a short note that the text wasn't found. Unit tests for the parser and the matcher.\n- The details panel: each `requirements` and `use_cases` entry renders inline with CompMD, so an entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`) opens the viewer; a bare ID stays text, as now.\n- **Skills** (`plugin/skills/create-tasks/SKILL.md`, and the lines on task text in `do-task`, `loop-tasks` and `plugin/CLAUDE.md`): from now on, a reference to a requirement, a use case or a place in a document is a relative link from the project root with a text fragment, and `requirements` / `use_cases` entries are such links. Say what a text fragment is, how its parts work, and the encoding of `-`, `,` and `&`, with two examples (an ID; a phrase with a prefix). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).\n- `docs/help.md`: references open the document at the text.\n\n## Try it\nEach opens the document viewer at the text, marked until the next click:\n\n| What | Link |\n|---|---|\n| An ID, its `-` encoded | [SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1) |\n| Another ID, in a long table | [SR-7.6](docs/sprints-and-releases-design.md#:~:text=SR%2D7.6) |\n| A phrase after a heading (a prefix) | [A link in task text](docs/compmd-viewer-design.md#:~:text=Resolving%20a%20reference-,A%20link%20in) |\n| The second of two matches (a suffix) | [Placement, as decided](docs/compmd-viewer-design.md#:~:text=Placement%3A,-A%2C%20movable) |\n| A range, from one text to another | [the review's decisions](docs/compmd-viewer-design.md#:~:text=Decided%20in%20the%20first%20round,Not%20only%20Markdown) |\n| An invariant, by its words | [I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP) |\n| Text the document doesn't have | [nowhere](docs/compmd-viewer-design.md#:~:text=no%20such%20sentence) (opens at the top, saying so) |\n\nA `requirements` entry written as a link shows in the details panel as a link too: this task's **Requirements** have two (V1d, V2, each opening the viewer at its text) and a bare ID (V2a, which stays text). On its card, all three show as text.\n\n## Tests\nUnit tests (parsing, encoding, matching with prefix, suffix and ranges); a component test for requirement links in the details panel; e2e: a text-fragment link in a description and in `requirements` opens the viewer at the match and marks it; one that matches nothing opens at the top with the note.\n",
+      "requirements": [
+        "[V1d](docs/compmd-viewer-design.md#:~:text=V1d.)",
+        "[V2](docs/compmd-viewer-design.md#:~:text=V2.%20Where.)",
+        "V2a"
+      ],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
-        "T-393"
+        "T-395"
       ],
       "files": [
-        "atm-cli/atm/lib/documents.py",
-        "atm-cli/atm/api/server.py",
         "dashboard/src/components/DetailPanel.svelte",
         "dashboard/src/lib/documents.ts",
         "docs/security-architecture.md",
-        "docs/help.md"
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "dashboard/tests/unit/documents.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T16:55:22Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "dashboard",
         "cli",
-        "docs"
+        "docs",
+        "skills"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "started_at": "2026-11-03T19:47:21Z",
+      "started_by": "claude:b7be7288",
+      "commit": "2d0f72d40ad74ac43bb7ee0a6bd47e7ef3a218fe",
+      "completed_at": "2026-11-03T19:53:41Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T19:53:41Z",
+          "kind": "review",
+          "text": "Text-fragment links open the document at the text, marked (CSS Custom Highlight API, CompMD’s page untouched); `requirements`/`use_cases` entries may be links. Check the skills’ wording on references (create-tasks, do-task, loop-tasks, plugin/CLAUDE.md) and the §3.3 written review. e2e 401, unit 1010; single file 554 kB.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-392",
@@ -20648,10 +20736,10 @@
       "labels": [
         "compmd"
       ],
-      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project.\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Tests\n`tests/lib/` for the kinds, the wrapping and `line_offset`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.",
+      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- For the viewer's *Open on GitHub* (T-393): `tracked` (git tracks the file) and `commit` (the HEAD commit's SHA), both through the vcs layer; `null` outside a git repository.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project. A project that isn't a git repository: no ignore check (the other checks hold).\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Not here\nRendering: the server only wraps a file into a CompMD document (a fence with the file's language for code); CompMD\nrenders it, highlighting included.\n\n## Tests\n`tests/lib/` for the kinds, the wrapping, `line_offset`, `tracked` and `commit`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/lib/documents.py",
@@ -20661,9 +20749,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "cli",
         "api",
@@ -20671,7 +20759,33 @@
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "started_at": "2026-11-03T18:51:33Z",
+      "started_by": "claude:b7be7288",
+      "commit": "cc7bf7b4560b775eb8f43f416d14a42c9011fd04",
+      "completed_at": "2026-11-03T19:02:41Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T19:02:41Z",
+          "kind": "review",
+          "text": "Routes `documents?path=` and `files?path=` through `lib/documents.py` (path rules, kinds, wrapping) and the vcs (reading, `ignored`, `tracked`, `head`). Check: `serve.test.mjs` \"a project’s files for the document viewer\"; note the ignore check fails closed (it first failed open: `check-ignore` refuses `--literal-pathspecs`). atm-cli 552 pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-393",
@@ -20681,10 +20795,10 @@
       "labels": [
         "compmd"
       ],
-      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6.\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Its title is the document's first heading, else its path. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash); e2e: open, move, resize, Back, Reload keeps it, a missing file, a refused file.",
+      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6. **Reviewed live with Hakan on the dev server** before the tasks that build on it (review mode `blocker`).\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- **The title bar:** the document's first heading (else its file name), its path under it, and two actions (decided with Hakan):\n  - **Copy path**: copies the path from the project root, with `#L<n>` (or `#L<n>-L<m>`) when a line or range is selected, for pasting to an agent; says \"Copied\" for a moment.\n  - **Open on GitHub**: the file in the repository's web view (`meta.repository`, the same address rules as commit links), at the HEAD commit the documents route gives (`commit`), with the selected line; in a new tab, without access to the page. Shown only when the project has a repository address and git tracks the file (`tracked`).\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash, the GitHub address); e2e: open, move, resize, Back, Reload keeps it, Copy path (with a line), Open on GitHub (shown or not), a missing file, a refused file.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-392"
       ],
@@ -20697,15 +20811,53 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T23:25:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "blocker",
+      "started_at": "2026-11-03T19:02:46Z",
+      "started_by": "claude:b7be7288",
+      "commit": "5e94bf3fe99922dbd9789b316ebfdeaa68e0d8fc",
+      "review_requested_at": "2026-11-03T19:11:51Z",
+      "notes": [
+        {
+          "at": "2026-11-03T19:11:51Z",
+          "kind": "review",
+          "text": "Live review on the dev server: open `#doc=docs/compmd-viewer-design.md` with the task panel open; move by the title bar, resize from the corner, Reload, Back, Escape, Copy path (`:L3`), Open on GitHub, a narrow window. e2e 386, unit 1001 pass.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:26:47Z",
+          "kind": "outcome",
+          "text": "Passed Hakan’s live review: page on a desk with theme papers, compacting title bar, a small × in the corner. Line links (scroll and mark) are T-394.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-03T19:11:51Z",
+          "to": "2026-11-03T19:26:47Z"
+        }
+      ],
+      "completed_at": "2026-11-03T19:26:47Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-394",
@@ -20715,10 +20867,10 @@
       "labels": [
         "compmd"
       ],
-      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.",
+      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left of a `code` or `text` file: a number per line of `text` (its lines never wrap on screen: the block scrolls sideways). `#L<n>` scrolls to the line; `#L<n>-L<m>` marks the range. Markdown documents are T-400: their blocks' source lines come from CompMD's renderer, through an API it is adding.\n- **Links to the dashboard itself** (its own address with a `#…`, e.g. a document's URL) open in place instead of in a new tab (Hakan, while trying this task's links).\n- **Refreshing in place:** a changed file re-renders where the reader is, never back at the top. A 304 changes nothing.\n- **Images:** a relative Markdown image becomes the files route's URL for the path resolved from the document's folder; `data:` stays; any other image shows its alt text.\n\n## Not here\nRendering content: CompMD renders the whole document, code blocks and their highlighting included (it takes care of highlighting itself); atm only wraps a file into a CompMD document (the server, T-392). The gutter, the line-range mark and the scroll position are the viewer's own UI around CompMD's output; add no renderer or highlighter.\n\n## Try it\nOn the dev server (`npm run dev` in `dashboard/`), these open in a new tab; once T-395 is done, the relative links below open the viewer in place.\n\n| What | Dev server | In the dashboard (T-395) |\n|---|---|---|\n| A design, lines 14–20 marked | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=docs/compmd-viewer-design.md:L14-L20) | [docs/compmd-viewer-design.md#L14-L20](docs/compmd-viewer-design.md#L14-L20) |\n| Code, line 40 | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=atm-cli/atm/lib/documents.py:L40) | [atm-cli/atm/lib/documents.py#L40](atm-cli/atm/lib/documents.py#L40) |\n| Code, a range | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=dashboard/src/lib/documents.ts:L44-L60) | [dashboard/src/lib/documents.ts#L44-L60](dashboard/src/lib/documents.ts#L44-L60) |\n| An image | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/atm-logo.png) | [branding/atm-logo.png](branding/atm-logo.png) |\n| A document in another folder | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/README.md) | [branding/README.md](branding/README.md) |\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40 and marks it; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't; a link to the dashboard opens in place.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-393"
       ],
@@ -20729,15 +20881,47 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-03T19:25:38Z",
+          "kind": "note",
+          "text": "From T-393’s live review (Hakan): a `#doc=…:L14-L20` link must scroll to those lines and mark them, in a Markdown document too (the blocks the lines fall in).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:42:17Z",
+          "kind": "review",
+          "text": "Code and text files: gutter, `:L40-L45` scrolls and marks; refreshing keeps the place; relative images load from the files route; links to the dashboard open in place. Check with the links in this task’s description. Markdown lines are T-400 (blocked on CompMD’s renderer API). e2e 394, unit 1003; single file 549 kB (guardrail 550 KiB).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-03T19:26:48Z",
+      "started_by": "claude:b7be7288",
+      "commit": "17faece19bdde384dbab4f3ff15c3dd5fa12e711",
+      "completed_at": "2026-11-03T19:42:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-395",
@@ -20750,7 +20934,7 @@
       "description": "The references that open the viewer, `docs/compmd-viewer-design.md` §1 (V1a–V1c) and §3.\n\n## Change\n- A relative link in task text (`docs/x.md`, `docs/x.md#3-routes`, `src/app.ts#L40`) becomes a viewer link, resolved from the project root; one leaving the project stays text. `safeTree` and `secureLinks` keep it, opened by the click handler, never by the browser.\n- A relative link inside an open document opens the viewer at the path resolved from its folder.\n- The details panel's Files list links every entry.\n\n## Tests\nUnit tests for the link rules (`compmd.test.ts`); e2e: a link in a description, in a document, and a Files entry each open the viewer; a `..` out of the project is text.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-393"
       ],
@@ -20762,15 +20946,41 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "started_at": "2026-11-03T19:42:21Z",
+      "started_by": "claude:b7be7288",
+      "commit": "a8156772938dad303224d804c27858d4b2908286",
+      "completed_at": "2026-11-03T19:47:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T19:47:17Z",
+          "kind": "review",
+          "text": "Relative links in task text (from the root) and in documents (from their folder) open the viewer, at `#L…` lines or a heading; Files entries are links (folders stay text). Check: T-394’s description links now open in place. e2e 398, unit 1007; single file 550.8 kB (guardrail 550 KiB = 563.2 kB).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-396",
@@ -20783,7 +20993,7 @@
       "description": "Help (`docs/help.md`, the task details) says that relative links and Files entries open in the document viewer, with `#L<n>` for a line. `/atm:create-tasks` gets one line: link documents and code with relative paths from the project root (`docs/x.md#section`, `src/app.ts#L40`). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-395"
       ],
@@ -20793,16 +21003,42 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "skills",
         "docs"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "started_at": "2026-11-03T19:53:44Z",
+      "started_by": "claude:b7be7288",
+      "commit": "34e36c0ea1b54a81c4cb8270941ad8f8fc0d9c5a",
+      "completed_at": "2026-11-03T19:55:32Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T19:55:32Z",
+          "kind": "review",
+          "text": "Help gains a Documents section (what opens the viewer, where, what it shows, the window). The `/atm:create-tasks` line on relative links and the §3.3 review went in with T-391. Check Help’s wording.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
     },
     {
       "id": "T-397",
@@ -20828,7 +21064,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T17:19:48Z",
-      "updated_at": "2026-11-03T17:34:38Z",
+      "updated_at": "2026-11-03T18:11:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20858,7 +21094,583 @@
       "pr": {
         "number": 33,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      },
+      "merged_at": "2026-11-03T18:10:34Z"
+    },
+    {
+      "id": "T-398",
+      "name": "Upgrade CompMD to its next release, with host-mode math",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- [`dashboard/package.json`](dashboard/package.json): bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` ([`dashboard/compmd.config.json`](dashboard/compmd.config.json)) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the [CHANGELOG](plugin/CHANGELOG.md#:~:text=Math%20shows%20as%20its%20TeX%20source), the \"math shows as TeX\" lines in [`docs/help.md`](docs/help.md), [`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md), and the math note in [`docs/compmd-rendering-design.md`](docs/compmd-rendering-design.md). Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- [`plugin/docs/compmd-llms.txt`](plugin/docs/compmd-llms.txt): replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the [§3.3 review](docs/security-architecture.md#:~:text=3.3%20Sprints%20and%20releases) in [`docs/security-architecture.md`](docs/security-architecture.md) gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt [`dashboard/src/lib/compmd.ts`](dashboard/src/lib/compmd.ts) and [`dashboard/compmd/entry.ts`](dashboard/compmd/entry.ts).\n\n## Tests\n[`compmd-processor.test.ts`](dashboard/tests/unit/compmd-processor.test.ts) and [`compmd.test.ts`](dashboard/tests/unit/compmd.test.ts) pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.\n\n## Try it\nWhat CompMD 0.4.0 changes, to check by eye here (switch Light and Dark in the ⋯ menu too).\n\n### Math\nInline: the area of a circle is $\\pi r^2$, and $e^{i\\pi} + 1 = 0$. A price stays text: it costs $5 and $6.\n\nA block:\n\n$$\n\\int_0^1 x^2 \\, dx = \\frac{1}{3}\n$$\n\nA matrix and a sum:\n\n$$\n\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}\n\\qquad\n\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}\n$$\n\n### Code, highlighted by its language\n```ts\n// TypeScript\nexport function greet(name: string): string {\n  return `Hello, ${name}!`;\n}\n```\n\n```python\n# Python\ndef fib(n: int) -> int:\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n```\n\n```json\n{ \"id\": \"T-398\", \"status\": \"in_progress\", \"labels\": [\"compmd\"] }\n```\n\n```bash\nnpm --prefix dashboard run build\n```\n\n```md\n::: card {title=\"CompMD's own syntax\"}\nHello {{md.doc.title}} :badge[beta]{tone=info}\n::: /card\n```\n\n```\nA block without a language stays plain.\n```\n\nInline code stays as before: `npm run check`.\n\n### A diagram (unchanged, still drawn)\n```mermaid {alt=\"Upgrade, then check, then commit\"}\nflowchart LR\n  up[Upgrade] --> check[Check] --> commit[Commit]\n```\n\n### Documents\nCode in the document viewer is highlighted too, with its line numbers: [atm-cli/atm/lib/documents.py#L40](atm-cli/atm/lib/documents.py#L40), [dashboard/src/lib/documents.ts#L44-L60](dashboard/src/lib/documents.ts#L44-L60). A Markdown document's code blocks as well: [docs/compmd-viewer-design.md](docs/compmd-viewer-design.md).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/package-lock.json",
+        "dashboard/compmd.config.json",
+        "plugin/assets/compmd/",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/detail.spec.ts",
+        "plugin/docs/compmd-llms.txt",
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/compmd-rendering-design.md",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-03T18:14:19Z",
+      "updated_at": "2026-11-03T23:25:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:14:19Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard",
+        "skills",
+        "docs"
+      ],
+      "with": "user",
+      "started_at": "2026-11-03T22:32:20Z",
+      "started_by": "claude:b7be7288",
+      "commit": "76ddae57151aaa6eae377a840c5136228831a01c",
+      "completed_at": "2026-11-03T22:42:21Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T22:42:21Z",
+          "kind": "outcome",
+          "text": "CompMD 0.4.0: math typesets, code highlighted (task text and the viewer), CSP unchanged; llms.txt at v0.4.0 (body unchanged). Reviewed live by Hakan with the Try it section. Runtime folder 11 → 18 MB (Shiki shipped twice, CompMD’s packaging).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
       }
+    },
+    {
+      "id": "T-399",
+      "name": "Sweep the open tasks: references become relative and text-fragment links",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "compmd"
+      ],
+      "description": "One pass over the tasks that aren't finished (to do, blocked or in review, in any sprint or the backlog: `atm list` with each status), so their references open in the document viewer, written as T-391 tells agents to.\n\n## Change\nFor each such task, with `atm edit` (never by editing `tasks.json`):\n- a document or file named in its description as a path (`docs/x.md`, `` `src/app.ts` ``) becomes a relative link from the project root (`[docs/x.md](docs/x.md)`), with a heading fragment (`#3-routes`) or a text fragment (`#:~:text=…`) when the text points at a place in it;\n- a requirement or use-case ID mentioned in the text (`SR-2.1`, `(D-1.3)`) becomes a link to the document that defines it, at the definition, with a text fragment (`[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`): find the defining document by searching `docs/` for the line where the ID comes first (a table row's first cell, a heading); when none is found, leave it as it is;\n- `requirements` and `use_cases` entries the same way.\n\nChange only references: no other wording, no status, no other field. Done tasks are history and stay as they are. Skip this task's own text.\n\n## Check\nOpen a few swept tasks on the dev server: their links open the viewer at the right place. List the tasks changed in the outcome note.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-391"
+      ],
+      "files": [
+        ".agentic-task-manager/tasks.json"
+      ],
+      "created_at": "2026-11-03T18:39:17Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:39:17Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "related": [
+        "T-391"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-03T19:49:26Z",
+          "kind": "note",
+          "text": "Found in T-391: `atm edit` has no flags for `requirements` or `use_cases` (only files, deps, labels, components, related), so the sweep can’t change those entries yet. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` here first (atm-cli, with a scenario test).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:56:50Z",
+          "kind": "review",
+          "text": "Swept the unfinished tasks: T-337, T-398, T-400 (paths to existing files became links; I1, I11, §3.3, V2a and the CHANGELOG’s math note text-fragment links). None had `requirements`/`use_cases` entries, so the missing `atm edit` flags for them weren’t needed (still a gap). Check the links open on the dev server.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "started_at": "2026-11-03T19:55:33Z",
+      "started_by": "claude:b7be7288",
+      "completed_at": "2026-11-03T19:56:50Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "commit": "647769d7fc7659dffbff356c2014d0263cb61659",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-400",
+      "name": "Document viewer: line numbers and #L links in Markdown documents, from CompMD's renderer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The Markdown half of T-394's line work ([`docs/compmd-viewer-design.md`](docs/compmd-viewer-design.md#:~:text=V2a.%20Line%20numbers) V2a), split off because it needs what only CompMD knows: which source lines each rendered block came from. CompMD's renderer will give it through an API (Hakan, 2026-11-03); this task waits for that release (T-398 upgrades CompMD).\n\n## Change\n- The gutter beside a Markdown document: each top-level block's first source line (less `line_offset`, 0 for Markdown), aligned with the block's rendered top, measured after CompMD's `rendered` and on resize; through CompMD's API, never by guessing which element came from which node.\n- `#doc=…:L<n>` and `:L<n>-L<m>` in a Markdown document: scroll to the block the line is in and mark the blocks the range falls in, as T-394 does for code.\n- Copy path and Open on GitHub with the selected lines, as for code.\n\n## Not here\nAny rendering of our own: CompMD renders, and gives the mapping; the gutter and the mark are the viewer's UI around its output.\n\n## Tests\ne2e: the gutter's numbers sit beside their blocks; `:L14-L20` in a Markdown document scrolls to and marks its blocks; a document with a frontmatter counts its lines from the file's first.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-394",
+        "T-398"
+      ],
+      "files": [
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T19:37:33Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T19:37:33Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "related": [
+        "T-394"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-03T19:37:37Z",
+          "kind": "note",
+          "text": "Waits for CompMD’s renderer API giving each rendered block’s source lines (Hakan is adding it); unblock when that release is out.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T22:42:32Z",
+          "kind": "answer",
+          "text": "CompMD 0.4.0 (T-398) gives it: a request with `origins: true` puts each node’s source range in the tree, and the sandbox’s view answers `rectsAt(offset)` and `reveal(offset)`, in host mode as in frames.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T22:59:05Z",
+          "kind": "review",
+          "text": "Markdown documents: one number per top-level block (its first source line, from CompMD 0.4.0’s origins and `rectsAt`), `:L` marks and scrolls to the blocks. Every line numbered waits for CompMD 0.5.0 (T-406, backlog). e2e 409.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-03T19:37:37Z",
+          "to": "2026-11-03T22:42:32Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-03T22:42:33Z",
+      "started_by": "claude:b7be7288",
+      "commit": "86755c25b686c92cfa65bd6ccc32156b40742147",
+      "completed_at": "2026-11-03T22:59:05Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-401",
+      "name": "atm edit: add and remove requirements and use cases",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm edit` can't change a task's `requirements` or `use_cases` once the task exists (found in T-391 and T-399): agents can't fix an entry, or turn one into a reference link as the skills now ask ([`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md#:~:text=References%20are%20links)).\n\n## Change\n- `atm edit <id>` gains `--add-requirement` / `--remove-requirement` and `--add-use-case` / `--remove-use-case`, repeatable, as `--add-file` / `--remove-file` work ([`atm-cli/atm/cli/edit.py`](atm-cli/atm/cli/edit.py), atm-lib's edit in [`atm-cli/atm/lib/edit.py`](atm-cli/atm/lib/edit.py)): an entry is any non-empty string (an ID, or a Markdown link to its definition); adding one already there or removing one that isn't changes nothing and says so.\n- The skills' lists of `atm edit` flags name them ([`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md#:~:text=Changing%20existing%20tasks), `do-task`, `loop-tasks`) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Define* line; a skill change, so a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3.\n\n## Tests\nScenarios in `tests/scripts/scenarios/edit.json` (add, remove, a link as an entry, a duplicate, a missing one) and an atm-lib unit test in `tests/lib/test_edit.py`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/edit.py",
+        "atm-cli/atm/lib/edit.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/scenarios/edit.json",
+        "tests/lib/test_edit.py",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T20:04:36Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T20:04:36Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-391",
+        "T-399"
+      ],
+      "started_at": "2026-11-03T20:27:11Z",
+      "started_by": "claude:b7be7288",
+      "commit": "a5617d8d9629b40a22407e2ef749274b90380b40",
+      "completed_at": "2026-11-03T20:37:46Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T20:37:46Z",
+          "kind": "review",
+          "text": "Check: `atm edit --add-requirement`/`--remove-requirement`, `--add-use-case`/`--remove-use-case` (IDs or text-fragment links; duplicates skipped; empty refused). Scenarios in `edit.json`, unit test in `tests/lib/test_edit.py`; public surface updated; skills and §3.3 review.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-402",
+      "name": "Document viewer: a subtle table of contents that hides itself",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A table of contents for a Markdown document in the viewer (Hakan): out of the way until wanted.\n\n## Change\n- In [`dashboard/src/components/DocumentViewer.svelte`](dashboard/src/components/DocumentViewer.svelte): a small, faint contents button at the page's top right, staying in view as the document scrolls; hovering it or focusing it shows the document's headings (h1 to h3, indented by level), the section being read marked; a click scrolls to the heading and the list hides again, as it does when the pointer leaves or Escape is pressed.\n- Built from the headings CompMD rendered (read, never rendered by atm), again after each render; only for a document with at least two headings.\n- Keyboard: the button is focusable, the list's entries are buttons, arrows move between them.\n\n## Tests\ne2e: no button for a document with one heading; the list shows the headings by level; a click scrolls to the heading and hides it; the current section is marked as the document scrolls.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T20:04:36Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T20:04:36Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "related": [
+        "T-393"
+      ],
+      "started_at": "2026-11-03T20:04:43Z",
+      "started_by": "claude:b7be7288",
+      "commit": "b1b5c306ac8426fe2f56a36e7aafa5a2c985d57f",
+      "completed_at": "2026-11-03T20:08:35Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T20:08:35Z",
+          "kind": "review",
+          "text": "Contents in the viewer: a faint button at the page’s top right, the headings (h1–h3) on hover or focus, the current section marked, a pick scrolls there. Try it on the dev server with a long design doc. e2e 404; single file 558.9 kB, ~4 kB under the 550 KiB guardrail.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T20:12:54Z",
+          "kind": "note",
+          "text": "Review changes (Hakan): the contents moved to the page’s top left, and the button grows into the list so the pointer stays inside it (reduced motion: at once). Guardrail raised to 600 KiB in the same commit.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-403",
+      "name": "Details panel: Requirements and Use Cases as a vertical list, like Files",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Since T-391 a `requirements` or `use_cases` entry may be a link whose text is anything (a phrase too), so the details panel's row of badges wraps badly and makes a link look like a bare ID. List them one per line instead, as the Files list does.\n\n## Change\n- `dashboard/src/components/DetailPanel.svelte`, the `badges` snippet: each entry on its own line. An entry written as a link renders inline with CompMD (as now) and looks like a file link (`.detail-files .file-link`); a bare ID stays plain text. None still says *None*.\n- `dashboard/src/app.css`: the list's styles, shared with `.detail-files` where they match; drop what the details panel no longer uses of `.req-badge` / `.uc-badge`.\n- Cards keep their compact badges (`markdownPlainText`): unchanged.\n\n## Tests\nA component test in `tests/unit/DetailPanel.component.test.ts` (one element per entry, a link entry is a link, a bare one text); the details-panel e2e specs (`npx playwright test detail documents`). The details-panel screenshots change: regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/DetailPanel.component.test.ts"
+      ],
+      "created_at": "2026-11-03T20:46:10Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T20:46:10Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "related": [
+        "T-391"
+      ],
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-03T20:46:22Z",
+      "started_by": "claude:b7be7288",
+      "commit": "c22eeb630093e2d4b5c80ed662528eb53ff60a72",
+      "completed_at": "2026-11-03T20:49:15Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T20:49:15Z",
+          "kind": "review",
+          "text": "Check: Requirements and Use Cases one entry a line in the details panel, links styled as file links, bare IDs text (T-391 has both); cards unchanged. Details-panel screenshots change at the release.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-404",
+      "name": "Document style: Auto, GitHub, Docs or Magazine for the document viewer's page",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A **Document style** setting in the ⋯ menu, under Theme: how the document viewer's page looks. Decided with Hakan: these are **host styles**, so atm defines them (CompMD's editor has its own, in its `frame.css`, as `host=github`, `host=docs`, `host=magazine`: atm's take after their ideas, not a copy) and gives the renderer one when needed; CompMD renders the content as before.\n\n## Styles\n| Style | Look |\n|---|---|\n| Auto (the default) | The theme's page, as now (the page on a desk; Hand-drawn's notebook, Sticky Notes' sheet) |\n| GitHub | System sans-serif, a 980px column, `h1`/`h2` with a rule under them, bordered tables and blockquotes, GitHub's link blue |\n| Docs | A serif reading font at 18px / 1.7, a narrow 44rem column, tighter heading spacing |\n| Magazine | Didot / Bodoni headings, a double rule under the `h1`, a drop cap on the paragraph after it, one red accent, centred italic pull quotes |\n\nEach in light and dark (the dashboard's mode); code keeps the viewer's gutter, line marks, highlights and contents button.\n\n## Change\n- `dashboard/src/lib/appearance.ts`: the styles (`DOC_STYLES`, `knownDocStyle`); the choice is a browser preference (`docStyle`, `lib/prefs.ts`) like the theme, kept by `state.svelte.ts`.\n- `SettingsMenu.svelte`: a Document style select under Theme.\n- `DocumentViewer.svelte`: `data-doc-style` on `.doc-viewer` when it isn't Auto.\n- `dashboard/src/themes/doc-styles.css`: the three styles, scoped to `.doc-viewer[data-doc-style=…] .doc-page`; the themes' paper (`hand-drawn.css`, `sticky-notes.css`) applies only to Auto.\n- Help's Documents section and the changelog.\n\n## Tests\nUnit tests for the preference; a component test for the menu; e2e: choosing a style sets it on the viewer and survives a reload, and each style's page has its font and column. The viewer's screenshots get one per style at the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/appearance.ts",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/SettingsMenu.svelte",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/themes/doc-styles.css",
+        "dashboard/src/themes/hand-drawn.css",
+        "dashboard/src/themes/sticky-notes.css",
+        "docs/help.md"
+      ],
+      "created_at": "2026-11-03T21:16:10Z",
+      "updated_at": "2026-11-03T23:30:16Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T21:16:10Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "related": [
+        "T-393"
+      ],
+      "started_at": "2026-11-03T21:16:19Z",
+      "started_by": "claude:b7be7288",
+      "commit": "b2ff02689baa0f0db521e018af48016b68883e7a",
+      "completed_at": "2026-11-03T21:22:56Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T21:22:56Z",
+          "kind": "review",
+          "text": "Check the look of each style (GitHub, Docs, Magazine) in light and dark, over Hand-drawn and Sticky Notes too, on a Markdown document and a code file; Settings › Document style. Single file 571 kB.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      }
+    },
+    {
+      "id": "T-405",
+      "name": "atm commit: a folder's changes at once, with --dir",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm commit` takes files only one `--file` at a time and refuses folders, so that it never commits another agent's work in the same tree. A generated folder makes that a chore: T-398 had to name 230 files of `plugin/assets/compmd/` (the old version's removed, the new one's added) one by one.\n\n## Change\n- `atm commit <id> --dir <folder>` (repeatable, beside `--file`): every change git sees under the folder, as `git status --porcelain --untracked-files=all` lists it (modified, added, deleted, renamed, new files git doesn't ignore), committed with the other files and `tasks.json`. The output names each file, as now.\n- Still refused, with a message: `.` and the repository's root (or anything above it), `.agentic-task-manager/`, a path outside the repository, and a folder with no changes. A changed file under the folder that another task **in progress and claimed by another agent** lists in its `files` makes the whole commit refuse, naming the file and the task: that is the case the rule against folders is there for.\n- [`atm-cli/atm/cli/`](atm-cli/atm/cli/) (the option) and atm-lib's `commit_task` (the expansion, through the vcs layer; `tests/lib/public-surface.json` and the changelog if its signature changes).\n- The skills' commit steps (`/atm:do-task` Step 7, `/atm:loop-tasks` step 5, [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Commit* line): `--dir` for a generated folder the task rebuilt, never for a folder others work in. A skill change and a CLI option that reads a path: a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3, and the invariant on `atm commit` updated.\n\n## Tests\nScenarios or `*.test.mjs` in `tests/scripts/` (a git repository): a folder with a modified, a new and a deleted file commits all three and nothing outside it; `.`, the root, `.agentic-task-manager/` and an empty folder are refused; another agent's claimed task listing a changed file under the folder refuses the commit and commits nothing.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/cli/commit.py",
+        "atm-cli/atm/lib/commit.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/git.test.mjs",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-03T22:43:49Z",
+      "updated_at": "2026-11-03T22:54:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T22:43:49Z",
+          "to": "2026-11-03T22:54:26Z"
+        }
+      ],
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-398"
+      ]
+    },
+    {
+      "id": "T-406",
+      "name": "Upgrade CompMD to 0.5.0, and number every line of a Markdown document in the viewer's gutter",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "T-400 numbers a Markdown document's blocks, each with its first source line (1, 4, 6, 9…), because CompMD 0.4.0 maps a source offset to the **elements** its node drew (`view.rectsAt`), not to a place in the text: a paragraph written over two lines is one box, so its second line has no place of its own. Hakan: CompMD 0.5.0 adds text-precise positions. When it is out, the gutter numbers every source line, as an editor does.\n\n## Change\n- Upgrade `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to 0.5.0, as T-398 did for 0.4.0: its *Change* list (the runtime folder, `plugin/docs/compmd-llms.txt` read in full, the §3.3 line, the release notes' changes for hosts) applies again. Restart a running `npm run dev` with `--force` after the install.\n- The gutter in [`DocumentViewer.svelte`](dashboard/src/components/DocumentViewer.svelte) for a Markdown document: a number for each source line that draws something, at its exact place through CompMD 0.5.0's text-precise lookup (read its README for the call: a line's start offset to its box in the rendered text); a line that starts with markup (`**bold…`) at the element it starts. Blank lines draw nothing: their numbers go in the gaps between blocks, spread over the gap, so the column reads 1, 2, 3… with no line skipped.\n- `:L<n>-L<m>` marks exactly those lines, not their whole blocks; Copy path and Open on GitHub as now.\n- Replaces T-400's per-block numbers (`blockSources`/`placeBlocks` in [`lib/compmd.ts`](dashboard/src/lib/compmd.ts)): keep what still serves, remove the rest.\n- Never match rendered text to source text to find a line: what drew a line is CompMD's to say (T-400's rule).\n\n## Tests\nUnit tests for the line placement; e2e: a paragraph written over two lines gets two numbers, each beside its words; a frontmatter's lines counted; blank lines numbered in the gaps; `:L7` marks the paragraph's second line only; the existing code-file gutter tests unchanged. Reviewed with Hakan in the browser.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/package-lock.json",
+        "plugin/assets/compmd/",
+        "plugin/docs/compmd-llms.txt",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/components/CompMd.svelte",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/documents.spec.ts",
+        "dashboard/tests/unit/compmd.test.ts",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-03T22:56:29Z",
+      "updated_at": "2026-11-03T22:56:47Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "with": "user",
+      "related": [
+        "T-400",
+        "T-398"
+      ]
+    },
+    {
+      "id": "T-407",
+      "name": "Release 0.29.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "The release of the sprint *Document Viewer*, as the project's `CLAUDE.md` (*Versions*, *CI*) says.\n\n## Steps\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.29.0`.\n- `plugin/CHANGELOG.md`: `[Unreleased]` becomes `[0.29.0]` with today's date; `plugin/WHATS-NEW.md`: an entry of 3–6 plain bullets from it (`npm run check` fails without either).\n- The Linux screenshot baselines, in Docker: `npm run test:e2e:visual:update` regenerates the changed ones (the details panel's references, the document viewer); look at a few before committing; delete a baseline whose test is gone.\n- `npm run verify`.\n- The security checklist (`docs/security-architecture.md` §3): the skills changed (T-391, T-396, T-398, T-401), so their written reviews in §3.3 stand in for the agent sandbox (no API key); the new entry points (the documents and files routes, T-392) are in the document.\n- Push and the one combined PR from `dev/0.29.0` to `main` with `/atm:push`, watching CI.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/tests/e2e/__screenshots__/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-03T23:18:35Z",
+      "updated_at": "2026-11-03T23:30:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T23:18:35Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "none",
+      "started_at": "2026-11-03T23:18:46Z",
+      "started_by": "claude:b7be7288",
+      "commit": "545808bb627adf1b5b08c98c75ac0377382b9334",
+      "pr": {
+        "number": 35,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+      },
+      "completed_at": "2026-11-03T23:30:15Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T23:30:15Z",
+          "kind": "outcome",
+          "text": "Released 0.29.0: versions, changelog, What’s new, 8 Linux baselines (details panel, Help, settings menu); `npm run verify` passed; PR #35, CI green first try.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

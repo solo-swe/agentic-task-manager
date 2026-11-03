@@ -4,7 +4,8 @@ nothing when nothing changed). It only reads the files; agents and the `atm` com
 
 Jump to: [your projects](#your-projects), [the views](#views), [filters and saved views](#filters-and-saved-views),
 [statuses](#statuses-and-kinds), [waiting on you](#waiting-on-you), [priorities and labels](#priorities-and-labels),
-[the task details](#the-task-details), [workflows and stages](#workflows-and-stages), [the archive](#the-archive),
+[the task details](#the-task-details), [documents](#documents), [workflows and stages](#workflows-and-stages),
+[the archive](#the-archive),
 [the skills](#the-skills), [agents in parallel](#running-agents-in-parallel).
 
 ## Your projects
@@ -25,7 +26,8 @@ Jump to: [your projects](#your-projects), [the views](#views), [filters and save
   task and idle stretches, for a period you choose.
 - **N need you** — tasks waiting for your review or for your answer. Click it for the Kanban board.
 - **Refresh** — reload now, or change how often the dashboard reloads by itself.
-- **Appearance** — light or dark mode, and one of 11 themes, picked from a drop-down list.
+- **Appearance** — light or dark mode, one of 11 themes, picked from a drop-down list, and the document viewer's
+  style.
 
 ## Views
 
@@ -100,10 +102,14 @@ Descriptions, notes and questions are written in [CompMD](https://compmd.hakanse
 and render as (this Help and What's new render with CompMD too):
 
 - **Markdown and GFM** — headings, lists (nested too), tables, task lists, code, quotes, alerts, footnotes and links;
+- **Code and math** — a code block is highlighted by its language (` ```ts `), in light or dark with the dashboard;
+  `$x^2$` and a `$$ … $$` block are typeset as math;
 - **Diagrams** — a `mermaid` code block draws a diagram with [Mermaid](https://mermaid.js.org/), in light or dark
   with the dashboard, in a sandboxed frame;
 - **The task's own values** — `{{md.data.task.status}}` shows the task's status as it is now;
-- **As written** — math, for now, and anything the dashboard won't run: scripts, raw HTML, images from elsewhere.
+- **References** — a link to a file of the project opens it in the document viewer; a requirement, a use case or a
+  sentence linked by its text (a link ending in `#:~:text=…`) opens the document there, marked;
+- **As written** — anything the dashboard won't run: scripts, raw HTML, images from elsewhere.
 
 A diagram is a fenced code block whose language is `mermaid`, holding the diagram's source, such as:
 
@@ -118,6 +124,25 @@ In a `mermaid` fence, it draws:
 flowchart LR
   todo[To do] --> active[In progress] --> done[Done]
 ```
+
+## Documents
+
+A task's files and the documents it refers to open in the **document viewer**, a window over the task's details:
+
+- **What opens it** — a link to a file of the project in a description or note (`docs/design.md`, from the
+  project's root), a link inside an open document (from that document's folder), and every entry of the task's
+  **Files** list;
+- **Where it opens** — at a heading (`docs/design.md#routes`), at lines of code (`src/app.ts#L40-L45`, marked in the
+  line numbers), or at a piece of text (a link ending in `#:~:text=…`, marked until you click);
+- **What it shows** — Markdown rendered as task text is, code and text files with their line numbers, images; it
+  follows the file as it changes, without losing your place. Hidden files, files git ignores and key files aren't
+  shown;
+- **The window** — drag its title bar to move it and its corner to resize it (or the arrow keys, Shift to resize); it
+  keeps its place. **Copy path** copies the file's path with its lines, for an agent; **Open on GitHub** shows the
+  file in the repository. **‹** goes back to the document before, **×** closes it;
+- **Its look** — **Document style** in the settings menu, under the theme: **Auto** writes the document on the
+  theme's own page, **GitHub** as a README, **Docs** in a narrow serif column for reading, **Magazine** with display
+  headings and a drop cap. Each follows light and dark mode.
 
 ## Workflows and stages
 

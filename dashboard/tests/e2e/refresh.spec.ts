@@ -127,7 +127,13 @@ test('the ⋯ settings menu: auto-refresh, mode and theme; closes on Escape and 
   await button.click();
   const settings = page.locator('#settings-menu');
   await expect(settings).toBeVisible();
-  await expect(settings.locator('.menu-label')).toHaveText(['Auto-refresh', 'Mode', 'Theme', 'This project']);
+  await expect(settings.locator('.menu-label')).toHaveText([
+    'Auto-refresh',
+    'Mode',
+    'Theme',
+    'Document style',
+    'This project',
+  ]);
   await expect(button).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('Escape');
   await expect(settings).toHaveCount(0);

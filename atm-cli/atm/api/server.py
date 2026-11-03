@@ -21,8 +21,9 @@ from urllib.parse import parse_qs, urlsplit
 from ..boot.open import open_registry, project_opener
 from ..common.core import PLUGIN_ROOT, WHOAMI, now, now_iso, read_json, to_json, write_json_atomic
 from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, home_id, page_tags
-from ..common.errors import AtmFailure
+from ..common.errors import AtmFailure, Invalid, NotFound, Refused, TooLarge
 from ..lib.archive import project_stamp, task_snapshot
+from ..lib.documents import document_stamp, read_document, read_image
 from ..lib.query import Filters, list_claims, project_summary, search_tasks
 from ..lib.settings import get_logo
 from ..lib.worktrees import working_copies, worktree_copies
@@ -292,6 +293,11 @@ def api_claims(summaries, entry, stamp):
 
 
 V1_TASKS = re.compile(r"/api/v1/projects/([^/]+)/tasks")
+# A project's files for the document viewer (docs/compmd-viewer-design.md §4): `documents` as JSON (what the file is,
+# and the CompMD document to render), `files` an image's bytes for an <img>
+V1_FILES = re.compile(r"/api/v1/projects/([^/]+)/(documents|files)")
+# atm-lib's refusals, as HTTP statuses: a malformed path, no such file, one atm doesn't show, one too large
+FILE_ERRORS = ((Invalid, 400), (NotFound, 404), (TooLarge, 413), (Refused, 403))
 LIST_PARAMETERS = ("status", "label", "sprint")  # repeatable: ?status=todo&status=blocked
 FLAG_PARAMETERS = ("backlog", "ready", "blocked", "in_pr", "with_user", "archived")
 VALUE_PARAMETERS = ("type", "priority", "agent", "release", "component")
@@ -434,6 +440,9 @@ def serve(home, port):
                 self.send(200, api_search(registry, summaries, query))
             elif V1_TASKS.fullmatch(path):
                 self.serve_v1_tasks(V1_TASKS.fullmatch(path).group(1), urlsplit(self.path).query)
+            elif V1_FILES.fullmatch(path):
+                match = V1_FILES.fullmatch(path)
+                self.serve_v1_file(match.group(1), match.group(2), urlsplit(self.path).query)
             else:
                 self.serve_project_file(path)
 
@@ -463,6 +472,40 @@ def serve(home, port):
             self.send(200, content, "application/json", etag)
 
         do_HEAD = do_GET
+
+        def serve_v1_file(self, project, route, query):
+            """GET /api/v1/projects/<p>/documents?path= (the viewer's JSON) or …/files?path= (an image), through
+            atm-lib, which checks the path and reads the file from the working copy (lib/documents.py). The ETag is
+            the file's size and mtime (and, for a document, the current commit, which it names), so the viewer's poll
+            gets a 304 without the file being read again."""
+            entry = registry.find(project)
+            if entry is None:
+                self.send_error_json(404, "unknown project")
+                return
+            if summaries.data_stamp(entry) is None:
+                self.send_error_json(404, "not found")
+                return
+            path = parse_qs(query).get("path", [""])[0]
+            opened = summaries.project(entry, tolerant=True)
+            try:
+                stamp = document_stamp(opened, path)
+                if route == "documents":
+                    etag = stamp_etag("document", stamp, opened.vcs.head())
+                    if self.headers.get("If-None-Match") == etag:
+                        self.send(304, etag=etag)
+                        return
+                    self.send(200, to_json(read_document(opened, path)).encode("utf-8"), "application/json", etag)
+                    return
+                etag = file_etag(stamp)
+                headers = {**LOGO_HEADERS, "Cache-Control": "no-cache"}
+                if self.headers.get("If-None-Match") == etag:
+                    self.send(304, etag=etag, headers=headers)
+                    return
+                data, content_type = read_image(opened, path)
+                self.send(200, data, content_type, etag, headers)
+            except AtmFailure as e:
+                status = next((code for kind, code in FILE_ERRORS if isinstance(e, kind)), 500)
+                self.send_error_json(status, str(e))
 
         def serve_project_file(self, path):
             match = PROJECT_FILE.fullmatch(path)

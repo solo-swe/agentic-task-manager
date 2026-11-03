@@ -15,6 +15,8 @@ export interface Prefs {
   mode: string;
   /** Theme id (see appearance.ts) */
   theme: string;
+  /** How the document viewer's page looks: a document style id (see appearance.ts DOC_STYLES) */
+  docStyle: string;
   /** The overview shows only active projects (lib/projects.ts) */
   overviewActiveOnly: boolean;
   /** The overview's tab: 'projects' or 'board' (lib/routes.ts) */
@@ -25,6 +27,8 @@ export interface Prefs {
   boardQuery: string;
   /** The All projects board shows the active sprints' tasks ('active', the default) or every task ('all'; T-340) */
   boardScope: string;
+  /** Where the document viewer is and how big (lib/documents.ts ViewerGeometry), or null for its default */
+  documentViewer: { x: number; y: number; w: number; h: number } | null;
 }
 
 function storage(): Storage | null {

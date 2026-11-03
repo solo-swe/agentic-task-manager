@@ -123,6 +123,57 @@
   --column-divider-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 400' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%233c3c44' stroke-linecap='round'%3E%3Cpath d='M4.4 1 Q 2.6 90 4.5 180 T 3.4 300 T 4.3 399' stroke-width='1.8' stroke-opacity='0.75' stroke-dasharray='150 3 120 2 260 4' vector-effect='non-scaling-stroke'/%3E%3Cpath d='M5.4 6 Q 4.2 120 5.6 220 T 4.8 394' stroke-width='0.9' stroke-opacity='0.35' stroke-dasharray='90 6 130 5 200 8' vector-effect='non-scaling-stroke'/%3E%3C/g%3E%3C/svg%3E");
 }
 
+/* The document viewer's page (DocumentViewer.svelte): the same notebook page, held upright, the binding holes down its
+   left edge, the margin line, and the text written on the rules (26px apart). Only for the Auto document style: another
+   (themes/doc-styles.css) is a page of its own */
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) {
+  --doc-page:
+    radial-gradient(circle at 13px 50%, var(--bg) 0 5px, transparent 5.6px) 0 8px / 26px 34px repeat-y,
+    linear-gradient(90deg, transparent 44px, rgba(230, 100, 100, 0.4) 44px 45.5px, transparent 45.5px),
+    repeating-linear-gradient(180deg, transparent 0 25px, rgba(140, 170, 220, 0.14) 25px 26px) 0 30px / 100% 100%
+      no-repeat,
+    #1e1e22;
+  --doc-page-border: none;
+  --doc-page-radius: 3px;
+  --doc-page-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --doc-page-padding: 30px 32px 52px 64px;
+}
+:root[data-theme='hand-drawn'][data-mode='light'] .doc-viewer:not([data-doc-style]) {
+  --doc-page:
+    radial-gradient(circle at 13px 50%, var(--bg) 0 5px, transparent 5.6px) 0 8px / 26px 34px repeat-y,
+    linear-gradient(90deg, transparent 44px, rgba(205, 70, 70, 0.55) 44px 45.5px, transparent 45.5px),
+    repeating-linear-gradient(180deg, transparent 0 25px, rgba(80, 130, 200, 0.28) 25px 26px) 0 30px / 100% 100%
+      no-repeat,
+    #fbf7ea;
+  --doc-page-shadow: 0 1px 2px rgba(60, 50, 30, 0.25), 0 4px 12px rgba(60, 50, 30, 0.18);
+}
+/* Written on the rules: every line and gap a rule's height; the headings in the handwriting */
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd {
+  line-height: 26px;
+}
+:root[data-theme='hand-drawn']
+  .doc-viewer:not([data-doc-style])
+  .doc-page
+  .compmd-page
+  :is(p, ul, ol, blockquote, table, pre, .compmd-alert) {
+  margin: 0 0 26px;
+}
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page li {
+  margin: 0;
+}
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page :is(h1, h2, h3, h4, h5, h6) {
+  margin: 26px 0 0;
+  line-height: 26px;
+  font-family: var(--board-font);
+}
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page h1 {
+  margin-top: 0;
+  font-size: 22px;
+}
+:root[data-theme='hand-drawn'] .doc-viewer:not([data-doc-style]) .doc-page .compmd-page h2 {
+  font-size: 18px;
+}
+
 /* Each card's box in its column's colour (the status colours of the Kanban's headings, lib/theme.ts KIND_COLORS) */
 :root[data-theme='hand-drawn'] .kanban-card {
   position: relative;

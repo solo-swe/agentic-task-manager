@@ -163,6 +163,49 @@
   --card-shadow: 0 10px 16px -6px rgba(0, 0, 0, 0.55), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+/* The document viewer (DocumentViewer.svelte): a white sheet taped to the board, written in the notes' dark inks.
+   Only for the Auto document style: another (themes/doc-styles.css) is a page of its own */
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) {
+  --doc-desk: #23302a;
+  --doc-page: #fbfaf5;
+  --doc-page-border: none;
+  --doc-page-radius: 1px;
+  --doc-page-shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 10px 22px -8px rgba(0, 0, 0, 0.55);
+}
+:root[data-theme='sticky-notes'][data-mode='light'] .doc-viewer:not([data-doc-style]) {
+  --doc-desk: #e9ecee;
+  --doc-page: #ffffff;
+  --doc-page-shadow: 0 1px 3px rgba(0, 0, 0, 0.18), 0 8px 18px -8px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) .doc-page {
+  position: relative;
+  --doc-page-ink: var(--note-ink);
+  --text: var(--note-ink);
+  --text-muted: var(--note-ink-muted);
+  --border: #c9c3b2;
+  --surface2: #0000000f;
+  --accent: #1d5fc2;
+  --green: #2b6b2f;
+  --yellow: #6f5300;
+  --red: #b0262a;
+  --purple: #5f3aa0;
+  --pink: #9c2464;
+  --orange: #974607;
+  --cyan: #0f666b;
+}
+/* The tape at the top */
+:root[data-theme='sticky-notes'] .doc-viewer:not([data-doc-style]) .doc-page::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 96px;
+  height: 22px;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(240, 232, 200, 0.75);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
 /* Tilt: a little, alternating, so the column looks hand-placed (straightens on hover) */
 :root[data-theme='sticky-notes'] .kanban-card:nth-child(4n + 1) {
   --card-tilt: -1.2deg;
