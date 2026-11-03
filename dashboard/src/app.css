@@ -186,23 +186,16 @@ body {
   padding: 12px 14px;
   min-width: 0;
 }
-.detail-description .markdown > :first-child {
-  margin-top: 0;
-}
-.detail-description .markdown > :last-child {
-  margin-bottom: 0;
-}
 /* Headings stay below the panel's section labels: smaller, and the lower levels muted */
-.detail-description .markdown h3 {
+.detail-description .compmd-page h1 {
   font-size: 14px;
   margin-top: 14px;
 }
-.detail-description .markdown h4 {
+.detail-description .compmd-page h2 {
   font-size: 13px;
   margin-top: 12px;
 }
-.detail-description .markdown h5,
-.detail-description .markdown h6 {
+.detail-description .compmd-page :is(h3, h4, h5, h6) {
   font-size: 12px;
   margin-top: 10px;
 }
@@ -267,6 +260,110 @@ body {
 }
 .markdown a {
   color: var(--accent);
+}
+/* Task text rendered with CompMD (CompMd.svelte, docs/compmd-rendering-design.md): it looks as Markdown.svelte's did,
+   CompMD's h1–h6 sized as its h3–h6, plus what only CompMD renders (tables, task lists, alerts). CompMD's own theme
+   tokens take the dashboard's colours */
+.compmd {
+  --compmd-accent: var(--accent);
+  --compmd-border-subtle-color: var(--border);
+  --compmd-border-strong: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.compmd-page > :first-child {
+  margin-top: 0;
+}
+.compmd-page > :last-child {
+  margin-bottom: 0;
+}
+.compmd-page :is(h1, h2, h3, h4, h5, h6) {
+  margin: 20px 0 6px;
+  font-weight: 600;
+}
+.compmd-page h1 {
+  font-size: 16px;
+}
+.compmd-page h2 {
+  font-size: 14px;
+}
+.compmd-page :is(h3, h4, h5, h6) {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.compmd-page :is(p, ul, ol, pre, blockquote, table, .compmd-alert) {
+  margin: 6px 0;
+}
+.compmd-page :is(ul, ol) {
+  padding-left: 20px;
+}
+.compmd-page li {
+  margin-bottom: 3px;
+}
+.compmd-page code {
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  background: var(--surface2);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.compmd-page pre {
+  background: var(--surface2);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.compmd-page pre code {
+  padding: 0;
+  background: none;
+}
+.compmd-page blockquote {
+  color: var(--text-muted);
+}
+.compmd-page a {
+  color: var(--accent);
+}
+.compmd-page hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+/* A wide table scrolls inside the text rather than widening the panel */
+.compmd-page table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.compmd-page :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+}
+.compmd-page th {
+  background: var(--surface2);
+  font-weight: 600;
+}
+.compmd-page .compmd-task > input {
+  vertical-align: middle;
+}
+.compmd-page .compmd-alert-title {
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+/* What a text shows when CompMD can't render it: as written, line breaks kept (R2) */
+.compmd-plain {
+  white-space: pre-wrap;
+}
+/* A question in a list: one paragraph, inline with its number */
+.compmd-inline,
+.compmd-inline .compmd-page,
+.compmd-inline .compmd-page > p:only-child {
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
 }
 .about .about-section-title {
   font-size: 13px;
@@ -3367,18 +3464,10 @@ svg.graph-minimap.hidden {
 }
 /* Notes, review notes and questions are Markdown (T-219): at the size of the text around them, without the margins
    of a description's paragraphs above the first block and below the last */
-.note-text .markdown,
-.review-note .markdown {
+.note-text .compmd,
+.review-note .compmd {
   font-size: inherit;
   line-height: 1.5;
-}
-.note-text .markdown > :first-child,
-.review-note .markdown > :first-child {
-  margin-top: 0;
-}
-.note-text .markdown > :last-child,
-.review-note .markdown > :last-child {
-  margin-bottom: 0;
 }
 .markdown-inline code {
   font-family: 'SF Mono', Menlo, Consolas, monospace;

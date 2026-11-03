@@ -19,8 +19,9 @@ import type { Plugin } from 'vite';
 const SCRIPTS = process.env.ATM_DEV_SCRIPTS || fileURLToPath(new URL('../../plugin/scripts', import.meta.url));
 const ATM = path.join(SCRIPTS, 'atm.py');
 const ATM_SERVE = path.join(SCRIPTS, 'atm-serve');
-/** The paths atm serve answers (docs/multi-project-api.md §2); the rest is the dev server's own */
-const API_PATHS = /^\/(api\/|p\/|__atm\/)/;
+/** The paths atm serve answers (docs/multi-project-api.md §2), the plugin's assets among them (the CompMD runtime,
+ * docs/compmd-rendering-design.md §2); the rest is the dev server's own */
+const API_PATHS = /^\/(api\/|p\/|__atm\/|assets\/)/;
 /** Where the dev API server starts looking for a free port: away from atm serve's 8765 */
 const FIRST_PORT = 8865;
 /** A rebuild writes atm.py in a few steps: restart once it has been quiet this long */

@@ -5,7 +5,8 @@ import type { Plugin } from 'vite';
 
 /**
  * What the dev page needs beyond `atm serve`'s policy (atm-cli/atm/api/server.py `page_csp`, T-226), and nothing
- * else: its scripts and styles are the dev server's own files (`'self'`), and Vite's client talks over a WebSocket.
+ * else: its scripts and styles are the dev server's own files (`'self'`, which also covers the CompMD runtime the
+ * server's policy names by its asset folder, forwarded by dev-api.ts), and Vite's client talks over a WebSocket.
  * tests/unit/security-headers.test.ts holds the two policies to this.
  */
 export const DEV_ADDITIONS: Record<string, string[]> = {
@@ -19,7 +20,7 @@ export const DEV_ADDITIONS: Record<string, string[]> = {
 export function devCsp(hashes: string[]): string {
   return [
     "default-src 'none'",
-    ["script-src 'self'", ...hashes].join(' '),
+    ["script-src 'self'", ...hashes, "'wasm-unsafe-eval'"].join(' '),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",

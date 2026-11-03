@@ -744,14 +744,83 @@ describe('serve', () => {
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     const page = await fetch(`http://localhost:${port}/`);
     const body = Buffer.from(await page.arrayBuffer());
-    assert.equal(page.headers.get('content-security-policy'), pageCsp(body));
-    assert.match(page.headers.get('content-security-policy'), /script-src 'sha256-[^']+' 'sha256-[^']+';/);
+    const policy = page.headers.get('content-security-policy');
+    assert.equal(policy, pageCsp(body, `http://localhost:${port}/assets/compmd/`));
+    // The page's own scripts by hash, and the CompMD runtime from the asset folder only, which may compile
+    // WebAssembly; never 'self', 'unsafe-eval' or 'unsafe-inline' (docs/compmd-rendering-design.md §2)
+    assert.match(
+      policy,
+      new RegExp(
+        `script-src 'sha256-[^']+' 'sha256-[^']+' 'wasm-unsafe-eval' http://localhost:${port}/assets/compmd/;`,
+      ),
+    );
+    // Opened as 127.0.0.1, the page names that origin: a source with a path needs the origin the browser uses
+    const numeric = await fetch(`http://127.0.0.1:${port}/`);
+    assert.ok(numeric.headers.get('content-security-policy').includes(` http://127.0.0.1:${port}/assets/compmd/;`));
     for (const p of ['/', '/api/projects', '/api/v1/projects/abcd1234/tasks', '/p/abcd1234/claims.json', '/nope']) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
       assert.equal(r.headers.get('cross-origin-resource-policy'), 'same-origin', p);
     }
     atm(['serve', 'stop'], root);
+  });
+
+  test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js and .wasm, no symlinks (T-284)', async () => {
+    // A copy of the plugin, so a symlink and a stray file can be put in its asset folder
+    const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
+    fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
+    cleanups.push(() => removeDir(path.dirname(plugin)));
+    const [version] = fs.readdirSync(path.join(plugin, 'assets/compmd'));
+    const folder = path.join(plugin, 'assets/compmd', version);
+    const secret = path.join(tempDir('atm-secret-'), 'secret.js');
+    fs.writeFileSync(secret, 'secret()');
+    cleanups.push(() => removeDir(path.dirname(secret)));
+    fs.symlinkSync(secret, path.join(folder, 'linked.js'));
+    fs.symlinkSync(path.dirname(secret), path.join(folder, 'linked-dir'));
+    fs.writeFileSync(path.join(folder, 'notes.txt'), 'not an asset');
+    const atmHome = home();
+    const root = project();
+    const port = ports();
+    const run = (args) =>
+      spawnSync(path.join(plugin, 'scripts/atm'), args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...baseEnv(), ATM_HOME: atmHome },
+      });
+    assert.equal(run(['serve', '--port', String(port)]).status, 0);
+    try {
+      const base = `http://localhost:${port}/assets/compmd/${version}/`;
+      const js = await fetch(base + 'compmd.js');
+      assert.equal(js.status, 200);
+      assert.equal(js.headers.get('content-type'), 'text/javascript; charset=utf-8');
+      assert.equal(js.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(await js.text(), fs.readFileSync(path.join(folder, 'compmd.js'), 'utf8'));
+      const wasm = await fetch(base + 'compmd_wasm_bg.wasm');
+      assert.equal(wasm.status, 200);
+      assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+      // Unchanged since it was last fetched: a 304, as for the other files the dashboard asks for again
+      const again = await fetch(base + 'compmd.js', { headers: { 'If-None-Match': js.headers.get('etag') } });
+      assert.equal(again.status, 304);
+      assert.equal((await fetch(base + 'compmd.js', { method: 'HEAD' })).status, 200);
+      assert.equal((await fetch(base + 'compmd.js', { method: 'POST' })).status, 405);
+      // Never outside the folder, never through a symlink, never another kind of file (raw paths: fetch would tidy them)
+      const host = `localhost:${port}`;
+      for (const [p, why] of [
+        [`/assets/compmd/${version}/missing.js`, 'missing'],
+        [`/assets/compmd/${version}/linked.js`, 'a symlinked file'],
+        [`/assets/compmd/${version}/linked-dir/secret.js`, 'through a symlinked folder'],
+        [`/assets/compmd/${version}/notes.txt`, 'not .js or .wasm'],
+        ['/assets/compmd/../../templates/tasks-dashboard.html', '..'],
+        ['/assets/compmd/%2e%2e/%2e%2e/scripts/atm.py', 'percent-encoded ..'],
+        [`/assets/compmd/${version}/.hidden.js`, 'a hidden file'],
+        [`/assets//compmd/${version}/compmd.js`, 'an empty segment'],
+        ['/assets/', 'the folder'],
+      ]) {
+        assert.equal((await rawGet(port, p, host)).status, 404, why);
+      }
+    } finally {
+      run(['serve', 'stop']);
+    }
   });
 
   test('[::1] on the port is the server too, so nobody else can answer for localhost; a taken [::1] moves it on (T-227, F10)', async () => {

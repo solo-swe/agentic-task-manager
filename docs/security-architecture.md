@@ -73,15 +73,15 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime: `.js` and `.wasm` only, regular files under `plugin/assets/` named by plain segments, never through a symlink, T-284) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…" |
 | I12 | **Only the registered projects' task data is served**, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…" |
-| I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts` |
+| I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
 ### Dashboard (B4)
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` | `tests/unit/url.test.ts`, `markdown.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts` |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#`; task text rendered with CompMD loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `markdown.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the built-in icons and the bundled logo | `security-invariants.test.ts` (`{@html}` only in `Icon.svelte` and `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
@@ -363,6 +363,29 @@ agents act on changed, so there is no agent sandbox run; this written review tak
 - **The removed raw routes answer 404 (T-374, T-388):** a 0.26.0 page left open across the update keeps its data and
   offers the reload. Nothing falls back to reading the files.
 - **No new route, command, task-folder file or CI permission.** `atm-serve` (T-379) is reviewed above.
+
+**CompMD renders task text (T-284, `docs/compmd-rendering-design.md`).** The details panel renders every task text
+(description, notes, the review note, questions) with CompMD instead of `markdown.ts`. Task text is untrusted (anyone
+who can change `tasks.json` wrote it), so:
+- **What runs is atm's, shipped with the plugin:** CompMD's processor (WebAssembly) and renderer, built from pinned
+  npm packages into `plugin/assets/compmd/<version>/` and checked against a fresh build by `npm run check`. Nothing
+  is fetched from elsewhere, and the text brings no code: it has no files to import, no packs (`imports: listed`,
+  none listed), no remote data (no allowed origin), and only one `host:` source, the task's own data, which the
+  reader sees in the same panel anyway. A frontmatter written in the text is only text: the dashboard puts its own
+  in front of every text.
+- **A new route, `/assets/` (I11),** serves the plugin's own files: GET and HEAD, `.js` and `.wasm` only, plain path
+  segments (no `..`, hidden files or percent-encoding), regular files reached through no symlink.
+- **The page's CSP (I13)** gains `'wasm-unsafe-eval'` (compiling WebAssembly; not `eval`) and the asset folder as the
+  one source of script files, with the page's own origin; never `'self'`, so a future route that answers with
+  something runnable can't become a script (the reasoning and examples are the design's §2).
+- **What the text renders:** CompMD's raw HTML allowlist (`details`, `summary`, `sub`, `sup`, `kbd`, `br`, `img`,
+  `a`); everything else, scripts and event attributes included, shows as text. Before rendering, `safeTree` turns an
+  image that isn't `data:` (Markdown's, a reference's, raw `<img>`) into its alt text, so none is requested, and a
+  link that isn't `https:`, `http:`, `mailto:` or `#` into its text; after rendering, `secureLinks` checks the links
+  again, and a click on one opens it in a new tab without access to the page (I14). Inputs render without a handler,
+  so changing one changes nothing.
+- **Readers never see CompMD's diagnostics,** and a text CompMD can't render shows as written (escaped).
+- **No skill or agent-facing text changed** in T-284 (T-286 adds the guidance, with its own review), so no sandbox run.
 
 ## 4. Keeping it current
 

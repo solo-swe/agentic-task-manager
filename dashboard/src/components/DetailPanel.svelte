@@ -9,7 +9,6 @@
   import { actorsLine, earlierAttempts } from '../lib/actors';
   import { noteKindLabel, shortSha, taskNotes } from '../lib/notes';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
-  import { parseInline, parseMarkdown } from '../lib/markdown';
   import { taskTimes } from '../lib/work';
   import { commitRef } from '../lib/repo';
   import { cutOff, scrollBehavior } from '../lib/scroll';
@@ -17,7 +16,7 @@
   import BranchChip from './BranchChip.svelte';
   import ComponentChips from './ComponentChips.svelte';
   import LabelChips from './LabelChips.svelte';
-  import Markdown from './Markdown.svelte';
+  import CompMd from './CompMd.svelte';
   import PriorityBadge from './PriorityBadge.svelte';
   import StageChip from './StageChip.svelte';
   import Icon from './Icon.svelte';
@@ -277,9 +276,9 @@
     {@render waiting(task)}
     <div class="detail-section">
       <div class="label">Description</div>
-      <!-- Markdown, like Help; every piece of text stays escaped. Heading IDs are prefixed per task -->
+      <!-- CompMD (docs/compmd-rendering-design.md), with the task's own data as md.data.task -->
       <div class="value detail-description" id="detail-description">
-        <Markdown blocks={parseMarkdown(task.description ?? '')} idPrefix="desc-{task.id}-" />
+        <CompMd text={task.description ?? ''} {task} />
       </div>
     </div>
     {#if history.length > 1}
@@ -376,7 +375,7 @@
                 >
               </div>
               <div class="note-text">
-                <Markdown blocks={parseMarkdown(note.text)} idPrefix="note-{task.id}-{i}-" />
+                <CompMd text={note.text} {task} />
               </div>
             </li>
           {/each}
@@ -456,7 +455,7 @@
         <div><strong>{reviewSummary(review)}</strong></div>
         <div style="color:var(--text-muted)">Since {new Date(review.since).toLocaleString()}</div>
         {#if review.note}<div class="review-note">
-            <Markdown blocks={parseMarkdown(review.note.text)} idPrefix="review-{task.id}-" />
+            <CompMd text={review.note.text} {task} />
           </div>{/if}
       </div>
     </div>
@@ -471,7 +470,7 @@
         {/if}
         {#if block.questions.length}
           <ol class="block-questions">
-            {#each block.questions as question, i (i)}<li><Markdown inline={parseInline(question)} /></li>{/each}
+            {#each block.questions as question, i (i)}<li><CompMd text={question} {task} inline /></li>{/each}
           </ol>
           <div style="color:var(--text-muted)">
             Answer with <code>atm unblock {task.id} --answer "…"</code>, one per question.

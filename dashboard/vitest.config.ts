@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { changelogModule } from './build/changelog.ts';
+import { compmdModule } from './build/compmd.ts';
 import { helpModule } from './build/help.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
 
@@ -16,6 +17,7 @@ export default defineConfig({
     svelte(),
     svelteTesting(),
     changelogModule(whatsNew),
+    compmdModule(),
     helpModule(help),
     pluginInfoModule(pluginJson, changelog),
   ],

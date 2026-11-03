@@ -17,13 +17,19 @@ function parse(policy: string): Record<string, string[]> {
   );
 }
 
-/** page_csp's directives, read from server.py; its script-src is the page's inline scripts by hash (`hashes`) */
+/** page_csp's script-src, besides the page's inline scripts by hash: compiling WebAssembly, and the CompMD runtime's
+ * asset folder on the page's own origin, which the dev page's `'self'` covers (docs/compmd-rendering-design.md §2) */
+const SERVER_SCRIPTS = ["'wasm-unsafe-eval'"];
+
+/** page_csp's directives, read from server.py; its script-src is the page's inline scripts by hash (`hashes`), and
+ * SERVER_SCRIPTS */
 function serverPolicy(hashes: string[]): Record<string, string[]> {
   const start = SERVER.indexOf('def page_csp');
   const body = SERVER.slice(start, SERVER.indexOf('\ndef ', start + 1));
   const policy: Record<string, string[]> = {};
   for (const [, name, sources] of body.matchAll(/^\s*"([a-z-]+)(?: ([^"]*))?"/gm)) {
-    policy[name] = name === 'script-src' ? hashes : (sources ?? '').split(/\s+/).filter(Boolean);
+    policy[name] =
+      name === 'script-src' ? [...hashes, ...SERVER_SCRIPTS] : (sources ?? '').split(/\s+/).filter(Boolean);
   }
   return policy;
 }
@@ -39,6 +45,13 @@ describe('the dev page’s Content-Security-Policy (T-386)', () => {
     for (const [name, sources] of Object.entries(server)) {
       expect([...dev[name]].sort(), name).toEqual([...sources, ...(DEV_ADDITIONS[name] ?? [])].sort());
     }
+  });
+
+  it('the server’s script-src is the hashes, WebAssembly and the asset folder only: never self or eval', () => {
+    const start = SERVER.indexOf('def page_csp');
+    const body = SERVER.slice(start, SERVER.indexOf('\ndef ', start + 1));
+    expect(body).toContain(`"script-src " + " ".join(hashes + ["'wasm-unsafe-eval'", origin + COMPMD_ASSETS])`);
+    expect(SERVER).toContain('COMPMD_ASSETS = ASSETS + "compmd/"');
   });
 
   it('hashes inline scripts only, as the server does for the built page', () => {

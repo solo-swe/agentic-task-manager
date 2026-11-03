@@ -4,6 +4,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { viteSingleFile } from 'vite-plugin-singlefile';
 import { stampBuildId } from './build/build-id.ts';
 import { changelogModule } from './build/changelog.ts';
+import { compmdModule } from './build/compmd.ts';
 import { devApi } from './build/dev-api.ts';
 import { favicon } from './build/favicon.ts';
 import { helpModule } from './build/help.ts';
@@ -26,6 +27,7 @@ export default defineConfig({
     // shared dashboard state; a reload restores everything from storage anyway.
     svelte({ compilerOptions: { hmr: false } }),
     changelogModule(whatsNew),
+    compmdModule(),
     helpModule(help),
     pluginInfoModule(pluginJson, changelog),
     devApi(ownTasks),

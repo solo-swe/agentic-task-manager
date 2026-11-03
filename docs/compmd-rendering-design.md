@@ -15,13 +15,15 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
   today. Help, What's new and the card tooltips (`markdownPlainText`) are not task details and keep `markdown.ts`
   for now (moving them is a follow-up, so `markdown.ts` can go).
 - **R2. CompMD only, no second renderer** (decided in review). Until CompMD has loaded (the first panel opened in a
-  page, some tens of milliseconds) the text's place is held at its height, empty. If CompMD can't load, or a
+  page, some tens of milliseconds) the text's place is empty (`data-compmd="loading"`; `ready` once drawn). If CompMD
+  can't load, or a
   document fails to process, the text shows as it is written, escaped, with its line breaks (`white-space:
   pre-wrap`): readable, not rendered. That failure is logged to the console, not shown to the reader.
 - **R2a. Readers never see CompMD's diagnostics** (warnings and errors about the text). Agents, who write the text,
   should: §3a.
-- **R3. The dashboard stays one file;** its guardrail (550 KiB; 543 kB today) is raised for the loader and the
-  sandbox's host runtime, by what they measure. CompMD, the sandbox's frames and Mermaid ship as separate files beside
+- **R3. The dashboard stays one file;** its guardrail (550 KiB) may be raised for this (decided in review), by what it
+  measures. T-284 didn't need it: the page grew from 543 to 547 kB, the loader and the panel component; the sandbox's
+  host runtime is in the served module. CompMD, the sandbox's frames and Mermaid ship as separate files beside
   it, loaded only when a details panel first opens (Mermaid only for a text with a diagram).
 - **R4. Nothing leaves localhost,** whatever the task text says: no remote data, no pack downloads, no images or
   scripts from elsewhere.
@@ -49,32 +51,34 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
 
 ### The chosen way (B)
 
-- **Files.** The build copies, from the pinned npm packages (exact versions, `npm ci`), only what the browser loads:
-  - `plugin/assets/compmd/<version>/processor/`: `dist/index.js` (the typed API), `pkg/compmd_wasm.js` (the glue),
-    `pkg/compmd_wasm_bg.wasm`, and the glue's `snippets/` (time zones);
-  - `plugin/assets/compmd/<version>/render/`: `dist/*.js` without `bindings/` (the React and Svelte bindings import
-    packages a browser can't resolve, and atm uses neither).
-
-  Both packages import only their own files by relative paths, so they load as plain ES modules, unbundled. The
-  files are committed build artifacts, like `tasks-dashboard.html`: the build writes them, the pre-commit hook
-  stages them, and CI fails when they are stale. A test checks the copied set is exactly the list above (no
-  bindings, no source maps pointing elsewhere).
+- **Files** (as built). A second Vite build (`vite.compmd.config.ts`, run by `npm run build`) bundles
+  `dashboard/compmd/entry.ts`, which re-exports `init`, `process` and `createSandbox` from the pinned packages
+  (exact versions, `npm ci`), into `plugin/assets/compmd/<version>/`: `compmd.js` (59 kB: the processor's glue, the
+  renderer and the sandbox's host side) and `compmd_wasm_bg.wasm` (2.8 MB) beside it. Copying the packages' files
+  as they are doesn't work: `@compmd/sandbox` imports `@compmd/render` by package name, which a browser can't
+  resolve without an import map. It is an app build, not library mode, which would inline the WebAssembly as a
+  `data:` URL that `connect-src 'self'` refuses; with `base: './'` the glue finds the `.wasm` beside the module.
+  The files are committed build artifacts, like `tasks-dashboard.html`. `npm run check` (so CI) builds them again
+  into a temporary folder and fails unless every file matches (`scripts/check-compmd-assets.mjs`); the pre-commit
+  hook and CI's workflow are unchanged.
 - **Route.** atm serve serves `plugin/assets/` at `/assets/` (REST API layer, `api/server.py`; it reads plugin files,
   not task data, so it doesn't go through atm-lib): GET and HEAD only; the path normalized and required to stay
   under the folder (`..`, absolute paths and encoded separators refused); regular files only, no symlinks; content
   types by extension (`.js` `text/javascript`, `.wasm` `application/wasm`, else 404); the usual security headers;
-  an ETag and a long `Cache-Control`, since a file's name changes with the plugin version (below).
-- **Versioned path.** The build copies into a folder named for the CompMD version (`plugin/assets/compmd/0.3.0/
-  processor/…`), removing older ones, and writes that version into the page. The dashboard asks for
-  `/assets/compmd/<version>/…`, so a page left open across an update that changes CompMD gets a 404 (and keeps its
-  `markdown.ts` render, then the reload offer) rather than mixing an old page with new modules (T-388's case).
-- **Loading.** `src/lib/compmd.ts` loads both modules with a dynamic `import()` of the served URLs (marked
-  `/* @vite-ignore */`), then `init()` the processor, which fetches its `.wasm` beside it (`new URL(…,
-  import.meta.url)` in the glue). The dashboard's own `fetch` rule (only `src/lib/api/http.ts` calls `fetch`) still
-  holds: the dashboard calls none here; the glue's one fetch is inside the served module. The module is loaded once
-  per page, on the first panel open, and kept.
+  `Cache-Control: no-cache` with an ETag, so the browser asks again and gets a 304 (`asset_file` in
+  `api/server.py`: each segment a plain name, no `.`, `..`, hidden file or percent-encoding).
+- **Versioned path.** The build writes into a folder named for the CompMD version (`plugin/assets/compmd/0.3.0/`),
+  removing older ones, and the page gets that version from the build (`virtual:atm-compmd`). The dashboard asks for
+  `/assets/compmd/<version>/compmd.js`, so a page left open across an update that changes CompMD gets a 404 (its
+  texts show as written, then the reload offer) rather than mixing an old page with new modules (T-388's case).
+- **Loading.** `src/lib/compmd.ts` loads the module with a dynamic `import()` of its served URL (marked
+  `/* @vite-ignore */`), then `init()` the processor, which fetches its `.wasm` beside it. The dashboard's own `fetch`
+  rule (only `src/lib/api/http.ts` calls `fetch`) still holds: the dashboard calls none here; the glue's one fetch is
+  inside the served module. The module is loaded once per page, on the first panel open, and kept; a failure is kept
+  too.
 - **Dev and tests.** The dev server forwards `/assets/` to the real API (`build/dev-api.ts`, with `api/`, `p/` and
-  `__atm/`); the e2e `tasksServer` fixture serves `plugin/assets/` the same way.
+  `__atm/`); the e2e static server (`tests/e2e/serve.mjs`) serves `plugin/assets/` beside the page by the same
+  rules, so the e2e suite loads the real module under the real CSP.
 
 ### The page's CSP
 
@@ -90,7 +94,7 @@ which allows that and nothing else: not `eval`, not `new Function`). The questio
 
 | Option | `script-src` | Allows |
 |---|---|---|
-| **1. The asset folder** (recommended) | `<hashes> 'wasm-unsafe-eval' http://localhost:8765/assets/compmd/0.3.0/` | only the files this plugin version ships, under that folder |
+| **1. The asset folder** (recommended) | `<hashes> 'wasm-unsafe-eval' http://localhost:8765/assets/compmd/` | only the files this plugin ships, under that folder |
 | **2. `'self'`** | `<hashes> 'wasm-unsafe-eval' 'self'` | any URL on this server that answers with a JavaScript content type |
 | 3. Hashes of each file | — | not possible: hashes allow external scripts only with an `integrity` attribute, and `import()` and the imports inside a module carry none |
 | 4. `'strict-dynamic'` with a nonce | `'nonce-…' 'strict-dynamic'` | whatever a trusted script loads, transitively, from anywhere; wider than 2 |
@@ -155,8 +159,8 @@ and rendered by `@compmd/sandbox`'s view in host mode (§3c), with no trusted co
 | Task text uses | What happens |
 |---|---|
 | raw HTML | the renderer's allowlist (`details`, `summary`, `sub`, `sup`, `kbd`, `br`, `img`, `a` with safe URLs); every other tag shows as text; no attributes beyond `src`, `alt`, `href` |
-| an image | `img-src` allows only this server and `data:`, so an outside image doesn't load (and makes no request) |
-| a link | after each render, a pass keeps only `https:`, `http:`, `mailto:` and `#` links (`safeHref`, as today; CompMD also allows relative ones, which T-336 will define); others become text. External links get `target="_blank" rel="noopener noreferrer"`; `#` links scroll within the document |
+| an image | before rendering, `safeTree` turns any image that isn't a `data:` image (Markdown's, a reference's, raw `<img>`) into its alt text, so none is ever requested; `img-src 'self' data:` would refuse one anyway, but with a policy violation in the console each time |
+| a link | `safeTree` turns a link to anything else into its text before rendering; after each render, a pass keeps only `https:`, `http:`, `mailto:` and `#` links (`safeHref`, as today; CompMD also allows relative ones, which T-336 will define); others become text. External links get `target="_blank" rel="noopener noreferrer"`; `#` links scroll within the document |
 | a host-language component written in the text (JSX, Svelte, …) | the text has no files to import it from, so there is none to mount: its fallback shows |
 | `from: https://…`, a file, another `host:` source | refused by the processor (no allowed origin, no files, only `host:task` given): a diagnostic, and the fallback |
 | a pack other than Mermaid | refused (`imports: listed`, only Mermaid listed): F026, and the fallback |
@@ -178,7 +182,6 @@ md:
   data:
     - from: host:task
       as: task
-      schema: {id: string, name: string, status: string, kind: string, ready: boolean, …}
   import:
     - from: "@comp-markdown/mermaid@0"     # §3c
       names: [mermaid]
@@ -189,13 +192,17 @@ md:
 - **`md.data.task`** is the task the text belongs to: its fields as `atm show --json` gives them (`id`, `name`,
   `type`, `status`, `priority`, `sprint`, `labels`, `dependencies`, `files`, `commit`, `pr`, `notes`, the actors and
   times) and atm's derived values for it (`kind`, `ready`, `waiting_for`, the effective review mode and release, the
-  stage), which the v1 route already gives the dashboard. The request passes it as `host: {task: …}`. The schema is
-  written from the task and view schemas atm already has (`atm-cli/atm/common/schema/`), in the form spec §8
-  takes, and generated with the other types, so it can't drift.
+  stage), which the v1 route already gives the dashboard. The request passes it as `host: {task: …}`.
+- **No `schema`** (found in T-284): in CompMD 0.3.0 a `host:` source with a schema is typed as a list of records,
+  so `md.data.task.dependencies` fails (F024, "list(map(string, dyn)) has no fields"), while the task is one
+  record. Without one its values are untyped and checked when evaluated: fields, `each` over a list, `md.list()` and
+  `size()` all work. A schema for a single record would need a CompMD change; then it can be written from atm's task
+  and view schemas (`atm-cli/atm/common/schema/`), so it can't drift.
 - Only the current task: never another task's or another project's data. It is data the reader sees in the same
   panel; values inserted into the text are escaped like any text.
-- Examples an agent might write: `Waiting on {{md.data.task.waiting_for}}`, a list of dependencies with
-  `::: each {in=(md.data.task.dependencies) as=d}`, the commit of the outcome with `{{md.data.task.commit}}`.
+- Examples an agent might write: `{{md.data.task.status}}`; a list, which `{{…}}` can't write, with
+  `:value[its dependencies]{of=(md.list(md.data.task.waiting_for))}` or `::: each {in=(md.data.task.dependencies)
+  as=d}`; the task's commit with `{{md.data.task.commit}}`. A field the task lacks shows the expression as written.
 - **Text that starts with a frontmatter of its own** would follow ours and render as a line and a heading. The
   skills say the dashboard provides the frontmatter (T-286); today's task text is plain Markdown, so nothing
   existing changes.
@@ -274,18 +281,19 @@ How the guidance is shipped:
 
 ## 4. In the panel
 
-- `CompMd.svelte` takes `text` and an id prefix. Until CompMD is ready it holds the text's place (R2); then it
-  creates a page in its element and renders the processed tree; it processes again only when `text` changes (R8),
-  and destroys the page when unmounted. A question renders as a one-paragraph document, its paragraph's margins
-  trimmed so it sits in its list item as today.
-- **Theme.** `tokens` map CompMD's `--compmd-*` properties to the dashboard's CSS custom properties (text, muted,
-  border, accent, code background, spacing); a few rules in `app.css` scoped to `.compmd` match today's headings,
-  lists, code, quotes and tables. When the theme or mode changes, the panel calls `page.scheme()` (for T-285's
-  diagrams; CSS-coloured content follows by itself).
-- **Section rail.** The panel already measures its sections; CompMD's render changes their height once, so the rail
-  re-measures on a `ResizeObserver` of the sections (if it doesn't already).
-- **Fragment links and ids.** `#` links scroll to the heading with that id inside the same document, as
-  `Markdown.svelte`'s `idPrefix` does today, so two notes with the same heading don't collide.
+- `CompMd.svelte` takes `text` and the `task` (and `inline`, for a question). CompMD's sandbox view (host mode, no
+  components) owns an element of its own that Svelte never renders into; the plain text of R2 sits beside it. It
+  processes again only when the text or the task's data changes (R8), and destroys the view when unmounted.
+  `data-compmd` is `loading`, `ready` (drawn) or `failed`.
+- **Theme.** The dashboard's stylesheet sets CompMD's `--compmd-*` properties on `.compmd` (accent, borders), and
+  rules scoped to `.compmd-page` match today's headings (CompMD's `h1`–`h6` sized as the old renderer's `h3`–`h6`),
+  lists, code and quotes, plus tables (scrolling inside the text when wide), task lists and alerts. Nothing is passed
+  through `view.theme`. When the theme or mode changes, T-285's diagrams will need `view.scheme()`.
+- **Section rail.** CompMD's render changes the sections' height once, after the panel opens; the rail measures
+  them when an entry is used. The scroll tests open a task once its description is drawn (`data-compmd="ready"`).
+- **Fragment links.** CompMD writes headings without ids, so a `#` link is resolved when clicked: the heading in the
+  same text whose slug matches (as `Markdown.svelte`'s ids were made), scrolled into view. Two texts with the same
+  heading don't collide, and CompMD's DOM is never changed.
 
 ## 5. Security document
 
@@ -296,32 +304,41 @@ How the guidance is shipped:
 
 ## 6. Tests
 
-- **atm-cli** (`tests/scripts/serve.test.mjs`): `/assets/` serves a `.js` and a `.wasm` with their types; refuses
-  `..`, encoded separators and a symlink out of the folder; 404s a missing file and an unknown extension; refuses
-  POST; the page's CSP has the new sources.
-- **Unit:** the request `compmd.ts` passes (§3), exactly; the link pass (each scheme); the plain text shown when the
-  import fails; processing skipped when the text is unchanged.
-- **e2e** (against the build, with the fixture serving `plugin/assets/`): a table and a task list render; raw
-  `<img onerror>` and `<script>` show as text and run nothing; a `javascript:` link isn't a link; an `https:` image
-  and a `from: https://…` component make no request (the guardrail's "no request leaves localhost"); the text
-  shows as written when `/assets/` answers 404; light and dark; the section rail's hints after the swap;
-  the details panel's screenshot baselines updated.
-- **Build:** the copied asset list is exactly §2's; the guardrail still passes.
-- **Dev:** `dev-api.test.mjs` checks `/assets/` is forwarded.
+As written in T-284:
+- **atm-cli** (`tests/scripts/serve.test.mjs`): `/assets/` serves `compmd.js` and the `.wasm` with their types, a 304
+  for an unchanged file, HEAD, and 405 for POST; it 404s a missing file, a symlinked file, a file through a symlinked
+  folder, another extension, `..`, percent-encoded `..`, a hidden file, an empty segment and the folder itself. The
+  page's CSP has exactly the new sources, with the origin of the Host the page was asked for.
+- **Unit, the real processor** (`compmd-processor.test.ts`, Node, the shipped WebAssembly): GFM with no
+  diagnostics; `md.data.task` with atm's derived values, `each` over its lists; a frontmatter written in the text is
+  only text; only `host:task` is given; an unknown component shows its fallback; `safeTree` on the real tree;
+  diagnostics' lines.
+- **Unit** (`compmd.test.ts`): the asset URL; loading once, a failure kept; the task's data, the frontmatter and the
+  request, exactly; the link pass for each kind of link. **Components** (`DetailPanel.component.test.ts`, the real
+  CompMD in jsdom): GFM, HTML outside the allowlist as text, `md.data.task`, a `#` link scrolling to its heading,
+  notes, the review note and questions.
+- **e2e** (`detail.spec.ts`, the real module from `/assets/` under the real CSP, every test guarded against requests
+  outside localhost and CSP violations): GFM and the task's derived data; raw `<img onerror>`, `<script>`,
+  an `onclick` and a `javascript:` link run nothing; an outside image shows its text and is never requested; web
+  links open in a new tab; notes and questions; the text as written when `/assets/` answers 404. `security.spec.ts`:
+  the policy's `script-src`.
+- **Policy:** `security-headers.test.ts` keeps the dev page's policy the server's plus Vite's needs.
+- **Build:** `npm run check` rebuilds the module and compares it with the committed files.
+- **Dev:** `dev-api.test.mjs` fetches the module through the dev server.
 
 ## 7. Costs and open points
 
 - **Plugin size:** about 3 MB more per installed plugin version (the WebAssembly), and the same in the repository's
   history each time CompMD is updated. The page itself grows only by the loader and the panel component.
 - **First open:** loading and compiling the module takes some tens of milliseconds from localhost; the text's place
-  is held empty meanwhile. Later panels render at once.
+  is empty meanwhile. Later panels render at once.
 - **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
   (R1); readers don't see diagnostics (R2a); the CSP's module source is the asset folder only (§2).
 - **Agents and diagnostics:** guidance only for now, from a pinned copy of CompMD's `llms.txt` (§3a, T-286).
 - **The dashboard adds one frontmatter when it renders a text** (never stored in `tasks.json`); **the task's data is
   `md.data.task`** (§3b), decided in review.
-- **The size guardrail** will be raised for this (decided in review): the page grows by the sandbox's host runtime
-  and the loader; CompMD, the frames and Mermaid are served beside it.
+- **The size guardrail** may be raised for this (decided in review). T-284 didn't need it (547 of 550 KiB); T-285
+  and T-342 decide.
 - **Mermaid is the `@comp-markdown/mermaid` pack in the strict sandbox** (§3c), decided in review, with its
   runtime cost measured in T-285; building Mermaid into the dashboard (D) is to be reconsidered later.
 - **Nothing is open.**

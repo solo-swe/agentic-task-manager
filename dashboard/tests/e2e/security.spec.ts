@@ -9,11 +9,15 @@ test('the dashboard is served with a strict Content-Security-Policy, nosniff and
   const headers = (await page.request.get('tasks-dashboard.html')).headers();
   const csp = headers['content-security-policy'];
   expect(csp).toContain("default-src 'none'");
-  expect(csp).toMatch(/script-src 'sha256-[A-Za-z0-9+/=]+' 'sha256-[A-Za-z0-9+/=]+'(;|$)/);
+  // The page's own scripts by hash, and the CompMD runtime from its asset folder only, which may compile WebAssembly
+  // (docs/compmd-rendering-design.md §2): no 'self', no eval, no inline scripts
+  expect(csp).toMatch(
+    /script-src 'sha256-[A-Za-z0-9+/=]+' 'sha256-[A-Za-z0-9+/=]+' 'wasm-unsafe-eval' http:\/\/localhost:\d+\/svelte\/assets\/compmd\/(;|$)/,
+  );
   expect(csp).toContain("connect-src 'self'");
   expect(csp).toContain("frame-ancestors 'none'");
-  expect(csp).not.toContain('unsafe-eval');
-  expect(csp).not.toMatch(/script-src[^;]*unsafe-inline/);
+  expect(csp).not.toContain("'unsafe-eval'");
+  expect(csp).not.toMatch(/script-src[^;]*('unsafe-inline'|'self')/);
   expect(headers['x-content-type-options']).toBe('nosniff');
   expect(headers['cross-origin-resource-policy']).toBe('same-origin');
 

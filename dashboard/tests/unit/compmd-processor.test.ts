@@ -1,0 +1,119 @@
+// @vitest-environment node
+// The request lib/compmd.ts builds, run through the real CompMD processor (the WebAssembly the dashboard ships):
+// what task text may and may not do (docs/compmd-rendering-design.md §3, §3b).
+import { readFileSync } from 'node:fs';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { initSync, process } from '@compmd/processor';
+import { compmdRequest, FRONTMATTER_LINES, safeTree } from '../../src/lib/compmd';
+import type { Task } from '../../src/lib/types';
+
+const WASM = new URL('../../node_modules/@compmd/processor/pkg/compmd_wasm_bg.wasm', import.meta.url);
+
+beforeAll(() => {
+  initSync({ module: readFileSync(WASM) });
+});
+
+const task: Task = {
+  id: 'T-7',
+  name: 'Sign-in page',
+  type: 'feature',
+  status: 'todo',
+  description: '',
+  phase: 0,
+  dependencies: ['T-5', 'T-6'],
+  labels: ['ux'],
+  derived: { kind: 'todo', ready: false, waiting_for: ['T-6'], priority: 'P2', archived: false },
+};
+
+const NOW = new Date('2026-11-03T10:00:00Z');
+const run = (text: string, t: Task = task) => process(compmdRequest(text, t, NOW, 'UTC'));
+/** The text of every node in the expanded tree, in order */
+function textOf(node: unknown): string {
+  if (!node || typeof node !== 'object') return '';
+  const n = node as { value?: unknown; children?: unknown[] };
+  return (typeof n.value === 'string' ? n.value : '') + (n.children ?? []).map(textOf).join('');
+}
+const codes = (r: ReturnType<typeof run>) => r.diagnostics.map((d) => d.code);
+
+describe('task text through the real processor', () => {
+  it('plain Markdown and GFM render with no diagnostics', () => {
+    const r = run('# Title\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] done\n- [ ] not yet\n\n~~old~~\n');
+    expect(r.diagnostics).toEqual([]);
+    expect(textOf(r.expanded)).toContain('Title');
+  });
+
+  it('md.data.task is the task, with atm’s derived values', () => {
+    const r = run(
+      'Task {{md.data.task.id}} is {{md.data.task.kind}} at {{md.data.task.priority}}, waiting for ' +
+        ':value[its dependencies]{of=(md.list(md.data.task.waiting_for))}.',
+    );
+    expect(r.diagnostics).toEqual([]);
+    expect(textOf(r.expanded)).toBe('Task T-7 is todo at P2, waiting for T-6.');
+  });
+
+  it('each runs over the task’s lists', () => {
+    const r = run('::: each {in=(md.data.task.dependencies) as=d join=list}\n- {{d}}\n::: /each\n');
+    expect(r.diagnostics).toEqual([]);
+    expect(textOf(r.expanded)).toBe('T-5T-6');
+  });
+
+  it('a field the task doesn’t have is a diagnostic, not a crash', () => {
+    const bare: Task = { id: 'T-1', name: 'x', type: 'feature', status: 'todo', description: '', phase: 0 };
+    const r = run('{{md.data.task.name}} :value[none]{of=(md.list(md.data.task.waiting_for))}', bare);
+    expect(textOf(r.expanded)).toContain('x');
+    expect(r.diagnostics.every((d) => d.stage === 'evaluate')).toBe(true);
+  });
+
+  it('a frontmatter written in the task text is only text: it can’t import data, packs or files', () => {
+    const r = run(
+      '---\nmd:\n  data:\n    - from: https://example.com/x.json\n      as: x\n  import:\n    - from: "@kit/ui@1"\n      names: [card]\n---\n',
+    );
+    expect(codes(r)).not.toContain('F028');
+    expect(textOf(r.expanded)).toContain('https://example.com/x.json');
+  });
+
+  it('only the task is host data: another host source is never given', () => {
+    const request = compmdRequest('', task, NOW, 'UTC');
+    expect(Object.keys(request.host)).toEqual(['task']);
+    expect(request.allowedOrigins).toEqual([]);
+    expect(request.policy).toEqual({ imports: 'listed', packs: {} });
+  });
+
+  it('a component that doesn’t exist shows its fallback, with a diagnostic', () => {
+    const r = run(':: chart[Sales went up] {rows=(md.data.task.labels)}\n');
+    expect(textOf(r.expanded)).toContain('Sales went up');
+    expect(r.diagnostics.length).toBeGreaterThan(0);
+  });
+
+  it('safeTree: images from anywhere but data: show their text; links atm wouldn’t follow become text', () => {
+    const tree = safeTree(
+      run(
+        '![a chart](https://example.com/c.png) ![ref][r] <img src="https://example.com/x.png"> ' +
+          '![dot](data:image/png;base64,iVBORw0KGgo=) [ok](https://example.com) [bad](javascript:alert(1)) ' +
+          '[rel](../api/projects)\n\n[r]: https://example.com/r.png\n',
+      ).expanded,
+    );
+    const types: string[] = [];
+    const urls: string[] = [];
+    const walk = (node: { type: string; url?: string; children?: unknown[] }) => {
+      types.push(node.type);
+      if (node.url && node.type !== 'definition') urls.push(node.url);
+      (node.children as (typeof node)[] | undefined)?.forEach(walk);
+    };
+    walk(tree as never);
+    expect(types).not.toContain('imageReference');
+    expect(urls).toEqual(['data:image/png;base64,iVBORw0KGgo=', 'https://example.com']);
+    const text = textOf(tree);
+    expect(text).toContain('a chart');
+    expect(text).toContain('ref');
+    expect(text).toContain('<img src="https://example.com/x.png">');
+    expect(text).toContain('bad');
+    expect(text).toContain('rel');
+  });
+
+  it('diagnostics give lines in the document: the text’s line plus the frontmatter’s', () => {
+    const r = run('fine\n\n{{md.nothing.here}}\n');
+    const unknown = r.diagnostics.find((d) => d.code === 'F014');
+    expect(unknown?.range.start.line).toBe(FRONTMATTER_LINES + 3);
+  });
+});
