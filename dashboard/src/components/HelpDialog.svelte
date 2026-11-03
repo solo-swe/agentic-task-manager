@@ -3,6 +3,7 @@
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
   import Dialog from './Dialog.svelte';
+  import HintScroll from './HintScroll.svelte';
 
   const open = $derived(dashboard.dialog === 'help');
   /** Rendered the first time Help opens, and kept: CompMD loads only once the page shows Markdown */
@@ -12,7 +13,10 @@
   });
 </script>
 
-<!-- docs/help.md, embedded at build time (build/help.ts), rendered by CompMD -->
+<!-- docs/help.md, embedded at build time (build/help.ts), rendered by CompMD. Like What's new, the title stays and the
+     text scrolls below it without a scrollbar, the hints counting the sections above and below -->
 <Dialog id="help" title="Help" {open} onclose={() => dashboard.closeDialog()}>
-  {#if opened}<CompMd text={help} />{/if}
+  <HintScroll item=".compmd-page > h2" outer="help-scroll" id="help-body">
+    {#if opened}<CompMd text={help} />{/if}
+  </HintScroll>
 </Dialog>

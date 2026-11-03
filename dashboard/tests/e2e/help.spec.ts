@@ -17,6 +17,31 @@ test.describe('Help', () => {
     await expect(page.locator('#footer-help')).toBeFocused();
   });
 
+  test('the text scrolls under the title without a scrollbar, with hints that count sections and scroll', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openDashboard(page, tasksServer, 'standard');
+    await page.locator('#footer-help').click();
+    await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
+    const body = page.locator('#help-body');
+    const sizes = await body.evaluate((el) => ({
+      overflows: el.scrollHeight > el.clientHeight,
+      scrollbar: (el as HTMLElement).offsetWidth - el.clientWidth,
+      panelScrolls: el.closest('#help-panel')!.scrollHeight > el.closest('#help-panel')!.clientHeight,
+    }));
+    expect(sizes).toEqual({ overflows: true, scrollbar: 0, panelScrolls: false });
+
+    const panel = page.locator('#help-panel');
+    await expect(panel.locator('.kanban-more.top')).toHaveCount(0);
+    await expect(panel.locator('.kanban-more.bottom')).toHaveText(/^▼ \d+ more$/);
+    const title = await panel.locator('h3').first().boundingBox();
+    await panel.locator('.kanban-more.bottom').click();
+    await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
+    await expect(panel.locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
+    expect(await panel.locator('h3').first().boundingBox()).toEqual(title);
+  });
+
   test('the diagram example shows its source, then the diagram drawn from it', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('#footer-help').click();

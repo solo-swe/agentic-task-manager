@@ -364,6 +364,18 @@ body {
 .whats-new .kanban-more.bottom {
   border-radius: 0;
 }
+/* Help scrolls the same way: the title stays, the text scrolls below it without a scrollbar */
+#help-panel {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.help-scroll {
+  flex: 1 1 auto;
+}
+.help .kanban-more.bottom {
+  border-radius: 0;
+}
 .whats-new .release + .release {
   margin-top: 18px;
 }
