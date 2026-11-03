@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/@compmd/vite/compmd.config.schema.json",
+  "packs": {
+    "@comp-markdown/mermaid": { "version": "0.1.1", "ambient": true }
+  },
+  "imports": "listed"
+}

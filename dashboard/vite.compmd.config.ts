@@ -1,12 +1,17 @@
 import { readdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { compmd } from '@compmd/vite';
 import { defineConfig, type Plugin } from 'vite';
 import { compmdVersion } from './build/compmd.ts';
 
-// The CompMD runtime the dashboard loads (docs/compmd-rendering-design.md §2): compmd/entry.ts built into
-// plugin/assets/compmd/<version>/ as compmd.js, with the processor's WebAssembly as its own file beside it (the glue
-// finds it with `new URL(…, import.meta.url)`). An app build, not library mode: library mode would inline the
-// WebAssembly as a data: URL, which the page's CSP (connect-src 'self') rightly refuses. Committed, like
+// The CompMD runtime the dashboard loads (docs/compmd-rendering-design.md §2, §3c), in plugin/assets/compmd/<version>/,
+// served by atm serve at /assets/compmd/<version>/:
+// - compmd.js, compmd/entry.ts built, with the processor's WebAssembly as its own file beside it. An app build, not
+//   library mode: library mode would inline the WebAssembly as a data: URL, which the page's CSP (connect-src 'self')
+//   rightly refuses;
+// - compmd/, @compmd/vite's: the sandbox's frame documents, and the built modules of the packs compmd.config.json
+//   lists (the Mermaid pack, ambient), whose versions and hashes it pins.
+// `base` is where atm serve serves the folder: @compmd/vite gives the frames' and modules' URLs from it. Committed, like
 // tasks-dashboard.html; `npm run check` fails when it is stale (scripts/check-compmd-assets.mjs).
 
 const assets = fileURLToPath(new URL('../plugin/assets/compmd/', import.meta.url));
@@ -36,10 +41,10 @@ function removeOtherVersions(): Plugin {
 }
 
 export default defineConfig({
+  root: fileURLToPath(new URL('.', import.meta.url)),
   publicDir: false,
-  // Files find each other relative to the module, wherever the folder is served
-  base: './',
-  plugins: [removeOtherVersions()],
+  base: `/assets/compmd/${version}/`,
+  plugins: [removeOtherVersions(), compmd()],
   build: {
     outDir: assets + version,
     emptyOutDir: true,

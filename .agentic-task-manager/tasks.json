@@ -14222,7 +14222,7 @@
       "description": "Render all task text in the details panel (the description, notes, the review note and a blocked task's questions) with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`, as the design approved with Hakan says: `docs/compmd-rendering-design.md` (it supersedes this task's first description).\n\n## In short\n- CompMD only, no second renderer: while it loads the place is empty; if it can't load, the text shows as written. Readers never see CompMD's diagnostics.\n- CompMD ships beside the single-file dashboard: a second Vite build bundles the runtime into `plugin/assets/compmd/<version>/` (`compmd.js` and the processor's `.wasm`), served by `atm serve` at `/assets/` (read-only, `.js` and `.wasm`, no symlinks) and loaded on the first panel open. `npm run check` fails when the committed files are stale.\n- The page's CSP adds `'wasm-unsafe-eval'` and the asset folder (never `'self'`).\n- The dashboard puts one frontmatter in front of every text (never stored): the task's own data as `md.data.task` (its fields and atm's derived values), nothing else: no files, packs, remote data or other host sources. `safeTree` takes out images that aren't `data:` and links atm wouldn't follow before rendering.\n- Rendered in host mode by `@compmd/sandbox`, so T-285's Mermaid pack adds a strict frame without changing this.\n\n## Tests\n`docs/compmd-rendering-design.md` §6.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -14245,7 +14245,7 @@
         "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T09:14:28Z",
+      "updated_at": "2026-11-03T09:14:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14264,7 +14264,7 @@
       ],
       "started_at": "2026-11-03T08:45:42Z",
       "started_by": "claude:b7be7288",
-      "commit": "ceedfc516ed8f007c3bb03992b79b4970a33e49e",
+      "commit": "d1118dff8ca7afcfd2110bc605529256462c6aa2",
       "notes": [
         {
           "at": "2026-11-03T07:34:14Z",
@@ -14277,6 +14277,12 @@
           "kind": "note",
           "text": "Approved: Design approved by Hakan (`docs/compmd-rendering-design.md`). Left: implement it (assets and route, CSP, loader, CompMd component in host mode, md.data.task, tests, security doc).",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T09:14:43Z",
+          "kind": "outcome",
+          "text": "CompMD renders all task text in the panel (design approved). Check in the browser: a rich description (tables, task lists), notes and questions; the `md.data.task` values; the look in light and dark (screenshots regenerate in the release task). Verified: 978 unit, 364 e2e, 548 atm-cli.",
+          "by": "claude:b7be7288"
         }
       ],
       "reviews": [
@@ -14285,17 +14291,19 @@
           "to": "2026-11-03T08:45:41Z",
           "outcome": "approved"
         }
-      ]
+      ],
+      "completed_at": "2026-11-03T09:14:43Z",
+      "completed_by": "claude:b7be7288"
     },
     {
       "id": "T-285",
       "name": "Mermaid diagrams in task text: the @comp-markdown/mermaid pack in the strict sandbox",
       "type": "feature",
       "priority": "P2",
-      "description": "Mermaid diagrams in task text, as decided in T-284's design (`docs/compmd-rendering-design.md` §3c): the published pack `@comp-markdown/mermaid` (Mermaid bundled in one module), run by `@compmd/sandbox` in a strict frame (an opaque origin with no network), with the dashboard rendering in host mode, which T-284 sets up.\n\n## Change\n- `@comp-markdown/mermaid` from npm, pinned exactly, installed with `npm ci`. The build copies its files (`package.json`, `index.comp.md`, `dist/mermaid.js`, `dist/LICENSES.md`) into the versioned asset folder (`plugin/assets/compmd/<version>/packs/@comp-markdown/mermaid@<version>/`), committed like T-284's assets.\n- The request (`src/lib/compmd.ts`): the pack's release in `packs` (its files, its `integrity` from `package-lock.json`), and `policy.packs['@comp-markdown/mermaid'] = { level: 'strict' }` with `imports: 'listed'`. atm's frontmatter (§3b) imports it: `from: \"@comp-markdown/mermaid@0\"`, `names: [mermaid]`.\n- The sandbox's `modules` gives the pack's module URL under the asset folder and its hash, so the frame runs it only if it matches.\n- The server, if T-284 didn't already: the frame documents with `Content-Security-Policy: sandbox allow-scripts`, the pack folder with `Access-Control-Allow-Origin: *` (the frames' origin is opaque), and the page's `frame-src` limited to the asset folder, as `script-src` is.\n- Theme: the pack's `theme=auto` follows the panel's light or dark mode; the view's `scheme()` is called when the dashboard switches mode or theme.\n- A diagram Mermaid can't read shows its code (the pack's own behaviour); the error is logged, not shown (R2a).\n- Mermaid isn't loaded for a text without a `mermaid` block.\n\n## Runtime cost (§3c)\nEach diagram's frame parses Mermaid's 7 MB module. Add an e2e timing for a task with one diagram and with five, and record the numbers in a note. If it is too slow, propose one of §3c's options (one frame per document, the module given as code, or Mermaid built in) to Hakan before changing course.\n\n## Tests\n- e2e: a flowchart renders as SVG inside a frame; a broken diagram shows its code; dark mode uses Mermaid's dark theme; a label with `<script>` or `<img onerror>` runs nothing in the dashboard's page; the frame makes no request outside localhost and none to the dashboard's API; Mermaid isn't requested for a task without a diagram; a module whose hash doesn't match doesn't run.\n- atm-cli (`tests/scripts/serve.test.mjs`): the frame documents' and the pack folder's headers.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: the sandbox as the place third-party rendering code runs, the frame headers, `frame-src`, and the pack's integrity check.\n\n## Later\nBuilding Mermaid into the dashboard at build time is to be reconsidered later (§3c, option D).\n",
+      "description": "Mermaid diagrams in task text, as decided in T-284's design (`docs/compmd-rendering-design.md` §3c, \"As built\" there): the published pack `@comp-markdown/mermaid`, run by `@compmd/sandbox` in a strict frame (an opaque origin with no network), the text itself rendering in the dashboard's page (host mode).\n\n## As built\n- Through `@compmd/vite` only (Hakan's direction): `dashboard/compmd.config.json` pins the pack (`0.1.1`), makes it **ambient** (no import line in the frontmatter) and lists it as the only pack (`imports: \"listed\"`, strict). The asset build runs `compmd()`, which writes the frame documents and the pack's module into the asset folder and gives `virtual:compmd` (`request`, `sandbox`), re-exported by the served module.\n- atm serve serves the folder as the plugin's own server does (CORS `*`, frame documents sandboxed); the page's policy gains `frame-src` for the asset folder.\n- Components a text defines itself are never given to the sandbox.\n- Diagrams follow light and dark mode; a broken diagram, or a module that doesn't match its hash, shows its code in the frame.\n- Measured: one diagram 280–390 ms, five 350–510 ms (opening the panel, CompMD's load included).\n\n## Not here\nMath stays TeX until CompMD's host mode typesets it (Hakan is fixing that in CompMD). Building Mermaid into the dashboard at build time is to be reconsidered later (§3c, option D).\n\n## Sample content (for trying the rendering)\nHakan's test content for this task's details panel: it shows how task text renders, and is no part of the work. Math shows as its TeX source until CompMD's fix.\n\n```mermaid {alt=\"A task goes from to do through in progress and review to done, or back to to do on changes\"}\nflowchart LR\n  todo[To do] --> active[In progress]\n  active --> review[In review]\n  review -->|approved| done[Done]\n  review -->|changes requested| active\n  active -->|blocked| blocked[Blocked]\n  blocked -->|answered| todo\n```\n\n| Diagram | Where it renders | Loaded when |\n|---|---|---|\n| Flowchart | a strict frame | the text has a `mermaid` block |\n| Sequence | a strict frame | the same |\n| None | the panel itself | never |\n\n- Shipping\n  - the pack's module, `dist/mermaid.js`\n    - 7.0 MB minified, 1.6 MB gzipped\n  - its licences, `dist/LICENSES.md`\n- Running\n  - one strict frame per diagram\n  - the module's hash checked before it runs\n\nInline math: the cost grows as $n \\cdot t_{parse}$ for $n$ diagrams. Display math:\n\n$$\nt_{panel} = t_{load} + \\sum_{i=1}^{n} t_{parse,i}\n$$\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-284"
       ],
@@ -14314,7 +14322,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T08:43:40Z",
+      "updated_at": "2026-11-03T09:58:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14330,7 +14338,9 @@
         "docs",
         "cli",
         "api"
-      ]
+      ],
+      "started_at": "2026-11-03T09:30:43Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-286",

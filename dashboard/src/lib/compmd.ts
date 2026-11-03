@@ -2,6 +2,8 @@
 // who can change tasks.json wrote it. This module builds what CompMD is given (the frontmatter the dashboard puts in
 // front of every text, and the request, §3 and §3b), loads CompMD from atm serve's asset folder (§2), and makes the
 // rendered links safe (§3).
+// Types only: the processor itself is in the module served from the asset folder, never in the dashboard's bundle
+import type { Request } from '@compmd/processor';
 import { version as compmdVersion } from 'virtual:atm-compmd';
 import { safeHref } from './markdown';
 import type { Task } from './types';
@@ -15,7 +17,8 @@ export function taskData(task: Task): Record<string, unknown> {
 
 /** The frontmatter in front of every task text: the same for each, never stored in tasks.json (§3b). Written as JSON,
  * which YAML reads as it is, so no value needs quoting rules. `host:task` has no `schema`: in CompMD 0.3.0 a schema
- * makes data a list of records, and the task is one record; its values are typed when evaluated instead. */
+ * makes data a list of records, and the task is one record; its values are typed when evaluated instead. Packs aren't
+ * here: compmd.config.json makes the Mermaid pack ambient (§3c). */
 export function frontmatter(): string {
   const md = { version: 1, data: [{ from: 'host:task', as: 'task' }] };
   return `---\n${JSON.stringify({ md })}\n---\n`;
@@ -26,17 +29,28 @@ export const FRONTMATTER_LINES = frontmatter().split('\n').length - 1;
 
 export const DOCUMENT = 'task.comp.md';
 
-/** What CompMD's processor is given for one task text (§3): the text alone, behind the frontmatter; no files to import,
- * no remote data, no packs; the task's own data as the one `host:` source */
-export function compmdRequest(text: string, task: Task, now = new Date(), timeZone = localTimeZone()) {
+/** @compmd/vite's request (`virtual:compmd`, from compmd.config.json): the packs, which are ambient, and their policy.
+ * The module served from the asset folder gives it; tests give it from the same configuration. */
+export type BaseRequest = Pick<Request, 'packs' | 'ambient' | 'policy'>;
+
+/** What CompMD's processor is given for one task text (§3): @compmd/vite's request (the plugin's packs, each strict:
+ * its components run in a strict frame with no network), and the dashboard's own parts: the text alone, behind the
+ * frontmatter, with no files to import and no remote data, and the task's own data as the one `host:` source */
+export function compmdRequest(
+  base: BaseRequest,
+  text: string,
+  task: Task,
+  now = new Date(),
+  timeZone = localTimeZone(),
+) {
   return {
+    ...base,
     path: DOCUMENT,
     files: { [DOCUMENT]: frontmatter() + text },
     now: now.toISOString(),
     tz: timeZone,
     allowedOrigins: [] as string[],
     host: { task: taskData(task) },
-    policy: { imports: 'listed' as const, packs: {} },
   };
 }
 
@@ -48,30 +62,52 @@ function localTimeZone(): string {
   }
 }
 
-/** Where atm serve serves this build's CompMD: plugin/assets/compmd/<version>/, relative to the page (§2) */
-export function compmdAssetUrl(file: string, base = document.baseURI): string {
-  return new URL(`assets/compmd/${compmdVersion}/${file}`, base).href;
+/** Where atm serve serves this build's CompMD: plugin/assets/compmd/<version>/, at /assets/compmd/<version>/ (§2):
+ * the path vite.compmd.config.ts builds it for, from which @compmd/vite gives its frames' and modules' URLs */
+export function compmdAssetUrl(file: string, origin = location.origin): string {
+  return new URL(`/assets/compmd/${compmdVersion}/${file}`, origin).href;
 }
 
 /** What the served module gives (dashboard/compmd/entry.ts) */
 export interface CompmdModule {
   init(): Promise<unknown>;
-  process(request: ReturnType<typeof compmdRequest>): {
-    expanded: unknown;
-    diagnostics: { code: string; severity: string; message: string; range: { start: { line: number } } }[];
+  OpenDocument: new (request: ReturnType<typeof compmdRequest>) => {
+    readonly expanded: unknown;
+    readonly components: readonly unknown[];
+    free(): void;
   };
-  createSandbox(options: { base: string; page: 'host' }): {
+  request: BaseRequest;
+  sandbox: { base: string; modules: unknown };
+  createSandbox(options: { base: string; modules: unknown; page: 'host' }): {
     open(
       container: HTMLElement,
       options: { components: readonly unknown[] },
     ): {
       render(tree: unknown): void;
-      theme(tokens: Record<string, string>): void;
       scheme(): void;
       on(type: 'rendered' | 'error', listener: (event: unknown) => void): void;
       destroy(): void;
     };
   };
+}
+
+/**
+ * Only the packs' components: built modules, which the sandbox loads from the asset folder and a strict frame runs
+ * only if they match the hash @compmd/vite took. A component the text defines itself (a `jsx` or `svelte` fence) has
+ * no module: it is left out, so it shows its fallback and its code never runs (R5).
+ */
+export function packComponents<T>(components: readonly T[]): T[] {
+  return components.filter((component) => !!(component as { module?: unknown }).module);
+}
+
+/** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
+export function processText(compmd: CompmdModule, text: string, task: Task) {
+  const document = new compmd.OpenDocument(compmdRequest(compmd.request, text, task));
+  try {
+    return { tree: safeTree(document.expanded), components: packComponents(document.components) };
+  } finally {
+    document.free();
+  }
 }
 
 let loading: Promise<CompmdModule> | null = null;

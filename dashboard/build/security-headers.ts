@@ -11,6 +11,8 @@ import type { Plugin } from 'vite';
  */
 export const DEV_ADDITIONS: Record<string, string[]> = {
   'script-src': ["'self'"],
+  // CompMD's sandbox frames, which the server's policy names by the asset folder (forwarded here)
+  'frame-src': ["'self'"],
   'style-src': ["'self'"],
   'connect-src': ['ws://localhost:*', 'ws://127.0.0.1:*'],
 };
@@ -21,6 +23,7 @@ export function devCsp(hashes: string[]): string {
   return [
     "default-src 'none'",
     ["script-src 'self'", ...hashes, "'wasm-unsafe-eval'"].join(' '),
+    "frame-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "connect-src 'self' ws://localhost:* ws://127.0.0.1:*",

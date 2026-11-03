@@ -1,14 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import {
-    compmdAssetUrl,
-    compmdRequest,
-    loadCompmd,
-    safeTree,
-    secureLinks,
-    taskData,
-    type CompmdModule,
-  } from '../lib/compmd';
+  import { loadCompmd, processText, secureLinks, taskData, type CompmdModule } from '../lib/compmd';
   import { safeHref, slug } from '../lib/markdown';
   import { scrollBehavior } from '../lib/scroll';
   import type { Task } from '../lib/types';
@@ -27,6 +19,7 @@
   /** Whether CompMD has drawn this text yet: `data-compmd` says so, for what measures the panel once it has */
   let drawn = $state(false);
   let view: View | null = null;
+  let schemes: MutationObserver | null = null;
   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
   let rendered = '';
 
@@ -39,16 +32,21 @@
     loadCompmd()
       .then((compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
-        const processed = compmd.process(compmdRequest(text, task));
+        const { tree, components } = processText(compmd, text, task);
         if (!view) {
-          // Host mode, no components: the page renders here; packs' frames (T-285) will come from the asset folder
-          view = compmd.createSandbox({ base: compmdAssetUrl(''), page: 'host' }).open(target, { components: [] });
+          // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
+          // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)
+          view = compmd.createSandbox({ ...compmd.sandbox, page: 'host' }).open(target, { components });
           view.on('rendered', () => {
             secureLinks(target);
             drawn = true;
           });
+          // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
+          // and a diagram's light or dark theme, follow when told
+          schemes = new MutationObserver(() => view?.scheme());
+          schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
         }
-        view.render(safeTree(processed.expanded));
+        view.render(tree);
         failed = false;
       })
       .catch((e: unknown) => {
@@ -57,7 +55,10 @@
       });
   });
 
-  onDestroy(() => view?.destroy());
+  onDestroy(() => {
+    schemes?.disconnect();
+    view?.destroy();
+  });
 
   /** Links open as the dashboard's always have (§3): `#` ones scroll to the heading in this text, the URL hash being
    * the dashboard's state; external ones in a new tab without access to this page; any other one not at all */

@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
 // CompMD in the details panel (docs/compmd-rendering-design.md): which version the dashboard loads from atm serve's
-// asset folder (§2).
+// asset folder (§2). Packs, their versions and the sandbox's frames are @compmd/vite's (compmd.config.json, built by
+// vite.compmd.config.ts).
 
 const ID = 'virtual:atm-compmd';
 const RESOLVED_ID = '\0' + ID;

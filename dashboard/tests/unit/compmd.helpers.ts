@@ -11,8 +11,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { vi } from 'vitest';
-import { initSync, process } from '@compmd/processor';
+import { initSync, OpenDocument } from '@compmd/processor';
 import { createSandbox } from '@compmd/sandbox';
+import { request, sandbox } from 'virtual:compmd';
 import type { CompmdModule } from '../../src/lib/compmd';
 
 // A path, not a URL: in jsdom, URL is jsdom's, which node:fs doesn't take
@@ -34,7 +35,13 @@ export function realCompmd(): Promise<CompmdModule> {
     addEventListener() {},
     removeEventListener() {},
   })) as unknown as typeof window.matchMedia;
-  return Promise.resolve({ init: async () => undefined, process, createSandbox } as unknown as CompmdModule);
+  return Promise.resolve({
+    init: async () => undefined,
+    OpenDocument,
+    createSandbox,
+    request,
+    sandbox,
+  } as unknown as CompmdModule);
 }
 
 /** Waits until every task text in the page is drawn, or shown as written (CompMd.svelte's data-compmd): CompMD

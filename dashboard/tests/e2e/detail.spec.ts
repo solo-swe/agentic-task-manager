@@ -306,3 +306,145 @@ test.describe('task text with CompMD', () => {
     await expect(description(page).locator('.compmd-plain')).toHaveText('## Plan\n\nStep **one**.');
   });
 });
+
+// Mermaid diagrams (T-285, docs/compmd-rendering-design.md §3c): the ambient @comp-markdown/mermaid pack, its built
+// module loaded by @compmd/sandbox into a strict frame (an opaque origin, no network), checked against its hash.
+test.describe('Mermaid diagrams in task text', () => {
+  const withText = (description: string) => ({
+    meta: { project: 'Diagrams' },
+    tasks: [{ id: 'T-1', name: 'Diagrams', phase: 0, type: 'feature', status: 'todo', description }],
+  });
+  const flowchart = (label = 'Draft') =>
+    `\`\`\`mermaid {alt="${label}, then review"}\nflowchart LR\n  a[${label}] --> b[Review]\n\`\`\`\n`;
+  const diagramFrame = (page: Page) => page.locator('#detail-description iframe');
+  const isMermaid = (url: string) => url.includes('/packs/@comp-markdown/mermaid@');
+
+  test('a mermaid block is drawn as SVG in a sandboxed frame', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, withText(`Before.\n\n${flowchart()}\nAfter.`), { tab: 'list' });
+    await openFromCard(page, 'T-1');
+    await expect(diagramFrame(page)).toHaveCount(1);
+    await expect(diagramFrame(page)).toHaveAttribute('sandbox', 'allow-scripts');
+    // Mermaid's drawing (it may hold other SVGs of its own: the first is the diagram)
+    const svg = page.frameLocator('#detail-description iframe').locator('svg').first();
+    await expect(svg).toBeVisible({ timeout: 15_000 });
+    await expect(svg).toContainText('Draft');
+    // The text around it stays in the page
+    await expect(page.locator('#detail-description')).toContainText('Before.');
+    await expect(page.locator('#detail-description')).toContainText('After.');
+  });
+
+  test('a diagram follows the dashboard’s light and dark mode', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, withText(flowchart()), { tab: 'list' });
+    await openFromCard(page, 'T-1');
+    const node = page.frameLocator('#detail-description iframe').locator('svg .node rect, svg .node polygon').first();
+    await expect(node).toBeVisible({ timeout: 15_000 });
+    const fill = () => node.evaluate((el) => getComputedStyle(el).fill);
+    const before = await fill();
+    // What the mode switch sets (the dashboard's colour scheme follows <html>'s data-mode)
+    const mode = await page.evaluate(() => document.documentElement.dataset.mode);
+    await page.evaluate((m) => (document.documentElement.dataset.mode = m === 'light' ? 'dark' : 'light'), mode);
+    await expect.poll(fill, { timeout: 15_000 }).not.toBe(before);
+  });
+
+  test('a diagram Mermaid can’t read shows its code', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, withText('```mermaid\nflowchart LR\n  a --> \n  ((((\n```\n'), {
+      tab: 'list',
+    });
+    await openFromCard(page, 'T-1');
+    // The pack shows the code where the diagram would be: in its frame
+    const frame = page.frameLocator('#detail-description iframe');
+    await expect(frame.locator('body')).toContainText('flowchart LR', { timeout: 15_000 });
+    await expect(frame.locator('svg')).toHaveCount(0);
+  });
+
+  test('a Mermaid module that isn’t the file the plugin shipped never runs: the diagram stays its code', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.route('**/packs/@comp-markdown/mermaid@*/dist/mermaid.js', async (route) => {
+      const response = await route.fetch();
+      const body = (await response.text()) + '\n// changed on its way';
+      await route.fulfill({ response, body });
+    });
+    await openDashboard(page, tasksServer, withText(flowchart()), { tab: 'list' });
+    await openFromCard(page, 'T-1');
+    // The frame refuses the module (its integrity doesn't match) and shows the block's code instead
+    const frame = page.frameLocator('#detail-description iframe');
+    await expect(frame.locator('body')).toContainText('flowchart LR', { timeout: 15_000 });
+    await expect(frame.locator('svg')).toHaveCount(0);
+  });
+
+  test('Mermaid isn’t loaded for a text without a diagram', async ({ page, tasksServer }) => {
+    const requested: string[] = [];
+    page.on('request', (r) => requested.push(r.url()));
+    await openDashboard(page, tasksServer, withText('Just text, **bold**.'), { tab: 'list' });
+    await openFromCard(page, 'T-1');
+    await expect(diagramFrame(page)).toHaveCount(0);
+    expect(requested.filter(isMermaid)).toEqual([]);
+  });
+
+  test('markup in a diagram’s labels runs nothing: the strict frame refuses it, the dashboard never sees it', async ({
+    page,
+    tasksServer,
+    sandboxRefusals,
+  }) => {
+    await openDashboard(
+      page,
+      tasksServer,
+      withText(flowchart('<img src=x onerror="parent.ranLabel=1"><script>parent.ranLabel=2</script>')),
+      { tab: 'list' },
+    );
+    await openFromCard(page, 'T-1');
+    await expect(page.frameLocator('#detail-description iframe').locator('svg').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    expect(await page.evaluate(() => (window as unknown as { ranLabel?: number }).ranLabel)).toBeUndefined();
+    // The markup reached the frame's document, whose own policy (no inline handlers, images only data: and blob:)
+    // refused it: the sandbox, not Mermaid, is what holds here
+    await expect.poll(() => sandboxRefusals.length).toBeGreaterThan(0);
+    expect(sandboxRefusals.join('\n')).toMatch(/inline event handler|img-src data: blob:/);
+  });
+
+  test('the time to draw one diagram and five (§3c: each frame parses Mermaid’s module)', async ({
+    page,
+    tasksServer,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    // T-1 has one diagram, T-5 five; CompMD is loaded by the first, so the second times the diagrams alone
+    const diagrams = (count: number) => Array.from({ length: count }, (_, i) => flowchart(`Step ${i + 1}`)).join('\n');
+    const task = (id: string, count: number) => ({
+      id,
+      name: `${count} diagrams`,
+      phase: 0,
+      type: 'feature',
+      status: 'todo',
+      description: diagrams(count),
+    });
+    await openDashboard(
+      page,
+      tasksServer,
+      { meta: { project: 'Diagrams' }, tasks: [task('T-1', 1), task('T-5', 5)] },
+      { tab: 'list' },
+    );
+    const timings: Record<string, number> = {};
+    for (const [id, count] of [
+      ['T-1', 1],
+      ['T-5', 5],
+    ] as const) {
+      const start = Date.now();
+      await openFromCard(page, id);
+      await expect(page.locator('#detail-panel h3')).toContainText(id);
+      await expect(diagramFrame(page)).toHaveCount(count);
+      for (let i = 0; i < count; i++)
+        await expect(page.frameLocator('#detail-description iframe').nth(i).locator('svg').first()).toBeVisible({
+          timeout: 30_000,
+        });
+      timings[`${count} diagram${count > 1 ? 's' : ''}`] = Date.now() - start;
+      // The panel covers the list: close it before opening the next task
+      await page.keyboard.press('Escape');
+      await expect(overlay(page)).toBeHidden();
+    }
+    await testInfo.attach('mermaid-timings', { body: JSON.stringify(timings), contentType: 'application/json' });
+    console.log('Mermaid timings (ms):', JSON.stringify(timings));
+  });
+});

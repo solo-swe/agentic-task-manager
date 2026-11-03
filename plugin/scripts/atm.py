@@ -9778,11 +9778,19 @@ LOGO_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     "X-Content-Type-Options": "nosniff",
 }
-# The plugin's own files the dashboard loads beside it (docs/compmd-rendering-design.md §2): read-only, only regular
-# files under plugin/assets/ with these extensions, never through a symlink
+# The plugin's own files the dashboard loads beside it (docs/compmd-rendering-design.md §2, §3c): read-only, only
+# regular files under plugin/assets/ with these extensions, never through a symlink. CompMD's sandbox frames have an
+# opaque origin, so what they load comes cross-origin: every asset may be read from anywhere (they are the plugin's
+# published files), and a frame document is sandboxed even when opened alone, as @compmd/vite serves them
 ASSETS = "/assets/"
 COMPMD_ASSETS = ASSETS + "compmd/"
-ASSET_TYPES = {".js": "text/javascript; charset=utf-8", ".wasm": "application/wasm"}
+ASSET_TYPES = {
+    ".js": "text/javascript; charset=utf-8",
+    ".wasm": "application/wasm",
+    ".html": "text/html; charset=utf-8",
+}
+ASSET_HEADERS = {"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"}
+FRAME_DOCUMENT_HEADERS = {**ASSET_HEADERS, "Content-Security-Policy": "sandbox allow-scripts"}
 ASSET_SEGMENT = re.compile(r"[A-Za-z0-9_@][A-Za-z0-9._@-]*")
 # On every response: no content sniffing, and no other site may embed it (docs/security-review.md F11)
 SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin"}
@@ -9791,11 +9799,11 @@ INLINE_SCRIPT = re.compile(rb"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
 
 def page_csp(page, origin):
     """The dashboard's Content-Security-Policy: only its own inline scripts run (by hash), and the CompMD runtime from
-    this server's asset folder, which may compile WebAssembly (docs/compmd-rendering-design.md §2); it talks only to
-    this server, and no page may frame it. Any script injected into it, from anywhere else, or a `javascript:` link,
-    is refused by the browser. `origin` is the page's (`http://localhost:<port>`, from the checked Host header): a
-    source with a path can't be written without it. tests/e2e/csp.mjs builds the same policy, so the e2e suite runs
-    under it."""
+    this server's asset folder, which may compile WebAssembly (docs/compmd-rendering-design.md §2); its only frames are
+    CompMD's sandbox frames from that folder (§3c), it talks only to this server, and no page may frame it. Any script
+    injected into it, from anywhere else, or a `javascript:` link, is refused by the browser. `origin` is the page's
+    (`http://localhost:<port>`, from the checked Host header): a source with a path can't be written without it.
+    tests/e2e/csp.mjs builds the same policy, so the e2e suite runs under it."""
     hashes = [
         "'sha256-" + base64.b64encode(hashlib.sha256(body).digest()).decode("ascii") + "'"
         for attrs, body in INLINE_SCRIPT.findall(page)
@@ -9805,6 +9813,7 @@ def page_csp(page, origin):
         [
             "default-src 'none'",
             "script-src " + " ".join(hashes + ["'wasm-unsafe-eval'", origin + COMPMD_ASSETS]),
+            "frame-src " + origin + COMPMD_ASSETS,
             "style-src 'unsafe-inline'",
             "img-src 'self' data:",
             "connect-src 'self'",
@@ -10234,7 +10243,8 @@ def serve(home, port):
                 with open(found[0], "rb") as f:
                     return f.read()
 
-            self.send_conditional(read, file_etag(stamp), found[1], {"Cache-Control": "no-cache"})
+            headers = FRAME_DOCUMENT_HEADERS if found[0].endswith(".html") else ASSET_HEADERS
+            self.send_conditional(read, file_etag(stamp), found[1], headers)
 
         def not_allowed(self):
             self.send_error_json(405, "only GET and HEAD")

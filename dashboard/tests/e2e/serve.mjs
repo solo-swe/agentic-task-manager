@@ -1,6 +1,6 @@
 // Minimal static server for e2e tests. The built dashboard is served as /svelte/tasks-dashboard.html, with the
-// security headers atm serve sends (T-226), and the plugin's asset folder beside it (/svelte/assets/…, the CompMD
-// runtime) as atm serve serves it; tasks.json is always supplied per test via page.route.
+// security headers atm serve sends (T-226), and the plugin's asset folder at /assets/ (the CompMD runtime, its sandbox's
+// frames and packs) as atm serve serves it; tasks.json is always supplied per test via page.route.
 import { createServer } from 'node:http';
 import { lstat, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -11,20 +11,31 @@ const ASSETS = root + '../plugin/assets/';
 const VARIANTS = {
   svelte: root + '../plugin/templates/tasks-dashboard.html',
 };
-// As atm serve's asset route: plain names, known extensions, no symlinks (atm-cli/atm/api/server.py asset_file)
-const ASSET = /^\/(\w+)\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm))$/;
-const ASSET_TYPES = { js: 'text/javascript; charset=utf-8', wasm: 'application/wasm' };
+// As atm serve's asset route (atm-cli/atm/api/server.py asset_file): plain names, known extensions, no symlinks; every
+// asset readable cross-origin (the sandbox's frames have an opaque origin), a frame document sandboxed
+const ASSET = /^\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm|html))$/;
+const ASSET_TYPES = {
+  js: 'text/javascript; charset=utf-8',
+  wasm: 'application/wasm',
+  html: 'text/html; charset=utf-8',
+};
 const SECURITY = { 'x-content-type-options': 'nosniff', 'cross-origin-resource-policy': 'same-origin' };
 const port = Number(process.env.PORT ?? 4173);
 
 createServer(async (req, res) => {
   const path = new URL(req.url, 'http://x').pathname;
   const asset = ASSET.exec(path);
-  if (asset && VARIANTS[asset[1]]) {
+  if (asset) {
     try {
-      if ((await lstat(ASSETS + asset[2])).isFile()) {
-        const body = await readFile(ASSETS + asset[2]);
-        res.writeHead(200, { 'content-type': ASSET_TYPES[asset[3]], 'cache-control': 'no-cache', ...SECURITY });
+      if ((await lstat(ASSETS + asset[1])).isFile()) {
+        const body = await readFile(ASSETS + asset[1]);
+        res.writeHead(200, {
+          'content-type': ASSET_TYPES[asset[2]],
+          'cache-control': 'no-cache',
+          'access-control-allow-origin': '*',
+          ...(asset[2] === 'html' ? { 'content-security-policy': 'sandbox allow-scripts' } : {}),
+          ...SECURITY,
+        });
         res.end(body);
         return;
       }
@@ -46,7 +57,7 @@ createServer(async (req, res) => {
       .writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
-        'content-security-policy': pageCsp(body, `http://${req.headers.host}/${match[1]}/assets/compmd/`),
+        'content-security-policy': pageCsp(body, `http://${req.headers.host}/assets/compmd/`),
         ...SECURITY,
       })
       .end(body);

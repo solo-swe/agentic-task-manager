@@ -765,7 +765,7 @@ describe('serve', () => {
     atm(['serve', 'stop'], root);
   });
 
-  test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js and .wasm, no symlinks (T-284)', async () => {
+  test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js, .wasm and .html, no symlinks (T-284)', async () => {
     // A copy of the plugin, so a symlink and a stray file can be put in its asset folder
     const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
     fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
@@ -798,6 +798,20 @@ describe('serve', () => {
       const wasm = await fetch(base + 'compmd_wasm_bg.wasm');
       assert.equal(wasm.status, 200);
       assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+      // CompMD's sandbox (T-285): its frames have an opaque origin, so every asset is readable cross-origin; a frame
+      // document is sandboxed even when opened alone; the Mermaid pack's built module is there, as @compmd/vite built it
+      assert.equal(js.headers.get('access-control-allow-origin'), '*');
+      const frame = await fetch(base + 'compmd/strict.html');
+      assert.equal(frame.status, 200);
+      assert.equal(frame.headers.get('content-type'), 'text/html; charset=utf-8');
+      assert.equal(frame.headers.get('content-security-policy'), 'sandbox allow-scripts');
+      assert.equal(frame.headers.get('access-control-allow-origin'), '*');
+      assert.equal(js.headers.get('content-security-policy'), null);
+      const mermaid = await fetch(base + 'compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js', {
+        method: 'HEAD',
+      });
+      assert.equal(mermaid.status, 200);
+      assert.equal(mermaid.headers.get('content-type'), 'text/javascript; charset=utf-8');
       // Unchanged since it was last fetched: a 304, as for the other files the dashboard asks for again
       const again = await fetch(base + 'compmd.js', { headers: { 'If-None-Match': js.headers.get('etag') } });
       assert.equal(again.status, 304);
@@ -809,7 +823,8 @@ describe('serve', () => {
         [`/assets/compmd/${version}/missing.js`, 'missing'],
         [`/assets/compmd/${version}/linked.js`, 'a symlinked file'],
         [`/assets/compmd/${version}/linked-dir/secret.js`, 'through a symlinked folder'],
-        [`/assets/compmd/${version}/notes.txt`, 'not .js or .wasm'],
+        [`/assets/compmd/${version}/notes.txt`, 'not .js, .wasm or .html'],
+        [`/assets/compmd/${version}/compmd/library-definition.json`, 'not .js, .wasm or .html'],
         ['/assets/compmd/../../templates/tasks-dashboard.html', '..'],
         ['/assets/compmd/%2e%2e/%2e%2e/scripts/atm.py', 'percent-encoded ..'],
         [`/assets/compmd/${version}/.hidden.js`, 'a hidden file'],

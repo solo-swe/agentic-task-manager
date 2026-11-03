@@ -182,9 +182,6 @@ md:
   data:
     - from: host:task
       as: task
-  import:
-    - from: "@comp-markdown/mermaid@0"     # §3c
-      names: [mermaid]
 ---
 <the task text>
 ```
@@ -213,12 +210,12 @@ md:
 
 | | **P. `@comp-markdown/mermaid` in CompMD's strict sandbox** (recommended) | **D. Mermaid built into the dashboard** |
 |---|---|---|
-| How | the frontmatter imports the pack; `@compmd/sandbox` runs its component in a strict frame: an opaque origin with no network, reaching only its params; the dashboard renders in host mode (`page: "host"`), so the text is in the dashboard's page and each diagram in its frame | the `mermaid` npm package, run in the dashboard's page through the renderer's `code: { mermaid }` option |
+| How | the pack is ambient (`compmd.config.json`); `@compmd/sandbox` runs its component in a strict frame: an opaque origin with no network, reaching only its params; the dashboard renders in host mode (`page: "host"`), so the text is in the dashboard's page and each diagram in its frame | the `mermaid` npm package, run in the dashboard's page through the renderer's `code: { mermaid }` option |
 | Mermaid fed untrusted text | in a frame that can't reach the dashboard, its API or the network: a Mermaid XSS (it has had several) stays in the frame | in the dashboard's page, guarded by Mermaid's `securityLevel: 'strict'` and the page's CSP |
 | Theme | Mermaid's own default or dark theme, following the page's light or dark mode | Mermaid's `themeVariables` from the dashboard's tokens: matches every dashboard theme |
 | Files and size | the pack's one module (7.0 MB, 1.6 MB gzipped; every Mermaid diagram type, with ELK), the sandbox's frame documents and runtime (`buildFrames`: about 1.9 MB with React, Svelte and a compiler atm doesn't use), loaded only for a text with a diagram | Mermaid's own build, loaded only for a text with a diagram; it can't be inlined in the single file (megabytes), so it is served from `/assets/` either way |
 | Server and CSP | `frame-src` for the frame documents (the asset folder, as for scripts); the frame documents served with `Content-Security-Policy: sandbox allow-scripts`; the pack's module with `Access-Control-Allow-Origin: *`, since the frames' opaque origin loads it cross-origin, and checked against its hash | no frames; Mermaid's module under the existing `script-src` asset source |
-| Beyond Mermaid | the same path for any later pack (charts, a document viewer's components, T-336): a pack is a file and a line in the frontmatter | each further renderer is dashboard code again |
+| Beyond Mermaid | the same path for any later pack (charts, a document viewer's components, T-336): a pack is an npm install and a line in `compmd.config.json` | each further renderer is dashboard code again |
 | For CompMD | atm uses CompMD as its documents and other hosts do, and tests the sandbox in a real host | a host-specific path other hosts don't share |
 | Moving parts | more: frames, their headers, CORS on the pack folder, the sandbox's protocol | fewer |
 
@@ -241,13 +238,39 @@ later CompMD capability takes. Its costs are one-time (the frame headers and the
 difference, Mermaid's own light and dark themes instead of the dashboard's colours, can change later through the
 pack's `theme` param, in CompMD.
 
-With P, T-284 renders through `@compmd/sandbox`'s view in host mode from the start (`createSandbox({ base, page:
-"host" }).open(…)`, which renders with `@compmd/render` underneath), so T-285 only adds the pack, its import line and
-its policy entry (`policy.packs["@comp-markdown/mermaid"] = { level: "strict" }`, `imports: "listed"`). Links in
-frames reach the dashboard as the view's `link` event, opened by the same rules as §3.
+### As built (T-285)
+
+- **Through `@compmd/vite`, and nothing else** (decided in review). `dashboard/compmd.config.json` lists
+  `@comp-markdown/mermaid` at version `0.1.1`, **ambient** (every text gets `mermaid` with no import line, so the
+  frontmatter keeps only atm's own settings), with `imports: "listed"` and the default strict trust. The version is
+  pinned there, in `package.json` (exact) and by the lockfile, from which the plugin takes the pack's integrity. The
+  asset build (`vite.compmd.config.ts`) runs `compmd()`: it checks the configuration and the pack, writes the
+  sandbox's frame documents and the pack's built module into `plugin/assets/compmd/<version>/compmd/`, and gives
+  `virtual:compmd`, which the served module re-exports: `request` (the packs, `ambient`, the policy) and `sandbox`
+  (where the frames are, and each built module's URL with its hash). The build's `base` is
+  `/assets/compmd/<version>/`, where atm serve serves the folder, since the plugin makes those URLs from it.
+- **The dashboard adds only its own parts:** `compmdRequest(request, text, task)` spreads the plugin's request and
+  sets the text, the frontmatter, `host: { task }` and `allowedOrigins: []`, which win over anything a configuration
+  might hold; the view opens with `createSandbox({ ...sandbox, page: "host" })`.
+- **Components the text defines itself are dropped** (`packComponents`): `imports: "listed"` keeps out other packs,
+  but CompMD still lets a document define a host-language component in a fence, which the sandbox would compile and
+  run (in a strict frame). Only components with a pack's built module go to the sandbox (R5); a text's own shows its
+  fallback.
+- **atm serve** serves the folder as the plugin's dev server does: every asset with `Access-Control-Allow-Origin: *`
+  (the frames' opaque origin loads them cross-origin), a frame document (`.html`) with `Content-Security-Policy:
+  sandbox allow-scripts`; the page's policy gains `frame-src` limited to the asset folder.
+- **Light and dark:** the component watches `<html>`'s `data-theme` and `data-mode` and calls `view.scheme()`; the
+  pack's `theme=auto` draws Mermaid's dark or default theme.
+- **A diagram Mermaid can't read, or a module that doesn't match its hash,** shows the block's code inside the
+  frame, where the diagram would be.
+- **Measured** (e2e, Chromium on an Apple M-series Mac): opening a task with one diagram, CompMD's first load
+  included, 280–390 ms until it is drawn; one with five, 350–510 ms. No need for any of the options above.
+- **Found:** Mermaid lets HTML in a label (`<img onerror>`) through into the frame's document; the strict frame's own
+  policy refuses the inline handler and the image. The sandbox, not Mermaid, is what holds there (a CompMD-side note:
+  the pack could run Mermaid with `securityLevel: 'strict'`).
 
 The developer guide's chapters on packs, the sandbox and code renderers are still to come; this section is from the
-packages' READMEs (`@compmd/sandbox`, `@compmd/vite`, `@comp-markdown/mermaid`, all as published). Settle any
+packages' READMEs and code (`@compmd/sandbox`, `@compmd/vite`, `@comp-markdown/mermaid`, as published). Settle any
 difference with the guide when those chapters appear.
 
 ## 3a. Diagnostics for agents
@@ -341,4 +364,7 @@ As written in T-284:
   and T-342 decide.
 - **Mermaid is the `@comp-markdown/mermaid` pack in the strict sandbox** (§3c), decided in review, with its
   runtime cost measured in T-285; building Mermaid into the dashboard (D) is to be reconsidered later.
+- **Math** shows as its TeX source for now (decided with Hakan during T-285): `@compmd/sandbox` typesets math with
+  Temml inside its frames, but its host mode passes no `math` to the page and takes none. Hakan is fixing that in
+  CompMD; atm takes the fixed version when it is published, and math renders with no atm-specific code.
 - **Nothing is open.**

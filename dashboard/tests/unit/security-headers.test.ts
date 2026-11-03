@@ -51,6 +51,8 @@ describe('the dev page’s Content-Security-Policy (T-386)', () => {
     const start = SERVER.indexOf('def page_csp');
     const body = SERVER.slice(start, SERVER.indexOf('\ndef ', start + 1));
     expect(body).toContain(`"script-src " + " ".join(hashes + ["'wasm-unsafe-eval'", origin + COMPMD_ASSETS])`);
+    // Its only frames: CompMD's sandbox frames from the same folder (T-285)
+    expect(body).toContain('"frame-src " + origin + COMPMD_ASSETS,');
     expect(SERVER).toContain('COMPMD_ASSETS = ASSETS + "compmd/"');
   });
 

@@ -3,8 +3,9 @@
 // what task text may and may not do (docs/compmd-rendering-design.md §3, §3b).
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { initSync, process } from '@compmd/processor';
-import { compmdRequest, FRONTMATTER_LINES, safeTree } from '../../src/lib/compmd';
+import { initSync, OpenDocument, process } from '@compmd/processor';
+import { request as base } from 'virtual:compmd';
+import { compmdRequest, FRONTMATTER_LINES, packComponents, safeTree } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
 
 const WASM = new URL('../../node_modules/@compmd/processor/pkg/compmd_wasm_bg.wasm', import.meta.url);
@@ -26,7 +27,9 @@ const task: Task = {
 };
 
 const NOW = new Date('2026-11-03T10:00:00Z');
-const run = (text: string, t: Task = task) => process(compmdRequest(text, t, NOW, 'UTC'));
+// The request as the served runtime gives it: @compmd/vite's, from compmd.config.json
+const requestFor = (text: string, t: Task = task) => compmdRequest(base, text, t, NOW, 'UTC');
+const run = (text: string, t: Task = task) => process(requestFor(text, t));
 /** The text of every node in the expanded tree, in order */
 function textOf(node: unknown): string {
   if (!node || typeof node !== 'object') return '';
@@ -72,11 +75,49 @@ describe('task text through the real processor', () => {
     expect(textOf(r.expanded)).toContain('https://example.com/x.json');
   });
 
-  it('only the task is host data: another host source is never given', () => {
-    const request = compmdRequest('', task, NOW, 'UTC');
+  it('only the task is host data, no origin is allowed, and only the listed packs, strict, ambient', () => {
+    const request = requestFor('');
     expect(Object.keys(request.host)).toEqual(['task']);
     expect(request.allowedOrigins).toEqual([]);
-    expect(request.policy).toEqual({ imports: 'listed', packs: {} });
+    expect(request.policy).toMatchObject({
+      imports: 'listed',
+      packs: { '@comp-markdown/mermaid': { level: 'strict' } },
+    });
+    expect(Object.keys((request.policy as { packs: object }).packs)).toEqual(['@comp-markdown/mermaid']);
+    expect(request.ambient).toEqual(['@comp-markdown/mermaid']);
+  });
+
+  it('a mermaid block is the ambient Mermaid pack’s component: a strict built module (T-285)', () => {
+    const document = new OpenDocument(requestFor('```mermaid {alt="A then B"}\ngraph LR; A --> B\n```\n'));
+    try {
+      expect(document.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+      expect(packComponents(document.components)).toMatchObject([
+        {
+          name: 'mermaid',
+          trust: { level: 'strict' },
+          module: { pack: '@comp-markdown/mermaid', version: '0.1.1', path: 'dist/mermaid.js' },
+        },
+      ]);
+    } finally {
+      document.free();
+    }
+  });
+
+  it('a pack the configuration doesn’t list can’t be imported, even from the text', () => {
+    const r = run('---\nmd:\n  import:\n    - from: "@kit/ui@1"\n      names: [card]\n---\n:: card[a card]\n');
+    expect(textOf(r.expanded)).toContain('a card');
+  });
+
+  it('a component the text defines itself is never given to the sandbox: its code never runs (R5)', () => {
+    const text =
+      '```jsx component=evil\nexport default function Evil() { return <b>x</b>; }\n```\n\n:: evil[the fallback]\n';
+    const document = new OpenDocument(requestFor(text));
+    try {
+      expect(document.components.map((c) => c.name)).toContain('evil');
+      expect(packComponents(document.components).map((c) => c.name)).toEqual(['mermaid']);
+    } finally {
+      document.free();
+    }
   });
 
   it('a component that doesn’t exist shows its fallback, with a diagnostic', () => {

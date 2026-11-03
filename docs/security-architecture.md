@@ -73,9 +73,9 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime: `.js` and `.wasm` only, regular files under `plugin/assets/` named by plain segments, never through a symlink, T-284) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…" |
 | I12 | **Only the registered projects' task data is served**, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…" |
-| I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
+| I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
 ### Dashboard (B4)
 
@@ -386,6 +386,27 @@ who can change `tasks.json` wrote it), so:
   so changing one changes nothing.
 - **Readers never see CompMD's diagnostics,** and a text CompMD can't render shows as written (escaped).
 - **No skill or agent-facing text changed** in T-284 (T-286 adds the guidance, with its own review), so no sandbox run.
+
+**Mermaid diagrams (T-285).** Third-party rendering code (Mermaid, 7 MB) now runs on task text, in CompMD's strict
+sandbox:
+- **Where it runs:** each diagram in an iframe with `sandbox="allow-scripts"` (an opaque origin: no access to the
+  dashboard, its storage or its API) whose document has its own policy: no network at all (`default-src 'none'`),
+  scripts only from the asset folder and blob:, images only `data:` and `blob:`, no nested frames. A Mermaid bug
+  (it has had XSS bugs) stays in the frame. The e2e test puts `<img onerror>` and `<script>` in a label: the markup
+  reaches the frame's document, its policy refuses it, and nothing runs in the dashboard.
+- **What runs:** only what the plugin ships, pinned by `@compmd/vite` (`dashboard/compmd.config.json`: the pack's
+  exact version, from the lockfile's integrity). The frame loads the pack's module by URL with its SRI hash, so a
+  file changed on its way never runs (tested: the diagram stays its code). Packs are `imports: "listed"`, strict, and
+  the Mermaid pack is the only one; a component the text defines itself in a fence is never given to the sandbox, so
+  its code never runs.
+- **What changed at the server (I11, I13):** `/assets/` serves `.html` too (the frame documents, with
+  `Content-Security-Policy: sandbox allow-scripts`, so they are sandboxed even when opened alone), and every asset
+  with `Access-Control-Allow-Origin: *`, since the frames' opaque origin loads them cross-origin. They are the
+  plugin's published files; a site could already tell atm is running from a failed or loaded image. The page's policy
+  gains `frame-src` limited to the asset folder.
+- **What the sandbox can't stop** (its README): WebRTC, and styles, fonts and prefetches to the frames' own origin.
+  The strict frame's policy gives no `connect-src` and no `style-src` beyond its own origin and inline, so the
+  remaining channel is to this server only.
 
 ## 4. Keeping it current
 

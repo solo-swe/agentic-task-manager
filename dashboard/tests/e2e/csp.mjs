@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto';
 
 /**
  * The policy for a page (its bytes): its own inline scripts by hash, and the CompMD runtime from `compmdAssets` (the
- * full URL of the asset folder it is served from, ending in `/`), which may compile WebAssembly; nothing else from
- * anywhere (docs/compmd-rendering-design.md §2)
+ * full URL of the asset folder it is served from, ending in `/`), which may compile WebAssembly, with its sandbox's
+ * frames from there; nothing else from anywhere (docs/compmd-rendering-design.md §2, §3c)
  */
 export function pageCsp(page, compmdAssets) {
   const hashes = [
@@ -18,6 +18,7 @@ export function pageCsp(page, compmdAssets) {
   return [
     "default-src 'none'",
     `script-src ${[...hashes, "'wasm-unsafe-eval'", compmdAssets].join(' ')}`,
+    `frame-src ${compmdAssets}`,
     "style-src 'unsafe-inline'",
     "img-src 'self' data:",
     "connect-src 'self'",

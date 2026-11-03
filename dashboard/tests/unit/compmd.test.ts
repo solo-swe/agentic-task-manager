@@ -1,7 +1,12 @@
 // lib/compmd.ts in the page: where CompMD is loaded from, loading it once, the frontmatter and the task's data, and
 // the links it renders (docs/compmd-rendering-design.md §2, §3, §3b). The processor itself: compmd-processor.test.ts.
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { version } from 'virtual:atm-compmd';
+import { request as base, sandbox } from 'virtual:compmd';
 import {
   compmdAssetUrl,
   compmdRequest,
@@ -28,14 +33,25 @@ const task: Task = {
 afterEach(() => resetCompmd());
 
 describe('the asset folder', () => {
-  it('is the installed CompMD version’s, relative to the page', () => {
+  it('is the installed CompMD version’s, at /assets/compmd/<version>/ on the page’s server', () => {
     expect(version).toMatch(/^\d+\.\d+\.\d+/);
-    expect(compmdAssetUrl('compmd.js', 'http://localhost:8765/')).toBe(
+    expect(compmdAssetUrl('compmd.js', 'http://localhost:8765')).toBe(
       `http://localhost:8765/assets/compmd/${version}/compmd.js`,
     );
-    expect(compmdAssetUrl('compmd.js', 'http://localhost:4173/svelte/tasks-dashboard.html')).toBe(
-      `http://localhost:4173/svelte/assets/compmd/${version}/compmd.js`,
+  });
+
+  it('the Mermaid pack’s module is pinned by the hash of the file it ships (@compmd/vite, T-285)', () => {
+    const found = (sandbox.modules as (place: object) => { url: string; integrity: string })({
+      pack: '@comp-markdown/mermaid',
+      version: '0.1.1',
+      path: 'dist/mermaid.js',
+    });
+    expect(found.url).toMatch(/\/packs\/@comp-markdown\/mermaid@0\.1\.1\/dist\/mermaid\.js$/);
+    const shipped = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../../node_modules/@comp-markdown/mermaid/dist/mermaid.js'),
     );
+    const hashes = found.integrity.split(/\s+/);
+    expect(hashes).toContain(`sha384-${createHash('sha384').update(shipped).digest('base64')}`);
   });
 });
 
@@ -44,7 +60,7 @@ describe('loading CompMD', () => {
     const init = vi.fn(async () => undefined);
     const importer = vi.fn<(url: string) => Promise<unknown>>(async () => ({
       init,
-      process: vi.fn(),
+      OpenDocument: vi.fn(),
       createSandbox: vi.fn(),
     }));
     const [a, b] = await Promise.all([loadCompmd(importer), loadCompmd(importer)]);
@@ -78,17 +94,21 @@ describe('what CompMD is given', () => {
     expect(FRONTMATTER_LINES).toBe(3);
   });
 
-  it('the request: the text behind the frontmatter, the task as host data, no origins, no packs', () => {
-    const request = compmdRequest('# Hello', task, new Date('2026-11-03T10:00:00Z'), 'Europe/Berlin');
+  it('the request: @compmd/vite’s (packs, ambient, policy), the text behind the frontmatter, the task, no origins', () => {
+    const request = compmdRequest(base, '# Hello', task, new Date('2026-11-03T10:00:00Z'), 'Europe/Berlin');
     expect(request).toEqual({
+      ...base,
       path: 'task.comp.md',
       files: { 'task.comp.md': frontmatter() + '# Hello' },
       now: '2026-11-03T10:00:00.000Z',
       tz: 'Europe/Berlin',
       allowedOrigins: [],
       host: { task: taskData(task) },
-      policy: { imports: 'listed', packs: {} },
     });
+    // The dashboard's parts win over anything a configuration might hold
+    const overridden = compmdRequest({ ...base, allowedOrigins: ['https://x'], host: { y: 1 } } as never, '', task);
+    expect(overridden.allowedOrigins).toEqual([]);
+    expect(Object.keys(overridden.host)).toEqual(['task']);
   });
 });
 
