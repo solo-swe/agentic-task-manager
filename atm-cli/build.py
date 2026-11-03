@@ -44,6 +44,7 @@ MODULES = [
     "common.components",
     "common.sprint_names",
     "common.repository",
+    "host.git",
     "db.interface",
     "vcs.interface",
     "db.jsongit.gitrun",
@@ -108,13 +109,15 @@ if __name__ == "__main__":
 """
 
 # The layers a layer may import from (docs/layered-architecture.md §1). `boot` is where a project is opened: the one
-# place that picks the store and the version control, so atm-lib knows only their interfaces.
+# place that picks the store and the version control, so atm-lib knows only their interfaces. `host` (running git,
+# reading HEAD) is below the stores and the version control, for them only (§11.8).
 ALLOWED = {
     "common": {"common"},
+    "host": {"common", "host"},
     "db-interface": {"common", "db-interface"},
-    "db": {"common", "db-interface", "db"},
+    "db": {"common", "host", "db-interface", "db"},
     "vcs-interface": {"common", "vcs-interface"},
-    "vcs": {"common", "vcs-interface", "vcs"},
+    "vcs": {"common", "host", "vcs-interface", "vcs"},
     "lib": {"common", "db-interface", "vcs-interface", "lib"},
     "boot": {"common", "db-interface", "db", "vcs-interface", "vcs", "lib", "boot"},
     "cli": {"common", "lib", "boot", "cli"},

@@ -19867,7 +19867,7 @@
       "description": "`docs/layered-architecture.md` §11.6.\n\n## Change\n- `atm.boot` gets `open_memory_project(tasks=(), archive=(), meta=None, actor=None)`, so tools and their tests never import `atm.db`; `tests/lib/test_public.py` uses it.\n- A contract test freezes the public surface: `atm.lib.__all__` and `atm.boot.__all__`, and each exported function's signature (`inspect.signature`), compared with a committed list (`tests/lib/public-surface.json`). A change fails until the list is updated, and the changelog notes it.\n- `atm/lib/__init__.py`'s docstring says the surface is for imports from the repository's `atm-cli/`, not from the shipped `plugin/scripts/atm.py`.\n- §5 says the surface is two modules; update §11.6 (settled), `CLAUDE.md`.\n\n## Tests\n- The contract test; `test_public.py` on `open_memory_project`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-383",
         "T-380"
@@ -19882,7 +19882,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:25:28Z",
+      "updated_at": "2026-11-03T01:30:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19898,7 +19898,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T01:25:28Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "c711f10be51f96135facf4f45599bda922b87fdb",
+      "completed_at": "2026-11-03T01:30:52Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T01:30:52Z",
+          "kind": "review",
+          "text": "`atm.boot.open_memory_project`; `test_public.py` freezes both modules’ `__all__` and signatures against `tests/lib/public-surface.json` (a change fails and prints the new list). §5, §11.6, `CLAUDE.md` and both docstrings say the surface is the two modules, imported from `atm-cli/`. Check: the signatures as Python 3.9 prints them (CI).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-385",
@@ -19911,7 +19923,7 @@
       "description": "`docs/layered-architecture.md` §11.8.\n\n## Change\n- A new layer `host/` below db and vcs, allowed I/O: the subprocess runner (`db/jsongit/gitrun.py`'s `git` and `vcs/git.py`'s `ask_git`/`run_git`) and the HEAD reader (`db/jsongit/worktrees.py`'s `head_branch`, `GitVcs.branch`'s copy). db and vcs import it; nothing else does. Add it to the build's layer rule.\n- One meaning of \"the branch\": the store's `here()` reads HEAD the same way (a detached HEAD gives the short SHA everywhere, not `HEAD` in a claim).\n- One way to ask whether a folder is in git.\n- Update §1's diagram and table, §2, §8, §11.8 (settled).\n\n## Tests\n- A detached HEAD: a claim's branch, the project card's and the worktree list agree (`tests/scripts/`).\n- A build test that only db and vcs may import `host`.\n- `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/host/",
@@ -19923,7 +19935,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:50Z",
+      "updated_at": "2026-11-03T01:30:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19937,7 +19949,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T01:30:52Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-386",

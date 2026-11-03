@@ -4,7 +4,7 @@ without running git where it can, so the server can ask on every poll."""
 
 import os
 
-from .gitrun import git
+from ...host.git import git, head_branch
 
 
 def main_worktree(root):
@@ -15,19 +15,6 @@ def main_worktree(root):
         if os.path.basename(common) == ".git":
             return os.path.dirname(common)
     return root
-
-
-def head_branch(git_dir):
-    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
-    try:
-        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
-            head = f.readline().strip()
-    except OSError:
-        return None
-    if head.startswith("ref: "):
-        ref = head[5:]
-        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-    return head[:7] or None
 
 
 def worktrees(root):

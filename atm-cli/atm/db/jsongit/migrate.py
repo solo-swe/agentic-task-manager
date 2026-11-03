@@ -10,7 +10,8 @@ from ...common.core import DASHBOARD_FILE, AtmError, now_iso, read_json, rel, wh
 from ...common.model import MAX_SPRINT_NAME, kind_of, vocabulary
 from .claims import CLAIMS_SNAPSHOT, read_store, write_claims_snapshot
 from .files import archive_hint, archive_path, load_archive, load_tasks
-from .gitrun import git, in_git, is_tracked
+from ...host.git import git, in_git
+from .gitrun import is_tracked
 from .lock import locked
 from .merge import ensure_merge_driver
 

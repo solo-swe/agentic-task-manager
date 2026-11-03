@@ -8,7 +8,7 @@ import os
 
 from ...common.core import SCRIPT_DIR, AtmError, read_json, rel, write_json_atomic
 from ...common.model import kind_of, split_id, vocabulary
-from .gitrun import git, in_git
+from ...host.git import git, in_git
 
 # What `atm` means is not in this file: git config can't be committed, so each clone registers the driver in its own
 # .git/config (merge.atm.driver), which the atm skills do on every run. A clone without it merges tasks.json normally.

@@ -253,8 +253,8 @@ describe('serve', () => {
     const summary = (await changed.json()).projects.find((p) => p.id === 'abcd1234').summary;
     assert.deepEqual([summary.agents_working, summary.last_activity], [1, '2026-03-15T12:00:00Z']);
     // What the agent works on, by name; nothing is left to take next
-    // (branch null: the test repository has no commit yet, so git names no branch)
-    assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: null }]);
+    // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
+    assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
     assert.deepEqual(summary.next, []);
     atm(['serve', 'stop'], root);
   });
@@ -586,6 +586,49 @@ describe('serve', () => {
     assert.equal((await fetch(apiUrl, { headers: { 'If-None-Match': apiEtag } })).status, 200);
     // Not for the dashboard
     assert.equal((await fetch(`http://localhost:${port}/`)).headers.get('etag'), null);
+    atm(['serve', 'stop'], root);
+  });
+
+  test('a detached HEAD is one branch everywhere: the claim, the project card and the worktree list (T-385)', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = makeProject({
+      commit: true,
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { id: 'dddd1234', project: 'Detached' },
+          tasks: [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo' }],
+        },
+      },
+    });
+    const linked = tempDir('atm-worktree-');
+    cleanups.push(
+      () => removeDir(root),
+      () => removeDir(linked),
+    );
+    git(['checkout', '-q', '--detach'], root);
+    git(['worktree', 'add', '-q', '--detach', linked], root);
+    const short = git(['rev-parse', '--short=7', 'HEAD'], root).trim();
+    // A claim in each worktree records the short SHA, not `HEAD`
+    assert.equal(atm(['start', 'T-1', '--agent', 'claude:main'], root).code, 0);
+    const claims = JSON.parse(atm(['claims', '--json'], root).stdout);
+    assert.deepEqual(
+      claims.map((c) => c.branch),
+      [short],
+    );
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
+    const [project] = api.projects;
+    assert.equal(project.summary.git.branch, short);
+    assert.deepEqual(
+      project.worktrees.map((w) => w.branch),
+      [short, short],
+    );
+    assert.deepEqual(
+      project.summary.working.map((w) => w.branch),
+      [short],
+    );
     atm(['serve', 'stop'], root);
   });
 

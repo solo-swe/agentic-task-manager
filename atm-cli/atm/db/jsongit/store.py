@@ -12,7 +12,7 @@ from ...common.model import settings_of, vocabulary
 from ..working import Working
 from .claims import claims_store_path, locked_with_claims, read_store, write_store
 from .files import archive_of, archive_path, load_archive, load_tasks, load_tasks_tolerant
-from .gitrun import git
+from ...host.git import checked_out_branch
 from .lock import locked
 from .logo import find_logo, logo_file
 from .merge import ensure_archive_merge
@@ -176,7 +176,8 @@ class JsonGitStore:
             work = Working(
                 load_tasks(self.paths),
                 read_store(self.paths),
-                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
+                # The branch as everywhere else (§11.8): from HEAD, a detached one as its short SHA
+                lambda: {"worktree": root, "branch": checked_out_branch(root)},
                 lambda: os.path.getsize(tasks_file),
                 # The files still hold what was read: nothing is written before fn returns
                 lambda: (read_json(tasks_file), read_store(self.paths)),

@@ -1,5 +1,5 @@
-"""Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: the
-store runs it for the task files (db/jsongit/gitrun.py), the vcs for the code (vcs/git.py)."""
+"""Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: it is
+the host layer's (host/git.py), for the store and the vcs only."""
 
 import contextlib
 import json

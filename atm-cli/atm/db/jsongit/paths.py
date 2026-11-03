@@ -3,7 +3,7 @@
 import os
 
 from ...common.core import DASHBOARD_FILE, TASK_DIR, TASKS_FILE, AtmError
-from .gitrun import git
+from ...host.git import git
 
 LEGACY_DIRS = ["docs", "."]
 # The files atm reads and writes in the task folder; a repository can commit any of them as a symlink

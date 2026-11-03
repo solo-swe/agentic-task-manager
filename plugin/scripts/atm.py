@@ -159,8 +159,8 @@ DEFAULT_PRIORITY = "P2"
 
 
 # ==== common/core.py ====
-# Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: the
-# store runs it for the task files (db/jsongit/gitrun.py), the vcs for the code (vcs/git.py).
+# Constants, errors, output, time helpers and atomic writes, shared by every layer. Running git is not here: it is
+# the host layer's (host/git.py), for the store and the vcs only.
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -2271,6 +2271,67 @@ def move_pr_links(tasks, old, new):
     return moved
 
 
+# ==== host/git.py ====
+# Running git, and reading a working copy's HEAD (docs/layered-architecture.md §11.8): the one place that does, for
+# both of git's roles, carrying the task files (the JSON-in-git store) and the code's version control (vcs/git.py).
+
+def git(args, cwd):
+    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    except OSError:
+        return None
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def run_git(args, cwd):
+    """Run git as a step that must work: return stdout stripped, or raise with git's own message."""
+    try:
+        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
+    except OSError as e:
+        raise AtmFailure(f"git isn't available: {e}")
+    if result.returncode != 0:
+        message = (result.stderr or result.stdout).strip()
+        command = next((a for a in args if not a.startswith("-")), "")
+        raise AtmFailure(f"git {command} failed: {message}")
+    return result.stdout.strip()
+
+
+def in_git(folder):
+    """Whether the folder is in a git repository: the one way atm asks."""
+    return git(["rev-parse", "--git-dir"], folder) is not None
+
+
+def head_branch(git_dir):
+    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
+    try:
+        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
+            head = f.readline().strip()
+    except OSError:
+        return None
+    if head.startswith("ref: "):
+        ref = head[5:]
+        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
+    return head[:7] or None
+
+
+def checked_out_branch(worktree):
+    """What "the branch" means everywhere in atm (a claim's, a project card's, the worktree list's): the branch the
+    working copy at `worktree` has checked out, read from its HEAD without running git; a detached HEAD gives its
+    short SHA; None outside git. A linked worktree's `.git` is a file naming its git directory."""
+    dot_git = os.path.join(worktree, ".git")
+    if os.path.isfile(dot_git):
+        try:
+            with open(dot_git, encoding="utf-8") as f:
+                line = f.readline().strip()
+        except OSError:
+            return None
+        if not line.startswith("gitdir: "):
+            return None
+        return head_branch(os.path.join(worktree, line[len("gitdir: ") :]))
+    return head_branch(dot_git)
+
+
 # ==== db/interface.py ====
 # The store: how atm-lib reads and writes a project's data, whatever keeps it (docs/layered-architecture.md §3).
 #
@@ -2458,24 +2519,11 @@ class Vcs(Protocol):
 
 
 # ==== db/jsongit/gitrun.py ====
-# Git as the carrier of the task files (docs/layered-architecture.md §2): finding the repository and its common
-# directory, staging the task folder's files, the merge driver's config. Git as the code's version control is vcs/git.py.
-
-def git(args, cwd):
-    """Run git; return stdout stripped, or None if git fails or isn't installed."""
-    try:
-        result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
-    except OSError:
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
+# Git as the carrier of the task files (docs/layered-architecture.md §2): whether a task file is tracked. Running git
+# itself is host/git.py's (§11.8); git as the code's version control is vcs/git.py.
 
 def is_tracked(root, p):
     return git(["ls-files", "--error-unmatch", "--", rel(root, p)], root) is not None
-
-
-def in_git(root):
-    return git(["rev-parse", "--git-dir"], root) is not None
 
 
 # ==== db/jsongit/files.py ====
@@ -2752,19 +2800,6 @@ def main_worktree(root):
         if os.path.basename(common) == ".git":
             return os.path.dirname(common)
     return root
-
-
-def head_branch(git_dir):
-    """The branch checked out per a git directory's HEAD file; a detached HEAD gives its short SHA, no file None."""
-    try:
-        with open(os.path.join(git_dir, "HEAD"), encoding="utf-8") as f:
-            head = f.readline().strip()
-    except OSError:
-        return None
-    if head.startswith("ref: "):
-        ref = head[5:]
-        return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-    return head[:7] or None
 
 
 def worktrees(root):
@@ -4171,7 +4206,8 @@ class JsonGitStore:
             work = Working(
                 load_tasks(self.paths),
                 read_store(self.paths),
-                lambda: {"worktree": root, "branch": git(["rev-parse", "--abbrev-ref", "HEAD"], root)},
+                # The branch as everywhere else (§11.8): from HEAD, a detached one as its short SHA
+                lambda: {"worktree": root, "branch": checked_out_branch(root)},
                 lambda: os.path.getsize(tasks_file),
                 # The files still hold what was read: nothing is written before fn returns
                 lambda: (read_json(tasks_file), read_store(self.paths)),
@@ -4333,57 +4369,30 @@ WHOLE_TREE = {".", "-A", "--all", "-u", "--update", ":/", "*"}
 LITERAL = ["--literal-pathspecs"]
 
 
-def run_git(args, root):
-    """Run git; return stdout stripped, or raise with git's own message."""
-    result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
-    if result.returncode != 0:
-        message = (result.stderr or result.stdout).strip()
-        command = next((a for a in args if not a.startswith("-")), "")
-        raise AtmFailure(f"git {command} failed: {message}")
-    return result.stdout.strip()
-
-
-def ask_git(args, root):  # not `git`: the store has its own (db/jsongit/gitrun.py), and names are unique
-    """Run git; return stdout stripped, or None if git fails or isn't installed (a question, not a step)."""
-    try:
-        result = subprocess.run(["git"] + args, cwd=root, capture_output=True, text=True)
-    except OSError:
-        return None
-    return result.stdout.strip() if result.returncode == 0 else None
-
-
 class GitVcs:
     def __init__(self, root):
         self.root = root
 
     def in_repository(self):
-        return ask_git(["rev-parse", "--git-dir"], self.root) is not None
+        return in_git(self.root)
 
     def branch(self):
-        """The main worktree's checked-out branch (a detached HEAD's short SHA), read from .git/HEAD without running
-        git; None outside git."""
-        try:
-            with open(os.path.join(self.root, ".git", "HEAD"), encoding="utf-8") as f:
-                head = f.readline().strip()
-        except OSError:
-            return None
-        if head.startswith("ref: "):
-            ref = head[5:]
-            return ref[len("refs/heads/") :] if ref.startswith("refs/heads/") else ref
-        return head[:7] or None
+        """The checked-out branch (a detached HEAD's short SHA), read from HEAD without running git, as the store's
+        claims record it (host/git.py); None outside git."""
+        return checked_out_branch(self.root)
 
     def user_name(self):
         """Who git says the user is (`user.name`), for naming the actor; None when it isn't set."""
-        return ask_git(["config", "user.name"], self.root)
+        return git(["config", "user.name"], self.root)
 
     def default_base(self):
         """The remote's default branch (origin/HEAD), else main."""
-        ref = ask_git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
+        ref = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], self.root)
         return ref.split("/", 1)[1] if ref and "/" in ref else "main"
 
     def remote_url(self):
         """The origin remote's address, as git has it (atm repository turns it into a web address)."""
-        return ask_git(["remote", "get-url", "origin"], self.root)
+        return git(["remote", "get-url", "origin"], self.root)
 
     def paths(self, files, cwd=None):
         """The files to commit, relative to the repository, from names relative to `cwd` (None: the repository);
@@ -4401,8 +4410,8 @@ class GitVcs:
             # A deleted file is fine as long as git knows it: still in the index (deleted by hand) or in HEAD (`git rm`)
             if (
                 not os.path.exists(full)
-                and ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
-                and ask_git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
+                and git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is None
+                and git(["cat-file", "-e", f"HEAD:{relative}"], self.root) is None
             ):
                 raise NotFound(f"{name}: no such file, and git doesn't track it")
             if relative not in picked:
@@ -4416,7 +4425,7 @@ class GitVcs:
         to_add = [
             f
             for f in files
-            if ask_git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
+            if git(LITERAL + ["ls-files", "--error-unmatch", "--", f], self.root) is not None
             or os.path.lexists(os.path.join(self.root, f))
         ]
         if to_add:
@@ -4426,11 +4435,11 @@ class GitVcs:
 
     def resolve(self, rev):
         """A revision's SHA, or None if there is no such commit."""
-        return ask_git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
+        return git(["rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}"], self.root)
 
     def in_history(self, sha):
         """Whether the commit is an ancestor of HEAD (on the current branch)."""
-        return ask_git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
+        return git(["merge-base", "--is-ancestor", sha, "HEAD"], self.root) is not None
 
     def message(self, sha):
         return run_git(["log", "-1", "--format=%B", sha], self.root)
@@ -7741,7 +7750,7 @@ def set_up_store(project):
     """`atm init`: set the store up in its working copy: in git, the merge driver for the task files (registered in
     the clone, `.gitattributes` staged). Returns {git, gitattributes_added}."""
     paths = project.store.paths
-    in_repository = in_git(paths["root"])
+    in_repository = project.vcs.in_repository()
     return {"git": in_repository, "gitattributes_added": ensure_merge_driver(paths) if in_repository else False}
 
 

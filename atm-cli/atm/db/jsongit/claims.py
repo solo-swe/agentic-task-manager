@@ -7,7 +7,7 @@ import contextlib
 import os
 
 from ...common.core import now_iso, read_json, write_json_atomic
-from .gitrun import git
+from ...host.git import git
 from .lock import locked
 
 CLAIMS_STORE = "claims.json"  # in <git common dir>/atm/, shared by all worktrees of a clone

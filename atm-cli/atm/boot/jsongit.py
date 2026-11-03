@@ -7,7 +7,6 @@ init`'s setup) are this store's. What every store has is `boot/open.py`'s."""
 import os
 import time
 
-from ..db.jsongit.gitrun import in_git
 from ..db.jsongit.lock import locked
 from ..db.jsongit.merge import ensure_merge_driver, merge_files
 from ..db.jsongit.migrate import describe_migration, migrate
@@ -38,7 +37,7 @@ def set_up_store(project):
     """`atm init`: set the store up in its working copy: in git, the merge driver for the task files (registered in
     the clone, `.gitattributes` staged). Returns {git, gitattributes_added}."""
     paths = project.store.paths
-    in_repository = in_git(paths["root"])
+    in_repository = project.vcs.in_repository()
     return {"git": in_repository, "gitattributes_added": ensure_merge_driver(paths) if in_repository else False}
 
 

@@ -36,6 +36,7 @@ flowchart TD
         VcsI["vcs interface"]
         Db["db implementations<br/><i>JSON-in-git store, in-memory store,<br/>the registry</i>"]
         Vcs["vcs implementation<br/><i>git, for code</i>"]
+        Host["host<br/><i>runs git, reads HEAD</i>"]
     end
 
     subgraph Shared[" "]
@@ -59,6 +60,8 @@ flowchart TD
     Lib --> VcsI
     Db -. implements .-> DbI
     Vcs -. implements .-> VcsI
+    Db --> Host
+    Vcs --> Host
     Python --> Common
     Dashboard --> TSTypes
     Common -. "generated at build time" .-> TSTypes
@@ -105,6 +108,7 @@ flowchart TD
 | **atm-lib** | Every business action and query (§5) | Knows how or where data is kept; prints; reads `argparse` objects |
 | **db** | One interface for data access (§3); its implementations know how and where data is kept, and keep concurrent writers apart | Business rules |
 | **vcs** | One interface to the code's version control (§2) | Business rules; storing tasks |
+| **host** | What atm asks of the machine, for db and vcs only (`host/git.py`): running git, whether a folder is in git, and the branch a working copy has checked out, read from its HEAD (a detached HEAD as its short SHA), the one meaning of "the branch" (T-385) | Business rules; is imported by anything but db and vcs |
 | **common** | The JSON Schema and the Python model generated from it, vocabularies and their defaults, status kinds, typed errors, pure helpers (time, IDs, names) | Depends on any other layer; does I/O |
 
 **The dependency rule.** Dependencies run one way:
@@ -175,7 +179,9 @@ Supporting GitLab needs no change to these layers: it is a change in the skills.
   only git; another implementation is possible later, not planned.
 
 Both git implementations (the store's and vcs's) run git the same way; they share a small git runner kept beside
-them, not in common, since common does no I/O.
+them, not in common, since common does no I/O: the **host** layer, `host/git.py` (T-385), with the HEAD reader. So
+"the branch" means one thing everywhere: a claim's, the project card's (`Vcs.branch`) and the worktree list's are
+all read from the working copy's HEAD, a detached one as its short SHA.
 
 ## 3. The db interface
 
@@ -615,6 +621,7 @@ loads, decides, saves and prints), and most also do storage. `cli.py` imports a 
 ```
 atm-cli/atm/
   common/        model (generated types + rules), vocabularies, errors, helpers; schema/
+  host/          git.py: running git and reading HEAD, for db and vcs only (T-385)
   db/            interface.py; jsongit/ (files, lock, merge driver, migrations, claims store); memory/
   vcs/           interface.py; git/
   lib/           atm-lib: tasks, claims, project, sprints, releases, components, archive, code, settings, projects
@@ -625,7 +632,7 @@ atm-cli/atm/
 
 - `atm-cli/build.py` already refuses an import from a module later in `MODULES`. It gets layers: each module's layer
   is its folder, and an import the rule doesn't allow fails the build (`api` → `lib` yes, `lib` → `db/jsongit` no,
-  `lib` → `cli` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names stay unique.
+  `lib` → `cli` no, `host` from anything but `db` and `vcs` no). The output is still one file, `plugin/scripts/atm.py`, and top-level names stay unique.
 - **The ratchet** was `atm-cli/layers.json`: the flat modules from before the layers (`legacy`, which could import
   anything until they moved) and, per layered module, the imports that still broke the rule (`exceptions`). The build
   refused a flat module or a forbidden import that wasn't listed, and an entry that was no longer needed, so fixing a
@@ -871,6 +878,13 @@ are unchanged (the atm-cli suite, at every step).
 - **Decision:** a small layer below db and vcs, **host** (`host/`), allowed I/O: the subprocess runner and the HEAD
   reader, imported by both; one meaning of "the branch" (a claim, the card and the worktree list agree, tested on a
   detached HEAD). The layer rule and §1's diagram get it.
+- **Settled (T-385):** `host/git.py` has `git` (a question: None on failure), `run_git` (a step: raises), `in_git`,
+  `head_branch` and `checked_out_branch(worktree)` (follows a linked worktree's `.git` file). The store's modules,
+  `GitVcs` and the worktree list use them; `ask_git`, `GitVcs.branch`'s copy of the HEAD reader and the store's
+  `rev-parse --abbrev-ref` are gone, and `atm init` asks `project.vcs.in_repository()`. The build allows `host` to
+  db and vcs only (a build test). A claim now names the branch HEAD names even before the first commit (it was
+  null), as the card did. `tests/scripts/serve.test.mjs` checks a detached HEAD: the claim, the summary's branch and
+  `working`, and both worktrees in the list give the short SHA.
 
 ### 11.9 The dev server runs the real API on a temporary ATM_HOME (T-386)
 

@@ -131,6 +131,21 @@ describe('layers', () => {
     assert.ok(fs.statSync(path.join(REPO, 'plugin/scripts/atm-serve')).mode & 0o111, 'atm-serve is executable');
   });
 
+  test('only the stores and the version control run git: the host layer is theirs (T-385)', () => {
+    const lib = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/lib/code.py'), '\nfrom ..host.git import git\n'),
+    );
+    assert.match(lib.stderr, /lib\/code\.py imports from host\.git, which the lib layer may not use/);
+    const boot = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/boot/open.py'), '\nfrom ..host.git import in_git\n'),
+    );
+    assert.match(boot.stderr, /boot\/open\.py imports from host\.git, which the boot layer may not use/);
+    const below = brokenBuild((cli) =>
+      fs.appendFileSync(path.join(cli, 'atm/host/git.py'), '\nfrom ..db.interface import Store\n'),
+    );
+    assert.match(below.stderr, /host\/git\.py imports from db\.interface, which the host layer may not use/);
+  });
+
   test('a module outside the layers is refused', () => {
     const { stderr } = brokenBuild((cli) => {
       fs.writeFileSync(path.join(cli, 'atm/extra.py'), '"""An extra module."""\n');
