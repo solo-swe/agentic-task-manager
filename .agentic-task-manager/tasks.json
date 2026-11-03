@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 392,
+    "next_id": 397,
     "labels": [
       {
         "id": "architecture",
@@ -17295,7 +17295,7 @@
       "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "in_progress",
       "dependencies": [
         "T-284"
       ],
@@ -17303,7 +17303,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T16:33:44Z",
+      "updated_at": "2026-11-03T16:53:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17321,17 +17321,28 @@
         }
       ],
       "sprint": "Rich Markdown",
-      "started_at": "2026-11-03T10:15:18Z",
+      "started_at": "2026-11-03T16:53:57Z",
       "started_by": "claude:b7be7288",
-      "commit": "3da26306955987c512dda98b3a0a488a4aa74d09",
-      "review_requested_at": "2026-11-03T10:16:06Z",
-      "review_state": "waiting",
+      "commit": "a2977693437d4f2016b2e6b4343b19264c1a5a0e",
       "notes": [
         {
           "at": "2026-11-03T10:16:06Z",
           "kind": "review",
           "text": "Design ready for Hakan’s review: `docs/compmd-viewer-design.md` (requirements V1–V7, where it opens, a read-only documents route through atm-lib, rendering). Four questions in §8; follow-up tasks in §9 are created once approved.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T16:53:56Z",
+          "kind": "note",
+          "text": "Approved: Design approved in Crit (3 rounds). Left: the follow-up tasks of §9, through `/atm:create-tasks`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-03T10:16:06Z",
+          "to": "2026-11-03T16:53:56Z",
+          "outcome": "approved"
         }
       ]
     },
@@ -20552,7 +20563,9 @@
       "requirements": [],
       "use_cases": [],
       "status": "todo",
-      "dependencies": [],
+      "dependencies": [
+        "T-393"
+      ],
       "files": [
         "atm-cli/atm/lib/documents.py",
         "atm-cli/atm/api/server.py",
@@ -20562,12 +20575,176 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T16:33:31Z",
+      "updated_at": "2026-11-03T16:55:22Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard",
         "cli",
+        "docs"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-392",
+      "name": "Document viewer: atm-lib read_file and the documents and files routes",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project.\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Tests\n`tests/lib/` for the kinds, the wrapping and `line_offset`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/documents.py",
+        "atm-cli/atm/api/server.py",
+        "tests/lib/test_documents.py",
+        "tests/scripts/serve.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-393",
+      "name": "Document viewer: the window, the #doc= hash and Back",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6.\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Its title is the document's first heading, else its path. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash); e2e: open, move, resize, Back, Reload keeps it, a missing file, a refused file.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-392"
+      ],
+      "files": [
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/components/CompMd.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/documents.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-394",
+      "name": "Document viewer: line numbers, refreshing in place, images",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-393"
+      ],
+      "files": [
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-395",
+      "name": "Document viewer: relative links and files entries open it",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The references that open the viewer, `docs/compmd-viewer-design.md` §1 (V1a–V1c) and §3.\n\n## Change\n- A relative link in task text (`docs/x.md`, `docs/x.md#3-routes`, `src/app.ts#L40`) becomes a viewer link, resolved from the project root; one leaving the project stays text. `safeTree` and `secureLinks` keep it, opened by the click handler, never by the browser.\n- A relative link inside an open document opens the viewer at the path resolved from its folder.\n- The details panel's Files list links every entry.\n\n## Tests\nUnit tests for the link rules (`compmd.test.ts`); e2e: a link in a description, in a document, and a Files entry each open the viewer; a `..` out of the project is text.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-393"
+      ],
+      "files": [
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/src/components/CompMd.svelte",
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/tests/unit/compmd.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-396",
+      "name": "Document viewer: tell users and agents that relative links open in the dashboard",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Help (`docs/help.md`, the task details) says that relative links and Files entries open in the document viewer, with `#L<n>` for a line. `/atm:create-tasks` gets one line: link documents and code with relative paths from the project root (`docs/x.md#section`, `src/app.ts#L40`). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-395"
+      ],
+      "files": [
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "skills",
         "docs"
       ],
       "related": [

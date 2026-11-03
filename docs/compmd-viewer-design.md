@@ -6,8 +6,8 @@ as text: a relative link isn't a link (T-284's link rules keep only `https:`, `h
 reads a project's files. This design opens them inside the dashboard, rendered with CompMD as task text is
 (`docs/compmd-rendering-design.md`).
 
-Status: **revised after the first review round with Hakan** (2026-11-03). §8 has what was decided and the one new
-point to check; nothing is built until it is approved.
+Status: **approved by Hakan** (2026-11-03, after three review rounds). §8 has what was decided; the work is in the
+backlog tasks of §9.
 
 ## 1. Requirements
 
@@ -172,14 +172,14 @@ New, to check: **with every file kind open, the server refuses files git ignores
 hidden-segment rule. Without it, a task text linking `config/credentials.json` would show its contents in the
 dashboard: only to this user on this machine, who can read the file anyway, but in a page an agent may screenshot.
 
-## 9. Follow-up tasks (proposed once approved, through `/atm:create-tasks`)
+## 9. Follow-up tasks (in the backlog: T-392 to T-396, and T-391)
 
-1. atm-lib `read_file` (the kinds of §4a, the checks of §4b) and the two REST routes, with their tests; the
+1. T-392: atm-lib `read_file` (the kinds of §4a, the checks of §4b) and the two REST routes, with their tests; the
    security document (§4, §7).
-2. The viewer window: `lib/documents.ts`, `DocumentViewer.svelte` (move, resize, scrollbar, kept geometry), the
+2. T-393: The viewer window: `lib/documents.ts`, `DocumentViewer.svelte` (move, resize, scrollbar, kept geometry), the
    `#doc=` hash, Back; e2e tests (§2, §6).
-3. Rendering documents: line numbers, refreshing in place, images from the files route (§5); e2e tests.
-4. Links: relative links in task text and documents, `files` entries (§3); e2e tests.
-5. Help and the skills: tell agents that relative links to files open in the dashboard, with `#L<n>` (a line in
+3. T-394: Rendering documents: line numbers, refreshing in place, images from the files route (§5); e2e tests.
+4. T-395: Links: relative links in task text and documents, `files` entries (§3); e2e tests.
+5. T-396: Help and the skills: tell agents that relative links to files open in the dashboard, with `#L<n>` (a line in
    `/atm:create-tasks`).
 6. Already in the backlog: T-391, requirement and use-case IDs open their document (V1d).
