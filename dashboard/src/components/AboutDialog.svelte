@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { homepage as compmdHomepage, license as compmdLicense, version as compmdVersion } from 'virtual:atm-compmd';
   import { pluginInfo } from '../lib/plugin-info';
   import { dashboard } from '../lib/state.svelte';
   import Dialog from './Dialog.svelte';
@@ -36,6 +37,12 @@
     <dd>{pluginInfo.license}</dd>
     <dt>Source</dt>
     <dd><a href={pluginInfo.repository} target="_blank" rel="noopener noreferrer">{pluginInfo.repository}</a></dd>
+    <!-- What renders task text, Help and What's new, shipped with the plugin -->
+    <dt>Rendering</dt>
+    <dd id="about-compmd">
+      <a href={compmdHomepage} target="_blank" rel="noopener noreferrer">CompMD</a>
+      {compmdVersion} ({compmdLicense})
+    </dd>
   </dl>
   {#if project}
     <h3 class="about-section-title" id="about-project">

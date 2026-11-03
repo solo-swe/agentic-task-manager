@@ -313,12 +313,12 @@ def pid_alive(pid):
 WHOAMI = "/__atm/whoami"
 
 
-def whoami(port):
+def whoami(port, timeout=1):
     """Ask the atm server on this port who it is; None if nothing (or not an atm server) answers."""
     import urllib.request
 
     try:
-        with urllib.request.urlopen(f"http://localhost:{port}{WHOAMI}", timeout=1) as response:
+        with urllib.request.urlopen(f"http://localhost:{port}{WHOAMI}", timeout=timeout) as response:
             info = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
         return None
@@ -337,12 +337,20 @@ BUILD_META = re.compile(r'<meta name="atm-dashboard-build" content="([^"]*)"')
 # The tags sit at the top of the page; reading this much finds them without reading the whole (inlined) dashboard
 HEAD_BYTES = 16384
 
-# In the user's atm folder (ATM_HOME): the running server's {pid, port, version, build, plugin_root, started_at}
+# In the user's atm folder (ATM_HOME): the running server's {pid, port, version, build, plugin_root, home, started_at}
 SERVER_RECORD = "server.json"
 SERVER_LOG = "server.log"
 DEFAULT_PORT = 8765
+# How many ports from the first one `atm serve status` and `stop` look at for a server the record doesn't name (T-390)
+SCAN_PORTS = 20
 # The argument the built atm.py takes to run the server instead of the CLI (plugin/scripts/atm-serve passes it)
 SERVER_ENTRY = "--server"
+
+
+def home_id(home):
+    """A short ID of an atm folder: its real path, hashed. The server gives it in whoami and its record, so the CLI can
+    tell its own folder's servers from another folder's (T-390) without the path going over HTTP."""
+    return hashlib.sha256(os.path.realpath(home).encode("utf-8")).hexdigest()[:16]
 
 
 def page_tags(head):
@@ -8982,6 +8990,13 @@ def cmd_lock_test(args):
 # user's atm folder, its pid); the server itself is the REST API's, run by `plugin/scripts/atm-serve` (the built
 # atm.py entered as the server). The two never import each other (docs/layered-architecture.md §11.1).
 
+# Held while one `atm serve` checks for a server and starts one, so two at once (two sessions' hooks) start one (T-390)
+SERVER_LOCK = "server.lock"
+SERVER_LOCK_WAIT = 15.0
+STOP_WAIT = 5.0
+KILL_WAIT = 2.0
+
+
 def server_url(port, project=None):
     return f"http://localhost:{port}/" + (f"#project={project}" if project else "")
 
@@ -9007,12 +9022,44 @@ def open_browser(url):
         out(f"Could not open a browser; open {url} yourself.")
 
 
-def ensure_server(home, port):
-    """The running server's record, starting the server process if none runs. Returns (record, started)."""
-    record = live_server(home)
-    if record:
-        return record, False
+@contextlib.contextmanager
+def server_lock(home):
+    """Only one `atm serve` at a time looks for a running server and starts one: a directory, which mkdir creates for
+    exactly one process. A lock whose holder is gone (its pid isn't running) or that outlived the wait is broken."""
     ensure_home(home)
+    lock = os.path.join(home, SERVER_LOCK)
+    deadline = time.time() + SERVER_LOCK_WAIT
+    while True:
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            holder = read_json(os.path.join(lock, "pid.json")) or {}
+            gone = isinstance(holder.get("pid"), int) and not pid_alive(holder["pid"])
+            if gone or time.time() >= deadline:
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            time.sleep(0.05)
+    try:
+        with open(os.path.join(lock, "pid.json"), "w", encoding="utf-8") as f:
+            f.write(to_json({"pid": os.getpid()}))
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+
+
+def ensure_server(home, port):
+    """The running server's record, starting the server process if none runs. Returns (record, started). Under the
+    server lock, so two at once start one server, and the second gets the first's."""
+    with server_lock(home):
+        record = live_server(home)
+        if record:
+            return record, False
+        return start_server(home, port), True
+
+
+def start_server(home, port):
+    """Start the server process and wait for its record."""
     with open(os.path.join(home, SERVER_LOG), "ab") as log:
         child = subprocess.Popen(
             server_command(home, port),
@@ -9026,7 +9073,7 @@ def ensure_server(home, port):
     while time.time() < deadline:
         record = read_json(os.path.join(home, SERVER_RECORD))
         if record and record.get("pid") == child.pid and whoami(record["port"]):
-            return record, True
+            return record
         if child.poll() is not None:
             break
         time.sleep(0.05)
@@ -9054,30 +9101,65 @@ def serve_start(cwd, port, overview):
     return url
 
 
-def stop_server(home, pid):
-    """Stop the user's server (whose pid whoami confirmed) and remove its record."""
-    os.kill(pid, signal.SIGTERM)
-    deadline = time.time() + 5
+def wait_gone(pid, seconds):
+    deadline = time.time() + seconds
     while time.time() < deadline and pid_alive(pid):
         time.sleep(0.05)
+    return not pid_alive(pid)
+
+
+def stop_server(home, pid):
+    """Stop a server of the user's (whose pid whoami confirmed): SIGTERM, then SIGKILL if it outlives the wait. Its
+    record goes only once it is gone, and only if it is that server's: a server still running is never forgotten
+    (T-390)."""
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    if not wait_gone(pid, STOP_WAIT):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        if not wait_gone(pid, KILL_WAIT):
+            raise AtmFailure(f"the dashboard server (pid {pid}) didn't stop; its record is kept")
     record_path = os.path.join(home, SERVER_RECORD)
-    if os.path.exists(record_path):
+    if (read_json(record_path) or {}).get("pid") == pid:
         os.remove(record_path)
 
 
-def serve_stop(home):
+def unrecorded_servers(home, first_port, record=None):
+    """The servers of this atm folder answering on the usual ports (from `first_port`) that the record doesn't name: a
+    server whose record was lost or overwritten (T-390). A server of another folder, or one too old to say its
+    folder, isn't this folder's to stop."""
+    mine = home_id(home)
+    found = []
+    for port in range(first_port, first_port + SCAN_PORTS):
+        info = whoami(port, timeout=0.5)
+        if info and info.get("home") == mine and info.get("pid") != (record or {}).get("pid"):
+            found.append(info)
+    return found
+
+
+def serve_stop(home, port):
     record_path = os.path.join(home, SERVER_RECORD)
     record = read_json(record_path)
-    if record is None:
+    live = bool(record) and (whoami(record.get("port")) or {}).get("pid") == record.get("pid")
+    strays = unrecorded_servers(home, port, record if live else None)
+    if record is None and not strays:
         out("Dashboard server is not running.")
         return
-    info = whoami(record.get("port"))
-    if not (info and info.get("pid") == record.get("pid")):
+    if record is not None and not live:
         os.remove(record_path)
-        out(f"Dashboard server is not running (removed a stale record for pid {record.get('pid')}).")
-        return
-    stop_server(home, record["pid"])
-    out(f"Dashboard server stopped (pid {record['pid']}).")
+        if not strays:
+            out(f"Dashboard server is not running (removed a stale record for pid {record.get('pid')}).")
+            return
+    if live:
+        stop_server(home, record["pid"])
+        out(f"Dashboard server stopped (pid {record['pid']}).")
+    for info in strays:
+        stop_server(home, info["pid"])
+        out(f"Stopped a dashboard server the record didn't name (pid {info['pid']}, port {info['port']}).")
 
 
 def outdated(record):
@@ -9104,11 +9186,12 @@ def refresh_server(home=None):
     record = read_json(os.path.join(home, SERVER_RECORD))
     if not isinstance(record, dict) or not outdated(record):
         return None
-    live = live_server(home)
-    if not live:
-        return None
-    stop_server(home, live["pid"])
-    return ensure_server(home, live["port"])[0]
+    with server_lock(home):
+        live = live_server(home)
+        if not live:
+            return None
+        stop_server(home, live["pid"])
+        return start_server(home, live["port"])
 
 
 def serve_refresh(home):
@@ -9117,19 +9200,27 @@ def serve_refresh(home):
         out(f"Dashboard server restarted with dashboard {record.get('version')}: {server_url(record['port'])}")
 
 
-def serve_status(home, as_json):
+def serve_status(home, as_json, port):
     record = live_server(home)
+    strays = unrecorded_servers(home, port, record)
     if as_json:
-        out(to_json({"running": bool(record), **(record or {}), "url": server_url(record["port"]) if record else None}))
+        url = server_url(record["port"]) if record else None
+        unrecorded = [{"pid": s["pid"], "port": s["port"], "version": s.get("version")} for s in strays]
+        out(to_json({"running": bool(record), **(record or {}), "url": url, "unrecorded": unrecorded}))
         return
     if not record:
         out("Dashboard server is not running.")
-        return
-    up = format_duration((datetime.now(timezone.utc) - parse_iso(record["started_at"])).total_seconds())
-    out(
-        f"Dashboard server running: {server_url(record['port'])} "
-        f"(pid {record['pid']}, dashboard {record.get('version')}, up {up})"
-    )
+    else:
+        up = format_duration((datetime.now(timezone.utc) - parse_iso(record["started_at"])).total_seconds())
+        out(
+            f"Dashboard server running: {server_url(record['port'])} "
+            f"(pid {record['pid']}, dashboard {record.get('version')}, up {up})"
+        )
+    for info in strays:
+        out(
+            f"Also running, without a record: pid {info['pid']} on port {info['port']} "
+            f"(dashboard {info.get('version')}); `atm serve stop` stops it."
+        )
 
 
 def cmd_serve(args):
@@ -9146,9 +9237,9 @@ def cmd_serve(args):
         if args.open:
             open_browser(url)
     elif args.action == "stop":
-        serve_stop(home)
+        serve_stop(home, args.port)
     else:
-        serve_status(home, args.json)
+        serve_status(home, args.json, args.port)
 
 
 # ==== cli/main.py ====
@@ -9778,15 +9869,32 @@ LOGO_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     "X-Content-Type-Options": "nosniff",
 }
+# The plugin's own files the dashboard loads beside it (docs/compmd-rendering-design.md §2, §3c): read-only, only
+# regular files under plugin/assets/ with these extensions, never through a symlink. CompMD's sandbox frames have an
+# opaque origin, so what they load comes cross-origin: every asset may be read from anywhere (they are the plugin's
+# published files), and a frame document is sandboxed even when opened alone, as @compmd/vite serves them
+ASSETS = "/assets/"
+COMPMD_ASSETS = ASSETS + "compmd/"
+ASSET_TYPES = {
+    ".js": "text/javascript; charset=utf-8",
+    ".wasm": "application/wasm",
+    ".html": "text/html; charset=utf-8",
+}
+ASSET_HEADERS = {"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"}
+FRAME_DOCUMENT_HEADERS = {**ASSET_HEADERS, "Content-Security-Policy": "sandbox allow-scripts"}
+ASSET_SEGMENT = re.compile(r"[A-Za-z0-9_@][A-Za-z0-9._@-]*")
 # On every response: no content sniffing, and no other site may embed it (docs/security-review.md F11)
 SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin"}
 INLINE_SCRIPT = re.compile(rb"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
 
 
-def page_csp(page):
-    """The dashboard's Content-Security-Policy: only its own inline scripts run (by hash), it talks only to this
-    server, and no page may frame it. Any script injected into it, or a `javascript:` link, is refused by the browser.
-    tests/e2e/serve.mjs builds the same policy, so the e2e suite runs under it."""
+def page_csp(page, origin):
+    """The dashboard's Content-Security-Policy: only its own inline scripts run (by hash), and the CompMD runtime from
+    this server's asset folder, which may compile WebAssembly (docs/compmd-rendering-design.md §2); its only frames are
+    CompMD's sandbox frames from that folder (§3c), it talks only to this server, and no page may frame it. Any script
+    injected into it, from anywhere else, or a `javascript:` link, is refused by the browser. `origin` is the page's
+    (`http://localhost:<port>`, from the checked Host header): a source with a path can't be written without it.
+    tests/e2e/csp.mjs builds the same policy, so the e2e suite runs under it."""
     hashes = [
         "'sha256-" + base64.b64encode(hashlib.sha256(body).digest()).decode("ascii") + "'"
         for attrs, body in INLINE_SCRIPT.findall(page)
@@ -9795,7 +9903,8 @@ def page_csp(page):
     return "; ".join(
         [
             "default-src 'none'",
-            "script-src " + (" ".join(hashes) or "'none'"),
+            "script-src " + " ".join(hashes + ["'wasm-unsafe-eval'", origin + COMPMD_ASSETS]),
+            "frame-src " + origin + COMPMD_ASSETS,
             "style-src 'unsafe-inline'",
             "img-src 'self' data:",
             "connect-src 'self'",
@@ -9817,6 +9926,28 @@ def port_in_use(port):
         except OSError:  # no IPv6 on this machine
             pass
     return False
+
+
+def asset_file(path, root=None):
+    """(absolute path, content type) of the plugin file a `/assets/…` request names, or None: each segment a plain
+    name (no `.` or `..`, no hidden file, nothing percent-encoded), a known extension, a regular file under
+    plugin/assets/ reached through no symlink."""
+    if not path.startswith(ASSETS):
+        return None
+    segments = path[len(ASSETS) :].split("/")
+    if not all(ASSET_SEGMENT.fullmatch(s) for s in segments):
+        return None
+    content_type = ASSET_TYPES.get(os.path.splitext(segments[-1])[1])
+    if content_type is None:
+        return None
+    current = root or os.path.join(PLUGIN_ROOT, "assets")
+    if os.path.islink(current):
+        return None
+    for segment in segments:
+        current = os.path.join(current, segment)
+        if os.path.islink(current):
+            return None
+    return (current, content_type) if os.path.isfile(current) else None
 
 
 def logo_stamp(p):
@@ -10055,7 +10186,11 @@ def serve(home, port):
     # From the bytes it serves, not a second read of the file: a build writing the file in between would make whoami
     # report another build than the page has, and the page would offer a reload forever
     version, build = page_tags(page[:HEAD_BYTES].decode("utf-8", errors="replace"))
-    page_headers = {"Content-Security-Policy": page_csp(page)}
+    # The policy names the page's own origin, so there is one per Host the server accepts (localhost, 127.0.0.1)
+    page_policies = {}
+    # Which atm folder this server serves, as an ID (common/dashboard.py home_id): `atm serve stop` finds it by this
+    # even if its record was lost (T-390)
+    served_home = home_id(home)
     registry = ServedProjects(home)
     summaries = Summaries()
 
@@ -10105,9 +10240,22 @@ def serve(home, port):
                 return
             path = urlsplit(self.path).path
             if path == "/":
-                self.send(200, page, "text/html; charset=utf-8", headers=page_headers)
+                host = self.headers.get("Host")
+                if host not in page_policies:
+                    page_policies[host] = page_csp(page, "http://" + host)
+                policy = {"Content-Security-Policy": page_policies[host]}
+                self.send(200, page, "text/html; charset=utf-8", headers=policy)
+            elif path.startswith(ASSETS):
+                self.serve_asset(path)
             elif path == WHOAMI:
-                info = {"atm": True, "pid": os.getpid(), "port": port_now, "version": version, "build": build}
+                info = {
+                    "atm": True,
+                    "pid": os.getpid(),
+                    "port": port_now,
+                    "version": version,
+                    "build": build,
+                    "home": served_home,
+                }
                 self.send(200, to_json(info).encode("utf-8"))
             elif path == "/api/projects":
                 body, etag = api_projects(registry, summaries)
@@ -10183,6 +10331,22 @@ def serve(home, port):
 
             self.send_conditional(read, file_etag(stamp), logo[1], {**LOGO_HEADERS, "Cache-Control": "no-cache"})
 
+        def serve_asset(self, path):
+            """A plugin file the dashboard loads (the CompMD runtime): asked again each time (no-cache), a 304 while
+            it is unchanged. Its folder is named for the version, so a page never gets another version's file."""
+            found = asset_file(path)
+            stamp = logo_stamp(found[0]) if found else None
+            if stamp is None:
+                self.send_error_json(404, "not found")
+                return
+
+            def read():
+                with open(found[0], "rb") as f:
+                    return f.read()
+
+            headers = FRAME_DOCUMENT_HEADERS if found[0].endswith(".html") else ASSET_HEADERS
+            self.send_conditional(read, file_etag(stamp), found[1], headers)
+
         def not_allowed(self):
             self.send_error_json(405, "only GET and HEAD")
 
@@ -10227,6 +10391,7 @@ def serve(home, port):
         "version": version,
         "build": build,
         "plugin_root": PLUGIN_ROOT,
+        "home": served_home,
         "started_at": now_iso(),
     }
     write_json_atomic(record_path, record)

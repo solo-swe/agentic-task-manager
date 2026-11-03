@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from ..boot.open import open_registry, project_opener
 from ..common.core import PLUGIN_ROOT, WHOAMI, now, now_iso, read_json, to_json, write_json_atomic
-from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, page_tags
+from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, home_id, page_tags
 from ..common.errors import AtmFailure
 from ..lib.archive import project_stamp, task_snapshot
 from ..lib.query import Filters, list_claims, project_summary, search_tasks
@@ -38,15 +38,32 @@ LOGO_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     "X-Content-Type-Options": "nosniff",
 }
+# The plugin's own files the dashboard loads beside it (docs/compmd-rendering-design.md §2, §3c): read-only, only
+# regular files under plugin/assets/ with these extensions, never through a symlink. CompMD's sandbox frames have an
+# opaque origin, so what they load comes cross-origin: every asset may be read from anywhere (they are the plugin's
+# published files), and a frame document is sandboxed even when opened alone, as @compmd/vite serves them
+ASSETS = "/assets/"
+COMPMD_ASSETS = ASSETS + "compmd/"
+ASSET_TYPES = {
+    ".js": "text/javascript; charset=utf-8",
+    ".wasm": "application/wasm",
+    ".html": "text/html; charset=utf-8",
+}
+ASSET_HEADERS = {"Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*"}
+FRAME_DOCUMENT_HEADERS = {**ASSET_HEADERS, "Content-Security-Policy": "sandbox allow-scripts"}
+ASSET_SEGMENT = re.compile(r"[A-Za-z0-9_@][A-Za-z0-9._@-]*")
 # On every response: no content sniffing, and no other site may embed it (docs/security-review.md F11)
 SECURITY_HEADERS = {"X-Content-Type-Options": "nosniff", "Cross-Origin-Resource-Policy": "same-origin"}
 INLINE_SCRIPT = re.compile(rb"<script\b([^>]*)>(.*?)</script>", re.S | re.I)
 
 
-def page_csp(page):
-    """The dashboard's Content-Security-Policy: only its own inline scripts run (by hash), it talks only to this
-    server, and no page may frame it. Any script injected into it, or a `javascript:` link, is refused by the browser.
-    tests/e2e/serve.mjs builds the same policy, so the e2e suite runs under it."""
+def page_csp(page, origin):
+    """The dashboard's Content-Security-Policy: only its own inline scripts run (by hash), and the CompMD runtime from
+    this server's asset folder, which may compile WebAssembly (docs/compmd-rendering-design.md §2); its only frames are
+    CompMD's sandbox frames from that folder (§3c), it talks only to this server, and no page may frame it. Any script
+    injected into it, from anywhere else, or a `javascript:` link, is refused by the browser. `origin` is the page's
+    (`http://localhost:<port>`, from the checked Host header): a source with a path can't be written without it.
+    tests/e2e/csp.mjs builds the same policy, so the e2e suite runs under it."""
     hashes = [
         "'sha256-" + base64.b64encode(hashlib.sha256(body).digest()).decode("ascii") + "'"
         for attrs, body in INLINE_SCRIPT.findall(page)
@@ -55,7 +72,8 @@ def page_csp(page):
     return "; ".join(
         [
             "default-src 'none'",
-            "script-src " + (" ".join(hashes) or "'none'"),
+            "script-src " + " ".join(hashes + ["'wasm-unsafe-eval'", origin + COMPMD_ASSETS]),
+            "frame-src " + origin + COMPMD_ASSETS,
             "style-src 'unsafe-inline'",
             "img-src 'self' data:",
             "connect-src 'self'",
@@ -77,6 +95,28 @@ def port_in_use(port):
         except OSError:  # no IPv6 on this machine
             pass
     return False
+
+
+def asset_file(path, root=None):
+    """(absolute path, content type) of the plugin file a `/assets/…` request names, or None: each segment a plain
+    name (no `.` or `..`, no hidden file, nothing percent-encoded), a known extension, a regular file under
+    plugin/assets/ reached through no symlink."""
+    if not path.startswith(ASSETS):
+        return None
+    segments = path[len(ASSETS) :].split("/")
+    if not all(ASSET_SEGMENT.fullmatch(s) for s in segments):
+        return None
+    content_type = ASSET_TYPES.get(os.path.splitext(segments[-1])[1])
+    if content_type is None:
+        return None
+    current = root or os.path.join(PLUGIN_ROOT, "assets")
+    if os.path.islink(current):
+        return None
+    for segment in segments:
+        current = os.path.join(current, segment)
+        if os.path.islink(current):
+            return None
+    return (current, content_type) if os.path.isfile(current) else None
 
 
 def logo_stamp(p):
@@ -315,7 +355,11 @@ def serve(home, port):
     # From the bytes it serves, not a second read of the file: a build writing the file in between would make whoami
     # report another build than the page has, and the page would offer a reload forever
     version, build = page_tags(page[:HEAD_BYTES].decode("utf-8", errors="replace"))
-    page_headers = {"Content-Security-Policy": page_csp(page)}
+    # The policy names the page's own origin, so there is one per Host the server accepts (localhost, 127.0.0.1)
+    page_policies = {}
+    # Which atm folder this server serves, as an ID (common/dashboard.py home_id): `atm serve stop` finds it by this
+    # even if its record was lost (T-390)
+    served_home = home_id(home)
     registry = ServedProjects(home)
     summaries = Summaries()
 
@@ -365,9 +409,22 @@ def serve(home, port):
                 return
             path = urlsplit(self.path).path
             if path == "/":
-                self.send(200, page, "text/html; charset=utf-8", headers=page_headers)
+                host = self.headers.get("Host")
+                if host not in page_policies:
+                    page_policies[host] = page_csp(page, "http://" + host)
+                policy = {"Content-Security-Policy": page_policies[host]}
+                self.send(200, page, "text/html; charset=utf-8", headers=policy)
+            elif path.startswith(ASSETS):
+                self.serve_asset(path)
             elif path == WHOAMI:
-                info = {"atm": True, "pid": os.getpid(), "port": port_now, "version": version, "build": build}
+                info = {
+                    "atm": True,
+                    "pid": os.getpid(),
+                    "port": port_now,
+                    "version": version,
+                    "build": build,
+                    "home": served_home,
+                }
                 self.send(200, to_json(info).encode("utf-8"))
             elif path == "/api/projects":
                 body, etag = api_projects(registry, summaries)
@@ -443,6 +500,22 @@ def serve(home, port):
 
             self.send_conditional(read, file_etag(stamp), logo[1], {**LOGO_HEADERS, "Cache-Control": "no-cache"})
 
+        def serve_asset(self, path):
+            """A plugin file the dashboard loads (the CompMD runtime): asked again each time (no-cache), a 304 while
+            it is unchanged. Its folder is named for the version, so a page never gets another version's file."""
+            found = asset_file(path)
+            stamp = logo_stamp(found[0]) if found else None
+            if stamp is None:
+                self.send_error_json(404, "not found")
+                return
+
+            def read():
+                with open(found[0], "rb") as f:
+                    return f.read()
+
+            headers = FRAME_DOCUMENT_HEADERS if found[0].endswith(".html") else ASSET_HEADERS
+            self.send_conditional(read, file_etag(stamp), found[1], headers)
+
         def not_allowed(self):
             self.send_error_json(405, "only GET and HEAD")
 
@@ -487,6 +560,7 @@ def serve(home, port):
         "version": version,
         "build": build,
         "plugin_root": PLUGIN_ROOT,
+        "home": served_home,
         "started_at": now_iso(),
     }
     write_json_atomic(record_path, record)

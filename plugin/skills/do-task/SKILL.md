@@ -145,7 +145,9 @@ While you work:
 
 Notes, questions, answers and reasons (`--note`, `--question`, `--answer`, `--reason`, `atm note`) show on the
 dashboard as Markdown: put paths, commands and identifiers in `` `code` `` and use `*italics*` or `**bold**` where
-they help; keep them short, without headings.
+they help; keep them short, without headings. The dashboard renders task text with CompMD (tables, task lists,
+` ```mermaid ` diagrams, the task's own data as `md.data.task`); `/atm:create-tasks` lists what renders, and the
+plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest. Never fetch it from the web.
 
 **Quote that text in single quotes** (`` --note 'Ran `npm test`' ``), never double quotes: inside double quotes the shell
 runs backticks and `$(…)`, so a note mentioning `` `npm test` `` would run it, and text copied from a task could run

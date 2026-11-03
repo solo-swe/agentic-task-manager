@@ -3,12 +3,14 @@
 // and every test stops what it started.
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import {
+  ATM,
   PLUGIN_BUILD,
   PLUGIN_VERSION,
   REPO,
@@ -102,6 +104,9 @@ function rawGet(port, urlPath, host) {
   });
 }
 
+/** The ID a server gives for its atm folder (common/dashboard.py home_id): the folder's real path, hashed */
+const homeId = (dir) => createHash('sha256').update(fs.realpathSync(dir)).digest('hex').slice(0, 16);
+
 describe('serve', () => {
   test('start, reuse, status, stop', async () => {
     const atmHome = home();
@@ -128,7 +133,10 @@ describe('serve', () => {
       port,
       version: PLUGIN_VERSION,
       build: PLUGIN_BUILD,
+      // Its atm folder, as an ID (T-390): `atm serve stop` finds it by this if its record is lost
+      home: homeId(atmHome),
     });
+    assert.equal(r.home, homeId(atmHome));
 
     const again = atm(['serve', 'start', '--port', String(port + 5)], root);
     assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/#project=abcd1234`));
@@ -744,14 +752,185 @@ describe('serve', () => {
     assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
     const page = await fetch(`http://localhost:${port}/`);
     const body = Buffer.from(await page.arrayBuffer());
-    assert.equal(page.headers.get('content-security-policy'), pageCsp(body));
-    assert.match(page.headers.get('content-security-policy'), /script-src 'sha256-[^']+' 'sha256-[^']+';/);
+    const policy = page.headers.get('content-security-policy');
+    assert.equal(policy, pageCsp(body, `http://localhost:${port}/assets/compmd/`));
+    // The page's own scripts by hash, and the CompMD runtime from the asset folder only, which may compile
+    // WebAssembly; never 'self', 'unsafe-eval' or 'unsafe-inline' (docs/compmd-rendering-design.md §2)
+    assert.match(
+      policy,
+      new RegExp(
+        `script-src 'sha256-[^']+' 'sha256-[^']+' 'wasm-unsafe-eval' http://localhost:${port}/assets/compmd/;`,
+      ),
+    );
+    // Opened as 127.0.0.1, the page names that origin: a source with a path needs the origin the browser uses
+    const numeric = await fetch(`http://127.0.0.1:${port}/`);
+    assert.ok(numeric.headers.get('content-security-policy').includes(` http://127.0.0.1:${port}/assets/compmd/;`));
     for (const p of ['/', '/api/projects', '/api/v1/projects/abcd1234/tasks', '/p/abcd1234/claims.json', '/nope']) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
       assert.equal(r.headers.get('cross-origin-resource-policy'), 'same-origin', p);
     }
     atm(['serve', 'stop'], root);
+  });
+
+  test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js, .wasm and .html, no symlinks (T-284)', async () => {
+    // A copy of the plugin, so a symlink and a stray file can be put in its asset folder
+    const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
+    fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
+    cleanups.push(() => removeDir(path.dirname(plugin)));
+    const [version] = fs.readdirSync(path.join(plugin, 'assets/compmd'));
+    const folder = path.join(plugin, 'assets/compmd', version);
+    const secret = path.join(tempDir('atm-secret-'), 'secret.js');
+    fs.writeFileSync(secret, 'secret()');
+    cleanups.push(() => removeDir(path.dirname(secret)));
+    fs.symlinkSync(secret, path.join(folder, 'linked.js'));
+    fs.symlinkSync(path.dirname(secret), path.join(folder, 'linked-dir'));
+    fs.writeFileSync(path.join(folder, 'notes.txt'), 'not an asset');
+    const atmHome = home();
+    const root = project();
+    const port = ports();
+    const run = (args) =>
+      spawnSync(path.join(plugin, 'scripts/atm'), args, {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...baseEnv(), ATM_HOME: atmHome },
+      });
+    assert.equal(run(['serve', '--port', String(port)]).status, 0);
+    try {
+      const base = `http://localhost:${port}/assets/compmd/${version}/`;
+      const js = await fetch(base + 'compmd.js');
+      assert.equal(js.status, 200);
+      assert.equal(js.headers.get('content-type'), 'text/javascript; charset=utf-8');
+      assert.equal(js.headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(await js.text(), fs.readFileSync(path.join(folder, 'compmd.js'), 'utf8'));
+      const wasm = await fetch(base + 'compmd_wasm_bg.wasm');
+      assert.equal(wasm.status, 200);
+      assert.equal(wasm.headers.get('content-type'), 'application/wasm');
+      // CompMD's sandbox (T-285): its frames have an opaque origin, so every asset is readable cross-origin; a frame
+      // document is sandboxed even when opened alone; the Mermaid pack's built module is there, as @compmd/vite built it
+      assert.equal(js.headers.get('access-control-allow-origin'), '*');
+      const frame = await fetch(base + 'compmd/strict.html');
+      assert.equal(frame.status, 200);
+      assert.equal(frame.headers.get('content-type'), 'text/html; charset=utf-8');
+      assert.equal(frame.headers.get('content-security-policy'), 'sandbox allow-scripts');
+      assert.equal(frame.headers.get('access-control-allow-origin'), '*');
+      assert.equal(js.headers.get('content-security-policy'), null);
+      const mermaid = await fetch(base + 'compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js', {
+        method: 'HEAD',
+      });
+      assert.equal(mermaid.status, 200);
+      assert.equal(mermaid.headers.get('content-type'), 'text/javascript; charset=utf-8');
+      // Unchanged since it was last fetched: a 304, as for the other files the dashboard asks for again
+      const again = await fetch(base + 'compmd.js', { headers: { 'If-None-Match': js.headers.get('etag') } });
+      assert.equal(again.status, 304);
+      assert.equal((await fetch(base + 'compmd.js', { method: 'HEAD' })).status, 200);
+      assert.equal((await fetch(base + 'compmd.js', { method: 'POST' })).status, 405);
+      // Never outside the folder, never through a symlink, never another kind of file (raw paths: fetch would tidy them)
+      const host = `localhost:${port}`;
+      for (const [p, why] of [
+        [`/assets/compmd/${version}/missing.js`, 'missing'],
+        [`/assets/compmd/${version}/linked.js`, 'a symlinked file'],
+        [`/assets/compmd/${version}/linked-dir/secret.js`, 'through a symlinked folder'],
+        [`/assets/compmd/${version}/notes.txt`, 'not .js, .wasm or .html'],
+        [`/assets/compmd/${version}/compmd/library-definition.json`, 'not .js, .wasm or .html'],
+        ['/assets/compmd/../../templates/tasks-dashboard.html', '..'],
+        ['/assets/compmd/%2e%2e/%2e%2e/scripts/atm.py', 'percent-encoded ..'],
+        [`/assets/compmd/${version}/.hidden.js`, 'a hidden file'],
+        [`/assets//compmd/${version}/compmd.js`, 'an empty segment'],
+        ['/assets/', 'the folder'],
+      ]) {
+        assert.equal((await rawGet(port, p, host)).status, 404, why);
+      }
+    } finally {
+      run(['serve', 'stop']);
+    }
+  });
+
+  /** `atm args...` in the background, so several can run at once; resolves to { code, stdout } */
+  const atmAsync = (args, cwd, atmHome) =>
+    new Promise((resolve) => {
+      const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_HOME: atmHome } });
+      let stdout = '';
+      child.stdout.on('data', (d) => (stdout += d));
+      child.on('exit', (code) => resolve({ code, stdout }));
+    });
+
+  test('stop ends a server that ignores SIGTERM, and forgets it only once it is gone (T-390)', async () => {
+    const atmHome = home();
+    const port = ports();
+    // A stand-in for a server that outlives the polite request: it answers whoami as this folder's, and ignores SIGTERM
+    const script =
+      "const http = require('http'); process.on('SIGTERM', () => {});" +
+      `http.createServer((q, r) => { r.setHeader('content-type', 'application/json');` +
+      ` r.end(JSON.stringify({ atm: true, pid: process.pid, port: ${port}, home: ${JSON.stringify(homeId(atmHome))} })); })` +
+      `.listen(${port}, () => console.log('ready'));`;
+    const stubborn = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+    cleanups.push(() => alive(stubborn.pid) && process.kill(stubborn.pid, 'SIGKILL'));
+    await new Promise((resolve) => stubborn.stdout.once('data', resolve));
+    fs.writeFileSync(
+      path.join(atmHome, 'server.json'),
+      JSON.stringify({ pid: stubborn.pid, port, version: '0.0.1', build: 'x', started_at: new Date().toISOString() }),
+    );
+    const root = project();
+    // Not spawnSync: the stand-in is this process's child, which Node reaps only while its event loop runs (a real
+    // server is detached, and the system reaps it)
+    const stopped = await atmAsync(['serve', 'stop', '--port', String(port)], root, atmHome);
+    assert.equal(stopped.code, 0);
+    assert.match(stopped.stdout, new RegExp(`stopped \\(pid ${stubborn.pid}\\)`));
+    assert.equal(alive(stubborn.pid), false);
+    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), false);
+  });
+
+  test('two `atm serve start` at once start one server (T-390)', async () => {
+    const atmHome = home();
+    const root = project();
+    const port = ports();
+    const both = await Promise.all([
+      atmAsync(['serve', 'start', '--port', String(port)], root, atmHome),
+      atmAsync(['serve', 'start', '--port', String(port)], root, atmHome),
+    ]);
+    assert.deepEqual(
+      both.map((r) => r.code),
+      [0, 0],
+    );
+    assert.deepEqual(both.map((r) => /started|already running/.exec(r.stdout)?.[0]).sort(), [
+      'already running',
+      'started',
+    ]);
+    const status = JSON.parse(atmIn(atmHome)(['serve', 'status', '--json', '--port', String(port)], root).stdout);
+    assert.equal(status.running, true);
+    assert.deepEqual(status.unrecorded, []);
+    atmIn(atmHome)(['serve', 'stop', '--port', String(port)], root);
+  });
+
+  test('a server whose record was overwritten is reported by status and stopped by stop (T-390)', async () => {
+    const atmHome = home();
+    const root = project();
+    const port = ports();
+    const atm = atmIn(atmHome);
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const { pid } = record(atmHome);
+    // Another server's record took its place (as a start from another copy of atm did), and that one is gone
+    fs.writeFileSync(
+      path.join(atmHome, 'server.json'),
+      JSON.stringify({
+        pid: 999999,
+        port: port + 5,
+        version: '0.0.1',
+        build: 'x',
+        started_at: new Date().toISOString(),
+      }),
+    );
+    const status = JSON.parse(atm(['serve', 'status', '--json', '--port', String(port)], root).stdout);
+    assert.equal(status.running, false);
+    assert.deepEqual(
+      status.unrecorded.map((s) => s.pid),
+      [pid],
+    );
+    assert.match(atm(['serve', 'status', '--port', String(port)], root).stdout, /without a record: pid \d+/);
+    const stopped = atm(['serve', 'stop', '--port', String(port)], root);
+    assert.match(stopped.stdout, new RegExp(`didn't name \\(pid ${pid}, port ${port}\\)`));
+    assert.equal(alive(pid), false);
   });
 
   test('[::1] on the port is the server too, so nobody else can answer for localhost; a taken [::1] moves it on (T-227, F10)', async () => {

@@ -4,6 +4,74 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.28.0] - 2026-11-03
+
+The sprint *Rich Markdown* (T-284 to T-397): task text renders with CompMD (`docs/compmd-rendering-design.md`). Also
+designed in it: opening referenced documents in a viewer (T-336, `docs/compmd-viewer-design.md`; built by the backlog
+tasks T-391 to T-396).
+
+### Added
+- **Task text renders with CompMD** (T-284): the details panel renders a task's description, notes, the review note
+  and a blocked task's questions with CompMD (Markdown with components) instead of the dashboard's own Markdown subset:
+  GFM tables, task lists, strikethrough, footnotes, nested lists, alerts, and CompMD's layout and control components.
+  The dashboard puts one frontmatter in front of every text when it renders it (never stored), giving the text its
+  task as `md.data.task`: its fields and atm's derived values. Until CompMD has loaded the text's place is empty; if
+  it can't load, the text shows as written. Readers never see CompMD's diagnostics.
+- **Mermaid diagrams** (T-285): a ` ```mermaid ` block draws a diagram, through the `@comp-markdown/mermaid` pack
+  (0.1.1), ambient, run by `@compmd/sandbox` in a strict frame (an opaque origin with no network). Diagrams follow
+  light and dark mode; one that Mermaid can't read shows its code.
+- **CompMD's guide for agents ships with the plugin** (T-286): `plugin/docs/compmd-llms.txt`, CompMD's `llms.txt` as
+  of `v0.3.0`. `/atm:create-tasks` lists what renders in atm and points to it, as do `/atm:do-task`,
+  `/atm:loop-tasks` and `plugin/CLAUDE.md`; agents read the local copy and never fetch it. Help describes what task
+  text renders.
+
+### Changed
+- **`atm serve` serves the plugin's assets at `/assets/`** (T-284, T-285): the CompMD runtime
+  (`plugin/assets/compmd/<version>/`: `compmd.js` and the processor's WebAssembly), the sandbox's frame documents and
+  the Mermaid pack's module, built by `@compmd/vite` from `dashboard/compmd.config.json`. GET and HEAD only; `.js`,
+  `.wasm` and `.html`; plain path segments; regular files reached through no symlink; readable cross-origin (the
+  frames have an opaque origin), a frame document sandboxed (`Content-Security-Policy: sandbox allow-scripts`).
+- **The page's Content-Security-Policy** adds `'wasm-unsafe-eval'` and the asset folder (with the page's own origin)
+  to `script-src`, and `frame-src` for the same folder; never `'self'`.
+- **Task text is made safe before it renders:** an image that isn't `data:` shows its alt text and is never
+  requested; a link other than `https:`, `http:`, `mailto:` and `#` becomes text; a component the text defines in a
+  fence is never given to the sandbox.
+- **One Markdown renderer:** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too,
+  loaded the first time one of them opens; the dashboard's own Markdown parser (`src/lib/markdown.ts`,
+  `Markdown.svelte`) is gone. Tooltips and card excerpts show text without its marks (`src/lib/plain-text.ts`). The
+  single file is 9 kB smaller. About names what renders Markdown (*Rendering*: CompMD, with its version, licence and
+  site, read from the installed package at build time), and Help links CompMD's and Mermaid's sites where it
+  describes task text, and draws its diagram example.
+- **Help and What's new are one kind of dialog** (`Dialog.svelte`'s `scrollItem`): the title stays, with a hairline
+  under it, and the content scrolls below it without a scrollbar, the ▲/▼ hints counting Help's sections or the
+  releases; once it has scrolled, the title compacts, as the dashboard's title bar does. What's new now moves focus in
+  and back like the other dialogs.
+- **What's new shows the newest 10 releases** (`RECENT_RELEASES` in `dashboard/build/changelog.ts`, the only ones
+  embedded), ending with a link to `plugin/WHATS-NEW.md` on GitHub, which keeps every release.
+- **README:** the Tenets section (T-389), and CompMD named, with its site, where it describes the dashboard.
+- **`npm run size`** (T-342) lists what the single file is made of, largest first; Help and What's new are embedded as
+  text and parsed when the page loads.
+- **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
+  it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
+- **Development dependencies:** `minimatch` (used by ESLint and typescript-eslint) is pinned to 11.0.1 through
+  `overrides` in `dashboard/package.json`, for GHSA-g3hv-75wg-m249 (a denial of service through crafted patterns).
+  `deepmerge` 4.3.1 (used by `@sveltejs/vite-plugin-svelte` on its own configuration) has GHSA-gcqx-w48m-w2h4 and no
+  fixed release yet; neither ships with the plugin.
+
+### Fixed
+- **An ⓘ explanation near a popup's right edge was cut off** (Activity's *Where the time went*): the popover now moves
+  left to fit inside what clips it (`InfoTip.svelte`).
+- **`atm serve` lost track of running servers** (T-390): `stop` removed the server's record after five seconds even
+  when the server was still running, and two `atm serve` at once (two sessions' hooks) could each start one, the
+  second record replacing the first; the lost servers kept running, unseen by `status` and `stop`. Now `stop` ends a
+  server that outlives the wait (SIGKILL) and drops the record only once it is gone; starting holds a lock
+  (`ATM_HOME/server.lock`), so two starts make one server; and `status` and `stop` find a server of this atm folder
+  that the record doesn't name, on the 20 ports from `--port` (`whoami` and the record now carry `home`, a hash of
+  the folder's path): `status` reports it (`unrecorded` in `--json`), `stop` stops it.
+
+### Known
+- Math shows as its TeX source: `@compmd/sandbox`'s host mode doesn't typeset it yet (a CompMD fix to come).
+
 ## [0.27.0] - 2026-11-03
 
 The sprint *Layered Architecture* (T-360 to T-388): atm-cli rebuilt in layers (`docs/layered-architecture.md`).

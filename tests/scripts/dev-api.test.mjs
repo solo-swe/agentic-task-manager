@@ -90,6 +90,11 @@ test(NAME, { skip }, async () => {
       tasks.tasks.map((v) => [v.task.id, v.derived.ready]),
       [['T-1', true]],
     );
+    // The plugin's assets too: the CompMD runtime the details panel loads (T-284)
+    const [version] = fs.readdirSync(path.join(plugin, 'assets/compmd'));
+    const runtime = await fetch(`${base}/assets/compmd/${version}/compmd.js`);
+    assert.equal(runtime.status, 200);
+    assert.equal(runtime.headers.get('content-type'), 'text/javascript; charset=utf-8');
 
     // A rebuild (atm.py written again): the API server restarts on it, and answers again
     const record = path.join(home, 'server.json');

@@ -1,53 +1,40 @@
 <script lang="ts">
-  import { UNRELEASED } from '../lib/changelog';
+  import { entryMarkdown, UNRELEASED } from '../lib/changelog';
+  import { pluginInfo } from '../lib/plugin-info';
   import { releaseNotes } from '../lib/release-notes';
   import { dashboard } from '../lib/state.svelte';
-  import HintScroll from './HintScroll.svelte';
+  import CompMd from './CompMd.svelte';
+  import Dialog from './Dialog.svelte';
 
-  /** Split `code` spans out of an item so they can be styled; everything stays plain text. */
-  function segments(item: string) {
-    return item.split('`').map((text, i) => ({ text, code: i % 2 === 1 }));
-  }
-
-  function onOverlayClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) dashboard.closeWhatsNew();
-  }
-
-  function onKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') dashboard.closeWhatsNew();
-  }
+  /** The notes render the first time What's new opens, and stay: CompMD loads only once the page shows Markdown */
+  let opened = $state(false);
+  $effect(() => {
+    if (dashboard.whatsNewOpen) opened = true;
+  });
+  /** Every release's notes, on GitHub: What's new shows only the newest */
+  const olderReleases = `${pluginInfo.repository.replace(/\/$/, '')}/blob/main/plugin/WHATS-NEW.md`;
 </script>
 
-<svelte:document onkeydown={onKeydown} />
-
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (Escape closes, see above) -->
-<div class="detail-overlay" class:open={dashboard.whatsNewOpen} id="whats-new-overlay" onclick={onOverlayClick}>
-  <div class="detail-panel whats-new" id="whats-new-panel" role="dialog" aria-label="What's new">
-    <!-- The title stays; the releases scroll below it without a scrollbar (T-282) -->
-    <div class="detail-head">
-      <h3>What's new</h3>
-      <button class="detail-close" aria-label="Close" onclick={() => dashboard.closeWhatsNew()}>&times;</button>
-    </div>
-    <HintScroll item=".release" outer="whats-new-scroll" id="whats-new-body">
-      {#each releaseNotes as entry (entry.version)}
-        <section class="release" data-version={entry.version}>
-          <h4>
-            {entry.version === UNRELEASED ? 'Unreleased' : 'v' + entry.version}{#if entry.date}<span
-                class="release-date">{entry.date}</span
-              >{/if}
-          </h4>
-          {#each entry.sections as section, i (i)}
-            {#if section.title}<div class="release-section">{section.title}</div>{/if}
-            <ul>
-              {#each section.items as item, j (j)}
-                <li>
-                  {#each segments(item) as seg, k (k)}{#if seg.code}<code>{seg.text}</code>{:else}{seg.text}{/if}{/each}
-                </li>
-              {/each}
-            </ul>
-          {/each}
-        </section>
-      {/each}
-    </HintScroll>
-  </div>
-</div>
+<!-- A scrolling dialog (T-282), like Help: the title stays, the releases scroll below it, the hints count them -->
+<Dialog
+  id="whats-new"
+  title="What's new"
+  open={dashboard.whatsNewOpen}
+  onclose={() => dashboard.closeWhatsNew()}
+  scrollItem=".release"
+>
+  {#each releaseNotes as entry (entry.version)}
+    <section class="release" data-version={entry.version}>
+      <h4>
+        {entry.version === UNRELEASED ? 'Unreleased' : 'v' + entry.version}{#if entry.date}<span class="release-date"
+            >{entry.date}</span
+          >{/if}
+      </h4>
+      {#if opened}<CompMd text={entryMarkdown(entry)} />{/if}
+    </section>
+  {/each}
+  <!-- Only the newest releases are embedded (build/changelog.ts); every release is in the file on GitHub -->
+  <p class="whats-new-older">
+    Older releases: <a href={olderReleases} target="_blank" rel="noopener noreferrer">all release notes</a>
+  </p>
+</Dialog>

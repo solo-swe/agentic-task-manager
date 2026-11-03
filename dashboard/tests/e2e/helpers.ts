@@ -398,7 +398,7 @@ export class TasksServer {
   }
 }
 
-type Fixtures = { tasksServer: TasksServer; externalRequestGuard: void; cspGuard: void };
+type Fixtures = { tasksServer: TasksServer; externalRequestGuard: void; cspGuard: void; sandboxRefusals: string[] };
 
 export const test = base.extend<Fixtures>({
   tasksServer: async ({ page }, use) => {
@@ -423,17 +423,24 @@ export const test = base.extend<Fixtures>({
 
   // The page runs under the Content-Security-Policy atm serve sends (serve.mjs sends the same, T-226): anything it
   // blocks (an inline script, a style, an image, a request) fails the test, so the policy and the dashboard agree.
+  // CompMD's sandbox frames (T-285) have a policy of their own, which refuses what untrusted text tries there: those
+  // refusals are the sandbox working, kept apart in `sandboxRefusals` for a test to look at.
   cspGuard: [
-    async ({ page }, use) => {
+    async ({ page, sandboxRefusals }, use) => {
       const violations: string[] = [];
       page.on('console', (msg) => {
-        if (/Content Security Policy/i.test(msg.text())) violations.push(msg.text());
+        if (!/Content Security Policy/i.test(msg.text())) return;
+        if (msg.location().url.includes('/assets/compmd/')) sandboxRefusals.push(msg.text());
+        else violations.push(msg.text());
       });
       await use();
       expect(violations, 'Content-Security-Policy violations').toEqual([]);
     },
     { auto: true },
   ],
+  sandboxRefusals: async ({}, use) => {
+    await use([]);
+  },
 });
 
 /**

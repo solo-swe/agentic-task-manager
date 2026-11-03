@@ -12,6 +12,21 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 ---
 
+## Tenets
+
+- **The data lives with the project.** Tasks are a file in your repository (`.agentic-task-manager/`), versioned with
+  your code by your own version control: branches, pull requests and history work for tasks as they do for code
+  ([Project files](#project-files)).
+- **One skill install.** Installing the plugin is all it takes: no service, no account, no database. It needs only
+  Python 3, which macOS and Linux already have ([Prerequisites](#prerequisites)).
+- **Actions through agents.** Every change to the tasks is made by an agent running a skill, or by `atm`, the command
+  the skills use; never by editing the files by hand. That keeps the file valid, locked and merged task by task
+  ([Running agents in parallel](#running-agents-in-parallel)).
+- **Visibility through the dashboard.** The dashboard shows everything, across all your projects, and changes
+  nothing: it is read-only, so what you see is always what the agents wrote ([Dashboard](#dashboard)).
+
+---
+
 ## What It Does
 
 1. **Decompose requirements into tasks** — Point the agent at your PRD, use cases, ADRs, or just describe what you need. It creates a `tasks.json` file with granular, dependency-aware tasks.
@@ -238,7 +253,9 @@ one watches CI and fixes failures.
 
 **Commit message format:** `feat(T-001): Short task name`
 
-**The loop re-reads tasks.json every iteration**, so you can edit tasks, change priorities, or mark tasks as done/skipped from the dashboard or another editor while the agent runs.
+**The loop re-reads tasks.json every iteration**, so you can change tasks while the agent runs: ask another agent
+session, or run `atm` yourself (`atm edit T-005 --priority P0`, `atm skip T-007 --reason '…'`), and the loop picks
+it up with its next task.
 
 ### `/atm:plan-sprint`
 
@@ -363,9 +380,9 @@ it runs there (both were never committed).
 
 ### tasks.json format
 
-`tasks.json` is plain, indented JSON you can read and edit by hand. Agents never touch it directly: they read and
-change it through `atm` (see [atm-cli's commands](#atm-clis-commands)), which locks it, checks it against the
-project's vocabularies and keeps the timestamps and actors right.
+`tasks.json` is plain, indented JSON you can read, and review in a diff like any file. Nobody edits it directly:
+agents, and you, change it through `atm` (see [atm-cli's commands](#atm-clis-commands)), which locks it, checks it
+against the project's vocabularies and keeps the timestamps and actors right.
 
 ```json
 {
@@ -483,8 +500,10 @@ them, and `atm unarchive <id>` brings one back. The dashboard loads the archive 
 
 ## Dashboard
 
-The dashboard is a single self-contained HTML file with no external dependencies, served by atm for all your
-projects. It reads each project's `tasks.json` from the server and renders an interactive view.
+The dashboard is a single self-contained HTML file, served by atm for all your projects. It reads each project's
+`tasks.json` from the server and renders an interactive view. Task text, Help and What's new are rendered with
+[CompMD](https://compmd.hakanserce.com/) (Markdown with components), which comes with the plugin and is served by the
+same local server, loaded the first time a page shows Markdown; nothing is fetched from anywhere else.
 
 ### Features
 
@@ -492,6 +511,7 @@ projects. It reads each project's `tasks.json` from the server and renders an in
 - **Top bar** — Stays in view while you scroll. A progress ring (click for completion overall, by phase and by type) and an activity sparkline (click for tasks completed by type, agents working, time per task and idle stretches, over a period you pick: hour, day, week, month, all time or custom, with ‹ › to step back); reload, auto-refresh, mode and theme menus on the right
 - **Needs you** — The header counts the tasks waiting for you: in review, or blocked on a question for you. Click it for the Kanban board
 - **Search and filters** — Keyword search over ID, name, description, type and labels, and filters by phase, type, status, priority, stage, label and who started the task (multi-select) in one line that shows what's selected and how many tasks match. Every filter button shows how many tasks it would show given the other filters, and empty choices are dimmed. **Include archived** adds the archived tasks
+- **Rich task text** — Descriptions, notes and questions render as [CompMD](https://compmd.hakanserce.com/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
 - **Detail panel** — Click a task to see its full description, dependencies (an archived one shows as "archived, done"), files and timestamps, who created, started and completed it (and who tried before), its notes newest first, its commit, and a blocked task's questions with how to answer them
 - **Priorities, labels and stages** — Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
 - **Views** — Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL
@@ -554,13 +574,13 @@ Use dependencies to enforce execution order. A task won't be picked up until all
 Use phases to group related work. Phase 0 is typically setup/foundation. Higher phases build on earlier ones. The loop processes lower phases first.
 
 ### Manual intervention
-You can edit `tasks.json` while the loop runs. Changes are picked up on the next iteration. Edit task definitions
-freely, but change statuses with atm-cli (`atm start|done|fail|release <id>`), which locks the file
-so your change and an agent's can't overwrite each other. Use this to:
-- Mark a task as `skipped` if it's no longer needed
-- Mark a task as `blocked` to prevent the agent from picking it up
-- Add new tasks mid-loop
-- Change task descriptions or dependencies
+You can change tasks while the loop runs: ask an agent in another session, or run `atm` yourself, which locks the
+file so your change and an agent's can't overwrite each other. Changes are picked up on the next iteration. Use this
+to:
+- Skip a task that's no longer needed (`atm skip <id> --reason '…'`)
+- Block a task so the agent doesn't pick it up (`atm block <id> --on user --question '…'`)
+- Add new tasks mid-loop (`/atm:create-tasks`)
+- Change a task's description or dependencies (`atm edit <id> --description … --add-dep …`)
 
 ### Multiple agents
 See [Running agents in parallel](#running-agents-in-parallel).

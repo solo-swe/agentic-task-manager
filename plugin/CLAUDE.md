@@ -85,6 +85,10 @@ atm-cli writes these fields; this is for reading `atm show --json` output, not f
 - Finished tasks move to `tasks-archive.json` with `atm archive` when atm suggests it, at a break between tasks
 - The dashboard reloads tasks.json from the atm server (not file://), and the archive only when a view needs history.
   Updating the plugin updates it; the server restarts on the new version by itself (`atm serve --refresh`)
+- Task text (descriptions, notes, questions) renders as CompMD: Markdown with tables, task lists, ` ```mermaid `
+  diagrams, layout components and the task's own data as `md.data.task`; never a frontmatter of its own.
+  `/atm:create-tasks` lists what renders; the plugin's `docs/compmd-llms.txt` (beside `skills/`) is CompMD's guide
+  for agents. Read that local copy; never fetch CompMD documentation from the web
 
 ## Available Skills
 - `/atm:create-tasks` — Analyze requirements and create tasks.json

@@ -1,0 +1,21 @@
+{
+  "imports": {
+    "react": "./libs/react@19.3.0/index.js",
+    "react/jsx-runtime": "./libs/react@19.3.0/jsx-runtime.js",
+    "react-dom": "./libs/react-dom@19.3.0/index.js",
+    "react-dom/client": "./libs/react-dom@19.3.0/client.js",
+    "svelte": "./libs/svelte@5.57.2/index.js",
+    "svelte/internal/client": "./libs/svelte@5.57.2/internal-client.js",
+    "svelte/internal/disclose-version": "./libs/svelte@5.57.2/internal-disclose-version.js",
+    "svelte/internal/flags/legacy": "./libs/svelte@5.57.2/internal-flags-legacy.js",
+    "svelte/internal/flags/async": "./libs/svelte@5.57.2/internal-flags-async.js",
+    "svelte/reactivity": "./libs/svelte@5.57.2/reactivity.js",
+    "svelte/store": "./libs/svelte@5.57.2/store.js",
+    "svelte/transition": "./libs/svelte@5.57.2/transition.js",
+    "svelte/easing": "./libs/svelte@5.57.2/easing.js",
+    "svelte/motion": "./libs/svelte@5.57.2/motion.js",
+    "svelte/animate": "./libs/svelte@5.57.2/animate.js",
+    "svelte/events": "./libs/svelte@5.57.2/events.js",
+    "svelte/attachments": "./libs/svelte@5.57.2/attachments.js"
+  }
+}

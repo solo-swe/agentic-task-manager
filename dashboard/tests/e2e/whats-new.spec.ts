@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
+import { RECENT_RELEASES } from '../../build/changelog';
 import { parseChangelog } from '../../src/lib/changelog';
 import { expect, openDashboard, test } from './helpers';
 
@@ -32,19 +33,31 @@ test.describe("What's new", () => {
     const versions = await panel(page)
       .locator('.release')
       .evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.version));
-    expect(versions).toEqual(entries.map((e) => e.version));
+    // Only the newest releases (build/changelog.ts); the rest are linked
+    expect(versions).toEqual(entries.slice(0, RECENT_RELEASES).map((e) => e.version));
 
-    const v060 = panel(page).locator('.release[data-version="0.6.0"]');
-    await expect(v060.locator('h4')).toHaveText(/^v0\.6\.0\s*2026-10-22$/);
-    // Plain bullets: no Added / Changed / Fixed headings
-    await expect(v060.locator('.release-section')).toHaveCount(0);
-    await expect(v060.locator('li').first()).toContainText('Zoom and pan the dependency graph');
+    const v0270 = panel(page).locator('.release[data-version="0.27.0"]');
+    await expect(v0270.locator('> h4')).toHaveText(/^v0\.27\.0\s*2026-11-03$/);
+    // Rendered with CompMD; plain bullets: no Added / Changed / Fixed headings
+    await expect(v0270.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(v0270.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
+    await expect(v0270.locator('.compmd-page li')).toHaveCount(
+      entries.find((e) => e.version === '0.27.0')!.sections.flatMap((s) => s.items).length,
+    );
+    await expect(v0270.locator('li').first()).toContainText('no longer blanks the dashboard');
   });
 
-  test('inline code is shown as code, as plain text', async ({ page }) => {
+  test('older releases are a link to every release’s notes, in a new tab', async ({ page }) => {
     await chip(page).click();
-    const code = panel(page).locator('.release[data-version="0.10.0"] code', { hasText: '/atm:serve' });
-    await expect(code).toHaveCount(1);
+    const older = panel(page).locator('.whats-new-older a');
+    await expect(older).toHaveText('all release notes');
+    await expect(older).toHaveAttribute(
+      'href',
+      'https://github.com/solo-swe/agentic-task-manager/blob/main/plugin/WHATS-NEW.md',
+    );
+    await expect(older).toHaveAttribute('target', '_blank');
+    await expect(older).toHaveAttribute('rel', 'noopener noreferrer');
+    // Markup renders, it never shows as written
     await expect(panel(page)).not.toContainText('`');
   });
 
@@ -52,6 +65,8 @@ test.describe("What's new", () => {
     page,
   }) => {
     await chip(page).click();
+    // Every release's notes drawn by CompMD: until then only the version headings take room
+    await expect(panel(page).locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
     const body = panel(page).locator('#whats-new-body');
     const sizes = await body.evaluate((el) => ({
       overflows: el.scrollHeight > el.clientHeight,
@@ -71,12 +86,23 @@ test.describe("What's new", () => {
     await expect(panel(page).locator('.kanban-more.top')).toHaveCount(0);
     await expect(panel(page).locator('.kanban-more.bottom')).toHaveText(`▼ ${await cutBelow()} more`);
 
-    // ▼ scrolls a page; then ▲ shows, and the title stays where it was
-    const title = await panel(page).locator('h3').boundingBox();
+    // A hairline under the title, at its full size at the top
+    const titleStyle = () =>
+      panel(page)
+        .locator('> h3')
+        .evaluate((h) => {
+          const s = getComputedStyle(h);
+          return { line: s.borderBottomStyle + ' ' + s.borderBottomWidth, size: parseFloat(s.fontSize) };
+        });
+    expect(await titleStyle()).toEqual({ line: 'solid 1px', size: 20 });
+
+    // ▼ scrolls a page; then ▲ shows, and the title compacts (as the dashboard's title bar does) and stays in view
     await panel(page).locator('.kanban-more.bottom').click();
     await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
     await expect(panel(page).locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
-    expect(await panel(page).locator('h3').boundingBox()).toEqual(title);
+    await expect(panel(page)).toHaveClass(/scrolled/);
+    await expect.poll(titleStyle).toEqual({ line: 'solid 1px', size: 16 });
+    await expect(panel(page).locator('> h3')).toBeInViewport();
   });
 
   test('closes with ×, the backdrop and Escape', async ({ page }) => {

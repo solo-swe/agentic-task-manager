@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { version as compmdVersion } from 'virtual:atm-compmd';
 import AboutDialog from '../../src/components/AboutDialog.svelte';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
@@ -29,6 +30,22 @@ describe('AboutDialog', () => {
     expect(dialog).toHaveTextContent('Licence MIT');
     expect(screen.getByRole('link', { name: pluginInfo.repository })).toHaveAttribute('target', '_blank');
     expect(location.hash).toBe('#about');
+  });
+
+  it('names what renders Markdown: CompMD, with its version, licence and site', () => {
+    render(AboutDialog);
+    dashboard.openDialog('about');
+    flushSync();
+    const dialog = screen.getByRole('dialog', { name: 'About' });
+    expect(dialog).toHaveTextContent(`Rendering CompMD ${compmdVersion} (MIT)`);
+    expect(document.querySelector('#about-compmd')).toHaveTextContent(
+      new RegExp(`^CompMD ${compmdVersion} \\(MIT\\)$`),
+    );
+    const link = screen.getByRole('link', { name: 'CompMD' });
+    expect(link).toHaveAttribute('href', 'https://compmd.hakanserce.com/');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(dialog).not.toHaveTextContent('Mermaid');
   });
 
   it("shows the project's vocabularies, short: statuses, phases and types, the defaults or meta's lists (T-255)", () => {

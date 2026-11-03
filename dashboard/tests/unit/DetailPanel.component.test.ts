@@ -1,13 +1,20 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import DetailPanel from '../../src/components/DetailPanel.svelte';
+import { compmdSettled } from './compmd.helpers';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';
 import archiveFile from '../fixtures/archive.json';
 import sprints from '../fixtures/sprints.json';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
+
+// Task text renders with the real CompMD (T-284), as the served module has it
+vi.mock('../../src/lib/compmd', async (actual) => ({
+  ...(await actual()),
+  loadCompmd: (await import('./compmd.helpers')).realCompmd,
+}));
 
 // The archive's meta (archived_at) isn't part of tasks.json's
 const archive = archiveFile as unknown as TasksFile;
@@ -154,7 +161,7 @@ describe('DetailPanel', () => {
     expect(labels).toContain('Notes');
   });
 
-  it('lists the notes newest first, with kind, author and time; a legacy last_failure among them', () => {
+  it('lists the notes newest first, with kind, author and time; a legacy last_failure among them', async () => {
     const container = open({
       notes: [
         { at: '2026-04-01T08:00:00Z', by: 'claude:aaaa', kind: 'handoff', text: 'Toolbar done; links left' },
@@ -162,6 +169,7 @@ describe('DetailPanel', () => {
       ],
       last_failure: { at: '2026-04-01T12:00:00Z', reason: 'lint failed' },
     });
+    await compmdSettled();
     const items = [...container.querySelectorAll('#detail-notes .detail-note')];
     expect(items.map((n) => (n as HTMLElement).dataset.kind)).toEqual(['rejection', 'failure', 'handoff']);
     expect(items[0].querySelector('.note-kind')).toHaveTextContent('Rejected');
@@ -209,15 +217,16 @@ describe('DetailPanel', () => {
     expect(open({ commit: 'e4969ae0123' }).querySelector('#detail-commit-note')).toBeNull();
   });
 
-  it('a blocked task lists its questions and how to answer them', () => {
+  it('a blocked task lists its questions and how to answer them', async () => {
     const container = open({
       status: 'blocked',
       waiting_on: 'user',
       questions: ['REST or GraphQL?', 'Which DB?'],
     });
+    await compmdSettled();
     const section = container.querySelector('#detail-blocked')!;
     expect(section).toHaveTextContent('Waiting on you · 2 questions');
-    expect([...section.querySelectorAll('.block-questions li')].map((li) => li.textContent)).toEqual([
+    expect([...section.querySelectorAll('.block-questions li')].map((li) => li.textContent?.trim())).toEqual([
       'REST or GraphQL?',
       'Which DB?',
     ]);
@@ -255,24 +264,51 @@ describe('DetailPanel', () => {
     expect(container.querySelector('#detail-archived')).toHaveTextContent('archived');
   });
 
-  it('renders the description as Markdown, with HTML kept as text and external links in a new tab', () => {
+  it('renders the description with CompMD: GFM, HTML outside the allowlist kept as text, links in a new tab', async () => {
     const container = open({
       description:
         '## Goal\n\nLog **every** sign-in.\n\n- the IP\n- the time\n\n```\natm show T-005\n```\n\n' +
-        'See [the spec](https://example.com/spec). <b>not bold</b>',
+        '| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] done\n\n' +
+        'See [the spec](https://example.com/spec). <i>not italic</i> <script>bad()</script>',
     });
+    await compmdSettled();
     const desc = container.querySelector('#detail-description')!;
-    expect(desc.querySelector('h4')).toHaveTextContent('Goal');
-    expect(desc.querySelector('h4')!.id).toBe('desc-T-005-goal');
+    expect(desc.querySelector('h2')).toHaveTextContent('Goal');
     expect(desc.querySelector('strong')).toHaveTextContent('every');
-    expect([...desc.querySelectorAll('li')].map((li) => li.textContent)).toEqual(['the IP', 'the time']);
+    expect([...desc.querySelectorAll('ul:not(:has(.compmd-task)) > li')].map((li) => li.textContent)).toEqual([
+      'the IP',
+      'the time',
+    ]);
     expect(desc.querySelector('pre code')).toHaveTextContent('atm show T-005');
+    expect(desc.querySelectorAll('table td')).toHaveLength(2);
+    expect(desc.querySelector('.compmd-task input[type=checkbox]')).toBeChecked();
     expect(desc.querySelector('a')).toHaveAttribute('target', '_blank');
-    expect(desc.querySelector('b')).toBeNull();
-    expect(desc).toHaveTextContent('<b>not bold</b>');
+    expect(desc.querySelector('i')).toBeNull();
+    expect(desc.querySelector('script')).toBeNull();
+    expect(desc).toHaveTextContent('<i>not italic</i>');
   });
 
-  it('renders notes, the review note and questions as Markdown, with HTML kept as text (T-219)', () => {
+  it('the task’s own data is md.data.task (T-284)', async () => {
+    // Its derived values too, which come with the v1 route's tasks (lib/compmd's tests); these come from a fixture
+    const container = open({ description: 'This is {{md.data.task.id}}, {{md.data.task.status}}.', status: 'todo' });
+    await compmdSettled();
+    expect(container.querySelector('#detail-description')).toHaveTextContent('This is T-005, todo.');
+  });
+
+  it('a # link scrolls to the heading in the same text; a link atm wouldn’t follow isn’t one', async () => {
+    const container = open({ description: '[jump](#setup) [bad](javascript:x)\n\n## Setup\n\nThere.' });
+    await compmdSettled();
+    const desc = container.querySelector('#detail-description')!;
+    const heading = desc.querySelector('h2')!;
+    const scrolled = vi.fn();
+    heading.scrollIntoView = scrolled;
+    await fireEvent.click(desc.querySelector('a[href="#setup"]')!);
+    expect(scrolled).toHaveBeenCalled();
+    expect(desc.querySelector('a[href^="javascript"]')).toBeNull();
+    expect(desc).toHaveTextContent('jump bad');
+  });
+
+  it('renders notes, the review note and questions with CompMD, with HTML kept as text (T-219)', async () => {
     const container = open({
       status: 'in_review',
       notes: [
@@ -280,6 +316,7 @@ describe('DetailPanel', () => {
         { at: '2026-04-02T08:00:00Z', by: 'claude:aaaa', kind: 'review', text: 'Check **the toolbar** <i>x</i>' },
       ],
     });
+    await compmdSettled();
     const notes = [...container.querySelectorAll('#detail-notes .note-text')];
     expect(notes.map((n) => n.textContent!.trim())).toEqual(['Check the toolbar <i>x</i>', 'Ran npm test; see CI']);
     expect(notes[0].querySelector('strong')).toHaveTextContent('the toolbar');
@@ -290,16 +327,18 @@ describe('DetailPanel', () => {
     expect(container.querySelector('#detail-review .review-note strong')).toHaveTextContent('the toolbar');
 
     const blocked = open({ status: 'blocked', waiting_on: 'user', questions: ['Keep `--force`? [why](javascript:x)'] });
+    await compmdSettled();
     const question = blocked.querySelector('.block-questions li')!;
     expect(question.querySelector('code')).toHaveTextContent('--force');
     expect(question.querySelector('a')).toBeNull(); // only links atm would follow
     expect(question).toHaveTextContent('Keep --force? why');
   });
 
-  it('a plain description is one paragraph, as before', () => {
+  it('a plain description is one paragraph, as before', async () => {
     const container = open({ description: 'Add the editor.' });
-    const paragraphs = container.querySelectorAll('#detail-description .markdown > *');
-    expect([...paragraphs].map((p) => [p.tagName, p.textContent])).toEqual([['P', 'Add the editor.']]);
+    await compmdSettled();
+    const paragraphs = container.querySelectorAll('#detail-description .compmd-page p');
+    expect([...paragraphs].map((p) => p.textContent)).toEqual(['Add the editor.']);
   });
 
   it('has no notes, commit or blocked section when the task has none', () => {

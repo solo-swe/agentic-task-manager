@@ -132,6 +132,23 @@ test.describe('Activity widget', () => {
     await expect(page.getByRole('dialog', { name: 'About tasks completed' })).toContainText('stacked by type');
   });
 
+  test('an explanation near the popup’s right edge moves left to fit, nothing cut off', async ({ page }) => {
+    await activityPill(page).click();
+    const panel = page.locator('#activity-panel');
+    await panel.locator('#kpi-where .infotip-button').click();
+    const popover = page.getByRole('dialog', { name: 'About where the time went' });
+    await expect(popover).toContainText('Idle includes nights and weekends');
+    // Placed at its ⓘ it would run past the popup's right edge (the card is the popup's last): it moved
+    await expect(popover).toHaveAttribute('style', /translateX\(-\d+(\.\d+)?px\)/);
+    // Inside the popup's box (what clips it) and the window
+    const fits = await popover.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      const panel = el.closest('#activity-panel')!.getBoundingClientRect();
+      return box.left >= panel.left && box.right <= panel.right && box.right <= document.documentElement.clientWidth;
+    });
+    expect(fits).toBe(true);
+  });
+
   test('the deep dive: key numbers, and charts by type, by agent and per task', async ({ page }) => {
     await activityPill(page).click();
     const panel = page.locator('#activity-panel');

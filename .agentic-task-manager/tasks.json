@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 390,
+    "next_id": 398,
     "labels": [
       {
         "id": "architecture",
@@ -577,7 +577,27 @@
       },
       {
         "id": "Rich Markdown",
-        "state": "planned"
+        "state": "closed",
+        "goal": "Rich task text: CompMD and Mermaid in task details",
+        "release": "0.28.0",
+        "start": "2026-11-03T07:29:42Z",
+        "end": "2026-11-03T17:34:05Z",
+        "report": {
+          "done": [
+            "T-284",
+            "T-285",
+            "T-286",
+            "T-336",
+            "T-342",
+            "T-389",
+            "T-390",
+            "T-397"
+          ],
+          "carried": [],
+          "added": [
+            "T-397"
+          ]
+        }
       },
       {
         "id": "Sprints and releases",
@@ -955,6 +975,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/31"
         },
         "released_at": "2026-11-02T10:46:35Z"
+      },
+      {
+        "id": "0.28.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -14212,32 +14236,35 @@
       "name": "Task details: render descriptions and notes with CompMD",
       "type": "feature",
       "priority": "P2",
-      "description": "Render a task's description and its notes in the details panel with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`. CompMD is CommonMark + GFM with components, so tables and the rest of GFM render too.\n\n## Packages\n`@compmd/processor` (WebAssembly; `init()`, `process({ path, files, now })`) and `@compmd/render` (`createPage(element).render(expanded)`), from npm, pinned to exact versions in `dashboard/package.json` and installed with `npm ci`. If they aren't on npm yet when this starts, block the task on the user; don't vendor them from the repository.\n\n## Shipping: separate files, not in the dashboard\nThe processor is about 808 KB gzipped, and the dashboard has a 400 KiB budget (`tests/e2e/guardrails.spec.ts`; 379 KB today). Keep the dashboard one file within that budget and ship CompMD beside it:\n- the build copies the packages' browser files into `plugin/assets/compmd/` (committed build artifacts, like `tasks-dashboard.html`: CI fails when they are stale);\n- `atm serve` serves `plugin/assets/` under a fixed path (e.g. `/assets/...`), read-only, only files under that folder (no `..`, no symlinks out), with correct content types (`application/wasm` for `.wasm`); the Vite dev server and the e2e `tasksServer` fixture serve the same path;\n- the dashboard loads them lazily, the first time a details panel opens, and keeps them loaded.\nThe guardrail test still holds: no request leaves localhost.\n\n## Untrusted text\nTask text comes from anyone who can change `tasks.json` (a collaborator, a merged PR, an agent). Configure CompMD for a document its user doesn't trust:\n- no raw HTML (shown as text, or sanitized with its allowlist; no scripts, styles or event attributes);\n- no remote data: no origin allowed (`from: https://…` fails);\n- no custom code components (JSX, TSX, Svelte, JS), no `host:` data, no inputs that change anything;\n- links only `https:`, `http:`, `mailto:` and `#` (as `safeHref` today), opened as today.\n\n## Scope\n- The details panel's description and notes only. Help, What's new and the card tooltips (`markdownPlainText`) keep `markdown.ts`.\n- The output follows the theme and light/dark mode through the CSS tokens (`no-hardcoded-colours.test.ts` still passes); headings, lists, code, quotes and tables look like today's.\n- While CompMD loads, or if it fails to load, the panel renders with `markdown.ts`, so a description never shows blank.\n- The section rail and its ▲/▼ hints keep working with the new content (T-280).\n\n## Security document\n`docs/security-architecture.md` in the same PR: the new route serving `plugin/assets/`, and CompMD as the renderer of untrusted task text, with the settings above and the checks that prove them.\n\n## Tests\n- atm-cli (`tests/scripts/`): the asset route serves a file with its content type, refuses `..` and paths outside the folder, and 404s a missing file.\n- e2e: a description with a table and a task list renders; raw HTML (`<img onerror>`, `<script>`) shows as text and runs nothing; a `javascript:` link isn't a link; a remote-data component makes no request; the fallback renders when the asset route fails; the details panel's screenshot baselines updated.\n- Unit: the configuration passed to CompMD (untrusted settings).",
+      "description": "Render all task text in the details panel (the description, notes, the review note and a blocked task's questions) with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`, as the design approved with Hakan says: `docs/compmd-rendering-design.md` (it supersedes this task's first description).\n\n## In short\n- CompMD only, no second renderer: while it loads the place is empty; if it can't load, the text shows as written. Readers never see CompMD's diagnostics.\n- CompMD ships beside the single-file dashboard: a second Vite build bundles the runtime into `plugin/assets/compmd/<version>/` (`compmd.js` and the processor's `.wasm`), served by `atm serve` at `/assets/` (read-only, `.js` and `.wasm`, no symlinks) and loaded on the first panel open. `npm run check` fails when the committed files are stale.\n- The page's CSP adds `'wasm-unsafe-eval'` and the asset folder (never `'self'`).\n- The dashboard puts one frontmatter in front of every text (never stored): the task's own data as `md.data.task` (its fields and atm's derived values), nothing else: no files, packs, remote data or other host sources. `safeTree` takes out images that aren't `data:` and links atm wouldn't follow before rendering.\n- Rendered in host mode by `@compmd/sandbox`, so T-285's Mermaid pack adds a strict frame without changing this.\n\n## Tests\n`docs/compmd-rendering-design.md` §6.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
         "dashboard/package-lock.json",
         "dashboard/vite.config.ts",
-        "dashboard/build/dev-data.ts",
         "dashboard/src/components/DetailPanel.svelte",
         "dashboard/src/components/CompMd.svelte",
         "dashboard/src/lib/compmd.ts",
         "dashboard/src/app.css",
-        "atm-cli/atm/server.py",
         "plugin/assets/compmd/",
         "docs/security-architecture.md",
         "dashboard/tests/e2e/helpers.ts",
         "dashboard/tests/e2e/detail.spec.ts",
         "dashboard/tests/unit/compmd.test.ts",
-        "tests/scripts/"
+        "tests/scripts/",
+        "atm-cli/atm/api/server.py",
+        "plugin/scripts/atm.py",
+        "dashboard/build/dev-api.ts",
+        "dashboard/build/security-headers.ts",
+        "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -14251,17 +14278,53 @@
         "compmd",
         "api",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T08:45:42Z",
+      "started_by": "claude:b7be7288",
+      "commit": "d1118dff8ca7afcfd2110bc605529256462c6aa2",
+      "notes": [
+        {
+          "at": "2026-11-03T07:34:14Z",
+          "kind": "review",
+          "text": "Design for review with Hakan before implementing: `docs/compmd-rendering-design.md` (shipping CompMD as served assets, the CSP, the untrusted-text settings, three open points in §7).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T08:45:41Z",
+          "kind": "note",
+          "text": "Approved: Design approved by Hakan (`docs/compmd-rendering-design.md`). Left: implement it (assets and route, CSP, loader, CompMd component in host mode, md.data.task, tests, security doc).",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T09:14:43Z",
+          "kind": "outcome",
+          "text": "CompMD renders all task text in the panel (design approved). Check in the browser: a rich description (tables, task lists), notes and questions; the `md.data.task` values; the look in light and dark (screenshots regenerate in the release task). Verified: 978 unit, 364 e2e, 548 atm-cli.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-03T07:34:14Z",
+          "to": "2026-11-03T08:45:41Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-03T09:14:43Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-285",
-      "name": "An ambient Mermaid pack: mermaid code blocks render as diagrams in task details",
+      "name": "Mermaid diagrams in task text: the @comp-markdown/mermaid pack in the strict sandbox",
       "type": "feature",
       "priority": "P2",
-      "description": "atm's own ambient CompMD pack (spec §6.3: a pack the processor provides to every document without an import) that renders fenced code blocks with the language `mermaid` as diagrams, in the task details' descriptions and notes (new-1).\n\n## Pack\n- Lives in the dashboard (`src/lib/compmd-packs/`), registered with CompMD's processor as ambient; documents may also import it explicitly (spec §6.3). Name it for atm (e.g. `@atm/mermaid`).\n- Mermaid from npm (`mermaid`, pinned exactly), shipped like CompMD in new-1: copied to `plugin/assets/mermaid/` by the build, served by `atm serve`, and loaded only when a document has a `mermaid` block.\n- Untrusted text: Mermaid's `securityLevel: 'strict'` (no HTML in labels, no click handlers or links that run code), `startOnLoad: false`, no external fonts or images.\n- Theme: the diagram follows light/dark mode and the dashboard theme (Mermaid `themeVariables` from the CSS tokens), and is re-rendered when the mode or theme changes.\n- A diagram that doesn't parse shows as its code block with Mermaid's error message under it, never a blank space.\n- A wide diagram scrolls inside its block or fits the panel width; it doesn't widen the panel.\n\n## Tests\n- e2e: a flowchart renders as SVG; a broken diagram shows the code and the error; a diagram in dark mode uses dark colours; a label with `<script>` or `<img onerror>` runs nothing; nothing loads from outside localhost; Mermaid isn't loaded for a task without a `mermaid` block.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: Mermaid's settings as part of the untrusted-text renderer.",
+      "description": "Mermaid diagrams in task text, as decided in T-284's design (`docs/compmd-rendering-design.md` §3c, \"As built\" there): the published pack `@comp-markdown/mermaid`, run by `@compmd/sandbox` in a strict frame (an opaque origin with no network), the text itself rendering in the dashboard's page (host mode).\n\n## As built\n- Through `@compmd/vite` only (Hakan's direction): `dashboard/compmd.config.json` pins the pack (`0.1.1`), makes it **ambient** (no import line in the frontmatter) and lists it as the only pack (`imports: \"listed\"`, strict). The asset build runs `compmd()`, which writes the frame documents and the pack's module into the asset folder and gives `virtual:compmd` (`request`, `sandbox`), re-exported by the served module.\n- atm serve serves the folder as the plugin's own server does (CORS `*`, frame documents sandboxed); the page's policy gains `frame-src` for the asset folder.\n- Components a text defines itself are never given to the sandbox.\n- Diagrams follow light and dark mode; a broken diagram, or a module that doesn't match its hash, shows its code in the frame.\n- Measured: one diagram 280–390 ms, five 350–510 ms (opening the panel, CompMD's load included).\n\n## Not here\nMath stays TeX until CompMD's host mode typesets it (Hakan is fixing that in CompMD). Building Mermaid into the dashboard at build time is to be reconsidered later (§3c, option D).\n\n## Sample content (for trying the rendering)\nHakan's test content for this task's details panel: it shows how task text renders, and is no part of the work. Math shows as its TeX source until CompMD's fix.\n\n```mermaid {alt=\"A task goes from to do through in progress and review to done, or back to to do on changes\"}\nflowchart LR\n  todo[To do] --> active[In progress]\n  active --> review[In review]\n  review -->|approved| done[Done]\n  review -->|changes requested| active\n  active -->|blocked| blocked[Blocked]\n  blocked -->|answered| todo\n```\n\n| Diagram | Where it renders | Loaded when |\n|---|---|---|\n| Flowchart | a strict frame | the text has a `mermaid` block |\n| Sequence | a strict frame | the same |\n| None | the panel itself | never |\n\n- Shipping\n  - the pack's module, `dist/mermaid.js`\n    - 7.0 MB minified, 1.6 MB gzipped\n  - its licences, `dist/LICENSES.md`\n- Running\n  - one strict frame per diagram\n  - the module's hash checked before it runs\n\nInline math: the cost grows as $n \\cdot t_{parse}$ for $n$ diagrams. Display math:\n\n$$\nt_{panel} = t_{load} + \\sum_{i=1}^{n} t_{parse,i}\n$$\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-284"
       ],
@@ -14269,18 +14332,20 @@
         "dashboard/package.json",
         "dashboard/package-lock.json",
         "dashboard/vite.config.ts",
-        "dashboard/src/lib/compmd-packs/mermaid.ts",
         "dashboard/src/lib/compmd.ts",
-        "plugin/assets/mermaid/",
         "docs/security-architecture.md",
         "dashboard/tests/e2e/detail.spec.ts",
         "dashboard/tests/e2e/visual.spec.ts",
-        "dashboard/tests/fixtures/standard.json"
+        "dashboard/tests/fixtures/standard.json",
+        "plugin/assets/compmd/",
+        "atm-cli/atm/api/server.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -14291,18 +14356,37 @@
       "components": [
         "dashboard",
         "compmd",
-        "docs"
-      ]
+        "docs",
+        "cli",
+        "api"
+      ],
+      "started_at": "2026-11-03T09:30:43Z",
+      "started_by": "claude:b7be7288",
+      "commit": "0058bdadb9401cd4a4a327472981c5482e9b40ab",
+      "completed_at": "2026-11-03T10:02:10Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:02:10Z",
+          "kind": "outcome",
+          "text": "Mermaid via `@compmd/vite` (pack pinned 0.1.1, ambient, strict). Check: the diagrams in T-285’s sample content in the browser, light and dark; e2e 371, unit 982, atm-cli 548 pass; timings 1 diagram ~300 ms, 5 ~400 ms. Math waits on the CompMD host-mode fix.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-286",
       "name": "Tell agents what task text can use: CompMD and Mermaid diagrams",
       "type": "docs",
       "priority": "P2",
-      "description": "Once the details panel renders CompMD with the Mermaid pack (new-1, new-2), the places that tell agents and users what task text may contain are out of date.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes: GFM including tables, and `mermaid` code blocks as diagrams; raw HTML shows as text. Suggest a diagram only where it helps (a flow, a state machine), not by default.\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, briefly.\n- `plugin/CLAUDE.md`: one line on what task text renders.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for the release that ships new-1 and new-2.\n\n## Before merging\nA skill changes, so the agent sandbox runs before the PR merges (`CLAUDE.md`, Security): `tests/sandbox/run.mjs` with Docker. Ask the user to run it (it needs their API key).",
+      "description": "Once the details panel renders all task text with CompMD (T-284) and Mermaid diagrams (T-285), the places that tell agents and users what task text may contain are out of date. Decided in T-284's design review (`docs/compmd-rendering-design.md` §3a): agents get **guidance** on writing CompMD, from CompMD's own guide for language models, `llms.txt`; there is no checker for now.\n\n## The guide, shipped with the plugin\n- Copy CompMD's `llms.txt` (in the root of `github.com/comp-markdown/compmd`) into `plugin/docs/compmd-llms.txt`, taken at the commit matching the CompMD version the dashboard ships (T-284's pinned npm version), with one header line naming that version and commit. It is updated with CompMD, by hand in the same change as a CompMD bump.\n- Skills point to this local copy; they never tell agents to fetch it, or anything else, from the web.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes a short summary of what renders in atm's panel (T-284's settings): GFM (tables, task lists, footnotes), alerts (`> [!NOTE]`), CompMD's core components (layout, `if`, `each`, `value`) and `mermaid` code blocks as diagrams; math shows as TeX source; inputs show but change nothing; pack imports, data from files or URLs, `host:` data and host-language components don't render (their fallback text shows); raw HTML beyond a short allowlist shows as text. The dashboard adds one frontmatter to every text when it renders it (design §3b; nothing is stored in `tasks.json`): task text never starts with one of its own, and gets the current task's data as `md.data.task` (its fields and atm's derived values: `{{md.data.task.status}}`, `::: each {in=(md.data.task.dependencies) as=d}`), and nothing else. Plain Markdown remains the default; suggest a diagram or a component only where it helps (a flow, a state machine, a comparison). For more, read `plugin/docs/compmd-llms.txt` (its ten rules first).\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, in a sentence, with the pointer to the guide.\n- `plugin/CLAUDE.md`: one line on what task text renders, with the pointer.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small table and a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for 0.28.0, the release that ships T-284 and T-285.\n\n## Security review\nSkills and `plugin/CLAUDE.md` change, so the release needs the agent-facing review (`CLAUDE.md`, Security; `docs/security-architecture.md` §3). No API key is used for the agent sandbox: write the review of these skill changes in §3.3 instead of a live run, as for earlier releases. It covers the new text and the shipped `compmd-llms.txt`: read the copy in full before committing it, check it tells agents nothing to run, fetch or install (it is a syntax guide; any such line is left out or the copy is not shipped), and note that skills reference it only as a local file.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-285"
       ],
@@ -14313,12 +14397,14 @@
         "plugin/CLAUDE.md",
         "docs/help.md",
         "plugin/CHANGELOG.md",
-        "plugin/WHATS-NEW.md"
+        "plugin/WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "plugin/docs/compmd-llms.txt"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-10-30T09:03:19Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
       "sprint_history": [
         {
@@ -14330,7 +14416,24 @@
         "skills",
         "compmd",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T10:02:16Z",
+      "started_by": "claude:b7be7288",
+      "commit": "845e390cbdf228485d3c9a69e1e0b278a85016bb",
+      "completed_at": "2026-11-03T10:06:12Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:06:12Z",
+          "kind": "outcome",
+          "text": "Skills, `plugin/CLAUDE.md` and Help say what task text renders; `plugin/docs/compmd-llms.txt` is CompMD’s llms.txt at v0.3.0, read in full (§3.3 review, no sandbox run). Check the skill wording; changelog and What’s new are under `[Unreleased]` for the release task to date as 0.28.0.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-287",
@@ -17221,7 +17324,7 @@
       "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-284"
       ],
@@ -17229,9 +17332,9 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "docs",
         "compmd"
@@ -17239,7 +17342,50 @@
       "with": "user",
       "related": [
         "T-284"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T16:53:57Z",
+      "started_by": "claude:b7be7288",
+      "commit": "4856644b61429fd7c847ca9f4eeb0f5fecf6f21d",
+      "notes": [
+        {
+          "at": "2026-11-03T10:16:06Z",
+          "kind": "review",
+          "text": "Design ready for Hakan’s review: `docs/compmd-viewer-design.md` (requirements V1–V7, where it opens, a read-only documents route through atm-lib, rendering). Four questions in §8; follow-up tasks in §9 are created once approved.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T16:53:56Z",
+          "kind": "note",
+          "text": "Approved: Design approved in Crit (3 rounds). Left: the follow-up tasks of §9, through `/atm:create-tasks`.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T16:55:39Z",
+          "kind": "outcome",
+          "text": "Design approved: `docs/compmd-viewer-design.md`. Follow-ups in the backlog: T-392–T-396 (routes, window, rendering, links, docs) and T-391 (requirement IDs, after T-393).",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-03T10:16:06Z",
+          "to": "2026-11-03T16:53:56Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-03T16:55:39Z",
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-337",
@@ -17512,10 +17658,10 @@
       "labels": [
         "ux"
       ],
-      "description": "In 0.26.0 the shipped single-file dashboard went over its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`), which was raised from 500 to 525 KiB (T-341). This task was created assuming the whole `plugin/CHANGELOG.md` is embedded; it isn't: `dashboard/vite.config.ts` embeds only `plugin/WHATS-NEW.md` (`changelogModule(whatsNew)`, for What's new), and reads `CHANGELOG.md` only for the copyright year (`pluginInfoModule`). What's New adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail back accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
+      "description": "The shipped single-file dashboard keeps nearing its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`, `MAX_BYTES`), which has been raised several times, most recently to 550 KiB; 0.27.0 ships 543 kB, so about 20 KB of room is left, and T-284 and T-285 in this sprint add a loader and a pack to it. Only `plugin/WHATS-NEW.md` is embedded (`changelogModule(whatsNew)` in `dashboard/vite.config.ts`, for What's new; `CHANGELOG.md` is read only for the copyright year in `pluginInfoModule`). What's new adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/build/changelog.ts",
@@ -17524,12 +17670,36 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-02T02:16:50Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T10:16:15Z",
+      "started_by": "claude:b7be7288",
+      "commit": "076d7895738d45e2990203d9b10385d1e640c646",
+      "completed_at": "2026-11-03T10:19:05Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:19:05Z",
+          "kind": "outcome",
+          "text": "Measured with the new `npm run size`: Svelte 161 KB and dagre 63 KB dominate (needed); Help and What’s new were embedded as parsed trees. Now embedded as text and parsed at load: 549,210 → 542,431 bytes (−6.8 KB, offsetting this sprint’s CompMD growth). Guardrail kept at 550 KiB: ~20 KB room, as at the sprint’s start, and Hakan expects to push it for CompMD.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     },
     {
       "id": "T-343",
@@ -18517,7 +18687,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18571,7 +18741,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-361",
@@ -18594,7 +18765,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18628,7 +18799,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-362",
@@ -18653,7 +18825,7 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18688,7 +18860,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-363",
@@ -18711,7 +18884,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18745,7 +18918,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-364",
@@ -18770,7 +18944,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18812,7 +18986,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-365",
@@ -18841,7 +19016,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18881,7 +19056,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-366",
@@ -18904,7 +19080,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18944,7 +19120,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-367",
@@ -18969,7 +19146,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19010,7 +19187,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-368",
@@ -19033,7 +19211,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19080,7 +19258,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-369",
@@ -19103,7 +19282,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19137,7 +19316,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-370",
@@ -19160,7 +19340,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19194,7 +19374,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-371",
@@ -19219,7 +19400,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19260,7 +19441,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-372",
@@ -19285,7 +19467,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19320,7 +19502,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-373",
@@ -19343,7 +19526,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19377,7 +19560,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-374",
@@ -19401,7 +19585,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19455,7 +19639,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-375",
@@ -19478,7 +19663,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19519,7 +19704,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-376",
@@ -19544,7 +19730,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19591,7 +19777,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-377",
@@ -19620,7 +19807,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T20:15:57Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19657,7 +19844,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-378",
@@ -19684,7 +19872,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19716,7 +19904,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-379",
@@ -19745,7 +19934,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19777,7 +19966,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-380",
@@ -19802,7 +19992,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19834,7 +20024,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-381",
@@ -19865,7 +20056,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19897,7 +20088,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-382",
@@ -19923,7 +20115,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19956,7 +20148,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-383",
@@ -19983,7 +20176,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20015,7 +20208,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-384",
@@ -20043,7 +20237,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20075,7 +20269,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-385",
@@ -20100,7 +20295,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20132,7 +20327,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-386",
@@ -20155,7 +20351,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20187,7 +20383,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-387",
@@ -20219,7 +20416,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20253,7 +20450,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-388",
@@ -20272,7 +20470,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20304,7 +20502,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-389",
@@ -20317,18 +20516,349 @@
       "description": "Add a short **Tenets** section to `README.md`: the principles atm is built on, one line each with a sentence on what it means for a user.\n\n## The tenets\n- **The data lives with the project**, versioned with the project's own version control (`.agentic-task-manager/` in the repository, committed with the code).\n- **One skill install**: installing the plugin is all it takes; nothing else to set up (no service, no account, no database).\n- **Actions through agents**: every change to the tasks is made by an agent running a skill (or `atm`), not by hand in the files.\n- **Visibility through the dashboard**: the dashboard shows everything and is read-only.\n\n## Notes\nPlace it near the top, after the introduction. Keep the README's tone; don't restate details covered further down, link to them instead.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "README.md"
       ],
       "created_at": "2026-11-03T01:25:18Z",
-      "updated_at": "2026-11-03T01:25:23Z",
+      "updated_at": "2026-11-03T17:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T09:06:58Z",
+      "started_by": "claude:b7be7288",
+      "commit": "8d70b203d3d3ca2848b22757969dba3360918ed3",
+      "completed_at": "2026-11-03T09:07:49Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T09:07:49Z",
+          "kind": "outcome",
+          "text": "README has a Tenets section after the intro (data with the project, one skill install, actions through agents, read-only dashboard), each linking to its details. Three passages that said to edit tasks.json or the dashboard by hand now say to use an agent or `atm`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
+    },
+    {
+      "id": "T-390",
+      "name": "atm serve loses track of a running server: stop and status miss it, and it keeps running",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "Found 2026-11-03: two dashboard servers kept running on ports 8765 and 8766, serving the real `~/.agentic-task-manager`. They were started on Nov 2, 8 minutes apart, from the repository checkout's `atm.py` (`_serve-child`, before T-379). `atm serve stop` and `atm serve status` said no server was running, because the server record (`SERVER_RECORD` in the user's atm folder) named another server, which had been stopped. The two had to be stopped by hand.\n\n## Likely causes (check each with a test first)\n- `stop_server` in `atm-cli/atm/cli/serve.py` sends SIGTERM, waits until a deadline, then removes the record **whether or not the process exited**. A server that outlives the wait (as during a `--refresh` restart) is left running with no record, and the new server takes the next free port.\n- Two `ensure_server` calls at once (two sessions' SessionStart hooks, or the hook and `/atm:serve`) both find no live record, and each starts a server; the second overwrites the record.\n- Servers from another plugin root (a checkout versus the installed plugin) share one record.\n\n## Change\n- `stop_server`: if the process is still alive after the wait, escalate (SIGKILL) or keep the record and report it, never forget a live server.\n- Starting: hold a lock in the atm folder across \"is one running?\" → start → write the record, so only one server is started.\n- `atm serve status` and `stop`: also find an atm server that answers `whoami` on the usual ports (8765 upward) for this atm folder but isn't the recorded one, report it, and let `stop` stop it (it is ours: `whoami` says `atm: true` and gives its pid).\n\n## Tests\n`tests/scripts/serve.test.mjs`: a server that ignores the first SIGTERM is still stopped (or reported) by `stop`; two `atm serve start` at once leave one server; `stop` finds and stops a server whose record was overwritten.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/serve.py",
+        "tests/scripts/serve.test.mjs",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T07:22:15Z",
+      "updated_at": "2026-11-03T17:34:38Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "cli",
+        "api"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T07:28:11Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T10:06:17Z",
+      "started_by": "claude:b7be7288",
+      "commit": "f36f4645338864373d774609e61b959382bd070f",
+      "completed_at": "2026-11-03T10:15:12Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:15:12Z",
+          "kind": "outcome",
+          "text": "Fixed all three causes, each with a test: `stop` escalates to SIGKILL and drops the record only once the server is gone; starting holds `ATM_HOME/server.lock`; `status`/`stop` find this folder’s unrecorded servers on 20 ports from `--port` via `home` in whoami (a path hash). atm-cli 551 pass.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
+    },
+    {
+      "id": "T-391",
+      "name": "Requirement and use-case IDs open the document that defines them",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A task's `requirements` and `use_cases` (`SR-7.6`, `UC-001`) open the document that defines each ID, at its line, in the document viewer of `docs/compmd-viewer-design.md` (requirement **V1d**; it opens files at `#L<n>`).\n\n## To settle first\natm has no map from an ID to the document that defines it. Options: a `meta.documents.requirements` setting naming the documents (or globs) that define IDs, and the server finding the first heading or line in them that starts with the ID; or an index atm builds from those documents. Agree the choice with Hakan before building.\n\n## Change\n- atm-lib: find an ID's document and line among the configured documents, through the same checks as the documents route (inside the project, no symlinks, not ignored).\n- A REST route (or a field of the documents route) answering an ID with `{path, line}`; 404 when no document defines it.\n- The details panel: each requirement and use-case ID becomes a link that opens the viewer at that line; an ID nothing defines stays text.\n- `docs/security-architecture.md` for the route, and Help.\n\n## Tests\natm-lib unit tests and `serve.test.mjs` for the lookup and its checks; a component test for the links; an e2e test opening an ID at its line.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-393"
+      ],
+      "files": [
+        "atm-cli/atm/lib/documents.py",
+        "atm-cli/atm/api/server.py",
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/src/lib/documents.ts",
+        "docs/security-architecture.md",
+        "docs/help.md"
+      ],
+      "created_at": "2026-11-03T16:33:31Z",
+      "updated_at": "2026-11-03T16:55:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "components": [
+        "dashboard",
+        "cli",
+        "docs"
+      ],
+      "related": [
+        "T-336"
       ]
+    },
+    {
+      "id": "T-392",
+      "name": "Document viewer: atm-lib read_file and the documents and files routes",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project.\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Tests\n`tests/lib/` for the kinds, the wrapping and `line_offset`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/documents.py",
+        "atm-cli/atm/api/server.py",
+        "tests/lib/test_documents.py",
+        "tests/scripts/serve.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "api",
+        "docs"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-393",
+      "name": "Document viewer: the window, the #doc= hash and Back",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6.\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Its title is the document's first heading, else its path. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash); e2e: open, move, resize, Back, Reload keeps it, a missing file, a refused file.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-392"
+      ],
+      "files": [
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/components/CompMd.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/documents.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-394",
+      "name": "Document viewer: line numbers, refreshing in place, images",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-393"
+      ],
+      "files": [
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/documents.ts",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-395",
+      "name": "Document viewer: relative links and files entries open it",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "The references that open the viewer, `docs/compmd-viewer-design.md` §1 (V1a–V1c) and §3.\n\n## Change\n- A relative link in task text (`docs/x.md`, `docs/x.md#3-routes`, `src/app.ts#L40`) becomes a viewer link, resolved from the project root; one leaving the project stays text. `safeTree` and `secureLinks` keep it, opened by the click handler, never by the browser.\n- A relative link inside an open document opens the viewer at the path resolved from its folder.\n- The details panel's Files list links every entry.\n\n## Tests\nUnit tests for the link rules (`compmd.test.ts`); e2e: a link in a description, in a document, and a Files entry each open the viewer; a `..` out of the project is text.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-393"
+      ],
+      "files": [
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/src/components/CompMd.svelte",
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/tests/unit/compmd.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-396",
+      "name": "Document viewer: tell users and agents that relative links open in the dashboard",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Help (`docs/help.md`, the task details) says that relative links and Files entries open in the document viewer, with `#L<n>` for a line. `/atm:create-tasks` gets one line: link documents and code with relative paths from the project root (`docs/x.md#section`, `src/app.ts#L40`). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-395"
+      ],
+      "files": [
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T16:55:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "skills",
+        "docs"
+      ],
+      "related": [
+        "T-336"
+      ]
+    },
+    {
+      "id": "T-397",
+      "name": "Release 0.28.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Release the sprint *Rich Markdown* as 0.28.0.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.28.0`.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`: `[Unreleased]` becomes `[0.28.0] - <date>`; add what isn't there yet (Help's and What's new's scrolling title, What's new showing recent releases).\n- **Trim What's new** (Hakan): the dashboard shows the last 10 releases, embedded at build time, and ends with a link to the full changelog on GitHub; `WHATS-NEW.md` keeps every release.\n- Regenerate the Linux screenshot baselines (`npm run test:e2e:visual:update`, Docker).\n- Security checklist (`docs/security-architecture.md` §3): skills changed (T-286), the written review in §3.3 stands for the sandbox run; a §3.3 entry for the release.\n\n## Then\n`npm run verify`, the PR to `main` through `/atm:push`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/build/changelog.ts",
+        "dashboard/src/components/WhatsNew.svelte",
+        "dashboard/tests/e2e/__screenshots__/",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T17:19:48Z",
+      "updated_at": "2026-11-03T17:34:38Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T17:19:48Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-03T17:19:52Z",
+      "started_by": "claude:b7be7288",
+      "commit": "61ba12ff6d06f8611201009b4fffd1244e8addae",
+      "completed_at": "2026-11-03T17:33:59Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T17:33:59Z",
+          "kind": "outcome",
+          "text": "Released as 0.28.0: version bump, CHANGELOG and WHATS-NEW dated, What’s new shows the newest 10 releases with a link to the rest, 10 screenshot baselines regenerated, §3.3 checklist. Verified: e2e 374, unit 981 (97%), atm-cli 551, visual 84.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 33,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
+      }
     }
   ]
 }

@@ -3,7 +3,7 @@
   import type { KanbanCard } from '../lib/kanban';
   import { dashboard } from '../lib/state.svelte';
   import { phaseColor, typeStyle } from '../lib/theme';
-  import { markdownPlainText } from '../lib/markdown';
+  import { markdownPlainText } from '../lib/plain-text';
   import { REVIEW_STATE_LABELS } from '../lib/review';
   import { kindOf, priorityOf } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';

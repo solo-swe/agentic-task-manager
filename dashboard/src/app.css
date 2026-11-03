@@ -186,87 +186,122 @@ body {
   padding: 12px 14px;
   min-width: 0;
 }
-.detail-description .markdown > :first-child {
-  margin-top: 0;
-}
-.detail-description .markdown > :last-child {
-  margin-bottom: 0;
-}
 /* Headings stay below the panel's section labels: smaller, and the lower levels muted */
-.detail-description .markdown h3 {
+.detail-description .compmd-page h1 {
   font-size: 14px;
   margin-top: 14px;
 }
-.detail-description .markdown h4 {
+.detail-description .compmd-page h2 {
   font-size: 13px;
   margin-top: 12px;
 }
-.detail-description .markdown h5,
-.detail-description .markdown h6 {
+.detail-description .compmd-page :is(h3, h4, h5, h6) {
   font-size: 12px;
   margin-top: 10px;
 }
-/* Rendered Markdown (Markdown.svelte): Help and task descriptions */
-.markdown {
+/* Markdown rendered with CompMD (CompMd.svelte, docs/compmd-rendering-design.md): task text, Help and What's new.
+   CompMD's h1–h6 at the dashboard's sizes, h3 and below muted; tables, task lists and alerts. CompMD's own theme
+   tokens take the dashboard's colours */
+.compmd {
+  --compmd-accent: var(--accent);
+  --compmd-border-subtle-color: var(--border);
+  --compmd-border-strong: var(--text-muted);
   font-size: 14px;
   line-height: 1.6;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
-.markdown h3,
-.markdown h4,
-.markdown h5,
-.markdown h6 {
+.compmd-page > :first-child {
+  margin-top: 0;
+}
+.compmd-page > :last-child {
+  margin-bottom: 0;
+}
+.compmd-page :is(h1, h2, h3, h4, h5, h6) {
   margin: 20px 0 6px;
   font-weight: 600;
 }
-.markdown h3 {
+.compmd-page h1 {
   font-size: 16px;
 }
-.markdown h4 {
+.compmd-page h2 {
   font-size: 14px;
 }
-.markdown h5,
-.markdown h6 {
+.compmd-page :is(h3, h4, h5, h6) {
   font-size: 13px;
   color: var(--text-muted);
 }
-.markdown p,
-.markdown ul,
-.markdown ol,
-.markdown pre,
-.markdown blockquote {
+.compmd-page :is(p, ul, ol, pre, blockquote, table, .compmd-alert) {
   margin: 6px 0;
 }
-.markdown ul,
-.markdown ol {
+.compmd-page :is(ul, ol) {
   padding-left: 20px;
 }
-.markdown li {
+.compmd-page li {
   margin-bottom: 3px;
 }
-.markdown code {
+.compmd-page code {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
   font-size: 12px;
   background: var(--surface2);
   padding: 0 4px;
   border-radius: 4px;
 }
-.markdown pre {
+.compmd-page pre {
   background: var(--surface2);
   padding: 8px 10px;
   border-radius: 6px;
   overflow-x: auto;
 }
-.markdown pre code {
+.compmd-page pre code {
   padding: 0;
   background: none;
 }
-.markdown blockquote {
-  border-left: 3px solid var(--border);
-  padding-left: 10px;
+.compmd-page blockquote {
   color: var(--text-muted);
 }
-.markdown a {
+.compmd-page a {
   color: var(--accent);
+}
+.compmd-page hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 10px 0;
+}
+/* A wide table scrolls inside the text rather than widening the panel */
+.compmd-page table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.compmd-page :is(th, td) {
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+}
+.compmd-page th {
+  background: var(--surface2);
+  font-weight: 600;
+}
+.compmd-page .compmd-task > input {
+  vertical-align: middle;
+}
+.compmd-page .compmd-alert-title {
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+/* What a text shows when CompMD can't render it: as written, line breaks kept (R2) */
+.compmd-plain {
+  white-space: pre-wrap;
+}
+/* A question in a list: one paragraph, inline with its number */
+.compmd-inline,
+.compmd-inline .compmd-page,
+.compmd-inline .compmd-page > p:only-child {
+  display: inline;
+  font-size: inherit;
+  line-height: inherit;
 }
 .about .about-section-title {
   font-size: 13px;
@@ -316,23 +351,65 @@ body {
   text-decoration: underline;
 }
 
-/* T-282: like the task details, the title stays and the releases scroll below it without a scrollbar */
-#whats-new-panel {
-  padding: 18px 20px;
+/* A scrolling dialog (Dialog.svelte's scrollItem: Help, What's new; T-282): the title stays, with a hairline under it,
+   and the content scrolls below it without a scrollbar. Once it has scrolled, the title compacts, as the dashboard's
+   title bar does */
+.detail-panel.scrolling {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  transition: padding-top 0.2s ease;
 }
-.whats-new-scroll {
+.detail-panel.scrolling.scrolled {
+  padding-top: 16px;
+}
+.detail-panel.scrolling > h3 {
+  margin: 0;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+  transition:
+    font-size 0.2s ease,
+    padding 0.2s ease;
+}
+.detail-panel.scrolling.scrolled > h3 {
+  font-size: 16px;
+  padding-bottom: 8px;
+}
+.detail-panel.scrolling > .detail-close {
+  transition: top 0.2s ease;
+}
+.detail-panel.scrolling.scrolled > .detail-close {
+  top: 10px;
+}
+.dialog-scroll {
   flex: 1 1 auto;
 }
-.whats-new .kanban-more.bottom {
+.dialog-scroll .hint-scroll-body {
+  padding-top: 14px;
+}
+.dialog-scroll .kanban-more.bottom {
   border-radius: 0;
+}
+/* Under the newest releases: where the older ones are */
+.whats-new-older {
+  margin: 18px 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.whats-new-older a {
+  color: var(--accent);
+}
+/* What's new keeps its tighter padding, and compacts from it */
+#whats-new-panel {
+  padding: 18px 20px;
+}
+#whats-new-panel.scrolled {
+  padding-top: 10px;
 }
 .whats-new .release + .release {
   margin-top: 18px;
 }
-.whats-new h4 {
+.whats-new .release > h4 {
   font-size: 15px;
   font-weight: 600;
   display: flex;
@@ -344,27 +421,22 @@ body {
   font-weight: 400;
   color: var(--text-muted);
 }
-.whats-new .release-section {
-  margin-top: 8px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-}
-.whats-new ul {
-  margin: 4px 0 0 18px;
+/* A release's notes, rendered by CompMD */
+.whats-new .compmd {
   font-size: 13px;
   line-height: 1.55;
 }
-.whats-new li {
-  margin-bottom: 3px;
+.whats-new .compmd-page ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
-.whats-new code {
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
-  background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
+.whats-new .compmd-page h4 {
+  margin: 8px 0 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.whats-new .compmd-page code {
   white-space: nowrap;
 }
 
@@ -3367,28 +3439,10 @@ svg.graph-minimap.hidden {
 }
 /* Notes, review notes and questions are Markdown (T-219): at the size of the text around them, without the margins
    of a description's paragraphs above the first block and below the last */
-.note-text .markdown,
-.review-note .markdown {
+.note-text .compmd,
+.review-note .compmd {
   font-size: inherit;
   line-height: 1.5;
-}
-.note-text .markdown > :first-child,
-.review-note .markdown > :first-child {
-  margin-top: 0;
-}
-.note-text .markdown > :last-child,
-.review-note .markdown > :last-child {
-  margin-bottom: 0;
-}
-.markdown-inline code {
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 0.92em;
-  background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
-}
-.markdown-inline a {
-  color: var(--accent);
 }
 /* The header's "need you" count (D-3.3) */
 .attention-chip {
