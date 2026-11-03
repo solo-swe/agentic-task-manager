@@ -261,8 +261,14 @@ above, the priority the project's default when a task has none), plus `by` (the 
 ## 4. `GET /__atm/whoami`
 
 ```json
-{ "atm": true, "pid": 41235, "port": 8765, "version": "0.15.0", "build": "3f9a1c0d" }
+{ "atm": true, "pid": 41235, "port": 8765, "version": "0.15.0", "build": "3f9a1c0d", "home": "9c1e0f44a2b7d813" }
 ```
+
+`home` identifies the atm folder (`ATM_HOME`) the server serves: the first 16 hex digits of the SHA-256 of its real
+path, never the path itself (T-390). `atm serve status` and `stop` look at the 20 ports from `--port` (8765 by
+default) for servers of their own folder that `server.json` doesn't name, a server whose record was lost or
+overwritten: `status` reports them (`unrecorded` in `--json`), `stop` stops them. A server of another folder, or one
+too old to give `home`, is never touched.
 
 `version` and `build` are the `atm-dashboard-version` and `atm-dashboard-build` meta tags of the dashboard the server
 holds, read from the very bytes it serves at `/`, so a page loaded from it always has the same `build`. atm compares
@@ -313,9 +319,15 @@ file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
   "version": "0.15.0",
   "build": "3f9a1c0d",
   "plugin_root": "/Users/me/.claude/plugins/cache/solo-swe-plugins/atm/0.15.0",
+  "home": "9c1e0f44a2b7d813",
   "started_at": "2026-10-25T21:51:38Z"
 }
 ```
 
 Written by the server once it listens, and removed when it stops. A record is trusted only if `whoami` on its port
 answers with the same `pid`. Otherwise it is stale and is removed, as today.
+
+T-390: `atm serve` starts a server under `ATM_HOME/server.lock`, held across "is one running?", the start and its
+record, so two at once (two sessions' hooks) start one server and the second reports it. `stop` sends SIGTERM, then
+SIGKILL if the server outlives five seconds; the record is removed only once that server is gone, and only if it is
+still that server's: a running server is never forgotten.

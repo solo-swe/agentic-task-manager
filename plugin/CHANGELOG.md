@@ -37,6 +37,15 @@ The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`doc
 - **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
 
+### Fixed
+- **`atm serve` lost track of running servers** (T-390): `stop` removed the server's record after five seconds even
+  when the server was still running, and two `atm serve` at once (two sessions' hooks) could each start one, the
+  second record replacing the first; the lost servers kept running, unseen by `status` and `stop`. Now `stop` ends a
+  server that outlives the wait (SIGKILL) and drops the record only once it is gone; starting holds a lock
+  (`ATM_HOME/server.lock`), so two starts make one server; and `status` and `stop` find a server of this atm folder
+  that the record doesn't name, on the 20 ports from `--port` (`whoami` and the record now carry `home`, a hash of
+  the folder's path): `status` reports it (`unrecorded` in `--json`), `stop` stops it.
+
 ### Known
 - Math shows as its TeX source: `@compmd/sandbox`'s host mode doesn't typeset it yet (a CompMD fix to come).
 

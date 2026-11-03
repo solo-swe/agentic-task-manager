@@ -161,12 +161,12 @@ def pid_alive(pid):
 WHOAMI = "/__atm/whoami"
 
 
-def whoami(port):
+def whoami(port, timeout=1):
     """Ask the atm server on this port who it is; None if nothing (or not an atm server) answers."""
     import urllib.request
 
     try:
-        with urllib.request.urlopen(f"http://localhost:{port}{WHOAMI}", timeout=1) as response:
+        with urllib.request.urlopen(f"http://localhost:{port}{WHOAMI}", timeout=timeout) as response:
             info = json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError):
         return None

@@ -20,7 +20,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from ..boot.open import open_registry, project_opener
 from ..common.core import PLUGIN_ROOT, WHOAMI, now, now_iso, read_json, to_json, write_json_atomic
-from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, page_tags
+from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, home_id, page_tags
 from ..common.errors import AtmFailure
 from ..lib.archive import project_stamp, task_snapshot
 from ..lib.query import Filters, list_claims, project_summary, search_tasks
@@ -357,6 +357,9 @@ def serve(home, port):
     version, build = page_tags(page[:HEAD_BYTES].decode("utf-8", errors="replace"))
     # The policy names the page's own origin, so there is one per Host the server accepts (localhost, 127.0.0.1)
     page_policies = {}
+    # Which atm folder this server serves, as an ID (common/dashboard.py home_id): `atm serve stop` finds it by this
+    # even if its record was lost (T-390)
+    served_home = home_id(home)
     registry = ServedProjects(home)
     summaries = Summaries()
 
@@ -414,7 +417,14 @@ def serve(home, port):
             elif path.startswith(ASSETS):
                 self.serve_asset(path)
             elif path == WHOAMI:
-                info = {"atm": True, "pid": os.getpid(), "port": port_now, "version": version, "build": build}
+                info = {
+                    "atm": True,
+                    "pid": os.getpid(),
+                    "port": port_now,
+                    "version": version,
+                    "build": build,
+                    "home": served_home,
+                }
                 self.send(200, to_json(info).encode("utf-8"))
             elif path == "/api/projects":
                 body, etag = api_projects(registry, summaries)
@@ -550,6 +560,7 @@ def serve(home, port):
         "version": version,
         "build": build,
         "plugin_root": PLUGIN_ROOT,
+        "home": served_home,
         "started_at": now_iso(),
     }
     write_json_atomic(record_path, record)

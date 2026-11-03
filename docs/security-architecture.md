@@ -402,6 +402,12 @@ used for the agent sandbox, so this written review takes the live run's place:
 - **What task text can do** is still bounded by the renderer (above: T-284, T-285), whatever the guide says CompMD
   can do: a text that follows the guide past what atm allows shows its fallback text, and runs nothing.
 
+**Finding and stopping lost servers (T-390).** `whoami` now also gives `home`, a hash of the server's atm folder path
+(never the path), and `atm serve status` and `stop` ask `whoami` on the 20 ports from `--port`. They act only on a
+server whose `home` is their own folder's, and stop it with signals to its pid on this machine, as `stop` always did;
+a server of another folder, or an older one without `home`, is never stopped. `whoami` has no CORS header, so another
+site's page can't read the hash. No new route, file the dashboard or agents act on, or permission.
+
 **Mermaid diagrams (T-285).** Third-party rendering code (Mermaid, 7 MB) now runs on task text, in CompMD's strict
 sandbox:
 - **Where it runs:** each diagram in an iframe with `sandbox="allow-scripts"` (an opaque origin: no access to the
