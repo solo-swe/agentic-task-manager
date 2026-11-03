@@ -133,7 +133,7 @@ refuses images from elsewhere, and `style-src 'unsafe-inline'` allows CompMD's s
 
 ## 3. Configuring CompMD for untrusted text
 
-Each document is processed alone, as atm's frontmatter (§3b) followed by the task text:
+Each document is processed alone, as the dashboard's frontmatter (§3b) followed by the stored task text:
 
 ```ts
 process({
@@ -165,10 +165,11 @@ and rendered by `@compmd/sandbox`'s view in host mode (§3c), with no trusted co
 
 **Diagnostics** are not shown in the panel (R2a). How agents see them is §3a.
 
-## 3b. The frontmatter atm writes, and the task's data
+## 3b. The frontmatter the dashboard adds, and the task's data
 
-Task text is a document's **body** only. atm writes its frontmatter (decided in review), so the settings are atm's,
-in one place, and agents never write `md:` keys:
+Task text is a document's **body** only, stored as written: nothing is added to `tasks.json`. When the dashboard
+renders a text, it puts one frontmatter in front of it, built in one place (`src/lib/compmd.ts`), the same for
+every text (decided in review). So the settings are atm's, defined once, and agents never write `md:` keys:
 
 ```yaml
 ---
@@ -196,9 +197,10 @@ md:
 - Examples an agent might write: `Waiting on {{md.data.task.waiting_for}}`, a list of dependencies with
   `::: each {in=(md.data.task.dependencies) as=d}`, the commit of the outcome with `{{md.data.task.commit}}`.
 - **Text that starts with a frontmatter of its own** would follow ours and render as a line and a heading. The
-  skills say atm provides the frontmatter (T-286); today's task text is plain Markdown, so nothing existing changes.
-- **One builder:** the frontmatter and request are built by one function (`src/lib/compmd.ts`), which a later checker
-  would share; diagnostics' line numbers are given relative to the task text, without atm's frontmatter lines.
+  skills say the dashboard provides the frontmatter (T-286); today's task text is plain Markdown, so nothing
+  existing changes.
+- **One builder:** the frontmatter and request are built by one function, which a later checker would share;
+  diagnostics' line numbers are given relative to the task text, without the frontmatter's lines.
 
 ## 3c. Mermaid (T-285): the pack in the sandbox, or built into the dashboard
 
@@ -265,7 +267,7 @@ How the guidance is shipped:
   never send agents to fetch it from the web: a fetched text could change under us and is outside text an agent
   would act on (the security document's rule for skills).
 - **The skills say briefly what works in atm's panel,** since atm's settings (§3) refuse part of CompMD: GFM, alerts
-  (`> [!NOTE]`), frontmatter values and CompMD's core components (layout, `if`, `each`, `value`) render; math shows
+  (`> [!NOTE]`), the task's own values (`md.data.task`) and CompMD's core components (layout, `if`, `each`, `value`) render; math shows
   as its TeX source (no math renderer); inputs show but change nothing; imports of packs, data from files or URLs,
   `host:` data and host-language components don't render (they show their fallback text). For more, they point to
   the local `llms.txt` (33 KB, read only when an agent wants more than plain Markdown).
@@ -316,7 +318,8 @@ How the guidance is shipped:
 - **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
   (R1); readers don't see diagnostics (R2a); the CSP's module source is the asset folder only (§2).
 - **Agents and diagnostics:** guidance only for now, from a pinned copy of CompMD's `llms.txt` (§3a, T-286).
-- **atm writes the frontmatter; the task's data is `md.data.task`** (§3b), decided in review.
+- **The dashboard adds one frontmatter when it renders a text** (never stored in `tasks.json`); **the task's data is
+  `md.data.task`** (§3b), decided in review.
 - **The size guardrail** will be raised for this (decided in review): the page grows by the sandbox's host runtime
   and the loader; CompMD, the frames and Mermaid are served beside it.
 - **Mermaid is the `@comp-markdown/mermaid` pack in the strict sandbox** (§3c), decided in review, with its
