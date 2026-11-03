@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 391,
+    "next_id": 392,
     "labels": [
       {
         "id": "architecture",
@@ -20538,6 +20538,40 @@
           "text": "Fixed all three causes, each with a test: `stop` escalates to SIGKILL and drops the record only once the server is gone; starting holds `ATM_HOME/server.lock`; `status`/`stop` find this folder’s unrecorded servers on 20 ports from `--port` via `home` in whoami (a path hash). atm-cli 551 pass.",
           "by": "claude:b7be7288"
         }
+      ]
+    },
+    {
+      "id": "T-391",
+      "name": "Requirement and use-case IDs open the document that defines them",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A task's `requirements` and `use_cases` (`SR-7.6`, `UC-001`) open the document that defines each ID, at its line, in the document viewer of `docs/compmd-viewer-design.md` (requirement **V1d**; it opens files at `#L<n>`).\n\n## To settle first\natm has no map from an ID to the document that defines it. Options: a `meta.documents.requirements` setting naming the documents (or globs) that define IDs, and the server finding the first heading or line in them that starts with the ID; or an index atm builds from those documents. Agree the choice with Hakan before building.\n\n## Change\n- atm-lib: find an ID's document and line among the configured documents, through the same checks as the documents route (inside the project, no symlinks, not ignored).\n- A REST route (or a field of the documents route) answering an ID with `{path, line}`; 404 when no document defines it.\n- The details panel: each requirement and use-case ID becomes a link that opens the viewer at that line; an ID nothing defines stays text.\n- `docs/security-architecture.md` for the route, and Help.\n\n## Tests\natm-lib unit tests and `serve.test.mjs` for the lookup and its checks; a component test for the links; an e2e test opening an ID at its line.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/documents.py",
+        "atm-cli/atm/api/server.py",
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/src/lib/documents.ts",
+        "docs/security-architecture.md",
+        "docs/help.md"
+      ],
+      "created_at": "2026-11-03T16:33:31Z",
+      "updated_at": "2026-11-03T16:33:31Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard",
+        "cli",
+        "docs"
+      ],
+      "related": [
+        "T-336"
       ]
     }
   ]
