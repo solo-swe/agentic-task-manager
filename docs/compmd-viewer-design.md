@@ -12,15 +12,19 @@ backlog tasks of §9.
 ## 1. Requirements
 
 - **V1. What opens.** Any file of the task's project, shown by what it is (§4a): a Markdown document rendered; source
-  code as highlighted code; an image as an image; other text as text; a binary file says it is binary.
+  code as code (plain monospace until CompMD ships its highlighter); an image as an image; other text as text; a
+  binary file says it is binary.
   - **V1a.** A relative link in task text (`[the design](docs/x.md)`, `docs/x.md#3-routes`, `src/app.ts#L40`),
     resolved from the **project root** (task text has no folder of its own).
   - **V1b.** A task's `files` entries: the Files list shows each as a link.
   - **V1c.** A relative link inside an open document, resolved from **that document's folder**, as Markdown viewers
     and GitHub do (`../v4/data-model.md` from `docs/x.md`).
-  - **V1d.** A `requirements` or `use_cases` ID (`SR-7.6`, `UC-001`) opens the document that defines it, at its line.
-    A good use case, kept as a requirement; built by its own backlog task (T-391), on top of this viewer and its
-    `#L<n>` positions, since it needs a map from IDs to documents that atm doesn't have yet.
+  - **V1d.** A reference to a requirement, a use case or any place in a document opens the document at that text.
+    Decided while planning the sprint: no ID index. References are relative links with a
+    [text fragment](https://web.dev/articles/text-fragments#text_fragments)
+    (`[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`), in task text and as `requirements` /
+    `use_cases` entries; the viewer opens the first match and marks it. The skills teach agents to write them, and one
+    sweep converts the open tasks' references (T-391, T-399).
 - **V2. Where.** The document opens in a viewer window over the details panel, the task's panel still under it (§2):
   movable by its title bar, resizable from a corner handle, scrolling with the dashboard's styled scrollbar. Back
   (the button, Escape, the browser's Back) returns to the task, or to the previous document. The URL says what is
@@ -54,6 +58,8 @@ Stacked over the details panel (option A of the first draft; B, a full page, and
 - **Where it was** (position and size) is kept for the page's next document, in the dashboard's local preferences.
 - **Scrollbar:** thin and themed, like the rest of the dashboard's scrolling panels (light and dark).
 - On a narrow window it fills the window, without moving or resizing.
+- **Title bar** (decided while planning): the title, the path, **Copy path** (with `#L<n>` for a selected line) and
+  **Open on GitHub** (the file at HEAD in `meta.repository`'s web view, shown only for a file git tracks).
 
 ## 3. Resolving a reference
 
@@ -182,4 +188,5 @@ dashboard: only to this user on this machine, who can read the file anyway, but 
 4. T-395: Links: relative links in task text and documents, `files` entries (§3); e2e tests.
 5. T-396: Help and the skills: tell agents that relative links to files open in the dashboard, with `#L<n>` (a line in
    `/atm:create-tasks`).
-6. Already in the backlog: T-391, requirement and use-case IDs open their document (V1d).
+6. T-391: text-fragment links open the document at the text, and the skills say how to write them (V1d); T-399: one
+   sweep of the open tasks' references.

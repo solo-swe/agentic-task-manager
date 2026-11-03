@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 399,
+    "next_id": 400,
     "labels": [
       {
         "id": "architecture",
@@ -20629,35 +20629,40 @@
     },
     {
       "id": "T-391",
-      "name": "Requirement and use-case IDs open the document that defines them",
+      "name": "Text-fragment links: references open the document at the text, and agents write them that way",
       "type": "feature",
       "priority": "P2",
       "labels": [
         "compmd"
       ],
-      "description": "A task's `requirements` and `use_cases` (`SR-7.6`, `UC-001`) open the document that defines each ID, at its line, in the document viewer of `docs/compmd-viewer-design.md` (requirement **V1d**; it opens files at `#L<n>`).\n\n## To settle first\natm has no map from an ID to the document that defines it. Options: a `meta.documents.requirements` setting naming the documents (or globs) that define IDs, and the server finding the first heading or line in them that starts with the ID; or an index atm builds from those documents. Agree the choice with Hakan before building.\n\n## Change\n- atm-lib: find an ID's document and line among the configured documents, through the same checks as the documents route (inside the project, no symlinks, not ignored).\n- A REST route (or a field of the documents route) answering an ID with `{path, line}`; 404 when no document defines it.\n- The details panel: each requirement and use-case ID becomes a link that opens the viewer at that line; an ID nothing defines stays text.\n- `docs/security-architecture.md` for the route, and Help.\n\n## Tests\natm-lib unit tests and `serve.test.mjs` for the lookup and its checks; a component test for the links; an e2e test opening an ID at its line.",
+      "description": "References to a requirement, a use case or any place in a document are **links with a text fragment** (decided with Hakan while planning; no ID index): `[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`. The viewer opens the document at the first match and highlights it; GitHub and browsers understand the same links.\n\n## Text fragments\nThe [text fragment](https://web.dev/articles/text-fragments#text_fragments) syntax: `#:~:text=[prefix-,]textStart[,textEnd][,-suffix]`, each part percent-encoded. `-`, `,` and `&` are part of the syntax, so in the text they are `%2D`, `%2C` and `%26` (an ID `SR-2.1` is `SR%2D2.1`). `textStart,textEnd` matches a range; `prefix-,` and `,-suffix` only narrow which match is meant. Several `text=` directives may follow, joined by `&`.\n\n## Change\n- `dashboard/src/lib/documents.ts`: parse a link's `#:~:text=…` (alone, or after a `#heading` fragment, which then gives way to it): decode the parts, find the first match in the rendered document's text (case-insensitive, across inline elements, whitespace collapsed; `textEnd` the end of the range; prefix and suffix checked around it), scroll to it and mark it (a highlight in the theme's colours, gone at the next click). No match: open at the top, with a short note that the text wasn't found. Unit tests for the parser and the matcher.\n- The details panel: each `requirements` and `use_cases` entry renders inline with CompMD, so an entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`) opens the viewer; a bare ID stays text, as now.\n- **Skills** (`plugin/skills/create-tasks/SKILL.md`, and the lines on task text in `do-task`, `loop-tasks` and `plugin/CLAUDE.md`): from now on, a reference to a requirement, a use case or a place in a document is a relative link from the project root with a text fragment, and `requirements` / `use_cases` entries are such links. Say what a text fragment is, how its parts work, and the encoding of `-`, `,` and `&`, with two examples (an ID; a phrase with a prefix). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).\n- `docs/help.md`: references open the document at the text.\n\n## Tests\nUnit tests (parsing, encoding, matching with prefix, suffix and ranges); a component test for requirement links in the details panel; e2e: a text-fragment link in a description and in `requirements` opens the viewer at the match and marks it; one that matches nothing opens at the top with the note.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-393"
+        "T-395"
       ],
       "files": [
-        "atm-cli/atm/lib/documents.py",
-        "atm-cli/atm/api/server.py",
         "dashboard/src/components/DetailPanel.svelte",
         "dashboard/src/lib/documents.ts",
         "docs/security-architecture.md",
-        "docs/help.md"
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "dashboard/tests/unit/documents.test.ts",
+        "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
         "dashboard",
         "cli",
-        "docs"
+        "docs",
+        "skills"
       ],
       "related": [
         "T-336"
@@ -20668,7 +20673,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "batch"
     },
     {
       "id": "T-392",
@@ -20678,7 +20684,7 @@
       "labels": [
         "compmd"
       ],
-      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project.\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Tests\n`tests/lib/` for the kinds, the wrapping and `line_offset`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.",
+      "description": "The server side of the document viewer, as `docs/compmd-viewer-design.md` §4 and §7 say.\n\n## Change\n- atm-lib `read_file(project, path)`: what a file is (§4a: `markdown`, `code` with its language from an extension map, `image`, `binary`, `text`), its `text` as it is, the CompMD `document` to render (code and text in a fence longer than any backtick run in them), `line_offset` (1 for a fence, 0 for Markdown), `lines`, `bytes`, `modified_at`.\n- For the viewer's *Open on GitHub* (T-393): `tracked` (git tracks the file) and `commit` (the HEAD commit's SHA), both through the vcs layer; `null` outside a git repository.\n- The checks of §4b: a relative, normalized path (no `..`, `.`, empty or hidden segment, no NUL or backslash, at most 512 characters); no symlink anywhere from the project root; not a file git ignores; not a key file (`*.pem`, `*.key`, `*.p12`, `*.pfx`, `id_rsa*`, `id_ed25519*`, `*.keystore`); a regular file of at most 1 MB (5 MB for images); a registered project. A project that isn't a git repository: no ignore check (the other checks hold).\n- REST: `GET api/v1/projects/<id>/documents?path=…` (JSON) and `GET api/v1/projects/<id>/files?path=…` (an image's bytes only, with its `Content-Type`, `nosniff`, CORP same-origin and `Content-Security-Policy: sandbox`), both with an ETag of size and mtime (304 when unchanged).\n- `docs/security-architecture.md`: I11 (the routes and their checks), I12 (what of a project the server reads now), and a §3.3 entry.\n\n## Not here\nSyntax highlighting: code is plain monospace until CompMD ships its highlighter (Hakan).\n\n## Tests\n`tests/lib/` for the kinds, the wrapping, `line_offset`, `tracked` and `commit`; `serve.test.mjs` for every check (a hidden file, an ignored one, a key file, a symlinked folder, `..`, too big), the ETag and the image headers.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20691,7 +20697,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20708,7 +20714,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "batch"
     },
     {
       "id": "T-393",
@@ -20718,7 +20725,7 @@
       "labels": [
         "compmd"
       ],
-      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6.\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Its title is the document's first heading, else its path. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash); e2e: open, move, resize, Back, Reload keeps it, a missing file, a refused file.",
+      "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6. **Reviewed live with Hakan on the dev server** before the tasks that build on it (review mode `blocker`).\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- **The title bar:** the document's first heading (else its file name), its path under it, and two actions (decided with Hakan):\n  - **Copy path**: copies the path from the project root, with `#L<n>` (or `#L<n>-L<m>`) when a line or range is selected, for pasting to an agent; says \"Copied\" for a moment.\n  - **Open on GitHub**: the file in the repository's web view (`meta.repository`, the same address rules as commit links), at the HEAD commit the documents route gives (`commit`), with the selected line; in a new tab, without access to the page. Shown only when the project has a repository address and git tracks the file (`tracked`).\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash, the GitHub address); e2e: open, move, resize, Back, Reload keeps it, Copy path (with a line), Open on GitHub (shown or not), a missing file, a refused file.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20734,7 +20741,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20749,7 +20756,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "blocker"
     },
     {
       "id": "T-394",
@@ -20759,7 +20767,7 @@
       "labels": [
         "compmd"
       ],
-      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.",
+      "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left: a number per line of `text` for `code` and `text` (their lines never wrap on screen: the block scrolls sideways), each top-level block's start line for `markdown` (from CompMD's node positions less `line_offset`, aligned with the block's rendered top, measured after `rendered` and on resize), none for `image` and `binary`. `#L<n>` scrolls to the line; `#L<n>-L<m>` highlights the range.\n- **Refreshing in place:** before re-rendering, note the top block's source line and its offset in the window; scroll it back after. A 304 changes nothing.\n- **Images:** a relative image URL becomes the files route's URL for the resolved path; `data:` stays; any other image shows its alt text.\n\n## Not here\nSyntax highlighting: code stays plain monospace; CompMD will ship a highlighter (Hakan). Add no highlighter of our own.\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20773,7 +20781,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20788,7 +20796,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "batch"
     },
     {
       "id": "T-395",
@@ -20813,7 +20822,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20828,7 +20837,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "batch"
     },
     {
       "id": "T-396",
@@ -20851,7 +20861,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:13:58Z",
+      "updated_at": "2026-11-03T18:39:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20867,7 +20877,8 @@
           "from": "2026-11-03T18:13:58Z"
         }
       ],
-      "sprint": "Document Viewer"
+      "sprint": "Document Viewer",
+      "review": "batch"
     },
     {
       "id": "T-397",
@@ -20971,6 +20982,40 @@
         "docs"
       ],
       "with": "user"
+    },
+    {
+      "id": "T-399",
+      "name": "Sweep the open tasks: references become relative and text-fragment links",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "compmd"
+      ],
+      "description": "One pass over the tasks that aren't finished (to do, blocked or in review, in any sprint or the backlog: `atm list` with each status), so their references open in the document viewer, written as T-391 tells agents to.\n\n## Change\nFor each such task, with `atm edit` (never by editing `tasks.json`):\n- a document or file named in its description as a path (`docs/x.md`, `` `src/app.ts` ``) becomes a relative link from the project root (`[docs/x.md](docs/x.md)`), with a heading fragment (`#3-routes`) or a text fragment (`#:~:text=…`) when the text points at a place in it;\n- a requirement or use-case ID mentioned in the text (`SR-2.1`, `(D-1.3)`) becomes a link to the document that defines it, at the definition, with a text fragment (`[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`): find the defining document by searching `docs/` for the line where the ID comes first (a table row's first cell, a heading); when none is found, leave it as it is;\n- `requirements` and `use_cases` entries the same way.\n\nChange only references: no other wording, no status, no other field. Done tasks are history and stay as they are. Skip this task's own text.\n\n## Check\nOpen a few swept tasks on the dev server: their links open the viewer at the right place. List the tasks changed in the outcome note.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-391"
+      ],
+      "files": [
+        ".agentic-task-manager/tasks.json"
+      ],
+      "created_at": "2026-11-03T18:39:17Z",
+      "updated_at": "2026-11-03T18:39:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:39:17Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "related": [
+        "T-391"
+      ]
     }
   ]
 }
