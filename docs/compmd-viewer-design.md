@@ -90,11 +90,19 @@ dashboard's 5-second poll and costs a 304 when unchanged.
 | `text` | anything else | the file in a plain fence |
 
 ```json
-{ "path": "src/app.ts", "kind": "code", "language": "ts", "document": "```ts\n…\n```\n", "lines": 120,
-  "bytes": 3214, "modified_at": "2026-11-03T10:00:00Z" }
+{ "path": "src/app.ts", "kind": "code", "language": "ts", "text": "…", "document": "```ts\n…\n```\n",
+  "line_offset": 1, "lines": 120, "bytes": 3214, "modified_at": "2026-11-03T10:00:00Z" }
 ```
 
-`kind` tells the viewer how to number lines (V2a): per line for `code` and `text`, per block for `markdown`.
+**Line numbers stay the file's, whatever the wrapping** (V2a). The wrapping only ever adds whole lines before the
+file's first line and after its last, never inside it: a fence's opening line for `code` and `text` (`line_offset`
+1), nothing for `markdown` (0). So:
+- `text` is the file as it is; the gutter counts its lines (`lines`), never the document's.
+- A position in the `document` (CompMD's node positions, a diagnostic) is the file's line `line − line_offset`.
+- `kind` says how the gutter numbers: a number per line for `code` and `text`, the start line of each block for
+  `markdown`, none for `image` and `binary`.
+- Code and text lines never wrap on screen (the block scrolls sideways), so line *n* of the gutter sits beside line
+  *n* of the code at the same line height; a test checks that the gutter and the code are as tall as each other.
 
 ### 4b. Checks
 
@@ -128,8 +136,8 @@ layered architecture's rule that the server reads nothing itself.
   web links as in task text.
 - **Line numbers (V2a):** CompMD's tree keeps each node's source position. For `markdown`, the gutter shows each
   top-level block's start line, aligned with the block's rendered top (measured after `rendered`, again when the
-  window resizes); for `code` and `text`, a number per line beside the code block. Lines count from the file's first
-  line (a document's own frontmatter included).
+  window resizes); for `code` and `text`, a number per line of `text` beside the code block. Lines count from the
+  file's first line (a document's own frontmatter included), with the server's `line_offset` taken off (§4a).
 - **Refreshing in place (V2b):** before re-rendering, the viewer notes the top block's source line and its offset
   in the window; CompMD's renderer updates the page in place, and the viewer scrolls that line back to the same
   offset. A 304 changes nothing at all.
