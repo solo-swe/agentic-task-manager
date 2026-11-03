@@ -101,7 +101,7 @@ flowchart TD
 | **Generated TS types** | The types of the API's responses, generated from common's schema; the Dashboard imports them | Is edited by hand |
 | **REST API** | Maps HTTP requests to atm-lib calls and results to JSON; the HTTP concerns (Host check, ETags, sizes, caching) | Holds logic; touches storage |
 | **CLI** | Maps arguments to atm-lib calls and results to text or `--json`; exit codes | Holds logic; touches storage |
-| **boot** | Opens a project: picks the store and the vcs; works out the actor; reaches what only the JSON-in-git store has (paths, migrations, the merge driver, the registry by folder) | Holds business rules |
+| **boot** | Opens a project and the registry (`boot/open.py`): picks the store and the vcs; works out the actor (`boot/identity.py`); reaches what only the JSON-in-git store has (`boot/jsongit.py`: paths, migrations, the merge driver, registering by folder) | Holds business rules |
 | **atm-lib** | Every business action and query (§5) | Knows how or where data is kept; prints; reads `argparse` objects |
 | **db** | One interface for data access (§3); its implementations know how and where data is kept, and keep concurrent writers apart | Business rules |
 | **vcs** | One interface to the code's version control (§2) | Business rules; storing tasks |
@@ -266,7 +266,9 @@ task's); every task it hands out fits the task schema. Writes are always strict,
 Things only one store has stay out of the interface and are reached through that store directly by the code that
 needs them: the JSON-in-git store's merge driver (`atm merge-driver`, which git runs), its migrations of old layouts
 (`atm migrate`), its file locations (`atm paths`) and its worktrees' copies (`worktrees.json`). A cloud store has no
-such things; atm-lib never calls them.
+such things; atm-lib never calls them. As built, the commands about them reach them through `boot/jsongit.py`, since
+the CLI may import only common, atm-lib and boot; the worktrees' copies went into the interface after all
+(`working_copies`, `copy_tasks`, §11.2).
 
 ### 3.3 Do we need transactions?
 
@@ -724,6 +726,11 @@ are unchanged (the atm-cli suite, at every step).
 - **Decision:** split boot: `boot/open.py` keeps what every store has (opening a project or the registry, the actor);
   `boot/jsongit.py` takes what only the JSON-in-git store has, and the commands about it (`cli/store.py`) import
   only that. `lib/projects.py` stays, for the rules about projects a second registry will need.
+- **Settled (T-380):** `boot/open.py` has `open_project`, `open_registry` and `project_opener(folder)` (atm serve's:
+  opens a project afresh per request, finding its data once); opening from the store's paths is internal to boot.
+  `boot/jsongit.py` has `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test` and
+  registering by folder (`register_project`, `dashboard_id`, `hook_project`). `cli/store.py` imports only it; the
+  REST API only `boot/open.py`.
 
 ### 11.3 The Store interface is the transitional one (T-381)
 

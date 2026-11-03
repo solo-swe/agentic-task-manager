@@ -3,7 +3,8 @@
 
 import os
 
-from ..boot.open import open_project, register_project, set_up_store
+from ..boot.jsongit import register_project, set_up_store
+from ..boot.open import open_project
 from ..common.core import out, read_json, to_json
 from ..common.errors import Invalid
 from ..lib.settings import (

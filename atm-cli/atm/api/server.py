@@ -18,7 +18,7 @@ import sys
 import threading
 from urllib.parse import parse_qs, urlsplit
 
-from ..boot.open import open_registry, project_at, task_paths
+from ..boot.open import open_registry, project_opener
 from ..common.core import PLUGIN_ROOT, WHOAMI, now, now_iso, read_json, to_json, write_json_atomic
 from ..common.dashboard import HEAD_BYTES, SERVER_RECORD, TEMPLATE, page_tags
 from ..common.errors import AtmFailure
@@ -118,16 +118,16 @@ class Summaries:
     when its task data or claims changed, or the day did (the completions count by day)."""
 
     def __init__(self):
-        self.paths = {}  # project folder -> where its data is (boot's task_paths): finding it runs git
+        self.openers = {}  # project folder -> boot's opener for it (it finds where the data is once: that runs git)
         self.cache = {}  # project folder -> (stamp, summary or None)
 
     def project(self, entry, tolerant=False):
         """The project, opened afresh for each request: atm-lib reads one snapshot of its data per call. `tolerant`
         reads a malformed task file as far as it can be read, for showing it (T-377). A task folder atm refuses (a
         symlink, docs/security-review.md F7, F8) raises AtmFailure."""
-        if entry["path"] not in self.paths:
-            self.paths[entry["path"]] = task_paths(entry["path"])
-        return project_at(self.paths[entry["path"]], tolerant=tolerant)
+        if entry["path"] not in self.openers:
+            self.openers[entry["path"]] = project_opener(entry["path"])
+        return self.openers[entry["path"]](tolerant=tolerant)
 
     def data_stamp(self, entry):
         """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""

@@ -1,10 +1,11 @@
-"""The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2): `atm paths`, `migrate`,
-`merge-driver` and the lock test. They reach the store through boot, the one place that knows it."""
+"""The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2, §11.2): `atm paths`,
+`migrate`, `merge-driver` and the lock test. They exist for this store (its files, its git merge driver, its lock), and
+reach it only through `boot/jsongit.py`: a store that isn't files in git has none of them."""
 
 import os
 import sys
 
-from ..boot.open import hold_lock_for_test, merge_versions, migrate_folder, task_paths
+from ..boot.jsongit import hold_lock_for_test, merge_versions, migrate_folder, task_paths
 from ..common.core import AtmExit, out, to_json
 
 

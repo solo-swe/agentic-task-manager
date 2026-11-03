@@ -10,7 +10,8 @@ import sys
 import time
 from datetime import datetime, timezone
 
-from ..boot.open import dashboard_id, migrate_folder, project_at, task_paths
+from ..boot.jsongit import dashboard_id, migrate_folder
+from ..boot.open import open_project
 from ..common.core import (
     PLUGIN_ROOT,
     atm_home,
@@ -89,7 +90,7 @@ def serve_start(cwd, port, overview):
                 out(line)
         if not migration["tasks_exists"]:
             raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
-        project, shown = dashboard_id(project_at(task_paths(cwd)))
+        project, shown = dashboard_id(open_project(cwd))
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
             project = None

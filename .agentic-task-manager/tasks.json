@@ -19588,7 +19588,7 @@
       "description": "`docs/layered-architecture.md` §11.1.\n\n## Change\n- `plugin/scripts/atm` runs the CLI; a new internal launcher `plugin/scripts/atm-serve` runs the REST API's server (one dispatch at the bottom of the one built `atm.py`, e.g. a `--server` entry).\n- The CLI manages the server as a process: `atm serve start|stop|status` spawn `atm-serve`, signal it and read its record; the restart after a plugin update spawns it too.\n- The cheap refresh check every command runs stays in-process: the server record's format and the dashboard's version tags (`api/dashboard.py`) move into common.\n- `app/` and `cli/main.py`'s `Serving` go; the layer rule drops `app`. The CLI never imports `api`.\n- `atm serve` and every skill, hook and permission stay exactly as they are (no new command for users or agents).\n- Update §1's diagram and table, §8's layout, §11.1 (settled), `CLAUDE.md`, `docs/v4/atm-cli.md`.\n\n## Tests\n- The serve tests pass unchanged; a build test that the CLI may not import the API stays.\n- `npm run test:scripts`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/app/main.py",
@@ -19604,7 +19604,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:24:09Z",
+      "updated_at": "2026-11-03T00:34:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19620,7 +19620,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T00:24:09Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "c6027f5bce74c60bb8c4de114bed3653ead11a3a",
+      "completed_at": "2026-11-03T00:34:38Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T00:34:38Z",
+          "kind": "review",
+          "text": "The `app` layer is gone: the CLI (`plugin/scripts/atm`) and the server (`plugin/scripts/atm-serve`, `atm.py --server`) are two processes; `atm serve` lives in `cli/serve.py`, the server process in `api/server.py` (`serve_main`); shared tags and record names in `common/dashboard.py`; the build writes the one entry and checks layers before order. 541 tests pass; users see no change.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-380",
@@ -19633,7 +19645,7 @@
       "description": "`docs/layered-architecture.md` §11.2.\n\n## Change\n- `boot/open.py` keeps what every store has: opening a project, opening the registry; the actor stays in `boot/identity.py`.\n- A new `boot/jsongit.py` takes what only the JSON-in-git store has: `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test`, and registering by folder (`register_project`, `dashboard_id`, `hook_project`).\n- `cli/store.py` (paths, migrate, merge-driver, the lock test) imports only `boot/jsongit.py`; say in its docstring that these commands exist for the JSON-in-git store.\n- `lib/projects.py` stays (the rules about projects a second registry will need).\n- Update §1, §3.2, §11.2 (settled).\n\n## Tests\n- `npm run test:scripts` passes unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/boot/open.py",
@@ -19645,7 +19657,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:46Z",
+      "updated_at": "2026-11-03T00:34:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19659,7 +19671,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T00:34:39Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-381",

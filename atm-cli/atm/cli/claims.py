@@ -6,7 +6,8 @@ import subprocess
 import sys
 
 from ..boot.identity import agent_identity, session_identity
-from ..boot.open import hook_project, open_project
+from ..boot.jsongit import hook_project
+from ..boot.open import open_project
 from ..common.errors import AtmFailure, Invalid
 from ..common.core import AtmExit, format_duration, now, out, parse_iso, to_json
 from ..lib.claims import live_claims, next_task_for, renew_due_claims, renew_lease, selection

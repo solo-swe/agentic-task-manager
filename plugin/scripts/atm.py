@@ -6943,20 +6943,33 @@ def agent_identity(agent=None):
 
 
 # ==== boot/open.py ====
-# Opening a project: its task files (the JSON-in-git store) and git; and the user's registry of projects. Boot is the
-# one place that knows which store and which version control atm runs on, so it is also where the commands that are
-# about the JSON-in-git store itself (`atm paths`, the lock test, the hook's registering) reach it
-# (docs/layered-architecture.md §3.2).
+# Opening a project, and the user's registry of projects: what every store has (docs/layered-architecture.md §1,
+# §11.2). Boot is the one place that knows which store and which version control atm runs on: today the JSON-in-git
+# store and git. What only the JSON-in-git store has (its paths, migrations, merge driver, registering by folder) is
+# `boot/jsongit.py`'s.
 
 def open_project(cwd, actor=None, tolerant=False):
     """The project at or above `cwd`. `tolerant`: read a malformed task file as far as it can be read (T-377)."""
-    return project_at(find_paths(cwd), actor, tolerant)
+    return _project_at(find_paths(cwd), actor, tolerant)
 
 
-def project_at(paths, actor=None, tolerant=False):
-    """The project whose task files `paths` locates: atm serve finds them once per project (`task_paths`, which runs
-    git) and opens the project afresh for each request. The task folder's symlink checks run each time, so a file
-    linked after the paths were found is refused too (docs/security-review.md F7, F8)."""
+def project_opener(folder):
+    """A way to open the project at `folder` again and again, cheaply: `opener(actor=None, tolerant=False)` gives the
+    project afresh each time (atm serve, one snapshot per request), finding where its data is only once (that runs
+    git). Its folder's symlink checks run on every open (docs/security-review.md F7, F8)."""
+    found = {}
+
+    def opener(actor=None, tolerant=False):
+        if "paths" not in found:
+            found["paths"] = find_paths(folder)
+        return _project_at(found["paths"], actor, tolerant)
+
+    return opener
+
+
+def _project_at(paths, actor=None, tolerant=False):
+    """The project whose task files `paths` locates. The task folder's symlink checks run each time, so a file linked
+    after the paths were found is refused too."""
     check_task_folder(paths["root"], paths["dir"])
     return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
 
@@ -6966,8 +6979,21 @@ def open_registry(home=None):
     return FileRegistry(home)
 
 
+# ==== boot/jsongit.py ====
+# What only the JSON-in-git store has, for the commands about it (docs/layered-architecture.md §3.2, §11.2): where a
+# project's task files are (`atm paths`), its migrations (`atm migrate`, and `atm serve` before showing a project), its
+# merge driver (`atm merge-driver`, `atm init`), its lock (the lock test), and registering a project on the dashboard by
+# its folder. A store that isn't files in git has none of these: the commands that use them (`cli/store.py`, `atm
+# init`'s setup) are this store's. What every store has is `boot/open.py`'s.
+
+def task_paths(cwd):
+    """`atm paths`: where the project's task files are (the JSON-in-git store's own locations)."""
+    return find_paths(cwd)
+
+
 def register_project(project, wait=True):
-    """List the project on the dashboard (every command that sets a project up does). Returns what the registry did."""
+    """List the project on the dashboard, by its folder (every command that sets a project up does). Returns what the
+    registry did."""
     return register(project.store.paths, wait)
 
 
@@ -7004,11 +7030,6 @@ def merge_versions(base, ours, theirs):
     return merge_files(base, ours, theirs)
 
 
-def task_paths(cwd):
-    """`atm paths`: where the project's task files are (the JSON-in-git store's own locations)."""
-    return find_paths(cwd)
-
-
 def hook_project(cwd, actor):
     """The project the plugin's hook (`heartbeat --auto`) works on in `cwd`, after listing it on the dashboard (one
     read of the registry when it is listed already); None when there are no task files there."""
@@ -7019,7 +7040,7 @@ def hook_project(cwd, actor):
         register_if_needed(paths)
     except Exception:  # noqa: BLE001 - the hook must never fail on the registry
         pass
-    return project_at(paths, actor)
+    return _project_at(paths, actor)  # the paths found once: the hook runs after every tool call
 
 
 def hold_lock_for_test(cwd, seconds):
@@ -8078,8 +8099,9 @@ def cmd_logo(args):
 
 
 # ==== cli/store.py ====
-# The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2): `atm paths`, `migrate`,
-# `merge-driver` and the lock test. They reach the store through boot, the one place that knows it.
+# The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2, §11.2): `atm paths`,
+# `migrate`, `merge-driver` and the lock test. They exist for this store (its files, its git merge driver, its lock), and
+# reach it only through `boot/jsongit.py`: a store that isn't files in git has none of them.
 
 def cmd_migrate(args):
     migration = migrate_folder(os.getcwd())
@@ -8184,7 +8206,7 @@ def serve_start(cwd, port, overview):
                 out(line)
         if not migration["tasks_exists"]:
             raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
-        project, shown = dashboard_id(project_at(task_paths(cwd)))
+        project, shown = dashboard_id(open_project(cwd))
         if not shown:
             out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
             project = None
@@ -8999,16 +9021,16 @@ class Summaries:
     when its task data or claims changed, or the day did (the completions count by day)."""
 
     def __init__(self):
-        self.paths = {}  # project folder -> where its data is (boot's task_paths): finding it runs git
+        self.openers = {}  # project folder -> boot's opener for it (it finds where the data is once: that runs git)
         self.cache = {}  # project folder -> (stamp, summary or None)
 
     def project(self, entry, tolerant=False):
         """The project, opened afresh for each request: atm-lib reads one snapshot of its data per call. `tolerant`
         reads a malformed task file as far as it can be read, for showing it (T-377). A task folder atm refuses (a
         symlink, docs/security-review.md F7, F8) raises AtmFailure."""
-        if entry["path"] not in self.paths:
-            self.paths[entry["path"]] = task_paths(entry["path"])
-        return project_at(self.paths[entry["path"]], tolerant=tolerant)
+        if entry["path"] not in self.openers:
+            self.openers[entry["path"]] = project_opener(entry["path"])
+        return self.openers[entry["path"]](tolerant=tolerant)
 
     def data_stamp(self, entry):
         """The project's store stamp ({tasks, archive, claims, head}), or None when the project is missing or refused."""

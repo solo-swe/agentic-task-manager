@@ -77,6 +77,7 @@ MODULES = [
     "lib.worktrees",
     "boot.identity",
     "boot.open",
+    "boot.jsongit",
     "cli.render",
     "cli.query",
     "cli.status",
