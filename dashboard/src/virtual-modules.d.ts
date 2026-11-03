@@ -12,6 +12,9 @@ declare module 'virtual:atm-help' {
 declare module 'virtual:atm-compmd' {
   /** The CompMD version the build ships in plugin/assets/compmd/<version>/ */
   export const version: string;
+  /** CompMD's licence and site, for About */
+  export const license: string;
+  export const homepage: string;
 }
 
 declare module 'virtual:atm-plugin-info' {

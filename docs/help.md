@@ -96,16 +96,25 @@ Click a task for everything about it: its description, what it depends on and wh
   your answers, and failures;
 - **Commit** — the commit that holds the task's work.
 
-Descriptions, notes and questions are written in CompMD, Markdown with components, and render as:
+Descriptions, notes and questions are written in [CompMD](https://compmd.hakanserce.com/), Markdown with components,
+and render as (this Help and What's new render with CompMD too):
 
 - **Markdown and GFM** — headings, lists (nested too), tables, task lists, code, quotes, alerts, footnotes and links;
-- **Diagrams** — a `mermaid` code block draws a diagram, in light or dark with the dashboard, in a sandboxed frame;
+- **Diagrams** — a `mermaid` code block draws a diagram with [Mermaid](https://mermaid.js.org/), in light or dark
+  with the dashboard, in a sandboxed frame;
 - **The task's own values** — `{{md.data.task.status}}` shows the task's status as it is now;
 - **As written** — math, for now, and anything the dashboard won't run: scripts, raw HTML, images from elsewhere.
 
 A diagram is a fenced code block whose language is `mermaid`, holding the diagram's source, such as:
 
 ```
+flowchart LR
+  todo[To do] --> active[In progress] --> done[Done]
+```
+
+In a `mermaid` fence, it draws:
+
+```mermaid {alt="To do, then In progress, then Done"}
 flowchart LR
   todo[To do] --> active[In progress] --> done[Done]
 ```

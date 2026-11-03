@@ -16,7 +16,13 @@ export function compmdVersion(): string {
   return JSON.parse(readFileSync(PROCESSOR, 'utf8')).version;
 }
 
-/** `import { version } from 'virtual:atm-compmd'`, inlined in the build */
+/** What About says of CompMD, which renders the dashboard's Markdown: from its processor's package.json */
+export function compmdAbout(): { license: string; homepage: string } {
+  const { license, homepage } = JSON.parse(readFileSync(PROCESSOR, 'utf8'));
+  return { license, homepage };
+}
+
+/** `import { version, license, homepage } from 'virtual:atm-compmd'`, inlined in the build */
 export function compmdModule(): Plugin {
   return {
     name: 'atm-compmd',
@@ -24,7 +30,12 @@ export function compmdModule(): Plugin {
     load(id) {
       if (id !== RESOLVED_ID) return;
       this.addWatchFile(PROCESSOR);
-      return `export const version = ${JSON.stringify(compmdVersion())};\n`;
+      const { license, homepage } = compmdAbout();
+      return (
+        `export const version = ${JSON.stringify(compmdVersion())};\n` +
+        `export const license = ${JSON.stringify(license)};\n` +
+        `export const homepage = ${JSON.stringify(homepage)};\n`
+      );
     },
   };
 }

@@ -37,7 +37,9 @@ The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`doc
 - **One Markdown renderer:** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too,
   loaded the first time one of them opens; the dashboard's own Markdown parser (`src/lib/markdown.ts`,
   `Markdown.svelte`) is gone. Tooltips and card excerpts show text without its marks (`src/lib/plain-text.ts`). The
-  single file is 9 kB smaller.
+  single file is 9 kB smaller. About names what renders Markdown (*Rendering*: CompMD, with its version, licence and
+  site, read from the installed package at build time), and Help links CompMD's and Mermaid's sites where it
+  describes task text.
 - **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
 

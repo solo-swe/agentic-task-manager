@@ -82,7 +82,7 @@ describe('HelpDialog', () => {
 });
 
 describe('docs/help.md', () => {
-  it('covers the topics D-1.3 asks for; links within the page go to headings that exist, the one off it to the repository', async () => {
+  it('covers the topics D-1.3 asks for; links within the page go to headings that exist, off it to the repository, CompMD and Mermaid', async () => {
     render(HelpDialog);
     const dialog = await openHelp();
     const slugs = [...dialog.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => slug(h.textContent ?? ''));
@@ -106,7 +106,9 @@ describe('docs/help.md', () => {
       const href = a.getAttribute('href') ?? '';
       if (href.startsWith('#')) expect(slugs).toContain(href.slice(1));
       else {
-        expect(href).toMatch(/^https:\/\/github\.com\/solo-swe\/agentic-task-manager/);
+        expect(href).toMatch(
+          /^https:\/\/(github\.com\/solo-swe\/agentic-task-manager|compmd\.hakanserce\.com\/$|mermaid\.js\.org\/$)/,
+        );
         expect(a).toHaveAttribute('target', '_blank');
         expect(a).toHaveAttribute('rel', 'noopener noreferrer');
       }
