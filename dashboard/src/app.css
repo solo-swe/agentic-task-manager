@@ -2716,6 +2716,19 @@ button.repo-ref {
 .detail-files div {
   margin-bottom: 2px;
 }
+/* A file opens in the document viewer */
+.detail-files .file-link {
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+.detail-files .file-link:hover {
+  text-decoration: underline;
+}
 
 /* The views: a strip of tabs on a panel that fills the rest of the window */
 .graph-section {

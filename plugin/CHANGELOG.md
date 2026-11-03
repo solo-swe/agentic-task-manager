@@ -33,6 +33,11 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   re-renders where the reader is. A relative image in a document loads from the files route (resolved from the
   document's folder); any other image still shows its alt text. Markdown documents get their line numbers from
   CompMD's renderer once it gives them (T-400, blocked on that release).
+- **Relative links and the Files list open the viewer** (T-395): a relative link in task text (`docs/x.md`,
+  `docs/x.md#routes`, `src/app.ts#L40-L45`) opens the file in the document viewer, resolved from the project's root;
+  one inside a document is resolved from its folder; one leaving the project stays text. `#L…` opens at the lines,
+  another fragment at the heading with that slug (Copy path keeps it). Every file in the details panel's Files list
+  is a link (a folder stays text). Help and What's new come with the plugin: their relative links stay text.
 - **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a
   document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
   opens in a new tab, without access to the page.

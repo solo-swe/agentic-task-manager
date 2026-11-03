@@ -11,6 +11,7 @@
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
   import { taskTimes } from '../lib/work';
   import { commitRef } from '../lib/repo';
+  import { referenceTo } from '../lib/documents';
   import { cutOff, scrollBehavior } from '../lib/scroll';
   import RepoRef from './RepoRef.svelte';
   import BranchChip from './BranchChip.svelte';
@@ -438,9 +439,12 @@
     <div class="detail-section">
       <div class="label">Files</div>
       <div class="detail-files">
-        {#each task.files ?? [] as file (file)}<div>{file}</div>{:else}<span style="color:var(--text-muted)"
-            >None specified</span
-          >{/each}
+        <!-- Each file opens in the document viewer (V1b); a folder (a trailing /) or a path leaving the project is text -->
+        {#each task.files ?? [] as file (file)}{@const ref = file.endsWith('/') ? null : referenceTo(file)}
+          <div>
+            {#if ref}<button class="link-button file-link" onclick={() => dashboard.openDocument(ref)}>{file}</button
+              >{:else}{file}{/if}
+          </div>{:else}<span style="color:var(--text-muted)">None specified</span>{/each}
       </div>
     </div>
   </div>

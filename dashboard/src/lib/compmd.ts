@@ -138,17 +138,11 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(
-  compmd: CompmdModule,
-  text: string,
-  task?: Task,
-  path?: string,
-  localImage?: (url: string) => string | null,
-) {
+export function processText(compmd: CompmdModule, text: string, task?: Task, path?: string, links: ProjectLinks = {}) {
   const request = path ? documentRequest(compmd.request, path, text) : compmdRequest(compmd.request, text, task);
   const document = new compmd.OpenDocument(request);
   try {
-    return { tree: safeTree(document.expanded, localImage), components: packComponents(document.components) };
+    return { tree: safeTree(document.expanded, links), components: packComponents(document.components) };
   } finally {
     document.free();
   }
@@ -176,6 +170,12 @@ export function resetCompmd() {
   loading = null;
 }
 
+/** How a project's text reaches the project's files (safeTree) */
+export interface ProjectLinks {
+  localImage?: (url: string) => string | null;
+  docLink?: (url: string) => string | null;
+}
+
 /** A node of CompMD's expanded tree, as far as safeTree reads it (mdast's fields) */
 interface TreeNode {
   type: string;
@@ -193,11 +193,12 @@ const RAW_IMAGE = /<\s*img\b/i;
  * The expanded tree with what task text mustn't do taken out before it renders (§3), so the browser never even asks:
  * an image that isn't a `data:` image (Markdown's, a reference's, or raw `<img>`) shows its text, since an image from
  * anywhere else would be a request outside the dashboard (the page's CSP refuses it too, noisily); a link atm
- * wouldn't follow becomes its text. secureLinks checks the rendered links again. In the document viewer, `localImage`
- * gives a relative image's address on this server (the files route), or null for one it won't load: such an image
- * loads from there (docs/compmd-viewer-design.md V5).
+ * wouldn't follow becomes its text. secureLinks checks the rendered links again. For a project's text (task text, a
+ * document in the viewer; docs/compmd-viewer-design.md): `localImage` gives a relative image's address on this server
+ * (the files route), so it loads from there (V5); `docLink` gives a relative link's `#doc=…` link, which opens the
+ * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
  */
-export function safeTree<T>(tree: T, localImage?: (url: string) => string | null): T {
+export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
   const root = tree as TreeNode;
   const definitions = new Map<string, string>();
   const collect = (node: TreeNode) => {
@@ -220,7 +221,11 @@ export function safeTree<T>(tree: T, localImage?: (url: string) => string | null
         return local ? [{ type: 'image', url: local, alt: node.alt }] : asText(node.alt);
       }
       case 'link':
-        if (!safeHref(node.url ?? '')) return (node.children ?? []).flatMap(visit);
+        if (!safeHref(node.url ?? '')) {
+          const viewer = docLink?.(node.url ?? '');
+          if (viewer) return [{ ...node, url: viewer, children: (node.children ?? []).flatMap(visit) }];
+          return (node.children ?? []).flatMap(visit);
+        }
         break;
       case 'html':
         if (RAW_IMAGE.test(String(node.value))) return asText(node.value);

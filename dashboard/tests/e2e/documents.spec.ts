@@ -370,3 +370,74 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     await expect(page.locator('#doc-title')).toHaveText('Index');
   });
 });
+
+// T-395: the references that open the viewer (docs/compmd-viewer-design.md V1a–V1c)
+test.describe('the document viewer: links that open it', () => {
+  const withDescription = (description: string, files: string[] = []) => ({
+    meta: { project: 'Docs' },
+    tasks: [{ id: 'T-1', name: 'Write the design', phase: 0, type: 'docs', status: 'todo', description, files }],
+  });
+
+  async function openTask(page: Page, tasksServer: TasksServer, data: ReturnType<typeof withDescription>) {
+    await openDashboard(page, tasksServer, data, { tab: 'list' });
+    await page.locator('.task-card[data-id="T-1"] .task-name').click();
+    await expect(page.locator('#detail-description .compmd')).toHaveAttribute('data-compmd', 'ready');
+  }
+
+  test('a relative link in task text opens the file, at its heading or lines; Back returns to the task', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
+    await openTask(page, tasksServer, withDescription('See [the routes](docs/design.md#routes).'));
+    const link = page.locator('#detail-description a', { hasText: 'the routes' });
+    await expect(link).not.toHaveAttribute('target', '_blank');
+    await link.click();
+    await expect(page.locator('#doc-title')).toHaveText('The design');
+    await expect(viewer(page).locator('.compmd-page h2', { hasText: 'Routes' })).toBeInViewport();
+    expect(new URL(page.url()).hash).toContain('doc=docs/design.md%23routes');
+    await page.locator('#doc-back').click();
+    await expect(viewer(page)).toHaveCount(0);
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+  });
+
+  test('a link inside a document is resolved from its folder', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/a/index.md', '# Index\n\nSee [the model](../model.md).\n'));
+    tasksServer.setDocument(projectDocument('docs/model.md', '# The model\n'));
+    await openTask(page, tasksServer, withDescription('Start at [the index](docs/a/index.md).'));
+    await page.locator('#detail-description a', { hasText: 'the index' }).click();
+    await expect(page.locator('#doc-title')).toHaveText('Index');
+    await viewer(page).locator('.compmd-page a', { hasText: 'the model' }).click();
+    await expect(page.locator('#doc-title')).toHaveText('The model');
+    expect(tasksServer.documentRequests).toEqual(['docs/a/index.md', 'docs/model.md']);
+    // Back goes to the document before; × closes them both
+    await page.locator('#doc-back').click();
+    await expect(page.locator('#doc-title')).toHaveText('Index');
+  });
+
+  test('every entry of the Files list opens the viewer; a folder stays text', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('src/app.ts', 'x\n', { kind: 'code', language: 'ts' }));
+    await openTask(page, tasksServer, withDescription('Plain.', ['src/app.ts', 'plugin/assets/']));
+    const files = page.locator('.detail-files');
+    await expect(files.locator('.file-link')).toHaveText(['src/app.ts']);
+    await expect(files).toContainText('plugin/assets/');
+    await files.locator('.file-link').click();
+    await expect(page.locator('#doc-title')).toHaveText('app.ts');
+  });
+
+  test('a link out of the project stays text; one to another site opens in a new tab', async ({
+    page,
+    tasksServer,
+  }) => {
+    await openTask(
+      page,
+      tasksServer,
+      withDescription('[secrets](../../etc/passwd) and [the site](https://example.com).'),
+    );
+    const description = page.locator('#detail-description');
+    await expect(description.locator('a')).toHaveCount(1);
+    await expect(description.locator('a')).toHaveAttribute('target', '_blank');
+    await expect(description).toContainText('secrets');
+    expect(tasksServer.documentRequests).toEqual([]);
+  });
+});

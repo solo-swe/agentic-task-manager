@@ -25,10 +25,12 @@ export interface ProjectDocument {
   commit: string | null;
 }
 
-/** A file and, optionally, the lines to show: from #doc=<path>:L<n> or :L<n>-L<m> */
+/** A file and, optionally, the lines to show (#doc=<path>:L<n> or :L<n>-L<m>) or the heading to open at (by its
+ * slug, #doc=<path>#<slug>) */
 export interface DocumentRef {
   path: string;
   lines?: [number, number];
+  heading?: string;
 }
 
 /** Why a document can't be shown (V6): no such file, one atm doesn't show, or the request failed */
@@ -81,28 +83,58 @@ export function formatLines(lines: [number, number]): string {
   return lines[0] === lines[1] ? `L${lines[0]}` : `L${lines[0]}-L${lines[1]}`;
 }
 
-/** The document a location hash opens (#doc=<path>[:L<n>[-L<m>]]), if any */
+/** The document a location hash opens (#doc=<path>[:L<n>[-L<m>]][#<heading>]), if any */
 export function parseDocHash(hash: string): DocumentRef | null {
   const value = hashParams(hash).get('doc');
   if (!value) return null;
-  const colon = value.lastIndexOf(':');
-  const lines = colon > 0 ? parseLines(value.slice(colon + 1)) : undefined;
-  const path = resolvePath(lines ? value.slice(0, colon) : value);
-  return path ? { path, ...(lines ? { lines } : {}) } : null;
+  const sharp = value.indexOf('#');
+  const target = sharp >= 0 ? value.slice(0, sharp) : value;
+  const heading = sharp >= 0 ? value.slice(sharp + 1) : '';
+  const colon = target.lastIndexOf(':');
+  const lines = colon > 0 ? parseLines(target.slice(colon + 1)) : undefined;
+  const path = resolvePath(lines ? target.slice(0, colon) : target);
+  if (!path) return null;
+  return { path, ...(lines ? { lines } : {}), ...(heading && !lines ? { heading } : {}) };
+}
+
+/** A ref as the value of #doc= */
+export function docHashValue(ref: DocumentRef): string {
+  return ref.path + (ref.lines ? `:${formatLines(ref.lines)}` : '') + (ref.heading ? `#${ref.heading}` : '');
 }
 
 /** `hash` with `ref` open (or none, for null), keeping the other parameters */
 export function withDocHash(hash: string, ref: DocumentRef | null): string {
   const params = hashParams(hash);
   params.delete('doc');
-  if (ref) params.set('doc', ref.lines ? `${ref.path}:${formatLines(ref.lines)}` : ref.path);
+  if (ref) params.set('doc', docHashValue(ref));
   return formatHash(params).replace(/%2F/g, '/').replace(/%3A/g, ':');
+}
+
+/**
+ * The document a relative link names (V1a–V1c), or null for a link that isn't one: `href` resolved from `from` (the
+ * open document's path; the project's root for task text), with what its fragment says: `#L40` or `#L40-L45` lines
+ * (GitHub's form), any other fragment a heading, by its slug.
+ */
+export function referenceTo(href: string, from?: string): DocumentRef | null {
+  const path = resolvePath(href, from);
+  if (!path) return null;
+  const sharp = href.indexOf('#');
+  let fragment = sharp >= 0 ? href.slice(sharp + 1) : '';
+  try {
+    fragment = decodeURIComponent(fragment);
+  } catch {
+    fragment = '';
+  }
+  const lines = parseLines(fragment);
+  if (lines) return { path, lines };
+  return fragment ? { path, heading: fragment } : { path };
 }
 
 /** What Copy path copies: the path from the project's root, with the lines when some are selected (`docs/x.md#L40`),
  * to paste to an agent */
 export function pathToCopy(ref: DocumentRef): string {
-  return ref.lines ? `${ref.path}#${formatLines(ref.lines)}` : ref.path;
+  if (ref.lines) return `${ref.path}#${formatLines(ref.lines)}`;
+  return ref.heading ? `${ref.path}#${ref.heading}` : ref.path;
 }
 
 /** The viewer's title: a Markdown document's first heading (after its own frontmatter), else the file's name */

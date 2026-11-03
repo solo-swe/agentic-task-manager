@@ -15,6 +15,7 @@
   } from '../lib/documents';
   import { getPref, setPref } from '../lib/prefs';
   import { fileRef } from '../lib/repo';
+  import { slug } from '../lib/compmd';
   import { compactAt } from '../lib/scroll';
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
@@ -101,7 +102,26 @@
   /** The file and lines last scrolled to, so a refresh doesn't scroll again */
   let scrolledTo = '';
 
+  /** `#<heading>`: once the document is drawn, its heading with that slug at the window's top (once per file and
+   * heading) */
+  function scrollToHeading() {
+    if (!ref?.heading || !pageEl) return;
+    const key = `${ref.path}#${ref.heading}`;
+    if (key === scrolledTo) return;
+    const wanted = ref.heading;
+    const heading = [...pageEl.querySelectorAll<HTMLElement>('.compmd-page :is(h1, h2, h3, h4, h5, h6)')].find(
+      (h) => slug(h.textContent ?? '') === wanted,
+    );
+    if (!heading) return;
+    scrolledTo = key;
+    const body = pageEl.closest('.doc-body');
+    body?.scrollTo({
+      top: Math.max(0, heading.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 16),
+    });
+  }
+
   function measureLines() {
+    scrollToHeading();
     const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
     if (!pageEl || !code || !doc || (doc.kind !== 'code' && doc.kind !== 'text')) {
       lineLayout = null;

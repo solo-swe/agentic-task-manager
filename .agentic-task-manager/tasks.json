@@ -20810,7 +20810,7 @@
       "description": "Rendering in the viewer, `docs/compmd-viewer-design.md` §4a and §5.\n\n## Change\n- **Line numbers** in a gutter on the left of a `code` or `text` file: a number per line of `text` (its lines never wrap on screen: the block scrolls sideways). `#L<n>` scrolls to the line; `#L<n>-L<m>` marks the range. Markdown documents are T-400: their blocks' source lines come from CompMD's renderer, through an API it is adding.\n- **Links to the dashboard itself** (its own address with a `#…`, e.g. a document's URL) open in place instead of in a new tab (Hakan, while trying this task's links).\n- **Refreshing in place:** a changed file re-renders where the reader is, never back at the top. A 304 changes nothing.\n- **Images:** a relative Markdown image becomes the files route's URL for the path resolved from the document's folder; `data:` stays; any other image shows its alt text.\n\n## Not here\nRendering content: CompMD renders the whole document, code blocks and their highlighting included (it takes care of highlighting itself); atm only wraps a file into a CompMD document (the server, T-392). The gutter, the line-range mark and the scroll position are the viewer's own UI around CompMD's output; add no renderer or highlighter.\n\n## Try it\nOn the dev server (`npm run dev` in `dashboard/`), these open in a new tab; once T-395 is done, the relative links below open the viewer in place.\n\n| What | Dev server | In the dashboard (T-395) |\n|---|---|---|\n| A design, lines 14–20 marked | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=docs/compmd-viewer-design.md:L14-L20) | [docs/compmd-viewer-design.md#L14-L20](docs/compmd-viewer-design.md#L14-L20) |\n| Code, line 40 | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=atm-cli/atm/lib/documents.py:L40) | [atm-cli/atm/lib/documents.py#L40](atm-cli/atm/lib/documents.py#L40) |\n| Code, a range | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=dashboard/src/lib/documents.ts:L44-L60) | [dashboard/src/lib/documents.ts#L44-L60](dashboard/src/lib/documents.ts#L44-L60) |\n| An image | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/atm-logo.png) | [branding/atm-logo.png](branding/atm-logo.png) |\n| A document in another folder | [open](http://localhost:5174/#project=cb66fd8c&view=list&doc=branding/README.md) | [branding/README.md](branding/README.md) |\n\n## Tests\ne2e: the gutter and the code are the same height; `#L40` opens at line 40 and marks it; a changed file re-renders at the same place; a local image loads from this server and a remote one doesn't; a link to the dashboard opens in place.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-393"
       ],
@@ -20821,7 +20821,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:37:52Z",
+      "updated_at": "2026-11-03T19:42:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20844,10 +20844,20 @@
           "kind": "note",
           "text": "From T-393’s live review (Hakan): a `#doc=…:L14-L20` link must scroll to those lines and mark them, in a Markdown document too (the blocks the lines fall in).",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:42:17Z",
+          "kind": "review",
+          "text": "Code and text files: gutter, `:L40-L45` scrolls and marks; refreshing keeps the place; relative images load from the files route; links to the dashboard open in place. Check with the links in this task’s description. Markdown lines are T-400 (blocked on CompMD’s renderer API). e2e 394, unit 1003; single file 549 kB (guardrail 550 KiB).",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-03T19:26:48Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "17faece19bdde384dbab4f3ff15c3dd5fa12e711",
+      "completed_at": "2026-11-03T19:42:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-395",
@@ -20860,7 +20870,7 @@
       "description": "The references that open the viewer, `docs/compmd-viewer-design.md` §1 (V1a–V1c) and §3.\n\n## Change\n- A relative link in task text (`docs/x.md`, `docs/x.md#3-routes`, `src/app.ts#L40`) becomes a viewer link, resolved from the project root; one leaving the project stays text. `safeTree` and `secureLinks` keep it, opened by the click handler, never by the browser.\n- A relative link inside an open document opens the viewer at the path resolved from its folder.\n- The details panel's Files list links every entry.\n\n## Tests\nUnit tests for the link rules (`compmd.test.ts`); e2e: a link in a description, in a document, and a Files entry each open the viewer; a `..` out of the project is text.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-393"
       ],
@@ -20872,7 +20882,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T18:39:44Z",
+      "updated_at": "2026-11-03T19:42:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20888,7 +20898,9 @@
         }
       ],
       "sprint": "Document Viewer",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-03T19:42:21Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-396",

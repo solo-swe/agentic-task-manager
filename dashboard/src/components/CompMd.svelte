@@ -10,7 +10,9 @@
     taskData,
     type CompmdModule,
   } from '../lib/compmd';
+  import { parseDocHash, referenceTo, withDocHash } from '../lib/documents';
   import { scrollBehavior } from '../lib/scroll';
+  import { dashboard } from '../lib/state.svelte';
   import type { Task } from '../lib/types';
 
   // Markdown rendered with CompMD (docs/compmd-rendering-design.md): a task text (description, note, question), which
@@ -34,6 +36,18 @@
     inline?: boolean;
   } = $props();
 
+  /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
+   * from the project's root for task text and from the document's folder in a document. Help and What's new come with
+   * the plugin, not the project: their relative links stay text. */
+  const docLink = $derived(
+    task || path
+      ? (url: string) => {
+          const ref = referenceTo(url, path);
+          return ref ? withDocHash('', ref) : null;
+        }
+      : undefined,
+  );
+
   type View = ReturnType<ReturnType<CompmdModule['createSandbox']>['open']>;
 
   /** CompMD's own element: the sandbox's page owns it, Svelte never renders into it */
@@ -55,7 +69,7 @@
     loadCompmd()
       .then((compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
-        const { tree, components } = processText(compmd, text, task, path, localImage);
+        const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
           // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)
@@ -95,6 +109,12 @@
     }
     if (href.startsWith('#')) {
       e.preventDefault();
+      // A document of the project (a relative link, made a viewer link by safeTree): the viewer opens it
+      const doc = parseDocHash(href);
+      if (doc) {
+        dashboard.openDocument(doc);
+        return;
+      }
       const wanted = decodeURIComponent(href.slice(1));
       const heading = [...host.querySelectorAll('h1, h2, h3, h4, h5, h6')].find(
         (h) => slug(h.textContent ?? '') === wanted,

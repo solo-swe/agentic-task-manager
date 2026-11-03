@@ -152,6 +152,27 @@ describe('task text through the real processor', () => {
     expect(text).toContain('rel');
   });
 
+  it('safeTree for a project’s text: a relative link opens the viewer, a relative image loads from this server', () => {
+    const tree = safeTree(
+      run(
+        '[design](docs/x.md#L3) [out](../../etc) [site](https://example.com) ![flow](img/f.png) ![far](https://e.com/a.png)\n',
+      ).expanded,
+      {
+        docLink: (url) => (url.startsWith('docs/') ? `#doc=${url.split('#')[0]}` : null),
+        localImage: (url) => (url.startsWith('img/') ? `api/files?path=${url}` : null),
+      },
+    );
+    const urls: string[] = [];
+    const walk = (node: { type: string; url?: string; children?: unknown[] }) => {
+      if (node.url) urls.push(`${node.type} ${node.url}`);
+      (node.children as (typeof node)[] | undefined)?.forEach(walk);
+    };
+    walk(tree as never);
+    expect(urls).toEqual(['link #doc=docs/x.md', 'link https://example.com', 'image api/files?path=img/f.png']);
+    expect(textOf(tree)).toContain('out');
+    expect(textOf(tree)).toContain('far');
+  });
+
   it('diagnostics give lines in the document: the text’s line plus the frontmatter’s', () => {
     const r = run('fine\n\n{{md.nothing.here}}\n');
     const unknown = r.diagnostics.find((d) => d.code === 'F014');

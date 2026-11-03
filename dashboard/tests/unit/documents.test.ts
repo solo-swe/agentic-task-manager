@@ -10,6 +10,7 @@ import {
   parseDocHash,
   parseLines,
   pathToCopy,
+  referenceTo,
   resolvePath,
   VIEWER_MIN,
   withDocHash,
@@ -48,6 +49,29 @@ describe('resolvePath: the project path a reference names', () => {
       expect(resolvePath(href), href).toBeNull();
     }
     expect(resolvePath('../../x.md', 'docs/x.md')).toBeNull();
+  });
+});
+
+describe('referenceTo: the document a relative link names, with its lines or heading', () => {
+  it('from the project root, or from the open document’s folder', () => {
+    expect(referenceTo('docs/x.md')).toEqual({ path: 'docs/x.md' });
+    expect(referenceTo('src/app.ts#L40')).toEqual({ path: 'src/app.ts', lines: [40, 40] });
+    expect(referenceTo('src/app.ts#L40-L45')).toEqual({ path: 'src/app.ts', lines: [40, 45] });
+    expect(referenceTo('docs/x.md#3-routes')).toEqual({ path: 'docs/x.md', heading: '3-routes' });
+    expect(referenceTo('../v4/data-model.md#tasks', 'docs/x.md')).toEqual({
+      path: 'v4/data-model.md',
+      heading: 'tasks',
+    });
+  });
+  it('none for a link that isn’t a project file', () => {
+    for (const href of ['https://example.com/x.md', '#routes', '../x.md', 'mailto:a@b']) {
+      expect(referenceTo(href), href).toBeNull();
+    }
+  });
+  it('a heading survives the URL hash, and Copy path keeps it', () => {
+    const hash = withDocHash('#view=list', { path: 'docs/x.md', heading: '3-routes' });
+    expect(parseDocHash(hash)).toEqual({ path: 'docs/x.md', heading: '3-routes' });
+    expect(pathToCopy({ path: 'docs/x.md', heading: '3-routes' })).toBe('docs/x.md#3-routes');
   });
 });
 
