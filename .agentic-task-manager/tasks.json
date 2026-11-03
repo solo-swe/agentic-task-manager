@@ -21257,7 +21257,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T20:08:35Z",
+      "updated_at": "2026-11-03T20:12:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21276,7 +21276,7 @@
       ],
       "started_at": "2026-11-03T20:04:43Z",
       "started_by": "claude:b7be7288",
-      "commit": "cbc3997056876b5668f93b15d3aa73edab38387b",
+      "commit": "b1b5c306ac8426fe2f56a36e7aafa5a2c985d57f",
       "completed_at": "2026-11-03T20:08:35Z",
       "completed_by": "claude:b7be7288",
       "sprint_review": "pending",
@@ -21285,6 +21285,12 @@
           "at": "2026-11-03T20:08:35Z",
           "kind": "review",
           "text": "Contents in the viewer: a faint button at the page’s top right, the headings (h1–h3) on hover or focus, the current section marked, a pick scrolls there. Try it on the dev server with a long design doc. e2e 404; single file 558.9 kB, ~4 kB under the 550 KiB guardrail.",
+          "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T20:12:54Z",
+          "kind": "note",
+          "text": "Review changes (Hakan): the contents moved to the page’s top left, and the button grows into the list so the pointer stays inside it (reduced motion: at once). Guardrail raised to 600 KiB in the same commit.",
           "by": "claude:b7be7288"
         }
       ]
