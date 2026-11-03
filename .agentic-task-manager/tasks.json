@@ -18517,7 +18517,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18571,7 +18571,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-361",
@@ -18594,7 +18595,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18628,7 +18629,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-362",
@@ -18653,7 +18655,7 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18688,7 +18690,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-363",
@@ -18711,7 +18714,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18745,7 +18748,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-364",
@@ -18770,7 +18774,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18812,7 +18816,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-365",
@@ -18841,7 +18846,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18881,7 +18886,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-366",
@@ -18904,7 +18910,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18944,7 +18950,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-367",
@@ -18969,7 +18976,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19010,7 +19017,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-368",
@@ -19033,7 +19041,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19080,7 +19088,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-369",
@@ -19103,7 +19112,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19137,7 +19146,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-370",
@@ -19160,7 +19170,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19194,7 +19204,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-371",
@@ -19219,7 +19230,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19260,7 +19271,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-372",
@@ -19285,7 +19297,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19320,7 +19332,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-373",
@@ -19343,7 +19356,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19377,7 +19390,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-374",
@@ -19401,7 +19415,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19455,7 +19469,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-375",
@@ -19478,7 +19493,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19519,7 +19534,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-376",
@@ -19544,7 +19560,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19591,7 +19607,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-377",
@@ -19620,7 +19637,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T20:15:57Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19657,7 +19674,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-378",
@@ -19684,7 +19702,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19716,7 +19734,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-379",
@@ -19745,7 +19764,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19777,7 +19796,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-380",
@@ -19802,7 +19822,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19834,7 +19854,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-381",
@@ -19865,7 +19886,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19897,7 +19918,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-382",
@@ -19923,7 +19945,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19956,7 +19978,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-383",
@@ -19983,7 +20006,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20015,7 +20038,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-384",
@@ -20043,7 +20067,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20075,7 +20099,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-385",
@@ -20100,7 +20125,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20132,7 +20157,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-386",
@@ -20155,7 +20181,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20187,7 +20213,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-387",
@@ -20219,7 +20246,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20253,7 +20280,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-388",
@@ -20272,7 +20300,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:59:52Z",
+      "updated_at": "2026-11-03T07:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20304,7 +20332,8 @@
       "pr": {
         "number": 32,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
-      }
+      },
+      "merged_at": "2026-11-03T07:17:57Z"
     },
     {
       "id": "T-389",
