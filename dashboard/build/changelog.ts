@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
-import { parseChangelog } from '../src/lib/changelog.ts';
 
 const ID = 'virtual:atm-changelog';
 const RESOLVED_ID = '\0' + ID;
+const CHANGELOG = fileURLToPath(new URL('../src/lib/changelog.ts', import.meta.url));
 
-// Exposes plugin/CHANGELOG.md, already parsed, as `import changelog from 'virtual:atm-changelog'`.
-// The release notes end up inlined in the single-file build: no runtime request, no Markdown library.
+// Exposes the release notes (plugin/WHATS-NEW.md), parsed, as `import changelog from 'virtual:atm-changelog'`. They
+// end up inlined in the single-file build: no runtime request, no Markdown library. Embedded as text and parsed when
+// the page loads: smaller than the parsed entries, and the parser is a few hundred bytes (T-342).
 export function changelogModule(changelogPath: string): Plugin {
   return {
     name: 'atm-changelog',
@@ -14,7 +16,8 @@ export function changelogModule(changelogPath: string): Plugin {
     load(id) {
       if (id !== RESOLVED_ID) return;
       this.addWatchFile(changelogPath);
-      return `export default ${JSON.stringify(parseChangelog(readFileSync(changelogPath, 'utf8')))};`;
+      const text = JSON.stringify(readFileSync(changelogPath, 'utf8'));
+      return `import { parseChangelog } from ${JSON.stringify(CHANGELOG)};\nexport default parseChangelog(${text});\n`;
     },
   };
 }

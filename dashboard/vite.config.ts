@@ -12,6 +12,7 @@ import { injectVersion } from './build/inject-version.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
 import { renameHtmlOutput } from './build/rename-output.ts';
 import { securityHeaders } from './build/security-headers.ts';
+import { sizeReport } from './build/size-report.ts';
 
 const pluginJson = fileURLToPath(new URL('../plugin/.claude-plugin/plugin.json', import.meta.url));
 const changelog = fileURLToPath(new URL('../plugin/CHANGELOG.md', import.meta.url));
@@ -32,6 +33,7 @@ export default defineConfig({
     pluginInfoModule(pluginJson, changelog),
     devApi(ownTasks),
     securityHeaders(),
+    sizeReport(),
     viteSingleFile(),
     injectVersion(pluginJson),
     favicon(logo),

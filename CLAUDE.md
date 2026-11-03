@@ -44,7 +44,9 @@ Commands (run in `dashboard/`):
   missing). `npm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
   The dev page runs under the server's Content-Security-Policy plus what Vite needs (`build/security-headers.ts`);
   `tests/scripts/dev-api.test.mjs` starts `vite dev` and checks all of this
-- `npm run build` — single-file build
+- `npm run build` — single-file build, and the CompMD runtime the details panel loads (`vite.compmd.config.ts`,
+  into `plugin/assets/compmd/<version>/`, committed; `npm run check` fails when it is stale)
+- `npm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
 - `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `npm run test:e2e` — build, then the Playwright e2e suite without the screenshots
 - `npm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)

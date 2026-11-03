@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build && vite build -c vite.compmd.config.ts",
     "build:cli": "python3 ../atm-cli/build.py",
+    "size": "ATM_SIZE_REPORT=1 vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

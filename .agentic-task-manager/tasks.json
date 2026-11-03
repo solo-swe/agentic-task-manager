@@ -17295,7 +17295,7 @@
       "description": "Write a design, reviewed with Hakan, for opening the documents a task refers to inside the dashboard, rendered with CompMD (T-284 brings CompMD to the details panel): a link in a description or note to `docs/x.md`, a task's `requirements` and `use_cases` pointing into documents, its `files` that are Markdown.\n\n## Questions to settle\n- **What opens:** which references count (relative links, `files`, requirement IDs mapped to documents), Markdown only or other text too, and how a reference is resolved (from the project root, from the referring document).\n- **Where:** a viewer beside the details panel, a full-page view, or a tab; navigation between linked documents, Back, a deep link in the URL (`#doc=…`).\n- **How the server serves them:** today `atm serve` serves only the task files (I11, I12). A read-only route for a project's documents: which files (under the project root only, no symlinks out, maybe only tracked by git, a size cap), content types, and what the security document must say.\n- **Untrusted content:** documents are as untrusted as task text: the same CompMD settings as T-284 (no raw HTML, no remote data, no code components), images (local only?), and links out.\n- **Fallbacks:** a missing file, a binary file, a project folder that moved.\n\n## Output\n`docs/compmd-viewer-design.md` with requirements (numbered, like the other designs), the options weighed and the choice; the follow-up tasks proposed through `/atm:create-tasks` once approved.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "T-284"
       ],
@@ -17303,7 +17303,7 @@
         "docs/compmd-viewer-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T10:15:18Z",
+      "updated_at": "2026-11-03T10:16:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17322,7 +17322,18 @@
       ],
       "sprint": "Rich Markdown",
       "started_at": "2026-11-03T10:15:18Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "abadcc0435769e84c471a9012ee6d07d0e7ea64a",
+      "review_requested_at": "2026-11-03T10:16:06Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-03T10:16:06Z",
+          "kind": "review",
+          "text": "Design ready for Hakan’s review: `docs/compmd-viewer-design.md` (requirements V1–V7, where it opens, a read-only documents route through atm-lib, rendering). Four questions in §8; follow-up tasks in §9 are created once approved.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-337",
@@ -17598,7 +17609,7 @@
       "description": "The shipped single-file dashboard keeps nearing its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`, `MAX_BYTES`), which has been raised several times, most recently to 550 KiB; 0.27.0 ships 543 kB, so about 20 KB of room is left, and T-284 and T-285 in this sprint add a loader and a pack to it. Only `plugin/WHATS-NEW.md` is embedded (`changelogModule(whatsNew)` in `dashboard/vite.config.ts`, for What's new; `CHANGELOG.md` is read only for the copyright year in `pluginInfoModule`). What's new adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/build/changelog.ts",
@@ -17607,7 +17618,7 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-03T07:29:27Z",
+      "updated_at": "2026-11-03T10:16:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17619,7 +17630,9 @@
           "from": "2026-11-03T07:28:11Z"
         }
       ],
-      "sprint": "Rich Markdown"
+      "sprint": "Rich Markdown",
+      "started_at": "2026-11-03T10:16:15Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-343",
