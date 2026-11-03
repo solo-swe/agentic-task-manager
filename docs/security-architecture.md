@@ -74,7 +74,7 @@ with the task that adds it.
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
 | I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks" |
-| I12 | **Only the registered projects' task files are served**, regular files only, never through a symlink | `serve.test.mjs` (the four files; the symlink test) |
+| I12 | **Only the registered projects' task data is served**, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts` |
 
 ### Dashboard (B4)
@@ -347,6 +347,22 @@ run. What changes for these invariants:
   the same checks (the lock, the vocabularies, the ID rules, the folder's symlink checks). It is a Python import, not
   a new route, file or command, and is no more trusted than the CLI.
 - **No new route, task-folder file, field or CI permission.** The written review above takes the sandbox's place.
+
+**Release 0.27.0 (the follow-ups T-377 to T-388).** No skill, `plugin/CLAUDE.md` text or command output that
+agents act on changed, so there is no agent sandbox run; this written review takes its place.
+- **Tolerant reads (T-377):** only the v1 route and `atm list --derived --tolerant` read leniently. Every command
+  that writes stays strict, so a malformed file is shown but never acted on. The problems atm finds are text
+  (Svelte escapes it, I15), and a task with a problem is never *ready*, so `atm next` never offers it.
+- **New fields the dashboard acts on:** `derived` (readiness, `waiting_for`, review mode, release, stage, problems)
+  on the v1 route, and on worktree copies in `worktrees.json` (T-387). atm works them out from the task files it
+  already reads; the dashboard only shows them and sends nothing back.
+- **The host layer (T-385)** runs git with fixed arguments, as `vcs/` did before. It reads a linked worktree's `.git`
+  file to find its HEAD and takes no path from a request.
+- **The archive lookup (T-378)** is per project now: one project's archive can no longer decide another's readiness
+  in the shared server.
+- **The removed raw routes answer 404 (T-374, T-388):** a 0.26.0 page left open across the update keeps its data and
+  offers the reload. Nothing falls back to reading the files.
+- **No new route, command, task-folder file or CI permission.** `atm-serve` (T-379) is reviewed above.
 
 ## 4. Keeping it current
 
