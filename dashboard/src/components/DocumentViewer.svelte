@@ -154,7 +154,65 @@
     }
   });
 
+  // The contents (T-402): a Markdown document's headings, h1 to h3, read from what CompMD rendered (atm renders
+  // nothing), again after each render; shown only for two or more. The list stays hidden until the faint button is
+  // hovered or focused, and hides again after a pick, when the pointer leaves, or on Escape.
+  type TocEntry = { level: number; text: string; el: HTMLElement };
+  let toc = $state.raw<TocEntry[]>([]);
+  let tocOpen = $state(false);
+  /** The heading of the section being read */
+  let tocCurrent = $state(-1);
+  let tocEl = $state<HTMLElement>();
+
+  function readHeadings() {
+    if (!pageEl || doc?.kind !== 'markdown') {
+      if (toc.length) toc = [];
+      return;
+    }
+    const next = [...pageEl.querySelectorAll<HTMLElement>('.compmd-page :is(h1, h2, h3)')]
+      .map((el) => ({ level: Number(el.tagName[1]), text: (el.textContent ?? '').trim(), el }))
+      .filter((h) => h.text);
+    if (next.length !== toc.length || next.some((h, i) => h.el !== toc[i].el || h.text !== toc[i].text)) {
+      toc = next;
+      followSection();
+    }
+  }
+
+  /** The section being read: the last heading at or above the top of the window */
+  function followSection() {
+    const body = pageEl?.closest('.doc-body');
+    if (!body || !toc.length) return;
+    const top = body.getBoundingClientRect().top + 72;
+    let found = -1;
+    toc.forEach((h, i) => {
+      if (h.el.getBoundingClientRect().top <= top) found = i;
+    });
+    tocCurrent = found;
+  }
+
+  function goToHeading(i: number) {
+    const body = pageEl?.closest('.doc-body');
+    const heading = toc[i]?.el;
+    if (!body || !heading) return;
+    body.scrollTo({
+      top: Math.max(0, heading.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 16),
+    });
+    tocOpen = false;
+  }
+
+  /** Up and down move between the entries; Escape closes the list (before the viewer sees it) */
+  function onTocKeys(e: KeyboardEvent) {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const entries = [...(tocEl?.querySelectorAll<HTMLElement>('.doc-toc-list button') ?? [])];
+    if (!entries.length) return;
+    e.preventDefault();
+    const at = entries.indexOf(document.activeElement as HTMLElement);
+    const next = at < 0 ? 0 : (at + (e.key === 'ArrowDown' ? 1 : -1) + entries.length) % entries.length;
+    entries[next].focus();
+  }
+
   function measureLines() {
+    readHeadings();
     scrollToHeading();
     showTextFragment();
     const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
@@ -283,6 +341,10 @@
     if (!open || e.key !== 'Escape') return;
     e.stopImmediatePropagation();
     e.preventDefault();
+    if (tocOpen) {
+      tocOpen = false; // the contents first, then the viewer
+      return;
+    }
     dashboard.documentBack();
   }
 
@@ -352,9 +414,56 @@
     <div
       class="doc-body"
       id="doc-body"
-      onscroll={(e) => (scrolled = compactAt(e.currentTarget.scrollTop))}
+      onscroll={(e) => {
+        scrolled = compactAt(e.currentTarget.scrollTop);
+        followSection();
+      }}
       onclick={clearTextFragment}
     >
+      {#if doc && toc.length >= 2}
+        <!-- The contents: a faint button at the page's top right, in view as it scrolls; the list on hover or focus -->
+        <div
+          class="doc-toc"
+          class:open={tocOpen}
+          id="doc-toc"
+          bind:this={tocEl}
+          role="presentation"
+          onmouseenter={() => (tocOpen = true)}
+          onmouseleave={() => (tocOpen = false)}
+          onfocusin={() => (tocOpen = true)}
+          onfocusout={(e) => {
+            if (!tocEl?.contains(e.relatedTarget as Node | null)) tocOpen = false;
+          }}
+          onkeydown={onTocKeys}
+        >
+          <button
+            class="doc-toc-button"
+            id="doc-toc-button"
+            aria-label="Contents"
+            title="Contents"
+            aria-expanded={tocOpen}
+            onclick={(e) => {
+              e.stopPropagation();
+              tocOpen = !tocOpen;
+            }}><Icon name="list" size={14} /></button
+          >
+          {#if tocOpen}
+            <nav class="doc-toc-list" aria-label="Contents">
+              {#each toc as heading, i (i)}
+                <button
+                  class="doc-toc-level-{heading.level}"
+                  class:current={i === tocCurrent}
+                  aria-current={i === tocCurrent ? 'location' : undefined}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    goToHeading(i);
+                  }}>{heading.text}</button
+                >
+              {/each}
+            </nav>
+          {/if}
+        </div>
+      {/if}
       {#if doc && fragmentMissing}
         <div class="doc-note" id="doc-fragment-missing">The text this link points to isn't in this document.</div>
       {/if}

@@ -489,3 +489,75 @@ test.describe('the document viewer: links that open it', () => {
     expect(await page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBe(0);
   });
 });
+
+// T-402: the contents, out of the way until wanted
+test.describe('the document viewer: contents', () => {
+  const LONG =
+    '# Guide\n\n' +
+    ['Setup', 'Usage', 'Reference']
+      .map(
+        (s) =>
+          `## ${s}\n\n` +
+          Array.from({ length: 12 }, (_, i) => `${s} paragraph ${i + 1}.`).join('\n\n') +
+          `\n\n### ${s} details\n\nMore.\n`,
+      )
+      .join('\n');
+
+  async function open(page: Page, tasksServer: TasksServer, text = LONG) {
+    tasksServer.setDocument(projectDocument('docs/guide.md', text));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/guide.md'));
+    await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+  }
+
+  test('a faint button; hovering it shows the headings by level; a pick scrolls there and hides the list', async ({
+    page,
+    tasksServer,
+  }) => {
+    await open(page, tasksServer);
+    const button = page.locator('#doc-toc-button');
+    await expect(button).toBeVisible();
+    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await button.hover();
+    const entries = page.locator('.doc-toc-list button');
+    await expect(entries).toHaveText([
+      'Guide',
+      'Setup',
+      'Setup details',
+      'Usage',
+      'Usage details',
+      'Reference',
+      'Reference details',
+    ]);
+    await expect(entries.nth(2)).toHaveClass(/doc-toc-level-3/);
+    await entries.filter({ hasText: /^Reference$/ }).click();
+    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await expect(viewer(page).locator('.compmd-page h2', { hasText: 'Reference' })).toBeInViewport();
+    // The button stays in view as the document scrolls
+    await expect(button).toBeInViewport();
+  });
+
+  test('the section being read is marked; the keyboard opens and walks the list; Escape closes it first', async ({
+    page,
+    tasksServer,
+  }) => {
+    await open(page, tasksServer);
+    await viewer(page)
+      .locator('.compmd-page h2', { hasText: 'Usage' })
+      .evaluate((h) => h.scrollIntoView({ block: 'start' }));
+    await page.locator('#doc-toc-button').focus();
+    await expect(page.locator('.doc-toc-list .current')).toHaveText('Usage');
+    await page.keyboard.press('ArrowDown');
+    await expect(page.locator('.doc-toc-list button').first()).toBeFocused();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.locator('.doc-toc-list button').last()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await expect(viewer(page)).toHaveCount(1); // the viewer stays: Escape closed the list
+  });
+
+  test('no contents for a document with one heading, or for code', async ({ page, tasksServer }) => {
+    await open(page, tasksServer, '# Only one\n\nText.\n');
+    await expect(page.locator('#doc-toc-button')).toHaveCount(0);
+  });
+});
