@@ -17609,7 +17609,7 @@
       "description": "The shipped single-file dashboard keeps nearing its size guardrail (`dashboard/tests/e2e/guardrails.spec.ts`, `MAX_BYTES`), which has been raised several times, most recently to 550 KiB; 0.27.0 ships 543 kB, so about 20 KB of room is left, and T-284 and T-285 in this sprint add a loader and a pack to it. Only `plugin/WHATS-NEW.md` is embedded (`changelogModule(whatsNew)` in `dashboard/vite.config.ts`, for What's new; `CHANGELOG.md` is read only for the copyright year in `pluginInfoModule`). What's new adds about half a KB per release.\n\n## Change\n- Measure what the shipped file is made of (the JS bundle by module, the CSS, the embedded What's new, the favicon) and list the biggest parts.\n- Embed only the releases What's new actually shows (e.g. the last few), if that saves enough to matter; otherwise look for the largest avoidable parts (unused code, large dependencies).\n- If the saving is real, lower `MAX_BYTES` in the guardrail accordingly, updating its comment. If not, say so in a note and skip the task.\n\n## Tests\nUpdate the tests that read the embedded notes (`tests/unit/release-notes.test.ts`) and the e2e specs of What's new, if what is embedded changes.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/build/changelog.ts",
@@ -17618,7 +17618,7 @@
         "dashboard/src/lib/release-notes.ts"
       ],
       "created_at": "2026-11-02T01:29:52Z",
-      "updated_at": "2026-11-03T10:16:15Z",
+      "updated_at": "2026-11-03T10:19:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -17632,7 +17632,18 @@
       ],
       "sprint": "Rich Markdown",
       "started_at": "2026-11-03T10:16:15Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "076d7895738d45e2990203d9b10385d1e640c646",
+      "completed_at": "2026-11-03T10:19:05Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:19:05Z",
+          "kind": "outcome",
+          "text": "Measured with the new `npm run size`: Svelte 161 KB and dagre 63 KB dominate (needed); Help and What’s new were embedded as parsed trees. Now embedded as text and parsed at load: 549,210 → 542,431 bytes (−6.8 KB, offsetting this sprint’s CompMD growth). Guardrail kept at 550 KiB: ~20 KB room, as at the sprint’s start, and Hakan expects to push it for CompMD.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-343",
