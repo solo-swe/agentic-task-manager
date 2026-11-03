@@ -157,7 +157,7 @@ and rendered with `createPage(element, { tokens })`, with no `components` and no
 
 **Diagnostics** are not shown in the panel (R2a). How agents see them is §3a.
 
-## 3a. Diagnostics for agents (open: to decide in review)
+## 3a. Diagnostics for agents
 
 Agents write task text through atm (`atm add`, `edit`, `note`, `review`, `block`). They should learn there that what
 they wrote won't render as meant (an unknown component, an unclosed container, a remote import that will be refused).
@@ -172,8 +172,18 @@ The dashboard can, but it is read-only by design (I11: nothing changes state ove
 | **E. The Rust crate, natively** | atm runs a `compmd` command-line tool built from the `compmd` crate (the same processor the WebAssembly is built from) | no Node; starts in milliseconds; the same results when the versions match | no such tool exists yet: the crate is a library (0.3.0, no binary, no GitHub releases). It needs a CLI in the CompMD repository and builds for each platform (macOS arm64 and x86-64, Linux x86-64 and arm64, Windows), several MB each (the crate carries ICU's locale data). atm can't ship them all in the plugin (every install would download every platform's binary), and must not download executables at run time; so it would use one only when the user installed it (`cargo install`, Homebrew). And a native binary runs with the user's full rights, where the WebAssembly runs sandboxed (it reaches nothing but what the glue gives it) |
 | **D. The dashboard records them** | the panel would report diagnostics back to atm serve, which stores them for `atm status` | no Node | breaks the read-only dashboard (I11) and the tenet it comes from; the server would write task data | 
 
-Recommended: **A**, with B's `atm check` included. A Node check is how a project already using Node would see it;
-for one without, nothing changes but the missing warnings.
+**Decided in review: C for now.** No checker: the skills guide agents in writing CompMD (T-286), from CompMD's own
+guide for language models, `llms.txt`. A check (A, or E once CompMD has a command-line tool) can come later.
+
+How the guidance is shipped:
+- **A pinned copy in the plugin,** `plugin/docs/compmd-llms.txt`, taken from the CompMD repository at the commit of
+  the shipped processor version, with that version and commit in a header line, and updated with CompMD. Skills
+  never send agents to fetch it from the web: a fetched text could change under us and is outside text an agent
+  would act on (the security document's rule for skills).
+- **The skills say briefly what works in atm's panel,** since atm's settings (§3) refuse part of CompMD: GFM and
+  CompMD's core components (layout, `if`, `each`, `value`, alerts) render; imports of packs, data from files or URLs,
+  `host:` data, inputs and host-language components don't (they show their fallback text). For more, they point to
+  the local `llms.txt` (33 KB, read only when an agent wants more than plain Markdown).
 
 ## 4. In the panel
 
@@ -220,4 +230,4 @@ for one without, nothing changes but the missing warnings.
   is held empty meanwhile. Later panels render at once.
 - **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
   (R1); readers don't see diagnostics (R2a); the CSP's module source is the asset folder only (§2).
-- **Still open:** how agents see diagnostics (§3a).
+- **Agents and diagnostics:** guidance only for now, from a pinned copy of CompMD's `llms.txt` (§3a, T-286).
