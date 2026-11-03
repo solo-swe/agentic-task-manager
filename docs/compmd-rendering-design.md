@@ -213,7 +213,20 @@ md:
 | For CompMD | atm uses CompMD as its documents and other hosts do, and tests the sandbox in a real host | a host-specific path other hosts don't share |
 | Moving parts | more: frames, their headers, CORS on the pack folder, the sandbox's protocol | fewer |
 
-**Recommended: P.** The decisive point is that Mermaid, a large library with a history of XSS bugs, renders text
+**Decided in review: P now; D (Mermaid built in at build time) to be reconsidered later.** CompMD's own example of
+a pack drawing Mermaid is `editor/examples/diagrams/diagrams.comp.md` in the CompMD repository: a pack's component
+is one built module the sandbox loads by URL, run only if it matches its hash.
+
+**Its runtime cost.** In host mode each strict component gets a frame of its own, so each diagram's frame loads
+Mermaid's module: from the browser's cache after the first, but parsed and compiled again per frame (7 MB of
+JavaScript; tens to a few hundred milliseconds each, more on a slow machine), and held in memory per frame while the
+panel shows it. A task with one or two diagrams is fine; a note list with many would be slow. Measure it in T-285
+(an e2e timing for a task with one and with five diagrams), and if it is too slow, the options are: the sandbox's
+`page: "frame"` mode (one strict frame per document, sharing one Mermaid; the text then renders inside the frame,
+so the theme's stylesheet is given to it with `view.styles`), giving the module as code so frames share its bytes
+(`modules: () => ({ code })`), or D.
+
+**Why P:** the decisive point is that Mermaid, a large library with a history of XSS bugs, renders text
 anyone with access to `tasks.json` writes; P runs it where a bug can't reach anything. P is also the path every
 later CompMD capability takes. Its costs are one-time (the frame headers and their tests). Its one visible
 difference, Mermaid's own light and dark themes instead of the dashboard's colours, can change later through the
@@ -306,4 +319,6 @@ How the guidance is shipped:
 - **atm writes the frontmatter; the task's data is `md.data.task`** (§3b), decided in review.
 - **The size guardrail** will be raised for this (decided in review): the page grows by the sandbox's host runtime
   and the loader; CompMD, the frames and Mermaid are served beside it.
-- **Still open:** Mermaid as the pack in the sandbox (P, recommended) or built into the dashboard (D) (§3c).
+- **Mermaid is the `@comp-markdown/mermaid` pack in the strict sandbox** (§3c), decided in review, with its
+  runtime cost measured in T-285; building Mermaid into the dashboard (D) is to be reconsidered later.
+- **Nothing is open.**
