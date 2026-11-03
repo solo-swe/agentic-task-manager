@@ -18517,7 +18517,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T17:33:45Z",
-      "updated_at": "2026-11-02T18:37:37Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "review": "blocker",
@@ -18567,7 +18567,11 @@
       ],
       "review_requested_at": "2026-11-02T18:34:56Z",
       "completed_at": "2026-11-02T18:37:37Z",
-      "completed_by": "claude:b7be7288"
+      "completed_by": "claude:b7be7288",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-361",
@@ -18590,7 +18594,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18620,7 +18624,11 @@
           "text": "Check: the layer rule in `atm-cli/build.py` (+ `boot` layer, added to the design), the ratchet `atm-cli/layers.json`, `atm show` via `cli/show.py` → `show_tasks` → `JsonGitStore` (wraps `load_tasks`); `cli.py` moved to `cli/main.py`. 536 atm-cli tests pass (18 new in `tests/lib/`).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-362",
@@ -18645,7 +18653,7 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18676,7 +18684,11 @@
           "text": "Check: `task.schema.json`; one stdlib generator in `build.py` writes `common/types.py` (functional TypedDicts) and `dashboard/src/lib/generated/types.ts`; no npm dependency (design §4.3 updated). Dashboard `Task` extends the generated one (keeps phase/description narrow). Fixtures and scenario task files validated. 538 atm-cli, 950 unit, 357 e2e pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-363",
@@ -18699,7 +18711,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18729,7 +18741,11 @@
           "text": "Check: `list`, `deps`, `status`, `summary` via `cli/query.py` → `lib/query.py` (from `query.py`) on a Project; typed errors (`common/errors.py`; `AtmError` subclasses `AtmFailure`); store adds `list_archived`, `read_claims`, `sizes`, `working_copy`, transitional `document()`; `vcs/git.py` branch. Moved on: backlog → T-371, projects → T-374, result types → T-364. 538 atm-cli tests, 40 in `tests/lib`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-364",
@@ -18754,7 +18770,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18792,7 +18808,11 @@
       "commit": "f11219bb9eef21d75aa6a0ae0a6e83d6abdb5c23",
       "completed_at": "2026-11-02T19:17:34Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-365",
@@ -18821,7 +18841,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18857,7 +18877,11 @@
       "commit": "11dc8eca93b685b8be0eb87f6b76e041a54f095b",
       "completed_at": "2026-11-02T19:34:43Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-366",
@@ -18880,7 +18904,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18916,7 +18940,11 @@
       "commit": "2bf9488b567797518c95bd4928163b5e0af4b1bd",
       "completed_at": "2026-11-02T19:45:10Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-367",
@@ -18941,7 +18969,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18978,7 +19006,11 @@
       "commit": "85e5c31ec446ea89fe881909f3dcd97573507cf6",
       "completed_at": "2026-11-02T19:53:12Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-368",
@@ -19001,7 +19033,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19044,7 +19076,11 @@
       "commit": "4e1429620b592e1620129e9ad0fc9d6ca15559cb",
       "completed_at": "2026-11-02T20:28:55Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-369",
@@ -19067,7 +19103,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19097,7 +19133,11 @@
           "text": "Check: `next` (with `--claim` in one store change), `heartbeat` (+ `--auto`), `run`’s renewals and `claims` via `lib/claims.py`; printing, hook input and the child process in `cli/claims.py`; the loop’s rule (`next_task`, `Selection`) still claims.py’s. The JSON store writes tasks.json only when the data changed (a read-only `next` leaves its mtime: no dashboard reloads). 10k-task write 0.95 s (0.90 before). 541 atm-cli, 80 `tests/lib`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-370",
@@ -19120,7 +19160,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19150,7 +19190,11 @@
           "text": "Check: `add`, `edit`, `check` (`lib/edit.py`, from edit.py) and `components` (`lib/components.py`) as store changes; the files options name are read in the CLI (`cli/edit.py`, `cli/components.py`); `Working.archive()` (read on demand, written only if changed) for `--from-label`; `raw()` for check; archived lookups passed in, not the `archived_task` global, for these. 541 atm-cli, 88 `tests/lib`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-371",
@@ -19175,7 +19219,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19212,7 +19256,11 @@
       "commit": "bdcd44d6bd8265e78e598966827994524e92da8c",
       "completed_at": "2026-11-02T21:13:37Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-372",
@@ -19237,7 +19285,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19268,7 +19316,11 @@
           "text": "Check: `archive`/`unarchive` via `lib/archive.py` (crash-safe order kept: `work.moving_into_archive()` makes the JSON store write the archive first; merge driver registered there); dashboard loads the archive from `v1 …/tasks?archived=true` and its notice from atm’s `archive_hint` (its own archive rule removed). Fixture: a 1 MB output cap hid a failure; it now throws instead of serving around one. 954 unit, 359 e2e, 541 atm-cli, 97 `tests/lib`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-373",
@@ -19291,7 +19343,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19321,7 +19373,11 @@
           "text": "Batch review: `git_ops.py` is now `lib/code.py` (workflow, commit, record, PR, merge) over the `Vcs` interface, implemented by `vcs/git.py` (`GitVcs`: paths, commit, resolve, in_history, message, default_base, remote_url); `cli/code.py` keeps the old output. Stores gain `files_for_commit()`. Check: `tests/lib/test_code.py` (fake vcs), contract tests; 541 atm-cli tests pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-374",
@@ -19345,7 +19401,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19395,7 +19451,11 @@
       "commit": "ae6367675517619f5c0895a34ce80eaf9d943c3f",
       "completed_at": "2026-11-02T22:32:43Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-375",
@@ -19418,7 +19478,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19455,7 +19515,11 @@
       "commit": "6e4fa2af25210dcbe08117e9474515ffaab2d402",
       "completed_at": "2026-11-02T22:46:15Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-376",
@@ -19480,7 +19544,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19523,7 +19587,11 @@
       "commit": "ad7444e68bf1cea445f6e88b55a067e3a5364f8a",
       "completed_at": "2026-11-02T22:49:57Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "reviewed"
+      "sprint_review": "reviewed",
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-377",
@@ -19552,7 +19620,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T20:15:57Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19585,7 +19653,11 @@
           "text": "Check: `load_tasks_tolerant` + `JsonGitStore(tolerant=True)`/`problems()`; the v1 route reads tolerantly (commands stay strict): non-task entries left out, bad IDs kept, broken deps shown with the readable IDs (every task fits the schema; a string there used to break the page), unusable vocab lists → defaults; `derived.problems` (not ready) + response `problems`. Footer notice, detail list. `atm list --derived --tolerant`. 955 unit, 359 e2e, 541 atm-cli.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-378",
@@ -19612,7 +19684,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19640,7 +19712,11 @@
           "text": "The global archive lookup is gone: the rules take the project’s lookup (`store.get_archived_task`, or `archived_in(work)` in a change), required where readiness depends on it; each store caches its own archive. Fixes the `atm serve` race (one project judged by another’s archive). New contract tests: archive-only dependency is done on both stores; two projects in one process. 540 + 126 pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-379",
@@ -19669,7 +19745,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19697,7 +19773,11 @@
           "text": "The `app` layer is gone: the CLI (`plugin/scripts/atm`) and the server (`plugin/scripts/atm-serve`, `atm.py --server`) are two processes; `atm serve` lives in `cli/serve.py`, the server process in `api/server.py` (`serve_main`); shared tags and record names in `common/dashboard.py`; the build writes the one entry and checks layers before order. 541 tests pass; users see no change.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-380",
@@ -19722,7 +19802,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19750,7 +19830,11 @@
           "text": "boot is split: `boot/open.py` (any store: `open_project`, `open_registry`, `project_opener` for atm serve) and `boot/jsongit.py` (this store only: paths, migrate, merge driver, setup, lock test, registering by folder). `cli/store.py` imports only `boot/jsongit.py`; the REST API only `boot/open.py`. 541 + 126 pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-381",
@@ -19781,7 +19865,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19809,7 +19893,11 @@
           "text": "change(fn) is the write path by design (§3.2/3.3). New per-entity reads (settings, sprints, releases, components) on both stores; the CLI and REST API no longer touch `project.store` (`task_snapshot`, `project_stamp`, `working_copies`), and the build refuses `.store` there. Left, by the review’s choice: ~12 reads still take `document()` because the rules take the whole file (§11.3). 542 pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-382",
@@ -19835,7 +19923,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19864,7 +19952,11 @@
           "text": "The generator takes nullable types (`[T, \"null\"]`, `anyOf` with null) and maps; `api.schema.json` has `ProjectSummary` and `StatusReport`; the Dashboard re-exports the generated types. `tests/lib/test_schema.py` checks real summaries and status reports (busy, empty, every fixture). Check: the older-server fallbacks are left (§11.10 B).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-383",
@@ -19891,7 +19983,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19919,7 +20011,11 @@
           "text": "One function per status change (`start_task` … `release_task`), returning a `StatusChange` (in `api.schema.json`); keyword parameters for sprints, releases and `edit_existing_task`; `commit_task` takes repository paths (`repository_paths`); `expire_claims`, `get_workflow`; `atm list` reads `task_views`. §5.1 rewritten. Check: no changelog entry yet for this sprint’s `atm.lib` changes.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-384",
@@ -19947,7 +20043,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19975,7 +20071,11 @@
           "text": "`atm.boot.open_memory_project`; `test_public.py` freezes both modules’ `__all__` and signatures against `tests/lib/public-surface.json` (a change fails and prints the new list). §5, §11.6, `CLAUDE.md` and both docstrings say the surface is the two modules, imported from `atm-cli/`. Check: the signatures as Python 3.9 prints them (CI).",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-385",
@@ -20000,7 +20100,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20028,7 +20128,11 @@
           "text": "New layer `host/git.py` (`git`, `run_git`, `in_git`, `head_branch`, `checked_out_branch`), used by db and vcs only (build rule and test). The branch is read from HEAD everywhere: a detached HEAD is the short SHA in claims, the card and the worktree list (serve test). Check: a claim before the first commit now says `main`, not null.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-386",
@@ -20051,7 +20155,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20079,7 +20183,11 @@
           "text": "`dev-api.ts` restarts the API server when `atm.py` changes, lists a folder without a task file as missing, logs its `ATM_HOME`. `devCsp` is the server’s policy plus `DEV_ADDITIONS`, held to `page_csp` by a unit test. `tests/scripts/dev-api.test.mjs` runs `vite dev` end to end (skipped without `npm ci`). Check: a SIGKILL of Vite still leaves the server.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-387",
@@ -20111,7 +20219,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20141,7 +20249,11 @@
           "text": "`worktrees.json` gives each linked worktree’s differing tasks as views, derived on that worktree’s own store (`copy_store`, tolerant, symlink-checked). The dashboard reads them and its readiness, together-now and effective review take atm’s word only. Check: `effectiveRelease` keeps its fallback (§11.10 A); 359 e2e pass.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-388",
@@ -20160,7 +20272,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:42:25Z",
+      "updated_at": "2026-11-03T06:59:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20188,7 +20300,11 @@
           "text": "Checked live with Hakan: a 0.26.0 page left open across the server swap shows the reload bar, keeps its board with no error, and reloads cleanly; raw routes 404. No fix needed; §11.5 settled.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 32,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/32"
+      }
     },
     {
       "id": "T-389",
