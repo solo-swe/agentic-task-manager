@@ -14245,7 +14245,7 @@
         "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T08:40:41Z",
+      "updated_at": "2026-11-03T08:43:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14264,7 +14264,7 @@
       ],
       "started_at": "2026-11-03T07:31:28Z",
       "started_by": "claude:b7be7288",
-      "commit": "d84bf1e19936e79770a413488ac5abd126603414",
+      "commit": "375b23ed9690a716d839283b8046410e17bde7f1",
       "review_requested_at": "2026-11-03T07:34:14Z",
       "review_state": "waiting",
       "notes": [
@@ -14278,10 +14278,10 @@
     },
     {
       "id": "T-285",
-      "name": "An ambient Mermaid pack: mermaid code blocks render as diagrams in task details",
+      "name": "Mermaid diagrams in task text: the @comp-markdown/mermaid pack in the strict sandbox",
       "type": "feature",
       "priority": "P2",
-      "description": "atm's own ambient CompMD pack (spec §6.3: a pack the processor provides to every document without an import) that renders fenced code blocks with the language `mermaid` as diagrams, in the task details' descriptions and notes (T-284).\n\n## Pack\n- Lives in the dashboard (`src/lib/compmd-packs/`), registered with CompMD's processor as ambient; documents may also import it explicitly (spec §6.3). Name it for atm (e.g. `@atm/mermaid`).\n- Mermaid from npm (`mermaid`, pinned exactly), shipped like CompMD in T-284: copied to `plugin/assets/mermaid/` by the build, served by `atm serve`'s asset route, and loaded only when a document has a `mermaid` block.\n- Untrusted text: Mermaid's `securityLevel: 'strict'` (no HTML in labels, no click handlers or links that run code), `startOnLoad: false`, no external fonts or images.\n- Theme: the diagram follows light/dark mode and the dashboard theme (Mermaid `themeVariables` from the CSS tokens), and is re-rendered when the mode or theme changes.\n- A diagram that doesn't parse shows as its code block with Mermaid's error message under it, never a blank space.\n- A wide diagram scrolls inside its block or fits the panel width; it doesn't widen the panel.\n\n## Tests\n- e2e: a flowchart renders as SVG; a broken diagram shows the code and the error; a diagram in dark mode uses dark colours; a label with `<script>` or `<img onerror>` runs nothing; nothing loads from outside localhost; Mermaid isn't loaded for a task without a `mermaid` block.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: Mermaid's settings as part of the untrusted-text renderer, and any change to the page's CSP it needs.\n",
+      "description": "Mermaid diagrams in task text, as decided in T-284's design (`docs/compmd-rendering-design.md` §3c): the published pack `@comp-markdown/mermaid` (Mermaid bundled in one module), run by `@compmd/sandbox` in a strict frame (an opaque origin with no network), with the dashboard rendering in host mode, which T-284 sets up.\n\n## Change\n- `@comp-markdown/mermaid` from npm, pinned exactly, installed with `npm ci`. The build copies its files (`package.json`, `index.comp.md`, `dist/mermaid.js`, `dist/LICENSES.md`) into the versioned asset folder (`plugin/assets/compmd/<version>/packs/@comp-markdown/mermaid@<version>/`), committed like T-284's assets.\n- The request (`src/lib/compmd.ts`): the pack's release in `packs` (its files, its `integrity` from `package-lock.json`), and `policy.packs['@comp-markdown/mermaid'] = { level: 'strict' }` with `imports: 'listed'`. atm's frontmatter (§3b) imports it: `from: \"@comp-markdown/mermaid@0\"`, `names: [mermaid]`.\n- The sandbox's `modules` gives the pack's module URL under the asset folder and its hash, so the frame runs it only if it matches.\n- The server, if T-284 didn't already: the frame documents with `Content-Security-Policy: sandbox allow-scripts`, the pack folder with `Access-Control-Allow-Origin: *` (the frames' origin is opaque), and the page's `frame-src` limited to the asset folder, as `script-src` is.\n- Theme: the pack's `theme=auto` follows the panel's light or dark mode; the view's `scheme()` is called when the dashboard switches mode or theme.\n- A diagram Mermaid can't read shows its code (the pack's own behaviour); the error is logged, not shown (R2a).\n- Mermaid isn't loaded for a text without a `mermaid` block.\n\n## Runtime cost (§3c)\nEach diagram's frame parses Mermaid's 7 MB module. Add an e2e timing for a task with one diagram and with five, and record the numbers in a note. If it is too slow, propose one of §3c's options (one frame per document, the module given as code, or Mermaid built in) to Hakan before changing course.\n\n## Tests\n- e2e: a flowchart renders as SVG inside a frame; a broken diagram shows its code; dark mode uses Mermaid's dark theme; a label with `<script>` or `<img onerror>` runs nothing in the dashboard's page; the frame makes no request outside localhost and none to the dashboard's API; Mermaid isn't requested for a task without a diagram; a module whose hash doesn't match doesn't run.\n- atm-cli (`tests/scripts/serve.test.mjs`): the frame documents' and the pack folder's headers.\n- A screenshot baseline for a task with a diagram, in light and dark.\n- `docs/security-architecture.md`: the sandbox as the place third-party rendering code runs, the frame headers, `frame-src`, and the pack's integrity check.\n\n## Later\nBuilding Mermaid into the dashboard at build time is to be reconsidered later (§3c, option D).\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -14292,16 +14292,18 @@
         "dashboard/package.json",
         "dashboard/package-lock.json",
         "dashboard/vite.config.ts",
-        "dashboard/src/lib/compmd-packs/mermaid.ts",
         "dashboard/src/lib/compmd.ts",
-        "plugin/assets/mermaid/",
         "docs/security-architecture.md",
         "dashboard/tests/e2e/detail.spec.ts",
         "dashboard/tests/e2e/visual.spec.ts",
-        "dashboard/tests/fixtures/standard.json"
+        "dashboard/tests/fixtures/standard.json",
+        "plugin/assets/compmd/",
+        "atm-cli/atm/api/server.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T07:29:26Z",
+      "updated_at": "2026-11-03T08:43:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14314,7 +14316,9 @@
       "components": [
         "dashboard",
         "compmd",
-        "docs"
+        "docs",
+        "cli",
+        "api"
       ]
     },
     {
@@ -14322,7 +14326,7 @@
       "name": "Tell agents what task text can use: CompMD and Mermaid diagrams",
       "type": "docs",
       "priority": "P2",
-      "description": "Once the details panel renders all task text with CompMD (T-284) and Mermaid diagrams (T-285), the places that tell agents and users what task text may contain are out of date. Decided in T-284's design review (`docs/compmd-rendering-design.md` §3a): agents get **guidance** on writing CompMD, from CompMD's own guide for language models, `llms.txt`; there is no checker for now.\n\n## The guide, shipped with the plugin\n- Copy CompMD's `llms.txt` (in the root of `github.com/comp-markdown/compmd`) into `plugin/docs/compmd-llms.txt`, taken at the commit matching the CompMD version the dashboard ships (T-284's pinned npm version), with one header line naming that version and commit. It is updated with CompMD, by hand in the same change as a CompMD bump.\n- Skills point to this local copy; they never tell agents to fetch it, or anything else, from the web.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes a short summary of what renders in atm's panel (T-284's settings): GFM (tables, task lists, footnotes), alerts (`> [!NOTE]`), CompMD's core components (layout, `if`, `each`, `value`) and `mermaid` code blocks as diagrams; math shows as TeX source; inputs show but change nothing; pack imports, data from files or URLs, `host:` data and host-language components don't render (their fallback text shows); raw HTML beyond a short allowlist shows as text. Plain Markdown remains the default; suggest a diagram or a component only where it helps (a flow, a state machine, a comparison). For more, read `plugin/docs/compmd-llms.txt` (its ten rules first).\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, in a sentence, with the pointer to the guide.\n- `plugin/CLAUDE.md`: one line on what task text renders, with the pointer.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small table and a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for 0.28.0, the release that ships T-284 and T-285.\n\n## Security review\nSkills and `plugin/CLAUDE.md` change, so the release needs the agent-facing review (`CLAUDE.md`, Security; `docs/security-architecture.md` §3). No API key is used for the agent sandbox: write the review of these skill changes in §3.3 instead of a live run, as for earlier releases. It covers the new text and the shipped `compmd-llms.txt`: read the copy in full before committing it, check it tells agents nothing to run, fetch or install (it is a syntax guide; any such line is left out or the copy is not shipped), and note that skills reference it only as a local file.\n",
+      "description": "Once the details panel renders all task text with CompMD (T-284) and Mermaid diagrams (T-285), the places that tell agents and users what task text may contain are out of date. Decided in T-284's design review (`docs/compmd-rendering-design.md` §3a): agents get **guidance** on writing CompMD, from CompMD's own guide for language models, `llms.txt`; there is no checker for now.\n\n## The guide, shipped with the plugin\n- Copy CompMD's `llms.txt` (in the root of `github.com/comp-markdown/compmd`) into `plugin/docs/compmd-llms.txt`, taken at the commit matching the CompMD version the dashboard ships (T-284's pinned npm version), with one header line naming that version and commit. It is updated with CompMD, by hand in the same change as a CompMD bump.\n- Skills point to this local copy; they never tell agents to fetch it, or anything else, from the web.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes a short summary of what renders in atm's panel (T-284's settings): GFM (tables, task lists, footnotes), alerts (`> [!NOTE]`), CompMD's core components (layout, `if`, `each`, `value`) and `mermaid` code blocks as diagrams; math shows as TeX source; inputs show but change nothing; pack imports, data from files or URLs, `host:` data and host-language components don't render (their fallback text shows); raw HTML beyond a short allowlist shows as text. atm writes each text's frontmatter (design §3b): task text never starts with one of its own, and gets the current task's data as `md.data.task` (its fields and atm's derived values: `{{md.data.task.status}}`, `::: each {in=(md.data.task.dependencies) as=d}`), and nothing else. Plain Markdown remains the default; suggest a diagram or a component only where it helps (a flow, a state machine, a comparison). For more, read `plugin/docs/compmd-llms.txt` (its ten rules first).\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, in a sentence, with the pointer to the guide.\n- `plugin/CLAUDE.md`: one line on what task text renders, with the pointer.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small table and a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for 0.28.0, the release that ships T-284 and T-285.\n\n## Security review\nSkills and `plugin/CLAUDE.md` change, so the release needs the agent-facing review (`CLAUDE.md`, Security; `docs/security-architecture.md` §3). No API key is used for the agent sandbox: write the review of these skill changes in §3.3 instead of a live run, as for earlier releases. It covers the new text and the shipped `compmd-llms.txt`: read the copy in full before committing it, check it tells agents nothing to run, fetch or install (it is a syntax guide; any such line is left out or the copy is not shipped), and note that skills reference it only as a local file.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -14341,7 +14345,7 @@
         "plugin/docs/compmd-llms.txt"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T08:27:56Z",
+      "updated_at": "2026-11-03T08:43:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
