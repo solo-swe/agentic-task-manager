@@ -577,10 +577,27 @@
       },
       {
         "id": "Rich Markdown",
-        "state": "active",
+        "state": "closed",
         "goal": "Rich task text: CompMD and Mermaid in task details",
         "release": "0.28.0",
-        "start": "2026-11-03T07:29:42Z"
+        "start": "2026-11-03T07:29:42Z",
+        "end": "2026-11-03T17:34:05Z",
+        "report": {
+          "done": [
+            "T-284",
+            "T-285",
+            "T-286",
+            "T-336",
+            "T-342",
+            "T-389",
+            "T-390",
+            "T-397"
+          ],
+          "carried": [],
+          "added": [
+            "T-397"
+          ]
+        }
       },
       {
         "id": "Sprints and releases",
@@ -20770,7 +20787,7 @@
       "description": "Release the sprint *Rich Markdown* as 0.28.0.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.28.0`.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`: `[Unreleased]` becomes `[0.28.0] - <date>`; add what isn't there yet (Help's and What's new's scrolling title, What's new showing recent releases).\n- **Trim What's new** (Hakan): the dashboard shows the last 10 releases, embedded at build time, and ends with a link to the full changelog on GitHub; `WHATS-NEW.md` keeps every release.\n- Regenerate the Linux screenshot baselines (`npm run test:e2e:visual:update`, Docker).\n- Security checklist (`docs/security-architecture.md` §3): skills changed (T-286), the written review in §3.3 stands for the sandbox run; a §3.3 entry for the release.\n\n## Then\n`npm run verify`, the PR to `main` through `/atm:push`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "plugin/.claude-plugin/plugin.json",
@@ -20783,7 +20800,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T17:19:48Z",
-      "updated_at": "2026-11-03T17:19:52Z",
+      "updated_at": "2026-11-03T17:33:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20798,7 +20815,18 @@
         "docs"
       ],
       "started_at": "2026-11-03T17:19:52Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "61ba12ff6d06f8611201009b4fffd1244e8addae",
+      "completed_at": "2026-11-03T17:33:59Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T17:33:59Z",
+          "kind": "outcome",
+          "text": "Released as 0.28.0: version bump, CHANGELOG and WHATS-NEW dated, What’s new shows the newest 10 releases with a link to the rest, 10 screenshot baselines regenerated, §3.3 checklist. Verified: e2e 374, unit 981 (97%), atm-cli 551, visual 84.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
