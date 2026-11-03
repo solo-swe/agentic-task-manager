@@ -9,8 +9,9 @@ const PLUGIN_JSON = new URL('../../../plugin/.claude-plugin/plugin.json', import
 // then from 450 KiB in 0.24.0 for the sprint and release views (decided with Hakan in sprint planning, T-305/T-309),
 // then from 500 KiB in 0.26.0 for the graph's auto-fit and animated fits (decided with Hakan, T-341), and from 525 KiB
 // in 0.26.0 for the overview's Agents, Activity and Progress (decided with Hakan, T-329); T-342 looks for what makes
-// the file grow, to trim it
-const MAX_BYTES = 550 * 1024;
+// the file grow, to trim it. Raised from 550 KiB in 0.29.0 for the document viewer and CompMD's coming upgrade
+// (decided with Hakan, 2026-11-03)
+const MAX_BYTES = 600 * 1024;
 
 test.describe('shipped dashboard file', () => {
   const html = () => readFileSync(BUILT, 'utf8');

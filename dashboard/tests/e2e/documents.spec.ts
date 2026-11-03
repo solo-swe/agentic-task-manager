@@ -517,7 +517,13 @@ test.describe('the document viewer: contents', () => {
     await open(page, tasksServer);
     const button = page.locator('#doc-toc-button');
     await expect(button).toBeVisible();
-    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await expect(page.locator('.doc-toc-list')).toBeHidden();
+    // At the page's top left
+    const place = await page.locator('#doc-viewer').evaluate((el) => ({
+      box: el.querySelector('.doc-toc-box')!.getBoundingClientRect().left,
+      page: el.querySelector('.doc-page')!.getBoundingClientRect(),
+    }));
+    expect(place.box).toBeLessThan(place.page.left + place.page.width / 4);
     await button.hover();
     const entries = page.locator('.doc-toc-list button');
     await expect(entries).toHaveText([
@@ -531,7 +537,7 @@ test.describe('the document viewer: contents', () => {
     ]);
     await expect(entries.nth(2)).toHaveClass(/doc-toc-level-3/);
     await entries.filter({ hasText: /^Reference$/ }).click();
-    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await expect(page.locator('.doc-toc-list')).toBeHidden();
     await expect(viewer(page).locator('.compmd-page h2', { hasText: 'Reference' })).toBeInViewport();
     // The button stays in view as the document scrolls
     await expect(button).toBeInViewport();
@@ -552,8 +558,27 @@ test.describe('the document viewer: contents', () => {
     await page.keyboard.press('ArrowUp');
     await expect(page.locator('.doc-toc-list button').last()).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(page.locator('.doc-toc-list')).toHaveCount(0);
+    await expect(page.locator('.doc-toc-list')).toBeHidden();
     await expect(viewer(page)).toHaveCount(1); // the viewer stays: Escape closed the list
+  });
+
+  test('the button grows into the list: moving from it to an entry never leaves it, so it stays open', async ({
+    page,
+    tasksServer,
+  }) => {
+    await open(page, tasksServer);
+    const b = (await page.locator('#doc-toc-button').boundingBox())!;
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await expect(page.locator('#doc-toc')).toHaveClass(/open/);
+    const last = page.locator('.doc-toc-list button').last();
+    await expect(last).toBeVisible();
+    const target = (await last.boundingBox())!;
+    // A slow move, in many steps, straight from the button to the last entry
+    await page.mouse.move(target.x + 20, target.y + target.height / 2, { steps: 25 });
+    await expect(page.locator('#doc-toc')).toHaveClass(/open/);
+    await page.mouse.down();
+    await page.mouse.up();
+    await expect(viewer(page).locator('.compmd-page h3', { hasText: 'Reference details' })).toBeInViewport();
   });
 
   test('no contents for a document with one heading, or for code', async ({ page, tasksServer }) => {

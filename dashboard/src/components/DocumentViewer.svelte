@@ -421,34 +421,33 @@
       onclick={clearTextFragment}
     >
       {#if doc && toc.length >= 2}
-        <!-- The contents: a faint button at the page's top right, in view as it scrolls; the list on hover or focus -->
-        <div
-          class="doc-toc"
-          class:open={tocOpen}
-          id="doc-toc"
-          bind:this={tocEl}
-          role="presentation"
-          onmouseenter={() => (tocOpen = true)}
-          onmouseleave={() => (tocOpen = false)}
-          onfocusin={() => (tocOpen = true)}
-          onfocusout={(e) => {
-            if (!tocEl?.contains(e.relatedTarget as Node | null)) tocOpen = false;
-          }}
-          onkeydown={onTocKeys}
-        >
-          <button
-            class="doc-toc-button"
-            id="doc-toc-button"
-            aria-label="Contents"
-            title="Contents"
-            aria-expanded={tocOpen}
-            onclick={(e) => {
-              e.stopPropagation();
-              tocOpen = !tocOpen;
-            }}><Icon name="list" size={14} /></button
+        <!-- The contents: one box at the page's top left, in view as it scrolls. Closed, it is a faint button; hovered
+             or focused, the box itself grows into the list, so the pointer is already inside it -->
+        <div class="doc-toc" class:open={tocOpen} id="doc-toc">
+          <div
+            class="doc-toc-box"
+            bind:this={tocEl}
+            role="presentation"
+            onmouseenter={() => (tocOpen = true)}
+            onmouseleave={() => (tocOpen = false)}
+            onfocusin={() => (tocOpen = true)}
+            onfocusout={(e) => {
+              if (!tocEl?.contains(e.relatedTarget as Node | null)) tocOpen = false;
+            }}
+            onkeydown={onTocKeys}
           >
-          {#if tocOpen}
-            <nav class="doc-toc-list" aria-label="Contents">
+            <button
+              class="doc-toc-button"
+              id="doc-toc-button"
+              aria-label="Contents"
+              title="Contents"
+              aria-expanded={tocOpen}
+              onclick={(e) => {
+                e.stopPropagation();
+                tocOpen = !tocOpen;
+              }}><Icon name="list" size={14} /><span class="doc-toc-title">Contents</span></button
+            >
+            <nav class="doc-toc-list" aria-label="Contents" inert={!tocOpen}>
               {#each toc as heading, i (i)}
                 <button
                   class="doc-toc-level-{heading.level}"
@@ -461,7 +460,7 @@
                 >
               {/each}
             </nav>
-          {/if}
+          </div>
         </div>
       {/if}
       {#if doc && fragmentMissing}

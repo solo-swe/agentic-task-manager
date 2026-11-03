@@ -46,9 +46,12 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   that way: relative links for files, text fragments for requirements and places in a document, with `-`, `,` and `&`
   encoded. Help says references open the document.
 - **Contents in the viewer** (T-402): a Markdown document with two or more headings has a faint contents button at
-  its top right, in view as it scrolls; hovering or focusing it lists the headings (h1 to h3, by level), the section
-  being read marked; a pick scrolls there and the list hides, as it does when the pointer leaves or on Escape (which
-  closes the list before the viewer). Read from the headings CompMD rendered.
+  its top left, in view as it scrolls; hovered or focused, the button grows into the list of headings (h1 to h3, by
+  level; at once with reduced motion), so the pointer is inside it all along, the section being read marked; a pick
+  scrolls there and the list hides, as it does when the pointer leaves or on Escape (which closes the list before
+  the viewer). Read from the headings CompMD rendered.
+- **The single file's guardrail goes from 550 to 600 KiB** (`tests/e2e/guardrails.spec.ts`, decided with Hakan): the
+  document viewer took it to 559 kB, and CompMD's coming upgrade needs room.
 - **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a
   piece of text), what it shows and how its window works.
 - **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a

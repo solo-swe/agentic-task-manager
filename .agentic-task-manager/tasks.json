@@ -21249,7 +21249,7 @@
       "description": "A table of contents for a Markdown document in the viewer (Hakan): out of the way until wanted.\n\n## Change\n- In [`dashboard/src/components/DocumentViewer.svelte`](dashboard/src/components/DocumentViewer.svelte): a small, faint contents button at the page's top right, staying in view as the document scrolls; hovering it or focusing it shows the document's headings (h1 to h3, indented by level), the section being read marked; a click scrolls to the heading and the list hides again, as it does when the pointer leaves or Escape is pressed.\n- Built from the headings CompMD rendered (read, never rendered by atm), again after each render; only for a document with at least two headings.\n- Keyboard: the button is focusable, the list's entries are buttons, arrows move between them.\n\n## Tests\ne2e: no button for a document with one heading; the list shows the headings by level; a click scrolls to the heading and hides it; the current section is marked as the document scrolls.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/components/DocumentViewer.svelte",
@@ -21257,7 +21257,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T20:04:43Z",
+      "updated_at": "2026-11-03T20:08:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21275,7 +21275,19 @@
         "T-393"
       ],
       "started_at": "2026-11-03T20:04:43Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "cbc3997056876b5668f93b15d3aa73edab38387b",
+      "completed_at": "2026-11-03T20:08:35Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T20:08:35Z",
+          "kind": "review",
+          "text": "Contents in the viewer: a faint button at the page’s top right, the headings (h1–h3) on hover or focus, the current section marked, a pick scrolls there. Try it on the dev server with a long design doc. e2e 404; single file 558.9 kB, ~4 kB under the 550 KiB guardrail.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }
