@@ -176,11 +176,22 @@ describe('opening and Back (the dashboard state)', () => {
     dashboard.openDocument({ path: 'docs/x.md', lines: [3, 3] });
     expect(dashboard.docRef).toEqual({ path: 'docs/x.md', lines: [3, 3] });
     expect(location.hash).toBe('#view=list&doc=docs/x.md:L3');
-    expect(history.state).toEqual({ atmDocument: true });
+    expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1 });
     const back = vi.spyOn(history, 'back').mockImplementation(() => {});
     dashboard.documentBack();
     expect(back).toHaveBeenCalledTimes(1);
     back.mockRestore();
+  });
+
+  it('Close goes back past every document opened in the viewer, so Back doesn’t bring one back', () => {
+    history.replaceState(null, '', '#view=list');
+    dashboard.openDocument({ path: 'docs/a.md' });
+    dashboard.openDocument({ path: 'docs/b.md' });
+    expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 2 });
+    const go = vi.spyOn(history, 'go').mockImplementation(() => {});
+    dashboard.closeDocument();
+    expect(go).toHaveBeenCalledWith(-2);
+    go.mockRestore();
   });
 
   it('one opened from a link or a reload closes, without a new history entry', () => {

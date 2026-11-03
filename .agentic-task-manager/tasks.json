@@ -20742,7 +20742,7 @@
       "description": "The viewer window of `docs/compmd-viewer-design.md` §2 and §6. **Reviewed live with Hakan on the dev server** before the tasks that build on it (review mode `blocker`).\n\n## Change\n- `dashboard/src/lib/documents.ts`: resolving a reference (§3: from the project root for task text, from the document's folder inside a document, never leaving the project), the URL hash (`#doc=<path>`, with `:L<n>`), fetching the documents route through `src/lib/api/http.ts` with its ETag on the dashboard's poll.\n- `dashboard/src/components/DocumentViewer.svelte`: stacked over the details panel, slightly offset; movable by its title bar (pointer, and arrow keys on the focused title bar), kept inside the window; resizable from a visible grip on its bottom-right corner (Shift and the arrow keys too), with a minimum size; its position and size kept in the local preferences; a thin themed scrollbar; full-window without move or resize on a narrow window. Back (the button, Escape, the browser's Back) returns to the previous document or the task. The fallbacks of V6.\n- **The title bar:** the document's first heading (else its file name), its path under it, and two actions (decided with Hakan):\n  - **Copy path**: copies the path from the project root, with `#L<n>` (or `#L<n>-L<m>`) when a line or range is selected, for pasting to an agent; says \"Copied\" for a moment.\n  - **Open on GitHub**: the file in the repository's web view (`meta.repository`, the same address rules as commit links), at the HEAD commit the documents route gives (`commit`), with the selected line; in a new tab, without access to the page. Shown only when the project has a repository address and git tracks the file (`tracked`).\n- `CompMd.svelte` takes a document's request parts (its own frontmatter, no `host:` data, only this file in `files`).\n\n## Tests\nUnit tests for `documents.ts` (resolving, the hash, the GitHub address); e2e: open, move, resize, Back, Reload keeps it, Copy path (with a line), Open on GitHub (shown or not), a missing file, a refused file.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "T-392"
       ],
@@ -20755,7 +20755,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:02:46Z",
+      "updated_at": "2026-11-03T19:11:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20773,7 +20773,18 @@
       "sprint": "Document Viewer",
       "review": "blocker",
       "started_at": "2026-11-03T19:02:46Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "325a903ab545e3063ac99414807825351cda24f2",
+      "review_requested_at": "2026-11-03T19:11:51Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-03T19:11:51Z",
+          "kind": "review",
+          "text": "Live review on the dev server: open `#doc=docs/compmd-viewer-design.md` with the task panel open; move by the title bar, resize from the corner, Reload, Back, Escape, Copy path (`:L3`), Open on GitHub, a narrow window. e2e 386, unit 1001 pass.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-394",

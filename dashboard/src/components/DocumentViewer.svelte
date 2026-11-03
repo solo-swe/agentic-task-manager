@@ -14,6 +14,7 @@
   } from '../lib/documents';
   import { getPref, setPref } from '../lib/prefs';
   import { fileRef } from '../lib/repo';
+  import { compactAt } from '../lib/scroll';
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
   import Icon from './Icon.svelte';
@@ -83,6 +84,13 @@
   const repoFile = $derived(
     doc?.tracked && doc.commit && ref ? fileRef(dashboard.meta, doc.commit, ref.path, ref.lines) : null,
   );
+
+  /** The document has scrolled: the title bar compacts, as the dashboard's and the dialogs' do (lib/scroll.ts) */
+  let scrolled = $state(false);
+  // Another file opens at its top, with the full title bar
+  $effect(() => {
+    if (ref?.path) scrolled = false;
+  });
 
   let copied = $state(false);
   let copiedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -177,6 +185,7 @@
   <div
     class="doc-viewer"
     class:narrow
+    class:scrolled
     id="doc-viewer"
     role="dialog"
     aria-label="Document: {title}"
@@ -215,12 +224,22 @@
           ><Icon name="external-link" size={14} />Open on {repoFile.host}</a
         >
       {/if}
+      <button
+        class="doc-close"
+        id="doc-close"
+        aria-label="Close"
+        title="Close"
+        onclick={() => dashboard.closeDocument()}><Icon name="x" size={13} /></button
+      >
     </div>
-    <div class="doc-body" id="doc-body">
+    <div class="doc-body" id="doc-body" onscroll={(e) => (scrolled = compactAt(e.currentTarget.scrollTop))}>
       {#if doc}
-        {#key `${ref.path}`}
-          <CompMd text={doc.document} path={doc.path} />
-        {/key}
+        <!-- A page on the desk: each theme may give it its own paper (--doc-page-*, themes/*.css) -->
+        <article class="doc-page" data-kind={doc.kind}>
+          {#key `${ref.path}`}
+            <CompMd text={doc.document} path={doc.path} />
+          {/key}
+        </article>
       {:else if error}
         <div class="doc-fallback" id="doc-fallback" data-error={error.kind}>
           <strong>{MESSAGES[error.kind]}</strong>

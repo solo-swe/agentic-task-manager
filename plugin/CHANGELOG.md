@@ -20,7 +20,11 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   window over the details panel, rendered by CompMD from the document atm wraps it in (`DocumentViewer.svelte`,
   `lib/documents.ts`). It moves by its title bar and resizes from a corner grip (the arrow keys too: Shift resizes),
   stays inside the window and keeps where it was (`documentViewer` preference); on a window narrower than 720 px it
-  fills it. Back (its button, Escape, the browser's) returns to the document before, or closes it. The title bar has
+  fills it. The document is a page on a desk (border, shadow, margins), which a theme may restyle (`--doc-page-*`):
+  Hand-drawn writes it on its ruled notebook page, Sticky Notes tapes a sheet to its board. Scrolled, the title bar
+  compacts, as the dashboard's and the dialogs' do (`compactAt` in `lib/scroll.ts`, shared by the three). Back (its
+  button, Escape, the browser's) returns to the document before; × closes it, back past every document opened in
+  it. The title bar has
   the document's first heading and path, **Copy path** (with `#L<n>`) and **Open on GitHub** (or GitLab, Bitbucket,
   Gitea: the file at the current commit, for a file git tracks). The file is asked for again on the dashboard's
   refresh, a 304 while unchanged; a missing file says "Not in the project", one atm doesn't show "Can't be shown here".

@@ -30,6 +30,13 @@ import {
 } from './filters';
 import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
 import { parseDocHash, withDocHash, type DocumentRef } from './documents';
+
+/** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
+function documentDepth(): number {
+  const state = history.state as { atmDocument?: boolean; atmDocumentDepth?: number } | null;
+  if (!state?.atmDocument) return 0;
+  return typeof state.atmDocumentDepth === 'number' && state.atmDocumentDepth > 0 ? state.atmDocumentDepth : 1;
+}
 import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
 import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
 import { formatHash, hashParams } from './hash';
@@ -599,14 +606,27 @@ export class DashboardState {
    * browser's Back (and the viewer's) returns to the previous document or to the task */
   openDocument(ref: DocumentRef) {
     this.docRef = ref;
-    history.pushState({ atmDocument: true }, '', withDocHash(location.hash, ref));
+    // How many of the viewer's entries lead here, so Close can go back past all of them
+    const depth = documentDepth() + 1;
+    history.pushState({ atmDocument: true, atmDocumentDepth: depth }, '', withDocHash(location.hash, ref));
   }
 
   /** The viewer's Back (its button, Escape): the previous history entry when this one was the viewer's own; for a
    * document opened from a link or a reload, closes it without a new history entry */
   documentBack() {
-    if ((history.state as { atmDocument?: boolean } | null)?.atmDocument) {
+    if (documentDepth() > 0) {
       history.back();
+      return;
+    }
+    this.closeDocument();
+  }
+
+  /** The viewer's Close: back past every document opened in it, to where the first was opened from (so the browser's
+   * Back doesn't bring one back); a document opened from a link or a reload closes without a new history entry */
+  closeDocument() {
+    const depth = documentDepth();
+    if (depth > 0) {
+      history.go(-depth);
       return;
     }
     this.docRef = null;

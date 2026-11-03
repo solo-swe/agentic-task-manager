@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import { compactAt } from '../lib/scroll';
   import HintScroll from './HintScroll.svelte';
 
   interface Props {
@@ -56,7 +57,12 @@
     <button bind:this={closeButton} class="detail-close" aria-label="Close" onclick={onclose}>&times;</button>
     <h3>{title}</h3>
     {#if scrollItem}
-      <HintScroll item={scrollItem} outer="dialog-scroll" id="{id}-body" onscrolled={(top) => (scrolled = top > 8)}>
+      <HintScroll
+        item={scrollItem}
+        outer="dialog-scroll"
+        id="{id}-body"
+        onscrolled={(top) => (scrolled = compactAt(top))}
+      >
         {@render children()}
       </HintScroll>
     {:else}

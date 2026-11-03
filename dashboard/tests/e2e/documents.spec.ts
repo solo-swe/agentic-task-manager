@@ -71,6 +71,13 @@ test.describe('the document viewer', () => {
     await page.keyboard.press('Escape');
     await expect(viewer(page)).toHaveCount(0);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    // × closes it too, the task staying open
+    await page.evaluate(() => (location.hash = location.hash + '&doc=docs/design.md'));
+    await expect(page.locator('#doc-title')).toHaveText('The design');
+    await page.locator('#doc-close').click();
+    await expect(viewer(page)).toHaveCount(0);
+    expect(new URL(page.url()).hash).not.toContain('doc=');
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     await page.keyboard.press('Escape');
     await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
   });
@@ -207,5 +214,45 @@ test.describe('the document viewer', () => {
     tasksServer.setDocument(projectDocument('docs/design.md', '# The new design\n'));
     await page.clock.runFor(5_000);
     await expect(page.locator('#doc-title')).toHaveText('The new design');
+  });
+
+  test('a page on a desk; scrolled, the title bar compacts, as the dialogs’ do, and comes back at the top', async ({
+    page,
+    tasksServer,
+  }) => {
+    const long = '# A long design\n\n' + Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1}.`).join('\n\n');
+    tasksServer.setDocument(projectDocument('docs/long.md', long));
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/long.md'));
+    await expect(viewer(page).locator('.doc-page .compmd')).toHaveAttribute('data-compmd', 'ready');
+    // The page stands apart from the desk under it
+    const colours = await viewer(page).evaluate((el) => ({
+      desk: getComputedStyle(el.querySelector('.doc-body')!).backgroundColor,
+      page: getComputedStyle(el.querySelector('.doc-page')!).backgroundColor,
+      border: getComputedStyle(el.querySelector('.doc-page')!).borderTopStyle,
+    }));
+    expect(colours.page).not.toBe(colours.desk);
+    expect(colours.border).toBe('solid');
+
+    const titleSize = () => page.locator('#doc-title').evaluate((h) => parseFloat(getComputedStyle(h).fontSize));
+    expect(await titleSize()).toBe(15);
+    await expect(page.locator('#doc-path')).toBeVisible();
+    await page.locator('#doc-body').evaluate((el) => el.scrollTo({ top: 400 }));
+    await expect(viewer(page)).toHaveClass(/scrolled/);
+    await expect.poll(titleSize).toBe(13); // after its transition
+    await expect.poll(() => page.locator('#doc-path').evaluate((el) => getComputedStyle(el).opacity)).toBe('0');
+    await page.locator('#doc-body').evaluate((el) => el.scrollTo({ top: 0 }));
+    await expect(viewer(page)).not.toHaveClass(/scrolled/);
+    await expect.poll(titleSize).toBe(15);
+  });
+
+  test('the Hand-drawn theme writes the document on a ruled notebook page', async ({ page, tasksServer }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', mode: 'light', autoRefresh: false })),
+    );
+    await openWithDocument(page, tasksServer, 'view=list&doc=docs/design.md');
+    const page_ = viewer(page).locator('.doc-page');
+    expect(await page_.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('repeating-linear-gradient');
+    expect(await page_.locator('.compmd').evaluate((el) => getComputedStyle(el).lineHeight)).toBe('26px');
   });
 });

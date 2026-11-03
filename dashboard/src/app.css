@@ -2276,6 +2276,31 @@ button.repo-ref {
 .doc-viewer.narrow .doc-titlebar {
   cursor: default;
 }
+/* Once the document scrolls, the title bar compacts, as the dashboard's and the dialogs' do: a smaller title, the
+   path folded away */
+.doc-titlebar,
+.doc-title,
+.doc-path {
+  transition:
+    padding 0.2s ease,
+    font-size 0.2s ease,
+    max-height 0.2s ease,
+    opacity 0.2s ease;
+}
+.doc-path {
+  max-height: 16px;
+}
+.doc-viewer.scrolled .doc-titlebar {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+.doc-viewer.scrolled .doc-title {
+  font-size: 13px;
+}
+.doc-viewer.scrolled .doc-path {
+  max-height: 0;
+  opacity: 0;
+}
 .doc-titlebar:focus-visible,
 .doc-grip:focus-visible {
   outline: 2px solid var(--accent);
@@ -2301,7 +2326,8 @@ button.repo-ref {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.doc-back {
+.doc-back,
+.doc-close {
   display: inline-flex;
   padding: 4px;
   background: none;
@@ -2310,7 +2336,22 @@ button.repo-ref {
   color: var(--text-muted);
   cursor: pointer;
 }
-.doc-back:hover {
+/* Close: small, in the window's top-right corner */
+.doc-close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  padding: 3px;
+  border-radius: 5px;
+}
+.doc-titlebar {
+  padding-right: 28px;
+}
+.doc-viewer.scrolled .doc-close {
+  top: 2px;
+}
+.doc-back:hover,
+.doc-close:hover {
   background: var(--surface2);
   color: var(--text);
 }
@@ -2332,14 +2373,49 @@ button.repo-ref {
   color: var(--text);
   background: var(--surface2);
 }
-/* The document scrolls with a thin scrollbar in the theme's colours */
+/* The document is a page on a desk, scrolling with a thin scrollbar in the theme's colours. A theme gives the desk
+   and the page its own look through these variables (themes/hand-drawn.css: a ruled notebook page) */
+.doc-viewer {
+  --doc-desk: var(--bg);
+  --doc-page: var(--surface);
+  --doc-page-border: 1px solid var(--border);
+  --doc-page-radius: 4px;
+  --doc-page-shadow:
+    0 1px 2px color-mix(in srgb, var(--overlay) 35%, transparent),
+    0 6px 18px color-mix(in srgb, var(--overlay) 25%, transparent);
+  --doc-page-padding: 36px 44px 44px;
+  --doc-page-ink: var(--text);
+}
 .doc-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 16px 20px 24px;
+  padding: 24px;
+  background: var(--doc-desk);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+}
+.doc-page {
+  max-width: 820px;
+  min-height: calc(100% - 4px);
+  margin: 0 auto;
+  padding: var(--doc-page-padding);
+  background: var(--doc-page);
+  border: var(--doc-page-border);
+  border-radius: var(--doc-page-radius);
+  box-shadow: var(--doc-page-shadow);
+  color: var(--doc-page-ink);
+  box-sizing: border-box;
+}
+/* A code or text file: less margin, the code is the page */
+.doc-page:is([data-kind='code'], [data-kind='text']) {
+  padding: 20px 24px;
+}
+.doc-viewer.narrow .doc-body {
+  padding: 12px;
+}
+.doc-viewer.narrow .doc-page {
+  padding: 20px 18px 28px;
 }
 .doc-body::-webkit-scrollbar {
   width: 8px;
