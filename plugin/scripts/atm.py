@@ -7700,6 +7700,13 @@ def _project_at(paths, actor=None, tolerant=False):
     return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
 
 
+def open_memory_project(tasks=(), archive=(), meta=None, actor=None):
+    """A project on the in-memory store, with no version control: for other tools' tests (and atm-lib's own), so they
+    never import `atm.db`. The lists given are copied; the project's changes stay in memory."""
+    copy = lambda items: [dict(item) for item in items]
+    return Project(MemoryStore(tasks=copy(tasks), archive=copy(archive), meta=dict(meta or {})), None, actor)
+
+
 def open_registry(home=None):
     """The user's registry of projects (the dashboard's list)."""
     return FileRegistry(home)

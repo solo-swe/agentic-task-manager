@@ -66,8 +66,10 @@ changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 **Layers** (`docs/layered-architecture.md`): every module is in a layer's folder (`common/`, `db/`, `vcs/`, `lib/`,
 `boot/`, `cli/`, `api/`; the CLI and the REST API are two processes, `plugin/scripts/atm` and the internal
 `plugin/scripts/atm-serve`, and never import each other), and the build
-refuses an import the layer rule forbids, with no exceptions. atm-lib's public surface, for other tools, is `atm.lib`
-(`atm/lib/__init__.py`, its `__all__`) with `atm.boot.open_project`; a change to it goes in the changelog. atm-lib's
+refuses an import the layer rule forbids, with no exceptions. atm-lib's public surface, for other tools, is two
+modules: `atm.lib` (`atm/lib/__init__.py`, its `__all__`) and `atm.boot` (`open_project`, `open_memory_project`,
+`open_registry`). Their names and signatures are frozen in `tests/lib/public-surface.json`: a change fails
+`test_public.py` until that list is updated, and goes in the changelog. atm-lib's
 unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `npm run test:scripts`).
 
 Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `npm run test:scripts`) drive the built atm-cli

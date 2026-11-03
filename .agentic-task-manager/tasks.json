@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 389,
+    "next_id": 390,
     "labels": [
       {
         "id": "architecture",
@@ -19812,7 +19812,7 @@
       "description": "`docs/layered-architecture.md` §11.7.\n\n## Change\n- A function per status change, each with its own parameters: `start_task(project, id, status=None)`, `review_task`, `done_task(project, id, note=None, commit=None, resolution=None, status=None)`, `reject_task(project, id, reason)`, `approve_task`, `request_changes`, `block_task`, `unblock_task`, `reopen_task`, `skip_task`, `fail_task`, `release_task`. `change_task_status` becomes internal.\n- Keyword parameters instead of `Changes` for sprints, releases, components and editing a task.\n- `commit_task` takes paths relative to the repository; the CLI resolves them from the current folder.\n- One naming scheme: claims as `list_claims` (reads) and `expire_claims`/`renew_*` (writes), settings as `get_*`/`set_*` (`workflow_settings` → `get_workflow`), one of `list_matching`/`task_views`.\n- Results typed in the schema where they cross to the CLI or API (`TaskView`; the status changes' answers), using the nullable types of the task before.\n- The CLI moves onto them; its output and exit codes stay as they are.\n- Update §5.1's tables to the code, `atm/lib/__init__.py`'s `__all__`, §11.7 (settled).\n\n## Tests\n- `tests/lib/` for the new functions; `npm run test:scripts` unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-381",
         "T-382"
@@ -19826,7 +19826,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:07:03Z",
+      "updated_at": "2026-11-03T01:25:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19842,7 +19842,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T01:07:03Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "e5b4e805a587109b1a64e40c8bbf0ec801b2a4de",
+      "completed_at": "2026-11-03T01:25:01Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T01:25:01Z",
+          "kind": "review",
+          "text": "One function per status change (`start_task` … `release_task`), returning a `StatusChange` (in `api.schema.json`); keyword parameters for sprints, releases and `edit_existing_task`; `commit_task` takes repository paths (`repository_paths`); `expire_claims`, `get_workflow`; `atm list` reads `task_views`. §5.1 rewritten. Check: no changelog entry yet for this sprint’s `atm.lib` changes.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-384",
@@ -19855,7 +19867,7 @@
       "description": "`docs/layered-architecture.md` §11.6.\n\n## Change\n- `atm.boot` gets `open_memory_project(tasks=(), archive=(), meta=None, actor=None)`, so tools and their tests never import `atm.db`; `tests/lib/test_public.py` uses it.\n- A contract test freezes the public surface: `atm.lib.__all__` and `atm.boot.__all__`, and each exported function's signature (`inspect.signature`), compared with a committed list (`tests/lib/public-surface.json`). A change fails until the list is updated, and the changelog notes it.\n- `atm/lib/__init__.py`'s docstring says the surface is for imports from the repository's `atm-cli/`, not from the shipped `plugin/scripts/atm.py`.\n- §5 says the surface is two modules; update §11.6 (settled), `CLAUDE.md`.\n\n## Tests\n- The contract test; `test_public.py` on `open_memory_project`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-383",
         "T-380"
@@ -19870,7 +19882,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:49Z",
+      "updated_at": "2026-11-03T01:25:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19884,7 +19896,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T01:25:28Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-385",
@@ -20039,6 +20053,30 @@
       "sprint": "Layered Architecture",
       "review": "batch",
       "with": "user",
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-389",
+      "name": "Add the tenets to the README",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "docs"
+      ],
+      "description": "Add a short **Tenets** section to `README.md`: the principles atm is built on, one line each with a sentence on what it means for a user.\n\n## The tenets\n- **The data lives with the project**, versioned with the project's own version control (`.agentic-task-manager/` in the repository, committed with the code).\n- **One skill install**: installing the plugin is all it takes; nothing else to set up (no service, no account, no database).\n- **Actions through agents**: every change to the tasks is made by an agent running a skill (or `atm`), not by hand in the files.\n- **Visibility through the dashboard**: the dashboard shows everything and is read-only.\n\n## Notes\nPlace it near the top, after the introduction. Keep the README's tone; don't restate details covered further down, link to them instead.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "README.md"
+      ],
+      "created_at": "2026-11-03T01:25:18Z",
+      "updated_at": "2026-11-03T01:25:23Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "docs"
       ]

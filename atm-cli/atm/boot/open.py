@@ -5,6 +5,7 @@ store and git. What only the JSON-in-git store has (its paths, migrations, merge
 
 from ..db.jsongit.paths import check_task_folder, find_paths
 from ..db.jsongit.store import JsonGitStore
+from ..db.memory import MemoryStore
 from ..db.registry import FileRegistry
 from ..lib.project import Project
 from ..vcs.git import GitVcs
@@ -34,6 +35,13 @@ def _project_at(paths, actor=None, tolerant=False):
     after the paths were found is refused too."""
     check_task_folder(paths["root"], paths["dir"])
     return Project(JsonGitStore(paths, tolerant=tolerant), GitVcs(paths["root"]), actor)
+
+
+def open_memory_project(tasks=(), archive=(), meta=None, actor=None):
+    """A project on the in-memory store, with no version control: for other tools' tests (and atm-lib's own), so they
+    never import `atm.db`. The lists given are copied; the project's changes stay in memory."""
+    copy = lambda items: [dict(item) for item in items]
+    return Project(MemoryStore(tasks=copy(tasks), archive=copy(archive), meta=dict(meta or {})), None, actor)
 
 
 def open_registry(home=None):

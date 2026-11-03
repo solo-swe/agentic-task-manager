@@ -4,7 +4,9 @@ Its functions take a Project and plain values (keyword parameters where there ar
 never parse arguments, print or exit, and reach data only through the store's interface. Function names are unique
 across atm (`show_tasks`, not `tasks.show`): the build puts every module in one namespace. §5.1 lists them.
 
-**For other tools** (an MCP server, a script), with `atm-cli/` on the import path; there is no published package:
+**For other tools** (an MCP server, a script), importing from the repository's `atm-cli/` (on the import path), not
+from the plugin's shipped `plugin/scripts/atm.py`, which is one flat file built for the CLI; there is no published
+package:
 
     from atm.boot import open_project              # picks the stores: the JSON-in-git store and git
     from atm.lib import done_task, show_tasks, start_task
@@ -14,11 +16,14 @@ across atm (`show_tasks`, not `tasks.show`): the build puts every module in one 
     done_task(project, "T-1", note="Shipped")
     print(show_tasks(project, ["T-1"])[0]["task"]["status"])
 
-What this module exports (`__all__`) is the public surface; everything else in atm, the other `atm.lib.*` names
-included, is internal and may change in any release. The surface is versioned with the plugin
-(`plugin/.claude-plugin/plugin.json`): a release that changes it says so in `plugin/CHANGELOG.md`. Failures are
-`AtmFailure` subclasses (`NotFound`, `Invalid`, `Conflict`, `NothingAvailable`, `Claimed`), each with the exit code
-the CLI gives it (`code`). A test can open a project on the in-memory store (`atm.db.memory.MemoryStore`) instead.
+The public surface is two modules: what this one exports (`__all__`) and `atm.boot`'s `__all__` (`open_project`,
+`open_memory_project`, `open_registry`). Everything else in atm, the other `atm.lib.*` and `atm.db` names included,
+is internal and may change in any release. The names and every function's signature are frozen in
+`tests/lib/public-surface.json`, which `tests/lib/test_public.py` compares with the code: a change fails it until the
+list is updated, and goes in `plugin/CHANGELOG.md` (the surface is versioned with the plugin,
+`plugin/.claude-plugin/plugin.json`). Failures are `AtmFailure` subclasses (`NotFound`, `Invalid`, `Conflict`,
+`NothingAvailable`, `Claimed`), each with the exit code the CLI gives it (`code`). A test opens a project in memory
+with `atm.boot.open_memory_project(tasks=[...])`.
 
 The results that cross to a front end are typed in `atm/common/schema/api.schema.json` (generated into
 `atm.common.types`): `TaskView` (task_views), `StatusChange` (the status changes), `DepsResult`, `StatusReport`,

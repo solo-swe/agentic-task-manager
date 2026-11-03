@@ -401,10 +401,13 @@ start_task(project, "T-360")
   this rule;
 
 - **delivery:** the plugin keeps the one-file `atm.py`, built from the same modules. Other tools import atm-lib from
-  the repository's `atm-cli/` for now; a published package can come later. Its public surface is `atm.lib` (what
-  `atm/lib/__init__.py` exports in `__all__`, with how to use it) and `atm.boot`'s `open_project` and
-  `open_registry`, which open the stores atm-lib may not know (T-376); versioned with the plugin, a change to it in
-  `plugin/CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py` uses only that surface.
+  the repository's `atm-cli/` (not the shipped `atm.py`) for now; a published package can come later. Its public
+  surface is two modules: `atm.lib` (what `atm/lib/__init__.py` exports in `__all__`, with how to use it) and
+  `atm.boot`'s `__all__`: `open_project`, `open_memory_project` (a project in memory, so tools and their tests never
+  import `atm.db`) and `open_registry`, which open the stores atm-lib may not know (T-376, T-384). It is versioned
+  with the plugin, a change to it in `plugin/CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py`
+  uses only that surface, and freezes it: the names and each function's signature against
+  `tests/lib/public-surface.json`, so a change fails until that list is updated.
 
 ### 5.1 The functions
 
@@ -826,6 +829,11 @@ are unchanged (the atm-cli suite, at every step).
   `open_memory_project(...)`, so tools and their tests never import `atm.db`; a contract test freezes `__all__` and
   every exported function's signature, so a change to the surface is made on purpose and noted in the changelog;
   the docstring says it is for imports from the repository. After §11.7.
+- **Settled (T-384):** `atm.boot.open_memory_project(tasks=(), archive=(), meta=None, actor=None)`;
+  `test_public.py` opens its projects with it and freezes both modules' `__all__` and signatures against
+  `tests/lib/public-surface.json` (on a change, the failure prints the new list to commit). §5 and both modules'
+  docstrings say the surface is the two modules, imported from the repository's `atm-cli/`. atm-lib's other tests
+  still use `atm.db.memory` directly: they test atm-lib from inside, not as a tool.
 
 ### 11.7 atm-lib's functions don't match §5.1 (T-383)
 
