@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 378,
+    "next_id": 389,
     "labels": [
       {
         "id": "architecture",
@@ -19403,7 +19403,7 @@
       "description": "Step 16 of `docs/layered-architecture.md` §9.\n\n## Change\n- The public module `atm.lib` (§5): what other tools may import, from the repository's `atm-cli/`; its documentation and how it is versioned. No published package.\n- Update `docs/v4/atm-cli.md`, `CLAUDE.md`'s layout and atm-cli sections, and `docs/security-architecture.md`'s components; mark `docs/layered-architecture.md` as done.\n\n## Tests\n- A `tests/lib/` test that imports only `atm.lib` and runs a task from start to done on the in-memory store.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-375"
       ],
@@ -19415,7 +19415,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:46:22Z",
+      "updated_at": "2026-11-02T22:49:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19445,10 +19445,20 @@
           "kind": "note",
           "text": "Open from T-375 (carried from T-366): the worktree copies still come without atm’s `derived` values, so the dashboard keeps its fallbacks for them (`kanban.ts` readiness, `waiting.ts` togetherNow). Raise it in the sprint review as a follow-up task.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-02T22:49:57Z",
+          "kind": "review",
+          "text": "Batch review: `atm.lib` is the public surface (`atm/lib/__init__.py`, its `__all__` and how to use it) with `atm.boot.open_project`; `tests/lib/test_public.py` runs a task start to done through it, on memory and a real folder. Docs: `docs/v4/atm-cli.md` layout, `CLAUDE.md`, the security review of the layers (§3.3), the design marked done with what differs and what is open.",
+          "by": "claude:b7be7288"
         }
       ],
       "started_at": "2026-11-02T22:46:22Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "ad7444e68bf1cea445f6e88b55a067e3a5364f8a",
+      "completed_at": "2026-11-02T22:49:57Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-377",
@@ -19510,6 +19520,455 @@
           "text": "Check: `load_tasks_tolerant` + `JsonGitStore(tolerant=True)`/`problems()`; the v1 route reads tolerantly (commands stay strict): non-task entries left out, bad IDs kept, broken deps shown with the readable IDs (every task fits the schema; a string there used to break the page), unusable vocab lists → defaults; `derived.problems` (not ready) + response `problems`. Footer notice, detail list. `atm list --derived --tolerant`. 955 unit, 359 e2e, 541 atm-cli.",
           "by": "claude:b7be7288"
         }
+      ]
+    },
+    {
+      "id": "T-378",
+      "name": "Layers gap 11.4: pass the archive lookup to the rules; the global hook goes (fixes a server race)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.4. Before the branch is merged.\n\n## Problem\n`common/model.py`'s `use_archive`/`archived_task` is a module-global lookup the JSON-in-git store's loaders set. `atm serve` is threaded and serves many projects in one process, so a request for one project can be judged against another project's archive (a dependency only in its own archive counts as missing; a ready task shows as waiting). On the in-memory store the hook is never set.\n\n## Change\n- The rules take the lookup as a parameter: `unfinished_dependencies(data, task, archived)`, `find_task(data, id, archived=...)`, `change_status`, the checks in `lib/edit.py` and `lib/status.py`, `cli/render.py`.\n- atm-lib passes `store.get_archived_task`, or `archived_in(work)` inside a change.\n- Each store keeps its own lazy archive cache (`JsonGitStore.get_archived_task` reads its own archive).\n- `use_archive`, `_archive` and the global `archived_task` are deleted.\n- Update §11.4 (settled) and §8's paragraph on the hook.\n\n## Tests\n- `tests/lib/`: a dependency only in the archive counts as done, on both stores (contract test).\n- Two JSON-in-git projects used one after the other in one process never see each other's archives.\n- `npm run test:scripts`; the serve tests.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/common/model.py",
+        "atm-cli/atm/db/jsongit/files.py",
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/render.py",
+        "tests/lib/test_store_contract.py",
+        "docs/layered-architecture.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:45Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-379",
+      "name": "Layers gap 11.1: two launchers, atm and an internal atm-serve, replace the app layer",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.1.\n\n## Change\n- `plugin/scripts/atm` runs the CLI; a new internal launcher `plugin/scripts/atm-serve` runs the REST API's server (one dispatch at the bottom of the one built `atm.py`, e.g. a `--server` entry).\n- The CLI manages the server as a process: `atm serve start|stop|status` spawn `atm-serve`, signal it and read its record; the restart after a plugin update spawns it too.\n- The cheap refresh check every command runs stays in-process: the server record's format and the dashboard's version tags (`api/dashboard.py`) move into common.\n- `app/` and `cli/main.py`'s `Serving` go; the layer rule drops `app`. The CLI never imports `api`.\n- `atm serve` and every skill, hook and permission stay exactly as they are (no new command for users or agents).\n- Update §1's diagram and table, §8's layout, §11.1 (settled), `CLAUDE.md`, `docs/v4/atm-cli.md`.\n\n## Tests\n- The serve tests pass unchanged; a build test that the CLI may not import the API stays.\n- `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/app/main.py",
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/api/dashboard.py",
+        "atm-cli/atm/common/",
+        "atm-cli/build.py",
+        "plugin/scripts/atm-serve",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md",
+        "CLAUDE.md",
+        "docs/v4/atm-cli.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:45Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-380",
+      "name": "Layers gap 11.2: split boot into what every store has and what only the JSON-in-git store has",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.2.\n\n## Change\n- `boot/open.py` keeps what every store has: opening a project, opening the registry; the actor stays in `boot/identity.py`.\n- A new `boot/jsongit.py` takes what only the JSON-in-git store has: `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test`, and registering by folder (`register_project`, `dashboard_id`, `hook_project`).\n- `cli/store.py` (paths, migrate, merge-driver, the lock test) imports only `boot/jsongit.py`; say in its docstring that these commands exist for the JSON-in-git store.\n- `lib/projects.py` stays (the rules about projects a second registry will need).\n- Update §1, §3.2, §11.2 (settled).\n\n## Tests\n- `npm run test:scripts` passes unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/boot/open.py",
+        "atm-cli/atm/boot/jsongit.py",
+        "atm-cli/atm/cli/",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/build.py",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-381",
+      "name": "Layers gap 11.3: change(fn) as the write path by design; per-entity reads; the store private to atm-lib and boot",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.3.\n\n## Change\n- §3.2 and §3.3 say what is built: `store.change(fn)` with the `Working` copy and its change list is the write path (no per-entity writes, no `apply`); list the interface as it is.\n- Add per-entity reads to the Store interface and both stores: `list_sprints`, `list_releases`, `list_components`, `get_settings` (meta without the lists).\n- Move atm-lib's reads off `store.document()` area by area (sprints, releases, components, settings, code, query); `document()` remains only as `work.document` inside a change, then goes from the interface.\n- `Project`'s store becomes private (`project._store`); the REST API and the CLI get what they read from atm-lib functions (the v1 route's meta, the server's stamps and working copies, `atm logo`'s working copy).\n- A build check refuses `.store.` / `._store` outside `lib/` and `boot/`.\n- Update §3.2, §3.3, §11.3 (settled).\n\n## Tests\n- Contract tests for each new read on both stores; a build test for the `.store` check; `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-378"
+      ],
+      "files": [
+        "atm-cli/atm/db/interface.py",
+        "atm-cli/atm/db/jsongit/store.py",
+        "atm-cli/atm/db/memory.py",
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/api/server.py",
+        "atm-cli/atm/cli/",
+        "atm-cli/build.py",
+        "tests/lib/",
+        "tests/scripts/build.test.mjs",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:47Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-382",
+      "name": "Layers gap 11.10 B: nullable types in the generator; ProjectSummary and StatusReport in the schema",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.10 B.\n\n## Change\n- The type generator in `atm-cli/build.py` supports a field that may be `null` (`\"type\": [\"string\", \"null\"]`, and a `$ref` or object that may be null): `Optional[...]` in Python, `T | null` in TypeScript.\n- `api.schema.json` gets `ProjectSummary` (what `api/projects` gives per project: totals, sprints, board, stats, git, needs you, …) and `StatusReport` (`atm status --json`).\n- The dashboard's hand-written `ProjectSummary` (`dashboard/src/lib/load.ts`) is replaced by the generated type.\n- Update §4.1, §4.2, §11.10 B (settled).\n\n## Tests\n- A build test for nullable fields in both languages.\n- A test validates a real `atm summary` and `atm status --json` and the e2e fixture's summary against the schema (as the fixtures are validated today).\n- `npm run check`, the unit tests, `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/build.py",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "atm-cli/atm/common/types.py",
+        "dashboard/src/lib/generated/types.ts",
+        "dashboard/src/lib/load.ts",
+        "tests/lib/",
+        "tests/scripts/build.test.mjs",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:48Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-383",
+      "name": "Layers gap 11.7: atm-lib's public functions as §5.1 lists them",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.7.\n\n## Change\n- A function per status change, each with its own parameters: `start_task(project, id, status=None)`, `review_task`, `done_task(project, id, note=None, commit=None, resolution=None, status=None)`, `reject_task(project, id, reason)`, `approve_task`, `request_changes`, `block_task`, `unblock_task`, `reopen_task`, `skip_task`, `fail_task`, `release_task`. `change_task_status` becomes internal.\n- Keyword parameters instead of `Changes` for sprints, releases, components and editing a task.\n- `commit_task` takes paths relative to the repository; the CLI resolves them from the current folder.\n- One naming scheme: claims as `list_claims` (reads) and `expire_claims`/`renew_*` (writes), settings as `get_*`/`set_*` (`workflow_settings` → `get_workflow`), one of `list_matching`/`task_views`.\n- Results typed in the schema where they cross to the CLI or API (`TaskView`; the status changes' answers), using the nullable types of the task before.\n- The CLI moves onto them; its output and exit codes stay as they are.\n- Update §5.1's tables to the code, `atm/lib/__init__.py`'s `__all__`, §11.7 (settled).\n\n## Tests\n- `tests/lib/` for the new functions; `npm run test:scripts` unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-381",
+        "T-382"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/",
+        "atm-cli/atm/common/schema/api.schema.json",
+        "tests/lib/",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:48Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-384",
+      "name": "Layers gap 11.6: atm.lib and atm.boot as the surface, an in-memory opener, frozen signatures",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.6.\n\n## Change\n- `atm.boot` gets `open_memory_project(tasks=(), archive=(), meta=None, actor=None)`, so tools and their tests never import `atm.db`; `tests/lib/test_public.py` uses it.\n- A contract test freezes the public surface: `atm.lib.__all__` and `atm.boot.__all__`, and each exported function's signature (`inspect.signature`), compared with a committed list (`tests/lib/public-surface.json`). A change fails until the list is updated, and the changelog notes it.\n- `atm/lib/__init__.py`'s docstring says the surface is for imports from the repository's `atm-cli/`, not from the shipped `plugin/scripts/atm.py`.\n- §5 says the surface is two modules; update §11.6 (settled), `CLAUDE.md`.\n\n## Tests\n- The contract test; `test_public.py` on `open_memory_project`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-383",
+        "T-380"
+      ],
+      "files": [
+        "atm-cli/atm/boot/__init__.py",
+        "atm-cli/atm/boot/open.py",
+        "atm-cli/atm/lib/__init__.py",
+        "tests/lib/test_public.py",
+        "tests/lib/public-surface.json",
+        "docs/layered-architecture.md",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-385",
+      "name": "Layers gap 11.8: a host layer for running git and reading HEAD; one meaning of the branch",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.8.\n\n## Change\n- A new layer `host/` below db and vcs, allowed I/O: the subprocess runner (`db/jsongit/gitrun.py`'s `git` and `vcs/git.py`'s `ask_git`/`run_git`) and the HEAD reader (`db/jsongit/worktrees.py`'s `head_branch`, `GitVcs.branch`'s copy). db and vcs import it; nothing else does. Add it to the build's layer rule.\n- One meaning of \"the branch\": the store's `here()` reads HEAD the same way (a detached HEAD gives the short SHA everywhere, not `HEAD` in a claim).\n- One way to ask whether a folder is in git.\n- Update §1's diagram and table, §2, §8, §11.8 (settled).\n\n## Tests\n- A detached HEAD: a claim's branch, the project card's and the worktree list agree (`tests/scripts/`).\n- A build test that only db and vcs may import `host`.\n- `npm run test:scripts`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/host/",
+        "atm-cli/atm/db/jsongit/",
+        "atm-cli/atm/vcs/git.py",
+        "atm-cli/build.py",
+        "tests/scripts/",
+        "plugin/scripts/atm.py",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-386",
+      "name": "Layers gap 11.9: the dev API restarts on rebuild, lists missing folders, matches the CSP, and is tested",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.9.\n\n## Change\n- `dashboard/build/dev-api.ts` watches `plugin/scripts/atm.py` and restarts the API server when it changes, so `npm run build:cli` is enough (no Vite restart).\n- A folder in `ATM_DEV_DATA` without a task file is listed as missing, as the old dev server did.\n- The dev page's Content-Security-Policy matches the server's (`build/security-headers.ts` against `api/server.py`'s `page_csp`).\n- Update `CLAUDE.md`'s `npm run dev` line, §11.9 (settled).\n\n## Tests\n- A test that starts `vite dev` on a temporary project and reads `api/projects` and the v1 tasks through it, then stops it and finds no server left.\n- The CSP check as a unit test.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/build/dev-api.ts",
+        "dashboard/build/security-headers.ts",
+        "dashboard/tests/unit/",
+        "CLAUDE.md",
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-387",
+      "name": "Layers gap 11.10 A: worktree copies with atm's derived values, computed in their own worktree; the dashboard's fallbacks go",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.10 A.\n\n## Change\n- `lib/worktrees.py` opens each linked worktree's own store and returns its differing tasks as views, `{task, derived}`, computed on that worktree's data: what `atm next` would do there (a dependency done in another worktree counts once the branches merge).\n- `worktrees.json` gives those views; `docs/multi-project-api.md` §2.2 says so.\n- The dashboard takes a copy's derived values from it and drops its own rules for copies: the readiness fallback in `kanban.ts`, together-now in `waiting.ts`, the effective-review fallback in `review.ts` (`hasDerived`).\n- Update §11.10 A (settled).\n\n## Tests\n- The serve test on worktrees checks the derived values of a copy.\n- The e2e specs for linked worktrees; the unit tests of the three modules; `npm run check`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-378",
+        "T-381"
+      ],
+      "files": [
+        "atm-cli/atm/lib/worktrees.py",
+        "atm-cli/atm/api/server.py",
+        "dashboard/src/lib/worktrees.ts",
+        "dashboard/src/lib/kanban.ts",
+        "dashboard/src/lib/waiting.ts",
+        "dashboard/src/lib/review.ts",
+        "dashboard/tests/",
+        "tests/scripts/serve.test.mjs",
+        "docs/multi-project-api.md",
+        "docs/layered-architecture.md",
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-388",
+      "name": "Layers gap 11.5: check a 0.26.0 dashboard page left open across the update",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "architecture"
+      ],
+      "description": "`docs/layered-architecture.md` §11.5. Part of the next release's checks, done together with Hakan.\n\n## Check\n- Serve a project with the released 0.26.0 plugin and open its dashboard; update to this branch's plugin so the server restarts with the new dashboard; look at the page left open.\n- It should show the reload offer (the server's build changed) and nothing broken until the reload; the removed raw routes (`p/<id>/tasks.json`, `p/<id>/tasks-archive.json`) answer 404.\n\n## If it shows an error instead\nA small fix in the dashboard so a 404 from a removed route leads to the reload offer, with a unit test.\n\nUpdate §11.5 (settled) with what was found.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/layered-architecture.md"
+      ],
+      "created_at": "2026-11-03T00:08:33Z",
+      "updated_at": "2026-11-03T00:08:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Layered Architecture",
+          "from": "2026-11-03T00:08:33Z"
+        }
+      ],
+      "sprint": "Layered Architecture",
+      "review": "batch",
+      "with": "user",
+      "components": [
+        "docs"
       ]
     }
   ]

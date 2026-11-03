@@ -3,10 +3,8 @@
 **Status:** done: approved (T-360, reviewed with Hakan in Crit), and carried out in the 16 steps of §9 (T-361 to
 T-376, with T-377) · **Date:** 2026-11-02 · **Sprint:** *Layered Architecture*
 
-Where the code ended up differs from the design in a few places, each said where it applies: the **app** layer on top
-(§1, §8), what only one store has reached through boot (§1, §3.2), the store's stamps for the REST API's ETags, and
-the one global hook left in common (§8). Still open: the worktree copies come without atm's derived values, so the
-Dashboard keeps its fallbacks for them; and `ProjectSummary` and `StatusReport` aren't in `api.schema.json` yet.
+Where the code ended up differs from this design, and what is still open, is in §11 (*Current state and gaps from
+the design*), with the decision taken on each in the end-of-sprint review and the task that carries it out.
 
 atm grew command by command: each `cmd_*` function parses its arguments, locks and reads `tasks.json`, applies the
 rules, writes the file back and prints the result. That was the fastest way to build it, and it works. It also means
@@ -30,11 +28,15 @@ flowchart TD
     Tools["Other tools<br/><i>MCP server, scripts</i>"]
 
     subgraph Python["atm (Python)"]
+        App["app<br/><i>the atm command: hands the API's<br/>server commands to the CLI</i>"]
         API["REST API<br/><i>atm serve</i>"]
         CLI["CLI<br/><i>atm …</i>"]
+        Boot["boot<br/><i>opens a project: picks the store<br/>and the vcs; the actor</i>"]
         Lib["atm-lib<br/><i>all business logic</i>"]
         DbI["db interface"]
         VcsI["vcs interface"]
+        Db["db implementations<br/><i>JSON-in-git store, in-memory store,<br/>the registry</i>"]
+        Vcs["vcs implementation<br/><i>git, for code</i>"]
     end
 
     subgraph Shared[" "]
@@ -44,11 +46,21 @@ flowchart TD
     end
 
     Dashboard -- "HTTP only" --> API
+    App --> CLI
+    App --> API
     API --> Lib
     CLI --> Lib
+    API --> Boot
+    CLI --> Boot
     Tools --> Lib
+    Tools --> Boot
+    Boot --> Lib
+    Boot --> Db
+    Boot --> Vcs
     Lib --> DbI
     Lib --> VcsI
+    Db -. implements .-> DbI
+    Vcs -. implements .-> VcsI
     Python --> Common
     Dashboard --> TSTypes
     Common -. "generated at build time" .-> TSTypes
@@ -58,7 +70,10 @@ flowchart TD
     style Shared fill:none,stroke:none
 ```
 
-Every layer inside *atm (Python)* may use common. The Dashboard uses only the types generated from it.
+The layers as built (T-361 to T-376). Every layer inside *atm (Python)* may use common; the Dashboard uses only the
+types generated from it. The arrows are the build's layer rule (`ALLOWED` in `atm-cli/build.py`): nothing else may
+import across layers. **app** and the reach of **boot** are the code's, not the first design's; §11 says where the
+code differs from the design and what follows (the `app` layer is to give way to two launchers, §11.1).
 
 **What implements the interfaces:**
 
@@ -84,8 +99,10 @@ flowchart TD
 |---|---|---|
 | **Dashboard** | Shows projects; fetches from the REST API; computes what is presentation (charts, forecasts, velocity, burndown, groupings, layout) | Reads files; holds business rules (what is ready, archivable, waiting on whom) |
 | **Generated TS types** | The types of the API's responses, generated from common's schema; the Dashboard imports them | Is edited by hand |
+| **app** | The `atm` command: the CLI, with the REST API's server commands (`serve`, the server process, the refresh) handed to it (`app/main.py`) | Holds logic; is imported by anything |
 | **REST API** | Maps HTTP requests to atm-lib calls and results to JSON; the HTTP concerns (Host check, ETags, sizes, caching) | Holds logic; touches storage |
 | **CLI** | Maps arguments to atm-lib calls and results to text or `--json`; exit codes | Holds logic; touches storage |
+| **boot** | Opens a project: picks the store and the vcs; works out the actor; reaches what only the JSON-in-git store has (paths, migrations, the merge driver, the registry by folder) | Holds business rules |
 | **atm-lib** | Every business action and query (§5) | Knows how or where data is kept; prints; reads `argparse` objects |
 | **db** | One interface for data access (§3); its implementations know how and where data is kept, and keep concurrent writers apart | Business rules |
 | **vcs** | One interface to the code's version control (§2) | Business rules; storing tasks |
@@ -658,3 +675,155 @@ they go in order.
 3. **The package for others:** not published yet; used from the repository.
 4. **The Dashboard's computations:** forecasts, velocity and burndown stay in the Dashboard; the rules that decide
    what atm does (ready, waiting, archivable, effective modes) move behind the API.
+
+## 11. Current state and gaps from the design
+
+Where the code stands after the migration (T-361 to T-376, with T-377), and each place it differs from §1–§10 or
+leaves one of their goals unmet. Every item was gone through with Hakan in the end-of-sprint review (2026-11-02) and
+has a decision and a task; a task that settles an item updates its entry here (and the section it changes) in the
+same change.
+
+**What holds today:** every module is in a layer's folder, and the build refuses an import the rule forbids, with no
+exceptions (§8). The Dashboard reads only the REST API; the server reads no task file itself; readiness, waiting,
+the vocabularies' kinds, effective review and release, and the archive hint come from atm-lib; the types of tasks
+and their views are generated from common's schema for both languages; the CLI's commands, output and exit codes
+are unchanged (the atm-cli suite, at every step).
+
+### 11.1 The `app` layer (T-379)
+
+- **Design:** the CLI and the REST API never call each other (§1); there was no layer above them.
+- **Built (T-374):** `atm serve`, the server process (`_serve-child`) and the refresh every command runs first
+  (`refresh_server`) are the API's, but the `atm` command must reach them. `app/main.py` imports both and hands the
+  API's server commands to the CLI's parser (`cli/main.py` `Serving`); `app` may import only `cli` and `api`, and
+  nothing imports it.
+- **Problem:** it keeps the separation at the import level only: the CLI and the API still run in one process, and
+  a layer exists only to join them.
+- **Decision:** two launchers. `plugin/scripts/atm` runs the CLI; an internal `atm-serve` runs the API's server (one
+  dispatch in the one built file). The CLI manages the server as a process (spawn, signal, read its record); the
+  cheap refresh check stays in-process, with the server record's format and the dashboard's version tags in common.
+  `atm serve` and every skill, hook and permission stay as they are. The `app` layer goes.
+
+### 11.2 What only one store has, through boot (T-380)
+
+- **Design:** what only the JSON-in-git store has (the merge driver, migrations, file locations, worktrees' copies)
+  stays out of the Store interface and is "reached through that store directly by the code that needs them" (§3.2).
+- **Built (T-374):** the code that needs them is the CLI and the API, which may import only common, atm-lib and boot;
+  so boot reaches them: `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `register_project`,
+  `dashboard_id`, `hook_project`, `hold_lock_for_test` (`boot/open.py`), and the actor (`boot/identity.py`). The
+  worktrees went *into* the interface instead (`working_copies`, `copy_tasks`; the rule in `lib/worktrees.py`). The
+  registry (`db/registry.py`) lists, adds, removes and prunes, without §3.2's `open(id)`; `lib/projects.py` only
+  passes calls through.
+- **Problem:** boot reads as one bag of functions, some for any store and some for this one only; a second store has
+  no way to say a command doesn't apply to it; registering reaches `project.store.paths`.
+- **Decision:** split boot: `boot/open.py` keeps what every store has (opening a project or the registry, the actor);
+  `boot/jsongit.py` takes what only the JSON-in-git store has, and the commands about it (`cli/store.py`) import
+  only that. `lib/projects.py` stays, for the rules about projects a second registry will need.
+
+### 11.3 The Store interface is the transitional one (T-381)
+
+- **Design:** operations per entity, with conditional writes and `apply` for writes that go together (§3.2, §3.3).
+- **Built:** decision B of T-368, `store.change(fn)` with a `Working` copy and its change list, became the write path
+  for every later step, and atm-lib reads the whole document (`store.document()`, `work.document`) in about 55
+  places: its rules take the task file's shape (`meta.sprints`, `meta.releases`, `meta.components` inside it).
+  `document()` was to go in step 14 and didn't (its docstring was changed instead). Added operations: `sizes`,
+  `problems`, `raw`, `files_for_commit`, `working_copy`, `exists`, `create`, `stamp`, `logo`, `check_logo`,
+  `working_copies`, `copy_tasks`.
+- **Problem:** another store would have to load a whole project into a `Working`; atm-lib's rules are bound to the
+  file's shape. And the REST API and the CLI reach the store through `project.store` (`document()["meta"]` in the v1
+  route, `stamp()` and `working_copies()` in the server, `working_copy()` in `atm logo`), which the build's import
+  rule can't see.
+- **Decision:** `change(fn)` with its change list is the write path, by design: §3.2 and §3.3 say so. atm-lib's reads
+  move off `document()` to per-entity reads (`list_sprints`, `list_releases`, `list_components`, `get_settings`),
+  area by area; `document()` remains only as `work.document` inside a change. `Project`'s store is private
+  (`project._store`), and a build check refuses `.store.` outside `lib/` and `boot/`.
+
+### 11.4 The global archive lookup in common (T-378, before the merge)
+
+- **Design:** no module-level state in atm-lib; the `archived_task` cache goes (§5).
+- **Built (T-374):** it became a hook in `common/model.py` (`use_archive(lookup)`, `archived_task(id)`) that the
+  JSON-in-git store's loaders set; `unfinished_dependencies`, `find_task`, `change_status`, the `edit` and `status`
+  checks and the renderer use it without knowing which project they mean.
+- **Problem:** a bug. `atm serve` is threaded and serves many projects in one process: a request for one project can
+  be judged against another's archive, so a dependency that is only in its own archive counts as missing and a ready
+  task shows as waiting (since T-364). On the in-memory store the hook is never set, so archived dependencies count
+  as missing there, and a stale lookup from an earlier store in the same process can answer.
+- **Decision:** before the branch is merged, the rules take the lookup as a parameter (atm-lib passes
+  `store.get_archived_task`, or `archived_in(work)` in a change), each store keeps its own archive cache, and the hook
+  goes. Tests: an archive-only dependency counts as done on both stores; two projects in one process never see each
+  other's archives.
+
+### 11.5 The raw file routes, and symlinks refusing the whole project (T-388)
+
+- **Design:** the raw routes go once the Dashboard no longer reads them (§6.2, step 14): done.
+- **Built (T-374):** `p/<id>/tasks.json` and `p/<id>/tasks-archive.json` are gone. With them: a task folder with a
+  symlinked file is refused whole (v1, claims, worktrees, logo all 404; atm itself refuses such a folder, F7), its
+  symlink checks run on every request (before, the server found a project's paths once, and from T-372 to T-374 the
+  v1 archive route could read through an archive linked after the server started); `claims.json` before the first
+  claim is an empty list; ETags hash the store's stamps.
+- **Problem:** a dashboard page from 0.26.0 left open across the update still asks for the removed routes. It should
+  get the reload offer (the server's build changed); what it shows until then hasn't been checked.
+- **Decision:** the routes stay removed. The release task checks a 0.26.0 page left open across the update; if it
+  shows an error rather than the reload offer, a small fix makes its 404s lead to the reload.
+
+### 11.6 The public surface is two modules (T-384)
+
+- **Design:** one public module, `atm.lib`, versioned with the plugin (§5).
+- **Built (T-376):** `atm.lib` (`atm/lib/__init__.py`, its `__all__`) and `atm.boot` (`open_project`,
+  `open_registry`): atm-lib may not import boot, which picks the stores. Tests use `atm.db.memory`, which is internal;
+  only the names' presence is tested; the surface exists only in the repository, not in the shipped `atm.py`.
+- **Decision:** `atm.lib` and `atm.boot` are the surface, by design (§5 says so). `atm.boot` gets
+  `open_memory_project(...)`, so tools and their tests never import `atm.db`; a contract test freezes `__all__` and
+  every exported function's signature, so a change to the surface is made on purpose and noted in the changelog;
+  the docstring says it is for imports from the repository. After §11.7.
+
+### 11.7 atm-lib's functions don't match §5.1 (T-383)
+
+- **Design:** §5.1's tables: a function per action, with its parameters and a result of common's types
+  (`TaskView`, …).
+- **Built:** the steps moved each CLI command's code into atm-lib as it was. So: one `change_task_status(project,
+  command, id, **options)` for every status change (what a command needs is checked at run time); results are dicts
+  of varying shape; sprints, releases, components and task edits take `Changes`, an object named after the CLI's
+  options; `commit_task` takes file names relative to the current folder; names are uneven (`live_claims`, which
+  writes, beside `list_claims`; `list_matching` beside `task_views`; `get_repository` beside `workflow_settings`).
+- **Decision:** a clean public layer over it: a function per status change with its own parameters
+  (`start_task`, `done_task`, `reject_task`, …; `change_task_status` becomes internal), keyword parameters instead of
+  `Changes`, repository-relative paths in `commit_task` (the CLI resolves the current folder), one naming scheme, and
+  results typed in the schema (§11.10). The CLI moves onto them, unchanged for users. §5.1 then matches the code.
+  Before §11.6's frozen signatures.
+
+### 11.8 Git run in two places; "the branch" three ways (T-385)
+
+- **Design:** git's two roles apart: carrying the task files is the store's, versioning the code the vcs's (§2).
+- **Built:** the store runs git through `db/jsongit/gitrun.py`, the vcs through its own runners in `vcs/git.py` (the
+  same ten lines, renamed: db and vcs may import only common, which does no I/O). The branch is read from
+  `.git/HEAD` by `GitVcs.branch()` (the card, `atm status`) and by a copy in `db/jsongit/worktrees.py` (the worktree
+  list), but with `git rev-parse --abbrev-ref HEAD` by the store's `here()` (the branch in a claim): on a detached
+  HEAD a claim says `HEAD` while the card shows the short SHA. "Is this a git repository" is asked two ways too.
+- **Decision:** a small layer below db and vcs, **host** (`host/`), allowed I/O: the subprocess runner and the HEAD
+  reader, imported by both; one meaning of "the branch" (a claim, the card and the worktree list agree, tested on a
+  detached HEAD). The layer rule and §1's diagram get it.
+
+### 11.9 The dev server runs the real API on a temporary ATM_HOME (T-386)
+
+- **Design:** step 15: the dev server runs the real REST API; `dev-data.ts` goes. Done.
+- **Built (T-375):** `dashboard/build/dev-api.ts` lists the `ATM_DEV_DATA` projects in a temporary `ATM_HOME`, starts
+  this checkout's `atm _serve-child` on the first free port from 8865, and forwards `api/`, `p/` and `__atm/` to it
+  (rewriting `Host`, so the DNS-rebinding check is Vite's own host check); it stops with Vite.
+- **Problems:** an atm-cli change needs a Vite restart; a folder without a task file isn't listed (before: listed as
+  missing); the dev page's CSP isn't checked against the server's; nothing tests it; a hard kill of Vite leaves the
+  server and the folder behind.
+- **Decision:** the dev API restarts when `plugin/scripts/atm.py` changes; folders without a task file are listed as
+  missing; the dev page's CSP is checked against the server's; a test starts `vite dev` and reads `api/projects`
+  through it.
+
+### 11.10 Still open: worktree copies' derived values; two answers outside the schema
+
+- **A. Worktree copies (T-387).** `worktrees.json` gives the linked worktrees' differing tasks without atm's derived values,
+  so the Dashboard keeps its own rules for them (readiness in `kanban.ts`, together-now in `waiting.ts`, the
+  effective review in `review.ts`): the duplication §1 set out to remove. **Decision:** each copy's derived values
+  are computed on its own worktree's data, which is what `atm next` does there (a dependency done in another worktree
+  counts once the branches merge), by `lib/worktrees.py` opening each worktree's store; the Dashboard's fallbacks go.
+- **B. `ProjectSummary` and `StatusReport` (T-382).** `api/projects`' summaries and `atm status --json` aren't in
+  `api.schema.json`; the Dashboard's `ProjectSummary` is written by hand. The generator can't express a field that
+  may be `null`. **Decision:** the generator learns nullable types (`Optional[...]`, `T | null`); both schemas are
+  written and the hand-written type replaced; a test validates a real summary and the e2e fixture against them.
