@@ -607,10 +607,9 @@ atm-cli/atm/
   refused a flat module or a forbidden import that wasn't listed, and an entry that was no longer needed, so fixing a
   violation removed its entry in the same change. Step 14 emptied it and removed it: the build now refuses every
   module outside a layer's folder and every import the rule forbids.
-- **One global hook is left in common:** the rules look an archived task up (a dependency only in the archive, `show`
-  of an archived task) through `common/model.py`'s `archived_task`, which the store that loaded the task data sets
-  (`use_archive`). It keeps one process to one project, as before; passing the lookup to every rule that needs it
-  (atm-lib's own functions already take `archived_in(work)`) would remove it.
+- **No global state:** the rules that need an archived task (a dependency only in the archive is done; the "it is
+  archived" hint) take the project's lookup as a parameter: atm-lib passes `store.get_archived_task`, or
+  `archived_in(work)` inside a change, and each store keeps its own archive cache (T-378, §11.4).
 - The Dashboard gets the same as an ESLint rule: only `src/lib/api/` may call `fetch`; generated types are imported,
   never edited.
 
@@ -751,6 +750,11 @@ are unchanged (the atm-cli suite, at every step).
   `store.get_archived_task`, or `archived_in(work)` in a change), each store keeps its own archive cache, and the hook
   goes. Tests: an archive-only dependency counts as done on both stores; two projects in one process never see each
   other's archives.
+- **Settled (T-378):** `unfinished_dependencies`, `change_status` and the loop's functions (`ready_in_order`,
+  `loop_order`, `next_task`, `apply_resolutions`) require the lookup (a call without it fails, rather than counting
+  archived dependencies as missing); `find_task` takes it for its hint; the JSON-in-git store's `get_archived_task`
+  reads its own archive once per store; `archived_in` moved to `lib/loop.py`; `use_archive` and the global
+  `archived_task` are gone. The tests are in `tests/lib/test_store_contract.py`.
 
 ### 11.5 The raw file routes, and symlinks refusing the whole project (T-388)
 

@@ -706,20 +706,10 @@ def status_for(vocab, kind, chosen=None):
     return chosen
 
 
-# Where the rules look up an archived task (a dependency not in tasks.json, show of an archived task): the store
-# that loaded the task data sets it (use_archive), read only when needed; one atm process works on one project
-_archive = {"lookup": None}
-
-
-def use_archive(lookup):
-    """Look archived tasks up with `lookup(task_id)` (task or None) from now on; None: there is no archive."""
-    _archive["lookup"] = lookup
-
-
-def archived_task(task_id):
-    """The archived task with this ID, if the archive has it."""
-    return _archive["lookup"](task_id) if _archive["lookup"] else None
-
+# The rules that need an archived task (a dependency only in the archive is done, the "it is archived" hint) take
+# `archived`: a lookup, `archived(task_id)` -> the archived task or None, from the project's store
+# (`store.get_archived_task`, or atm-lib's `archived_in(work)` inside a change). There is no global one: one process
+# (atm serve) works on many projects at once (docs/layered-architecture.md §11.4).
 
 ARCHIVE_DEFAULTS = {"threshold_kb": 1024, "threshold_tasks": 500, "keep_days": 14, "auto": True}
 
@@ -818,20 +808,19 @@ def tolerant_vocabulary(meta):
                 usable = {}  # nothing to narrow it to: the defaults
 
 
-def find_task(data, task_id, archived=False):
-    """The task with this ID in tasks.json; with `archived`, also in the archive (for reading only)."""
+def find_task(data, task_id, archived=None):
+    """The task with this ID in tasks.json. Raises AtmError when there is none; with `archived` (the project's lookup)
+    the error says when the task is archived."""
     for task in data["tasks"]:
         if task.get("id") == task_id:
             return task
-    if archived and archived_task(task_id):
-        return archived_task(task_id)
-    hint = " (it is archived: atm unarchive brings it back)" if not archived and archived_task(task_id) else ""
+    hint = " (it is archived: atm unarchive brings it back)" if archived and archived(task_id) else ""
     raise AtmError(f"no task {task_id}{hint}")
 
 
-def unfinished_dependencies(data, task):
+def unfinished_dependencies(data, task, archived):
     """Dependencies that don't have a done-kind status yet, with their status ("missing" for unknown IDs). A
-    dependency that is only in the archive is done (DM-3.1)."""
+    dependency that is only in the archive is done (DM-3.1): `archived` is the project's lookup."""
     vocab = vocabulary(data)
     status = {t.get("id"): t.get("status") for t in data["tasks"]}
     deps = task.get("dependencies", [])
@@ -840,7 +829,7 @@ def unfinished_dependencies(data, task):
     return [
         (dep, status.get(dep, "missing"))
         for dep in deps
-        if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived_task(dep))
+        if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived(dep))
     ]
 
 
@@ -939,8 +928,11 @@ def change_status(
     answers=(),
     resolution=None,
     duplicate_of=None,
+    *,
+    archived,
 ):
-    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `status`
+    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
+    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
     picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
     `done` as completed_by (both kept when it is done, so the dashboard can show who did what); `note` and `reason`
     become notes, `commit` the task's commit. `block` records who it waits on and the open questions; `unblock`
@@ -969,7 +961,7 @@ def change_status(
     if command in ("approve", "request-changes") and status is None:
         new = current  # it stays in its review status (a project may have several)
     if command == "start":
-        blocking = unfinished_dependencies(data, task)
+        blocking = unfinished_dependencies(data, task, archived)
         if blocking:
             raise AtmError(f"can't start {task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking))
     if note is not None:
@@ -1938,7 +1930,8 @@ def load_archive(paths):
 
 
 def archive_of(paths):
-    """The rules' lookup of archived tasks in the archive of `paths`, read on the first lookup."""
+    """A lookup of the archived tasks in the archive of `paths` (`lookup(task_id)` -> task or None), read on the first
+    lookup: what the store hands the rules for its project."""
     found = {}
 
     def lookup(task_id):
@@ -1975,7 +1968,6 @@ def load_tasks(paths):
         deps = task.get("dependencies", [])
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
             raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
-    use_archive(archive_of(paths))
     return data
 
 
@@ -2007,7 +1999,6 @@ def load_tasks_tolerant(paths):
     # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
     _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
     problems["file"] += vocabulary_problems
-    use_archive(archive_of(paths))
     return data, problems
 
 
@@ -3468,6 +3459,7 @@ class JsonGitStore:
         self.paths = paths
         self.tolerant = tolerant
         self._data = None
+        self._archived = None  # the lookup of this project's archive, made on first use
         self._problems = {"file": [], "tasks": {}}
 
     def _loaded(self):
@@ -3497,8 +3489,10 @@ class JsonGitStore:
         return None
 
     def get_archived_task(self, task_id):
-        self._loaded()  # the archive is looked up for the file it belongs to
-        return archived_task(task_id)
+        """This project's archived task with this ID, or None; its own archive, read once per store."""
+        if self._archived is None:
+            self._archived = archive_of(self.paths)
+        return self._archived(task_id)
 
     def list_archived(self):
         return [t for t in load_archive(self.paths)["tasks"] if isinstance(t, dict)]
@@ -3623,7 +3617,7 @@ class JsonGitStore:
                 write()
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
-        self._data = None  # this store's snapshot is out of date now
+        self._data = self._archived = None  # this store's snapshot is out of date now
         work.raise_deferred()
         return result
 
@@ -3861,15 +3855,30 @@ class Project:
 # atm-lib: the loop's rules (docs/parallel-agents-design.md; docs/sprints-and-releases-design.md §3): leases, who
 # holds a claim, what was decided in another worktree, and which task the loop takes next (`next_task`, the same order
 # the dashboard's Next up shows). They work on the task data and the claims store as the store hands them out
-# (`work.document`, `work.claims_store`); keeping the claims is the store's (db/jsongit/claims.py).
+# (`work.document`, `work.claims_store`), with the project's lookup of archived tasks (`archived`: a dependency only
+# in the archive is done); keeping the claims is the store's (db/jsongit/claims.py).
 
 DEFAULT_LEASE_MINUTES = 30
 
 
-def apply_resolutions(worktree, data, store):
+def archived_in(work):
+    """The lookup of archived tasks inside a store change (`archived(task_id)` -> task or None): the change's own
+    archive, read only when something asks for it."""
+    index = {}
+
+    def lookup(task_id):
+        if not index:
+            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
+        return index.get(task_id)
+
+    return lookup
+
+
+def apply_resolutions(worktree, data, store, archived):
     """Apply what was decided in another worktree about a task waiting in this one (store["resolved"]): the answer,
     the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. `worktree` is
-    this working copy's folder. A task changed here in the meantime is left as it is. Returns the IDs applied."""
+    this working copy's folder, `archived` the project's lookup of archived tasks. A task changed here in the meantime
+    is left as it is. Returns the IDs applied."""
     applied = []
     for task_id, record in list(store["resolved"].items()):
         if not isinstance(record, dict) or record.get("worktree") != worktree:
@@ -3886,6 +3895,7 @@ def apply_resolutions(worktree, data, store):
                 agent=record.get("by"),
                 reason=record.get("reason"),
                 answers=record.get("answers") or [],
+                archived=archived,
             )
             applied.append(task_id)
         except (AtmError, KeyError):
@@ -3955,15 +3965,15 @@ def own_lease_expired(expired, data, task_id, agent, then):
     )
 
 
-def ready_in_order(data, store, candidates=None, rank=None):
-    """The to-do tasks the loop could take, in the order it takes them: every dependency done, not claimed, not
-    completed or waiting in another worktree; by `rank` (the selection's own order, SR-3.2), then the most urgent
-    priority, then lowest ID."""
+def ready_in_order(data, store, candidates=None, rank=None, *, archived):
+    """The to-do tasks the loop could take, in the order it takes them: every dependency done (`archived`: the
+    project's lookup of archived tasks, which are), not claimed, not completed or waiting in another worktree; by
+    `rank` (the selection's own order, SR-3.2), then the most urgent priority, then lowest ID."""
     vocab = vocabulary(data)
     if candidates is None:
         candidates = [t for t in data["tasks"] if kind_of(vocab, t.get("status")) == "todo"]
     taken = set(store["claims"]) | set(store["completed"]) | set(store["waiting"])
-    ready = [t for t in candidates if not unfinished_dependencies(data, t) and t.get("id") not in taken]
+    ready = [t for t in candidates if not unfinished_dependencies(data, t, archived) and t.get("id") not in taken]
     rank = rank or (lambda t: 0)
     order = lambda t: (rank(t), priority_rank(vocab, t.get("priority")), natural_key(t.get("id")))
     return sorted(ready, key=order)
@@ -4040,7 +4050,7 @@ def offered_to(data, task, agent):
     return now() >= reviewed + timedelta(minutes=lease_minutes(data))
 
 
-def loop_order(data, store, sel, agent=None, with_user=False):
+def loop_order(data, store, sel, agent=None, with_user=False, *, archived):
     """Every task the loop could take now, in the order it takes them: `atm next` hands out the first, and atm serve's
     summary lists them as `next`, which the dashboard's Next up shows (T-321), so the two can't disagree. Returns
     (ready, selected, candidates, together, scope, problem); `problem` says why the selection itself is refused."""
@@ -4063,18 +4073,22 @@ def loop_order(data, store, sel, agent=None, with_user=False):
     if not with_user:
         candidates = [t for t in candidates if t.get("with") != "user"]
     in_order = rank or (lambda t: 0)
-    ready = ready_in_order(data, store, candidates, lambda t: (t.get("id") not in first, in_order(t)))
+    ready = ready_in_order(
+        data, store, candidates, lambda t: (t.get("id") not in first, in_order(t)), archived=archived
+    )
     return ready, selected, candidates, together, scope, None
 
 
-def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False):
+def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False, *, archived):
     """The loop's rule (same as the dashboard's "Next up"): todo (or back from review), every dependency done, not
     claimed and not completed in another worktree, in the selection (the default one when `sel` is None); in its
     order, then the most urgent priority, then lowest ID. Returns (task, reason) where reason explains an empty
     result: the selection is finished, the rest of it waits, or it is empty (SR-3.6)."""
     vocab = vocabulary(data)
     sel = sel or Selection(task_type=task_type)
-    ready, selected, candidates, together, scope, problem = loop_order(data, store, sel, agent, with_user)
+    ready, selected, candidates, together, scope, problem = loop_order(
+        data, store, sel, agent, with_user, archived=archived
+    )
     if problem:
         return None, problem
     if ready:
@@ -4229,13 +4243,14 @@ def in_open_pr(task):
     return isinstance(task.get("pr"), dict) and not task.get("merged_at")
 
 
-def ready_tasks(data):
-    """To-do tasks whose dependencies are all done, in the loop's order."""
+def ready_tasks(data, archived):
+    """To-do tasks whose dependencies are all done, in the loop's order. `archived`: the project's lookup of archived
+    tasks (a dependency only in the archive is done)."""
     vocab = vocabulary(data)
     ready = [
         t
         for t in data["tasks"]
-        if kind_of(vocab, t.get("status")) == "todo" and not unfinished_dependencies(data, t)
+        if kind_of(vocab, t.get("status")) == "todo" and not unfinished_dependencies(data, t, archived)
     ]
     return sorted(ready, key=lambda t: (priority_rank(vocab, t.get("priority")), natural_key(t.get("id"))))
 
@@ -4246,7 +4261,7 @@ def list_matching(project, filters):
     data = store.document()
     vocab = vocabulary(data)
     args = filters
-    ready = {t.get("id") for t in ready_tasks(data)}
+    ready = {t.get("id") for t in ready_tasks(data, store.get_archived_task)}
     in_scope = scope_filter(vocab, args)
     tasks = []
     for t in store.list_archived() if args.archived else data["tasks"]:
@@ -4290,8 +4305,8 @@ def task_views(project, filters):
     priority, review mode and release, its stage, and whether it is archived. The dashboard takes these instead of
     working them out itself."""
     found = list_matching(project, filters)
-    data, vocab = project.store.document(), found["vocab"]
-    ready = {t.get("id") for t in ready_tasks(data)}
+    data, vocab, archived = project.store.document(), found["vocab"], project.store.get_archived_task
+    ready = {t.get("id") for t in ready_tasks(data, archived)}
     # A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
     troubled = {} if filters.archived else project.store.problems()["tasks"]
     views = []
@@ -4301,7 +4316,7 @@ def task_views(project, filters):
         values = {
             "kind": kind,
             "ready": t.get("id") in ready and not problems,
-            "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "waiting_for": [d for d, _ in unfinished_dependencies(data, t, archived)] if kind == "todo" else [],
             "problems": problems,
             "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
             "priority": priority_of(vocab, t),
@@ -4497,7 +4512,7 @@ def board_column(cards, cap=BOARD_CAP):
     return {"count": len(cards), "cards": cards[:cap]}
 
 
-def todo_order(data, tasks, kinds, loop_ready, vocab):
+def todo_order(data, tasks, kinds, loop_ready, vocab, archived):
     """Every to-do task, for the board's To Do column (T-349): first the ready ones, those the loop takes in its order
     before the rest (other sprints', the backlog's), then the ready ones done with the user, then those waiting on
     dependencies (each by priority, then ID). Each with why it isn't plain ready: done with the user, or the
@@ -4505,7 +4520,7 @@ def todo_order(data, tasks, kinds, loop_ready, vocab):
     rank = {t.get("id"): i for i, t in enumerate(loop_ready)}
 
     def entry(t):
-        waits = [dep for dep, _ in unfinished_dependencies(data, t)]
+        waits = [dep for dep, _ in unfinished_dependencies(data, t, archived)]
         key = (
             bool(waits),
             t.get("with") == "user",
@@ -4645,7 +4660,7 @@ def project_summary(project):
     """A project's numbers for the dashboard's overview and project selector (docs/multi-project-api.md, 3.2), by
     status kind as atm counts them everywhere else: done / (total - skipped), the active and recent sprints, live
     claims, what needs the user, the latest activity and the completions of the last 14 days."""
-    data = project.store.document()
+    data, archived = project.store.document(), project.store.get_archived_task
     vocab = vocabulary(data)
     tasks = data["tasks"]
     kinds = [kind_of(vocab, t.get("status")) for t in tasks]
@@ -4677,10 +4692,10 @@ def project_summary(project):
     ]
     # What the loop takes next with its default selection (the active sprint's tasks in a project with sprints, SR-5.1),
     # by the very rule `atm next` follows: the dashboard's Next up shows the first (T-321)
-    in_loop_order = loop_order(data, store, Selection())[0]
+    in_loop_order = loop_order(data, store, Selection(), archived=archived)[0]
     next_up = [{"id": t.get("id"), "name": capped(t.get("name"))} for t in in_loop_order[:NEXT_TASKS]]
     # The board's To Do column: every to-do task, the loop's first (T-349)
-    todo = todo_order(data, tasks, kinds, in_loop_order, vocab)
+    todo = todo_order(data, tasks, kinds, in_loop_order, vocab, archived)
     finished = [(t.get("completed_at"), t) for t, k in zip(tasks, kinds) if k == "done" and parse_time(t.get("completed_at"))]
     last_task = max(finished, key=lambda f: f[0])[1] if finished else None
     last_done = (
@@ -4710,7 +4725,7 @@ def project_summary(project):
 
     def together_now(t):
         in_scope = active is None or (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
-        return in_scope and not unfinished_dependencies(data, t)
+        return in_scope and not unfinished_dependencies(data, t, archived)
 
     def needs_you(t, k):
         if k == "review":
@@ -4778,7 +4793,7 @@ def status_report(project, scope):
     """`atm status`: the overview, in the scope's tasks (`Filters` with sprint, backlog, release, component): the
     active sprint, counts, what is in progress, in review, blocked or waiting, the next task, the files' size and the
     hints. `report` is what --json prints; `has_sprints` says whether the project has any."""
-    data = project.store.document()
+    data, archived = project.store.document(), project.store.get_archived_task
     vocab = vocabulary(data)
     store = project.store.read_claims()
     sizes = project.store.sizes()
@@ -4819,9 +4834,9 @@ def status_report(project, scope):
         if kind_of(vocab, t.get("status")) == "active"
     ]
     waiting = [
-        {"id": t.get("id"), "name": t.get("name", ""), "on": [d for d, _ in unfinished_dependencies(data, t)]}
+        {"id": t.get("id"), "name": t.get("name", ""), "on": [d for d, _ in unfinished_dependencies(data, t, archived)]}
         for t in tasks
-        if kind_of(vocab, t.get("status")) == "todo" and unfinished_dependencies(data, t)
+        if kind_of(vocab, t.get("status")) == "todo" and unfinished_dependencies(data, t, archived)
     ]
     blocked = [
         {"id": t.get("id"), "name": t.get("name", ""), "waiting_on": t.get("waiting_on"), "questions": t.get("questions", [])}
@@ -4845,7 +4860,7 @@ def status_report(project, scope):
             in_review.append({**item, "since": record.get("at")})
         else:
             blocked.append({**item, "waiting_on": record.get("waiting_on"), "questions": record.get("questions") or []})
-    nxt, reason = next_task(data, store)
+    nxt, reason = next_task(data, store, archived=archived)
     largest = sorted(((len(json.dumps(t, ensure_ascii=False)), t.get("id")) for t in tasks), reverse=True)
     result = {
         "sprint": sprint,
@@ -4944,9 +4959,9 @@ def adopt_waiting(task, data, store, here, command):
     return record.get("worktree")
 
 
-def newly_ready(data, task_id):
+def newly_ready(data, task_id, archived):
     """The to-do tasks waiting on `task_id` whose dependencies are now all done."""
-    ready = {t.get("id") for t in ready_tasks(data)}
+    ready = {t.get("id") for t in ready_tasks(data, archived)}
     return [t.get("id") for t in data["tasks"] if task_id in (t.get("dependencies") or []) and t.get("id") in ready]
 
 
@@ -4960,12 +4975,12 @@ def change_task_status(project, command, task_id, **options):
     answers = list(options.get("answers") or [])
 
     def change(work):
-        data, store = work.document, work.claims()
+        data, store, archived = work.document, work.claims(), archived_in(work)
         claims = store["claims"]
         here = work.here()["worktree"]
         expired = expire_claims(data, claims)
-        apply_resolutions(here, data, store)
-        task = find_task(data, task_id)
+        apply_resolutions(here, data, store, archived)
+        task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
             own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
             if own:
@@ -4973,7 +4988,7 @@ def change_task_status(project, command, task_id, **options):
                 return {"task": task, "expired": expired}
         check_holder(claims, task_id, agent, command)
         duplicate_of = options.get("duplicate_of")
-        if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived_task(duplicate_of):
+        if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived(duplicate_of):
             raise Invalid(f"{task_id} can't be a duplicate of {duplicate_of}, which doesn't exist")
         waits_in = adopt_waiting(task, data, store, here, command)
         previous = change_status(
@@ -4990,6 +5005,7 @@ def change_task_status(project, command, task_id, **options):
             answers=answers,
             resolution=options.get("resolution"),
             duplicate_of=duplicate_of,
+            archived=archived,
         )
         if command == "start":
             claims[task_id] = claim_record(work, data, task_id, agent)
@@ -5019,7 +5035,7 @@ def change_task_status(project, command, task_id, **options):
                 }
             elif resolution and resolution.get("worktree") != here:
                 store["resolved"][task_id] = resolution  # still to be applied where it waits
-        unblocked = newly_ready(data, task_id) if command == "done" else []
+        unblocked = newly_ready(data, task_id, archived) if command == "done" else []
         # The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
         hint = archive_hint_for(data, work.size()) if command == "done" else None
         today = now_iso()[:10]
@@ -5042,6 +5058,7 @@ def change_task_status(project, command, task_id, **options):
             "stranded": stranded,
             "expired": expired,
             "document": data,
+            "archived": archived,  # the lookup of this project's archived tasks, for showing the task
         }
 
     return project.store.change(change)
@@ -5051,7 +5068,7 @@ def add_task_note(project, task_id, text):
     """A note on a task, whatever its status (DM-4), at most 500 characters. Returns the task."""
 
     def change(work):
-        task = find_task(work.document, task_id)
+        task = find_task(work.document, task_id, archived_in(work))
         stamp = now_iso()
         add_note(task, "note", text, project.actor, stamp)
         touch(task, project.actor, stamp)
@@ -5081,13 +5098,13 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
     agent = project.actor
 
     def change(work):
-        data, store = work.document, work.claims()
+        data, store, archived = work.document, work.claims(), archived_in(work)
         expired = expire_claims(data, store["claims"])
-        apply_resolutions(work.here()["worktree"], data, store)
-        task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user)
+        apply_resolutions(work.here()["worktree"], data, store, archived)
+        task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user, archived=archived)
         new = None
         if task and claim:
-            change_status(task, data, "start", agent=agent, status=status)
+            change_status(task, data, "start", agent=agent, status=status, archived=archived)
             new = store["claims"][task["id"]] = claim_record(work, data, task["id"], agent)
         return {"task": task, "claim": new, "reason": reason, "expired": expired}
 
@@ -5251,7 +5268,7 @@ def check_review(value):
     return value
 
 
-def check_related(task_id, related, known, archived=archived_task):
+def check_related(task_id, related, known, archived):
     """`archived(id)`: the archived task with that ID, or None (the store's lookup, from atm-lib)."""
     for other in related:
         if other == task_id:
@@ -5338,7 +5355,7 @@ def find_cycle(tasks):
     return None
 
 
-def add_tasks(data, entries, actor, archived=archived_task):
+def add_tasks(data, entries, actor, archived):
     """Add `entries` (dicts of task fields; an "id" there is a placeholder other entries' dependencies may use) to
     `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid. `archived(id)` looks
     up an archived task (a dependency on one is fine)."""
@@ -5369,18 +5386,6 @@ def add_tasks(data, entries, actor, archived=archived_task):
     return tasks
 
 
-def archived_in(work):
-    """A lookup of the archived tasks of a change: the archive is read only when something asks for it."""
-    index = {}
-
-    def lookup(task_id):
-        if not index:
-            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
-        return index.get(task_id)
-
-    return lookup
-
-
 def add_new_tasks(project, entries):
     """`atm add`: the tasks `entries` describe (dicts of task fields; an "id" there is a placeholder the others'
     dependencies may use), with the next IDs, all or none, as `project.actor`. Returns {tasks, vocab}."""
@@ -5409,8 +5414,9 @@ def edit_existing_task(project, task_id, changes):
     `changed` the names of the fields that changed (nothing is written when none did)."""
 
     def change(work):
-        task = find_task(work.document, task_id)
-        changed = edit_task(work.document, task, changes, archived_in(work))
+        archived = archived_in(work)
+        task = find_task(work.document, task_id, archived)
+        changed = edit_task(work.document, task, changes, archived)
         if changed:
             touch(task, project.actor, now_iso())
         return {"task": task, "changed": changed, "vocab": vocabulary(work.document)}
@@ -5418,7 +5424,7 @@ def edit_existing_task(project, task_id, changes):
     return project.store.change(change)
 
 
-def edit_task(data, task, args, archived=archived_task):
+def edit_task(data, task, args, archived):
     """Apply atm edit's options to `task`; returns the names of the fields that changed. Raises AtmError (nothing
     changed yet in the file) when a value is invalid. A description from a file is the caller's to read."""
     vocab = vocabulary(data)
@@ -6121,9 +6127,9 @@ def move_tasks(project, ids, to):
     def change(work):
         data = work.document
         vocab = vocabulary(data)
-        plans = []
+        plans, archived = [], archived_in(work)
         for task_id in ids:
-            task = find_task(data, task_id)
+            task = find_task(data, task_id, archived)
             kind = kind_of(vocab, task.get("status"))
             if kind == "active":
                 raise Invalid(f"{task_id} is in progress (claimed): it stays where the work is happening")
@@ -6552,7 +6558,7 @@ def record_on_task(project, task_id, sha):
     """The task's commit is `sha` (the SHA is known only once the commit exists: a change for the next commit)."""
 
     def change(work):
-        task = find_task(work.document, task_id)
+        task = find_task(work.document, task_id, archived_in(work))
         task["commit"] = sha
         touch(task, project.actor, now_iso())
         return task
@@ -6569,7 +6575,7 @@ def commit_task(project, task_id, files, cwd, message=None):
     if not files:
         raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
     data = project.store.document()
-    task = find_task(data, task_id)
+    task = find_task(data, task_id, project.store.get_archived_task)
     workflow = workflow_of(data) or WORKFLOW_DEFAULTS
     text = message if message is not None else workflow["commit_template"]
     for key in ("id", "name", "phase", "type"):
@@ -6615,7 +6621,8 @@ def record_pr(project, ids, number, url):
         raise Invalid(f"--url must be an http:// or https:// address, not {url!r}")
 
     def change(work):
-        found = [find_task(work.document, task_id) for task_id in ids]
+        archived = archived_in(work)
+        found = [find_task(work.document, task_id, archived) for task_id in ids]
         stamp = now_iso()
         for task in found:
             task["pr"] = {"number": number, "url": url}
@@ -7009,12 +7016,12 @@ def list_lines(vocab, tasks):
         )
 
 
-def describe_task(data, task):
-    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
-    start): the same text as `atm show`, from atm-lib's view of it."""
+def describe_task(data, task, archived_lookup):
+    """A task in full, as text, as a status change prints the task it starts: the same text as `atm show`, from
+    atm-lib's view of it. `archived_lookup` is the project's lookup of archived tasks (its dependencies may be)."""
     # A task not in tasks.json is from the archive
     archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
+    return render_task(view_task(task, archived, data["tasks"], archived_lookup, vocabulary(data)))
 
 
 def render_task(view):
@@ -7898,7 +7905,7 @@ def cmd_status_change(command):
         if stranded:
             out(f"  {stranded}")
         if command == "start":
-            out(describe_task(result["document"], task))
+            out(describe_task(result["document"], task, result["archived"]))
         if result["unblocked"]:
             out("Now ready: " + ", ".join(result["unblocked"]))
         if hint:

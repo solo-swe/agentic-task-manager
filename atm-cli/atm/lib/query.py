@@ -89,13 +89,14 @@ def in_open_pr(task):
     return isinstance(task.get("pr"), dict) and not task.get("merged_at")
 
 
-def ready_tasks(data):
-    """To-do tasks whose dependencies are all done, in the loop's order."""
+def ready_tasks(data, archived):
+    """To-do tasks whose dependencies are all done, in the loop's order. `archived`: the project's lookup of archived
+    tasks (a dependency only in the archive is done)."""
     vocab = vocabulary(data)
     ready = [
         t
         for t in data["tasks"]
-        if kind_of(vocab, t.get("status")) == "todo" and not unfinished_dependencies(data, t)
+        if kind_of(vocab, t.get("status")) == "todo" and not unfinished_dependencies(data, t, archived)
     ]
     return sorted(ready, key=lambda t: (priority_rank(vocab, t.get("priority")), natural_key(t.get("id"))))
 
@@ -106,7 +107,7 @@ def list_matching(project, filters):
     data = store.document()
     vocab = vocabulary(data)
     args = filters
-    ready = {t.get("id") for t in ready_tasks(data)}
+    ready = {t.get("id") for t in ready_tasks(data, store.get_archived_task)}
     in_scope = scope_filter(vocab, args)
     tasks = []
     for t in store.list_archived() if args.archived else data["tasks"]:
@@ -150,8 +151,8 @@ def task_views(project, filters):
     priority, review mode and release, its stage, and whether it is archived. The dashboard takes these instead of
     working them out itself."""
     found = list_matching(project, filters)
-    data, vocab = project.store.document(), found["vocab"]
-    ready = {t.get("id") for t in ready_tasks(data)}
+    data, vocab, archived = project.store.document(), found["vocab"], project.store.get_archived_task
+    ready = {t.get("id") for t in ready_tasks(data, archived)}
     # A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
     troubled = {} if filters.archived else project.store.problems()["tasks"]
     views = []
@@ -161,7 +162,7 @@ def task_views(project, filters):
         values = {
             "kind": kind,
             "ready": t.get("id") in ready and not problems,
-            "waiting_for": [d for d, _ in unfinished_dependencies(data, t)] if kind == "todo" else [],
+            "waiting_for": [d for d, _ in unfinished_dependencies(data, t, archived)] if kind == "todo" else [],
             "problems": problems,
             "waiting_on": t.get("waiting_on") if kind == "blocked" else None,
             "priority": priority_of(vocab, t),
@@ -357,7 +358,7 @@ def board_column(cards, cap=BOARD_CAP):
     return {"count": len(cards), "cards": cards[:cap]}
 
 
-def todo_order(data, tasks, kinds, loop_ready, vocab):
+def todo_order(data, tasks, kinds, loop_ready, vocab, archived):
     """Every to-do task, for the board's To Do column (T-349): first the ready ones, those the loop takes in its order
     before the rest (other sprints', the backlog's), then the ready ones done with the user, then those waiting on
     dependencies (each by priority, then ID). Each with why it isn't plain ready: done with the user, or the
@@ -365,7 +366,7 @@ def todo_order(data, tasks, kinds, loop_ready, vocab):
     rank = {t.get("id"): i for i, t in enumerate(loop_ready)}
 
     def entry(t):
-        waits = [dep for dep, _ in unfinished_dependencies(data, t)]
+        waits = [dep for dep, _ in unfinished_dependencies(data, t, archived)]
         key = (
             bool(waits),
             t.get("with") == "user",
@@ -505,7 +506,7 @@ def project_summary(project):
     """A project's numbers for the dashboard's overview and project selector (docs/multi-project-api.md, 3.2), by
     status kind as atm counts them everywhere else: done / (total - skipped), the active and recent sprints, live
     claims, what needs the user, the latest activity and the completions of the last 14 days."""
-    data = project.store.document()
+    data, archived = project.store.document(), project.store.get_archived_task
     vocab = vocabulary(data)
     tasks = data["tasks"]
     kinds = [kind_of(vocab, t.get("status")) for t in tasks]
@@ -537,10 +538,10 @@ def project_summary(project):
     ]
     # What the loop takes next with its default selection (the active sprint's tasks in a project with sprints, SR-5.1),
     # by the very rule `atm next` follows: the dashboard's Next up shows the first (T-321)
-    in_loop_order = loop_order(data, store, Selection())[0]
+    in_loop_order = loop_order(data, store, Selection(), archived=archived)[0]
     next_up = [{"id": t.get("id"), "name": capped(t.get("name"))} for t in in_loop_order[:NEXT_TASKS]]
     # The board's To Do column: every to-do task, the loop's first (T-349)
-    todo = todo_order(data, tasks, kinds, in_loop_order, vocab)
+    todo = todo_order(data, tasks, kinds, in_loop_order, vocab, archived)
     finished = [(t.get("completed_at"), t) for t, k in zip(tasks, kinds) if k == "done" and parse_time(t.get("completed_at"))]
     last_task = max(finished, key=lambda f: f[0])[1] if finished else None
     last_done = (
@@ -570,7 +571,7 @@ def project_summary(project):
 
     def together_now(t):
         in_scope = active is None or (find_sprint(vocab, t.get("sprint")) or {}).get("id") == active["id"]
-        return in_scope and not unfinished_dependencies(data, t)
+        return in_scope and not unfinished_dependencies(data, t, archived)
 
     def needs_you(t, k):
         if k == "review":
@@ -638,7 +639,7 @@ def status_report(project, scope):
     """`atm status`: the overview, in the scope's tasks (`Filters` with sprint, backlog, release, component): the
     active sprint, counts, what is in progress, in review, blocked or waiting, the next task, the files' size and the
     hints. `report` is what --json prints; `has_sprints` says whether the project has any."""
-    data = project.store.document()
+    data, archived = project.store.document(), project.store.get_archived_task
     vocab = vocabulary(data)
     store = project.store.read_claims()
     sizes = project.store.sizes()
@@ -679,9 +680,9 @@ def status_report(project, scope):
         if kind_of(vocab, t.get("status")) == "active"
     ]
     waiting = [
-        {"id": t.get("id"), "name": t.get("name", ""), "on": [d for d, _ in unfinished_dependencies(data, t)]}
+        {"id": t.get("id"), "name": t.get("name", ""), "on": [d for d, _ in unfinished_dependencies(data, t, archived)]}
         for t in tasks
-        if kind_of(vocab, t.get("status")) == "todo" and unfinished_dependencies(data, t)
+        if kind_of(vocab, t.get("status")) == "todo" and unfinished_dependencies(data, t, archived)
     ]
     blocked = [
         {"id": t.get("id"), "name": t.get("name", ""), "waiting_on": t.get("waiting_on"), "questions": t.get("questions", [])}
@@ -705,7 +706,7 @@ def status_report(project, scope):
             in_review.append({**item, "since": record.get("at")})
         else:
             blocked.append({**item, "waiting_on": record.get("waiting_on"), "questions": record.get("questions") or []})
-    nxt, reason = next_task(data, store)
+    nxt, reason = next_task(data, store, archived=archived)
     largest = sorted(((len(json.dumps(t, ensure_ascii=False)), t.get("id")) for t in tasks), reverse=True)
     result = {
         "sprint": sprint,

@@ -11,7 +11,6 @@ from ..common.core import now_iso
 from ..common.model import (
     add_note,
     archive_hint_for,
-    archived_task,
     change_status,
     find_sprint,
     find_task,
@@ -20,7 +19,7 @@ from ..common.model import (
     touch,
     vocabulary,
 )
-from .loop import apply_resolutions, check_holder, expire_claims, lease_until, own_lease_expired
+from .loop import apply_resolutions, archived_in, check_holder, expire_claims, lease_until, own_lease_expired
 from .query import ready_tasks
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
@@ -84,9 +83,9 @@ def adopt_waiting(task, data, store, here, command):
     return record.get("worktree")
 
 
-def newly_ready(data, task_id):
+def newly_ready(data, task_id, archived):
     """The to-do tasks waiting on `task_id` whose dependencies are now all done."""
-    ready = {t.get("id") for t in ready_tasks(data)}
+    ready = {t.get("id") for t in ready_tasks(data, archived)}
     return [t.get("id") for t in data["tasks"] if task_id in (t.get("dependencies") or []) and t.get("id") in ready]
 
 
@@ -100,12 +99,12 @@ def change_task_status(project, command, task_id, **options):
     answers = list(options.get("answers") or [])
 
     def change(work):
-        data, store = work.document, work.claims()
+        data, store, archived = work.document, work.claims(), archived_in(work)
         claims = store["claims"]
         here = work.here()["worktree"]
         expired = expire_claims(data, claims)
-        apply_resolutions(here, data, store)
-        task = find_task(data, task_id)
+        apply_resolutions(here, data, store, archived)
+        task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
             own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
             if own:
@@ -113,7 +112,7 @@ def change_task_status(project, command, task_id, **options):
                 return {"task": task, "expired": expired}
         check_holder(claims, task_id, agent, command)
         duplicate_of = options.get("duplicate_of")
-        if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived_task(duplicate_of):
+        if duplicate_of and not any(t.get("id") == duplicate_of for t in data["tasks"]) and not archived(duplicate_of):
             raise Invalid(f"{task_id} can't be a duplicate of {duplicate_of}, which doesn't exist")
         waits_in = adopt_waiting(task, data, store, here, command)
         previous = change_status(
@@ -130,6 +129,7 @@ def change_task_status(project, command, task_id, **options):
             answers=answers,
             resolution=options.get("resolution"),
             duplicate_of=duplicate_of,
+            archived=archived,
         )
         if command == "start":
             claims[task_id] = claim_record(work, data, task_id, agent)
@@ -159,7 +159,7 @@ def change_task_status(project, command, task_id, **options):
                 }
             elif resolution and resolution.get("worktree") != here:
                 store["resolved"][task_id] = resolution  # still to be applied where it waits
-        unblocked = newly_ready(data, task_id) if command == "done" else []
+        unblocked = newly_ready(data, task_id, archived) if command == "done" else []
         # The archive hint after done, at most once a day per clone (CLI-5.2), so a loop doesn't repeat it
         hint = archive_hint_for(data, work.size()) if command == "done" else None
         today = now_iso()[:10]
@@ -182,6 +182,7 @@ def change_task_status(project, command, task_id, **options):
             "stranded": stranded,
             "expired": expired,
             "document": data,
+            "archived": archived,  # the lookup of this project's archived tasks, for showing the task
         }
 
     return project.store.change(change)
@@ -191,7 +192,7 @@ def add_task_note(project, task_id, text):
     """A note on a task, whatever its status (DM-4), at most 500 characters. Returns the task."""
 
     def change(work):
-        task = find_task(work.document, task_id)
+        task = find_task(work.document, task_id, archived_in(work))
         stamp = now_iso()
         add_note(task, "note", text, project.actor, stamp)
         touch(task, project.actor, stamp)

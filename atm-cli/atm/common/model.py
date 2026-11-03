@@ -385,20 +385,10 @@ def status_for(vocab, kind, chosen=None):
     return chosen
 
 
-# Where the rules look up an archived task (a dependency not in tasks.json, show of an archived task): the store
-# that loaded the task data sets it (use_archive), read only when needed; one atm process works on one project
-_archive = {"lookup": None}
-
-
-def use_archive(lookup):
-    """Look archived tasks up with `lookup(task_id)` (task or None) from now on; None: there is no archive."""
-    _archive["lookup"] = lookup
-
-
-def archived_task(task_id):
-    """The archived task with this ID, if the archive has it."""
-    return _archive["lookup"](task_id) if _archive["lookup"] else None
-
+# The rules that need an archived task (a dependency only in the archive is done, the "it is archived" hint) take
+# `archived`: a lookup, `archived(task_id)` -> the archived task or None, from the project's store
+# (`store.get_archived_task`, or atm-lib's `archived_in(work)` inside a change). There is no global one: one process
+# (atm serve) works on many projects at once (docs/layered-architecture.md §11.4).
 
 ARCHIVE_DEFAULTS = {"threshold_kb": 1024, "threshold_tasks": 500, "keep_days": 14, "auto": True}
 
@@ -497,20 +487,19 @@ def tolerant_vocabulary(meta):
                 usable = {}  # nothing to narrow it to: the defaults
 
 
-def find_task(data, task_id, archived=False):
-    """The task with this ID in tasks.json; with `archived`, also in the archive (for reading only)."""
+def find_task(data, task_id, archived=None):
+    """The task with this ID in tasks.json. Raises AtmError when there is none; with `archived` (the project's lookup)
+    the error says when the task is archived."""
     for task in data["tasks"]:
         if task.get("id") == task_id:
             return task
-    if archived and archived_task(task_id):
-        return archived_task(task_id)
-    hint = " (it is archived: atm unarchive brings it back)" if not archived and archived_task(task_id) else ""
+    hint = " (it is archived: atm unarchive brings it back)" if archived and archived(task_id) else ""
     raise AtmError(f"no task {task_id}{hint}")
 
 
-def unfinished_dependencies(data, task):
+def unfinished_dependencies(data, task, archived):
     """Dependencies that don't have a done-kind status yet, with their status ("missing" for unknown IDs). A
-    dependency that is only in the archive is done (DM-3.1)."""
+    dependency that is only in the archive is done (DM-3.1): `archived` is the project's lookup."""
     vocab = vocabulary(data)
     status = {t.get("id"): t.get("status") for t in data["tasks"]}
     deps = task.get("dependencies", [])
@@ -519,7 +508,7 @@ def unfinished_dependencies(data, task):
     return [
         (dep, status.get(dep, "missing"))
         for dep in deps
-        if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived_task(dep))
+        if (dep in status and kind_of(vocab, status[dep]) != "done") or (dep not in status and not archived(dep))
     ]
 
 
@@ -618,8 +607,11 @@ def change_status(
     answers=(),
     resolution=None,
     duplicate_of=None,
+    *,
+    archived,
 ):
-    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `status`
+    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
+    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
     picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
     `done` as completed_by (both kept when it is done, so the dashboard can show who did what); `note` and `reason`
     become notes, `commit` the task's commit. `block` records who it waits on and the open questions; `unblock`
@@ -648,7 +640,7 @@ def change_status(
     if command in ("approve", "request-changes") and status is None:
         new = current  # it stays in its review status (a project may have several)
     if command == "start":
-        blocking = unfinished_dependencies(data, task)
+        blocking = unfinished_dependencies(data, task, archived)
         if blocking:
             raise AtmError(f"can't start {task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking))
     if note is not None:

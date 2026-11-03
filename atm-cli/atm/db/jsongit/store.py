@@ -8,10 +8,10 @@ import os
 
 from ...common.core import AtmError, read_json, to_json, write_json_atomic, write_text_atomic
 from ...common.errors import Conflict
-from ...common.model import archived_task, vocabulary
+from ...common.model import vocabulary
 from ..working import Working
 from .claims import claims_store_path, locked_with_claims, read_store, write_store
-from .files import archive_path, load_archive, load_tasks, load_tasks_tolerant
+from .files import archive_of, archive_path, load_archive, load_tasks, load_tasks_tolerant
 from .gitrun import git
 from .lock import locked
 from .logo import find_logo, logo_file
@@ -35,6 +35,7 @@ class JsonGitStore:
         self.paths = paths
         self.tolerant = tolerant
         self._data = None
+        self._archived = None  # the lookup of this project's archive, made on first use
         self._problems = {"file": [], "tasks": {}}
 
     def _loaded(self):
@@ -64,8 +65,10 @@ class JsonGitStore:
         return None
 
     def get_archived_task(self, task_id):
-        self._loaded()  # the archive is looked up for the file it belongs to
-        return archived_task(task_id)
+        """This project's archived task with this ID, or None; its own archive, read once per store."""
+        if self._archived is None:
+            self._archived = archive_of(self.paths)
+        return self._archived(task_id)
 
     def list_archived(self):
         return [t for t in load_archive(self.paths)["tasks"] if isinstance(t, dict)]
@@ -190,6 +193,6 @@ class JsonGitStore:
                 write()
             if work.store_changed():
                 write_store(self.paths, work.claims_store)
-        self._data = None  # this store's snapshot is out of date now
+        self._data = self._archived = None  # this store's snapshot is out of date now
         work.raise_deferred()
         return result

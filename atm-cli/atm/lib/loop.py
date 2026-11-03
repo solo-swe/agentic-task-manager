@@ -1,7 +1,8 @@
 """atm-lib: the loop's rules (docs/parallel-agents-design.md; docs/sprints-and-releases-design.md §3): leases, who
 holds a claim, what was decided in another worktree, and which task the loop takes next (`next_task`, the same order
 the dashboard's Next up shows). They work on the task data and the claims store as the store hands them out
-(`work.document`, `work.claims_store`); keeping the claims is the store's (db/jsongit/claims.py)."""
+(`work.document`, `work.claims_store`), with the project's lookup of archived tasks (`archived`: a dependency only
+in the archive is done); keeping the claims is the store's (db/jsongit/claims.py)."""
 
 from datetime import timedelta
 
@@ -22,10 +23,24 @@ from ..common.model import (
 DEFAULT_LEASE_MINUTES = 30
 
 
-def apply_resolutions(worktree, data, store):
+def archived_in(work):
+    """The lookup of archived tasks inside a store change (`archived(task_id)` -> task or None): the change's own
+    archive, read only when something asks for it."""
+    index = {}
+
+    def lookup(task_id):
+        if not index:
+            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
+        return index.get(task_id)
+
+    return lookup
+
+
+def apply_resolutions(worktree, data, store, archived):
     """Apply what was decided in another worktree about a task waiting in this one (store["resolved"]): the answer,
     the passed or rejected review, the skip, as if given here, so this worktree's copy stops waiting too. `worktree` is
-    this working copy's folder. A task changed here in the meantime is left as it is. Returns the IDs applied."""
+    this working copy's folder, `archived` the project's lookup of archived tasks. A task changed here in the meantime
+    is left as it is. Returns the IDs applied."""
     applied = []
     for task_id, record in list(store["resolved"].items()):
         if not isinstance(record, dict) or record.get("worktree") != worktree:
@@ -42,6 +57,7 @@ def apply_resolutions(worktree, data, store):
                 agent=record.get("by"),
                 reason=record.get("reason"),
                 answers=record.get("answers") or [],
+                archived=archived,
             )
             applied.append(task_id)
         except (AtmError, KeyError):
@@ -111,15 +127,15 @@ def own_lease_expired(expired, data, task_id, agent, then):
     )
 
 
-def ready_in_order(data, store, candidates=None, rank=None):
-    """The to-do tasks the loop could take, in the order it takes them: every dependency done, not claimed, not
-    completed or waiting in another worktree; by `rank` (the selection's own order, SR-3.2), then the most urgent
-    priority, then lowest ID."""
+def ready_in_order(data, store, candidates=None, rank=None, *, archived):
+    """The to-do tasks the loop could take, in the order it takes them: every dependency done (`archived`: the
+    project's lookup of archived tasks, which are), not claimed, not completed or waiting in another worktree; by
+    `rank` (the selection's own order, SR-3.2), then the most urgent priority, then lowest ID."""
     vocab = vocabulary(data)
     if candidates is None:
         candidates = [t for t in data["tasks"] if kind_of(vocab, t.get("status")) == "todo"]
     taken = set(store["claims"]) | set(store["completed"]) | set(store["waiting"])
-    ready = [t for t in candidates if not unfinished_dependencies(data, t) and t.get("id") not in taken]
+    ready = [t for t in candidates if not unfinished_dependencies(data, t, archived) and t.get("id") not in taken]
     rank = rank or (lambda t: 0)
     order = lambda t: (rank(t), priority_rank(vocab, t.get("priority")), natural_key(t.get("id")))
     return sorted(ready, key=order)
@@ -196,7 +212,7 @@ def offered_to(data, task, agent):
     return now() >= reviewed + timedelta(minutes=lease_minutes(data))
 
 
-def loop_order(data, store, sel, agent=None, with_user=False):
+def loop_order(data, store, sel, agent=None, with_user=False, *, archived):
     """Every task the loop could take now, in the order it takes them: `atm next` hands out the first, and atm serve's
     summary lists them as `next`, which the dashboard's Next up shows (T-321), so the two can't disagree. Returns
     (ready, selected, candidates, together, scope, problem); `problem` says why the selection itself is refused."""
@@ -219,18 +235,22 @@ def loop_order(data, store, sel, agent=None, with_user=False):
     if not with_user:
         candidates = [t for t in candidates if t.get("with") != "user"]
     in_order = rank or (lambda t: 0)
-    ready = ready_in_order(data, store, candidates, lambda t: (t.get("id") not in first, in_order(t)))
+    ready = ready_in_order(
+        data, store, candidates, lambda t: (t.get("id") not in first, in_order(t)), archived=archived
+    )
     return ready, selected, candidates, together, scope, None
 
 
-def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False):
+def next_task(data, store, task_type=None, sel=None, agent=None, with_user=False, *, archived):
     """The loop's rule (same as the dashboard's "Next up"): todo (or back from review), every dependency done, not
     claimed and not completed in another worktree, in the selection (the default one when `sel` is None); in its
     order, then the most urgent priority, then lowest ID. Returns (task, reason) where reason explains an empty
     result: the selection is finished, the rest of it waits, or it is empty (SR-3.6)."""
     vocab = vocabulary(data)
     sel = sel or Selection(task_type=task_type)
-    ready, selected, candidates, together, scope, problem = loop_order(data, store, sel, agent, with_user)
+    ready, selected, candidates, together, scope, problem = loop_order(
+        data, store, sel, agent, with_user, archived=archived
+    )
     if problem:
         return None, problem
     if ready:

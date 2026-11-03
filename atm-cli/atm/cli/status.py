@@ -41,7 +41,7 @@ def cmd_status_change(command):
         if stranded:
             out(f"  {stranded}")
         if command == "start":
-            out(describe_task(result["document"], task))
+            out(describe_task(result["document"], task, result["archived"]))
         if result["unblocked"]:
             out("Now ready: " + ", ".join(result["unblocked"]))
         if hint:

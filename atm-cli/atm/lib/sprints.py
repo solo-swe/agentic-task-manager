@@ -21,6 +21,7 @@ from ..common.model import (
 )
 from ..common.sprint_names import generate_sprint_name
 from .edit import open_sprint
+from .loop import archived_in
 
 
 def sprint_overview(data, archived, include_closed):
@@ -396,9 +397,9 @@ def move_tasks(project, ids, to):
     def change(work):
         data = work.document
         vocab = vocabulary(data)
-        plans = []
+        plans, archived = [], archived_in(work)
         for task_id in ids:
-            task = find_task(data, task_id)
+            task = find_task(data, task_id, archived)
             kind = kind_of(vocab, task.get("status"))
             if kind == "active":
                 raise Invalid(f"{task_id} is in progress (claimed): it stays where the work is happening")

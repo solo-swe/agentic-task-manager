@@ -11,7 +11,6 @@ from ..common.core import AtmError, now_iso
 from ..common.model import (
     RESOLUTIONS,
     REVIEW_MODES,
-    archived_task,
     find_release,
     find_sprint,
     find_task,
@@ -26,6 +25,7 @@ from ..common.model import (
     valid_task_id,
     vocabulary,
 )
+from .loop import archived_in
 
 LABEL = re.compile(r"^[a-z0-9_-]{1,32}$")
 DEFAULT_ID = ("T-", 3)
@@ -97,7 +97,7 @@ def check_review(value):
     return value
 
 
-def check_related(task_id, related, known, archived=archived_task):
+def check_related(task_id, related, known, archived):
     """`archived(id)`: the archived task with that ID, or None (the store's lookup, from atm-lib)."""
     for other in related:
         if other == task_id:
@@ -184,7 +184,7 @@ def find_cycle(tasks):
     return None
 
 
-def add_tasks(data, entries, actor, archived=archived_task):
+def add_tasks(data, entries, actor, archived):
     """Add `entries` (dicts of task fields; an "id" there is a placeholder other entries' dependencies may use) to
     `data`. Returns the new tasks. Raises AtmError, before changing anything, if one is invalid. `archived(id)` looks
     up an archived task (a dependency on one is fine)."""
@@ -215,18 +215,6 @@ def add_tasks(data, entries, actor, archived=archived_task):
     return tasks
 
 
-def archived_in(work):
-    """A lookup of the archived tasks of a change: the archive is read only when something asks for it."""
-    index = {}
-
-    def lookup(task_id):
-        if not index:
-            index.update({t.get("id"): t for t in work.archive()["tasks"] if isinstance(t, dict)} or {None: None})
-        return index.get(task_id)
-
-    return lookup
-
-
 def add_new_tasks(project, entries):
     """`atm add`: the tasks `entries` describe (dicts of task fields; an "id" there is a placeholder the others'
     dependencies may use), with the next IDs, all or none, as `project.actor`. Returns {tasks, vocab}."""
@@ -255,8 +243,9 @@ def edit_existing_task(project, task_id, changes):
     `changed` the names of the fields that changed (nothing is written when none did)."""
 
     def change(work):
-        task = find_task(work.document, task_id)
-        changed = edit_task(work.document, task, changes, archived_in(work))
+        archived = archived_in(work)
+        task = find_task(work.document, task_id, archived)
+        changed = edit_task(work.document, task, changes, archived)
         if changed:
             touch(task, project.actor, now_iso())
         return {"task": task, "changed": changed, "vocab": vocabulary(work.document)}
@@ -264,7 +253,7 @@ def edit_existing_task(project, task_id, changes):
     return project.store.change(change)
 
 
-def edit_task(data, task, args, archived=archived_task):
+def edit_task(data, task, args, archived):
     """Apply atm edit's options to `task`; returns the names of the fields that changed. Raises AtmError (nothing
     changed yet in the file) when a value is invalid. A description from a file is the caller's to read."""
     vocab = vocabulary(data)

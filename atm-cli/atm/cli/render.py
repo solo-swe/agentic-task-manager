@@ -4,7 +4,7 @@ import sys
 
 from ..common.fields import priority_of
 from ..lib.tasks import view_task
-from ..common.model import archived_task, vocabulary
+from ..common.model import vocabulary
 
 
 def report_expired(expired):
@@ -27,12 +27,12 @@ def list_lines(vocab, tasks):
         )
 
 
-def describe_task(data, task):
-    """A task in full, as text, for the commands not on the layers yet (the status changes print the task they
-    start): the same text as `atm show`, from atm-lib's view of it."""
+def describe_task(data, task, archived_lookup):
+    """A task in full, as text, as a status change prints the task it starts: the same text as `atm show`, from
+    atm-lib's view of it. `archived_lookup` is the project's lookup of archived tasks (its dependencies may be)."""
     # A task not in tasks.json is from the archive
     archived = all(t is not task for t in data["tasks"])
-    return render_task(view_task(task, archived, data["tasks"], archived_task, vocabulary(data)))
+    return render_task(view_task(task, archived, data["tasks"], archived_lookup, vocabulary(data)))
 
 
 def render_task(view):

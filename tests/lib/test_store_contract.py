@@ -13,6 +13,8 @@ from atm.common.errors import Conflict
 from atm.db.jsongit.store import JsonGitStore
 from atm.db.memory import MemoryStore
 from atm.db.jsongit.paths import find_paths
+from atm.lib.project import Project
+from atm.lib.query import Filters, task_views
 
 TASKS = [task("T-1", status="done"), task("T-2", dependencies=["T-1", "T-0"], priority="P1")]
 ARCHIVE = [task("T-0", status="done")]
@@ -95,6 +97,11 @@ class StoreContract:
     def test_the_files_for_commit_are_a_list_of_relative_paths(self):
         self.assertTrue(all(isinstance(f, str) and not os.path.isabs(f) for f in self.store.files_for_commit()))
 
+    def test_a_dependency_only_in_the_archive_counts_as_done(self):
+        # T-2 depends on T-1 (done) and T-0 (archived): ready, waiting for nothing (DM-3.1, §11.4)
+        views = {v["task"]["id"]: v["derived"] for v in task_views(Project(self.store), Filters())}
+        self.assertEqual((views["T-2"]["ready"], views["T-2"]["waiting_for"]), (True, []))
+
     def test_it_exists_and_refuses_to_be_created_again(self):
         self.assertTrue(self.store.exists())
         with self.assertRaises(Conflict):
@@ -138,6 +145,22 @@ class JsonGitStoreContract(StoreContract, unittest.TestCase):
         os.utime(tasks_file, (1_000_000, 1_000_000))
         self.store.change(lambda work: work.tasks()[0].get("id"))
         self.assertEqual(os.stat(tasks_file).st_mtime, 1_000_000)
+
+    def test_two_projects_in_one_process_never_see_each_others_archive(self):
+        # atm serve: projects opened at once, in one process (§11.4). The other project has T-2 waiting on a T-0 it
+        # doesn't have; opening it in between must not change what this project's T-0 is
+        other = tempfile.mkdtemp(prefix="atm-store-")
+        self.addCleanup(shutil.rmtree, other)
+        os.makedirs(os.path.join(other, ".agentic-task-manager"))
+        with open(os.path.join(other, ".agentic-task-manager", "tasks.json"), "w", encoding="utf-8") as f:
+            json.dump({"meta": META, "tasks": TASKS}, f)
+        mine, theirs = Project(self.store), Project(JsonGitStore(find_paths(other)))
+        mine.store.document()
+        theirs.store.document()
+        derived = lambda project: {v["task"]["id"]: v["derived"] for v in task_views(project, Filters())}["T-2"]
+        self.assertEqual(derived(mine)["waiting_for"], [])  # its own archive has T-0
+        self.assertEqual(derived(theirs)["waiting_for"], ["T-0"])  # theirs doesn't
+        self.assertEqual(derived(mine)["waiting_for"], [])
 
 
 if __name__ == "__main__":

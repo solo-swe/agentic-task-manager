@@ -19533,7 +19533,7 @@
       "description": "`docs/layered-architecture.md` §11.4. Before the branch is merged.\n\n## Problem\n`common/model.py`'s `use_archive`/`archived_task` is a module-global lookup the JSON-in-git store's loaders set. `atm serve` is threaded and serves many projects in one process, so a request for one project can be judged against another project's archive (a dependency only in its own archive counts as missing; a ready task shows as waiting). On the in-memory store the hook is never set.\n\n## Change\n- The rules take the lookup as a parameter: `unfinished_dependencies(data, task, archived)`, `find_task(data, id, archived=...)`, `change_status`, the checks in `lib/edit.py` and `lib/status.py`, `cli/render.py`.\n- atm-lib passes `store.get_archived_task`, or `archived_in(work)` inside a change.\n- Each store keeps its own lazy archive cache (`JsonGitStore.get_archived_task` reads its own archive).\n- `use_archive`, `_archive` and the global `archived_task` are deleted.\n- Update §11.4 (settled) and §8's paragraph on the hook.\n\n## Tests\n- `tests/lib/`: a dependency only in the archive counts as done, on both stores (contract test).\n- Two JSON-in-git projects used one after the other in one process never see each other's archives.\n- `npm run test:scripts`; the serve tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/common/model.py",
@@ -19547,7 +19547,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:45Z",
+      "updated_at": "2026-11-03T00:14:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19561,7 +19561,9 @@
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T00:14:47Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-379",

@@ -4,7 +4,7 @@
 import os
 
 from ...common.core import AtmError, read_json
-from ...common.model import archive_hint_for, tolerant_vocabulary, use_archive, valid_task_id, vocabulary
+from ...common.model import archive_hint_for, tolerant_vocabulary, valid_task_id, vocabulary
 
 ARCHIVE_FILE = "tasks-archive.json"
 
@@ -25,7 +25,8 @@ def load_archive(paths):
 
 
 def archive_of(paths):
-    """The rules' lookup of archived tasks in the archive of `paths`, read on the first lookup."""
+    """A lookup of the archived tasks in the archive of `paths` (`lookup(task_id)` -> task or None), read on the first
+    lookup: what the store hands the rules for its project."""
     found = {}
 
     def lookup(task_id):
@@ -62,7 +63,6 @@ def load_tasks(paths):
         deps = task.get("dependencies", [])
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
             raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
-    use_archive(archive_of(paths))
     return data
 
 
@@ -94,7 +94,6 @@ def load_tasks_tolerant(paths):
     # The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
     _, vocabulary_problems, data["meta"] = tolerant_vocabulary(data.get("meta"))
     problems["file"] += vocabulary_problems
-    use_archive(archive_of(paths))
     return data, problems
 
 

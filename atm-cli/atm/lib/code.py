@@ -9,6 +9,7 @@ import re
 
 from ..common.errors import AtmFailure, Invalid, NotFound
 from ..common.core import now_iso, parse_iso
+from .loop import archived_in
 from ..common.model import WORKFLOW_DEFAULTS, WORKFLOW_TYPES, effective_release, find_task, kind_of, touch, vocabulary, workflow_of
 
 HTTP_URL = re.compile(r"https?://[^\s]+\Z", re.IGNORECASE)
@@ -70,7 +71,7 @@ def record_on_task(project, task_id, sha):
     """The task's commit is `sha` (the SHA is known only once the commit exists: a change for the next commit)."""
 
     def change(work):
-        task = find_task(work.document, task_id)
+        task = find_task(work.document, task_id, archived_in(work))
         task["commit"] = sha
         touch(task, project.actor, now_iso())
         return task
@@ -87,7 +88,7 @@ def commit_task(project, task_id, files, cwd, message=None):
     if not files:
         raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
     data = project.store.document()
-    task = find_task(data, task_id)
+    task = find_task(data, task_id, project.store.get_archived_task)
     workflow = workflow_of(data) or WORKFLOW_DEFAULTS
     text = message if message is not None else workflow["commit_template"]
     for key in ("id", "name", "phase", "type"):
@@ -133,7 +134,8 @@ def record_pr(project, ids, number, url):
         raise Invalid(f"--url must be an http:// or https:// address, not {url!r}")
 
     def change(work):
-        found = [find_task(work.document, task_id) for task_id in ids]
+        archived = archived_in(work)
+        found = [find_task(work.document, task_id, archived) for task_id in ids]
         stamp = now_iso()
         for task in found:
             task["pr"] = {"number": number, "url": url}

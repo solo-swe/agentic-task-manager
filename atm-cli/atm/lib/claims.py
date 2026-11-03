@@ -10,6 +10,7 @@ from ..common.model import change_status
 from .loop import (
     Selection,
     apply_resolutions,
+    archived_in,
     check_holder,
     expire_claims,
     lease_minutes,
@@ -35,13 +36,13 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
     agent = project.actor
 
     def change(work):
-        data, store = work.document, work.claims()
+        data, store, archived = work.document, work.claims(), archived_in(work)
         expired = expire_claims(data, store["claims"])
-        apply_resolutions(work.here()["worktree"], data, store)
-        task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user)
+        apply_resolutions(work.here()["worktree"], data, store, archived)
+        task, reason = next_task(data, store, sel=sel, agent=agent, with_user=with_user, archived=archived)
         new = None
         if task and claim:
-            change_status(task, data, "start", agent=agent, status=status)
+            change_status(task, data, "start", agent=agent, status=status, archived=archived)
             new = store["claims"][task["id"]] = claim_record(work, data, task["id"], agent)
         return {"task": task, "claim": new, "reason": reason, "expired": expired}
 
