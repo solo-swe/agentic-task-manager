@@ -17415,7 +17415,7 @@
       "labels": [
         "code-review"
       ],
-      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today (I11: nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in `docs/security-architecture.md` change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text (I1), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.",
+      "description": "Write a design, reviewed with Hakan, for code and document reviews built into atm and its dashboard, recorded in the project, so they can replace Crit fully: a person reviews a task's diff (or a plan, a document, a PR) in the dashboard, leaves comments on lines or quoted text, and finishes a round; agents wait for that, read the comments, reply, change the code and start the next round.\n\n## Questions to settle\n- **What is reviewed:** a task's commits, a branch against its base, a PR, a single document; how rounds work (a new round after the agent's changes; comments that drift when lines move: anchors and quotes).\n- **Where it is recorded:** in `.agentic-task-manager/` (e.g. a reviews file or folder per task), committed and merged by atm's merge driver; how it relates to the task's review state (`atm review`, `approve`, `request-changes`) and notes.\n- **Writing from the browser:** the dashboard only reads today ([I11](docs/security-architecture.md#:~:text=Nothing%20changes%20state%20over%20HTTP): nothing changes state over HTTP). Comments need writes: what a write route would be (loopback only, the Host check, a per-session token against CSRF from other pages, which fields it may change), or another way (comments written by `atm` from the browser's form through a local helper). The threat model and invariants in [`docs/security-architecture.md`](docs/security-architecture.md) change with it.\n- **Agents:** atm commands to list, add and reply to comments and resolve them (`atm comments`, `atm comment --reply-to`), and to **wait for a state change** (a round finished, approved) without polling by hand (`atm review wait <id>`, keeping the claim alive like `atm run`); how the skills use them; review comments are task text ([I1](docs/security-architecture.md#:~:text=Task%20text%20is%20data%2C%20not%20commands)), never instructions to run.\n- **The dashboard:** a diff view (files, side by side or unified), inline comments and threads, finishing a round, approving; Markdown documents rendered (CompMD, T-284).\n- **Replacing Crit:** what Crit does that this must cover (plan reviews, sharing a review, syncing comments to a GitHub PR) and what can wait.\n\n## Output\n`docs/code-review-design.md` with requirements, options and choices, the security changes spelled out, and the follow-up tasks proposed through `/atm:create-tasks` once approved.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -17424,9 +17424,9 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-01T08:41:22Z",
+      "updated_at": "2026-11-03T19:56:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "docs",
         "dashboard",
@@ -20939,7 +20939,7 @@
       "description": "Help (`docs/help.md`, the task details) says that relative links and Files entries open in the document viewer, with `#L<n>` for a line. `/atm:create-tasks` gets one line: link documents and code with relative paths from the project root (`docs/x.md#section`, `src/app.ts#L40`). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-395"
       ],
@@ -20949,7 +20949,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:53:44Z",
+      "updated_at": "2026-11-03T19:55:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20968,7 +20968,19 @@
       "sprint": "Document Viewer",
       "review": "batch",
       "started_at": "2026-11-03T19:53:44Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "34e36c0ea1b54a81c4cb8270941ad8f8fc0d9c5a",
+      "completed_at": "2026-11-03T19:55:32Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T19:55:32Z",
+          "kind": "review",
+          "text": "Help gains a Documents section (what opens the viewer, where, what it shows, the window). The `/atm:create-tasks` line on relative links and the §3.3 review went in with T-391. Check Help’s wording.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-397",
@@ -21035,7 +21047,7 @@
       "labels": [
         "compmd"
       ],
-      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- `dashboard/package.json`: bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` (`dashboard/compmd.config.json`) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the CHANGELOG, the \"math shows as TeX\" lines in `docs/help.md`, `plugin/skills/create-tasks/SKILL.md` and `plugin/CLAUDE.md`, and the math note in `docs/compmd-rendering-design.md`. Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- `plugin/docs/compmd-llms.txt`: replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the §3.3 review in `docs/security-architecture.md` gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt `dashboard/src/lib/compmd.ts` and `dashboard/compmd/entry.ts`.\n\n## Tests\n`compmd-processor.test.ts` and `compmd.test.ts` pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.",
+      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- [`dashboard/package.json`](dashboard/package.json): bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` ([`dashboard/compmd.config.json`](dashboard/compmd.config.json)) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the [CHANGELOG](plugin/CHANGELOG.md#:~:text=Math%20shows%20as%20its%20TeX%20source), the \"math shows as TeX\" lines in [`docs/help.md`](docs/help.md), [`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md), and the math note in [`docs/compmd-rendering-design.md`](docs/compmd-rendering-design.md). Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- [`plugin/docs/compmd-llms.txt`](plugin/docs/compmd-llms.txt): replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the [§3.3 review](docs/security-architecture.md#:~:text=3.3%20Sprints%20and%20releases) in [`docs/security-architecture.md`](docs/security-architecture.md) gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt [`dashboard/src/lib/compmd.ts`](dashboard/src/lib/compmd.ts) and [`dashboard/compmd/entry.ts`](dashboard/compmd/entry.ts).\n\n## Tests\n[`compmd-processor.test.ts`](dashboard/tests/unit/compmd-processor.test.ts) and [`compmd.test.ts`](dashboard/tests/unit/compmd.test.ts) pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -21056,9 +21068,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T18:14:19Z",
-      "updated_at": "2026-11-03T18:14:19Z",
+      "updated_at": "2026-11-03T19:56:39Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Document Viewer",
@@ -21084,7 +21096,7 @@
       "description": "One pass over the tasks that aren't finished (to do, blocked or in review, in any sprint or the backlog: `atm list` with each status), so their references open in the document viewer, written as T-391 tells agents to.\n\n## Change\nFor each such task, with `atm edit` (never by editing `tasks.json`):\n- a document or file named in its description as a path (`docs/x.md`, `` `src/app.ts` ``) becomes a relative link from the project root (`[docs/x.md](docs/x.md)`), with a heading fragment (`#3-routes`) or a text fragment (`#:~:text=…`) when the text points at a place in it;\n- a requirement or use-case ID mentioned in the text (`SR-2.1`, `(D-1.3)`) becomes a link to the document that defines it, at the definition, with a text fragment (`[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`): find the defining document by searching `docs/` for the line where the ID comes first (a table row's first cell, a heading); when none is found, leave it as it is;\n- `requirements` and `use_cases` entries the same way.\n\nChange only references: no other wording, no status, no other field. Done tasks are history and stay as they are. Skip this task's own text.\n\n## Check\nOpen a few swept tasks on the dev server: their links open the viewer at the right place. List the tasks changed in the outcome note.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-391"
       ],
@@ -21092,7 +21104,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-03T18:39:17Z",
-      "updated_at": "2026-11-03T19:49:26Z",
+      "updated_at": "2026-11-03T19:56:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21112,8 +21124,19 @@
           "kind": "note",
           "text": "Found in T-391: `atm edit` has no flags for `requirements` or `use_cases` (only files, deps, labels, components, related), so the sweep can’t change those entries yet. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` here first (atm-cli, with a scenario test).",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T19:56:50Z",
+          "kind": "review",
+          "text": "Swept the unfinished tasks: T-337, T-398, T-400 (paths to existing files became links; I1, I11, §3.3, V2a and the CHANGELOG’s math note text-fragment links). None had `requirements`/`use_cases` entries, so the missing `atm edit` flags for them weren’t needed (still a gap). Check the links open on the dev server.",
+          "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "started_at": "2026-11-03T19:55:33Z",
+      "started_by": "claude:b7be7288",
+      "completed_at": "2026-11-03T19:56:50Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-400",
@@ -21123,7 +21146,7 @@
       "labels": [
         "compmd"
       ],
-      "description": "The Markdown half of T-394's line work (`docs/compmd-viewer-design.md` V2a), split off because it needs what only CompMD knows: which source lines each rendered block came from. CompMD's renderer will give it through an API (Hakan, 2026-11-03); this task waits for that release (T-398 upgrades CompMD).\n\n## Change\n- The gutter beside a Markdown document: each top-level block's first source line (less `line_offset`, 0 for Markdown), aligned with the block's rendered top, measured after CompMD's `rendered` and on resize; through CompMD's API, never by guessing which element came from which node.\n- `#doc=…:L<n>` and `:L<n>-L<m>` in a Markdown document: scroll to the block the line is in and mark the blocks the range falls in, as T-394 does for code.\n- Copy path and Open on GitHub with the selected lines, as for code.\n\n## Not here\nAny rendering of our own: CompMD renders, and gives the mapping; the gutter and the mark are the viewer's UI around its output.\n\n## Tests\ne2e: the gutter's numbers sit beside their blocks; `:L14-L20` in a Markdown document scrolls to and marks its blocks; a document with a frontmatter counts its lines from the file's first.",
+      "description": "The Markdown half of T-394's line work ([`docs/compmd-viewer-design.md`](docs/compmd-viewer-design.md#:~:text=V2a.%20Line%20numbers) V2a), split off because it needs what only CompMD knows: which source lines each rendered block came from. CompMD's renderer will give it through an API (Hakan, 2026-11-03); this task waits for that release (T-398 upgrades CompMD).\n\n## Change\n- The gutter beside a Markdown document: each top-level block's first source line (less `line_offset`, 0 for Markdown), aligned with the block's rendered top, measured after CompMD's `rendered` and on resize; through CompMD's API, never by guessing which element came from which node.\n- `#doc=…:L<n>` and `:L<n>-L<m>` in a Markdown document: scroll to the block the line is in and mark the blocks the range falls in, as T-394 does for code.\n- Copy path and Open on GitHub with the selected lines, as for code.\n\n## Not here\nAny rendering of our own: CompMD renders, and gives the mapping; the gutter and the mark are the viewer's UI around its output.\n\n## Tests\ne2e: the gutter's numbers sit beside their blocks; `:L14-L20` in a Markdown document scrolls to and marks its blocks; a document with a frontmatter counts its lines from the file's first.\n",
       "requirements": [],
       "use_cases": [],
       "status": "blocked",
@@ -21138,7 +21161,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T19:37:33Z",
-      "updated_at": "2026-11-03T19:37:37Z",
+      "updated_at": "2026-11-03T19:56:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
