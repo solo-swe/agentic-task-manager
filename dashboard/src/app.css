@@ -390,6 +390,15 @@ body {
 .dialog-scroll .kanban-more.bottom {
   border-radius: 0;
 }
+/* Under the newest releases: where the older ones are */
+.whats-new-older {
+  margin: 18px 0 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.whats-new-older a {
+  color: var(--accent);
+}
 /* What's new keeps its tighter padding, and compacts from it */
 #whats-new-panel {
   padding: 18px 20px;

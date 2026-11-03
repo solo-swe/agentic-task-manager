@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
+import { RECENT_RELEASES } from '../../build/changelog';
 import { parseChangelog } from '../../src/lib/changelog';
 import { expect, openDashboard, test } from './helpers';
 
@@ -32,20 +33,31 @@ test.describe("What's new", () => {
     const versions = await panel(page)
       .locator('.release')
       .evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset.version));
-    expect(versions).toEqual(entries.map((e) => e.version));
+    // Only the newest releases (build/changelog.ts); the rest are linked
+    expect(versions).toEqual(entries.slice(0, RECENT_RELEASES).map((e) => e.version));
 
-    const v060 = panel(page).locator('.release[data-version="0.6.0"]');
-    await expect(v060.locator('> h4')).toHaveText(/^v0\.6\.0\s*2026-10-22$/);
+    const v0270 = panel(page).locator('.release[data-version="0.27.0"]');
+    await expect(v0270.locator('> h4')).toHaveText(/^v0\.27\.0\s*2026-11-03$/);
     // Rendered with CompMD; plain bullets: no Added / Changed / Fixed headings
-    await expect(v060.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
-    await expect(v060.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
-    await expect(v060.locator('li').first()).toContainText('Zoom and pan the dependency graph');
+    await expect(v0270.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(v0270.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
+    await expect(v0270.locator('.compmd-page li')).toHaveCount(
+      entries.find((e) => e.version === '0.27.0')!.sections.flatMap((s) => s.items).length,
+    );
+    await expect(v0270.locator('li').first()).toContainText('no longer blanks the dashboard');
   });
 
-  test('inline code is shown as code, rendered by CompMD', async ({ page }) => {
+  test('older releases are a link to every release’s notes, in a new tab', async ({ page }) => {
     await chip(page).click();
-    const code = panel(page).locator('.release[data-version="0.10.0"] code', { hasText: '/atm:serve' });
-    await expect(code).toHaveCount(1);
+    const older = panel(page).locator('.whats-new-older a');
+    await expect(older).toHaveText('all release notes');
+    await expect(older).toHaveAttribute(
+      'href',
+      'https://github.com/solo-swe/agentic-task-manager/blob/main/plugin/WHATS-NEW.md',
+    );
+    await expect(older).toHaveAttribute('target', '_blank');
+    await expect(older).toHaveAttribute('rel', 'noopener noreferrer');
+    // Markup renders, it never shows as written
     await expect(panel(page)).not.toContainText('`');
   });
 
@@ -53,6 +65,8 @@ test.describe("What's new", () => {
     page,
   }) => {
     await chip(page).click();
+    // Every release's notes drawn by CompMD: until then only the version headings take room
+    await expect(panel(page).locator('.compmd:not([data-compmd="ready"])')).toHaveCount(0);
     const body = panel(page).locator('#whats-new-body');
     const sizes = await body.evaluate((el) => ({
       overflows: el.scrollHeight > el.clientHeight,

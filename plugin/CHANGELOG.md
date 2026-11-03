@@ -4,9 +4,11 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
-## [Unreleased]
+## [0.28.0] - 2026-11-03
 
-The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`docs/compmd-rendering-design.md`).
+The sprint *Rich Markdown* (T-284 to T-397): task text renders with CompMD (`docs/compmd-rendering-design.md`). Also
+designed in it: opening referenced documents in a viewer (T-336, `docs/compmd-viewer-design.md`; built by the backlog
+tasks T-391 to T-396).
 
 ### Added
 - **Task text renders with CompMD** (T-284): the details panel renders a task's description, notes, the review note
@@ -39,7 +41,16 @@ The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`doc
   `Markdown.svelte`) is gone. Tooltips and card excerpts show text without its marks (`src/lib/plain-text.ts`). The
   single file is 9 kB smaller. About names what renders Markdown (*Rendering*: CompMD, with its version, licence and
   site, read from the installed package at build time), and Help links CompMD's and Mermaid's sites where it
-  describes task text.
+  describes task text, and draws its diagram example.
+- **Help and What's new are one kind of dialog** (`Dialog.svelte`'s `scrollItem`): the title stays, with a hairline
+  under it, and the content scrolls below it without a scrollbar, the ▲/▼ hints counting Help's sections or the
+  releases; once it has scrolled, the title compacts, as the dashboard's title bar does. What's new now moves focus in
+  and back like the other dialogs.
+- **What's new shows the newest 10 releases** (`RECENT_RELEASES` in `dashboard/build/changelog.ts`, the only ones
+  embedded), ending with a link to `plugin/WHATS-NEW.md` on GitHub, which keeps every release.
+- **README:** the Tenets section (T-389), and CompMD named, with its site, where it describes the dashboard.
+- **`npm run size`** (T-342) lists what the single file is made of, largest first; Help and What's new are embedded as
+  text and parsed when the page loads.
 - **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
 

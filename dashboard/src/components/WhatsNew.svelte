@@ -1,5 +1,6 @@
 <script lang="ts">
   import { entryMarkdown, UNRELEASED } from '../lib/changelog';
+  import { pluginInfo } from '../lib/plugin-info';
   import { releaseNotes } from '../lib/release-notes';
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
@@ -10,6 +11,8 @@
   $effect(() => {
     if (dashboard.whatsNewOpen) opened = true;
   });
+  /** Every release's notes, on GitHub: What's new shows only the newest */
+  const olderReleases = `${pluginInfo.repository.replace(/\/$/, '')}/blob/main/plugin/WHATS-NEW.md`;
 </script>
 
 <!-- A scrolling dialog (T-282), like Help: the title stays, the releases scroll below it, the hints count them -->
@@ -30,4 +33,8 @@
       {#if opened}<CompMd text={entryMarkdown(entry)} />{/if}
     </section>
   {/each}
+  <!-- Only the newest releases are embedded (build/changelog.ts); every release is in the file on GitHub -->
+  <p class="whats-new-older">
+    Older releases: <a href={olderReleases} target="_blank" rel="noopener noreferrer">all release notes</a>
+  </p>
 </Dialog>

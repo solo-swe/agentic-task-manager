@@ -429,6 +429,17 @@ sandbox:
   The strict frame's policy gives no `connect-src` and no `style-src` beyond its own origin and inline, so the
   remaining channel is to this server only.
 
+**Release 0.28.0 (the sprint *Rich Markdown*, T-397).** The checklist:
+- **Skills and `plugin/CLAUDE.md` changed** (T-286). No API key is used for the agent sandbox, so the written review
+  above (*What agents are told about task text*) takes the live run's place: the new text tells agents how to write
+  task text and names the shipped guide only as a local file, never to be fetched.
+- **Entry points and fields:** the `/assets/` route (I11), the page's CSP (I13), task text rendered by CompMD and
+  Mermaid in a strict frame (I14), and `whoami`'s `home` (T-390) are all documented above, each with its tests. No
+  CI permission changed.
+- **What the dashboard shows that isn't task text:** Help, What's new and About come with the plugin; What's new
+  links to `plugin/WHATS-NEW.md` on GitHub and About to CompMD's site, both opening in a new tab without access to the
+  page, as every outside link does.
+
 **One Markdown renderer.** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too, the
 same way as task text (`safeTree`, `secureLinks`, no `host:` data), and the dashboard's own parser (`markdown.ts`,
 `Markdown.svelte`) is gone. Both texts come with the plugin, so nothing untrusted is added; CompMD loads only when one

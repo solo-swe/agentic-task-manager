@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 397,
+    "next_id": 398,
     "labels": [
       {
         "id": "architecture",
@@ -20758,6 +20758,47 @@
       "related": [
         "T-336"
       ]
+    },
+    {
+      "id": "T-397",
+      "name": "Release 0.28.0",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Release the sprint *Rich Markdown* as 0.28.0.\n\n## Change\n- Bump `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.28.0`.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md`: `[Unreleased]` becomes `[0.28.0] - <date>`; add what isn't there yet (Help's and What's new's scrolling title, What's new showing recent releases).\n- **Trim What's new** (Hakan): the dashboard shows the last 10 releases, embedded at build time, and ends with a link to the full changelog on GitHub; `WHATS-NEW.md` keeps every release.\n- Regenerate the Linux screenshot baselines (`npm run test:e2e:visual:update`, Docker).\n- Security checklist (`docs/security-architecture.md` §3): skills changed (T-286), the written review in §3.3 stands for the sandbox run; a §3.3 entry for the release.\n\n## Then\n`npm run verify`, the PR to `main` through `/atm:push`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/build/changelog.ts",
+        "dashboard/src/components/WhatsNew.svelte",
+        "dashboard/tests/e2e/__screenshots__/",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-03T17:19:48Z",
+      "updated_at": "2026-11-03T17:19:52Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Rich Markdown",
+          "from": "2026-11-03T17:19:48Z"
+        }
+      ],
+      "sprint": "Rich Markdown",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-03T17:19:52Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

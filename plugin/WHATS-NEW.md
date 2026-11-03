@@ -2,13 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
-## [Unreleased]
+## [0.28.0] - 2026-11-03
 
 - Task descriptions and notes look richer: tables, checklists, nested lists and callouts render as they should.
 - Diagrams written in task text are drawn, in light or dark to match the dashboard.
 - A task's text can show the task's own live values, such as its status, so they never go stale.
 - Agents know what they can write, so the tasks they create read better.
-- Help and What's new look the same as task text, with the same richer formatting.
+- Help and What's new look like task text, and keep their title in view as you scroll.
+- What's new shows the latest releases, with a link to all the others.
 
 ## [0.27.0] - 2026-11-03
 
