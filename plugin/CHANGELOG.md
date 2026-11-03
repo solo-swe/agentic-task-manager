@@ -45,6 +45,8 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   text. `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` tell agents to write references
   that way: relative links for files, text fragments for requirements and places in a document, with `-`, `,` and `&`
   encoded. Help says references open the document.
+- **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a
+  piece of text), what it shows and how its window works.
 - **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a
   document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
   opens in a new tab, without access to the page.

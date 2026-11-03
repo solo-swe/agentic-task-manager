@@ -4,7 +4,8 @@ nothing when nothing changed). It only reads the files; agents and the `atm` com
 
 Jump to: [your projects](#your-projects), [the views](#views), [filters and saved views](#filters-and-saved-views),
 [statuses](#statuses-and-kinds), [waiting on you](#waiting-on-you), [priorities and labels](#priorities-and-labels),
-[the task details](#the-task-details), [workflows and stages](#workflows-and-stages), [the archive](#the-archive),
+[the task details](#the-task-details), [documents](#documents), [workflows and stages](#workflows-and-stages),
+[the archive](#the-archive),
 [the skills](#the-skills), [agents in parallel](#running-agents-in-parallel).
 
 ## Your projects
@@ -120,6 +121,22 @@ In a `mermaid` fence, it draws:
 flowchart LR
   todo[To do] --> active[In progress] --> done[Done]
 ```
+
+## Documents
+
+A task's files and the documents it refers to open in the **document viewer**, a window over the task's details:
+
+- **What opens it** — a link to a file of the project in a description or note (`docs/design.md`, from the
+  project's root), a link inside an open document (from that document's folder), and every entry of the task's
+  **Files** list;
+- **Where it opens** — at a heading (`docs/design.md#routes`), at lines of code (`src/app.ts#L40-L45`, marked in the
+  line numbers), or at a piece of text (a link ending in `#:~:text=…`, marked until you click);
+- **What it shows** — Markdown rendered as task text is, code and text files with their line numbers, images; it
+  follows the file as it changes, without losing your place. Hidden files, files git ignores and key files aren't
+  shown;
+- **The window** — drag its title bar to move it and its corner to resize it (or the arrow keys, Shift to resize); it
+  keeps its place. **Copy path** copies the file's path with its lines, for an agent; **Open on GitHub** shows the
+  file in the repository. **‹** goes back to the document before, **×** closes it.
 
 ## Workflows and stages
 
