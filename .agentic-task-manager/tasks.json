@@ -21561,7 +21561,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-03T23:18:35Z",
-      "updated_at": "2026-11-03T23:18:46Z",
+      "updated_at": "2026-11-03T23:25:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21573,7 +21573,8 @@
       "sprint": "Document Viewer",
       "review": "none",
       "started_at": "2026-11-03T23:18:46Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "545808bb627adf1b5b08c98c75ac0377382b9334"
     }
   ]
 }
