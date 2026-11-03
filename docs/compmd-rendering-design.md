@@ -122,8 +122,8 @@ holds only what the build copied from the pinned packages.
   suite runs in Chromium; the risk was only that something in this setup behaves differently, which the e2e run on
   the real CSP shows before merging.
 
-None of these is a reason to fall back to `'self'`; each is handled once, with a test. Recommended: option 1, with no
-fallback.
+None of these is a reason to fall back to `'self'`; each is handled once, with a test. **Decided in review: option 1,
+with no fallback.**
 
 The rest of the policy needs no change: `connect-src 'self'` allows the glue's `.wasm` fetch, `img-src 'self' data:`
 refuses images from elsewhere, and `style-src 'unsafe-inline'` allows CompMD's stylesheet.
@@ -169,6 +169,7 @@ The dashboard can, but it is read-only by design (I11: nothing changes state ove
 | **A. atm checks on write, with Node when present** | atm's write commands (and `atm check`) run `plugin/scripts/compmd-check.mjs` with `node` when it is on PATH: the same WebAssembly files the dashboard uses (`plugin/assets/compmd/…`), `initSync` with the bytes, the same request as §3. Warnings print after the command's output (`--json`: a `compmd` list); they never block a write. Without Node: skipped silently, one line in `atm check` | the agent sees them at the moment it writes, in the output it already reads; one processor and one configuration, so it reports exactly what the panel will do | Node becomes an optional second runtime (atm's rule is Python only: here it's optional, nothing breaks without it); about 50–100 ms per write to load the module |
 | **B. On demand only** | the same check, only in `atm check` (and the end-of-task steps of the skills call it) | no cost on every write | found later, after the text is committed |
 | **C. Guidance only** | T-286 tells agents what renders; no check | nothing new to run | mistakes go unnoticed; readers just see odd text |
+| **E. The Rust crate, natively** | atm runs a `compmd` command-line tool built from the `compmd` crate (the same processor the WebAssembly is built from) | no Node; starts in milliseconds; the same results when the versions match | no such tool exists yet: the crate is a library (0.3.0, no binary, no GitHub releases). It needs a CLI in the CompMD repository and builds for each platform (macOS arm64 and x86-64, Linux x86-64 and arm64, Windows), several MB each (the crate carries ICU's locale data). atm can't ship them all in the plugin (every install would download every platform's binary), and must not download executables at run time; so it would use one only when the user installed it (`cargo install`, Homebrew). And a native binary runs with the user's full rights, where the WebAssembly runs sandboxed (it reaches nothing but what the glue gives it) |
 | **D. The dashboard records them** | the panel would report diagnostics back to atm serve, which stores them for `atm status` | no Node | breaks the read-only dashboard (I11) and the tenet it comes from; the server would write task data | 
 
 Recommended: **A**, with B's `atm check` included. A Node check is how a project already using Node would see it;
@@ -218,7 +219,5 @@ for one without, nothing changes but the missing warnings.
 - **First open:** loading and compiling the module takes some tens of milliseconds from localhost; the text's place
   is held empty meanwhile. Later panels render at once.
 - **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
-  (R1); readers don't see diagnostics (R2a).
-- **Still open:**
-  1. The CSP's module source: the asset folder only, or `'self'` (§2, The page's CSP).
-  2. How agents see diagnostics (§3a).
+  (R1); readers don't see diagnostics (R2a); the CSP's module source is the asset folder only (§2).
+- **Still open:** how agents see diagnostics (§3a).
