@@ -2,6 +2,13 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [Unreleased]
+
+- Task descriptions and notes look richer: tables, checklists, nested lists and callouts render as they should.
+- Diagrams written in task text are drawn, in light or dark to match the dashboard.
+- A task's text can show the task's own live values, such as its status, so they never go stale.
+- Agents know what they can write, so the tasks they create read better.
+
 ## [0.27.0] - 2026-11-03
 
 - A task file with mistakes in it no longer blanks the dashboard: it keeps showing your tasks, and tells you what's wrong.

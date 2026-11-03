@@ -4,6 +4,42 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [Unreleased]
+
+The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`docs/compmd-rendering-design.md`).
+
+### Added
+- **Task text renders with CompMD** (T-284): the details panel renders a task's description, notes, the review note
+  and a blocked task's questions with CompMD (Markdown with components) instead of the dashboard's own Markdown subset:
+  GFM tables, task lists, strikethrough, footnotes, nested lists, alerts, and CompMD's layout and control components.
+  The dashboard puts one frontmatter in front of every text when it renders it (never stored), giving the text its
+  task as `md.data.task`: its fields and atm's derived values. Until CompMD has loaded the text's place is empty; if
+  it can't load, the text shows as written. Readers never see CompMD's diagnostics.
+- **Mermaid diagrams** (T-285): a ` ```mermaid ` block draws a diagram, through the `@comp-markdown/mermaid` pack
+  (0.1.1), ambient, run by `@compmd/sandbox` in a strict frame (an opaque origin with no network). Diagrams follow
+  light and dark mode; one that Mermaid can't read shows its code.
+- **CompMD's guide for agents ships with the plugin** (T-286): `plugin/docs/compmd-llms.txt`, CompMD's `llms.txt` as
+  of `v0.3.0`. `/atm:create-tasks` lists what renders in atm and points to it, as do `/atm:do-task`,
+  `/atm:loop-tasks` and `plugin/CLAUDE.md`; agents read the local copy and never fetch it. Help describes what task
+  text renders.
+
+### Changed
+- **`atm serve` serves the plugin's assets at `/assets/`** (T-284, T-285): the CompMD runtime
+  (`plugin/assets/compmd/<version>/`: `compmd.js` and the processor's WebAssembly), the sandbox's frame documents and
+  the Mermaid pack's module, built by `@compmd/vite` from `dashboard/compmd.config.json`. GET and HEAD only; `.js`,
+  `.wasm` and `.html`; plain path segments; regular files reached through no symlink; readable cross-origin (the
+  frames have an opaque origin), a frame document sandboxed (`Content-Security-Policy: sandbox allow-scripts`).
+- **The page's Content-Security-Policy** adds `'wasm-unsafe-eval'` and the asset folder (with the page's own origin)
+  to `script-src`, and `frame-src` for the same folder; never `'self'`.
+- **Task text is made safe before it renders:** an image that isn't `data:` shows its alt text and is never
+  requested; a link other than `https:`, `http:`, `mailto:` and `#` becomes text; a component the text defines in a
+  fence is never given to the sandbox.
+- **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
+  it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
+
+### Known
+- Math shows as its TeX source: `@compmd/sandbox`'s host mode doesn't typeset it yet (a CompMD fix to come).
+
 ## [0.27.0] - 2026-11-03
 
 The sprint *Layered Architecture* (T-360 to T-388): atm-cli rebuilt in layers (`docs/layered-architecture.md`).

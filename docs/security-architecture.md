@@ -387,6 +387,21 @@ who can change `tasks.json` wrote it), so:
 - **Readers never see CompMD's diagnostics,** and a text CompMD can't render shows as written (escaped).
 - **No skill or agent-facing text changed** in T-284 (T-286 adds the guidance, with its own review), so no sandbox run.
 
+**What agents are told about task text (T-286).** `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and
+`plugin/CLAUDE.md` now say what task text renders (CompMD: tables, task lists, Mermaid diagrams, `md.data.task`) and
+point to `plugin/docs/compmd-llms.txt`, a copy of CompMD's `llms.txt` at `v0.3.0` (commit `43cca4a9`). No API key is
+used for the agent sandbox, so this written review takes the live run's place:
+- **The new skill text** tells agents how to write task text, nothing to run, fetch or install. It names the guide
+  only as a local file (`${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt`), and says, each time, never to fetch it
+  from the web: outside text an agent would act on stays out.
+- **The guide** was read in full before it was committed. It is a syntax reference for writing CompMD. The only
+  commands in it are inside example documents (`cargo install rayplay` and `rayplay migrate` in a sample release
+  note), as content, not as steps for the reader; nothing in it asks an agent to run, fetch, install, read
+  credentials or change settings. A header line names its version and commit, and that atm's panel refuses part of
+  CompMD (imports, data files, URLs, components defined in the text). It is updated with CompMD, and read again then.
+- **What task text can do** is still bounded by the renderer (above: T-284, T-285), whatever the guide says CompMD
+  can do: a text that follows the guide past what atm allows shows its fallback text, and runs nothing.
+
 **Mermaid diagrams (T-285).** Third-party rendering code (Mermaid, 7 MB) now runs on task text, in CompMD's strict
 sandbox:
 - **Where it runs:** each diagram in an iframe with `sandbox="allow-scripts"` (an opaque origin: no access to the

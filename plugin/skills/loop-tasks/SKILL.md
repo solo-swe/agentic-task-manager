@@ -133,7 +133,9 @@ errors (the message says what).
    Notes, questions, answers and reasons show on the dashboard as Markdown: paths, commands and identifiers in
    `` `code` ``, short, without headings. Quote them in **single quotes**, never double: in double quotes the shell
    runs backticks and `$(…)` (write an apostrophe as `’`). A later task's description (`atm edit <id> --description-file <file>`) is
-   Markdown too, as `/atm:create-tasks` writes it.
+   Markdown too, as `/atm:create-tasks` writes it. The dashboard renders task text with CompMD (tables, task lists,
+   ` ```mermaid ` diagrams, the task's own data as `md.data.task`): `/atm:create-tasks` lists what renders, and the
+   plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest; never fetch it from the web.
 6. **Statuses have kinds.** A project may name its own statuses; each has one of six kinds (`todo`, `active`,
    `review`, `blocked`, `done`, `skipped`) and atm works by kind, so "to do", "in review" and "done" below mean any
    status of that kind. When a kind has several statuses (e.g. `awaiting_user` and `awaiting_agent`, both `review`),

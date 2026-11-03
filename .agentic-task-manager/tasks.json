@@ -14303,7 +14303,7 @@
       "description": "Mermaid diagrams in task text, as decided in T-284's design (`docs/compmd-rendering-design.md` §3c, \"As built\" there): the published pack `@comp-markdown/mermaid`, run by `@compmd/sandbox` in a strict frame (an opaque origin with no network), the text itself rendering in the dashboard's page (host mode).\n\n## As built\n- Through `@compmd/vite` only (Hakan's direction): `dashboard/compmd.config.json` pins the pack (`0.1.1`), makes it **ambient** (no import line in the frontmatter) and lists it as the only pack (`imports: \"listed\"`, strict). The asset build runs `compmd()`, which writes the frame documents and the pack's module into the asset folder and gives `virtual:compmd` (`request`, `sandbox`), re-exported by the served module.\n- atm serve serves the folder as the plugin's own server does (CORS `*`, frame documents sandboxed); the page's policy gains `frame-src` for the asset folder.\n- Components a text defines itself are never given to the sandbox.\n- Diagrams follow light and dark mode; a broken diagram, or a module that doesn't match its hash, shows its code in the frame.\n- Measured: one diagram 280–390 ms, five 350–510 ms (opening the panel, CompMD's load included).\n\n## Not here\nMath stays TeX until CompMD's host mode typesets it (Hakan is fixing that in CompMD). Building Mermaid into the dashboard at build time is to be reconsidered later (§3c, option D).\n\n## Sample content (for trying the rendering)\nHakan's test content for this task's details panel: it shows how task text renders, and is no part of the work. Math shows as its TeX source until CompMD's fix.\n\n```mermaid {alt=\"A task goes from to do through in progress and review to done, or back to to do on changes\"}\nflowchart LR\n  todo[To do] --> active[In progress]\n  active --> review[In review]\n  review -->|approved| done[Done]\n  review -->|changes requested| active\n  active -->|blocked| blocked[Blocked]\n  blocked -->|answered| todo\n```\n\n| Diagram | Where it renders | Loaded when |\n|---|---|---|\n| Flowchart | a strict frame | the text has a `mermaid` block |\n| Sequence | a strict frame | the same |\n| None | the panel itself | never |\n\n- Shipping\n  - the pack's module, `dist/mermaid.js`\n    - 7.0 MB minified, 1.6 MB gzipped\n  - its licences, `dist/LICENSES.md`\n- Running\n  - one strict frame per diagram\n  - the module's hash checked before it runs\n\nInline math: the cost grows as $n \\cdot t_{parse}$ for $n$ diagrams. Display math:\n\n$$\nt_{panel} = t_{load} + \\sum_{i=1}^{n} t_{parse,i}\n$$\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-284"
       ],
@@ -14322,7 +14322,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T09:58:44Z",
+      "updated_at": "2026-11-03T10:02:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14340,7 +14340,18 @@
         "api"
       ],
       "started_at": "2026-11-03T09:30:43Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "0058bdadb9401cd4a4a327472981c5482e9b40ab",
+      "completed_at": "2026-11-03T10:02:10Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-03T10:02:10Z",
+          "kind": "outcome",
+          "text": "Mermaid via `@compmd/vite` (pack pinned 0.1.1, ambient, strict). Check: the diagrams in T-285’s sample content in the browser, light and dark; e2e 371, unit 982, atm-cli 548 pass; timings 1 diagram ~300 ms, 5 ~400 ms. Math waits on the CompMD host-mode fix.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-286",
@@ -14350,7 +14361,7 @@
       "description": "Once the details panel renders all task text with CompMD (T-284) and Mermaid diagrams (T-285), the places that tell agents and users what task text may contain are out of date. Decided in T-284's design review (`docs/compmd-rendering-design.md` §3a): agents get **guidance** on writing CompMD, from CompMD's own guide for language models, `llms.txt`; there is no checker for now.\n\n## The guide, shipped with the plugin\n- Copy CompMD's `llms.txt` (in the root of `github.com/comp-markdown/compmd`) into `plugin/docs/compmd-llms.txt`, taken at the commit matching the CompMD version the dashboard ships (T-284's pinned npm version), with one header line naming that version and commit. It is updated with CompMD, by hand in the same change as a CompMD bump.\n- Skills point to this local copy; they never tell agents to fetch it, or anything else, from the web.\n\n## Change\n- `plugin/skills/create-tasks/SKILL.md`: the rule listing what the dashboard renders (\"`#`–`####` headings, paragraphs, …; anything else (tables, HTML) shows as text\") becomes a short summary of what renders in atm's panel (T-284's settings): GFM (tables, task lists, footnotes), alerts (`> [!NOTE]`), CompMD's core components (layout, `if`, `each`, `value`) and `mermaid` code blocks as diagrams; math shows as TeX source; inputs show but change nothing; pack imports, data from files or URLs, `host:` data and host-language components don't render (their fallback text shows); raw HTML beyond a short allowlist shows as text. The dashboard adds one frontmatter to every text when it renders it (design §3b; nothing is stored in `tasks.json`): task text never starts with one of its own, and gets the current task's data as `md.data.task` (its fields and atm's derived values: `{{md.data.task.status}}`, `::: each {in=(md.data.task.dependencies) as=d}`), and nothing else. Plain Markdown remains the default; suggest a diagram or a component only where it helps (a flow, a state machine, a comparison). For more, read `plugin/docs/compmd-llms.txt` (its ten rules first).\n- `plugin/skills/do-task/SKILL.md` and `plugin/skills/loop-tasks/SKILL.md`, where they describe notes and descriptions as Markdown: the same, in a sentence, with the pointer to the guide.\n- `plugin/CLAUDE.md`: one line on what task text renders, with the pointer.\n- `docs/help.md` (the dashboard's Help): what renders in task details, with a small table and a small Mermaid example.\n- `plugin/CHANGELOG.md` and `plugin/WHATS-NEW.md` entries for 0.28.0, the release that ships T-284 and T-285.\n\n## Security review\nSkills and `plugin/CLAUDE.md` change, so the release needs the agent-facing review (`CLAUDE.md`, Security; `docs/security-architecture.md` §3). No API key is used for the agent sandbox: write the review of these skill changes in §3.3 instead of a live run, as for earlier releases. It covers the new text and the shipped `compmd-llms.txt`: read the copy in full before committing it, check it tells agents nothing to run, fetch or install (it is a syntax guide; any such line is left out or the copy is not shipped), and note that skills reference it only as a local file.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-285"
       ],
@@ -14366,7 +14377,7 @@
         "plugin/docs/compmd-llms.txt"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T08:45:06Z",
+      "updated_at": "2026-11-03T10:02:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14380,7 +14391,9 @@
         "skills",
         "compmd",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T10:02:16Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-287",

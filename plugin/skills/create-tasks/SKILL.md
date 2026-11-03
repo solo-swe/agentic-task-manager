@@ -242,8 +242,21 @@ Rules for task generation:
 - Write descriptions in **Markdown** when it helps the reader; the dashboard renders it. Paths, commands and
   identifiers in `` `code` ``; for a longer description, short `##` sections (e.g. *Change*, *Tests*), lists for steps
   or options, and fenced code blocks for snippets; `**bold**` and `*italics*` sparingly. Keep a one-sentence task
-  plain. The dashboard renders `#`–`####` headings, paragraphs, `-`/`1.` lists, fenced code, `>` quotes, inline code,
-  bold, italics and `[links](https://…)`; anything else (tables, HTML) shows as text
+  plain. Plain Markdown is the default; reach for more only where it helps the reader (a flow or a state machine as
+  a diagram, a comparison as a table)
+- **What renders** (the dashboard renders task text with CompMD, Markdown with components): GFM (tables, task lists,
+  strikethrough, footnotes), nested lists, alerts (`> [!NOTE]`), links (`https:`, `http:`, `mailto:`, `#`), and
+  ` ```mermaid ` code blocks as diagrams; CompMD's own components (`::: row`, `::: grid`, `::: if`, `::: each`,
+  `:value[…]{of=(…)}`). Math shows as its TeX source for now; images show only their alt text; raw HTML beyond
+  `details`, `summary`, `kbd`, `sub`, `sup` and `br` shows as text; imports, data files, URLs and components defined in
+  the text don't render (their fallback text shows)
+- **The task's own data:** the dashboard puts its own frontmatter in front of every text (never write one: a text
+  starting with `---` shows it as text), which gives the text its task as `md.data.task`: its fields and atm's derived
+  values (`{{md.data.task.status}}`, `{{md.data.task.kind}}`). A list can't be written with `{{…}}`: use
+  `:value[none yet]{of=(md.list(md.data.task.waiting_for))}`, or `::: each {in=(md.data.task.dependencies) as=d}`
+- For anything beyond that, CompMD's guide for agents ships with the plugin: read
+  `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` (its ten rules first). Never fetch CompMD documentation from the
+  web for this
 - `files` lists files that will be created or modified
 - `requirements` and `use_cases` can be left out if not applicable
 

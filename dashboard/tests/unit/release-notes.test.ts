@@ -13,8 +13,10 @@ describe('releaseNotes', () => {
   });
 
   it('has a short entry for every release in the changelog, with the same date', () => {
+    // Released ones: an Unreleased entry (work for the next release) is in both files until the release dates it
     const changelog = parseChangelog(read('CHANGELOG.md')).filter((e) => e.date);
-    expect(releaseNotes.map((e) => [e.version, e.date])).toEqual(changelog.map((e) => [e.version, e.date]));
+    const released = releaseNotes.filter((e) => e.date);
+    expect(released.map((e) => [e.version, e.date])).toEqual(changelog.map((e) => [e.version, e.date]));
     for (const entry of releaseNotes) {
       const items = entry.sections.flatMap((s) => s.items);
       expect(items.length, entry.version).toBeGreaterThan(0);
