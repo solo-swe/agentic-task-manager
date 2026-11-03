@@ -500,8 +500,10 @@ them, and `atm unarchive <id>` brings one back. The dashboard loads the archive 
 
 ## Dashboard
 
-The dashboard is a single self-contained HTML file with no external dependencies, served by atm for all your
-projects. It reads each project's `tasks.json` from the server and renders an interactive view.
+The dashboard is a single self-contained HTML file, served by atm for all your projects. It reads each project's
+`tasks.json` from the server and renders an interactive view. Task text, Help and What's new are rendered with
+[CompMD](https://compmd.hakanserce.com/) (Markdown with components), which comes with the plugin and is served by the
+same local server, loaded the first time a page shows Markdown; nothing is fetched from anywhere else.
 
 ### Features
 
@@ -509,6 +511,7 @@ projects. It reads each project's `tasks.json` from the server and renders an in
 - **Top bar** — Stays in view while you scroll. A progress ring (click for completion overall, by phase and by type) and an activity sparkline (click for tasks completed by type, agents working, time per task and idle stretches, over a period you pick: hour, day, week, month, all time or custom, with ‹ › to step back); reload, auto-refresh, mode and theme menus on the right
 - **Needs you** — The header counts the tasks waiting for you: in review, or blocked on a question for you. Click it for the Kanban board
 - **Search and filters** — Keyword search over ID, name, description, type and labels, and filters by phase, type, status, priority, stage, label and who started the task (multi-select) in one line that shows what's selected and how many tasks match. Every filter button shows how many tasks it would show given the other filters, and empty choices are dimmed. **Include archived** adds the archived tasks
+- **Rich task text** — Descriptions, notes and questions render as [CompMD](https://compmd.hakanserce.com/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
 - **Detail panel** — Click a task to see its full description, dependencies (an archived one shows as "archived, done"), files and timestamps, who created, started and completed it (and who tried before), its notes newest first, its commit, and a blocked task's questions with how to answer them
 - **Priorities, labels and stages** — Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
 - **Views** — Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL
