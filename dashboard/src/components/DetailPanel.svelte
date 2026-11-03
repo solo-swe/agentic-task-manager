@@ -489,9 +489,11 @@
   <div class="detail-section">
     <div class="label">{label}</div>
     <div class="value">
-      {#each items as item, i (item)}{i > 0 ? ' ' : ''}<span class={cls}>{item}</span>{:else}<span
-          style="color:var(--text-muted)">None</span
-        >{/each}
+      <!-- An entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`, T-391) renders with CompMD, so it opens
+           the document at the text; a bare ID stays text -->
+      {#each items as item, i (item)}{i > 0 ? ' ' : ''}<span class={cls}
+          >{#if task && /\]\(/.test(item)}<CompMd text={item} {task} inline />{:else}{item}{/if}</span
+        >{:else}<span style="color:var(--text-muted)">None</span>{/each}
     </div>
   </div>
 {/snippet}

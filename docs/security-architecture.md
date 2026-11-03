@@ -466,6 +466,19 @@ CompMD document atm wraps it in) and `files?path=` (an image's bytes, for an `<i
   `notes.txt`) can be shown, to the same user on the same machine, who can read it anyway; the dashboard shows it
   only when a link names it. No new permission; the page's CSP is unchanged (`img-src 'self'`).
 
+**References as links (T-391).** `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` now
+tell agents to write references as relative links from the project root (`docs/x.md#routes`, `src/app.ts#L40`) and
+requirements or places in a document as text-fragment links (`docs/x.md#:~:text=SR%2D2.1`), also in `requirements`
+and `use_cases`. No API key is used for the agent sandbox, so this written review takes the live run's place:
+- **What the new text asks of agents:** how to write a link in task text, nothing to run, fetch or install. Every
+  example is a path inside the project; none points elsewhere.
+- **What such a link does:** in the dashboard, only what T-392 and T-395 allow: the viewer asks the documents route,
+  which checks the path again (no `..`, hidden, ignored or key files, no symlinks). The text fragment is searched for
+  in the rendered page and marked with the CSS Custom Highlight API: CompMD's page isn't changed, nothing is run, and
+  a fragment that matches nothing only shows a note.
+- **`requirements` and `use_cases` entries** may now be Markdown links: the details panel renders an entry with a
+  link through CompMD, under the same rules as task text; a card shows its text (`plain-text.ts`).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

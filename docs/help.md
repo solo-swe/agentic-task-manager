@@ -103,6 +103,8 @@ and render as (this Help and What's new render with CompMD too):
 - **Diagrams** — a `mermaid` code block draws a diagram with [Mermaid](https://mermaid.js.org/), in light or dark
   with the dashboard, in a sandboxed frame;
 - **The task's own values** — `{{md.data.task.status}}` shows the task's status as it is now;
+- **References** — a link to a file of the project opens it in the document viewer; a requirement, a use case or a
+  sentence linked by its text (a link ending in `#:~:text=…`) opens the document there, marked;
 - **As written** — math, for now, and anything the dashboard won't run: scripts, raw HTML, images from elsewhere.
 
 A diagram is a fenced code block whose language is `mermaid`, holding the diagram's source, such as:

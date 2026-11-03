@@ -20638,7 +20638,7 @@
       "description": "References to a requirement, a use case or any place in a document are **links with a text fragment** (decided with Hakan while planning; no ID index): `[SR-2.1](docs/sprints-and-releases-design.md#:~:text=SR%2D2.1)`. The viewer opens the document at the first match and highlights it; GitHub and browsers understand the same links.\n\n## Text fragments\nThe [text fragment](https://web.dev/articles/text-fragments#text_fragments) syntax: `#:~:text=[prefix-,]textStart[,textEnd][,-suffix]`, each part percent-encoded. `-`, `,` and `&` are part of the syntax, so in the text they are `%2D`, `%2C` and `%26` (an ID `SR-2.1` is `SR%2D2.1`). `textStart,textEnd` matches a range; `prefix-,` and `,-suffix` only narrow which match is meant. Several `text=` directives may follow, joined by `&`.\n\n## Change\n- `dashboard/src/lib/documents.ts`: parse a link's `#:~:text=…` (alone, or after a `#heading` fragment, which then gives way to it): decode the parts, find the first match in the rendered document's text (case-insensitive, across inline elements, whitespace collapsed; `textEnd` the end of the range; prefix and suffix checked around it), scroll to it and mark it (a highlight in the theme's colours, gone at the next click). No match: open at the top, with a short note that the text wasn't found. Unit tests for the parser and the matcher.\n- The details panel: each `requirements` and `use_cases` entry renders inline with CompMD, so an entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`) opens the viewer; a bare ID stays text, as now.\n- **Skills** (`plugin/skills/create-tasks/SKILL.md`, and the lines on task text in `do-task`, `loop-tasks` and `plugin/CLAUDE.md`): from now on, a reference to a requirement, a use case or a place in a document is a relative link from the project root with a text fragment, and `requirements` / `use_cases` entries are such links. Say what a text fragment is, how its parts work, and the encoding of `-`, `,` and `&`, with two examples (an ID; a phrase with a prefix). A skill change: add the written review to `docs/security-architecture.md` §3.3 (no API key for the agent sandbox).\n- `docs/help.md`: references open the document at the text.\n\n## Tests\nUnit tests (parsing, encoding, matching with prefix, suffix and ranges); a component test for requirement links in the details panel; e2e: a text-fragment link in a description and in `requirements` opens the viewer at the match and marks it; one that matches nothing opens at the top with the note.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-395"
       ],
@@ -20655,7 +20655,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T18:39:15Z",
+      "updated_at": "2026-11-03T19:47:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20674,7 +20674,9 @@
         }
       ],
       "sprint": "Document Viewer",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-03T19:47:21Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-392",
@@ -20870,7 +20872,7 @@
       "description": "The references that open the viewer, `docs/compmd-viewer-design.md` §1 (V1a–V1c) and §3.\n\n## Change\n- A relative link in task text (`docs/x.md`, `docs/x.md#3-routes`, `src/app.ts#L40`) becomes a viewer link, resolved from the project root; one leaving the project stays text. `safeTree` and `secureLinks` keep it, opened by the click handler, never by the browser.\n- A relative link inside an open document opens the viewer at the path resolved from its folder.\n- The details panel's Files list links every entry.\n\n## Tests\nUnit tests for the link rules (`compmd.test.ts`); e2e: a link in a description, in a document, and a Files entry each open the viewer; a `..` out of the project is text.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-393"
       ],
@@ -20882,7 +20884,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T19:42:21Z",
+      "updated_at": "2026-11-03T19:47:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20900,7 +20902,19 @@
       "sprint": "Document Viewer",
       "review": "batch",
       "started_at": "2026-11-03T19:42:21Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "a8156772938dad303224d804c27858d4b2908286",
+      "completed_at": "2026-11-03T19:47:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T19:47:17Z",
+          "kind": "review",
+          "text": "Relative links in task text (from the root) and in documents (from their folder) open the viewer, at `#L…` lines or a heading; Files entries are links (folders stay text). Check: T-394’s description links now open in place. e2e 398, unit 1007; single file 550.8 kB (guardrail 550 KiB = 563.2 kB).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-396",
@@ -21064,9 +21078,9 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-03T18:39:17Z",
-      "updated_at": "2026-11-03T18:39:17Z",
+      "updated_at": "2026-11-03T19:49:26Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Document Viewer",
@@ -21077,6 +21091,14 @@
       "review": "batch",
       "related": [
         "T-391"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-03T19:49:26Z",
+          "kind": "note",
+          "text": "Found in T-391: `atm edit` has no flags for `requirements` or `use_cases` (only files, deps, labels, components, related), so the sweep can’t change those entries yet. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` here first (atm-cli, with a scenario test).",
+          "by": "claude:b7be7288"
+        }
       ]
     },
     {

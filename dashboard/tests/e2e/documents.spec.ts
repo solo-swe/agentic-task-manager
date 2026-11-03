@@ -440,4 +440,52 @@ test.describe('the document viewer: links that open it', () => {
     await expect(description).toContainText('secrets');
     expect(tasksServer.documentRequests).toEqual([]);
   });
+
+  // T-391: a reference by its text (https://web.dev/articles/text-fragments)
+  const SPEC =
+    '# Requirements\n\n| ID | Rule |\n|---|---|\n| SR-2.1 | Sprint states |\n| SR-2.2 | Due dates |\n\n' +
+    Array.from({ length: 40 }, (_, i) => `Filler paragraph ${i + 1}.`).join('\n\n') +
+    '\n\n## Later\n\nThe last rule is here.\n';
+  const highlighted = (page: Page) =>
+    page.evaluate(() => {
+      const h = (CSS as unknown as { highlights: Map<string, Iterable<Range>> }).highlights.get('atm-doc-fragment');
+      return h ? [...h].map((r) => r.toString()) : [];
+    });
+
+  test('a text-fragment link opens the document at the text, marked; a click clears the mark', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(projectDocument('docs/spec.md', SPEC));
+    await openTask(page, tasksServer, withDescription('Per [the last rule](docs/spec.md#:~:text=last%20rule).'));
+    await page.locator('#detail-description a', { hasText: 'the last rule' }).click();
+    await expect(page.locator('#doc-title')).toHaveText('Requirements');
+    await expect.poll(() => highlighted(page)).toEqual(['last rule']);
+    await expect(viewer(page).locator('.compmd-page p', { hasText: 'The last rule is here.' })).toBeInViewport();
+    await page.locator('#doc-body').click({ position: { x: 5, y: 5 } });
+    await expect.poll(() => highlighted(page)).toEqual([]);
+  });
+
+  test('a requirement written as a link opens its definition; a bare ID stays text', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/spec.md', SPEC));
+    const data = withDescription('Plain.');
+    Object.assign(data.tasks[0], { requirements: ['[SR-2.2](docs/spec.md#:~:text=SR%2D2.2)', 'SR-9'] });
+    await openTask(page, tasksServer, data);
+    // The card shows the link's text; the details panel the link
+    await expect(page.locator('.task-card[data-id="T-1"] .req-badge')).toHaveText(['SR-2.2', 'SR-9']);
+    const badges = page.locator('#detail-panel .req-badge');
+    await expect(badges).toHaveText(['SR-2.2', 'SR-9'], { useInnerText: true });
+    await expect(badges.nth(1).locator('a')).toHaveCount(0);
+    await badges.nth(0).locator('a').click();
+    await expect(page.locator('#doc-title')).toHaveText('Requirements');
+    await expect.poll(() => highlighted(page)).toEqual(['SR-2.2']);
+  });
+
+  test('text the document doesn’t have: it opens at the top, saying so', async ({ page, tasksServer }) => {
+    tasksServer.setDocument(projectDocument('docs/spec.md', SPEC));
+    await openTask(page, tasksServer, withDescription('[gone](docs/spec.md#:~:text=no%20such%20rule)'));
+    await page.locator('#detail-description a', { hasText: 'gone' }).click();
+    await expect(page.locator('#doc-fragment-missing')).toContainText("isn't in this document");
+    expect(await page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBe(0);
+  });
 });

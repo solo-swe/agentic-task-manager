@@ -2439,6 +2439,20 @@ button.repo-ref {
   opacity: 1;
   font-weight: 600;
 }
+/* The text a text-fragment link names (T-391), marked with the CSS Custom Highlight API */
+::highlight(atm-doc-fragment) {
+  background-color: color-mix(in srgb, var(--yellow) 45%, transparent);
+  color: inherit;
+}
+.doc-note {
+  max-width: 820px;
+  margin: 0 auto 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
 /* The lines a #L link names, marked across the page */
 .doc-line-mark {
   position: absolute;

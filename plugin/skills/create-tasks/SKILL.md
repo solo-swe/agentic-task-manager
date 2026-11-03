@@ -245,7 +245,8 @@ Rules for task generation:
   plain. Plain Markdown is the default; reach for more only where it helps the reader (a flow or a state machine as
   a diagram, a comparison as a table)
 - **What renders** (the dashboard renders task text with CompMD, Markdown with components): GFM (tables, task lists,
-  strikethrough, footnotes), nested lists, alerts (`> [!NOTE]`), links (`https:`, `http:`, `mailto:`, `#`), and
+  strikethrough, footnotes), nested lists, alerts (`> [!NOTE]`), links (`https:`, `http:`, `mailto:`, `#`, and
+  relative links to the project's files, below), and
   ` ```mermaid ` code blocks as diagrams; CompMD's own components (`::: row`, `::: grid`, `::: if`, `::: each`,
   `:value[…]{of=(…)}`). Math shows as its TeX source for now; images show only their alt text; raw HTML beyond
   `details`, `summary`, `kbd`, `sub`, `sup` and `br` shows as text; imports, data files, URLs and components defined in
@@ -257,8 +258,16 @@ Rules for task generation:
 - For anything beyond that, CompMD's guide for agents ships with the plugin: read
   `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` (its ten rules first). Never fetch CompMD documentation from the
   web for this
+- **References are links the dashboard opens in its document viewer.** A document or file of the project: a relative
+  link from the project root, `[the design](docs/x.md)`, at a heading `docs/x.md#routes`, at lines of code
+  `src/app.ts#L40-L45`. A requirement, a use case or a sentence in a document: a **text fragment** link, which opens
+  the document at that text: `[SR-2.1](docs/sprints-design.md#:~:text=SR%2D2.1)`. After `#:~:text=` comes the text to
+  find, percent-encoded (a space is `%20`); `-`, `,` and `&` are the syntax's own, so in the text they are `%2D`, `%2C`
+  and `%26`. `prefix-,text` and `text,-suffix` only say which match is meant
+  (`#:~:text=Routes-,One%20route`: "One route" after "Routes"); `start,end` marks everything from one to the other
 - `files` lists files that will be created or modified
-- `requirements` and `use_cases` can be left out if not applicable
+- `requirements` and `use_cases` can be left out if not applicable; when the document that defines one is in the
+  project, write the entry as such a link: `"requirements": ["[SR-2.1](docs/sprints-design.md#:~:text=SR%2D2.1)"]`
 
 **Changing existing tasks** (when extending a project): `atm edit <id>` with `--description` (or
 `--description-file <file>` for a multi-line Markdown description), `--sprint` / `--backlog`, `--priority`, `--add-dep`/`--remove-dep`,

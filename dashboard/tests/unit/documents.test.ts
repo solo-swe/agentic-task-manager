@@ -9,6 +9,8 @@ import {
   loadDocument,
   parseDocHash,
   parseLines,
+  findTextFragment,
+  parseTextFragment,
   pathToCopy,
   referenceTo,
   resolvePath,
@@ -72,6 +74,49 @@ describe('referenceTo: the document a relative link names, with its lines or hea
     const hash = withDocHash('#view=list', { path: 'docs/x.md', heading: '3-routes' });
     expect(parseDocHash(hash)).toEqual({ path: 'docs/x.md', heading: '3-routes' });
     expect(pathToCopy({ path: 'docs/x.md', heading: '3-routes' })).toBe('docs/x.md#3-routes');
+  });
+});
+
+describe('text fragments: #:~:text=…', () => {
+  it('parses the directives, the parts decoded, -, , and & in the text encoded', () => {
+    expect(parseTextFragment(':~:text=SR%2D2.1')).toEqual([{ start: 'SR-2.1' }]);
+    expect(parseTextFragment(':~:text=Routes-,One%20route')).toEqual([{ prefix: 'Routes', start: 'One route' }]);
+    expect(parseTextFragment(':~:text=one,two,-three')).toEqual([{ start: 'one', end: 'two', suffix: 'three' }]);
+    expect(parseTextFragment('routes:~:text=a%2C%20b%26c&text=d')).toEqual([{ start: 'a, b&c' }, { start: 'd' }]);
+    expect(parseTextFragment(':~:text=')).toEqual([]);
+    expect(parseTextFragment('routes')).toEqual([]);
+    expect(parseTextFragment(':~:text=%E0%A4%A')).toEqual([]); // malformed encoding: left out
+  });
+
+  it('a reference keeps it, encoded, through the URL hash and Copy path', () => {
+    const ref = referenceTo('docs/x.md#:~:text=SR%2D2.1');
+    expect(ref).toEqual({ path: 'docs/x.md', text: ':~:text=SR%2D2.1' });
+    // After a heading, the text fragment wins
+    expect(referenceTo('docs/x.md#routes:~:text=One')).toEqual({ path: 'docs/x.md', text: ':~:text=One' });
+    expect(parseDocHash(withDocHash('#view=list', ref))).toEqual(ref);
+    expect(pathToCopy(ref!)).toBe('docs/x.md#:~:text=SR%2D2.1');
+  });
+
+  it('finds the first match: case and whitespace aside, across inline elements, with prefix, suffix and range', () => {
+    const root = document.createElement('div');
+    root.innerHTML =
+      '<h2>Routes</h2><p>One   <strong>route</strong> per project.</p><table><tr><td>SR-2.1</td><td>Sprint states</td></tr></table>' +
+      '<p>One route again, then the end.</p>';
+    const text = (d: Parameters<typeof findTextFragment>[1]) => findTextFragment(root, d)?.toString();
+    expect(text({ start: 'one route' })).toBe('One   route');
+    expect(text({ start: 'SR-2.1' })).toBe('SR-2.1');
+    // A suffix picks the second match
+    expect(text({ start: 'one route', suffix: 'again' })).toBe('One route');
+    expect(findTextFragment(root, { start: 'one route', suffix: 'again' })?.startContainer.parentElement?.tagName).toBe(
+      'P',
+    );
+    // A prefix across blocks: the heading, then the paragraph
+    expect(text({ prefix: 'Routes', start: 'One' })).toBe('One');
+    // A range from one text to another
+    expect(text({ start: 'One route again', end: 'the end' })).toBe('One route again, then the end');
+    // Text in two cells is apart, not run together
+    expect(text({ start: 'SR-2.1 Sprint' })).toBe('SR-2.1Sprint');
+    expect(text({ start: 'nowhere' })).toBeUndefined();
   });
 });
 

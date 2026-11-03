@@ -4,7 +4,9 @@
     clampGeometry,
     defaultGeometry,
     documentTitle,
+    findTextFragment,
     isGeometry,
+    parseTextFragment,
     loadDocument,
     pathToCopy,
     resolvePath,
@@ -120,8 +122,41 @@
     });
   }
 
+  /** `#:~:text=…`: once the document is drawn, the first match marked (the CSS Custom Highlight API: CompMD's page
+   * isn't changed) and scrolled to, once per file and fragment; no match, a note saying so (T-391) */
+  let fragmentMissing = $state(false);
+  const FRAGMENT_HIGHLIGHT = 'atm-doc-fragment';
+  function showTextFragment() {
+    if (!ref?.text || !pageEl) return;
+    const key = `${ref.path}#${ref.text}`;
+    if (key === scrolledTo) return;
+    const page = pageEl.querySelector('.compmd-page');
+    if (!page || pageEl.querySelector('.compmd')?.getAttribute('data-compmd') !== 'ready') return;
+    scrolledTo = key;
+    const range = parseTextFragment(ref.text)
+      .map((d) => findTextFragment(page, d))
+      .find((r): r is Range => r !== null);
+    fragmentMissing = !range;
+    if (!range) return;
+    if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.set(FRAGMENT_HIGHLIGHT, new Highlight(range));
+    const body = pageEl.closest('.doc-body');
+    const box = range.getBoundingClientRect();
+    if (body) body.scrollTo({ top: Math.max(0, box.top - body.getBoundingClientRect().top + body.scrollTop - 64) });
+  }
+  /** The mark goes at the next click, and with the file */
+  function clearTextFragment() {
+    if (typeof CSS !== 'undefined' && 'highlights' in CSS) CSS.highlights.delete(FRAGMENT_HIGHLIGHT);
+  }
+  $effect(() => {
+    if (!ref?.text) {
+      clearTextFragment();
+      fragmentMissing = false;
+    }
+  });
+
   function measureLines() {
     scrollToHeading();
+    showTextFragment();
     const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
     if (!pageEl || !code || !doc || (doc.kind !== 'code' && doc.kind !== 'text')) {
       lineLayout = null;
@@ -312,7 +347,17 @@
         onclick={() => dashboard.closeDocument()}><Icon name="x" size={13} /></button
       >
     </div>
-    <div class="doc-body" id="doc-body" onscroll={(e) => (scrolled = compactAt(e.currentTarget.scrollTop))}>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (a click only clears the
+         text fragment's mark) -->
+    <div
+      class="doc-body"
+      id="doc-body"
+      onscroll={(e) => (scrolled = compactAt(e.currentTarget.scrollTop))}
+      onclick={clearTextFragment}
+    >
+      {#if doc && fragmentMissing}
+        <div class="doc-note" id="doc-fragment-missing">The text this link points to isn't in this document.</div>
+      {/if}
       {#if doc}
         <!-- A page on the desk: each theme may give it its own paper (--doc-page-*, themes/*.css) -->
         <article class="doc-page" data-kind={doc.kind} bind:this={pageEl}>

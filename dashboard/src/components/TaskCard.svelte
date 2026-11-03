@@ -110,7 +110,9 @@
     {/if}
   </div>
   <div class="task-tags">
-    {#each task.use_cases ?? [] as uc (uc)}<span class="uc-badge" title={uc}>{uc}</span
-      >{/each}{#each task.requirements ?? [] as req (req)}<span class="req-badge">{req}</span>{/each}
+    <!-- An entry written as a link (T-391) shows its text: the details panel has the link -->
+    {#each task.use_cases ?? [] as uc (uc)}<span class="uc-badge" title={markdownPlainText(uc)}
+        >{markdownPlainText(uc)}</span
+      >{/each}{#each task.requirements ?? [] as req (req)}<span class="req-badge">{markdownPlainText(req)}</span>{/each}
   </div>
 </div>

@@ -38,6 +38,13 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   one inside a document is resolved from its folder; one leaving the project stays text. `#L…` opens at the lines,
   another fragment at the heading with that slug (Copy path keeps it). Every file in the details panel's Files list
   is a link (a folder stays text). Help and What's new come with the plugin: their relative links stay text.
+- **Text-fragment links** (T-391): a link ending in `#:~:text=…` ([text fragments](https://web.dev/articles/text-fragments))
+  opens the document at the first match, marked (the CSS Custom Highlight API), until the next click; prefix, suffix
+  and ranges work, and text it doesn't find opens the document at the top with a note. A `requirements` or `use_cases`
+  entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`) is a link in the details panel; cards show its
+  text. `/atm:create-tasks`, `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` tell agents to write references
+  that way: relative links for files, text fragments for requirements and places in a document, with `-`, `,` and `&`
+  encoded. Help says references open the document.
 - **A link to the dashboard itself opens in place** (T-394): a web link to the page's own address with a `#…` (a
   document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
   opens in a new tab, without access to the page.
