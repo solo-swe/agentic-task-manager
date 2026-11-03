@@ -351,34 +351,19 @@ body {
   text-decoration: underline;
 }
 
-/* T-282: like the task details, the title stays and the releases scroll below it without a scrollbar */
-#whats-new-panel {
-  padding: 18px 20px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.whats-new-scroll {
-  flex: 1 1 auto;
-}
-.whats-new .kanban-more.bottom {
-  border-radius: 0;
-}
-/* Help scrolls the same way: the title stays, the text scrolls below it without a scrollbar */
-#help-panel {
+/* A scrolling dialog (Dialog.svelte's scrollItem: Help, What's new; T-282): the title stays, with a hairline under it,
+   and the content scrolls below it without a scrollbar. Once it has scrolled, the title compacts, as the dashboard's
+   title bar does */
+.detail-panel.scrolling {
   overflow: hidden;
   display: flex;
   flex-direction: column;
   transition: padding-top 0.2s ease;
 }
-#help-panel.scrolled {
+.detail-panel.scrolling.scrolled {
   padding-top: 16px;
 }
-.help-scroll {
-  flex: 1 1 auto;
-}
-/* A hairline under the title; once the text scrolls, the title compacts as the dashboard's title bar does */
-#help-panel > h3 {
+.detail-panel.scrolling > h3 {
   margin: 0;
   padding-bottom: 14px;
   border-bottom: 1px solid var(--border);
@@ -386,21 +371,31 @@ body {
     font-size 0.2s ease,
     padding 0.2s ease;
 }
-#help-panel.scrolled > h3 {
+.detail-panel.scrolling.scrolled > h3 {
   font-size: 16px;
   padding-bottom: 8px;
 }
-#help-panel > .detail-close {
+.detail-panel.scrolling > .detail-close {
   transition: top 0.2s ease;
 }
-#help-panel.scrolled > .detail-close {
+.detail-panel.scrolling.scrolled > .detail-close {
   top: 10px;
 }
-#help-panel .help-scroll .hint-scroll-body {
+.dialog-scroll {
+  flex: 1 1 auto;
+}
+.dialog-scroll .hint-scroll-body {
   padding-top: 14px;
 }
-.help .kanban-more.bottom {
+.dialog-scroll .kanban-more.bottom {
   border-radius: 0;
+}
+/* What's new keeps its tighter padding, and compacts from it */
+#whats-new-panel {
+  padding: 18px 20px;
+}
+#whats-new-panel.scrolled {
+  padding-top: 10px;
 }
 .whats-new .release + .release {
   margin-top: 18px;

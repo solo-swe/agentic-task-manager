@@ -72,12 +72,23 @@ test.describe("What's new", () => {
     await expect(panel(page).locator('.kanban-more.top')).toHaveCount(0);
     await expect(panel(page).locator('.kanban-more.bottom')).toHaveText(`▼ ${await cutBelow()} more`);
 
-    // ▼ scrolls a page; then ▲ shows, and the title stays where it was
-    const title = await panel(page).locator('h3').boundingBox();
+    // A hairline under the title, at its full size at the top
+    const titleStyle = () =>
+      panel(page)
+        .locator('> h3')
+        .evaluate((h) => {
+          const s = getComputedStyle(h);
+          return { line: s.borderBottomStyle + ' ' + s.borderBottomWidth, size: parseFloat(s.fontSize) };
+        });
+    expect(await titleStyle()).toEqual({ line: 'solid 1px', size: 20 });
+
+    // ▼ scrolls a page; then ▲ shows, and the title compacts (as the dashboard's title bar does) and stays in view
     await panel(page).locator('.kanban-more.bottom').click();
     await expect.poll(() => body.evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
     await expect(panel(page).locator('.kanban-more.top')).toHaveText(/^▲ \d+ more$/);
-    expect(await panel(page).locator('h3').boundingBox()).toEqual(title);
+    await expect(panel(page)).toHaveClass(/scrolled/);
+    await expect.poll(titleStyle).toEqual({ line: 'solid 1px', size: 16 });
+    await expect(panel(page).locator('> h3')).toBeInViewport();
   });
 
   test('closes with ×, the backdrop and Escape', async ({ page }) => {
