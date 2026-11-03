@@ -471,12 +471,14 @@ test.describe('the document viewer: links that open it', () => {
     const data = withDescription('Plain.');
     Object.assign(data.tasks[0], { requirements: ['[SR-2.2](docs/spec.md#:~:text=SR%2D2.2)', 'SR-9'] });
     await openTask(page, tasksServer, data);
-    // The card shows the link's text; the details panel the link
+    // The card shows the link's text; the details panel the link, one entry a line (T-403)
     await expect(page.locator('.task-card[data-id="T-1"] .req-badge')).toHaveText(['SR-2.2', 'SR-9']);
-    const badges = page.locator('#detail-panel .req-badge');
-    await expect(badges).toHaveText(['SR-2.2', 'SR-9'], { useInnerText: true });
-    await expect(badges.nth(1).locator('a')).toHaveCount(0);
-    await badges.nth(0).locator('a').click();
+    const entries = page.locator('#detail-panel .detail-ref');
+    await expect(entries).toHaveText(['SR-2.2', 'SR-9'], { useInnerText: true });
+    await expect(entries.nth(1).locator('a')).toHaveCount(0);
+    const [first, second] = [await entries.nth(0).boundingBox(), await entries.nth(1).boundingBox()];
+    expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height);
+    await entries.nth(0).locator('a').click();
     await expect(page.locator('#doc-title')).toHaveText('Requirements');
     await expect.poll(() => highlighted(page)).toEqual(['SR-2.2']);
   });

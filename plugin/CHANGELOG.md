@@ -56,6 +56,9 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   (exit 2, nothing written). atm-lib: `edit_existing_task` gains `add_requirements`, `remove_requirements`,
   `add_use_cases` and `remove_use_cases` (`tests/lib/public-surface.json`). `/atm:create-tasks`, `/atm:do-task` and
   `plugin/CLAUDE.md` list the flags.
+- **Requirements and use cases one a line** (T-403): the details panel lists them as it lists Files (`.detail-refs`,
+  sharing `.detail-files`' styles), one entry a line; an entry written as a link looks like a file link, a bare ID is
+  text. Cards keep their badges.
 - **The single file's guardrail goes from 550 to 600 KiB** (`tests/e2e/guardrails.spec.ts`, decided with Hakan): the
   document viewer took it to 559 kB, and CompMD's coming upgrade needs room.
 - **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a

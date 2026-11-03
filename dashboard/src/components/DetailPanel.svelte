@@ -434,8 +434,8 @@
     </div>
   {/if}
   <div class="detail-group" data-group="ref">
-    {@render badges('Use Cases', task.use_cases ?? [], 'uc-badge')}
-    {@render badges('Requirements', task.requirements ?? [], 'req-badge')}
+    {@render references('Use Cases', task.use_cases ?? [])}
+    {@render references('Requirements', task.requirements ?? [])}
     <div class="detail-section">
       <div class="label">Files</div>
       <div class="detail-files">
@@ -485,15 +485,16 @@
   {/if}
 {/snippet}
 
-{#snippet badges(label: string, items: string[], cls: string)}
+{#snippet references(label: string, items: string[])}
   <div class="detail-section">
     <div class="label">{label}</div>
-    <div class="value">
-      <!-- An entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`, T-391) renders with CompMD, so it opens
-           the document at the text; a bare ID stays text -->
-      {#each items as item, i (item)}{i > 0 ? ' ' : ''}<span class={cls}
-          >{#if task && /\]\(/.test(item)}<CompMd text={item} {task} inline />{:else}{item}{/if}</span
-        >{:else}<span style="color:var(--text-muted)">None</span>{/each}
+    <!-- One entry a line, as Files (T-403). An entry written as a link (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`,
+         T-391) renders with CompMD, so it opens the document at the text; a bare ID stays text -->
+    <div class="detail-refs">
+      {#each items as item (item)}
+        <div class="detail-ref">
+          {#if task && /\]\(/.test(item)}<CompMd text={item} {task} inline />{:else}{item}{/if}
+        </div>{:else}<span style="color:var(--text-muted)">None</span>{/each}
     </div>
   </div>
 {/snippet}

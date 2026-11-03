@@ -31,8 +31,8 @@ test.describe('detail panel', () => {
     await openFromCard(page, 'T-004');
     await expect(panel(page).locator('.task-meta > *')).toHaveText(['feature', 'Done', 'Phase 1', 'P2']);
     await expect(section(page, 'Description').locator('.value')).toHaveText('Description of T-004: User login.');
-    await expect(section(page, 'Use Cases').locator('.uc-badge')).toHaveText(['UC-001']);
-    await expect(section(page, 'Requirements').locator('.req-badge')).toHaveText(['FR-1.1', 'FR-1.2']);
+    await expect(section(page, 'Use Cases').locator('.detail-ref')).toHaveText(['UC-001']);
+    await expect(section(page, 'Requirements').locator('.detail-ref')).toHaveText(['FR-1.1', 'FR-1.2']);
     await expect(section(page, 'Timestamps')).toContainText('Created: 3/31/2026, 8:00:00 AM');
     await expect(section(page, 'Timestamps')).toContainText('Updated: 4/3/2026, 11:00:00 AM');
     await expect(section(page, 'Files').locator('.detail-files div')).toHaveText(['src/auth/login.ts']);
@@ -82,8 +82,8 @@ test.describe('detail panel', () => {
 
   test('placeholders for missing optional fields', async ({ page }) => {
     await openFromCard(page, 'T-009');
-    await expect(section(page, 'Use Cases').locator('.value')).toHaveText('None');
-    await expect(section(page, 'Requirements').locator('.value')).toHaveText('None');
+    await expect(section(page, 'Use Cases').locator('.detail-refs')).toHaveText('None');
+    await expect(section(page, 'Requirements').locator('.detail-refs')).toHaveText('None');
     await expect(section(page, 'Files').locator('.detail-files')).toHaveText('None specified');
     await expect(section(page, 'Timestamps')).toHaveCount(0);
   });

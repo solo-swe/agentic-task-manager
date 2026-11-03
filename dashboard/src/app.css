@@ -2839,26 +2839,32 @@ button.repo-ref {
   text-overflow: ellipsis;
 }
 
-.detail-files {
+/* Files, and the use cases and requirements above them (T-403): one entry a line */
+.detail-files,
+.detail-refs {
   font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 12px;
   color: var(--text-muted);
 }
 
-.detail-files div {
+.detail-files div,
+.detail-refs .detail-ref {
   margin-bottom: 2px;
 }
-/* A file opens in the document viewer */
-.detail-files .file-link {
+/* A file, or a reference written as a link, opens in the document viewer */
+.detail-files .file-link,
+.detail-refs a {
   padding: 0;
   font: inherit;
   color: var(--accent);
+  text-decoration: none;
   background: none;
   border: none;
   cursor: pointer;
   text-align: left;
 }
-.detail-files .file-link:hover {
+.detail-files .file-link:hover,
+.detail-refs a:hover {
   text-decoration: underline;
 }
 

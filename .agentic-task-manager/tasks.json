@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 403,
+    "next_id": 404,
     "labels": [
       {
         "id": "architecture",
@@ -21312,6 +21312,45 @@
           "by": "claude:b7be7288"
         }
       ]
+    },
+    {
+      "id": "T-403",
+      "name": "Details panel: Requirements and Use Cases as a vertical list, like Files",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Since T-391 a `requirements` or `use_cases` entry may be a link whose text is anything (a phrase too), so the details panel's row of badges wraps badly and makes a link look like a bare ID. List them one per line instead, as the Files list does.\n\n## Change\n- `dashboard/src/components/DetailPanel.svelte`, the `badges` snippet: each entry on its own line. An entry written as a link renders inline with CompMD (as now) and looks like a file link (`.detail-files .file-link`); a bare ID stays plain text. None still says *None*.\n- `dashboard/src/app.css`: the list's styles, shared with `.detail-files` where they match; drop what the details panel no longer uses of `.req-badge` / `.uc-badge`.\n- Cards keep their compact badges (`markdownPlainText`): unchanged.\n\n## Tests\nA component test in `tests/unit/DetailPanel.component.test.ts` (one element per entry, a link entry is a link, a bare one text); the details-panel e2e specs (`npx playwright test detail documents`). The details-panel screenshots change: regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/unit/DetailPanel.component.test.ts"
+      ],
+      "created_at": "2026-11-03T20:46:10Z",
+      "updated_at": "2026-11-03T20:46:22Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T20:46:10Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "batch",
+      "related": [
+        "T-391"
+      ],
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-03T20:46:22Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }
