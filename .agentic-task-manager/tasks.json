@@ -21051,10 +21051,10 @@
       "labels": [
         "compmd"
       ],
-      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- [`dashboard/package.json`](dashboard/package.json): bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` ([`dashboard/compmd.config.json`](dashboard/compmd.config.json)) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the [CHANGELOG](plugin/CHANGELOG.md#:~:text=Math%20shows%20as%20its%20TeX%20source), the \"math shows as TeX\" lines in [`docs/help.md`](docs/help.md), [`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md), and the math note in [`docs/compmd-rendering-design.md`](docs/compmd-rendering-design.md). Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- [`plugin/docs/compmd-llms.txt`](plugin/docs/compmd-llms.txt): replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the [§3.3 review](docs/security-architecture.md#:~:text=3.3%20Sprints%20and%20releases) in [`docs/security-architecture.md`](docs/security-architecture.md) gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt [`dashboard/src/lib/compmd.ts`](dashboard/src/lib/compmd.ts) and [`dashboard/compmd/entry.ts`](dashboard/compmd/entry.ts).\n\n## Tests\n[`compmd-processor.test.ts`](dashboard/tests/unit/compmd-processor.test.ts) and [`compmd.test.ts`](dashboard/tests/unit/compmd.test.ts) pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.\n",
+      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- [`dashboard/package.json`](dashboard/package.json): bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` ([`dashboard/compmd.config.json`](dashboard/compmd.config.json)) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the [CHANGELOG](plugin/CHANGELOG.md#:~:text=Math%20shows%20as%20its%20TeX%20source), the \"math shows as TeX\" lines in [`docs/help.md`](docs/help.md), [`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md), and the math note in [`docs/compmd-rendering-design.md`](docs/compmd-rendering-design.md). Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- [`plugin/docs/compmd-llms.txt`](plugin/docs/compmd-llms.txt): replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the [§3.3 review](docs/security-architecture.md#:~:text=3.3%20Sprints%20and%20releases) in [`docs/security-architecture.md`](docs/security-architecture.md) gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt [`dashboard/src/lib/compmd.ts`](dashboard/src/lib/compmd.ts) and [`dashboard/compmd/entry.ts`](dashboard/compmd/entry.ts).\n\n## Tests\n[`compmd-processor.test.ts`](dashboard/tests/unit/compmd-processor.test.ts) and [`compmd.test.ts`](dashboard/tests/unit/compmd.test.ts) pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.\n\n## Try it\nWhat CompMD 0.4.0 changes, to check by eye here (switch Light and Dark in the ⋯ menu too).\n\n### Math\nInline: the area of a circle is $\\pi r^2$, and $e^{i\\pi} + 1 = 0$. A price stays text: it costs $5 and $6.\n\nA block:\n\n$$\n\\int_0^1 x^2 \\, dx = \\frac{1}{3}\n$$\n\nA matrix and a sum:\n\n$$\n\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}\n\\qquad\n\\sum_{k=1}^{n} k = \\frac{n(n+1)}{2}\n$$\n\n### Code, highlighted by its language\n```ts\n// TypeScript\nexport function greet(name: string): string {\n  return `Hello, ${name}!`;\n}\n```\n\n```python\n# Python\ndef fib(n: int) -> int:\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n```\n\n```json\n{ \"id\": \"T-398\", \"status\": \"in_progress\", \"labels\": [\"compmd\"] }\n```\n\n```bash\nnpm --prefix dashboard run build\n```\n\n```md\n::: card {title=\"CompMD's own syntax\"}\nHello {{md.doc.title}} :badge[beta]{tone=info}\n::: /card\n```\n\n```\nA block without a language stays plain.\n```\n\nInline code stays as before: `npm run check`.\n\n### A diagram (unchanged, still drawn)\n```mermaid {alt=\"Upgrade, then check, then commit\"}\nflowchart LR\n  up[Upgrade] --> check[Check] --> commit[Commit]\n```\n\n### Documents\nCode in the document viewer is highlighted too, with its line numbers: [atm-cli/atm/lib/documents.py#L40](atm-cli/atm/lib/documents.py#L40), [dashboard/src/lib/documents.ts#L44-L60](dashboard/src/lib/documents.ts#L44-L60). A Markdown document's code blocks as well: [docs/compmd-viewer-design.md](docs/compmd-viewer-design.md).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21072,7 +21072,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T18:14:19Z",
-      "updated_at": "2026-11-03T19:56:39Z",
+      "updated_at": "2026-11-03T22:39:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21087,7 +21087,9 @@
         "skills",
         "docs"
       ],
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-03T22:32:20Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-399",
@@ -21375,7 +21377,7 @@
       "description": "A **Document style** setting in the ⋯ menu, under Theme: how the document viewer's page looks. Decided with Hakan: these are **host styles**, so atm defines them (CompMD's editor has its own, in its `frame.css`, as `host=github`, `host=docs`, `host=magazine`: atm's take after their ideas, not a copy) and gives the renderer one when needed; CompMD renders the content as before.\n\n## Styles\n| Style | Look |\n|---|---|\n| Auto (the default) | The theme's page, as now (the page on a desk; Hand-drawn's notebook, Sticky Notes' sheet) |\n| GitHub | System sans-serif, a 980px column, `h1`/`h2` with a rule under them, bordered tables and blockquotes, GitHub's link blue |\n| Docs | A serif reading font at 18px / 1.7, a narrow 44rem column, tighter heading spacing |\n| Magazine | Didot / Bodoni headings, a double rule under the `h1`, a drop cap on the paragraph after it, one red accent, centred italic pull quotes |\n\nEach in light and dark (the dashboard's mode); code keeps the viewer's gutter, line marks, highlights and contents button.\n\n## Change\n- `dashboard/src/lib/appearance.ts`: the styles (`DOC_STYLES`, `knownDocStyle`); the choice is a browser preference (`docStyle`, `lib/prefs.ts`) like the theme, kept by `state.svelte.ts`.\n- `SettingsMenu.svelte`: a Document style select under Theme.\n- `DocumentViewer.svelte`: `data-doc-style` on `.doc-viewer` when it isn't Auto.\n- `dashboard/src/themes/doc-styles.css`: the three styles, scoped to `.doc-viewer[data-doc-style=…] .doc-page`; the themes' paper (`hand-drawn.css`, `sticky-notes.css`) applies only to Auto.\n- Help's Documents section and the changelog.\n\n## Tests\nUnit tests for the preference; a component test for the menu; e2e: choosing a style sets it on the viewer and survives a reload, and each style's page has its font and column. The viewer's screenshots get one per style at the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/appearance.ts",
@@ -21389,7 +21391,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-03T21:16:10Z",
-      "updated_at": "2026-11-03T21:16:19Z",
+      "updated_at": "2026-11-03T21:22:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21407,7 +21409,19 @@
         "T-393"
       ],
       "started_at": "2026-11-03T21:16:19Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "b2ff02689baa0f0db521e018af48016b68883e7a",
+      "completed_at": "2026-11-03T21:22:56Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T21:22:56Z",
+          "kind": "review",
+          "text": "Check the look of each style (GitHub, Docs, Magazine) in light and dark, over Hand-drawn and Sticky Notes too, on a Markdown document and a code file; Settings › Document style. Single file 571 kB.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

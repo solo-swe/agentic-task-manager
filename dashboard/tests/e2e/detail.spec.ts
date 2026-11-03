@@ -236,6 +236,18 @@ test.describe('task text with CompMD', () => {
     await expect(description(page)).toContainText('This is T-1, ready: true.');
   });
 
+  test('math typesets, inline and as a block, not as its TeX (CompMD 0.4.0, T-398)', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, withText('Area $x^2$ of a square.\n\n$$\n\\frac{a}{b}\n$$\n'), {
+      tab: 'list',
+    });
+    await openFromCard(page, 'T-1');
+    await expect(description(page).locator('math')).toHaveCount(2);
+    await expect(description(page).locator('math[display="block"] mfrac')).toHaveCount(1);
+    await expect(description(page).locator('math').first().locator('msup')).toHaveCount(1);
+    await expect(description(page)).not.toContainText('$x^2$');
+    await expect(description(page)).not.toContainText('\\frac');
+  });
+
   test('raw HTML, scripts and javascript: links run nothing', async ({ page, tasksServer }) => {
     await openDashboard(
       page,

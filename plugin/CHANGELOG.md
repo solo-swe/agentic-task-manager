@@ -75,6 +75,16 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   document's or a view's URL) follows its hash in the same tab, a history entry for Back; every other web link still
   opens in a new tab, without access to the page.
 
+### Changed
+- **CompMD 0.4.0** (T-398): `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` 0.4.0 (the
+  Mermaid pack stays 0.1.1); the runtime is `plugin/assets/compmd/0.4.0/`. **Math typesets** (Temml, as MathML) in
+  task text, Help, What's new and documents, which 0.28.0 showed as TeX; **code blocks are highlighted** by CompMD
+  (Shiki, GitHub's light and dark, following the dashboard's mode), in task text and in the document viewer, its
+  gutter unchanged. No atm code changed for either, and the page's CSP is the same. `plugin/docs/compmd-llms.txt` is
+  CompMD's guide at `v0.4.0` (its body unchanged). The runtime folder grows from 11 to 18 MB: Shiki's grammars ship
+  in the page's runtime and again in the frames' (CompMD's packaging), each loaded only for a block of its language.
+  CompMD 0.4.0 also maps a rendered block to its source lines (`origins`), which T-400 needs.
+
 ## [0.28.0] - 2026-11-03
 
 The sprint *Rich Markdown* (T-284 to T-397): task text renders with CompMD (`docs/compmd-rendering-design.md`). Also

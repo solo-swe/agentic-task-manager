@@ -402,6 +402,19 @@ used for the agent sandbox, so this written review takes the live run's place:
 - **What task text can do** is still bounded by the renderer (above: T-284, T-285), whatever the guide says CompMD
   can do: a text that follows the guide past what atm allows shows its fallback text, and runs nothing.
 
+**CompMD 0.4.0 (T-398).** The dashboard renders with CompMD 0.4.0, and the guide is its `llms.txt` at `v0.4.0`
+(commit `98387209`). Written review, as above:
+- **The guide** was read in full again: its body is the same as 0.3.0's, word for word; only atm's header line
+  changes, to the new version and commit.
+- **The skill text** (`/atm:create-tasks`) now says math and highlighted code render: how to write task text, nothing
+  to run, fetch or install.
+- **What the page runs** grows by two of CompMD's own renderers, both loaded from the plugin's asset folder like the
+  rest of CompMD (I-CSP holds: the CSP guard of the e2e suite saw no refusal): Temml typesets math as MathML in the
+  page, and Shiki highlights code blocks with its JavaScript regex engine (no WebAssembly), its token colours set
+  through the CSSOM, so `style-src` is unchanged. Neither takes a URL from the text. The release's other changes for
+  hosts (asking the reader before data from a new origin, `host` for trusted components, images in frame mode) don't
+  reach atm: its settings allow no data from URLs, no trusted components and no frame-mode pages.
+
 **Finding and stopping lost servers (T-390).** `whoami` now also gives `home`, a hash of the server's atm folder path
 (never the path), and `atm serve status` and `stop` ask `whoami` on the 20 ports from `--port`. They act only on a
 server whose `home` is their own folder's, and stop it with signals to its pid on this machine, as `stop` always did;

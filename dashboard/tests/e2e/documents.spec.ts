@@ -333,6 +333,35 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     expect(Math.abs(sizes.gutterHeight - sizes.codeHeight)).toBeLessThan(2);
   });
 
+  test('code is highlighted by CompMD (Shiki, CompMD 0.4.0), coloured tokens, the gutter still beside its lines', async ({
+    page,
+    tasksServer,
+  }) => {
+    tasksServer.setDocument(codeDoc());
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
+    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    const code = page.locator('#doc-viewer .compmd-page pre code');
+    // The keyword `const` is a token of its own, coloured unlike the plain text around it
+    const keyword = code.locator('span', { hasText: /^const$/ }).first();
+    await expect(keyword).toBeVisible();
+    const [keywordColour, codeColour] = await Promise.all([
+      keyword.evaluate((el) => getComputedStyle(el).color),
+      code.evaluate((el) => getComputedStyle(el).color),
+    ]);
+    expect(keywordColour).not.toBe(codeColour);
+    // Its colours follow the dashboard's mode (its color-scheme), not only the OS's
+    await openMenu(page, '#settings-btn');
+    await page.locator('.mode-btn[data-mode="light"]').click();
+    await expect.poll(() => keyword.evaluate((el) => getComputedStyle(el).color)).not.toBe(keywordColour);
+    await expect(page.locator('#doc-gutter div')).toHaveCount(120);
+    const tops = await page.locator('#doc-viewer').evaluate((el) => {
+      const g = el.querySelector('#doc-gutter')!.getBoundingClientRect();
+      const c = el.querySelector('.compmd-page pre code')!.getBoundingClientRect();
+      return [g.height, c.height];
+    });
+    expect(Math.abs(tops[0] - tops[1])).toBeLessThan(2);
+  });
+
   test('#L40 opens at line 40, marked; a range marks its lines', async ({ page, tasksServer }) => {
     tasksServer.setDocument(codeDoc());
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });

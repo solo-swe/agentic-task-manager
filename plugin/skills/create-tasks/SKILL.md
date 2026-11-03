@@ -248,7 +248,8 @@ Rules for task generation:
   strikethrough, footnotes), nested lists, alerts (`> [!NOTE]`), links (`https:`, `http:`, `mailto:`, `#`, and
   relative links to the project's files, below), and
   ` ```mermaid ` code blocks as diagrams; CompMD's own components (`::: row`, `::: grid`, `::: if`, `::: each`,
-  `:value[…]{of=(…)}`). Math shows as its TeX source for now; images show only their alt text; raw HTML beyond
+  `:value[…]{of=(…)}`), math (`$x^2$`, and `$$…$$` blocks), and code blocks highlighted by their fence's language.
+  Images show only their alt text (except a relative image in a document the viewer opens); raw HTML beyond
   `details`, `summary`, `kbd`, `sub`, `sup` and `br` shows as text; imports, data files, URLs and components defined in
   the text don't render (their fallback text shows)
 - **The task's own data:** the dashboard puts its own frontmatter in front of every text (never write one: a text
