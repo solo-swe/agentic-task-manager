@@ -20,12 +20,15 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
   pre-wrap`): readable, not rendered. That failure is logged to the console, not shown to the reader.
 - **R2a. Readers never see CompMD's diagnostics** (warnings and errors about the text). Agents, who write the text,
   should: §3a.
-- **R3. The dashboard stays one file within its guardrail** (550 KiB; 543 kB today). CompMD ships as separate files
-  beside it, loaded only when a details panel first opens.
+- **R3. The dashboard stays one file;** its guardrail (550 KiB; 543 kB today) is raised for the loader and the
+  sandbox's host runtime, by what they measure. CompMD, the sandbox's frames and Mermaid ship as separate files beside
+  it, loaded only when a details panel first opens (Mermaid only for a text with a diagram).
 - **R4. Nothing leaves localhost,** whatever the task text says: no remote data, no pack downloads, no images or
   scripts from elsewhere.
-- **R5. Task text runs nothing:** no raw HTML beyond a short allowlist, no scripts, no component code, no `host:`
-  data, no inputs that change anything, no links other than `https:`, `http:`, `mailto:` and `#`.
+- **R5. Task text runs nothing of its own:** no raw HTML beyond a short allowlist, no scripts, no component code
+  from the text, no `host:` data but the task's own, no inputs that change anything, no links other than `https:`,
+  `http:`, `mailto:` and `#`. The only code that runs for it is atm's choice, shipped with the plugin: CompMD, and
+  Mermaid's pack in a strict frame (§3c).
 - **R6. It looks like today:** headings, lists, code, quotes and tables follow the theme and light/dark mode through
   the dashboard's CSS tokens (`no-hardcoded-colours.test.ts` still passes); links open as today (external ones in a
   new tab with `noopener noreferrer`, `#` ones scroll within the text).
@@ -130,32 +133,100 @@ refuses images from elsewhere, and `style-src 'unsafe-inline'` allows CompMD's s
 
 ## 3. Configuring CompMD for untrusted text
 
-Each document is processed alone:
+Each document is processed alone, as atm's frontmatter (§3b) followed by the task text:
 
 ```ts
 process({
   path: 'task.comp.md',
-  files: { 'task.comp.md': text },   // no other files: imports of files fail (a diagnostic)
+  files: { 'task.comp.md': frontmatter + text },   // no other files: imports of files fail (a diagnostic)
   now: new Date().toISOString(),
   tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
   allowedOrigins: [],                // no remote data (R4)
-  policy: { imports: 'listed', packs: {} },   // no packs; T-285 lists its own Mermaid pack as ambient
-  // no `remote`, `host`, `packs` or `inputs`: nothing is fetched, no host data, no input values
+  host: { task },                    // the current task only (§3b)
+  packs: { '@comp-markdown/mermaid': [mermaidRelease] },   // shipped with the plugin (§3c)
+  policy: { imports: 'listed', packs: { '@comp-markdown/mermaid': { level: 'strict' } } },
+  // no `remote` or `inputs`: nothing is fetched, no input values
 });
 ```
 
-and rendered with `createPage(element, { tokens })`, with no `components` and no `onSet`:
+and rendered by `@compmd/sandbox`'s view in host mode (§3c), with no trusted components, no `host` functions and no
+`set` handler:
 
 | Task text uses | What happens |
 |---|---|
 | raw HTML | the renderer's allowlist (`details`, `summary`, `sub`, `sup`, `kbd`, `br`, `img`, `a` with safe URLs); every other tag shows as text; no attributes beyond `src`, `alt`, `href` |
 | an image | `img-src` allows only this server and `data:`, so an outside image doesn't load (and makes no request) |
 | a link | after each render, a pass keeps only `https:`, `http:`, `mailto:` and `#` links (`safeHref`, as today; CompMD also allows relative ones, which T-336 will define); others become text. External links get `target="_blank" rel="noopener noreferrer"`; `#` links scroll within the document |
-| a host-language component (JSX, Svelte, …) | never mounted: with no `components`, the renderer shows its fallback |
-| `from: https://…`, `host:` data, a pack | refused by the processor (no allowed origin, no host data, policy `listed` with none listed): a diagnostic, and the component's fallback |
-| an input | rendered without `onSet`, so changing it changes nothing |
+| a host-language component written in the text (JSX, Svelte, …) | the text has no files to import it from, so there is none to mount: its fallback shows |
+| `from: https://…`, a file, another `host:` source | refused by the processor (no allowed origin, no files, only `host:task` given): a diagnostic, and the fallback |
+| a pack other than Mermaid | refused (`imports: listed`, only Mermaid listed): F026, and the fallback |
+| a ` ```mermaid ` block | drawn by the Mermaid pack in a strict frame (§3c) |
+| an input | shown, but with no `set` handler, changing it changes nothing |
 
 **Diagnostics** are not shown in the panel (R2a). How agents see them is §3a.
+
+## 3b. The frontmatter atm writes, and the task's data
+
+Task text is a document's **body** only. atm writes its frontmatter (decided in review), so the settings are atm's,
+in one place, and agents never write `md:` keys:
+
+```yaml
+---
+md:
+  version: 1
+  data:
+    - from: host:task
+      as: task
+      schema: {id: string, name: string, status: string, kind: string, ready: boolean, …}
+  import:
+    - from: "@comp-markdown/mermaid@0"     # §3c
+      names: [mermaid]
+---
+<the task text>
+```
+
+- **`md.data.task`** is the task the text belongs to: its fields as `atm show --json` gives them (`id`, `name`,
+  `type`, `status`, `priority`, `sprint`, `labels`, `dependencies`, `files`, `commit`, `pr`, `notes`, the actors and
+  times) and atm's derived values for it (`kind`, `ready`, `waiting_for`, the effective review mode and release, the
+  stage), which the v1 route already gives the dashboard. The request passes it as `host: {task: …}`. The schema is
+  written from the task and view schemas atm already has (`atm-cli/atm/common/schema/`), in the form spec §8
+  takes, and generated with the other types, so it can't drift.
+- Only the current task: never another task's or another project's data. It is data the reader sees in the same
+  panel; values inserted into the text are escaped like any text.
+- Examples an agent might write: `Waiting on {{md.data.task.waiting_for}}`, a list of dependencies with
+  `::: each {in=(md.data.task.dependencies) as=d}`, the commit of the outcome with `{{md.data.task.commit}}`.
+- **Text that starts with a frontmatter of its own** would follow ours and render as a line and a heading. The
+  skills say atm provides the frontmatter (T-286); today's task text is plain Markdown, so nothing existing changes.
+- **One builder:** the frontmatter and request are built by one function (`src/lib/compmd.ts`), which a later checker
+  would share; diagnostics' line numbers are given relative to the task text, without atm's frontmatter lines.
+
+## 3c. Mermaid (T-285): the pack in the sandbox, or built into the dashboard
+
+| | **P. `@comp-markdown/mermaid` in CompMD's strict sandbox** (recommended) | **D. Mermaid built into the dashboard** |
+|---|---|---|
+| How | the frontmatter imports the pack; `@compmd/sandbox` runs its component in a strict frame: an opaque origin with no network, reaching only its params; the dashboard renders in host mode (`page: "host"`), so the text is in the dashboard's page and each diagram in its frame | the `mermaid` npm package, run in the dashboard's page through the renderer's `code: { mermaid }` option |
+| Mermaid fed untrusted text | in a frame that can't reach the dashboard, its API or the network: a Mermaid XSS (it has had several) stays in the frame | in the dashboard's page, guarded by Mermaid's `securityLevel: 'strict'` and the page's CSP |
+| Theme | Mermaid's own default or dark theme, following the page's light or dark mode | Mermaid's `themeVariables` from the dashboard's tokens: matches every dashboard theme |
+| Files and size | the pack's one module (7.0 MB, 1.6 MB gzipped; every Mermaid diagram type, with ELK), the sandbox's frame documents and runtime (`buildFrames`: about 1.9 MB with React, Svelte and a compiler atm doesn't use), loaded only for a text with a diagram | Mermaid's own build, loaded only for a text with a diagram; it can't be inlined in the single file (megabytes), so it is served from `/assets/` either way |
+| Server and CSP | `frame-src` for the frame documents (the asset folder, as for scripts); the frame documents served with `Content-Security-Policy: sandbox allow-scripts`; the pack's module with `Access-Control-Allow-Origin: *`, since the frames' opaque origin loads it cross-origin, and checked against its hash | no frames; Mermaid's module under the existing `script-src` asset source |
+| Beyond Mermaid | the same path for any later pack (charts, a document viewer's components, T-336): a pack is a file and a line in the frontmatter | each further renderer is dashboard code again |
+| For CompMD | atm uses CompMD as its documents and other hosts do, and tests the sandbox in a real host | a host-specific path other hosts don't share |
+| Moving parts | more: frames, their headers, CORS on the pack folder, the sandbox's protocol | fewer |
+
+**Recommended: P.** The decisive point is that Mermaid, a large library with a history of XSS bugs, renders text
+anyone with access to `tasks.json` writes; P runs it where a bug can't reach anything. P is also the path every
+later CompMD capability takes. Its costs are one-time (the frame headers and their tests). Its one visible
+difference, Mermaid's own light and dark themes instead of the dashboard's colours, can change later through the
+pack's `theme` param, in CompMD.
+
+With P, T-284 renders through `@compmd/sandbox`'s view in host mode from the start (`createSandbox({ base, page:
+"host" }).open(…)`, which renders with `@compmd/render` underneath), so T-285 only adds the pack, its import line and
+its policy entry (`policy.packs["@comp-markdown/mermaid"] = { level: "strict" }`, `imports: "listed"`). Links in
+frames reach the dashboard as the view's `link` event, opened by the same rules as §3.
+
+The developer guide's chapters on packs, the sandbox and code renderers are still to come; this section is from the
+packages' READMEs (`@compmd/sandbox`, `@compmd/vite`, `@comp-markdown/mermaid`, all as published). Settle any
+difference with the guide when those chapters appear.
 
 ## 3a. Diagnostics for agents
 
@@ -232,3 +303,7 @@ How the guidance is shipped:
 - **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
   (R1); readers don't see diagnostics (R2a); the CSP's module source is the asset folder only (§2).
 - **Agents and diagnostics:** guidance only for now, from a pinned copy of CompMD's `llms.txt` (§3a, T-286).
+- **atm writes the frontmatter; the task's data is `md.data.task`** (§3b), decided in review.
+- **The size guardrail** will be raised for this (decided in review): the page grows by the sandbox's host runtime
+  and the loader; CompMD, the frames and Mermaid are served beside it.
+- **Still open:** Mermaid as the pack in the sandbox (P, recommended) or built into the dashboard (D) (§3c).
