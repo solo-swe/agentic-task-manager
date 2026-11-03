@@ -49,7 +49,7 @@
   const release = $derived(task ? effectiveRelease(dashboard.sprints, task) : undefined);
   const history = $derived(task && Array.isArray(task.sprint_history) ? task.sprint_history : []);
   const carried = $derived(task && sprint ? carriedCount(task, sprint) : 0);
-  const reviewMode = $derived(task ? effectiveReview(dashboard.meta, task) : 'none');
+  const reviewMode = $derived(task ? effectiveReview(task) : 'none');
   const actors = $derived(task ? actorsLine(task) : '');
   const attempts = $derived(task ? earlierAttempts(task) : []);
   const requiredBy = $derived(task ? dashboard.tasks.filter((t) => (t.dependencies ?? []).includes(task.id)) : []);

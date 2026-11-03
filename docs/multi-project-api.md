@@ -64,7 +64,12 @@ the first claim there is no store yet, and the answer is an empty list.
       "path": "/Users/me/workplace/atm-agent-2",
       "branch": "agent-2",
       "main": false,
-      "tasks": [{ "id": "T-179", "status": "in_progress", "...": "the task as that worktree's tasks.json has it" }]
+      "tasks": [
+        {
+          "task": { "id": "T-179", "status": "in_progress", "...": "the task as that worktree's tasks.json has it" },
+          "derived": { "kind": "active", "ready": false, "waiting_for": [], "...": "as the v1 tasks route's (§2.5)" }
+        }
+      ]
     }
   ]
 }
@@ -76,6 +81,9 @@ the first claim there is no store yet, and the answer is an empty list.
 - Each linked worktree lists the tasks of its own `tasks.json` that differ from the main worktree's copy, or that only
   it has; the main worktree's tasks are `tasks.json` itself. A task blocked or in review there but already decided in
   another worktree (the claims store's `resolved`) is left out: that copy is stale until atm runs there next.
+- Each is a view, `{task, derived}`, like the v1 tasks route's (`TaskView`, §2.5): the derived values worked out on
+  that worktree's own data, as `atm next` there would (a dependency done in another worktree counts once the branches
+  merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
 - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
   store does.
 - The dashboard shows all of them on one board: each task from the worktree where it got furthest (by status kind:

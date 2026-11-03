@@ -907,13 +907,20 @@ are unchanged (the atm-cli suite, at every step).
   and the v1 tasks through it, rebuilds, and stops it: no server, no home left. Left: a hard kill of Vite
   (`SIGKILL`) still leaves the API server running; nothing in the process can catch it.
 
-### 11.10 Still open: worktree copies' derived values; two answers outside the schema
+### 11.10 Worktree copies' derived values; two answers outside the schema
 
 - **A. Worktree copies (T-387).** `worktrees.json` gives the linked worktrees' differing tasks without atm's derived values,
   so the Dashboard keeps its own rules for them (readiness in `kanban.ts`, together-now in `waiting.ts`, the
   effective review in `review.ts`): the duplication §1 set out to remove. **Decision:** each copy's derived values
   are computed on its own worktree's data, which is what `atm next` does there (a dependency done in another worktree
   counts once the branches merge), by `lib/worktrees.py` opening each worktree's store; the Dashboard's fallbacks go.
+  **Settled (T-387):** the store interface has `copy_store(folder)` (the JSON-in-git store opens the worktree's own
+  task files, tolerantly, with the symlink checks; the in-memory one has none), and `worktree_copies` gives each
+  differing task as a view from `task_views` on that store. The Dashboard reads the views (`worktrees.ts`) and its
+  readiness (`kanban.ts`), together-now (`waiting.ts`) and effective review (`review.ts`, `hasDerived` gone) take
+  atm's word only: a task without derived values isn't ready and has no review mode. Left: `sprints.ts`'s
+  `effectiveRelease` keeps its fallback, which the release and filter views' tests lean on; every task now comes with
+  `effective_release`, so it can go too.
 - **B. `ProjectSummary` and `StatusReport` (T-382).** `api/projects`' summaries and `atm status --json` aren't in
   `api.schema.json`; the Dashboard's `ProjectSummary` is written by hand. The generator can't express a field that
   may be `null`. **Decision:** the generator learns nullable types (`Optional[...]`, `T | null`); both schemas are

@@ -2444,6 +2444,11 @@ class Store(Protocol):
         """The tasks as the working copy at `folder` has them."""
         ...
 
+    def copy_store(self, folder: str) -> "Store":
+        """The working copy at `folder` as a store of its own, read as far as it can be (tolerant), for working out
+        its tasks' derived values on its own data (§11.10 A). AtmFailure when it can't be opened."""
+        ...
+
 
 class Registry(Protocol):
     """The user's list of projects, the ones the dashboard shows (docs/layered-architecture.md §3.2). Each operation
@@ -4183,6 +4188,11 @@ class JsonGitStore:
         tasks = data.get("tasks") if isinstance(data, dict) else None
         return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
 
+    def copy_store(self, folder):
+        """The working copy at `folder` as a store of its own (its tasks.json and archive), read tolerantly, for its
+        tasks' derived values. Its task folder's symlink checks run as for any project (docs/security-review.md F8)."""
+        return JsonGitStore(find_paths(folder), tolerant=True)
+
     def raw(self):
         """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when
         it isn't a task file), "archive": the archived tasks, "archive_error": why the archive can't be read}."""
@@ -4332,6 +4342,9 @@ class MemoryStore:
 
     def copy_tasks(self, folder):
         return []
+
+    def copy_store(self, folder):
+        raise NotFound(f"{folder}: an in-memory project has no working copies")
 
     def raw(self):
         return {"document": self.document(), "archive": self.archive, "archive_error": None}
@@ -7624,11 +7637,23 @@ def working_copies(project):
     return project.store.working_copies()
 
 
+def copy_views(project, folder):
+    """The tasks of the working copy at `folder` as views ({task, derived}), each worked out on that copy's own data
+    (§11.10 A): what `atm next` would say there, so a dependency done in another worktree counts once the branches
+    merge. By task ID; {} when the copy can't be read."""
+    try:
+        views = task_views(Project(project.store.copy_store(folder)), Filters())
+    except AtmFailure:
+        return {}
+    return {v["task"].get("id"): v for v in views if isinstance(v["task"].get("id"), str)}
+
+
 def worktree_copies(project):
     """The project's working copies, main first ([{path, branch, main}]), and for each other one the tasks whose copy
-    there differs from the main one's (or that only it has), under `tasks`. A copy of a task decided in another
-    working copy (answered, reviewed: the claims store's `resolved`, T-204) is left out: it is stale until atm next
-    runs there, and would otherwise outrank the decision. [] for a store without working copies."""
+    there differs from the main one's (or that only it has), under `tasks`, as views ({task, derived}) worked out in
+    that working copy. A copy of a task decided in another working copy (answered, reviewed: the claims store's
+    `resolved`, T-204) is left out: it is stale until atm next runs there, and would otherwise outrank the decision.
+    [] for a store without working copies."""
     store = project.store
     trees = store.working_copies()
     resolved = store.read_claims()["resolved"]
@@ -7639,9 +7664,12 @@ def worktree_copies(project):
         if tree["main"]:
             main = {t["id"]: t for t in tasks}
             listed.append(tree)
-        else:
-            differing = [t for t in tasks if main.get(t["id"]) != t and (tree["path"], t["id"]) not in stale]
-            listed.append({**tree, "tasks": differing})
+            continue
+        differing = [t for t in tasks if main.get(t["id"]) != t and (tree["path"], t["id"]) not in stale]
+        views = copy_views(project, tree["path"]) if differing else {}
+        listed.append(
+            {**tree, "tasks": [views.get(t["id"]) or {"task": t, "derived": {}} for t in differing]}
+        )
     return listed
 
 

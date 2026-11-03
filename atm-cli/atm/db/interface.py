@@ -113,6 +113,11 @@ class Store(Protocol):
         """The tasks as the working copy at `folder` has them."""
         ...
 
+    def copy_store(self, folder: str) -> "Store":
+        """The working copy at `folder` as a store of its own, read as far as it can be (tolerant), for working out
+        its tasks' derived values on its own data (§11.10 A). AtmFailure when it can't be opened."""
+        ...
+
 
 class Registry(Protocol):
     """The user's list of projects, the ones the dashboard shows (docs/layered-architecture.md §3.2). Each operation

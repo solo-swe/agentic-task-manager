@@ -19976,7 +19976,7 @@
       "description": "`docs/layered-architecture.md` §11.9.\n\n## Change\n- `dashboard/build/dev-api.ts` watches `plugin/scripts/atm.py` and restarts the API server when it changes, so `npm run build:cli` is enough (no Vite restart).\n- A folder in `ATM_DEV_DATA` without a task file is listed as missing, as the old dev server did.\n- The dev page's Content-Security-Policy matches the server's (`build/security-headers.ts` against `api/server.py`'s `page_csp`).\n- Update `CLAUDE.md`'s `npm run dev` line, §11.9 (settled).\n\n## Tests\n- A test that starts `vite dev` on a temporary project and reads `api/projects` and the v1 tasks through it, then stops it and finds no server left.\n- The CSP check as a unit test.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/build/dev-api.ts",
@@ -19986,7 +19986,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:46:15Z",
+      "updated_at": "2026-11-03T01:52:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20002,7 +20002,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T01:46:15Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "1bfc5dde9c86e047ecee2a0c1e19e8eb2496e9f4",
+      "completed_at": "2026-11-03T01:52:46Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-03T01:52:46Z",
+          "kind": "review",
+          "text": "`dev-api.ts` restarts the API server when `atm.py` changes, lists a folder without a task file as missing, logs its `ATM_HOME`. `devCsp` is the server’s policy plus `DEV_ADDITIONS`, held to `page_csp` by a unit test. `tests/scripts/dev-api.test.mjs` runs `vite dev` end to end (skipped without `npm ci`). Check: a SIGKILL of Vite still leaves the server.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-387",
@@ -20015,7 +20027,7 @@
       "description": "`docs/layered-architecture.md` §11.10 A.\n\n## Change\n- `lib/worktrees.py` opens each linked worktree's own store and returns its differing tasks as views, `{task, derived}`, computed on that worktree's data: what `atm next` would do there (a dependency done in another worktree counts once the branches merge).\n- `worktrees.json` gives those views; `docs/multi-project-api.md` §2.2 says so.\n- The dashboard takes a copy's derived values from it and drops its own rules for copies: the readiness fallback in `kanban.ts`, together-now in `waiting.ts`, the effective-review fallback in `review.ts` (`hasDerived`).\n- Update §11.10 A (settled).\n\n## Tests\n- The serve test on worktrees checks the derived values of a copy.\n- The e2e specs for linked worktrees; the unit tests of the three modules; `npm run check`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-378",
         "T-381"
@@ -20034,7 +20046,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:08:51Z",
+      "updated_at": "2026-11-03T01:52:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20050,7 +20062,9 @@
         "cli",
         "api",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-03T01:52:47Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-388",

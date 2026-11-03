@@ -4,7 +4,7 @@ the store's interface only: the contract tests (tests/lib/) run the same checks 
 import copy
 import json
 
-from ..common.errors import Conflict, Invalid
+from ..common.errors import Conflict, Invalid, NotFound
 from ..common.model import settings_of, vocabulary
 from .working import Working
 
@@ -96,6 +96,9 @@ class MemoryStore:
 
     def copy_tasks(self, folder):
         return []
+
+    def copy_store(self, folder):
+        raise NotFound(f"{folder}: an in-memory project has no working copies")
 
     def raw(self):
         return {"document": self.document(), "archive": self.archive, "archive_error": None}

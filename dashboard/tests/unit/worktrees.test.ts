@@ -87,13 +87,16 @@ describe('mergeWorktrees', () => {
 
 describe('loadWorktrees', () => {
   it("fetches the project's worktrees.json, conditionally once it has validators", async () => {
-    const body = { worktrees: [main, { ...linked('a', [task('T-1', 'done')]), extra: 1 }, { branch: 'x' }] };
+    // A linked worktree's copies come as views, with atm's derived values from that worktree (T-387)
+    const derived = { kind: 'done', ready: false, waiting_for: [], priority: 'P2', archived: false, stage: 'done' };
+    const views = [{ task: task('T-1', 'done'), derived }, { derived }, null];
+    const body = { worktrees: [main, { ...linked('a', []), tasks: views, extra: 1 }, { branch: 'x' }] };
     const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { headers: { ETag: '"w1"' } }));
     const result = await loadWorktrees('abcd1234', fetchFn);
     expect(fetchFn).toHaveBeenCalledWith('p/abcd1234/worktrees.json', { cache: 'no-store', headers: {} });
     expect(result).toEqual({
       unchanged: false,
-      worktrees: [main, linked('a', [task('T-1', 'done')])],
+      worktrees: [main, linked('a', [{ ...task('T-1', 'done'), derived }])],
       validators: { etag: '"w1"' },
     });
     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));

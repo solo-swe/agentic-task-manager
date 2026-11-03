@@ -45,18 +45,12 @@ const newestFirst = (when: (t: Task) => string | undefined) => (a: Task, b: Task
 
 /**
  * Whether a to-do task can start, and what it waits for: as atm says it (the task's `derived` values from the API,
- * T-366), which counts an archived dependency as done. Only a task that comes without them (a linked worktree's copy)
- * is judged here: ready if every dependency it can see is done; one it can't see counts as unfinished.
+ * T-366), which counts an archived dependency as done. Every task comes with them, a linked worktree's copy too
+ * (worked out in its worktree, T-387); one without them isn't called ready.
  */
-export function readiness(task: Task, taskMap: ReadonlyMap<string, Task>, vocab = DEFAULT_VOCABULARY): Readiness {
+export function readiness(task: Task): Readiness {
   const derived = task.derived;
-  if (derived && typeof derived.ready === 'boolean')
-    return derived.ready ? { ready: true } : { ready: false, waitingOn: derived.waiting_for ?? [] };
-  const waitingOn = (task.dependencies ?? []).filter((d) => {
-    const dep = taskMap.get(d);
-    return !dep || kindOf(vocab, dep.status) !== 'done';
-  });
-  return waitingOn.length ? { ready: false, waitingOn } : { ready: true };
+  return derived?.ready === true ? { ready: true } : { ready: false, waitingOn: derived?.waiting_for ?? [] };
 }
 
 /** The To Do column's order after ready-first: the most urgent priority, then lowest ID. Only for reading the column;
@@ -71,8 +65,8 @@ const ORDER: Partial<Record<StatusKind, (a: Task, b: Task) => number>> = {
 };
 
 /**
- * Columns for the visible (filtered) tasks, in the vocabulary's status order; readiness and next-up are judged
- * against all tasks. `columns` forces a column set (used to keep swimlanes aligned).
+ * Columns for the visible (filtered) tasks, in the vocabulary's status order; readiness is atm's (each task's
+ * `derived`), next-up atm's too (`nextUp`). `columns` forces a column set (used to keep swimlanes aligned).
  */
 export function buildBoard(
   tasks: Task[],
@@ -80,7 +74,6 @@ export function buildBoard(
   { showSkipped, statusFilter, vocab = DEFAULT_VOCABULARY, nextUp = null }: BoardOptions,
   columns?: ColumnId[],
 ): KanbanColumn[] {
-  const taskMap = new Map(allTasks.map((t) => [t.id, t]));
   const known = new Map(vocab.statuses.map((s) => [s.id, s]));
   const columnOf = (status: string) => (known.has(status) ? status : OTHER_COLUMN);
   const grouped = new Map<ColumnId, Task[]>();
@@ -99,7 +92,7 @@ export function buildBoard(
     const kind = def?.kind;
     const cards = (grouped.get(id) ?? []).map((task) => ({
       task,
-      ...(kind === 'todo' ? { readiness: readiness(task, taskMap, vocab) } : {}),
+      ...(kind === 'todo' ? { readiness: readiness(task) } : {}),
       nextUp: nextUp !== null && task.id === nextUp,
     }));
     // To Do: ready first (see below), then by priority and ID

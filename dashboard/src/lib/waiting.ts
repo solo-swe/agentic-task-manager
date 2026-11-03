@@ -73,25 +73,19 @@ export function blockSummary(wait: BlockWait): string {
 export const REWORK_STATES = ['changes_requested', 'approved'];
 
 /**
- * Which to-do tasks marked `with: user` need the user now (T-347): those in the active sprint (any, without one) whose
- * dependencies are done. A dependency the project doesn't list (archived, while the archive isn't loaded) counts as
- * done, as atm counts an archived one.
+ * Which to-do tasks marked `with: user` need the user now (T-347): those in the active sprint (any, without one) that
+ * atm says are ready (their dependencies done, an archived one counting as done).
  */
 export interface NeedsYouScope {
   model: SprintModel;
-  tasks: ReadonlyMap<string, Task>;
 }
 
-function togetherNow(task: Task, vocab: Vocabulary, scope?: NeedsYouScope): boolean {
+function togetherNow(task: Task, scope?: NeedsYouScope): boolean {
   if (!scope) return true;
   const active = activeSprint(scope.model);
   if (active && scope.model.sprintOf(task) !== active.id) return false;
-  // Its dependencies done, as atm says it (T-366); judged here only for a task that comes without atm's values
-  if (typeof task.derived?.ready === 'boolean') return task.derived.ready;
-  return (task.dependencies ?? []).every((id) => {
-    const dep = scope.tasks.get(id);
-    return !dep || kindOf(vocab, dep.status) === 'done';
-  });
+  // Its dependencies done, as atm says it (T-366), for every task, a worktree's copy too (T-387)
+  return task.derived?.ready === true;
 }
 
 /** Why a task needs the user (D-3.3, SR-6.6): in review and waiting for the reviewer, blocked on a question for the
@@ -104,7 +98,7 @@ export function needsYouReason(
   const kind = kindOf(vocab, task.status);
   if (kind === 'review') return REWORK_STATES.includes(task.review_state ?? '') ? undefined : 'review';
   if (kind === 'blocked' && task.waiting_on === 'user') return 'blocked';
-  if (kind === 'todo' && task.with === 'user' && togetherNow(task, vocab, scope)) return 'together';
+  if (kind === 'todo' && task.with === 'user' && togetherNow(task, scope)) return 'together';
   return undefined;
 }
 

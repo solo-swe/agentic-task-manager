@@ -1,6 +1,8 @@
 // A project's git worktrees on one board (T-179). Each worktree has its branch's copy of tasks.json; atm serve's
 // p/<id>/worktrees.json lists the worktrees and, for each linked one, the tasks whose copy there differs from the main
-// worktree's. A task is shown from the worktree where it got furthest, with that worktree's branch on its card.
+// worktree's, as views ({task, derived}) with atm's derived values worked out in that worktree (T-387): a copy is
+// judged by atm, like every other task. A task is shown from the worktree where it got furthest, with that
+// worktree's branch on its card.
 import { browserFetch, fetchProjectFile, type Fetch, type Validators } from './api/http';
 import type { Task } from './types';
 import { kindOf, type StatusKind, type Vocabulary } from './vocab';
@@ -9,8 +11,17 @@ export interface Worktree {
   path: string;
   branch: string | null;
   main: boolean;
-  /** Linked worktrees only: the tasks that differ from the main worktree's copy, or that only this one has */
+  /** Linked worktrees only: the tasks that differ from the main worktree's copy, or that only this one has, each with
+   * atm's derived values from that worktree */
   tasks?: Task[];
+}
+
+/** A worktree's views as tasks, each with its derived values beside its fields (as the v1 tasks route's, load.ts) */
+function viewedCopies(list: unknown[]): Task[] {
+  return list
+    .filter((v): v is { task: Task; derived?: Task['derived'] } => !!v && typeof v === 'object' && 'task' in v)
+    .filter((v) => !!v.task && typeof v.task === 'object')
+    .map((v) => (v.derived ? { ...v.task, derived: v.derived } : v.task));
 }
 
 /** How far a task got, by its status's kind: a linked worktree's copy wins only when it got further */
@@ -72,7 +83,7 @@ export async function loadWorktrees(
       path: w.path,
       branch: typeof w.branch === 'string' && w.branch ? w.branch : null,
       main: w.main === true,
-      ...(Array.isArray(w.tasks) ? { tasks: w.tasks } : {}),
+      ...(Array.isArray(w.tasks) ? { tasks: viewedCopies(w.tasks) } : {}),
     }));
   return { unchanged: false, worktrees, validators: file.validators };
 }

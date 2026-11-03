@@ -670,9 +670,15 @@ describe('serve', () => {
     assert.equal(after.status, 200);
     const changed = (await after.json()).worktrees[1].tasks;
     assert.deepEqual(
-      changed.map((t) => [t.id, t.status]),
-      [['T-1', 'in_progress']],
+      changed.map((v) => [v.task.id, v.task.status, v.derived.kind]),
+      [['T-1', 'in_progress', 'active']],
     );
+    // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
+    // which is in progress there
+    assert.equal(atm(['edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
+    const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    const t2 = copies.find((v) => v.task.id === 'T-2');
+    assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
     const claims = await (await fetch(`${base}/p/abcd1234/claims.json`)).json();
     assert.deepEqual(
       claims.claims.map((c) => [c.task, c.agent, c.branch]),
@@ -686,11 +692,18 @@ describe('serve', () => {
     assert.equal(atm(block, linked).code, 0);
     const blocked = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
     assert.deepEqual(
-      blocked.map((t) => [t.id, t.status]),
-      [['T-1', 'blocked']],
+      blocked.map((v) => [v.task.id, v.task.status, v.derived.waiting_on ?? null]),
+      [
+        ['T-1', 'blocked', 'user'],
+        ['T-2', 'todo', null],
+      ],
     );
     assert.equal(atm(['unblock', 'T-1', '--answer', 'This one'], root).code, 0);
-    assert.deepEqual((await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks, []);
+    const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
+    assert.deepEqual(
+      left.map((v) => v.task.id),
+      ['T-2'],
+    );
     atm(['serve', 'stop'], root);
   });
 

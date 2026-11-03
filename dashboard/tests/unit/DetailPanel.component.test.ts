@@ -57,6 +57,15 @@ describe('DetailPanel', () => {
       with: 'user',
       components: ['ui', 'api'],
       sprint_review: 'pending',
+      // The review mode is atm's to say (T-387)
+      derived: {
+        kind: 'review',
+        ready: false,
+        waiting_for: [],
+        priority: 'P2',
+        archived: false,
+        effective_review: 'blocker',
+      },
     });
     expect(container.querySelector('#detail-review-mode')).toHaveTextContent('review: blocker');
     expect(container.querySelector('.task-meta [data-review-state]')).toHaveTextContent('Changes requested');

@@ -16,6 +16,7 @@ from ...host.git import checked_out_branch
 from .lock import locked
 from .logo import find_logo, logo_file
 from .merge import ensure_archive_merge
+from .paths import find_paths
 from .worktrees import worktrees
 
 
@@ -152,6 +153,11 @@ class JsonGitStore:
         data = read_json(os.path.join(folder, os.path.relpath(self.paths["tasks"], self.paths["root"])))
         tasks = data.get("tasks") if isinstance(data, dict) else None
         return [t for t in tasks or [] if isinstance(t, dict) and isinstance(t.get("id"), str)]
+
+    def copy_store(self, folder):
+        """The working copy at `folder` as a store of its own (its tasks.json and archive), read tolerantly, for its
+        tasks' derived values. Its task folder's symlink checks run as for any project (docs/security-review.md F8)."""
+        return JsonGitStore(find_paths(folder), tolerant=True)
 
     def raw(self):
         """The task data as stored, unchecked, for `atm check` to report on: {"document": the file's JSON (None when

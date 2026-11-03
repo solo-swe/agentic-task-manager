@@ -107,13 +107,16 @@ describe('needingUser', () => {
     ]);
   });
 
-  it('with you: only the active sprint’s, with their dependencies done (T-347)', () => {
+  const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
+
+  it('with you: only the active sprint’s, ready as atm says it (T-347, T-366)', () => {
     const tasks = [
-      task('todo', { id: 'W1', with: 'user', sprint: 'Now' }),
-      task('todo', { id: 'W2', with: 'user', sprint: 'Later' }),
-      task('todo', { id: 'W3', with: 'user' }),
-      task('todo', { id: 'W4', with: 'user', sprint: 'Now', dependencies: ['D1'] }),
-      task('todo', { id: 'W5', with: 'user', sprint: 'Now', dependencies: ['D2', 'ARCHIVED'] }),
+      task('todo', { id: 'W1', with: 'user', sprint: 'Now', derived: derived(true) }),
+      task('todo', { id: 'W2', with: 'user', sprint: 'Later', derived: derived(true) }),
+      task('todo', { id: 'W3', with: 'user', derived: derived(true) }),
+      task('todo', { id: 'W4', with: 'user', sprint: 'Now', dependencies: ['D1'], derived: derived(false) }),
+      // Waits on a done task and an archived one, which atm counts as done
+      task('todo', { id: 'W5', with: 'user', sprint: 'Now', dependencies: ['D2', 'ARCHIVED'], derived: derived(true) }),
       task('in_progress', { id: 'D1', sprint: 'Now' }),
       task('done', { id: 'D2', sprint: 'Now' }),
       task('in_review', { id: 'R', sprint: 'Later' }),
@@ -125,30 +128,27 @@ describe('needingUser', () => {
       ],
     };
     const vocab = resolveVocabulary(meta);
-    const scope = { model: sprintModel(meta, tasks, vocab), tasks: new Map(tasks.map((t) => [t.id, t])) };
+    const scope = { model: sprintModel(meta, tasks, vocab) };
     // Reviews count wherever they are; W2 is in a planned sprint, W3 in the backlog, W4 waits on D1
     expect(needingUser(tasks, vocab, scope).map((t) => t.id)).toEqual(['W1', 'W5', 'R']);
     // Without an active sprint, any sprint's, still only when ready
     const none = { sprints: [{ id: 'Now', state: 'planned' }] };
-    const idle = { model: sprintModel(none, tasks, resolveVocabulary(none)), tasks: scope.tasks };
+    const idle = { model: sprintModel(none, tasks, resolveVocabulary(none)) };
     expect(needingUser(tasks, vocab, idle).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W5', 'R']);
     // Without a scope (older callers), every with-you task, as before
     expect(needingUser(tasks, vocab).map((t) => t.id)).toEqual(['W1', 'W2', 'W3', 'W4', 'W5', 'R']);
   });
 
-  it('with you: whether its dependencies are done is atm’s to say when the API gives it (T-366)', () => {
-    const derived = (ready: boolean) => ({ kind: 'todo', ready, waiting_for: [], priority: 'P2', archived: false });
+  it('with you: a task without atm’s values isn’t ready now; the dashboard doesn’t judge its dependencies (T-387)', () => {
     const tasks = [
-      // Waits on a task this page can't see, which atm counts as done (archived)
-      task('todo', { id: 'W1', with: 'user', sprint: 'Now', dependencies: ['GONE'], derived: derived(true) }),
       // Its dependency looks done here, but atm says it isn't ready
-      task('todo', { id: 'W2', with: 'user', sprint: 'Now', dependencies: ['D'], derived: derived(false) }),
+      task('todo', { id: 'W1', with: 'user', sprint: 'Now', dependencies: ['D'], derived: derived(false) }),
+      task('todo', { id: 'W2', with: 'user', sprint: 'Now' }),
       task('done', { id: 'D', sprint: 'Now' }),
     ];
     const meta = { sprints: [{ id: 'Now', state: 'active' }] };
     const vocab = resolveVocabulary(meta);
-    const scope = { model: sprintModel(meta, tasks, vocab), tasks: new Map(tasks.map((t) => [t.id, t])) };
-    expect(needingUser(tasks, vocab, scope).map((t) => t.id)).toEqual(['W1']);
+    expect(needingUser(tasks, vocab, { model: sprintModel(meta, tasks, vocab) })).toEqual([]);
   });
 });
 
