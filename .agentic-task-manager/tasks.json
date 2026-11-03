@@ -727,9 +727,74 @@
       },
       {
         "id": "Layered Architecture",
-        "state": "active",
+        "state": "closed",
         "goal": "A design for clear layers in atm: cli, rest api, client, db, common",
-        "start": "2026-11-02T17:34:06Z"
+        "start": "2026-11-02T17:34:06Z",
+        "end": "2026-11-03T06:42:25Z",
+        "report": {
+          "done": [
+            "T-360",
+            "T-361",
+            "T-362",
+            "T-363",
+            "T-364",
+            "T-365",
+            "T-366",
+            "T-367",
+            "T-368",
+            "T-369",
+            "T-370",
+            "T-371",
+            "T-372",
+            "T-373",
+            "T-374",
+            "T-375",
+            "T-376",
+            "T-377",
+            "T-378",
+            "T-379",
+            "T-380",
+            "T-381",
+            "T-382",
+            "T-383",
+            "T-384",
+            "T-385",
+            "T-386",
+            "T-387",
+            "T-388"
+          ],
+          "carried": [],
+          "added": [
+            "T-361",
+            "T-362",
+            "T-363",
+            "T-364",
+            "T-365",
+            "T-366",
+            "T-367",
+            "T-368",
+            "T-369",
+            "T-370",
+            "T-371",
+            "T-372",
+            "T-373",
+            "T-374",
+            "T-375",
+            "T-376",
+            "T-377",
+            "T-378",
+            "T-379",
+            "T-380",
+            "T-381",
+            "T-382",
+            "T-383",
+            "T-384",
+            "T-385",
+            "T-386",
+            "T-387",
+            "T-388"
+          ]
+        }
       }
     ],
     "releases": [
@@ -18525,7 +18590,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:48:50Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18547,7 +18612,7 @@
       "commit": "2ff6d9785d08f3d94239c75a4f97c0ac23fa3561",
       "completed_at": "2026-11-02T18:48:50Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T18:48:50Z",
@@ -18580,7 +18645,7 @@
         "dashboard/package.json"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T18:58:30Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18603,7 +18668,7 @@
       "commit": "30b70f123355da2c4e08ac6d11a4ae0cc1f2de5c",
       "completed_at": "2026-11-02T18:58:30Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T18:58:30Z",
@@ -18634,7 +18699,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:08:40Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18656,7 +18721,7 @@
       "commit": "c622e1aa19969da11fb9a2e0e548e478e41d6da8",
       "completed_at": "2026-11-02T19:08:40Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T19:08:40Z",
@@ -18689,7 +18754,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:17:34Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18727,7 +18792,7 @@
       "commit": "f11219bb9eef21d75aa6a0ae0a6e83d6abdb5c23",
       "completed_at": "2026-11-02T19:17:34Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-365",
@@ -18756,7 +18821,7 @@
         "dashboard/build/dev-data.ts"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:34:43Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18792,7 +18857,7 @@
       "commit": "11dc8eca93b685b8be0eb87f6b76e041a54f095b",
       "completed_at": "2026-11-02T19:34:43Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-366",
@@ -18815,7 +18880,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:45:10Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18851,7 +18916,7 @@
       "commit": "2bf9488b567797518c95bd4928163b5e0af4b1bd",
       "completed_at": "2026-11-02T19:45:10Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-367",
@@ -18876,7 +18941,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T19:53:12Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18913,7 +18978,7 @@
       "commit": "85e5c31ec446ea89fe881909f3dcd97573507cf6",
       "completed_at": "2026-11-02T19:53:12Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-368",
@@ -18936,7 +19001,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T20:28:55Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -18979,7 +19044,7 @@
       "commit": "4e1429620b592e1620129e9ad0fc9d6ca15559cb",
       "completed_at": "2026-11-02T20:28:55Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-369",
@@ -19002,7 +19067,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T20:51:00Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19024,7 +19089,7 @@
       "commit": "5ded0f50d55dd1e54211ef18ca9acad6b0de8b7e",
       "completed_at": "2026-11-02T20:51:00Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T20:51:00Z",
@@ -19055,7 +19120,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:04:44Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19077,7 +19142,7 @@
       "commit": "c5abb7566b9579742f3357d04990bd2549e510ba",
       "completed_at": "2026-11-02T21:04:44Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T21:04:44Z",
@@ -19110,7 +19175,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:13:37Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19147,7 +19212,7 @@
       "commit": "bdcd44d6bd8265e78e598966827994524e92da8c",
       "completed_at": "2026-11-02T21:13:37Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-372",
@@ -19172,7 +19237,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:37:40Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19195,7 +19260,7 @@
       "commit": "3244b8d22a953ed87733edc4062117260a03f399",
       "completed_at": "2026-11-02T21:37:40Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T21:37:40Z",
@@ -19226,7 +19291,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T21:48:02Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19248,7 +19313,7 @@
       "commit": "e35c75297a6119dfb46bc673ca0a43bc71417b7e",
       "completed_at": "2026-11-02T21:48:02Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T21:48:02Z",
@@ -19280,7 +19345,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:32:43Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19330,7 +19395,7 @@
       "commit": "ae6367675517619f5c0895a34ce80eaf9d943c3f",
       "completed_at": "2026-11-02T22:32:43Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-375",
@@ -19353,7 +19418,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:46:15Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19390,7 +19455,7 @@
       "commit": "6e4fa2af25210dcbe08117e9474515ffaab2d402",
       "completed_at": "2026-11-02T22:46:15Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-376",
@@ -19415,7 +19480,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T18:34:40Z",
-      "updated_at": "2026-11-02T22:49:57Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19458,7 +19523,7 @@
       "commit": "ad7444e68bf1cea445f6e88b55a067e3a5364f8a",
       "completed_at": "2026-11-02T22:49:57Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending"
+      "sprint_review": "reviewed"
     },
     {
       "id": "T-377",
@@ -19487,7 +19552,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-02T20:15:57Z",
-      "updated_at": "2026-11-02T20:40:46Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19512,7 +19577,7 @@
       "commit": "0300c3b87f376a5ab191fdef4f5c09de5006b39f",
       "completed_at": "2026-11-02T20:40:46Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-02T20:40:46Z",
@@ -19547,7 +19612,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:24:08Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19567,7 +19632,7 @@
       "commit": "52257997cff72c1b32906d7446d816c12adfa906",
       "completed_at": "2026-11-03T00:24:08Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T00:24:08Z",
@@ -19604,7 +19669,7 @@
         "docs/v4/atm-cli.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:34:38Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19624,7 +19689,7 @@
       "commit": "c6027f5bce74c60bb8c4de114bed3653ead11a3a",
       "completed_at": "2026-11-03T00:34:38Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T00:34:38Z",
@@ -19657,7 +19722,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:40:31Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19677,7 +19742,7 @@
       "commit": "2234e8b304561b2096cbbbf1a737edd52e2a79a7",
       "completed_at": "2026-11-03T00:40:31Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T00:40:31Z",
@@ -19716,7 +19781,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T00:49:11Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19736,7 +19801,7 @@
       "commit": "34d7e4d7d86475d2c30de6811f5de2827be12bc5",
       "completed_at": "2026-11-03T00:49:11Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T00:49:11Z",
@@ -19770,7 +19835,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:06:59Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19791,7 +19856,7 @@
       "commit": "1bdc5b1990a3fbdcf74af89bdb393e0cc3017b2d",
       "completed_at": "2026-11-03T01:06:59Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T01:06:59Z",
@@ -19826,7 +19891,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:25:01Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19846,7 +19911,7 @@
       "commit": "e5b4e805a587109b1a64e40c8bbf0ec801b2a4de",
       "completed_at": "2026-11-03T01:25:01Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T01:25:01Z",
@@ -19882,7 +19947,7 @@
         "CLAUDE.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:30:52Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19902,7 +19967,7 @@
       "commit": "c711f10be51f96135facf4f45599bda922b87fdb",
       "completed_at": "2026-11-03T01:30:52Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T01:30:52Z",
@@ -19935,7 +20000,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:46:14Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -19955,7 +20020,7 @@
       "commit": "381124639edfdebdeb61ba9683e93a5e64c055a4",
       "completed_at": "2026-11-03T01:46:14Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T01:46:14Z",
@@ -19986,7 +20051,7 @@
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T01:52:46Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20006,7 +20071,7 @@
       "commit": "1bfc5dde9c86e047ecee2a0c1e19e8eb2496e9f4",
       "completed_at": "2026-11-03T01:52:46Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T01:52:46Z",
@@ -20046,7 +20111,7 @@
         "plugin/scripts/atm.py"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T02:06:12Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20068,7 +20133,7 @@
       "commit": "85bb722f66a9ed9c9d14e4582e1354757fa4040f",
       "completed_at": "2026-11-03T02:06:12Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-03T02:06:12Z",
@@ -20089,13 +20154,13 @@
       "description": "`docs/layered-architecture.md` §11.5. Part of the next release's checks, done together with Hakan.\n\n## Check\n- Serve a project with the released 0.26.0 plugin and open its dashboard; update to this branch's plugin so the server restarts with the new dashboard; look at the page left open.\n- It should show the reload offer (the server's build changed) and nothing broken until the reload; the removed raw routes (`p/<id>/tasks.json`, `p/<id>/tasks-archive.json`) answer 404.\n\n## If it shows an error instead\nA small fix in the dashboard so a 404 from a removed route leads to the reload offer, with a unit test.\n\nUpdate §11.5 (settled) with what was found.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/layered-architecture.md"
       ],
       "created_at": "2026-11-03T00:08:33Z",
-      "updated_at": "2026-11-03T06:34:43Z",
+      "updated_at": "2026-11-03T06:42:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -20111,7 +20176,19 @@
         "docs"
       ],
       "started_at": "2026-11-03T06:34:43Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "1cd37cf5fb856558815a046231333c136898e44e",
+      "completed_at": "2026-11-03T06:41:12Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "reviewed",
+      "notes": [
+        {
+          "at": "2026-11-03T06:41:12Z",
+          "kind": "review",
+          "text": "Checked live with Hakan: a 0.26.0 page left open across the server swap shows the reload bar, keeps its board with no error, and reloads cleanly; raw routes 404. No fix needed; §11.5 settled.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-389",
