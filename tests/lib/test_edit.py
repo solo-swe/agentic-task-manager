@@ -54,6 +54,18 @@ class AddAndEdit(unittest.TestCase):
         self.assertEqual(result["changed"], [])
         self.assertNotIn("updated_by", s.tasks[0])
 
+    def test_requirements_and_use_cases_take_ids_and_links_but_not_empty_text(self):
+        link = "[SR-2.1](docs/x.md#:~:text=SR%2D2.1)"
+        s = MemoryStore(tasks=[task("T-1", requirements=["FR-1"])])
+        result = edit_existing_task(
+            Project(s), "T-1", add_requirements=[link], remove_requirements=["FR-1"], add_use_cases=["UC-1"]
+        )
+        self.assertEqual(result["changed"], ["requirements", "use_cases"])
+        self.assertEqual((s.tasks[0]["requirements"], s.tasks[0]["use_cases"]), ([link], ["UC-1"]))
+        with self.assertRaisesRegex(AtmFailure, "empty use case"):
+            edit_existing_task(Project(s), "T-1", add_use_cases=[""], remove_requirements=[link])
+        self.assertEqual(s.tasks[0]["requirements"], [link])
+
 
 class Check(unittest.TestCase):
     def test_errors_and_warnings(self):

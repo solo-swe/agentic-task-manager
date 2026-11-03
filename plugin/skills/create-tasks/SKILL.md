@@ -271,7 +271,9 @@ Rules for task generation:
 
 **Changing existing tasks** (when extending a project): `atm edit <id>` with `--description` (or
 `--description-file <file>` for a multi-line Markdown description), `--sprint` / `--backlog`, `--priority`, `--add-dep`/`--remove-dep`,
-`--add-label`/`--remove-label`, `--add-file`/`--remove-file`. Statuses change only through the status commands, never
+`--add-label`/`--remove-label`, `--add-file`/`--remove-file`, `--add-requirement`/`--remove-requirement` and
+`--add-use-case`/`--remove-use-case` (an ID, or a text-fragment link as above; remove an entry by its exact text,
+as `atm show` lists it). Statuses change only through the status commands, never
 here.
 
 Then check the result:

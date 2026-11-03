@@ -479,6 +479,15 @@ and `use_cases`. No API key is used for the agent sandbox, so this written revie
 - **`requirements` and `use_cases` entries** may now be Markdown links: the details panel renders an entry with a
   link through CompMD, under the same rules as task text; a card shows its text (`plain-text.ts`).
 
+**`atm edit` for requirements and use cases (T-401).** `/atm:create-tasks`, `/atm:do-task` and `plugin/CLAUDE.md`
+list `atm edit`'s new `--add-requirement`, `--remove-requirement`, `--add-use-case` and `--remove-use-case`. Written
+review in place of the live sandbox run:
+- **What the new text asks of agents:** to change a task's definition with atm, as they already do for files, labels
+  and dependencies; nothing to run, fetch or install.
+- **The flags** only add or remove strings in a task's own lists, under atm's lock, like `--add-label`: no path is
+  read, no URL fetched, and no new entry point (atm-cli reads nothing outside `tasks.json`). An entry is shown as
+  `requirements` entries already were (T-391: through CompMD in the details panel, as text on a card).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

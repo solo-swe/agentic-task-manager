@@ -92,7 +92,7 @@ atm-cli writes these fields; this is for reading `atm show --json` output, not f
 - References in task text are links the dashboard opens in its document viewer: files and documents by a relative
   link from the project root (`docs/x.md#routes`, `src/app.ts#L40`), a requirement or a place in a document by a text
   fragment (`docs/x.md#:~:text=SR%2D2.1`, with `-`, `,` and `&` in the text as `%2D`, `%2C`, `%26`), also in
-  `requirements` and `use_cases`
+  `requirements` and `use_cases` (`atm edit <id> --add-requirement`/`--add-use-case`, and `--remove-…`)
 
 ## Available Skills
 - `/atm:create-tasks` — Analyze requirements and create tasks.json

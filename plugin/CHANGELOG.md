@@ -50,6 +50,12 @@ The sprint *Document Viewer* (release 0.29.0): open the documents and files a ta
   level; at once with reduced motion), so the pointer is inside it all along, the section being read marked; a pick
   scrolls there and the list hides, as it does when the pointer leaves or on Escape (which closes the list before
   the viewer). Read from the headings CompMD rendered.
+- **`atm edit` changes requirements and use cases** (T-401): `--add-requirement`/`--remove-requirement` and
+  `--add-use-case`/`--remove-use-case` (each repeatable) take an ID or a Markdown link to where it is defined
+  (`[SR-2.1](docs/x.md#:~:text=SR%2D2.1)`); an entry already there isn't added twice, and an empty one is refused
+  (exit 2, nothing written). atm-lib: `edit_existing_task` gains `add_requirements`, `remove_requirements`,
+  `add_use_cases` and `remove_use_cases` (`tests/lib/public-surface.json`). `/atm:create-tasks`, `/atm:do-task` and
+  `plugin/CLAUDE.md` list the flags.
 - **The single file's guardrail goes from 550 to 600 KiB** (`tests/e2e/guardrails.spec.ts`, decided with Hakan): the
   document viewer took it to 559 kB, and CompMD's coming upgrade needs room.
 - **Help has a Documents section** (T-396): what opens the document viewer, where it opens (a heading, lines, a

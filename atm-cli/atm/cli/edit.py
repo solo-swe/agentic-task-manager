@@ -96,6 +96,10 @@ def cmd_edit(args):
         remove_components=args.remove_component or [],
         add_related=args.add_related or [],
         remove_related=args.remove_related or [],
+        add_requirements=args.add_requirement or [],
+        remove_requirements=args.remove_requirement or [],
+        add_use_cases=args.add_use_case or [],
+        remove_use_cases=args.remove_use_case or [],
     )
     task, changed = result["task"], result["changed"]
     if args.json:

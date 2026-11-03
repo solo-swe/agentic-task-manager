@@ -131,7 +131,7 @@ command, so it goes through the same permission check as the command itself.
 While you work:
 - **A later task needs to change** (what you built changes its scope, its files or its dependencies): update it with
   `atm edit <id>` (`--description`, or `--description-file <file>` for several lines, `--add-dep`/`--remove-dep`,
-  `--add-file`/`--remove-file`, `--add-label`, ...). Descriptions are Markdown, as `/atm:create-tasks` writes them.
+  `--add-file`/`--remove-file`, `--add-label`, `--add-requirement`, `--add-use-case`, ...). Descriptions are Markdown, as `/atm:create-tasks` writes them.
   Its status changes only through the status commands.
 - **You can't go on without a decision** (two reasonable designs, a missing requirement, a credential): ask instead of
   guessing. `atm block $TASK_ID --on user --question '<one question>' [--question ...]` releases your claim and shows

@@ -21202,7 +21202,7 @@
       "description": "`atm edit` can't change a task's `requirements` or `use_cases` once the task exists (found in T-391 and T-399): agents can't fix an entry, or turn one into a reference link as the skills now ask ([`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md#:~:text=References%20are%20links)).\n\n## Change\n- `atm edit <id>` gains `--add-requirement` / `--remove-requirement` and `--add-use-case` / `--remove-use-case`, repeatable, as `--add-file` / `--remove-file` work ([`atm-cli/atm/cli/edit.py`](atm-cli/atm/cli/edit.py), atm-lib's edit in [`atm-cli/atm/lib/edit.py`](atm-cli/atm/lib/edit.py)): an entry is any non-empty string (an ID, or a Markdown link to its definition); adding one already there or removing one that isn't changes nothing and says so.\n- The skills' lists of `atm edit` flags name them ([`plugin/skills/create-tasks/SKILL.md`](plugin/skills/create-tasks/SKILL.md#:~:text=Changing%20existing%20tasks), `do-task`, `loop-tasks`) and [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Define* line; a skill change, so a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3.\n\n## Tests\nScenarios in `tests/scripts/scenarios/edit.json` (add, remove, a link as an entry, a duplicate, a missing one) and an atm-lib unit test in `tests/lib/test_edit.py`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/edit.py",
@@ -21217,9 +21217,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T20:04:36Z",
+      "updated_at": "2026-11-03T20:27:11Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Document Viewer",
@@ -21236,7 +21236,9 @@
       "related": [
         "T-391",
         "T-399"
-      ]
+      ],
+      "started_at": "2026-11-03T20:27:11Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-402",
