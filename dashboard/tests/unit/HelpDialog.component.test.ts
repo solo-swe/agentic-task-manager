@@ -1,14 +1,31 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import HelpDialog from '../../src/components/HelpDialog.svelte';
-import Markdown from '../../src/components/Markdown.svelte';
-import { parseMarkdown } from '../../src/lib/markdown';
+import { slug } from '../../src/lib/compmd';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
+import { compmdSettled } from './compmd.helpers';
 import { loadIntoDashboard } from './components.helpers';
 
+// Help renders docs/help.md with the real CompMD, as the served module has it
+const loadCompmd = vi.hoisted(() => vi.fn());
+vi.mock('../../src/lib/compmd', async (actual) => {
+  const { realCompmd } = await import('./compmd.helpers');
+  loadCompmd.mockImplementation(realCompmd);
+  return { ...(await actual()), loadCompmd };
+});
+
 const overlay = () => document.querySelector('#help-overlay')!;
+const heading = (dialog: HTMLElement, text: string) =>
+  [...dialog.querySelectorAll<HTMLElement>('h1, h2, h3, h4, h5, h6')].find((h) => h.textContent === text);
+
+async function openHelp() {
+  dashboard.openDialog('help');
+  flushSync();
+  await compmdSettled();
+  return screen.getByRole('dialog', { name: 'Help' });
+}
 
 describe('HelpDialog', () => {
   beforeEach(() => {
@@ -16,18 +33,19 @@ describe('HelpDialog', () => {
     dashboard.closeDialog();
   });
 
-  it('is closed until opened, then shows docs/help.md', () => {
+  it('is closed until opened, and loads CompMD only then; then shows docs/help.md', async () => {
+    loadCompmd.mockClear();
     render(HelpDialog);
     expect(overlay()).not.toHaveClass('open');
-    dashboard.openDialog('help');
-    flushSync();
+    expect(loadCompmd).not.toHaveBeenCalled();
+    const dialog = await openHelp();
     expect(overlay()).toHaveClass('open');
-    const dialog = screen.getByRole('dialog', { name: 'Help' });
-    expect(dialog.querySelector('#help-statuses-and-kinds')).toHaveTextContent('Statuses and kinds');
-    // Heading IDs are prefixed: an element with the ID "help" would make the browser jump to it on "#help"
-    expect(document.getElementById('help')).toBeNull();
+    expect(dialog.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    expect(heading(dialog, 'Statuses and kinds')?.tagName).toBe('H2');
     expect(dialog).toHaveTextContent('/atm:loop-tasks');
     expect(location.hash).toBe('#help');
+    // Headings have no IDs: an element with the ID "help" would make the browser jump to it on "#help"
+    expect(document.getElementById('help')).toBeNull();
   });
 
   it('closes with the close button, Escape and the backdrop, returning focus', async () => {
@@ -53,9 +71,8 @@ describe('HelpDialog', () => {
 
   it('links within the page scroll to the heading and leave the URL hash alone', async () => {
     render(HelpDialog);
-    dashboard.openDialog('help');
-    flushSync();
-    const target = document.querySelector('#help-priorities-and-labels') as HTMLElement;
+    const dialog = await openHelp();
+    const target = heading(dialog, 'Priorities and labels')!;
     let scrolled = false;
     target.scrollIntoView = () => (scrolled = true);
     await fireEvent.click(screen.getByRole('link', { name: 'priorities and labels' }));
@@ -64,18 +81,35 @@ describe('HelpDialog', () => {
   });
 });
 
-describe('Markdown', () => {
-  it('renders the tree with every text escaped; external links open in a new tab', () => {
-    const { container } = render(Markdown, {
-      blocks: parseMarkdown('## A <b>title</b>\n\n- **x** and `<script>`\n\n[site](https://example.com)'),
-      idPrefix: 'md-',
-    });
-    expect(container.querySelector('h4')).toHaveTextContent('A <b>title</b>');
-    expect(container.querySelector('h4')).toHaveAttribute('id', 'md-a-b-title-b');
-    expect(container.querySelector('b, script')).toBeNull();
-    expect(container.querySelector('li strong')).toHaveTextContent('x');
-    expect(container.querySelector('li code')).toHaveTextContent('<script>');
-    expect(container.querySelector('a')).toHaveAttribute('target', '_blank');
-    expect(container.querySelector('a')).toHaveAttribute('rel', 'noopener noreferrer');
+describe('docs/help.md', () => {
+  it('covers the topics D-1.3 asks for; links within the page go to headings that exist, the one off it to the repository', async () => {
+    render(HelpDialog);
+    const dialog = await openHelp();
+    const slugs = [...dialog.querySelectorAll('h1, h2, h3, h4, h5, h6')].map((h) => slug(h.textContent ?? ''));
+    for (const id of [
+      'views',
+      'filters-and-saved-views',
+      'statuses-and-kinds',
+      'waiting-on-you',
+      'priorities-and-labels',
+      'the-task-details',
+      'workflows-and-stages',
+      'the-archive',
+      'the-skills',
+      'running-agents-in-parallel',
+    ])
+      expect(slugs).toContain(id);
+
+    const links = [...dialog.querySelectorAll('.compmd a')];
+    expect(links.length).toBeGreaterThan(0);
+    for (const a of links) {
+      const href = a.getAttribute('href') ?? '';
+      if (href.startsWith('#')) expect(slugs).toContain(href.slice(1));
+      else {
+        expect(href).toMatch(/^https:\/\/github\.com\/solo-swe\/agentic-task-manager/);
+        expect(a).toHaveAttribute('target', '_blank');
+        expect(a).toHaveAttribute('rel', 'noopener noreferrer');
+      }
+    }
   });
 });

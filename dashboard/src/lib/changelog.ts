@@ -1,5 +1,5 @@
-// Parses plugin/CHANGELOG.md (Keep a Changelog subset) without a Markdown library. Inline Markdown in items
-// (backticks, links) is kept as plain text.
+// Parses plugin/WHATS-NEW.md and plugin/CHANGELOG.md (Keep a Changelog subset) into releases, for picking them by
+// version. Items keep their inline Markdown (backticks, links), which CompMD renders (entryMarkdown).
 
 export interface ChangelogSection {
   title: string;
@@ -62,6 +62,13 @@ export function parseChangelog(markdown: string): ChangelogEntry[] {
     }
   }
   return entries;
+}
+
+/** A release's notes as Markdown, without its version heading: a `####` heading per titled section, then its items */
+export function entryMarkdown(entry: ChangelogEntry): string {
+  return entry.sections
+    .map((s) => (s.title ? `#### ${s.title}\n\n` : '') + s.items.map((item) => `- ${item}`).join('\n'))
+    .join('\n\n');
 }
 
 function parts(version: string): number[] {

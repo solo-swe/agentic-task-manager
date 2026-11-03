@@ -35,13 +35,14 @@ test.describe("What's new", () => {
     expect(versions).toEqual(entries.map((e) => e.version));
 
     const v060 = panel(page).locator('.release[data-version="0.6.0"]');
-    await expect(v060.locator('h4')).toHaveText(/^v0\.6\.0\s*2026-10-22$/);
-    // Plain bullets: no Added / Changed / Fixed headings
-    await expect(v060.locator('.release-section')).toHaveCount(0);
+    await expect(v060.locator('> h4')).toHaveText(/^v0\.6\.0\s*2026-10-22$/);
+    // Rendered with CompMD; plain bullets: no Added / Changed / Fixed headings
+    await expect(v060.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(v060.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
     await expect(v060.locator('li').first()).toContainText('Zoom and pan the dependency graph');
   });
 
-  test('inline code is shown as code, as plain text', async ({ page }) => {
+  test('inline code is shown as code, rendered by CompMD', async ({ page }) => {
     await chip(page).click();
     const code = panel(page).locator('.release[data-version="0.10.0"] code', { hasText: '/atm:serve' });
     await expect(code).toHaveCount(1);

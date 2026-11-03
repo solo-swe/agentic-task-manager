@@ -1,12 +1,25 @@
-// CompMD renders all task text in the details panel (docs/compmd-rendering-design.md). Task text is untrusted: anyone
-// who can change tasks.json wrote it. This module builds what CompMD is given (the frontmatter the dashboard puts in
-// front of every text, and the request, §3 and §3b), loads CompMD from atm serve's asset folder (§2), and makes the
-// rendered links safe (§3).
+// CompMD renders all Markdown the dashboard shows (docs/compmd-rendering-design.md): task text in the details panel,
+// and Help and What's new, which come with the plugin. Task text is untrusted: anyone who can change tasks.json wrote
+// it. This module builds what CompMD is given (the frontmatter the dashboard puts in front of every text, and the
+// request, §3 and §3b), loads CompMD from atm serve's asset folder (§2), and makes the rendered links safe (§3).
 // Types only: the processor itself is in the module served from the asset folder, never in the dashboard's bundle
 import type { Request } from '@compmd/processor';
 import { version as compmdVersion } from 'virtual:atm-compmd';
-import { safeHref } from './markdown';
 import type { Task } from './types';
+
+/** Links that are safe to follow: web and mail addresses, and anchors in the page. */
+export function safeHref(href: string): boolean {
+  return /^(https?:|mailto:|#)/i.test(href.trim());
+}
+
+/** "Filters and saved views" → "filters-and-saved-views": what a `#` link names a heading by (CompMD gives headings no
+ * IDs, so a link finds its heading by this) */
+export function slug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 /** The record `md.data.task` holds: the task's fields and what atm derives for it, a derived value replacing the
  * stored one of the same name (the effective priority). Only this task: never another task's or project's data. */
@@ -15,12 +28,13 @@ export function taskData(task: Task): Record<string, unknown> {
   return { ...stored, ...(derived ?? {}) };
 }
 
-/** The frontmatter in front of every task text: the same for each, never stored in tasks.json (§3b). Written as JSON,
- * which YAML reads as it is, so no value needs quoting rules. `host:task` has no `schema`: in CompMD 0.3.0 a schema
- * makes data a list of records, and the task is one record; its values are typed when evaluated instead. Packs aren't
- * here: compmd.config.json makes the Mermaid pack ambient (§3c). */
-export function frontmatter(): string {
-  const md = { version: 1, data: [{ from: 'host:task', as: 'task' }] };
+/** The frontmatter in front of every text: the same for each, never stored in tasks.json (§3b). Written as JSON,
+ * which YAML reads as it is, so no value needs quoting rules. A task's text gets its task as `md.data.task`; a text
+ * that isn't a task's (Help) gets none. `host:task` has no `schema`: in CompMD 0.3.0 a schema makes data a list of
+ * records, and the task is one record; its values are typed when evaluated instead. Packs aren't here:
+ * compmd.config.json makes the Mermaid pack ambient (§3c). */
+export function frontmatter(withTask = true): string {
+  const md = withTask ? { version: 1, data: [{ from: 'host:task', as: 'task' }] } : { version: 1 };
   return `---\n${JSON.stringify({ md })}\n---\n`;
 }
 
@@ -35,22 +49,23 @@ export type BaseRequest = Pick<Request, 'packs' | 'ambient' | 'policy'>;
 
 /** What CompMD's processor is given for one task text (§3): @compmd/vite's request (the plugin's packs, each strict:
  * its components run in a strict frame with no network), and the dashboard's own parts: the text alone, behind the
- * frontmatter, with no files to import and no remote data, and the task's own data as the one `host:` source */
+ * frontmatter, with no files to import and no remote data, and the task's own data, if it is a task's, as the one
+ * `host:` source */
 export function compmdRequest(
   base: BaseRequest,
   text: string,
-  task: Task,
+  task: Task | undefined,
   now = new Date(),
   timeZone = localTimeZone(),
 ) {
   return {
     ...base,
     path: DOCUMENT,
-    files: { [DOCUMENT]: frontmatter() + text },
+    files: { [DOCUMENT]: frontmatter(!!task) + text },
     now: now.toISOString(),
     tz: timeZone,
     allowedOrigins: [] as string[],
-    host: { task: taskData(task) },
+    host: task ? { task: taskData(task) } : {},
   };
 }
 
@@ -101,7 +116,7 @@ export function packComponents<T>(components: readonly T[]): T[] {
 }
 
 /** A text processed: its expanded tree, safe to render (safeTree), and the packs' components it can name */
-export function processText(compmd: CompmdModule, text: string, task: Task) {
+export function processText(compmd: CompmdModule, text: string, task?: Task) {
   const document = new compmd.OpenDocument(compmdRequest(compmd.request, text, task));
   try {
     return { tree: safeTree(document.expanded), components: packComponents(document.components) };

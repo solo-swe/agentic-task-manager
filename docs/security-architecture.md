@@ -81,7 +81,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#`; task text rendered with CompMD loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `markdown.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the built-in icons and the bundled logo | `security-invariants.test.ts` (`{@html}` only in `Icon.svelte` and `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
@@ -428,6 +428,12 @@ sandbox:
 - **What the sandbox can't stop** (its README): WebRTC, and styles, fonts and prefetches to the frames' own origin.
   The strict frame's policy gives no `connect-src` and no `style-src` beyond its own origin and inline, so the
   remaining channel is to this server only.
+
+**One Markdown renderer.** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too, the
+same way as task text (`safeTree`, `secureLinks`, no `host:` data), and the dashboard's own parser (`markdown.ts`,
+`Markdown.svelte`) is gone. Both texts come with the plugin, so nothing untrusted is added; CompMD loads only when one
+of them is first opened. Tooltips and card excerpts still show text without markup (`plain-text.ts`): it only takes
+marks away and renders nothing, through Svelte's escaping. No new route, input or permission.
 
 ## 4. Keeping it current
 

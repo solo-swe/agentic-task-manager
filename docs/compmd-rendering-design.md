@@ -12,8 +12,9 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
 - **R1. What renders:** all task text in the details panel renders with CompMD, and only with CompMD: the
   description, every note, the review note shown above the description, and a blocked task's questions. That's
   CommonMark and GFM, so tables, task lists, strikethrough and footnotes render, which `markdown.ts` shows as text
-  today. Help, What's new and the card tooltips (`markdownPlainText`) are not task details and keep `markdown.ts`
-  for now (moving them is a follow-up, so `markdown.ts` can go).
+  today. Help and What's new render with CompMD too since `markdown.ts` was removed (in the same sprint, after
+  T-286): the same component, with no task, so no `host:` data, loaded the first time one of them opens. Tooltips and
+  card excerpts, which can't show markup, take the marks away (`plain-text.ts`) and render nothing.
 - **R2. CompMD only, no second renderer** (decided in review). Until CompMD has loaded (the first panel opened in a
   page, some tens of milliseconds) the text's place is empty (`data-compmd="loading"`; `ready` once drawn). If CompMD
   can't load, or a

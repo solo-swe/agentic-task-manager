@@ -199,70 +199,8 @@ body {
   font-size: 12px;
   margin-top: 10px;
 }
-/* Rendered Markdown (Markdown.svelte): Help and task descriptions */
-.markdown {
-  font-size: 14px;
-  line-height: 1.6;
-}
-.markdown h3,
-.markdown h4,
-.markdown h5,
-.markdown h6 {
-  margin: 20px 0 6px;
-  font-weight: 600;
-}
-.markdown h3 {
-  font-size: 16px;
-}
-.markdown h4 {
-  font-size: 14px;
-}
-.markdown h5,
-.markdown h6 {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-.markdown p,
-.markdown ul,
-.markdown ol,
-.markdown pre,
-.markdown blockquote {
-  margin: 6px 0;
-}
-.markdown ul,
-.markdown ol {
-  padding-left: 20px;
-}
-.markdown li {
-  margin-bottom: 3px;
-}
-.markdown code {
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
-  background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
-}
-.markdown pre {
-  background: var(--surface2);
-  padding: 8px 10px;
-  border-radius: 6px;
-  overflow-x: auto;
-}
-.markdown pre code {
-  padding: 0;
-  background: none;
-}
-.markdown blockquote {
-  border-left: 3px solid var(--border);
-  padding-left: 10px;
-  color: var(--text-muted);
-}
-.markdown a {
-  color: var(--accent);
-}
-/* Task text rendered with CompMD (CompMd.svelte, docs/compmd-rendering-design.md): it looks as Markdown.svelte's did,
-   CompMD's h1–h6 sized as its h3–h6, plus what only CompMD renders (tables, task lists, alerts). CompMD's own theme
+/* Markdown rendered with CompMD (CompMd.svelte, docs/compmd-rendering-design.md): task text, Help and What's new.
+   CompMD's h1–h6 at the dashboard's sizes, h3 and below muted; tables, task lists and alerts. CompMD's own theme
    tokens take the dashboard's colours */
 .compmd {
   --compmd-accent: var(--accent);
@@ -429,7 +367,7 @@ body {
 .whats-new .release + .release {
   margin-top: 18px;
 }
-.whats-new h4 {
+.whats-new .release > h4 {
   font-size: 15px;
   font-weight: 600;
   display: flex;
@@ -441,27 +379,22 @@ body {
   font-weight: 400;
   color: var(--text-muted);
 }
-.whats-new .release-section {
-  margin-top: 8px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-muted);
-}
-.whats-new ul {
-  margin: 4px 0 0 18px;
+/* A release's notes, rendered by CompMD */
+.whats-new .compmd {
   font-size: 13px;
   line-height: 1.55;
 }
-.whats-new li {
-  margin-bottom: 3px;
+.whats-new .compmd-page ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
 }
-.whats-new code {
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
-  background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
+.whats-new .compmd-page h4 {
+  margin: 8px 0 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.whats-new .compmd-page code {
   white-space: nowrap;
 }
 
@@ -3468,16 +3401,6 @@ svg.graph-minimap.hidden {
 .review-note .compmd {
   font-size: inherit;
   line-height: 1.5;
-}
-.markdown-inline code {
-  font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 0.92em;
-  background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
-}
-.markdown-inline a {
-  color: var(--accent);
 }
 /* The header's "need you" count (D-3.3) */
 .attention-chip {

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { compareVersions, entriesBetween, parseChangelog, UNRELEASED } from '../../src/lib/changelog';
+import { compareVersions, entriesBetween, entryMarkdown, parseChangelog, UNRELEASED } from '../../src/lib/changelog';
 
 const real = readFileSync(new URL('../../../plugin/CHANGELOG.md', import.meta.url), 'utf8');
 const pluginVersion: string = JSON.parse(
@@ -61,6 +61,15 @@ describe('parseChangelog (edge cases)', () => {
       '\n',
     );
     expect(parseChangelog(md)[0].sections[0].items).toEqual(['`code` and [link](x)']);
+  });
+});
+
+describe('entryMarkdown: a release’s notes, for CompMD', () => {
+  it('a list per section, a heading for each titled one; no version heading', () => {
+    const [entry] = parseChangelog(
+      ['## [1.0.0] - 2026-01-02', '- loose `item`', '### Fixed', '- one', '- two', '  wrapped'].join('\n'),
+    );
+    expect(entryMarkdown(entry)).toBe('- loose `item`\n\n#### Fixed\n\n- one\n- two wrapped');
   });
 });
 

@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { loadCompmd, processText, secureLinks, taskData, type CompmdModule } from '../lib/compmd';
-  import { safeHref, slug } from '../lib/markdown';
+  import { loadCompmd, processText, safeHref, secureLinks, slug, taskData, type CompmdModule } from '../lib/compmd';
   import { scrollBehavior } from '../lib/scroll';
   import type { Task } from '../lib/types';
 
-  // A task text (description, note, question) rendered with CompMD (docs/compmd-rendering-design.md): untrusted text,
-  // processed with the dashboard's frontmatter and the task's own data, rendered in the dashboard's page by CompMD's
-  // sandbox in host mode. Until CompMD has loaded the place is empty; if it can't load or the text can't be processed,
-  // the text shows as written (R2). CompMD's diagnostics are never shown here (R2a).
-  let { text, task, inline = false }: { text: string; task: Task; inline?: boolean } = $props();
+  // Markdown rendered with CompMD (docs/compmd-rendering-design.md): a task text (description, note, question), which
+  // is untrusted, or a text that comes with the plugin (Help, What's new; no `task`). Processed with the dashboard's
+  // frontmatter and the task's own data, rendered in the dashboard's page by CompMD's sandbox in host mode. Until
+  // CompMD has loaded the place is empty; if it can't load or the text can't be processed, the text shows as written
+  // (R2). CompMD's diagnostics are never shown here (R2a).
+  let { text, task, inline = false }: { text: string; task?: Task; inline?: boolean } = $props();
 
   type View = ReturnType<ReturnType<CompmdModule['createSandbox']>['open']>;
 
@@ -24,7 +24,7 @@
   let rendered = '';
 
   $effect(() => {
-    const data = taskData(task);
+    const data = task ? taskData(task) : null;
     const key = text + '\u0000' + JSON.stringify(data);
     const target = host;
     if (!target || key === rendered) return;
@@ -50,7 +50,7 @@
         failed = false;
       })
       .catch((e: unknown) => {
-        console.error('CompMD could not render a task text:', e);
+        console.error('CompMD could not render a text:', e);
         failed = true;
       });
   });

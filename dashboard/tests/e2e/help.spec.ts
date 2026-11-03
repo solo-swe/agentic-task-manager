@@ -1,6 +1,7 @@
 import { expect, openDashboard, test } from './helpers';
 
-// D-1.3, D-1.5: Help shows docs/help.md, inlined at build time; it opens from the footer or #help.
+// D-1.3, D-1.5: Help shows docs/help.md, inlined at build time and rendered with CompMD; it opens from the footer or
+// #help.
 const overlay = '#help-overlay';
 
 test.describe('Help', () => {
@@ -8,7 +9,8 @@ test.describe('Help', () => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('#footer-help').click();
     await expect(page.locator(overlay)).toBeVisible();
-    await expect(page.locator('#help-panel h4#help-statuses-and-kinds')).toHaveText('Statuses and kinds');
+    await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(page.locator('#help-panel h2', { hasText: 'Statuses and kinds' })).toBeVisible();
     await expect(page).toHaveURL(/#.*help/);
     await page.keyboard.press('Escape');
     await expect(page.locator(overlay)).toBeHidden();
@@ -21,7 +23,7 @@ test.describe('Help', () => {
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#tab-list')).toHaveAttribute('aria-selected', 'true');
     await page.locator('#help-panel').getByRole('link', { name: 'priorities and labels' }).click();
-    await expect(page.locator('#help-priorities-and-labels')).toBeInViewport();
+    await expect(page.locator('#help-panel h2', { hasText: 'Priorities and labels' })).toBeInViewport();
     await expect(page.locator(overlay)).toBeVisible();
     // The Sprint filter follows in the hash (#sprint=, T-323)
     expect(new URL(page.url()).hash).toMatch(/^#view=list&help(&sprint=[^&]+)?$/);
@@ -33,6 +35,7 @@ test.describe('Help', () => {
   }) => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('#footer-help').click();
+    await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
     const external = page.locator('#help-panel a[target="_blank"]');
     await expect(external).toHaveCount(1);
     await expect(external).toHaveAttribute('href', /^https:\/\/github\.com\/solo-swe\/agentic-task-manager/);

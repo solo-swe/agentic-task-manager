@@ -14,7 +14,9 @@ import {
   FRONTMATTER_LINES,
   loadCompmd,
   resetCompmd,
+  safeHref,
   secureLinks,
+  slug,
   taskData,
 } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
@@ -109,6 +111,32 @@ describe('what CompMD is given', () => {
     const overridden = compmdRequest({ ...base, allowedOrigins: ['https://x'], host: { y: 1 } } as never, '', task);
     expect(overridden.allowedOrigins).toEqual([]);
     expect(Object.keys(overridden.host)).toEqual(['task']);
+  });
+
+  it('a text that is no task’s (Help, What’s new) gets no task: no host source, no host data', () => {
+    const text = frontmatter(false);
+    expect(JSON.parse(text.slice(4, -5))).toEqual({ md: { version: 1 } });
+    expect(text.split('\n').length - 1).toBe(FRONTMATTER_LINES);
+    const request = compmdRequest(base, '# Help', undefined);
+    expect(request.files['task.comp.md']).toBe(text + '# Help');
+    expect(request.host).toEqual({});
+  });
+});
+
+describe('links', () => {
+  it('only web and mail addresses and anchors in the page are followed', () => {
+    expect(['https://a', 'http://a', 'mailto:a@b', '#x', ' #x'].map(safeHref)).toEqual([true, true, true, true, true]);
+    expect(['data:text/html,x', 'javascript:alert(1)', 'file:///etc', 'docs/a.md'].map(safeHref)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it('a `#` link names a heading by its slug', () => {
+    expect(slug('Statuses and kinds!')).toBe('statuses-and-kinds');
+    expect(slug('  Running agents in parallel ')).toBe('running-agents-in-parallel');
   });
 });
 

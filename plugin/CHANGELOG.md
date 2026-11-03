@@ -34,6 +34,10 @@ The sprint *Rich Markdown* (release 0.28.0): task text renders with CompMD (`doc
 - **Task text is made safe before it renders:** an image that isn't `data:` shows its alt text and is never
   requested; a link other than `https:`, `http:`, `mailto:` and `#` becomes text; a component the text defines in a
   fence is never given to the sandbox.
+- **One Markdown renderer:** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too,
+  loaded the first time one of them opens; the dashboard's own Markdown parser (`src/lib/markdown.ts`,
+  `Markdown.svelte`) is gone. Tooltips and card excerpts show text without its marks (`src/lib/plain-text.ts`). The
+  single file is 9 kB smaller.
 - **Development:** `npm run build` also builds the CompMD runtime (`vite.compmd.config.ts`); `npm run check` rebuilds
   it into a temporary folder and fails when the committed files differ. The dev server forwards `/assets/`.
 

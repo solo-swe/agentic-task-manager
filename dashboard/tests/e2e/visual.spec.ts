@@ -259,6 +259,7 @@ for (const mode of ['dark', 'light'] as const) {
       });
       await page.keyboard.press('Escape');
       await page.locator('#footer-help').click();
+      await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
       await expect(page.locator('#help-panel')).toHaveScreenshot(`v4-${mode}-help.png`);
     });
   });

@@ -1,13 +1,15 @@
 <script lang="ts">
-  import { UNRELEASED } from '../lib/changelog';
+  import { entryMarkdown, UNRELEASED } from '../lib/changelog';
   import { releaseNotes } from '../lib/release-notes';
   import { dashboard } from '../lib/state.svelte';
+  import CompMd from './CompMd.svelte';
   import HintScroll from './HintScroll.svelte';
 
-  /** Split `code` spans out of an item so they can be styled; everything stays plain text. */
-  function segments(item: string) {
-    return item.split('`').map((text, i) => ({ text, code: i % 2 === 1 }));
-  }
+  /** The notes render the first time What's new opens, and stay: CompMD loads only once the page shows Markdown */
+  let opened = $state(false);
+  $effect(() => {
+    if (dashboard.whatsNewOpen) opened = true;
+  });
 
   function onOverlayClick(e: MouseEvent) {
     if (e.target === e.currentTarget) dashboard.closeWhatsNew();
@@ -36,16 +38,7 @@
                 class="release-date">{entry.date}</span
               >{/if}
           </h4>
-          {#each entry.sections as section, i (i)}
-            {#if section.title}<div class="release-section">{section.title}</div>{/if}
-            <ul>
-              {#each section.items as item, j (j)}
-                <li>
-                  {#each segments(item) as seg, k (k)}{#if seg.code}<code>{seg.text}</code>{:else}{seg.text}{/if}{/each}
-                </li>
-              {/each}
-            </ul>
-          {/each}
+          {#if opened}<CompMd text={entryMarkdown(entry)} />{/if}
         </section>
       {/each}
     </HintScroll>

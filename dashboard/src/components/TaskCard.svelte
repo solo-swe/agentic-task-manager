@@ -5,7 +5,7 @@
   import { kindStyle, phaseColor, typeStyle } from '../lib/theme';
   import type { Task } from '../lib/types';
   import { cardFacts, cardNote } from '../lib/cardfacts';
-  import { markdownPlainText } from '../lib/markdown';
+  import { markdownPlainText } from '../lib/plain-text';
   import { noteKindLabel } from '../lib/notes';
   import { kindOf, statusLabel, typeLabel } from '../lib/vocab';
   import { blockSummary, blockWait, reviewSummary, reviewWait } from '../lib/waiting';
