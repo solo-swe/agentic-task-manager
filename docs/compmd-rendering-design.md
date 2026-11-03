@@ -180,9 +180,10 @@ How the guidance is shipped:
   the shipped processor version, with that version and commit in a header line, and updated with CompMD. Skills
   never send agents to fetch it from the web: a fetched text could change under us and is outside text an agent
   would act on (the security document's rule for skills).
-- **The skills say briefly what works in atm's panel,** since atm's settings (§3) refuse part of CompMD: GFM and
-  CompMD's core components (layout, `if`, `each`, `value`, alerts) render; imports of packs, data from files or URLs,
-  `host:` data, inputs and host-language components don't (they show their fallback text). For more, they point to
+- **The skills say briefly what works in atm's panel,** since atm's settings (§3) refuse part of CompMD: GFM, alerts
+  (`> [!NOTE]`), frontmatter values and CompMD's core components (layout, `if`, `each`, `value`) render; math shows
+  as its TeX source (no math renderer); inputs show but change nothing; imports of packs, data from files or URLs,
+  `host:` data and host-language components don't render (they show their fallback text). For more, they point to
   the local `llms.txt` (33 KB, read only when an agent wants more than plain Markdown).
 
 ## 4. In the panel
