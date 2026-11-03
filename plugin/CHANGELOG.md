@@ -4,7 +4,7 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
-## [Unreleased]
+## [0.29.0] - 2026-11-03
 
 The sprint *Document Viewer* (release 0.29.0): open the documents and files a task refers to inside the dashboard
 (`docs/compmd-viewer-design.md`).

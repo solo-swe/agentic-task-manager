@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 407,
+    "next_id": 408,
     "labels": [
       {
         "id": "architecture",
@@ -21167,7 +21167,7 @@
       "description": "The Markdown half of T-394's line work ([`docs/compmd-viewer-design.md`](docs/compmd-viewer-design.md#:~:text=V2a.%20Line%20numbers) V2a), split off because it needs what only CompMD knows: which source lines each rendered block came from. CompMD's renderer will give it through an API (Hakan, 2026-11-03); this task waits for that release (T-398 upgrades CompMD).\n\n## Change\n- The gutter beside a Markdown document: each top-level block's first source line (less `line_offset`, 0 for Markdown), aligned with the block's rendered top, measured after CompMD's `rendered` and on resize; through CompMD's API, never by guessing which element came from which node.\n- `#doc=…:L<n>` and `:L<n>-L<m>` in a Markdown document: scroll to the block the line is in and mark the blocks the range falls in, as T-394 does for code.\n- Copy path and Open on GitHub with the selected lines, as for code.\n\n## Not here\nAny rendering of our own: CompMD renders, and gives the mapping; the gutter and the mark are the viewer's UI around its output.\n\n## Tests\ne2e: the gutter's numbers sit beside their blocks; `:L14-L20` in a Markdown document scrolls to and marks its blocks; a document with a frontmatter counts its lines from the file's first.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-394",
         "T-398"
@@ -21179,7 +21179,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T19:37:33Z",
-      "updated_at": "2026-11-03T22:42:33Z",
+      "updated_at": "2026-11-03T22:59:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21208,6 +21208,12 @@
           "kind": "answer",
           "text": "CompMD 0.4.0 (T-398) gives it: a request with `origins: true` puts each node’s source range in the tree, and the sandbox’s view answers `rectsAt(offset)` and `reveal(offset)`, in host mode as in frames.",
           "by": "claude:b7be7288"
+        },
+        {
+          "at": "2026-11-03T22:59:05Z",
+          "kind": "review",
+          "text": "Markdown documents: one number per top-level block (its first source line, from CompMD 0.4.0’s origins and `rectsAt`), `:L` marks and scrolls to the blocks. Every line numbered waits for CompMD 0.5.0 (T-406, backlog). e2e 409.",
+          "by": "claude:b7be7288"
         }
       ],
       "blocks": [
@@ -21218,7 +21224,11 @@
         }
       ],
       "started_at": "2026-11-03T22:42:33Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "86755c25b686c92cfa65bd6ccc32156b40742147",
+      "completed_at": "2026-11-03T22:59:05Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending"
     },
     {
       "id": "T-401",
@@ -21531,6 +21541,39 @@
         "T-400",
         "T-398"
       ]
+    },
+    {
+      "id": "T-407",
+      "name": "Release 0.29.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "The release of the sprint *Document Viewer*, as the project's `CLAUDE.md` (*Versions*, *CI*) says.\n\n## Steps\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.29.0`.\n- `plugin/CHANGELOG.md`: `[Unreleased]` becomes `[0.29.0]` with today's date; `plugin/WHATS-NEW.md`: an entry of 3–6 plain bullets from it (`npm run check` fails without either).\n- The Linux screenshot baselines, in Docker: `npm run test:e2e:visual:update` regenerates the changed ones (the details panel's references, the document viewer); look at a few before committing; delete a baseline whose test is gone.\n- `npm run verify`.\n- The security checklist (`docs/security-architecture.md` §3): the skills changed (T-391, T-396, T-398, T-401), so their written reviews in §3.3 stand in for the agent sandbox (no API key); the new entry points (the documents and files routes, T-392) are in the document.\n- Push and the one combined PR from `dev/0.29.0` to `main` with `/atm:push`, watching CI.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/tests/e2e/__screenshots__/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-03T23:18:35Z",
+      "updated_at": "2026-11-03T23:18:46Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T23:18:35Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "review": "none",
+      "started_at": "2026-11-03T23:18:46Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.29.0] - 2026-11-03
+
+- Files and documents a task links to open right in the dashboard, in a window you can move and resize.
+- A link can point at lines of code or a sentence in a document: it opens there, marked.
+- Code is highlighted, math is typeset, and documents show line numbers and a contents list.
+- Pick how documents look: your theme's page, GitHub, Docs or Magazine.
+- Requirements and use cases are listed one per line, and link to where they are defined.
+
 ## [0.28.0] - 2026-11-03
 
 - Task descriptions and notes look richer: tables, checklists, nested lists and callouts render as they should.
