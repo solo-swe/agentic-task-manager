@@ -14222,7 +14222,7 @@
       "description": "Render a task's description and its notes in the details panel with CompMD ([site](https://compmd.hakanserce.com), [repo](https://github.com/comp-markdown/compmd)) instead of `src/lib/markdown.ts`. CompMD is CommonMark + GFM with components, so tables and the rest of GFM render too.\n\n## Packages\n`@compmd/processor` (WebAssembly; `init()`, `process({ path, files, now })`) and `@compmd/render` (`createPage(element).render(expanded)`), from npm (both 0.3.0 as of 2026-11-03), pinned to exact versions in `dashboard/package.json` and installed with `npm ci`. Don't vendor them from the repository.\n\n## Shipping: separate files, not in the dashboard\nThe processor is about 808 KB gzipped. The dashboard is one file with a size guardrail of 550 KiB (`tests/e2e/guardrails.spec.ts`; 543 kB as of 0.27.0, so about 20 KB of room; T-342 in this sprint looks for savings). Keep the dashboard one file within that guardrail and ship CompMD beside it:\n- the build copies the packages' browser files into `plugin/assets/compmd/` (committed build artifacts, like `tasks-dashboard.html`: CI fails when they are stale);\n- `atm serve` serves `plugin/assets/` under a fixed path (e.g. `/assets/...`), read-only, only files under that folder (no `..`, no symlinks out), with correct content types (`application/wasm` for `.wasm`). The route belongs to the REST API's layer, `atm-cli/atm/api/server.py` (`docs/layered-architecture.md`; it reads files from the plugin, not task data, so it doesn't go through atm-lib);\n- the dev server forwards that path to the real API like `api/`, `p/` and `__atm/` (`dashboard/build/dev-api.ts`), and the e2e `tasksServer` fixture (`tests/e2e/helpers.ts`) serves the same path;\n- the dashboard loads them lazily, the first time a details panel opens, and keeps them loaded. Its requests go through `src/lib/api/http.ts`, the only module allowed to call `fetch` (ESLint); load the assets through it, or through a dynamic `import()` of the served module if that is what CompMD needs, and say which in the code.\n\nThe guardrail test still holds: no request leaves localhost. The page's Content-Security-Policy (`page_csp` in `api/server.py`, mirrored by `build/security-headers.ts` for the dev server) must allow exactly what loading CompMD needs, nothing broader: today `script-src` lists only the page's own script hashes and nothing allows WebAssembly, so expect `'wasm-unsafe-eval'` and the asset path's scripts (e.g. `'self'` limited to `/assets/`, if CSP paths fit, else the files' hashes); `tests/unit/security-headers.test.ts` keeps the two in step.\n\n## Untrusted text\nTask text comes from anyone who can change `tasks.json` (a collaborator, a merged PR, an agent). Configure CompMD for a document its user doesn't trust:\n- no raw HTML (shown as text, or sanitized with its allowlist; no scripts, styles or event attributes);\n- no remote data: no origin allowed (`from: https://…` fails);\n- no custom code components (JSX, TSX, Svelte, JS), no `host:` data, no inputs that change anything;\n- links only `https:`, `http:`, `mailto:` and `#` (as `safeHref` today), opened as today.\n\n## Scope\n- The details panel's description and notes only. Help, What's new and the card tooltips (`markdownPlainText`) keep `markdown.ts`.\n- The output follows the theme and light/dark mode through the CSS tokens (`no-hardcoded-colours.test.ts` still passes); headings, lists, code, quotes and tables look like today's.\n- While CompMD loads, or if it fails to load, the panel renders with `markdown.ts`, so a description never shows blank.\n- The section rail and its ▲/▼ hints keep working with the new content (T-280).\n\n## Security document\n`docs/security-architecture.md` in the same PR: the new route serving `plugin/assets/` (I11's list of routes), the CSP change, and CompMD as the renderer of untrusted task text, with the settings above and the checks that prove them.\n\n## Tests\n- atm-cli (`tests/scripts/serve.test.mjs`): the asset route serves a file with its content type, refuses `..` and paths outside the folder, and 404s a missing file.\n- e2e: a description with a table and a task list renders; raw HTML (`<img onerror>`, `<script>`) shows as text and runs nothing; a `javascript:` link isn't a link; a remote-data component makes no request; the fallback renders when the asset route fails; the details panel's screenshot baselines updated.\n- Unit: the configuration passed to CompMD (untrusted settings).\n- `tests/scripts/dev-api.test.mjs`: the dev server forwards the asset path.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -14245,7 +14245,7 @@
         "dashboard/src/lib/api/http.ts"
       ],
       "created_at": "2026-10-30T09:03:19Z",
-      "updated_at": "2026-11-03T07:31:28Z",
+      "updated_at": "2026-11-03T07:34:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint": "Rich Markdown",
@@ -14263,7 +14263,18 @@
         "docs"
       ],
       "started_at": "2026-11-03T07:31:28Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "41bc0321d0c44232cbd2f1d00ecd50c8e5efbcd8",
+      "review_requested_at": "2026-11-03T07:34:14Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-03T07:34:14Z",
+          "kind": "review",
+          "text": "Design for review with Hakan before implementing: `docs/compmd-rendering-design.md` (shipping CompMD as served assets, the CSP, the untrusted-text settings, three open points in §7).",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-285",

@@ -9,13 +9,17 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
 
 ## 1. Requirements
 
-- **R1. What renders:** a task's description, its notes and the review note shown above the description (it is a
-  note too) render with CompMD: CommonMark and GFM, so tables, task lists, strikethrough and footnotes render, which
-  `markdown.ts` shows as text today. The blocked task's questions (one line each) keep `markdown.ts`'s inline
-  rendering, as do Help, What's new and the card tooltips (`markdownPlainText`).
-- **R2. Never blank:** the panel renders with `markdown.ts` at once; CompMD's render replaces it once CompMD is
-  loaded. If CompMD fails to load, or a document fails to process, `markdown.ts`'s render stays. A failure is logged
-  once, not shown.
+- **R1. What renders:** all task text in the details panel renders with CompMD, and only with CompMD: the
+  description, every note, the review note shown above the description, and a blocked task's questions. That's
+  CommonMark and GFM, so tables, task lists, strikethrough and footnotes render, which `markdown.ts` shows as text
+  today. Help, What's new and the card tooltips (`markdownPlainText`) are not task details and keep `markdown.ts`
+  for now (moving them is a follow-up, so `markdown.ts` can go).
+- **R2. CompMD only, no second renderer** (decided in review). Until CompMD has loaded (the first panel opened in a
+  page, some tens of milliseconds) the text's place is held at its height, empty. If CompMD can't load, or a
+  document fails to process, the text shows as it is written, escaped, with its line breaks (`white-space:
+  pre-wrap`): readable, not rendered. That failure is logged to the console, not shown to the reader.
+- **R2a. Readers never see CompMD's diagnostics** (warnings and errors about the text). Agents, who write the text,
+  should: §3a.
 - **R3. The dashboard stays one file within its guardrail** (550 KiB; 543 kB today). CompMD ships as separate files
   beside it, loaded only when a details panel first opens.
 - **R4. Nothing leaves localhost,** whatever the task text says: no remote data, no pack downloads, no images or
@@ -71,20 +75,58 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
 
 ### The page's CSP
 
-Today: `script-src` has only the page's inline script hashes; nothing allows WebAssembly. It becomes:
+**What `script-src` does.** It lists where the page may run JavaScript from: inline `<script>` blocks (by hash), and
+script URLs, which include every `import()` and every module those modules import. Today it has only the page's own
+inline script hashes, so the page can't load any script file at all: an injected `<script src="/anything">` or
+`import("/anything")` is refused by the browser. That is the second line of defence. The first is that task text
+can't put a script into the page in the first place (Svelte escapes it; CompMD's raw HTML allowlist has no
+`script`). The CSP matters only if the first line ever fails, through a bug in a renderer or a new route.
 
-```
-script-src <the inline hashes> 'wasm-unsafe-eval' http://localhost:<port>/assets/compmd/<version>/
-```
+To load CompMD, `script-src` must name some script URLs, and allow compiling WebAssembly (`'wasm-unsafe-eval'`,
+which allows that and nothing else: not `eval`, not `new Function`). The question is how wide the URLs are.
 
-- `'wasm-unsafe-eval'` allows compiling WebAssembly, and nothing else (not `eval`).
-- The module source is the asset folder only, not `'self'`: a JSON route can never be loaded as a script, and
-  `nosniff` already refuses that. The server builds it from the request's `Host`, which it already requires to be
-  loopback (I10). If the browsers' path matching proves unreliable in the e2e run, the fallback is `'self'`
-  (decided in review, and written in the security document).
-- `connect-src 'self'` already allows the `.wasm` fetch; `img-src 'self' data:` already refuses images from elsewhere;
-  `style-src 'unsafe-inline'` already allows CompMD's stylesheet.
-- `build/security-headers.ts` mirrors the change for the dev server (`security-headers.test.ts` keeps them in step).
+| Option | `script-src` | Allows |
+|---|---|---|
+| **1. The asset folder** (recommended) | `<hashes> 'wasm-unsafe-eval' http://localhost:8765/assets/compmd/0.3.0/` | only the files this plugin version ships, under that folder |
+| **2. `'self'`** | `<hashes> 'wasm-unsafe-eval' 'self'` | any URL on this server that answers with a JavaScript content type |
+| 3. Hashes of each file | — | not possible: hashes allow external scripts only with an `integrity` attribute, and `import()` and the imports inside a module carry none |
+| 4. `'strict-dynamic'` with a nonce | `'nonce-…' 'strict-dynamic'` | whatever a trusted script loads, transitively, from anywhere; wider than 2 |
+
+**Why `'self'` is the riskier one.** It trusts every route, today's and future ones, to never answer a script
+request with something runnable. Today that holds: the routes answer JSON, the page, and the project's logo (an image
+type, with `nosniff`, so the browser refuses to run it as a script). But the guarantee rests on every future route
+getting its content type right. Examples of how that could break:
+- **T-336** plans a route serving a project's documents to the CompMD viewer. If it served a project's `.js` file
+  as `text/javascript`, then under `'self'` a malicious repository's `docs/x.js` becomes a runnable script on the
+  dashboard's origin. Combined with any injection bug (say, a future allowlisted tag that takes a `src`), an
+  attacker who can only get a file into a repository you open would run code in your dashboard. That code could
+  read every project's tasks through the API and show you a convincing fake page.
+- A route that **echoes part of the request** (an error message quoting the path, a search echoing the query) with
+  a JavaScript-compatible type would become a script gadget: `import("/api/search?q=alert(1)//")`.
+- A **dev-only route** or a debugging aid added later, serving files with types guessed from their extension.
+
+With option 1, none of these runs: the browser runs only files whose URL is under the versioned asset folder, which
+holds only what the build copied from the pinned packages.
+
+**What option 1 costs,** which is why the first draft named a fallback:
+- **The origin is per request.** A path can't be written without its scheme, host and port: `http://localhost:8765`
+  is a different source from `http://127.0.0.1:8765`. The server already builds the CSP for each page response; it
+  takes the host from the request's `Host` header, which it already requires to be a loopback name (I10), so the
+  page opened as `127.0.0.1:8766` gets `http://127.0.0.1:8766/assets/compmd/0.3.0/`.
+- **The dev server's origin is Vite's** (`localhost:5173`, forwarding `/assets/` to the API): `build/security-headers.ts`
+  builds it from the dev server's address, and `security-headers.test.ts` keeps the two in step.
+- **Path matching rules:** a source ending in `/` matches everything under it; one without matches that file only.
+  After a redirect, browsers ignore the path part (so that a redirect can't reveal where it went); the asset route
+  never redirects, and a test checks it answers directly.
+- **Browser support:** paths in sources are CSP level 2, supported by Chrome, Firefox and Safari for years. The e2e
+  suite runs in Chromium; the risk was only that something in this setup behaves differently, which the e2e run on
+  the real CSP shows before merging.
+
+None of these is a reason to fall back to `'self'`; each is handled once, with a test. Recommended: option 1, with no
+fallback.
+
+The rest of the policy needs no change: `connect-src 'self'` allows the glue's `.wasm` fetch, `img-src 'self' data:`
+refuses images from elsewhere, and `style-src 'unsafe-inline'` allows CompMD's stylesheet.
 
 ## 3. Configuring CompMD for untrusted text
 
@@ -113,14 +155,31 @@ and rendered with `createPage(element, { tokens })`, with no `components` and no
 | `from: https://…`, `host:` data, a pack | refused by the processor (no allowed origin, no host data, policy `listed` with none listed): a diagnostic, and the component's fallback |
 | an input | rendered without `onSet`, so changing it changes nothing |
 
-**Diagnostics** are not shown in the panel: the reader isn't the author, and an agent writing task text doesn't see
-them. They are logged to the console in development builds only.
+**Diagnostics** are not shown in the panel (R2a). How agents see them is §3a.
+
+## 3a. Diagnostics for agents (open: to decide in review)
+
+Agents write task text through atm (`atm add`, `edit`, `note`, `review`, `block`). They should learn there that what
+they wrote won't render as meant (an unknown component, an unclosed container, a remote import that will be refused).
+The difficulty: the processor is WebAssembly, and atm is Python with the standard library only, which can't run it.
+The dashboard can, but it is read-only by design (I11: nothing changes state over HTTP), and agents don't read it.
+
+| Option | How | For | Against |
+|---|---|---|---|
+| **A. atm checks on write, with Node when present** | atm's write commands (and `atm check`) run `plugin/scripts/compmd-check.mjs` with `node` when it is on PATH: the same WebAssembly files the dashboard uses (`plugin/assets/compmd/…`), `initSync` with the bytes, the same request as §3. Warnings print after the command's output (`--json`: a `compmd` list); they never block a write. Without Node: skipped silently, one line in `atm check` | the agent sees them at the moment it writes, in the output it already reads; one processor and one configuration, so it reports exactly what the panel will do | Node becomes an optional second runtime (atm's rule is Python only: here it's optional, nothing breaks without it); about 50–100 ms per write to load the module |
+| **B. On demand only** | the same check, only in `atm check` (and the end-of-task steps of the skills call it) | no cost on every write | found later, after the text is committed |
+| **C. Guidance only** | T-286 tells agents what renders; no check | nothing new to run | mistakes go unnoticed; readers just see odd text |
+| **D. The dashboard records them** | the panel would report diagnostics back to atm serve, which stores them for `atm status` | no Node | breaks the read-only dashboard (I11) and the tenet it comes from; the server would write task data | 
+
+Recommended: **A**, with B's `atm check` included. A Node check is how a project already using Node would see it;
+for one without, nothing changes but the missing warnings.
 
 ## 4. In the panel
 
-- `CompMd.svelte` takes `text` and an id prefix. It renders `Markdown.svelte` (R2) until CompMD is ready, then
+- `CompMd.svelte` takes `text` and an id prefix. Until CompMD is ready it holds the text's place (R2); then it
   creates a page in its element and renders the processed tree; it processes again only when `text` changes (R8),
-  and destroys the page when unmounted.
+  and destroys the page when unmounted. A question renders as a one-paragraph document, its paragraph's margins
+  trimmed so it sits in its list item as today.
 - **Theme.** `tokens` map CompMD's `--compmd-*` properties to the dashboard's CSS custom properties (text, muted,
   border, accent, code background, spacing); a few rules in `app.css` scoped to `.compmd` match today's headings,
   lists, code, quotes and tables. When the theme or mode changes, the panel calls `page.scheme()` (for T-285's
@@ -142,12 +201,12 @@ them. They are logged to the console in development builds only.
 - **atm-cli** (`tests/scripts/serve.test.mjs`): `/assets/` serves a `.js` and a `.wasm` with their types; refuses
   `..`, encoded separators and a symlink out of the folder; 404s a missing file and an unknown extension; refuses
   POST; the page's CSP has the new sources.
-- **Unit:** the request `compmd.ts` passes (§3), exactly; the link pass (each scheme); the fallback when the import
-  fails; processing skipped when the text is unchanged.
+- **Unit:** the request `compmd.ts` passes (§3), exactly; the link pass (each scheme); the plain text shown when the
+  import fails; processing skipped when the text is unchanged.
 - **e2e** (against the build, with the fixture serving `plugin/assets/`): a table and a task list render; raw
   `<img onerror>` and `<script>` show as text and run nothing; a `javascript:` link isn't a link; an `https:` image
-  and a `from: https://…` component make no request (the guardrail's "no request leaves localhost"); the
-  `markdown.ts` render stays when `/assets/` answers 404; light and dark; the section rail's hints after the swap;
+  and a `from: https://…` component make no request (the guardrail's "no request leaves localhost"); the text
+  shows as written when `/assets/` answers 404; light and dark; the section rail's hints after the swap;
   the details panel's screenshot baselines updated.
 - **Build:** the copied asset list is exactly §2's; the guardrail still passes.
 - **Dev:** `dev-api.test.mjs` checks `/assets/` is forwarded.
@@ -156,10 +215,10 @@ them. They are logged to the console in development builds only.
 
 - **Plugin size:** about 3 MB more per installed plugin version (the WebAssembly), and the same in the repository's
   history each time CompMD is updated. The page itself grows only by the loader and the panel component.
-- **First open:** loading and compiling the module takes some tens of milliseconds from localhost; the panel shows
-  `markdown.ts`'s render meanwhile, then swaps once. Later panels render at once.
-- **For review:**
-  1. The CSP module source limited to the asset folder, with `'self'` as the fallback: agreed?
-  2. The review note above the description renders with CompMD too (it is a note); questions stay one-line
-     `markdown.ts`: agreed?
-  3. Diagnostics not shown to the reader: agreed, or a small "some of this text couldn't render" mark?
+- **First open:** loading and compiling the module takes some tens of milliseconds from localhost; the text's place
+  is held empty meanwhile. Later panels render at once.
+- **Decided in review:** CompMD only, no second renderer (R2); notes, the review note and questions render with it
+  (R1); readers don't see diagnostics (R2a).
+- **Still open:**
+  1. The CSP's module source: the asset folder only, or `'self'` (§2, The page's CSP).
+  2. How agents see diagnostics (§3a).
