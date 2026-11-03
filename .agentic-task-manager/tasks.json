@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 398,
+    "next_id": 399,
     "labels": [
       {
         "id": "architecture",
@@ -815,6 +815,13 @@
             "T-388"
           ]
         }
+      },
+      {
+        "id": "Document Viewer",
+        "state": "active",
+        "goal": "Open the documents and files a task refers to inside the dashboard, rendered with CompMD",
+        "release": "0.29.0",
+        "start": "2026-11-03T18:13:58Z"
       }
     ],
     "releases": [
@@ -984,6 +991,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
         },
         "released_at": "2026-11-03T18:10:34Z"
+      },
+      {
+        "id": "0.29.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -20640,7 +20651,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T16:55:22Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20650,7 +20661,14 @@
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-392",
@@ -20673,9 +20691,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "cli",
         "api",
@@ -20683,7 +20701,14 @@
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-393",
@@ -20709,15 +20734,22 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-394",
@@ -20741,15 +20773,22 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-395",
@@ -20774,15 +20813,22 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-396",
@@ -20805,16 +20851,23 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T16:55:17Z",
+      "updated_at": "2026-11-03T18:13:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "components": [
         "skills",
         "docs"
       ],
       "related": [
         "T-336"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:13:58Z"
+        }
+      ],
+      "sprint": "Document Viewer"
     },
     {
       "id": "T-397",
@@ -20872,6 +20925,52 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/33"
       },
       "merged_at": "2026-11-03T18:10:34Z"
+    },
+    {
+      "id": "T-398",
+      "name": "Upgrade CompMD to its next release, with host-mode math",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "compmd"
+      ],
+      "description": "Move the dashboard to CompMD's next release once Hakan says it is published (expected before this sprint closes); it fixes host mode's math, which shows as TeX today.\n\n## Change\n- `dashboard/package.json`: bump `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to the new version (exact versions, as now), and `@comp-markdown/mermaid` (`dashboard/compmd.config.json`) if it has a matching release. Install from the lockfile as the repository does.\n- Rebuild: the runtime moves to `plugin/assets/compmd/<new version>/`; the old version's folder is removed (`npm run check` compares the committed files with a fresh build).\n- **Math:** inline and display math now typeset in task text, Help and What's new. Remove the *Known* note in the CHANGELOG, the \"math shows as TeX\" lines in `docs/help.md`, `plugin/skills/create-tasks/SKILL.md` and `plugin/CLAUDE.md`, and the math note in `docs/compmd-rendering-design.md`. Check that the page's CSP still holds (math in host mode must not need `style-src` beyond what it has, or inline scripts).\n- `plugin/docs/compmd-llms.txt`: replace with CompMD's `llms.txt` at the new version's tag, its header naming the version and commit; read it in full before committing (a skill reads it: the §3.3 review in `docs/security-architecture.md` gets a line).\n- Anything else the release notes of CompMD change for hosts (the sandbox's API, the request): adapt `dashboard/src/lib/compmd.ts` and `dashboard/compmd/entry.ts`.\n\n## Tests\n`compmd-processor.test.ts` and `compmd.test.ts` pass on the new version; an e2e check that `$x^2$` and a `$$…$$` block render as math in the details panel (not as their TeX); the Mermaid e2e tests and timings; the CSP guard sees no refusal. `npm run size` for the single file.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/package-lock.json",
+        "dashboard/compmd.config.json",
+        "plugin/assets/compmd/",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/tests/e2e/detail.spec.ts",
+        "plugin/docs/compmd-llms.txt",
+        "docs/help.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/compmd-rendering-design.md",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-03T18:14:19Z",
+      "updated_at": "2026-11-03T18:14:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Document Viewer",
+          "from": "2026-11-03T18:14:19Z"
+        }
+      ],
+      "sprint": "Document Viewer",
+      "components": [
+        "dashboard",
+        "skills",
+        "docs"
+      ],
+      "with": "user"
     }
   ]
 }
