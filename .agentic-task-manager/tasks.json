@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 408,
+    "next_id": 411,
     "labels": [
       {
         "id": "architecture",
@@ -852,6 +852,13 @@
             "T-407"
           ]
         }
+      },
+      {
+        "id": "Viewer fixes",
+        "state": "active",
+        "goal": "Submodule files open in the viewer, CompMD 0.5.0 and every Markdown line numbered, and smaller CLI fixes",
+        "release": "0.30.0",
+        "start": "2026-11-04T00:03:31Z"
       }
     ],
     "releases": [
@@ -1030,6 +1037,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
         },
         "released_at": "2026-11-03T23:54:50Z"
+      },
+      {
+        "id": "0.30.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -21582,7 +21593,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-03T22:54:26Z",
+      "updated_at": "2026-11-04T00:03:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21590,6 +21601,10 @@
           "sprint": "Document Viewer",
           "from": "2026-11-03T22:43:49Z",
           "to": "2026-11-03T22:54:26Z"
+        },
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:30Z"
         }
       ],
       "components": [
@@ -21600,7 +21615,8 @@
       "review": "batch",
       "related": [
         "T-398"
-      ]
+      ],
+      "sprint": "Viewer fixes"
     },
     {
       "id": "T-406",
@@ -21629,7 +21645,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:56:29Z",
-      "updated_at": "2026-11-03T22:56:47Z",
+      "updated_at": "2026-11-04T00:03:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -21640,7 +21656,14 @@
       "related": [
         "T-400",
         "T-398"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:30Z"
+        }
+      ],
+      "sprint": "Viewer fixes"
     },
     {
       "id": "T-407",
@@ -21690,6 +21713,126 @@
         }
       ],
       "merged_at": "2026-11-03T23:54:50Z"
+    },
+    {
+      "id": "T-408",
+      "name": "Files inside a git submodule open in the document viewer",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A file inside a git submodule never opens in the viewer: it says the file can't be shown, as for a file git ignores (Hakan).\n\n## Cause\nThe vcs layer's [`ignored`](atm-cli/atm/vcs/git.py#:~:text=def%20ignored) runs `git check-ignore` in the project's repository. For a path inside a submodule, git refuses (\"is in submodule\", exit 128), and the check fails closed: any answer but \"not ignored\" counts as ignored. [`tracked`](atm-cli/atm/vcs/git.py#:~:text=def%20tracked) has the same problem (`ls-files` in the superproject doesn't list the submodule's files), so *Open on GitHub* would be wrong for them too.\n\n## Change\n- `ignored` and `tracked` in [`atm-cli/atm/vcs/git.py`](atm-cli/atm/vcs/git.py): for a path inside a submodule (the nearest submodule from `git submodule status`, or `git ls-files --stage` mode `160000`, cached per call), ask the submodule's own git with the path relative to it. Its ignore rules, and the superproject's for the submodule's folder, decide; any other git error still refuses (fail closed, as now). Nested submodules: the innermost.\n- `head`/`tracked` for *Open on GitHub*: a file in a submodule links to the submodule's own repository at its commit, when its remote is a web address atm knows (`repo.ts`'s hosts); otherwise the button doesn't show. Through the documents route's `tracked`/`commit` fields, plus what the link needs (the submodule's web address and path).\n- The other checks stay as they are for submodule files: no hidden parts, no key files, no symlink on the way, the size limits.\n- [`docs/security-architecture.md`](docs/security-architecture.md): I11 and I12 say what the routes do inside a submodule (its own ignore rules; failing closed).\n\n## Tests\n`serve.test.mjs` with a real submodule (a second repository added with `git submodule add` from a local path): a file in it opens; one its `.gitignore` ignores doesn't; a key file in it doesn't; the documents route gives the submodule's commit. A unit test in `tests/lib/` for the path-to-submodule lookup.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/vcs/git.py",
+        "atm-cli/atm/lib/documents.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/serve.test.mjs",
+        "tests/lib/test_documents.py",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/repo.ts",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T00:03:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-392"
+      ]
+    },
+    {
+      "id": "T-409",
+      "name": "atm help lists edit's requirement and use-case flags",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm help`'s overview still gives `edit` its flags from before T-401; `atm edit --help` is right. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` to the `edit` lines of the overview in atm-cli's help text (in `atm-cli/atm/cli/`), and check every other command's line there against its own `--help` while at it. A scenario in `tests/scripts/scenarios/` (`stdoutIncludes`) for the new flags in `atm help`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/scenarios/basics.json",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T00:03:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "cli"
+      ],
+      "review": "batch",
+      "related": [
+        "T-401"
+      ]
+    },
+    {
+      "id": "T-410",
+      "name": "Release 0.30.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "The release of the sprint *Viewer fixes*, as T-407 did for 0.29.0 and the project's `CLAUDE.md` (*Versions*, *CI*) says.\n\n## Steps\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.30.0`.\n- `plugin/CHANGELOG.md`: `[Unreleased]` becomes `[0.30.0]` with the date; `plugin/WHATS-NEW.md`: 3–6 plain bullets from it.\n- The Linux screenshot baselines in Docker (`npm run test:e2e:visual:update`), looked at before committing.\n- `npm run verify`.\n- The security checklist (`docs/security-architecture.md` §3): written §3.3 reviews for any skill change (no API key for the sandbox); the document updated for any new entry point.\n- Push and the combined PR from the sprint's branch to `main` with `/atm:push`, watching CI.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-408",
+        "T-409",
+        "T-405",
+        "T-406"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/tests/e2e/__screenshots__/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T00:03:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "review": "none"
     }
   ]
 }
