@@ -2567,6 +2567,11 @@ class Vcs(Protocol):
         """The current commit's SHA; None outside version control or before the first commit."""
         ...
 
+    def submodule_of(self, relative: str) -> Optional[dict]:
+        """For a file inside a submodule (the innermost): {path: the submodule's folder, commit: its own HEAD,
+        repository: its web address or None}; None for any other file, and outside version control (T-408)."""
+        ...
+
 
 # ==== db/jsongit/gitrun.py ====
 # Git as the carrier of the task files (docs/layered-architecture.md §2): whether a task file is tracked. Running git
@@ -4532,21 +4537,63 @@ class GitVcs:
         with open(path, "rb") as f:
             return f.read()
 
+    def _submodule(self, relative):
+        """The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or None. A submodule
+        is a folder this repository records as a commit (mode 160000) with a checkout of its own (`.git`); git answers
+        nothing about the files in it from here, only from its own repository (T-408). A nested repository that isn't a
+        submodule is not one: its files stay this repository's to judge (and git refuses them, so they stay hidden)."""
+        parts = relative.split("/")
+        for i in range(1, len(parts)):
+            folder = "/".join(parts[:i])
+            if not os.path.lexists(os.path.join(self.root, folder, ".git")):
+                continue
+            for line in (git(LITERAL + ["ls-files", "--stage", "--", folder], self.root) or "").splitlines():
+                meta, _, path = line.partition("\t")
+                if path == folder and meta.split(" ", 1)[0] == "160000":
+                    return folder, "/".join(parts[i:])
+        return None
+
+    def _in_submodule(self, relative):
+        """The submodule's own GitVcs and the path inside it, or None outside one"""
+        found = self._submodule(relative)
+        return (GitVcs(os.path.join(self.root, found[0])), found[1]) if found else None
+
     def ignored(self, relative):
         """git's ignore rules, as `git status` applies them: a file git tracks is never ignored. check-ignore takes
         paths, not patterns (and refuses --literal-pathspecs). It fails closed: only git's "not ignored" (exit 1)
-        lets a file through; an error counts as ignored."""
+        lets a file through; an error counts as ignored. A file in a submodule: the submodule's own rules decide (git
+        refuses the question from here), down to the innermost submodule."""
         if not self.in_repository():
             return False
+        inside = self._in_submodule(relative)
+        if inside:
+            return inside[0].ignored(inside[1])
         return git_exit(["check-ignore", "-q", "--", relative], self.root) != 1
 
     def tracked(self, relative):
         if not self.in_repository():
             return None
+        inside = self._in_submodule(relative)
+        if inside:
+            return inside[0].tracked(inside[1])
         return git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is not None
 
     def head(self):
         return self.resolve("HEAD") if self.in_repository() else None
+
+    def submodule_of(self, relative):
+        """For a file in a submodule (the innermost): {path: its folder from the root, commit: its HEAD, repository:
+        its origin's web address or None}; None for any other file."""
+        if not self.in_repository():
+            return None
+        found = self._submodule(relative)
+        if not found:
+            return None
+        sub = GitVcs(os.path.join(self.root, found[0]))
+        nested = sub.submodule_of(found[1])
+        if nested:
+            return {**nested, "path": f"{found[0]}/{nested['path']}"}
+        return {"path": found[0], "commit": sub.head(), "repository": repository_url(sub.remote_url())}
 
 
 # ==== lib/project.py ====
@@ -7987,7 +8034,8 @@ def read_document(project, path):
     text in a fence (`line_offset` 1: the fence's first line comes before the file's), an image as a Markdown image
     of its own name (relative, which the dashboard points at the files route), a binary file as a line saying so.
     `text` is the file as it is (None for an image or a binary file); `lines` counts its lines. `tracked` and
-    `commit` (the current commit) are None outside version control. NotFound, Refused or TooLarge."""
+    `commit` (the current commit) are None outside version control; `submodule` is {path, commit, repository} for a
+    file in a git submodule, else None. NotFound, Refused or TooLarge."""
     path, kind, detail, stamp = _checked(project, path)
     data = project.vcs.read_file(path)
     name = path.rsplit("/", 1)[-1]
@@ -8023,6 +8071,8 @@ def read_document(project, path):
         "modified_at": modified,
         "tracked": project.vcs.tracked(path),
         "commit": project.vcs.head(),
+        # A file in a submodule lives in the submodule's repository: its folder, commit and web address (T-408)
+        "submodule": project.vcs.submodule_of(path),
     }
 
 

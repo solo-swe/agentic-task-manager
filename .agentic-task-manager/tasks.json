@@ -21725,7 +21725,7 @@
       "description": "A file inside a git submodule never opens in the viewer: it says the file can't be shown, as for a file git ignores (Hakan).\n\n## Cause\nThe vcs layer's [`ignored`](atm-cli/atm/vcs/git.py#:~:text=def%20ignored) runs `git check-ignore` in the project's repository. For a path inside a submodule, git refuses (\"is in submodule\", exit 128), and the check fails closed: any answer but \"not ignored\" counts as ignored. [`tracked`](atm-cli/atm/vcs/git.py#:~:text=def%20tracked) has the same problem (`ls-files` in the superproject doesn't list the submodule's files), so *Open on GitHub* would be wrong for them too.\n\n## Change\n- `ignored` and `tracked` in [`atm-cli/atm/vcs/git.py`](atm-cli/atm/vcs/git.py): for a path inside a submodule (the nearest submodule from `git submodule status`, or `git ls-files --stage` mode `160000`, cached per call), ask the submodule's own git with the path relative to it. Its ignore rules, and the superproject's for the submodule's folder, decide; any other git error still refuses (fail closed, as now). Nested submodules: the innermost.\n- `head`/`tracked` for *Open on GitHub*: a file in a submodule links to the submodule's own repository at its commit, when its remote is a web address atm knows (`repo.ts`'s hosts); otherwise the button doesn't show. Through the documents route's `tracked`/`commit` fields, plus what the link needs (the submodule's web address and path).\n- The other checks stay as they are for submodule files: no hidden parts, no key files, no symlink on the way, the size limits.\n- [`docs/security-architecture.md`](docs/security-architecture.md): I11 and I12 say what the routes do inside a submodule (its own ignore rules; failing closed).\n\n## Tests\n`serve.test.mjs` with a real submodule (a second repository added with `git submodule add` from a local path): a file in it opens; one its `.gitignore` ignores doesn't; a key file in it doesn't; the documents route gives the submodule's commit. A unit test in `tests/lib/` for the path-to-submodule lookup.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/vcs/git.py",
@@ -21739,9 +21739,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T00:08:01Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Viewer fixes",
@@ -21758,7 +21758,9 @@
       "review": "batch",
       "related": [
         "T-392"
-      ]
+      ],
+      "started_at": "2026-11-04T00:08:01Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-409",

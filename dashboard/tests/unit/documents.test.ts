@@ -13,6 +13,7 @@ import {
   parseTextFragment,
   pathToCopy,
   referenceTo,
+  repositoryFile,
   resolvePath,
   VIEWER_MIN,
   withDocHash,
@@ -298,5 +299,27 @@ describe('Open on GitHub: a file at a commit, in the repository’s web view', (
     expect(fileRef(undefined, sha, 'x.ts')).toBeNull();
     expect(fileRef({ repository: 'https://example.com/o/r' }, sha, 'x.ts')).toBeNull();
     expect(fileRef({ repository: 'javascript:alert(1)' }, sha, 'x.ts')).toBeNull();
+  });
+
+  it('a file in a submodule: its own repository, at its commit, the path inside it (T-408)', () => {
+    const meta = { repository: 'https://github.com/o/app' };
+    const sub = { path: 'vendor/lib', commit: 'b'.repeat(40), repository: 'https://github.com/o/lib' };
+    expect(repositoryFile({ tracked: true, commit: sha, submodule: sub }, 'vendor/lib/docs/x.md', meta)).toEqual({
+      meta: { repository: 'https://github.com/o/lib' },
+      commit: 'b'.repeat(40),
+      path: 'docs/x.md',
+    });
+    // The project's own file, as before
+    expect(repositoryFile({ tracked: true, commit: sha, submodule: null }, 'docs/x.md', meta)).toEqual({
+      meta,
+      commit: sha,
+      path: 'docs/x.md',
+    });
+    // Nowhere to go: untracked, a submodule without a web address, no commit
+    expect(repositoryFile({ tracked: false, commit: sha }, 'docs/x.md', meta)).toBeNull();
+    expect(
+      repositoryFile({ tracked: true, commit: sha, submodule: { ...sub, repository: null } }, 'vendor/lib/x.md', meta),
+    ).toBeNull();
+    expect(repositoryFile({ tracked: true, commit: null }, 'docs/x.md', meta)).toBeNull();
   });
 });

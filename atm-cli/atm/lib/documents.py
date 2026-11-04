@@ -210,7 +210,8 @@ def read_document(project, path):
     text in a fence (`line_offset` 1: the fence's first line comes before the file's), an image as a Markdown image
     of its own name (relative, which the dashboard points at the files route), a binary file as a line saying so.
     `text` is the file as it is (None for an image or a binary file); `lines` counts its lines. `tracked` and
-    `commit` (the current commit) are None outside version control. NotFound, Refused or TooLarge."""
+    `commit` (the current commit) are None outside version control; `submodule` is {path, commit, repository} for a
+    file in a git submodule, else None. NotFound, Refused or TooLarge."""
     path, kind, detail, stamp = _checked(project, path)
     data = project.vcs.read_file(path)
     name = path.rsplit("/", 1)[-1]
@@ -246,6 +247,8 @@ def read_document(project, path):
         "modified_at": modified,
         "tracked": project.vcs.tracked(path),
         "commit": project.vcs.head(),
+        # A file in a submodule lives in the submodule's repository: its folder, commit and web address (T-408)
+        "submodule": project.vcs.submodule_of(path),
     }
 
 

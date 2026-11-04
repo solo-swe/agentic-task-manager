@@ -9,6 +9,7 @@
     parseTextFragment,
     loadDocument,
     pathToCopy,
+    repositoryFile,
     resolvePath,
     VIEWER_NARROW,
     type DocumentError,
@@ -84,10 +85,12 @@
   });
 
   const title = $derived(doc ? documentTitle(doc) : (ref?.path.split('/').pop() ?? ''));
-  // Open on GitHub (or the project's host): only for a file git tracks, at the commit the server named
-  const repoFile = $derived(
-    doc?.tracked && doc.commit && ref ? fileRef(dashboard.meta, doc.commit, ref.path, ref.lines) : null,
-  );
+  // Open on GitHub (or the project's host): only for a file git tracks, at the commit the server named; a file in a
+  // submodule in the submodule's own repository (T-408)
+  const repoFile = $derived.by(() => {
+    const where = doc && ref ? repositoryFile(doc, ref.path, dashboard.meta) : null;
+    return where && ref ? fileRef(where.meta, where.commit, where.path, ref.lines) : null;
+  });
 
   /** A relative image in the document, resolved from its folder, loads from this server's files route (V5); any
    * other image shows its alt text */

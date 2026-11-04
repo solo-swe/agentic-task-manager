@@ -150,11 +150,14 @@ The document viewer's routes (T-392, docs/compmd-viewer-design.md §4), answered
 reads the working copy through the version control. `path` is relative to the project's root, `/`-separated.
 
 - `documents?path=` answers `{path, kind, language, text, document, line_offset, lines, bytes, modified_at, tracked,
-  commit}`. `kind` is `markdown`, `code` (with its fence `language`), `image`, `binary` or `text`; `document` is the
+  commit, submodule}`. `kind` is `markdown`, `code` (with its fence `language`), `image`, `binary` or `text`; `document` is the
   CompMD document the dashboard renders: a Markdown file as it is, code and text in a fence (`line_offset` 1, the
   lines the wrapping adds before the file's first), an image as a Markdown image of its own name, a binary file as a
   line saying so. `text` is the file as it is (`null` for an image or a binary file), `lines` its line count.
-  `tracked` and `commit` (the HEAD commit) are `null` outside git. The ETag is the file's size, mtime and the commit.
+  `tracked` and `commit` (the HEAD commit) are `null` outside git. A file in a git submodule (T-408) is judged by the
+  submodule's own repository (`tracked`, and whether it is ignored), and `submodule` is `{path, commit, repository}`:
+  the submodule's folder, its own HEAD and its origin's web address (`null` when it isn't one); `null` for any other
+  file. The ETag is the file's size, mtime and the commit.
 - `files?path=` answers an image's bytes (PNG, JPEG, GIF, WebP, SVG whose bytes match its name) with its type,
   `Cache-Control: no-cache`, `nosniff` and a sandboxing CSP; any other file `403`. The ETag is the size and mtime.
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or

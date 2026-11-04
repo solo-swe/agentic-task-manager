@@ -4,6 +4,18 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [Unreleased]
+
+The sprint *Viewer fixes* (release 0.30.0).
+
+### Fixed
+- **Files inside a git submodule open in the document viewer** (T-408): the viewer refused them as if git ignored
+  them, since `git check-ignore` in the project's repository refuses a path inside a submodule and the check fails
+  closed. The vcs layer now asks the submodule's own repository (`ignored` and `tracked`, down to the innermost
+  submodule; any git error still refuses), and the documents route gives `submodule` (`{path, commit, repository}`,
+  the vcs's new `submodule_of`), so **Open on GitHub** links to the submodule's repository at its commit (or doesn't
+  show when its remote isn't a web address).
+
 ## [0.29.0] - 2026-11-03
 
 The sprint *Document Viewer* (release 0.29.0): open the documents and files a task refers to inside the dashboard
