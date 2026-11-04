@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 411,
+    "next_id": 412,
     "labels": [
       {
         "id": "architecture",
@@ -21799,7 +21799,7 @@
       "description": "`atm help`'s overview still gives `edit` its flags from before T-401; `atm edit --help` is right. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` to the `edit` lines of the overview in atm-cli's help text (in `atm-cli/atm/cli/`), and check every other command's line there against its own `--help` while at it. A scenario in `tests/scripts/scenarios/` (`stdoutIncludes`) for the new flags in `atm help`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/main.py",
@@ -21808,7 +21808,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:27:18Z",
+      "updated_at": "2026-11-04T00:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21826,7 +21826,19 @@
         "T-401"
       ],
       "started_at": "2026-11-04T00:27:18Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "8991cfd176937ea3bdb9e4e2a97ef09c5a5a6d62",
+      "completed_at": "2026-11-04T00:29:05Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:29:05Z",
+          "kind": "review",
+          "text": "Check: `atm help`’s overview now matches each command’s `--help` (edit, add, status, list, check, commit --record, sprints close --reviewed / delete); `add --requirement` says a link works. Scenario in `basics.json`.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-410",
@@ -21863,6 +21875,44 @@
       ],
       "sprint": "Viewer fixes",
       "review": "none"
+    },
+    {
+      "id": "T-411",
+      "name": "Omniboard: a card opens its task's details over the Omniboard, not the project's Kanban",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "overview"
+      ],
+      "description": "Clicking a card on the Omniboard (All projects › Omniboard) switches to the project's page and opens the task there (Hakan): it should stay on the Omniboard, with the task's details open over it. The card's project chip and \"+ N more\" still open the project.\n\n## Change\n- `dashboard/src/lib/state.svelte.ts`: `openOnBoard(project, task)` loads the card's project's data (tasks, claims, worktrees; the same as a project page loads) under the Omniboard, without changing the page or the URL, and opens the task's details; the dashboard's refresh keeps it current while the details are open. Closing the details, or going to another page, ends it. The project's saved view isn't applied then (only when its page opens).\n- `AllProjectsBoard.svelte`: a card (click, Enter, Space) calls it.\n- `DocumentViewer.svelte`: opens for that project too, so links in the task's text work on the Omniboard.\n\n## Tests\nThe e2e test in `all-projects-board.spec.ts` (\"a card opens its task…\"): the URL stays the Omniboard's, the board stays, the details show the task; a dependency in the details opens that task; Escape closes them and the board is still there; the chip still opens the project. A unit test for the state.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/tests/e2e/all-projects-board.spec.ts",
+        "dashboard/tests/unit/state.test.ts"
+      ],
+      "created_at": "2026-11-04T01:31:16Z",
+      "updated_at": "2026-11-04T01:31:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T01:31:16Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-04T01:31:18Z",
+      "started_by": "claude:b7be7288"
     }
   ]
 }

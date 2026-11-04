@@ -91,8 +91,8 @@
           <em>All tasks</em>, every sprint and the backlog, with what was done in the last 24 hours.
         </p>
         <p>
-          Each project's full details are on its own Kanban board: a card opens its task there, the project chip or
-          <em>+ N more</em> opens the project.
+          A card opens its task's details here, over the board. Each project's full board is its own Kanban: the project
+          chip or <em>+ N more</em> opens the project.
         </p>
       </InfoTip>
       <!-- The active sprints' tasks (the default) or every task, as before (T-340) -->

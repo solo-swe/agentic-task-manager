@@ -121,14 +121,38 @@ test.describe('All projects board', () => {
     await expect(column(page, 'review').locator('.kanban-count')).toHaveText('0');
   });
 
-  test('a card opens its task in its project; the chip opens the project', async ({ page, tasksServer }) => {
+  test('a card opens its task’s details over the board, which stays; the chip opens the project (T-411)', async ({
+    page,
+    tasksServer,
+  }) => {
     await openBoard(page, tasksServer);
-    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"]').click();
-    await expect(page).toHaveURL(/project=shop/);
-    await expect(page.locator('#detail-overlay.open #detail-panel h3 > span').first()).toHaveText('T-005');
-
+    const url = page.url();
+    const panel = page.locator('#detail-overlay.open #detail-panel');
+    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-007"]').click();
+    await expect(panel.locator('h3')).toHaveText('T-007 Two-factor sign-in');
+    // Still the board, at the same address: no jump to the project's Kanban
+    expect(page.url()).toBe(url);
+    await expect(page.locator('#all-board')).toBeVisible();
+    // The details are the project's own: a dependency opens its task
+    await panel.locator('.detail-dep-item', { hasText: 'T-001' }).click();
+    await expect(panel.locator('h3 > span').first()).toHaveText('T-001');
+    // Kept open as the dashboard refreshes, until closed; then the board is as it was
+    await page.clock.runFor(6_000);
+    await expect(panel).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#detail-overlay.open')).toHaveCount(0);
+    await expect(page.locator('#all-board')).toBeVisible();
+    // Another card, by the keyboard
+    await page.locator('#all-board .board-card[data-project="shop"][data-id="T-005"]').press('Enter');
+    await expect(panel.locator('h3 > span').first()).toHaveText('T-005');
+    await page.keyboard.press('Escape');
+    expect(page.url()).toBe(url);
+    // A card whose task its project's data doesn't have (B-1: the Blog fixture's tasks are others) opens the project
+    await page.locator('#all-board .board-card[data-project="blog"][data-id="B-1"]').click();
+    await expect(page).toHaveURL(/project=blog/);
     await page.goBack();
     await expect(page.locator('#all-board')).toBeVisible();
+
     await page.locator('#all-board .board-card[data-id="B-1"] .board-project-chip').click();
     await expect(page).toHaveURL(/project=blog/);
     await expect(page.locator('#detail-overlay.open')).toHaveCount(0);
@@ -292,7 +316,8 @@ test.describe('All projects board', () => {
     await page.getByRole('button', { name: 'About the Omniboard' }).click();
     const about = page.getByRole('dialog', { name: 'About the Omniboard' });
     await expect(about).toContainText('done in the last 24 hours');
-    await expect(about).toContainText("Each project's full details are on its own Kanban board");
+    await expect(about).toContainText("A card opens its task's details here, over the board");
+    await expect(about).toContainText("Each project's full board is its own Kanban");
   });
 
   test('Active only applies to the board too', async ({ page, tasksServer }) => {

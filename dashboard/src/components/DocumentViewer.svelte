@@ -30,7 +30,8 @@
   // Reload work; the file is asked for again on the dashboard's refresh, a 304 while it is unchanged.
 
   const ref = $derived(dashboard.docRef);
-  const project = $derived(dashboard.route.page === 'project' ? dashboard.projectId : null);
+  // The shown project's files; on the Omniboard, those of the project whose task is open over it (T-411)
+  const project = $derived(dashboard.route.page === 'project' || dashboard.peeking ? dashboard.projectId : null);
   const open = $derived(ref !== null && project !== null);
 
   let doc = $state.raw<ProjectDocument | null>(null);

@@ -1,7 +1,7 @@
 <script lang="ts">
   // The All projects board (T-259, docs/all-projects-kanban-proposal.md §3): what's happening now, everywhere. Cards
-  // like a project's Kanban cards, each with its project's chip; a card opens the task in its project, the chip the
-  // project, "+ N more" the project's Kanban. Grouped by project, a lane per project instead of the chips.
+  // like a project's Kanban cards, each with its project's chip; a card opens the task's details over the board
+  // (T-411), the chip the project, "+ N more" the project's Kanban. Grouped by project, a lane per project instead of the chips.
   import {
     allBoard,
     allBoardLanes,
@@ -85,8 +85,9 @@
     return null;
   }
 
+  /** The task's details over the board, which stays (T-411); the chip opens the project */
   function open(item: AllBoardCard) {
-    dashboard.openProject(item.project.id, { task: item.card.id });
+    void dashboard.openOnBoard(item.project.id, item.card.id);
   }
 
   function onKeydown(e: KeyboardEvent, item: AllBoardCard) {

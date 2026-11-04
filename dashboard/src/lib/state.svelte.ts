@@ -206,6 +206,8 @@ export class DashboardState {
   /** Task shown in the detail panel; the panel keeps its last content while closed. */
   detailId = $state<string | null>(null);
   detailOpen = $state(false);
+  /** A task of the Omniboard is open over it (T-411): its project's data is loaded, the page is still the overview */
+  peeking = $state(false);
 
   /** The selected view tab; mirrored in the URL hash ("#view=kanban") */
   tab = $state<ViewId>(parseViewHash(location.hash));
@@ -351,10 +353,12 @@ export class DashboardState {
     this.projectsLoaded = true;
     this.route = routeFor(this.projects, location.hash);
     if (this.route.page !== 'project') {
-      // A task's details belong to its project's page (Back from a task opened on the overview)
-      this.detailOpen = false;
+      // A task's details belong to its project's page (Back from a task opened on the overview), unless the task was
+      // opened on the Omniboard (T-411)
+      if (!this.peeking) this.detailOpen = false;
       return null;
     }
+    this.peeking = false;
     if (this.route.id !== this.projectId) this.switchProject(this.route.id);
     // The project page wasn't shown, so nothing followed a #view= in the link that opened it
     if (hasViewHash(location.hash)) this.tab = parseViewHash(location.hash);
@@ -421,6 +425,11 @@ export class DashboardState {
     }
     const route = routeFor(this.projects, location.hash);
     if (JSON.stringify(route) !== JSON.stringify(this.route)) {
+      // Another page: a task opened on the Omniboard closes with it
+      if (this.peeking) {
+        this.peeking = false;
+        this.detailOpen = false;
+      }
       void this.reload();
       return;
     }
@@ -453,11 +462,51 @@ export class DashboardState {
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     if (project === null) {
       if (this.route.page === 'overview') await this.refreshProjectSources();
+      // A task open on the Omniboard (T-411): its project's data kept current under the board
+      if (this.peeking && this.projectId) await this.loadProjectData(this.projectId);
       this.loadedAt = Date.now();
       return;
     }
+    await this.loadProjectData(project);
+    if (!this.loaded) this.restoreView();
+    if (this.#pendingNeedsYou) {
+      // Opened from an overview card's "needs you": only what waits for a review or a decision
+      this.#pendingNeedsYou = false;
+      const status = this.vocab.statuses.filter((s) => s.kind === 'review' || s.kind === 'blocked').map((s) => s.id);
+      const none = Object.fromEntries(FILTER_GROUPS.map((g) => [g, []])) as unknown as Record<FilterGroup, string[]>;
+      this.filters = filtersFrom({ ...none, status });
+    }
+    this.loaded = true;
+    if (this.#pendingTask) {
+      // Opened from an overview card's "needs you" list: that task's details
+      this.showDetail(this.#pendingTask);
+      this.#pendingTask = null;
+    }
+  }
+
+  /** A task of the Omniboard's (T-411): its details open over the board, which stays (the page and the URL don't
+   * change). Its project's data is loaded underneath, as its page would load it, without its saved view: that is
+   * applied when the project's page opens. Closing the details, or another page, ends it. */
+  async openOnBoard(projectId: string, taskId: string) {
+    if (projectId !== this.projectId) this.switchProject(projectId);
+    this.peeking = true;
+    await this.loadProjectData(projectId);
+    if (this.projectId !== projectId || !this.peeking) return; // another card was opened meanwhile, or another page
+    if (this.taskMap.has(taskId) || this.archiveMap.has(taskId)) {
+      this.showDetail(taskId);
+      return;
+    }
+    // Not in the data loaded (the board and the project disagree for a moment): its project's page, as before
+    this.peeking = false;
+    this.openProject(projectId, { task: taskId });
+  }
+
+  /** The project's tasks, claims and worktrees, applied to the state (the project's page, or a task opened on the
+   * Omniboard) */
+  private async loadProjectData(project: string) {
     const [result, claims, trees] = await Promise.all([
-      loadTasks(project, browserFetch, this.loaded ? this.#validators : undefined),
+      // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
+      loadTasks(project, browserFetch, this.#validators),
       loadClaims(project),
       // Worktrees are extra: a failure leaves the board on the main worktree's tasks (logged only)
       loadWorktrees(project, browserFetch, this.#worktreesValidators).catch((e): WorktreesResult => {
@@ -480,20 +529,6 @@ export class DashboardState {
     } else {
       this.#validators = result.validators;
       this.apply(result.loaded, claims);
-    }
-    if (!this.loaded) this.restoreView();
-    if (this.#pendingNeedsYou) {
-      // Opened from an overview card's "needs you": only what waits for a review or a decision
-      this.#pendingNeedsYou = false;
-      const status = this.vocab.statuses.filter((s) => s.kind === 'review' || s.kind === 'blocked').map((s) => s.id);
-      const none = Object.fromEntries(FILTER_GROUPS.map((g) => [g, []])) as unknown as Record<FilterGroup, string[]>;
-      this.filters = filtersFrom({ ...none, status });
-    }
-    this.loaded = true;
-    if (this.#pendingTask) {
-      // Opened from an overview card's "needs you" list: that task's details
-      this.showDetail(this.#pendingTask);
-      this.#pendingTask = null;
     }
   }
 
@@ -593,6 +628,7 @@ export class DashboardState {
 
   closeDetail() {
     this.detailOpen = false;
+    this.peeking = false;
   }
 
   openWhatsNew() {

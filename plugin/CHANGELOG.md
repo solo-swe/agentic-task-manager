@@ -18,6 +18,12 @@ The sprint *Viewer fixes* (release 0.30.0).
   `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` say when to use it.
 
 ### Fixed
+- **A card on the Omniboard opens its task over the Omniboard** (T-411), instead of switching to the project's
+  page: `openOnBoard` in `lib/state.svelte.ts` loads the card's project's data underneath (tasks, claims, worktrees,
+  as its page would; not its saved view) and opens the details, kept current by the refresh until they close or the
+  page changes (`peeking`); the document viewer opens for that project too. The project chip and "+ N more" still open
+  the project; a card whose task its project's data doesn't have opens the project, as before. The Omniboard's ⓘ
+  says so.
 - **`atm help` lists every command's options again** (T-409): its overview had drifted from the commands' own
   `--help`: `edit`'s requirement, use-case, component, related, release, review and `--with` options, `add`'s, `status`
   and `list`'s `--release`/`--component` (and `list --archived`), `check --files`, `commit --record` and
