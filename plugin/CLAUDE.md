@@ -37,7 +37,8 @@ Every command takes `--json`; `atm help` lists them all.
 - Not needed: `atm skip <id> --reason ...` (a to-do or blocked task)
 - Undo: `atm reopen <id> --reason ...` takes a done or skipped task back to to-do (never edit its status by hand)
 - Commit: `atm commit <id> --file F [--file F]...`, naming every file the task changed, while the task is still in
-  progress; only then `atm done` (or `review`/`block`). A task is never done with its work uncommitted
+  progress; only then `atm done` (or `review`/`block`). A task is never done with its work uncommitted. A generated
+  folder the task rebuilt (a build's output) goes in whole with `--dir FOLDER`; never a folder others work in
 - Push: `/atm:push` records the PR with `atm pr <id>... --number N --url U` and merges with `atm merged --pr N`
 - Define: `atm init --meta-file F` (project, vocabularies), `atm repository [set URL]` (the repository's web address,
   for commit and PR links; `atm init` fills it from origin), `atm sprints` (the sprints; `/atm:plan-sprint` plans

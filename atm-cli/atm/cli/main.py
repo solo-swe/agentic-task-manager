@@ -41,11 +41,12 @@ commands:
                  run the dashboard server in the background: one per user, for all registered projects
                  (start registers this project, or the one at PATH, and prints its URL; --all the overview's;
                  --refresh only restarts a running server whose dashboard is older than this plugin's)
-  status         the overview: counts, what is in progress, in review or blocked, the next task
+  status [--sprint S]... [--backlog] [--release R] [--component C]
+                 the overview: counts, what is in progress, in review or blocked, the next task
   summary        the project's numbers as atm serve gives them to the dashboard (JSON)
   show <id>...   tasks in full (description, dependencies, files, notes)
-  list [--status S] [--sprint S | --backlog] [--type T] [--priority P] [--label L] [--agent A] [--ready]
-       [--blocked] [--in-pr] [--with-user] [--derived]
+  list [--status S] [--sprint S | --backlog] [--release R] [--component C] [--type T] [--priority P]
+       [--label L] [--agent A] [--ready] [--blocked] [--in-pr] [--with-user] [--archived] [--derived]
                  one line per task: ID, status, priority, labels, name (--derived: each task in full with what atm
                  derives for it, as JSON)
   deps <id>      what a task waits for, and what waits for it
@@ -73,21 +74,31 @@ commands:
   release <id> [--note TEXT]
                  put an in_progress task back to todo; the note is a handoff for the next agent
   note <id> TEXT add a note to a task (at most 500 characters)
-  add --name N --type T [--sprint S] [--priority P] [--label L]... [--description D] [--dep ID]... [--file F]...
+  add --name N --type T [--sprint S] [--release R] [--priority P] [--label L]...
+      [--description D | --description-file F] [--dep ID]... [--file F]... [--requirement R]...
+      [--component C]... [--components auto] [--review MODE] [--related ID]... [--with user]
                  add a task with the next ID (in the backlog without --sprint); add --json-file F adds many
-  edit <id> [--name] [--description] [--sprint S | --backlog] [--type] [--priority]
+  edit <id> [--name] [--description | --description-file F] [--sprint S | --backlog] [--type] [--priority]
+            [--release R] [--review MODE] [--with user] [--components auto]
             [--add-dep/--remove-dep ID] [--add-file/--remove-file F] [--add-label/--remove-label L]
-                 change a task's definition (its status changes only through the status commands)
-  check          check tasks.json: schema, vocabularies, dependencies (exit code 1 on errors)
+            [--add-component/--remove-component C] [--add-related/--remove-related ID]
+            [--add-requirement/--remove-requirement R] [--add-use-case/--remove-use-case U]
+                 change a task's definition (its status changes only through the status commands); a
+                 requirement or use case is an ID, or a link to where it is defined
+  check [--files]
+                 check tasks.json: schema, vocabularies, dependencies (exit code 1 on errors); --files also
+                 warns about missing files that finished tasks list
   archive [--sprint S]... [--before DATE] [--keep-days N] [--dry-run]
                  move finished tasks to tasks-archive.json, to keep tasks.json small
   unarchive <id>...
                  bring archived tasks back into tasks.json
   workflow [set direct|pull-request] [--base B] [--verify true|false] [--max-rounds N] ...
                  print the project's workflow (meta.workflow), or set it
-  commit <id> --file F [--file F]... [--message TEXT]
-                 commit exactly those files plus tasks.json (message from meta.workflow.commit_template),
-                 and record the commit on the task
+  commit <id> --file F [--file F]... [--dir FOLDER]... [--message TEXT]
+                 commit exactly those files (and every change under a --dir folder, e.g. a generated one the
+                 task rebuilt) plus tasks.json (message from meta.workflow.commit_template),
+                 and record the commit on the task; commit <id> --record REV records an existing commit
+                 instead (after a rebase or a cherry-pick)
   pr <id>... --number N --url URL
                  record the PR that contains the tasks
   merged --pr N [--at TIME]
@@ -117,11 +128,13 @@ commands:
                  file inside the project, at most 512 KB); without one, a logo.svg, .github/logo.png, ... is used
   sprints [--all] | sprints add ["<name>"] [--goal T] [--release R] [--due DATE] [--after S]
           | sprints edit <S> [--goal] [--release] [--due] | sprints start <S>
-          | sprints close <S> [--carry-to <S2>|new [--name N]|backlog]
+          | sprints close <S> [--carry-to <S2>|new [--name N]|backlog] [--reviewed]
+          | sprints delete <S> [--move-to <S2>|backlog] [--force]
                  the sprints in order with their task counts (closed ones with --all); add one (a name is
                  generated without one), change one, make one active (one at a time), or close one: its
                  unfinished tasks go to --carry-to (needed when there are any), keeping their status, and it
-                 keeps a report of what was done, carried and added mid-sprint
+                 keeps a report of what was done, carried and added mid-sprint (--reviewed: its batch tasks were
+                 reviewed with the user); delete one created by mistake
   releases [--all] | releases add <R> [--name N] [--target DATE] [--pr N]... [--released-at TIME]
           | releases edit <R> [--name] [--target] | releases archive <R> | releases notes <R>
                  the releases in order with their tasks by kind and stage (archived ones with --all); add one
@@ -329,7 +342,12 @@ def build_parser():
     describe.add_argument("--description-file", metavar="FILE", help="read the description from a file")
     add.add_argument("--dep", action="append", default=[], metavar="ID", help="a task it depends on (repeatable)")
     add.add_argument("--file", action="append", default=[], help="a file it will create or change (repeatable)")
-    add.add_argument("--requirement", action="append", default=[], help="a requirement ID (repeatable)")
+    add.add_argument(
+        "--requirement",
+        action="append",
+        default=[],
+        help="a requirement: its ID, or a link to where it is defined (repeatable)",
+    )
     add.add_argument("--sprint", metavar="NAME", help="the sprint it goes into (default: none, the backlog)")
     add.add_argument("--release", metavar="R", help="the release it ships in (default: its sprint's)")
     add.add_argument("--component", action="append", default=[], metavar="C", help="a component (repeatable)")
@@ -415,7 +433,15 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each)"
+    )
+    commit.add_argument(
+        "--dir",
+        action="append",
+        default=[],
+        metavar="FOLDER",
+        help="every change under a folder the task rebuilt, e.g. a generated one (repeatable; refused for the "
+        "repository's root, the task folder, and a folder holding files another agent's claimed task lists)",
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
     commit.add_argument(

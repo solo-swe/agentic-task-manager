@@ -23,6 +23,25 @@ export interface ProjectDocument {
   tracked: boolean | null;
   /** The current commit; null outside git */
   commit: string | null;
+  /** For a file in a git submodule: the submodule's folder, its own commit and its web address (null when atm can't
+   * tell); null for any other file (T-408). Optional: a server older than 0.30.0 doesn't send it */
+  submodule?: { path: string; commit: string | null; repository: string | null } | null;
+}
+
+/** Where *Open on GitHub* takes a file: the project's repository at its commit, or, for a file in a submodule, the
+ * submodule's own repository at its commit, with the path inside it (T-408); null when there is nowhere to go */
+export function repositoryFile(
+  doc: Pick<ProjectDocument, 'tracked' | 'commit' | 'submodule'>,
+  path: string,
+  meta: { repository?: unknown; repository_type?: unknown } | undefined,
+): { meta: { repository?: unknown; repository_type?: unknown } | undefined; commit: string; path: string } | null {
+  if (!doc.tracked) return null;
+  const sub = doc.submodule;
+  if (sub) {
+    if (!sub.repository || !sub.commit || !path.startsWith(sub.path + '/')) return null;
+    return { meta: { repository: sub.repository }, commit: sub.commit, path: path.slice(sub.path.length + 1) };
+  }
+  return doc.commit ? { meta, commit: doc.commit, path } : null;
 }
 
 /** A file and, optionally, the lines to show (#doc=<path>:L<n> or :L<n>-L<m>) or the heading to open at (by its

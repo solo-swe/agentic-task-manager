@@ -193,7 +193,10 @@ Name **every** file from your list, deleted ones too (also `.agentic-task-manage
 `.agentic-task-manager/.gitattributes` if `git status` shows atm changed them); paths are relative to where you run
 it. atm commits exactly those plus `tasks.json`, with the project's commit message (`feat($TASK_ID): $TASK_NAME`
 unless the project sets another), and records the commit on the task. It refuses `.`, `-A` and directories: another
-agent's unfinished work may be in the same working tree, so never `git add -A` or `git add .` either.
+agent's unfinished work may be in the same working tree, so never `git add -A` or `git add .` either. One exception:
+a **generated folder the task rebuilt** (a build's output, many files) goes in whole with `--dir <folder>` beside the
+`--file`s; atm refuses it for the repository's root and for a folder holding files another agent's claimed task
+lists. Never `--dir` a folder of source files others may be working in.
 
 **If the commit fails**, the task stays in progress: fix the cause (a hook, a file you forgot) and commit again. If
 you can't, don't mark it done: `atm release $TASK_ID --note '<what is done; why the commit failed>'`, or block it on

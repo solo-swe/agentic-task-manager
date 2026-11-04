@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { browserFetch, v1FileUrl, type Validators } from '../lib/api/http';
   import {
     clampGeometry,
@@ -9,6 +10,7 @@
     parseTextFragment,
     loadDocument,
     pathToCopy,
+    repositoryFile,
     resolvePath,
     VIEWER_NARROW,
     type DocumentError,
@@ -17,7 +19,7 @@
   } from '../lib/documents';
   import { getPref, setPref } from '../lib/prefs';
   import { fileRef } from '../lib/repo';
-  import { slug, type PlacedBlock } from '../lib/compmd';
+  import { gutterRows, slug, type DrawnLine, type GutterRow } from '../lib/compmd';
   import { compactAt } from '../lib/scroll';
   import { dashboard } from '../lib/state.svelte';
   import CompMd from './CompMd.svelte';
@@ -29,7 +31,8 @@
   // Reload work; the file is asked for again on the dashboard's refresh, a 304 while it is unchanged.
 
   const ref = $derived(dashboard.docRef);
-  const project = $derived(dashboard.route.page === 'project' ? dashboard.projectId : null);
+  // The shown project's files; on the Omniboard, those of the project whose task is open over it (T-411)
+  const project = $derived(dashboard.route.page === 'project' || dashboard.peeking ? dashboard.projectId : null);
   const open = $derived(ref !== null && project !== null);
 
   let doc = $state.raw<ProjectDocument | null>(null);
@@ -84,10 +87,12 @@
   });
 
   const title = $derived(doc ? documentTitle(doc) : (ref?.path.split('/').pop() ?? ''));
-  // Open on GitHub (or the project's host): only for a file git tracks, at the commit the server named
-  const repoFile = $derived(
-    doc?.tracked && doc.commit && ref ? fileRef(dashboard.meta, doc.commit, ref.path, ref.lines) : null,
-  );
+  // Open on GitHub (or the project's host): only for a file git tracks, at the commit the server named; a file in a
+  // submodule in the submodule's own repository (T-408)
+  const repoFile = $derived.by(() => {
+    const where = doc && ref ? repositoryFile(doc, ref.path, dashboard.meta) : null;
+    return where && ref ? fileRef(where.meta, where.commit, where.path, ref.lines) : null;
+  });
 
   /** A relative image in the document, resolved from its folder, loads from this server's files route (V5); any
    * other image shows its alt text */
@@ -98,48 +103,73 @@
 
   // A code or text file's lines (V2a): CompMD renders it as one code block, its lines never wrapping, so the gutter
   // numbers them at the block's top and line height, measured after each render and on resize. A Markdown document's
-  // come from CompMD (T-400): each top-level block's first source line, beside where it was drawn (its origins and the
-  // view's rectsAt), measured the same way.
+  // come from CompMD (T-406): every source line, where CompMD drew it (its origins and the view's lines(), CompMD
+  // 0.5.0), and the lines that draw nothing in the gaps between (gutterRows), measured again each time the page's
+  // layout moves.
   let pageEl = $state<HTMLElement>();
   let lineLayout = $state<{ top: number; lineHeight: number; fontSize: number } | null>(null);
-  /** A Markdown document's blocks: their source lines, and their top and height in the page */
-  let blocks = $state.raw<{ line: number; endLine: number; top: number; height: number }[]>([]);
-  let measureBlocks: (() => Promise<PlacedBlock[]>) | null = null;
-  /** The last measurement asked for: an older answer that comes in after it is dropped */
-  let blocksAsked = 0;
+  /** A Markdown document's gutter: a row per line (or per lines sharing a visual line), in the page's coordinates */
+  let rows = $state.raw<GutterRow[]>([]);
+  /** Where a Markdown document's lines were drawn, in the page's coordinates */
+  let drawnLines = $state.raw<DrawnLine[]>([]);
 
-  async function placeMarkdownLines() {
+  function placeMarkdownLines(lines: DrawnLine[], from: HTMLElement) {
     const el = pageEl;
-    if (!el || doc?.kind !== 'markdown' || !measureBlocks) {
-      if (blocks.length) blocks = [];
-      return;
-    }
-    const asked = ++blocksAsked;
-    const placed = await measureBlocks();
-    if (asked !== blocksAsked || el !== pageEl) return;
-    const origin = el.getBoundingClientRect().top;
-    const next = placed.map((b) => ({
-      line: b.line,
-      endLine: b.endLine,
-      top: Math.round(b.top - origin),
-      height: Math.round(b.bottom - b.top),
+    if (!el || doc?.kind !== 'markdown') return;
+    // The lines' boxes are from the top left of CompMD's container's content; the gutter and the marks are in the page
+    const page = el.getBoundingClientRect();
+    const box = from.getBoundingClientRect();
+    const style = getComputedStyle(from);
+    const dx = box.left - page.left + from.clientLeft + parseFloat(style.paddingLeft || '0');
+    const dy = box.top - page.top + from.clientTop + parseFloat(style.paddingTop || '0');
+    const round = (n: number) => Math.round(n * 10) / 10;
+    const moved = lines.map((l) => ({
+      line: l.line,
+      rects: l.rects.map((r) => ({
+        x: round(r.x + dx),
+        y: round(r.y + dy),
+        width: round(r.width),
+        height: round(r.height),
+      })),
     }));
-    if (JSON.stringify(next) !== JSON.stringify(blocks)) blocks = next;
-    scrollToBlocks();
+    const next = gutterRows(moved, doc.lines, { top: 0, bottom: el.clientHeight }).map((r) => ({
+      ...r,
+      top: round(r.top),
+      height: round(r.height),
+    }));
+    if (JSON.stringify(moved) !== JSON.stringify(drawnLines)) drawnLines = moved;
+    if (JSON.stringify(next) !== JSON.stringify(rows)) rows = next;
+    scrollToMarkedRows();
   }
 
-  /** The blocks a `:L<n>-L<m>` link's lines fall in */
-  const markedBlocks = $derived(
-    ref?.lines ? blocks.filter((b) => b.line <= ref.lines![1] && b.endLine >= ref.lines![0]) : [],
+  const inLink = (from: number, to: number) => !!ref?.lines && from <= ref.lines[1] && to >= ref.lines[0];
+  /** The gutter's rows a `:L<n>-L<m>` link names */
+  const markedRows = $derived(ref?.lines ? rows.filter((r) => inLink(r.from, r.to)) : []);
+  /** The boxes of the text of exactly those lines: what CompMD drew from them */
+  const markedRects = $derived(
+    ref?.lines ? drawnLines.filter((l) => inLink(l.line, l.line)).flatMap((l) => l.rects) : [],
   );
 
-  /** `#L<n>` in a Markdown document: the first block its lines fall in, a little below the window's top (once) */
-  function scrollToBlocks() {
-    if (!ref?.lines || !pageEl || !markedBlocks.length) return;
+  // Another file: its own lines, once CompMD has drawn it; another link into the same file scrolls to its lines
+  const docPath = $derived(ref?.path);
+  $effect(() => {
+    void docPath;
+    untrack(() => {
+      rows = [];
+      drawnLines = [];
+    });
+  });
+  $effect(() => {
+    if (markedRows.length) untrack(scrollToMarkedRows);
+  });
+
+  /** `#L<n>` in a Markdown document: its first line a little below the window's top (once) */
+  function scrollToMarkedRows() {
+    if (!ref?.lines || !pageEl || !markedRows.length) return;
     const key = `${ref.path}:${ref.lines.join('-')}`;
     if (key === scrolledTo) return;
     scrolledTo = key;
-    pageEl.closest('.doc-body')?.scrollTo({ top: Math.max(0, pageEl.offsetTop + markedBlocks[0].top - 48) });
+    pageEl.closest('.doc-body')?.scrollTo({ top: Math.max(0, pageEl.offsetTop + markedRows[0].top - 48) });
   }
   /** The file and lines last scrolled to, so a refresh doesn't scroll again */
   let scrolledTo = '';
@@ -255,7 +285,6 @@
     readHeadings();
     scrollToHeading();
     showTextFragment();
-    void placeMarkdownLines();
     const code = pageEl?.querySelector<HTMLElement>('.compmd-page pre > code');
     if (!pageEl || !code || !doc || (doc.kind !== 'code' && doc.kind !== 'text')) {
       lineLayout = null;
@@ -532,42 +561,35 @@
               ></div>
             {/if}
           {/if}
-          {#if doc.kind === 'markdown' && blocks.length}
-            <!-- A Markdown document's line numbers (T-400): each block's first source line, beside where CompMD drew
-                 it; the blocks a link's lines fall in, marked -->
-            <div class="doc-gutter doc-gutter-blocks" id="doc-gutter" aria-hidden="true">
-              {#each blocks as block (block.line)}
+          {#if doc.kind === 'markdown' && rows.length}
+            <!-- A Markdown document's line numbers (T-406): each line beside its text, where CompMD drew it; lines
+                 that draw nothing in the gaps; a link's lines marked, in the gutter and on their text -->
+            <div class="doc-gutter doc-gutter-lines" id="doc-gutter" aria-hidden="true">
+              {#each rows as row (row.from)}
                 <div
-                  class:marked={markedBlocks.includes(block)}
-                  data-line={block.line}
-                  style:top="{block.top}px"
-                  style:height="{block.height}px"
+                  class:marked={inLink(row.from, row.to)}
+                  class:blank={!row.drawn}
+                  data-line={row.from}
+                  style:top="{row.top}px"
+                  style:height="{row.height}px"
                 >
-                  {block.line}
+                  {row.from === row.to ? row.from : `${row.from}–${row.to}`}
                 </div>
               {/each}
             </div>
-            {#if markedBlocks.length}
+            {#each markedRects as rect, i (i)}
               <div
-                class="doc-line-mark"
-                id="doc-line-mark"
-                style:top="{markedBlocks[0].top}px"
-                style:height="{markedBlocks[markedBlocks.length - 1].top +
-                  markedBlocks[markedBlocks.length - 1].height -
-                  markedBlocks[0].top}px"
+                class="doc-line-mark doc-text-mark"
+                id={i === 0 ? 'doc-line-mark' : undefined}
+                style:left="{rect.x}px"
+                style:top="{rect.y}px"
+                style:width="{rect.width}px"
+                style:height="{rect.height}px"
               ></div>
-            {/if}
+            {/each}
           {/if}
           {#key `${ref.path}`}
-            <CompMd
-              text={doc.document}
-              path={doc.path}
-              {localImage}
-              onblocks={(measure) => {
-                measureBlocks = measure;
-                void placeMarkdownLines();
-              }}
-            />
+            <CompMd text={doc.document} path={doc.path} {localImage} onlines={placeMarkdownLines} />
           {/key}
         </article>
       {:else if error}

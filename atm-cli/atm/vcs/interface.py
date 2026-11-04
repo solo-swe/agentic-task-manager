@@ -63,3 +63,14 @@ class Vcs(Protocol):
     def head(self) -> Optional[str]:
         """The current commit's SHA; None outside version control or before the first commit."""
         ...
+
+    def changes_under(self, folders: List[str], cwd: Optional[str] = None) -> List[str]:
+        """Every changed file under each folder (named relative to `cwd`), relative to the repository: what
+        `atm commit --dir` commits (T-405). Invalid for the root, anything outside the repository and the task folder;
+        NotFound for a folder with nothing changed."""
+        ...
+
+    def submodule_of(self, relative: str) -> Optional[dict]:
+        """For a file inside a submodule (the innermost): {path: the submodule's folder, commit: its own HEAD,
+        repository: its web address or None}; None for any other file, and outside version control (T-408)."""
+        ...

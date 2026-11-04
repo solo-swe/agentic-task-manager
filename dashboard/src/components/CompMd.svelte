@@ -1,18 +1,15 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import {
-    blockSources,
     dashboardHash,
     loadCompmd,
-    placeBlocks,
     processText,
     safeHref,
     secureLinks,
     slug,
     taskData,
-    type BlockSource,
     type CompmdModule,
-    type PlacedBlock,
+    type DrawnLine,
   } from '../lib/compmd';
   import { parseDocHash, referenceTo, withDocHash } from '../lib/documents';
   import { scrollBehavior } from '../lib/scroll';
@@ -26,22 +23,23 @@
   // (R2). CompMD's diagnostics are never shown here (R2a). With `path`, `text` is a file of the project in the document
   // viewer: a document of its own, under that path, with its own frontmatter (docs/compmd-viewer-design.md §5).
   // `localImage`, in the document viewer: a relative image's address on this server (null: shown as its alt text).
-  // `onblocks`, in the document viewer: after each render, a function that measures where each top-level block was
-  // drawn, with its source lines (CompMD's origins and its view's rectsAt; T-400), for the viewer's line numbers.
+  // `onlines`, in the document viewer: each time the page's layout moved, where each line of the text was drawn
+  // (CompMD's origins and its view's lines(), CompMD 0.5.0; T-406), for the viewer's line numbers, with the element the
+  // lines' boxes are measured from.
   let {
     text,
     task,
     path,
     localImage,
     inline = false,
-    onblocks,
+    onlines,
   }: {
     text: string;
     task?: Task;
     path?: string;
     localImage?: (url: string) => string | null;
     inline?: boolean;
-    onblocks?: (measure: () => Promise<PlacedBlock[]>) => void;
+    onlines?: (lines: DrawnLine[], from: HTMLElement) => void;
   } = $props();
 
   /** A project's text (a task's, or a document's): a relative link in it opens the document viewer (V1a–V1c), resolved
@@ -67,8 +65,20 @@
   let schemes: MutationObserver | null = null;
   /** What was last rendered: the text and the task's data, so an unchanged text is never processed again (R8) */
   let rendered = '';
-  /** The last render's top-level blocks and their source lines (a document's: its request asks for origins) */
-  let sources: BlockSource[] = [];
+  /** The last measurement of the lines asked for: an older one that ends after it is dropped */
+  let measuring = 0;
+
+  /** Where each line is, read to the end (a document has a size limit, so all of it), then given to `onlines` */
+  async function measureLines(shown: View, target: HTMLElement) {
+    if (!onlines) return;
+    const asked = ++measuring;
+    const lines: DrawnLine[] = [];
+    for await (const line of shown.lines()) {
+      if (asked !== measuring) return;
+      lines.push(line);
+    }
+    if (asked === measuring && shown === view) onlines(lines, target);
+  }
 
   $effect(() => {
     const data = task ? taskData(task) : null;
@@ -87,15 +97,15 @@
           view.on('rendered', () => {
             secureLinks(target);
             drawn = true;
-            const shown = view;
-            if (onblocks && shown) onblocks(() => placeBlocks(sources, (offset) => shown.rectsAt(offset)));
           });
+          const shown = view;
+          // After a render is painted, when the page or a block in it changes size, when fonts load
+          view.on('layout', () => void measureLines(shown, target));
           // The dashboard switches theme and mode by attributes on <html> (its color-scheme follows): the frames,
           // and a diagram's light or dark theme, follow when told
           schemes = new MutationObserver(() => view?.scheme());
           schemes.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-mode'] });
         }
-        sources = blockSources(tree);
         view.render(tree);
         failed = false;
       })

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 408,
+    "next_id": 412,
     "labels": [
       {
         "id": "architecture",
@@ -852,6 +852,13 @@
             "T-407"
           ]
         }
+      },
+      {
+        "id": "Viewer fixes",
+        "state": "active",
+        "goal": "Submodule files open in the viewer, CompMD 0.5.0 and every Markdown line numbered, and smaller CLI fixes",
+        "release": "0.30.0",
+        "start": "2026-11-04T00:03:31Z"
       }
     ],
     "releases": [
@@ -1024,6 +1031,15 @@
       },
       {
         "id": "0.29.0",
+        "state": "released",
+        "pr": {
+          "number": 35,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
+        },
+        "released_at": "2026-11-03T23:54:50Z"
+      },
+      {
+        "id": "0.30.0",
         "state": "planned"
       }
     ],
@@ -20689,7 +20705,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:33:31Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20726,7 +20742,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-392",
@@ -20749,7 +20766,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20785,7 +20802,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-393",
@@ -20811,7 +20829,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T23:25:56Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20857,7 +20875,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-394",
@@ -20881,7 +20900,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20921,7 +20940,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-395",
@@ -20946,7 +20966,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -20980,7 +21000,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-396",
@@ -21003,7 +21024,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T16:55:17Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -21038,7 +21059,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-397",
@@ -21126,7 +21148,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T18:14:19Z",
-      "updated_at": "2026-11-03T23:25:56Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21158,7 +21180,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-399",
@@ -21179,7 +21202,7 @@
         ".agentic-task-manager/tasks.json"
       ],
       "created_at": "2026-11-03T18:39:17Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21216,7 +21239,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-400",
@@ -21241,7 +21265,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T19:37:33Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21294,7 +21318,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-401",
@@ -21322,7 +21347,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21359,7 +21384,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-402",
@@ -21380,7 +21406,7 @@
         "dashboard/tests/e2e/documents.spec.ts"
       ],
       "created_at": "2026-11-03T20:04:36Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21420,7 +21446,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-403",
@@ -21441,7 +21468,7 @@
         "dashboard/tests/unit/DetailPanel.component.test.ts"
       ],
       "created_at": "2026-11-03T20:46:10Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21475,7 +21502,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-404",
@@ -21502,7 +21530,7 @@
         "docs/help.md"
       ],
       "created_at": "2026-11-03T21:16:10Z",
-      "updated_at": "2026-11-03T23:30:16Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21536,7 +21564,8 @@
       "pr": {
         "number": 35,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/35"
-      }
+      },
+      "merged_at": "2026-11-03T23:54:50Z"
     },
     {
       "id": "T-405",
@@ -21549,7 +21578,7 @@
       "description": "`atm commit` takes files only one `--file` at a time and refuses folders, so that it never commits another agent's work in the same tree. A generated folder makes that a chore: T-398 had to name 230 files of `plugin/assets/compmd/` (the old version's removed, the new one's added) one by one.\n\n## Change\n- `atm commit <id> --dir <folder>` (repeatable, beside `--file`): every change git sees under the folder, as `git status --porcelain --untracked-files=all` lists it (modified, added, deleted, renamed, new files git doesn't ignore), committed with the other files and `tasks.json`. The output names each file, as now.\n- Still refused, with a message: `.` and the repository's root (or anything above it), `.agentic-task-manager/`, a path outside the repository, and a folder with no changes. A changed file under the folder that another task **in progress and claimed by another agent** lists in its `files` makes the whole commit refuse, naming the file and the task: that is the case the rule against folders is there for.\n- [`atm-cli/atm/cli/`](atm-cli/atm/cli/) (the option) and atm-lib's `commit_task` (the expansion, through the vcs layer; `tests/lib/public-surface.json` and the changelog if its signature changes).\n- The skills' commit steps (`/atm:do-task` Step 7, `/atm:loop-tasks` step 5, [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Commit* line): `--dir` for a generated folder the task rebuilt, never for a folder others work in. A skill change and a CLI option that reads a path: a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3, and the invariant on `atm commit` updated.\n\n## Tests\nScenarios or `*.test.mjs` in `tests/scripts/` (a git repository): a folder with a modified, a new and a deleted file commits all three and nothing outside it; `.`, the root, `.agentic-task-manager/` and an empty folder are refused; another agent's claimed task listing a changed file under the folder refuses the commit and commits nothing.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/main.py",
@@ -21564,7 +21593,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-03T22:54:26Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21572,6 +21601,10 @@
           "sprint": "Document Viewer",
           "from": "2026-11-03T22:43:49Z",
           "to": "2026-11-03T22:54:26Z"
+        },
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:30Z"
         }
       ],
       "components": [
@@ -21582,7 +21615,26 @@
       "review": "batch",
       "related": [
         "T-398"
-      ]
+      ],
+      "sprint": "Viewer fixes",
+      "started_at": "2026-11-04T00:17:19Z",
+      "started_by": "claude:b7be7288",
+      "commit": "03fa9a04a4c2f8c931c43d6e9864e6c072ada536",
+      "completed_at": "2026-11-04T00:27:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:27:17Z",
+          "kind": "review",
+          "text": "Check: `atm commit --dir FOLDER` commits a folder’s changes (modified, new, deleted, renamed); refuses the root, outside, the task folder, a file, nothing changed, and another agent’s claimed files. Skills and CLAUDE.md say: generated folders only. §3.3 review; public surface + `folder_changes`. atm-cli 559.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-406",
@@ -21595,7 +21647,7 @@
       "description": "T-400 numbers a Markdown document's blocks, each with its first source line (1, 4, 6, 9…), because CompMD 0.4.0 maps a source offset to the **elements** its node drew (`view.rectsAt`), not to a place in the text: a paragraph written over two lines is one box, so its second line has no place of its own. Hakan: CompMD 0.5.0 adds text-precise positions. When it is out, the gutter numbers every source line, as an editor does.\n\n## Change\n- Upgrade `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to 0.5.0, as T-398 did for 0.4.0: its *Change* list (the runtime folder, `plugin/docs/compmd-llms.txt` read in full, the §3.3 line, the release notes' changes for hosts) applies again. Restart a running `npm run dev` with `--force` after the install.\n- The gutter in [`DocumentViewer.svelte`](dashboard/src/components/DocumentViewer.svelte) for a Markdown document: a number for each source line that draws something, at its exact place through CompMD 0.5.0's text-precise lookup (read its README for the call: a line's start offset to its box in the rendered text); a line that starts with markup (`**bold…`) at the element it starts. Blank lines draw nothing: their numbers go in the gaps between blocks, spread over the gap, so the column reads 1, 2, 3… with no line skipped.\n- `:L<n>-L<m>` marks exactly those lines, not their whole blocks; Copy path and Open on GitHub as now.\n- Replaces T-400's per-block numbers (`blockSources`/`placeBlocks` in [`lib/compmd.ts`](dashboard/src/lib/compmd.ts)): keep what still serves, remove the rest.\n- Never match rendered text to source text to find a line: what drew a line is CompMD's to say (T-400's rule).\n\n## Tests\nUnit tests for the line placement; e2e: a paragraph written over two lines gets two numbers, each beside its words; a frontmatter's lines counted; blank lines numbered in the gaps; `:L7` marks the paragraph's second line only; the existing code-file gutter tests unchanged. Reviewed with Hakan in the browser.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21611,7 +21663,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:56:29Z",
-      "updated_at": "2026-11-03T22:56:47Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -21622,7 +21674,31 @@
       "related": [
         "T-400",
         "T-398"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:30Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "started_at": "2026-11-04T02:08:49Z",
+      "started_by": "claude:b7be7288",
+      "commit": "20c68b5aea8156330daedd9c442473205ee493da",
+      "completed_at": "2026-11-04T02:21:30Z",
+      "completed_by": "claude:b7be7288",
+      "notes": [
+        {
+          "at": "2026-11-04T02:21:30Z",
+          "kind": "outcome",
+          "text": "CompMD 0.5.0; a Markdown document’s gutter numbers every line where CompMD drew it (`view.lines()`), blank lines in the gaps, `:L` marks exactly those lines. Also: the contents list keeps each entry’s height and scrolls. Reviewed with Hakan in the browser. Unit 1022, e2e 409 + 1.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-407",
@@ -21643,7 +21719,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-03T23:18:35Z",
-      "updated_at": "2026-11-03T23:30:15Z",
+      "updated_at": "2026-11-03T23:57:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21670,7 +21746,225 @@
           "text": "Released 0.29.0: versions, changelog, What’s new, 8 Linux baselines (details panel, Help, settings menu); `npm run verify` passed; PR #35, CI green first try.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "merged_at": "2026-11-03T23:54:50Z"
+    },
+    {
+      "id": "T-408",
+      "name": "Files inside a git submodule open in the document viewer",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "compmd"
+      ],
+      "description": "A file inside a git submodule never opens in the viewer: it says the file can't be shown, as for a file git ignores (Hakan).\n\n## Cause\nThe vcs layer's [`ignored`](atm-cli/atm/vcs/git.py#:~:text=def%20ignored) runs `git check-ignore` in the project's repository. For a path inside a submodule, git refuses (\"is in submodule\", exit 128), and the check fails closed: any answer but \"not ignored\" counts as ignored. [`tracked`](atm-cli/atm/vcs/git.py#:~:text=def%20tracked) has the same problem (`ls-files` in the superproject doesn't list the submodule's files), so *Open on GitHub* would be wrong for them too.\n\n## Change\n- `ignored` and `tracked` in [`atm-cli/atm/vcs/git.py`](atm-cli/atm/vcs/git.py): for a path inside a submodule (the nearest submodule from `git submodule status`, or `git ls-files --stage` mode `160000`, cached per call), ask the submodule's own git with the path relative to it. Its ignore rules, and the superproject's for the submodule's folder, decide; any other git error still refuses (fail closed, as now). Nested submodules: the innermost.\n- `head`/`tracked` for *Open on GitHub*: a file in a submodule links to the submodule's own repository at its commit, when its remote is a web address atm knows (`repo.ts`'s hosts); otherwise the button doesn't show. Through the documents route's `tracked`/`commit` fields, plus what the link needs (the submodule's web address and path).\n- The other checks stay as they are for submodule files: no hidden parts, no key files, no symlink on the way, the size limits.\n- [`docs/security-architecture.md`](docs/security-architecture.md): I11 and I12 say what the routes do inside a submodule (its own ignore rules; failing closed).\n\n## Tests\n`serve.test.mjs` with a real submodule (a second repository added with `git submodule add` from a local path): a file in it opens; one its `.gitignore` ignores doesn't; a key file in it doesn't; the documents route gives the submodule's commit. A unit test in `tests/lib/` for the path-to-submodule lookup.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/vcs/git.py",
+        "atm-cli/atm/lib/documents.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/serve.test.mjs",
+        "tests/lib/test_documents.py",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/src/lib/repo.ts",
+        "docs/security-architecture.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T02:29:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ],
+      "review": "batch",
+      "related": [
+        "T-392"
+      ],
+      "started_at": "2026-11-04T00:08:01Z",
+      "started_by": "claude:b7be7288",
+      "commit": "24e8d4e74426f898349fe26b35f4db8bcdbfe50b",
+      "completed_at": "2026-11-04T00:17:18Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:17:18Z",
+          "kind": "review",
+          "text": "Check: files in a submodule open (its own ignore rules, failing closed); Open on GitHub goes to the submodule’s repo at its commit. `serve.test.mjs` “files in a git submodule…” with a real submodule; I11/I12 updated. e2e 409, atm-cli 556.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
+    },
+    {
+      "id": "T-409",
+      "name": "atm help lists edit's requirement and use-case flags",
+      "type": "docs",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm help`'s overview still gives `edit` its flags from before T-401; `atm edit --help` is right. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` to the `edit` lines of the overview in atm-cli's help text (in `atm-cli/atm/cli/`), and check every other command's line there against its own `--help` while at it. A scenario in `tests/scripts/scenarios/` (`stdoutIncludes`) for the new flags in `atm help`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "plugin/scripts/atm.py",
+        "tests/scripts/scenarios/basics.json",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T02:29:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "cli"
+      ],
+      "review": "batch",
+      "related": [
+        "T-401"
+      ],
+      "started_at": "2026-11-04T00:27:18Z",
+      "started_by": "claude:b7be7288",
+      "commit": "8991cfd176937ea3bdb9e4e2a97ef09c5a5a6d62",
+      "completed_at": "2026-11-04T00:29:05Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:29:05Z",
+          "kind": "review",
+          "text": "Check: `atm help`’s overview now matches each command’s `--help` (edit, add, status, list, check, commit --record, sprints close --reviewed / delete); `add --requirement` says a link works. Scenario in `basics.json`.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
+    },
+    {
+      "id": "T-410",
+      "name": "Release 0.30.0",
+      "type": "infra",
+      "priority": "P1",
+      "description": "The release of the sprint *Viewer fixes*, as T-407 did for 0.29.0 and the project's `CLAUDE.md` (*Versions*, *CI*) says.\n\n## Steps\n- `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` to `0.30.0`.\n- `plugin/CHANGELOG.md`: `[Unreleased]` becomes `[0.30.0]` with the date; `plugin/WHATS-NEW.md`: 3–6 plain bullets from it.\n- The Linux screenshot baselines in Docker (`npm run test:e2e:visual:update`), looked at before committing.\n- `npm run verify`.\n- The security checklist (`docs/security-architecture.md` §3): written §3.3 reviews for any skill change (no API key for the sandbox); the document updated for any new entry point.\n- Push and the combined PR from the sprint's branch to `main` with `/atm:push`, watching CI.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [
+        "T-408",
+        "T-409",
+        "T-405",
+        "T-406"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/CHANGELOG.md",
+        "plugin/WHATS-NEW.md",
+        "dashboard/tests/e2e/__screenshots__/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T02:29:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T00:03:26Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "review": "none",
+      "started_at": "2026-11-04T02:21:57Z",
+      "started_by": "claude:b7be7288",
+      "commit": "a625da7dcf5eb9c9a5a1d6427ff370f0bec3b661",
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
+    },
+    {
+      "id": "T-411",
+      "name": "Omniboard: a card opens its task's details over the Omniboard, not the project's Kanban",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "overview"
+      ],
+      "description": "Clicking a card on the Omniboard (All projects › Omniboard) switches to the project's page and opens the task there (Hakan): it should stay on the Omniboard, with the task's details open over it. The card's project chip and \"+ N more\" still open the project.\n\n## Change\n- `dashboard/src/lib/state.svelte.ts`: `openOnBoard(project, task)` loads the card's project's data (tasks, claims, worktrees; the same as a project page loads) under the Omniboard, without changing the page or the URL, and opens the task's details; the dashboard's refresh keeps it current while the details are open. Closing the details, or going to another page, ends it. The project's saved view isn't applied then (only when its page opens).\n- `AllProjectsBoard.svelte`: a card (click, Enter, Space) calls it.\n- `DocumentViewer.svelte`: opens for that project too, so links in the task's text work on the Omniboard.\n\n## Tests\nThe e2e test in `all-projects-board.spec.ts` (\"a card opens its task…\"): the URL stays the Omniboard's, the board stays, the details show the task; a dependency in the details opens that task; Escape closes them and the board is still there; the chip still opens the project. A unit test for the state.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/AllProjectsBoard.svelte",
+        "dashboard/src/components/DocumentViewer.svelte",
+        "dashboard/tests/e2e/all-projects-board.spec.ts",
+        "dashboard/tests/unit/state.test.ts"
+      ],
+      "created_at": "2026-11-04T01:31:16Z",
+      "updated_at": "2026-11-04T02:29:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
+      "sprint_history": [
+        {
+          "sprint": "Viewer fixes",
+          "from": "2026-11-04T01:31:16Z"
+        }
+      ],
+      "sprint": "Viewer fixes",
+      "components": [
+        "dashboard"
+      ],
+      "review": "batch",
+      "started_at": "2026-11-04T01:31:18Z",
+      "started_by": "claude:b7be7288",
+      "commit": "32c591224544db6a530e414383f38ee0ad5c4be4",
+      "completed_at": "2026-11-04T01:35:01Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T01:35:01Z",
+          "kind": "review",
+          "text": "Check on the Omniboard: a card opens its task’s details over it (same URL, board stays); dependencies and document links work; Escape closes; the chip and “+ N more” still open the project. e2e 409, unit 1019.",
+          "by": "claude:b7be7288"
+        }
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     }
   ]
 }

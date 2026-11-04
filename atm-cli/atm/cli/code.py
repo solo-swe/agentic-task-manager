@@ -6,7 +6,16 @@ from ..boot.open import open_project
 from ..boot.identity import agent_identity
 from ..common.errors import Invalid
 from ..common.core import out, to_json
-from ..lib.code import commit_task, get_workflow, record_commit, record_merge, record_pr, repository_paths, set_workflow
+from ..lib.code import (
+    commit_task,
+    folder_changes,
+    get_workflow,
+    record_commit,
+    record_merge,
+    record_pr,
+    repository_paths,
+    set_workflow,
+)
 
 
 def describe_workflow(workflow, base_default):
@@ -54,8 +63,8 @@ def cmd_commit(args):
     """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
     project = open_project(os.getcwd(), agent_identity(args.agent))
     if args.record is not None:
-        if args.file or args.message is not None:
-            raise Invalid("--record records an existing commit: no --file or --message")
+        if args.file or args.dir or args.message is not None:
+            raise Invalid("--record records an existing commit: no --file, --dir or --message")
         result = record_commit(project, args.id, args.record)
         if args.json:
             shown = {k: result[k] for k in ("task", "commit", "recorded")}
@@ -67,6 +76,9 @@ def cmd_commit(args):
         return
     # The files are named from the current folder; atm-lib takes them relative to the repository
     files = repository_paths(project, args.file or [], os.getcwd())
+    # A folder's changes, all of them (T-405): a generated folder the task rebuilt
+    if args.dir:
+        files += [f for f in folder_changes(project, args.id, args.dir, os.getcwd()) if f not in files]
     result = commit_task(project, args.id, files, args.message)
     if args.json:
         out(to_json(result))

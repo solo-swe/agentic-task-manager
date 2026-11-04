@@ -179,6 +179,90 @@ describe('atm commit', () => {
 });
 
 // T-343: after a rebase or cherry-pick, the recorded SHA is no longer on the branch; --record names the new one
+describe('atm commit --dir (T-405)', () => {
+  /** A project with a generated folder gen/ (two files committed), and src/ */
+  function generated(tasks) {
+    const root = makeProject({
+      commit: true,
+      files: {
+        [TASKS]: {
+          meta: {},
+          tasks: tasks ?? [{ id: 'T-001', name: 'Rebuild', phase: 1, type: 'infra', status: 'in_progress' }],
+        },
+        'src/a.txt': 'a\n',
+        'gen/old.js': 'old\n',
+        'gen/keep.js': 'keep\n',
+      },
+    });
+    return root;
+  }
+
+  test('commits every change under the folder (modified, new, deleted, nested) and nothing outside it', () => {
+    const root = generated();
+    try {
+      write(root, 'gen/keep.js', 'keep2\n');
+      fs.rmSync(path.join(root, 'gen/old.js'));
+      fs.mkdirSync(path.join(root, 'gen/chunks'));
+      write(root, 'gen/chunks/new.js', 'new\n');
+      write(root, 'src/a.txt', 'a2\n');
+      const result = runAtm(['commit', 'T-001', '--dir', 'gen'], root, ENV);
+      assert.equal(result.code, 0, result.stderr);
+      assert.deepEqual(committedFiles(root), ['gen/chunks/new.js', 'gen/keep.js', 'gen/old.js']);
+      assert.match(git(['status', '--porcelain'], root), /^ ?M src\/a\.txt$/m);
+      // With --file beside it, and from a subfolder
+      write(root, 'gen/keep.js', 'keep3\n');
+      write(root, 'src/a.txt', 'a3\n');
+      const both = runAtm(['commit', 'T-001', '--dir', '../gen', '--file', 'a.txt'], path.join(root, 'src'), ENV);
+      assert.equal(both.code, 0, both.stderr);
+      assert.deepEqual(committedFiles(root), [TASKS, 'gen/keep.js', 'src/a.txt']);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('refuses the root, above it, the task folder, a file, and a folder with nothing changed', () => {
+    const root = generated();
+    try {
+      write(root, 'gen/keep.js', 'keep2\n');
+      for (const [dir, code, message] of [
+        ['.', 2, /not the repository itself/],
+        ['..', 2, /not the repository itself/],
+        ['.agentic-task-manager', 2, /task folder/],
+        ['src/a.txt', 2, /is a file/],
+        ['src', 1, /nothing changed under it/],
+      ]) {
+        const result = runAtm(['commit', 'T-001', '--dir', dir], root, ENV);
+        assert.equal(result.code, code, `${dir}: ${result.stderr}`);
+        assert.match(result.stderr, message, dir);
+      }
+      assert.equal(git(['rev-list', '--count', 'HEAD'], root), '1');
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('refuses, committing nothing, when a changed file under it is in another agent’s claimed task', () => {
+    const root = generated([
+      { id: 'T-001', name: 'Rebuild', phase: 1, type: 'infra', status: 'todo' },
+      { id: 'T-002', name: 'Hand-edit', phase: 1, type: 'feature', status: 'todo', files: ['gen/keep.js'] },
+    ]);
+    try {
+      assert.equal(runAtm(['start', 'T-001'], root, ENV).code, 0);
+      assert.equal(runAtm(['start', 'T-002'], root, { ...ENV, ATM_AGENT: 'bob' }).code, 0);
+      write(root, 'gen/keep.js', 'bob was here\n');
+      write(root, 'gen/new.js', 'new\n');
+      const result = runAtm(['commit', 'T-001', '--dir', 'gen'], root, ENV);
+      assert.equal(result.code, 1, result.stderr);
+      assert.match(result.stderr, /gen\/keep\.js.*T-002.*bob/);
+      assert.equal(git(['rev-list', '--count', 'HEAD'], root), '1');
+      // Naming its own files still works
+      assert.equal(runAtm(['commit', 'T-001', '--file', 'gen/new.js'], root, ENV).code, 0);
+    } finally {
+      removeDir(root);
+    }
+  });
+});
+
 describe('atm commit --record', () => {
   /** A project with a commit for T-001 on top of the initial one; returns [root, its SHA] */
   function withTaskCommit(message = 'feat(T-001): Add login') {
@@ -236,7 +320,12 @@ describe('atm commit --record', () => {
         [['--record=--output=x'], 2, /a revision, not an option/],
         [['--record', side], 1, /not on the current branch/],
         [['--record', tree], 1, /no commit/],
-        [['--record', 'HEAD', '--file', 'src/a.txt'], 2, /--record records an existing commit: no --file or --message/],
+        [
+          ['--record', 'HEAD', '--file', 'src/a.txt'],
+          2,
+          /--record records an existing commit: no --file, --dir or --message/,
+        ],
+        [['--record', 'HEAD', '--dir', 'src'], 2, /--record records an existing commit/],
       ]) {
         const result = runAtm(['commit', 'T-001', ...args], root, ENV);
         assert.equal(result.code, code, `${args.join(' ')}: ${result.stderr}`);

@@ -29,10 +29,10 @@ backlog tasks of §9.
   movable by its title bar, resizable from a corner handle, scrolling with the dashboard's styled scrollbar. Back
   (the button, Escape, the browser's Back) returns to the task, or to the previous document. The URL says what is
   open (`#doc=<path>`, with `:L<n>` for a line, beside the task's), so a link can be shared and Reload keeps it.
-- **V2a. Line numbers** on the left, as in an editor: every line of code and text; for a Markdown document, the
-  source line each block starts on, beside the block. A `#L<n>` link scrolls to the line. Which source lines a
-  rendered block came from is CompMD's to say: CompMD 0.4.0's origins and `rectsAt` give it per block (T-400); every
-  line, at its place in the text, comes with CompMD 0.5.0's text-precise positions (T-406).
+- **V2a. Line numbers** on the left, as in an editor: every line of code and text, and of a Markdown document, each
+  beside its text where it was drawn; lines that draw nothing (blank lines, frontmatter, fences) in the gaps between.
+  A `#L<n>` link scrolls to the line and marks it. Where each line was drawn is CompMD's to say, never found by
+  matching text: CompMD 0.5.0's `view.lines()` gives each line's boxes (T-406; per block before it, T-400).
 - **V2b. The reader keeps their place.** The open document refreshes on the dashboard's poll; a change re-renders it
   where the reader is (the block at the top of the window stays there), never back at the top.
 - **V3. Only the project's own files, read-only.** The server reads a file only from inside the project's folder,

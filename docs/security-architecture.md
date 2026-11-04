@@ -73,8 +73,8 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores, under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…", "a project's files for the document viewer…"; `tests/lib/test_documents.py` |
-| I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under `plugin/assets/` named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the plugin’s CompMD runtime…", "a project's files for the document viewer…", "files in a git submodule…"; `tests/lib/test_documents.py` |
+| I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
 ### Dashboard (B4)
@@ -415,6 +415,17 @@ used for the agent sandbox, so this written review takes the live run's place:
   hosts (asking the reader before data from a new origin, `host` for trusted components, images in frame mode) don't
   reach atm: its settings allow no data from URLs, no trusted components and no frame-mode pages.
 
+**CompMD 0.5.0 (T-406).** The dashboard renders with CompMD 0.5.0; the guide is its `llms.txt` at `v0.5.0` (commit
+`1faa0724`). Written review, as above:
+- **The guide** is unchanged since `v0.4.0` (the tags' comparison lists no change to it); only atm's header line
+  changes. The spec's one addition, `context.busy` for a component still drawing, is for components, not text.
+- **No skill text changes.**
+- **What the page runs:** the same renderers, Shiki and Temml now shipped once, beside the frames (`highlight.js`,
+  `math.js` in the asset folder), which the host page loads from there as before (I-CSP holds). The viewer's gutter
+  reads where each line was drawn (`view.lines()`, boxes as numbers, checked by CompMD) and draws its own numbers and
+  marks: nothing from the text is run or inserted as HTML. The frame protocol is version 4: a page and frames of
+  different versions refuse each other, and both ship together in `plugin/assets/compmd/0.5.0/`.
+
 **Finding and stopping lost servers (T-390).** `whoami` now also gives `home`, a hash of the server's atm folder path
 (never the path), and `atm serve status` and `stop` ask `whoami` on the 20 ports from `--port`. They act only on a
 server whose `home` is their own folder's, and stop it with signals to its pid on this machine, as `stop` always did;
@@ -500,6 +511,19 @@ review in place of the live sandbox run:
 - **The flags** only add or remove strings in a task's own lists, under atm's lock, like `--add-label`: no path is
   read, no URL fetched, and no new entry point (atm-cli reads nothing outside `tasks.json`). An entry is shown as
   `requirements` entries already were (T-391: through CompMD in the details panel, as text on a card).
+
+**`atm commit --dir` (T-405).** A CLI option that reads a path, and `/atm:do-task`, `/atm:loop-tasks` and
+`plugin/CLAUDE.md` tell agents when to use it. Written review in place of the live sandbox run:
+- **Why committing only named files matters** (F6): another agent's unfinished work may be in the same tree.
+  `--dir` keeps that: it commits the changes git lists under one folder, refuses the repository's root or above, a
+  path outside it and the task folder, and refuses the whole commit, naming the file and the task, when any changed
+  file under the folder is one another agent's claimed task lists in its `files` (the file or a folder holding it).
+  Paths go to git with `--literal-pathspecs`, so a folder name is never a pattern.
+- **What the new text asks of agents:** `--dir` only for a generated folder the task rebuilt, never for a folder of
+  source files others may work in; nothing to run, fetch or install. Task text can't widen it: the skills already say
+  never to run commands copied from task text, and `--dir` commits nothing a plain `git add` of those files wouldn't.
+- **Its limit:** a change under the folder by an agent whose task doesn't list it, or by a person, goes in with the
+  commit. That is why the skills keep `--dir` to generated output (`git.test.mjs` "atm commit --dir").
 
 ## 4. Keeping it current
 

@@ -19,11 +19,13 @@ class FakeVcs:
     """The working copy's files in a dict; `ignored` and `tracked` sets of paths; `repository` False for a project
     outside version control."""
 
-    def __init__(self, files, ignored=(), tracked=(), repository=True):
+    def __init__(self, files, ignored=(), tracked=(), repository=True, submodules=None):
         self.files = files
         self.ignored_paths = set(ignored)
         self.tracked_paths = set(tracked)
         self.repository = repository
+        # A top-level folder that is a submodule: what submodule_of gives for its files
+        self.submodules = submodules or {}
 
     def file_stamp(self, relative):
         data = self.files.get(relative)
@@ -42,6 +44,9 @@ class FakeVcs:
 
     def head(self):
         return SHA if self.repository else None
+
+    def submodule_of(self, relative):
+        return self.submodules.get(relative.split("/", 1)[0]) if self.repository else None
 
 
 def project(files, **vcs):
@@ -129,6 +134,14 @@ class Documents(unittest.TestCase):
         doc = read_document(project({"x.md": b"# x\n"}, repository=False), "x.md")
         self.assertIsNone(doc["tracked"])
         self.assertIsNone(doc["commit"])
+        self.assertIsNone(doc["submodule"])
+
+    def test_a_file_in_a_submodule_says_which_and_where_it_lives(self):
+        sub = {"path": "vendor/lib", "commit": "b" * 40, "repository": "https://github.com/o/lib"}
+        files = {"vendor/lib/README.md": b"# lib\n", "README.md": b"# top\n"}
+        p = project(files, submodules={"vendor": sub})
+        self.assertEqual(read_document(p, "vendor/lib/README.md")["submodule"], sub)
+        self.assertIsNone(read_document(p, "README.md")["submodule"])
 
 
 class Refusals(unittest.TestCase):

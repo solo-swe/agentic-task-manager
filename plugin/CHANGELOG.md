@@ -4,6 +4,53 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.30.0] - 2026-11-04
+
+The sprint *Viewer fixes* (release 0.30.0).
+
+### Added
+- **`atm commit <id> --dir FOLDER`** (T-405, repeatable, beside `--file`): every change git lists under the folder
+  (modified, new, deleted, renamed), for a generated folder the task rebuilt, such as CompMD's runtime after an
+  upgrade (T-398 named 230 files one by one). Refused for the repository's root or above, a path outside it, the task
+  folder, a file, a folder with nothing changed, and, as a whole, when a changed file under it is one another agent's
+  claimed task lists in its `files`. atm-lib: `folder_changes(project, task_id, folders, cwd)`
+  (`tests/lib/public-surface.json`); the vcs: `changes_under`; `host/git.py`'s `run_git` takes `strip=False`.
+  `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` say when to use it.
+
+### Changed
+- **CompMD 0.5.0** (T-406): `@compmd/processor`, `render`, `sandbox` and `vite` at 0.5.0, the runtime in
+  `plugin/assets/compmd/0.5.0/` (0.4.0's removed). Its frames speak frame protocol version 4, so page and frames ship
+  together; Shiki and Temml ship once, beside the frames (`highlight.js`, `math.js`), not also beside `compmd.js`.
+  `plugin/docs/compmd-llms.txt` is its `llms.txt` at `v0.5.0`, unchanged since `v0.4.0` but for atm's header.
+- **A Markdown document's gutter numbers every line** (T-406), 1, 2, 3…, as an editor's does, instead of each block's
+  first line (T-400): each line beside its own text, where CompMD drew it (the view's `lines()`, re-read on its
+  `layout` event), a paragraph's later lines too; lines that share a visual line share a row (`3–4`); lines that draw
+  nothing (blank lines, frontmatter, fences, a diagram's source after its first line) spread over the gaps between,
+  fainter. `:L<n>-L<m>` marks exactly those lines, in the gutter and on their text's boxes, not their whole blocks.
+  `gutterRows` in `lib/compmd.ts` replaces `blockSources` and `placeBlocks`; `CompMd.svelte`'s `onlines` replaces
+  `onblocks`.
+
+### Fixed
+- **The document viewer's contents stay readable with many headings**: the list's entries were squeezed to fit its
+  height (a flex column whose entries' `overflow: hidden` let them shrink); now each keeps its height and the list
+  scrolls.
+- **A card on the Omniboard opens its task over the Omniboard** (T-411), instead of switching to the project's
+  page: `openOnBoard` in `lib/state.svelte.ts` loads the card's project's data underneath (tasks, claims, worktrees,
+  as its page would; not its saved view) and opens the details, kept current by the refresh until they close or the
+  page changes (`peeking`); the document viewer opens for that project too. The project chip and "+ N more" still open
+  the project; a card whose task its project's data doesn't have opens the project, as before. The Omniboard's ⓘ
+  says so.
+- **`atm help` lists every command's options again** (T-409): its overview had drifted from the commands' own
+  `--help`: `edit`'s requirement, use-case, component, related, release, review and `--with` options, `add`'s, `status`
+  and `list`'s `--release`/`--component` (and `list --archived`), `check --files`, `commit --record` and
+  `sprints close --reviewed` / `sprints delete` are in it now; `add --requirement`'s help says an entry may be a link.
+- **Files inside a git submodule open in the document viewer** (T-408): the viewer refused them as if git ignored
+  them, since `git check-ignore` in the project's repository refuses a path inside a submodule and the check fails
+  closed. The vcs layer now asks the submodule's own repository (`ignored` and `tracked`, down to the innermost
+  submodule; any git error still refuses), and the documents route gives `submodule` (`{path, commit, repository}`,
+  the vcs's new `submodule_of`), so **Open on GitHub** links to the submodule's repository at its commit (or doesn't
+  show when its remote isn't a web address).
+
 ## [0.29.0] - 2026-11-03
 
 The sprint *Document Viewer* (release 0.29.0): open the documents and files a task refers to inside the dashboard

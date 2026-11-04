@@ -33,7 +33,16 @@ The results that cross to a front end are typed in `atm/common/schema/api.schema
 from ..common.errors import AtmFailure, Claimed, Conflict, Invalid, NothingAvailable, NotFound
 from .archive import archive_finished, archive_hint_now, unarchive_tasks
 from .claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
-from .code import commit_task, get_workflow, record_commit, record_merge, record_pr, repository_paths, set_workflow
+from .code import (
+    commit_task,
+    folder_changes,
+    get_workflow,
+    record_commit,
+    record_merge,
+    record_pr,
+    repository_paths,
+    set_workflow,
+)
 from .components import add_component, edit_component, list_components
 from .edit import add_new_tasks, check_project, edit_existing_task
 from .project import Project
@@ -115,6 +124,7 @@ __all__ = [
     "get_workflow",
     "set_workflow",
     "repository_paths",
+    "folder_changes",
     "commit_task",
     "record_commit",
     "record_pr",

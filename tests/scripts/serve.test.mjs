@@ -663,6 +663,57 @@ describe('serve', () => {
     atm(['serve', 'stop'], root);
   });
 
+  test('files in a git submodule: its own ignore rules decide, and the document names its repository (T-408)', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    // The submodule's repository: a README, a file its own .gitignore ignores, a key file, a nested folder
+    const lib = tempDir('atm-sublib-');
+    cleanups.push(() => removeDir(lib));
+    const id = ['-c', 'user.name=Test', '-c', 'user.email=test@example.com'];
+    git(['init', '-q'], lib);
+    fs.mkdirSync(path.join(lib, 'docs'));
+    fs.writeFileSync(path.join(lib, 'README.md'), '# The library\n');
+    fs.writeFileSync(path.join(lib, 'docs/guide.md'), '# Guide\n');
+    fs.writeFileSync(path.join(lib, '.gitignore'), 'local.md\n');
+    git(['add', '.'], lib);
+    git([...id, 'commit', '-q', '-m', 'lib'], lib);
+    git(['remote', 'add', 'origin', 'git@github.com:acme/lib.git'], lib);
+    const root = project({ meta: { id: 'subm0001', project: 'Sub' }, tasks: [] }, { 'docs/x.md': '# Top\n' });
+    git(['-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'vendor/lib'], root);
+    git([...id, 'commit', '-q', '-m', 'the submodule'], root);
+    const sub = path.join(root, 'vendor/lib');
+    git(['remote', 'set-url', 'origin', 'git@github.com:acme/lib.git'], sub);
+    const subHead = git(['rev-parse', 'HEAD'], sub);
+    fs.writeFileSync(path.join(sub, 'local.md'), '# Ignored by the submodule\n');
+    fs.writeFileSync(path.join(sub, 'new.md'), '# Not committed yet\n');
+    fs.writeFileSync(path.join(sub, 'id_rsa'), 'nope');
+    assert.equal(atm(['projects', 'add'], root).code, 0);
+    const port = ports();
+    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    const get = (file) =>
+      fetch(`http://localhost:${port}/api/v1/projects/subm0001/documents?path=${encodeURIComponent(file)}`);
+
+    // A file in the submodule opens, tracked by the submodule, at its commit, in its repository
+    const readme = await get('vendor/lib/README.md');
+    assert.equal(readme.status, 200);
+    const body = await readme.json();
+    assert.equal(body.tracked, true);
+    assert.deepEqual(body.submodule, {
+      path: 'vendor/lib',
+      commit: subHead,
+      repository: 'https://github.com/acme/lib',
+    });
+    assert.equal((await (await get('vendor/lib/docs/guide.md')).json()).document, '# Guide\n');
+    // One the submodule hasn't committed opens too, untracked
+    assert.equal((await (await get('vendor/lib/new.md')).json()).tracked, false);
+    // The submodule's .gitignore hides a file; a key file stays refused
+    assert.equal((await get('vendor/lib/local.md')).status, 403);
+    assert.equal((await get('vendor/lib/id_rsa')).status, 403);
+    // A file of the project itself: no submodule
+    assert.equal((await (await get('docs/x.md')).json()).submodule, null);
+    atm(['serve', 'stop'], root);
+  });
+
   test('tasks and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);

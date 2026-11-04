@@ -2308,8 +2308,9 @@ def git_exit(args, cwd):
         return None
 
 
-def run_git(args, cwd):
-    """Run git as a step that must work: return stdout stripped, or raise with git's own message."""
+def run_git(args, cwd, strip=True):
+    """Run git as a step that must work: return stdout (stripped, unless `strip` is False: a status line starts with
+    a space that means something), or raise with git's own message."""
     try:
         result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
     except OSError as e:
@@ -2318,7 +2319,7 @@ def run_git(args, cwd):
         message = (result.stderr or result.stdout).strip()
         command = next((a for a in args if not a.startswith("-")), "")
         raise AtmFailure(f"git {command} failed: {message}")
-    return result.stdout.strip()
+    return result.stdout.strip() if strip else result.stdout
 
 
 def in_git(folder):
@@ -2565,6 +2566,17 @@ class Vcs(Protocol):
 
     def head(self) -> Optional[str]:
         """The current commit's SHA; None outside version control or before the first commit."""
+        ...
+
+    def changes_under(self, folders: List[str], cwd: Optional[str] = None) -> List[str]:
+        """Every changed file under each folder (named relative to `cwd`), relative to the repository: what
+        `atm commit --dir` commits (T-405). Invalid for the root, anything outside the repository and the task folder;
+        NotFound for a folder with nothing changed."""
+        ...
+
+    def submodule_of(self, relative: str) -> Optional[dict]:
+        """For a file inside a submodule (the innermost): {path: the submodule's folder, commit: its own HEAD,
+        repository: its web address or None}; None for any other file, and outside version control (T-408)."""
         ...
 
 
@@ -4476,6 +4488,45 @@ class GitVcs:
                 picked.append(relative)
         return picked
 
+    def changes_under(self, folders, cwd=None):
+        """`atm commit --dir` (T-405): every change git sees under each folder (named relative to `cwd`, None: the
+        repository), as `git status` lists it: modified, added, deleted, renamed (both names) and new files git doesn't
+        ignore; relative to the repository, in order. Refuses the repository's root or above, a folder outside it, the
+        task folder (tasks.json goes with every commit anyway), a file, and a folder with nothing changed."""
+        picked = []
+        for name in folders:
+            full = os.path.realpath(os.path.join(cwd or self.root, name))
+            relative = os.path.relpath(full, self.root).replace(os.sep, "/")
+            if relative in (".", "..") or relative.startswith("../"):
+                raise Invalid(f"--dir {name}: name a folder inside the repository, not the repository itself or above it")
+            if relative == ".agentic-task-manager" or relative.startswith(".agentic-task-manager/"):
+                raise Invalid(f"--dir {name}: the task folder isn't committed this way (tasks.json goes with every commit)")
+            if os.path.isfile(full):
+                raise Invalid(f"--dir {name} is a file: name it with --file")
+            status = run_git(
+                LITERAL + ["status", "--porcelain", "-z", "--untracked-files=all", "--", relative], self.root, strip=False
+            )
+            entries = [e for e in status.split("\0") if e]
+            found = []
+            i = 0
+            while i < len(entries):
+                entry = entries[i]
+                i += 1
+                if len(entry) < 4:
+                    continue
+                code, path = entry[:2], entry[3:]
+                found.append(path)
+                # A rename or a copy: the next entry is the name it had, which goes in the commit too
+                if "R" in code or "C" in code:
+                    if i < len(entries):
+                        found.append(entries[i])
+                    i += 1
+            found = [p for p in found if p == relative or p.startswith(relative + "/")]
+            if not found:
+                raise NotFound(f"--dir {name}: nothing changed under it")
+            picked += [p for p in found if p not in picked]
+        return picked
+
     def commit(self, files, message):
         """Commit exactly `files` (relative to the repository); whatever else is staged stays staged and out of this
         commit. Returns the new commit's SHA."""
@@ -4532,21 +4583,63 @@ class GitVcs:
         with open(path, "rb") as f:
             return f.read()
 
+    def _submodule(self, relative):
+        """The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or None. A submodule
+        is a folder this repository records as a commit (mode 160000) with a checkout of its own (`.git`); git answers
+        nothing about the files in it from here, only from its own repository (T-408). A nested repository that isn't a
+        submodule is not one: its files stay this repository's to judge (and git refuses them, so they stay hidden)."""
+        parts = relative.split("/")
+        for i in range(1, len(parts)):
+            folder = "/".join(parts[:i])
+            if not os.path.lexists(os.path.join(self.root, folder, ".git")):
+                continue
+            for line in (git(LITERAL + ["ls-files", "--stage", "--", folder], self.root) or "").splitlines():
+                meta, _, path = line.partition("\t")
+                if path == folder and meta.split(" ", 1)[0] == "160000":
+                    return folder, "/".join(parts[i:])
+        return None
+
+    def _in_submodule(self, relative):
+        """The submodule's own GitVcs and the path inside it, or None outside one"""
+        found = self._submodule(relative)
+        return (GitVcs(os.path.join(self.root, found[0])), found[1]) if found else None
+
     def ignored(self, relative):
         """git's ignore rules, as `git status` applies them: a file git tracks is never ignored. check-ignore takes
         paths, not patterns (and refuses --literal-pathspecs). It fails closed: only git's "not ignored" (exit 1)
-        lets a file through; an error counts as ignored."""
+        lets a file through; an error counts as ignored. A file in a submodule: the submodule's own rules decide (git
+        refuses the question from here), down to the innermost submodule."""
         if not self.in_repository():
             return False
+        inside = self._in_submodule(relative)
+        if inside:
+            return inside[0].ignored(inside[1])
         return git_exit(["check-ignore", "-q", "--", relative], self.root) != 1
 
     def tracked(self, relative):
         if not self.in_repository():
             return None
+        inside = self._in_submodule(relative)
+        if inside:
+            return inside[0].tracked(inside[1])
         return git(LITERAL + ["ls-files", "--error-unmatch", "--", relative], self.root) is not None
 
     def head(self):
         return self.resolve("HEAD") if self.in_repository() else None
+
+    def submodule_of(self, relative):
+        """For a file in a submodule (the innermost): {path: its folder from the root, commit: its HEAD, repository:
+        its origin's web address or None}; None for any other file."""
+        if not self.in_repository():
+            return None
+        found = self._submodule(relative)
+        if not found:
+            return None
+        sub = GitVcs(os.path.join(self.root, found[0]))
+        nested = sub.submodule_of(found[1])
+        if nested:
+            return {**nested, "path": f"{found[0]}/{nested['path']}"}
+        return {"path": found[0], "commit": sub.head(), "repository": repository_url(sub.remote_url())}
 
 
 # ==== lib/project.py ====
@@ -7454,6 +7547,31 @@ def repository_paths(project, files, cwd):
     return vcs.paths(files, cwd)
 
 
+def folder_changes(project, task_id, folders, cwd):
+    """`atm commit --dir` (T-405): every changed file under the folders (named relative to `cwd`), relative to the
+    repository, for commit_task. Refused as a whole when one of them is a file another agent's claimed task lists in
+    its `files` (the file, or a folder holding it): the case committing only named files guards against, another
+    agent's unfinished work in the same tree."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    changed = vcs.changes_under(list(folders), cwd)
+    claims = project.store.read_claims()["claims"]
+    for claim in claims.values():
+        if not isinstance(claim, dict) or claim.get("task") == task_id or claim.get("agent") == project.actor:
+            continue
+        other = project.store.get_task(claim.get("task"))
+        listed = [f for f in (other or {}).get("files") or [] if isinstance(f, str)]
+        for path in changed:
+            owner = next((f for f in listed if path == f.rstrip("/") or path.startswith(f.rstrip("/") + "/")), None)
+            if owner:
+                raise Refused(
+                    f"--dir would commit {path}, which {claim['task']} lists ({owner}), claimed by {claim.get('agent')}: "
+                    "name your own files with --file"
+                )
+    return changed
+
+
 def commit_task(project, task_id, files, message=None):
     """`atm commit`: commit exactly `files` (relative to the repository; repository_paths turns names relative to a
     folder into these) plus the task data that travels with code commits, with the workflow's message, then record
@@ -7462,7 +7580,7 @@ def commit_task(project, task_id, files, message=None):
     if vcs is None or not vcs.in_repository():
         raise AtmFailure("atm commit needs a git repository")
     if not files:
-        raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
+        raise Invalid("atm commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
     store = project.store
     # The one task, or the error find_task gives (saying when it is archived)
     task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)
@@ -7987,7 +8105,8 @@ def read_document(project, path):
     text in a fence (`line_offset` 1: the fence's first line comes before the file's), an image as a Markdown image
     of its own name (relative, which the dashboard points at the files route), a binary file as a line saying so.
     `text` is the file as it is (None for an image or a binary file); `lines` counts its lines. `tracked` and
-    `commit` (the current commit) are None outside version control. NotFound, Refused or TooLarge."""
+    `commit` (the current commit) are None outside version control; `submodule` is {path, commit, repository} for a
+    file in a git submodule, else None. NotFound, Refused or TooLarge."""
     path, kind, detail, stamp = _checked(project, path)
     data = project.vcs.read_file(path)
     name = path.rsplit("/", 1)[-1]
@@ -8023,6 +8142,8 @@ def read_document(project, path):
         "modified_at": modified,
         "tracked": project.vcs.tracked(path),
         "commit": project.vcs.head(),
+        # A file in a submodule lives in the submodule's repository: its folder, commit and web address (T-408)
+        "submodule": project.vcs.submodule_of(path),
     }
 
 
@@ -9110,8 +9231,8 @@ def cmd_commit(args):
     """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
     project = open_project(os.getcwd(), agent_identity(args.agent))
     if args.record is not None:
-        if args.file or args.message is not None:
-            raise Invalid("--record records an existing commit: no --file or --message")
+        if args.file or args.dir or args.message is not None:
+            raise Invalid("--record records an existing commit: no --file, --dir or --message")
         result = record_commit(project, args.id, args.record)
         if args.json:
             shown = {k: result[k] for k in ("task", "commit", "recorded")}
@@ -9123,6 +9244,9 @@ def cmd_commit(args):
         return
     # The files are named from the current folder; atm-lib takes them relative to the repository
     files = repository_paths(project, args.file or [], os.getcwd())
+    # A folder's changes, all of them (T-405): a generated folder the task rebuilt
+    if args.dir:
+        files += [f for f in folder_changes(project, args.id, args.dir, os.getcwd()) if f not in files]
     result = commit_task(project, args.id, files, args.message)
     if args.json:
         out(to_json(result))
@@ -9623,11 +9747,12 @@ commands:
                  run the dashboard server in the background: one per user, for all registered projects
                  (start registers this project, or the one at PATH, and prints its URL; --all the overview's;
                  --refresh only restarts a running server whose dashboard is older than this plugin's)
-  status         the overview: counts, what is in progress, in review or blocked, the next task
+  status [--sprint S]... [--backlog] [--release R] [--component C]
+                 the overview: counts, what is in progress, in review or blocked, the next task
   summary        the project's numbers as atm serve gives them to the dashboard (JSON)
   show <id>...   tasks in full (description, dependencies, files, notes)
-  list [--status S] [--sprint S | --backlog] [--type T] [--priority P] [--label L] [--agent A] [--ready]
-       [--blocked] [--in-pr] [--with-user] [--derived]
+  list [--status S] [--sprint S | --backlog] [--release R] [--component C] [--type T] [--priority P]
+       [--label L] [--agent A] [--ready] [--blocked] [--in-pr] [--with-user] [--archived] [--derived]
                  one line per task: ID, status, priority, labels, name (--derived: each task in full with what atm
                  derives for it, as JSON)
   deps <id>      what a task waits for, and what waits for it
@@ -9655,21 +9780,31 @@ commands:
   release <id> [--note TEXT]
                  put an in_progress task back to todo; the note is a handoff for the next agent
   note <id> TEXT add a note to a task (at most 500 characters)
-  add --name N --type T [--sprint S] [--priority P] [--label L]... [--description D] [--dep ID]... [--file F]...
+  add --name N --type T [--sprint S] [--release R] [--priority P] [--label L]...
+      [--description D | --description-file F] [--dep ID]... [--file F]... [--requirement R]...
+      [--component C]... [--components auto] [--review MODE] [--related ID]... [--with user]
                  add a task with the next ID (in the backlog without --sprint); add --json-file F adds many
-  edit <id> [--name] [--description] [--sprint S | --backlog] [--type] [--priority]
+  edit <id> [--name] [--description | --description-file F] [--sprint S | --backlog] [--type] [--priority]
+            [--release R] [--review MODE] [--with user] [--components auto]
             [--add-dep/--remove-dep ID] [--add-file/--remove-file F] [--add-label/--remove-label L]
-                 change a task's definition (its status changes only through the status commands)
-  check          check tasks.json: schema, vocabularies, dependencies (exit code 1 on errors)
+            [--add-component/--remove-component C] [--add-related/--remove-related ID]
+            [--add-requirement/--remove-requirement R] [--add-use-case/--remove-use-case U]
+                 change a task's definition (its status changes only through the status commands); a
+                 requirement or use case is an ID, or a link to where it is defined
+  check [--files]
+                 check tasks.json: schema, vocabularies, dependencies (exit code 1 on errors); --files also
+                 warns about missing files that finished tasks list
   archive [--sprint S]... [--before DATE] [--keep-days N] [--dry-run]
                  move finished tasks to tasks-archive.json, to keep tasks.json small
   unarchive <id>...
                  bring archived tasks back into tasks.json
   workflow [set direct|pull-request] [--base B] [--verify true|false] [--max-rounds N] ...
                  print the project's workflow (meta.workflow), or set it
-  commit <id> --file F [--file F]... [--message TEXT]
-                 commit exactly those files plus tasks.json (message from meta.workflow.commit_template),
-                 and record the commit on the task
+  commit <id> --file F [--file F]... [--dir FOLDER]... [--message TEXT]
+                 commit exactly those files (and every change under a --dir folder, e.g. a generated one the
+                 task rebuilt) plus tasks.json (message from meta.workflow.commit_template),
+                 and record the commit on the task; commit <id> --record REV records an existing commit
+                 instead (after a rebase or a cherry-pick)
   pr <id>... --number N --url URL
                  record the PR that contains the tasks
   merged --pr N [--at TIME]
@@ -9699,11 +9834,13 @@ commands:
                  file inside the project, at most 512 KB); without one, a logo.svg, .github/logo.png, ... is used
   sprints [--all] | sprints add ["<name>"] [--goal T] [--release R] [--due DATE] [--after S]
           | sprints edit <S> [--goal] [--release] [--due] | sprints start <S>
-          | sprints close <S> [--carry-to <S2>|new [--name N]|backlog]
+          | sprints close <S> [--carry-to <S2>|new [--name N]|backlog] [--reviewed]
+          | sprints delete <S> [--move-to <S2>|backlog] [--force]
                  the sprints in order with their task counts (closed ones with --all); add one (a name is
                  generated without one), change one, make one active (one at a time), or close one: its
                  unfinished tasks go to --carry-to (needed when there are any), keeping their status, and it
-                 keeps a report of what was done, carried and added mid-sprint
+                 keeps a report of what was done, carried and added mid-sprint (--reviewed: its batch tasks were
+                 reviewed with the user); delete one created by mistake
   releases [--all] | releases add <R> [--name N] [--target DATE] [--pr N]... [--released-at TIME]
           | releases edit <R> [--name] [--target] | releases archive <R> | releases notes <R>
                  the releases in order with their tasks by kind and stage (archived ones with --all); add one
@@ -9911,7 +10048,12 @@ def build_parser():
     describe.add_argument("--description-file", metavar="FILE", help="read the description from a file")
     add.add_argument("--dep", action="append", default=[], metavar="ID", help="a task it depends on (repeatable)")
     add.add_argument("--file", action="append", default=[], help="a file it will create or change (repeatable)")
-    add.add_argument("--requirement", action="append", default=[], help="a requirement ID (repeatable)")
+    add.add_argument(
+        "--requirement",
+        action="append",
+        default=[],
+        help="a requirement: its ID, or a link to where it is defined (repeatable)",
+    )
     add.add_argument("--sprint", metavar="NAME", help="the sprint it goes into (default: none, the backlog)")
     add.add_argument("--release", metavar="R", help="the release it ships in (default: its sprint's)")
     add.add_argument("--component", action="append", default=[], metavar="C", help="a component (repeatable)")
@@ -9997,7 +10139,15 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each)"
+    )
+    commit.add_argument(
+        "--dir",
+        action="append",
+        default=[],
+        metavar="FOLDER",
+        help="every change under a folder the task rebuilt, e.g. a generated one (repeatable; refused for the "
+        "repository's root, the task folder, and a folder holding files another agent's claimed task lists)",
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
     commit.add_argument(

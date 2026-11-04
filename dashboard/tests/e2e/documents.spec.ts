@@ -333,7 +333,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     expect(Math.abs(sizes.gutterHeight - sizes.codeHeight)).toBeLessThan(2);
   });
 
-  test('code is highlighted by CompMD (Shiki, CompMD 0.4.0), coloured tokens, the gutter still beside its lines', async ({
+  test('code is highlighted by CompMD (Shiki), coloured tokens, the gutter still beside its lines', async ({
     page,
     tasksServer,
   }) => {
@@ -380,13 +380,18 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     expect(Math.abs(covered.bottom)).toBeLessThan(2);
   });
 
-  // T-400: a Markdown document's lines, each block's first source line from CompMD (origins, the view's rectsAt)
+  // T-406: a Markdown document's lines, every one, placed by CompMD (origins, the view's lines(), CompMD 0.5.0). The
+  // paragraph's lines are long enough that each starts on a visual line of its own
+  const LONG = 'word '.repeat(30).trim();
   const MARKDOWN =
-    '---\ntitle: Spec\n---\n# The spec\n\nA paragraph\nover two lines.\n\n- one\n- two\n\n```ts\nconst a = 1;\n```\n\n' +
+    `---\ntitle: Spec\n---\n# The spec\n\n${LONG} first.\n${LONG} second.\n\n- one\n- two\n\n\`\`\`ts\nconst a = 1;\n\`\`\`\n\n` +
     Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 16}.`).join('\n\n') +
     '\n\n## The end\n\nThe last words.\n';
+  const MARKDOWN_LINES = MARKDOWN.split('\n').length - 1;
+  /** The gutter's row for a line, and the text box CompMD drew it in, both in the viewport */
+  const rowOf = (page: Page, line: number) => page.locator(`#doc-gutter div[data-line="${line}"]`);
 
-  test('a Markdown document: each block’s first line in the gutter, beside the block, counted from the file’s first', async ({
+  test('a Markdown document: every line numbered, 1, 2, 3…, each beside its text; blank lines in the gaps', async ({
     page,
     tasksServer,
   }) => {
@@ -394,37 +399,77 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md'));
     const numbers = page.locator('#doc-gutter div');
-    // The frontmatter's three lines count: the title is line 4
-    await expect(numbers.first()).toHaveText('4');
-    await expect(numbers.nth(1)).toHaveText('6');
-    await expect(numbers.nth(2)).toHaveText('9');
-    await expect(numbers.nth(3)).toHaveText('12');
-    // Each number at the top of the block it numbers
-    const offsets = await page.locator('#doc-viewer').evaluate((el) => {
-      const blocks = [...el.querySelectorAll('.compmd-page > *')].slice(0, 4).map((b) => b.getBoundingClientRect().top);
-      const rows = [...el.querySelectorAll('#doc-gutter div')].slice(0, 4).map((d) => d.getBoundingClientRect().top);
-      return rows.map((top, i) => top - blocks[i]);
+    await expect(numbers).toHaveCount(MARKDOWN_LINES);
+    // No line skipped: the frontmatter's three lines and the blank ones count
+    expect((await numbers.allTextContents()).map((t) => t.trim())).toEqual(
+      Array.from({ length: MARKDOWN_LINES }, (_, i) => String(i + 1)),
+    );
+    await expect(rowOf(page, 2)).toHaveClass(/blank/);
+    await expect(rowOf(page, 4)).not.toHaveClass(/blank/);
+    const place = await page.locator('#doc-viewer').evaluate((el) => {
+      const mid = (r: DOMRect) => r.top + r.height / 2;
+      const row = (n: number) => el.querySelector(`#doc-gutter div[data-line="${n}"]`)!.getBoundingClientRect();
+      const h1 = el.querySelector('.compmd-page h1')!.getBoundingClientRect();
+      // The paragraph's two source lines: the text node's text before and after its soft break
+      const text = el.querySelector('.compmd-page > p')!.firstChild as Text;
+      const range = (from: number, to: number) => {
+        const r = document.createRange();
+        r.setStart(text, from);
+        r.setEnd(text, to);
+        return r.getClientRects()[0];
+      };
+      const brk = text.data.indexOf('\n');
+      const ul = el.querySelector('.compmd-page > ul')!.getBoundingClientRect();
+      return {
+        title: mid(row(4)) - mid(h1),
+        first: mid(row(6)) - mid(range(0, 4)),
+        second: mid(row(7)) - mid(range(brk + 1, brk + 5)),
+        rows: [row(5), row(8)].map((r) => [r.top, r.bottom]),
+        h1Middle: mid(h1),
+        paragraphTop: range(0, 4).top,
+        ulTop: ul.top,
+        nine: row(9).top,
+      };
     });
-    for (const offset of offsets) expect(Math.abs(offset)).toBeLessThan(3);
+    // Each drawn line's number on its text, the paragraph's second line on its own words
+    for (const offset of [place.title, place.first, place.second]) expect(Math.abs(offset)).toBeLessThan(3);
+    // A blank line's number between the blocks around it: below the heading's text (its line box), above the paragraph
+    expect(place.rows[0][0]).toBeGreaterThan(place.h1Middle);
+    expect(place.rows[0][1]).toBeLessThanOrEqual(place.paragraphTop + 1);
+    // Line 8's gap ends where the list's first line, 9, starts: its text, inside the list's box
+    expect(place.rows[1][1]).toBeLessThanOrEqual(place.nine + 0.5);
+    expect(place.nine).toBeGreaterThanOrEqual(place.ulTop - 0.5);
   });
 
-  test('#L in a Markdown document: scrolls to the blocks its lines fall in and marks them', async ({
+  test('#L in a Markdown document: marks exactly those lines, in the gutter and on their text; scrolls to them', async ({
     page,
     tasksServer,
   }) => {
     tasksServer.setDocument(projectDocument('docs/spec.md', MARKDOWN));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    // Line 7 is the paragraph's second line, 9 the list's first: both blocks
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7-L9'));
-    await expect(page.locator('#doc-gutter .marked')).toHaveText(['6', '9']);
+    // Line 7 is the paragraph's second line only
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7'));
+    await expect(page.locator('#doc-gutter .marked')).toHaveText(['7']);
     const covered = await page.locator('#doc-viewer').evaluate((el) => {
-      const m = el.querySelector('#doc-line-mark')!.getBoundingClientRect();
-      const [p, ul] = [el.querySelector('.compmd-page > p')!, el.querySelector('.compmd-page > ul')!];
-      return { top: m.top - p.getBoundingClientRect().top, bottom: m.bottom - ul.getBoundingClientRect().bottom };
+      const marks = [...el.querySelectorAll('.doc-text-mark')].map((m) => m.getBoundingClientRect());
+      const text = el.querySelector('.compmd-page > p')!.firstChild as Text;
+      const brk = text.data.indexOf('\n');
+      const r = document.createRange();
+      r.setStart(text, brk + 1);
+      r.setEnd(text, brk + 5);
+      const second = r.getClientRects()[0];
+      r.setStart(text, 0);
+      r.setEnd(text, 4);
+      const first = r.getClientRects()[0];
+      return { top: marks[0].top - second.top, firstTop: first.top, marksTop: Math.min(...marks.map((m) => m.top)) };
     });
     expect(Math.abs(covered.top)).toBeLessThan(3);
-    expect(Math.abs(covered.bottom)).toBeLessThan(3);
-    // A line far down (the last of the 40 paragraphs, every other line from 16): the viewer scrolls to its block
+    // Not the paragraph's first line
+    expect(covered.marksTop).toBeGreaterThan(covered.firstTop + 5);
+    // A range: its lines marked, the blank one between too
+    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7-L9'));
+    await expect(page.locator('#doc-gutter .marked')).toHaveText(['7', '8', '9']);
+    // A line far down (the last of the 40 paragraphs, every other line from 16): the viewer scrolls to it
     await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L94'));
     await expect(page.locator('#doc-gutter .marked')).toHaveText(['94']);
     await expect(page.locator('#doc-line-mark')).toBeInViewport();
@@ -661,6 +706,25 @@ test.describe('the document viewer: contents', () => {
     await expect(viewer(page).locator('.compmd-page h2', { hasText: 'Reference' })).toBeInViewport();
     // The button stays in view as the document scrolls
     await expect(button).toBeInViewport();
+  });
+
+  test('many headings: each entry keeps its height, readable, and the list scrolls to the rest', async ({
+    page,
+    tasksServer,
+  }) => {
+    const MANY = Array.from({ length: 60 }, (_, i) => `## Section ${i + 1}\n\nText ${i + 1}.\n`).join('\n');
+    await open(page, tasksServer, MANY);
+    await page.locator('#doc-toc-button').hover();
+    const entries = page.locator('.doc-toc-list button');
+    await expect(entries).toHaveCount(60);
+    const sizes = await page.locator('.doc-toc-list').evaluate((list) => ({
+      heights: [...list.querySelectorAll('button')].map((b) => b.getBoundingClientRect().height),
+      scrolls: list.scrollHeight > list.clientHeight,
+    }));
+    for (const h of sizes.heights) expect(h).toBeGreaterThanOrEqual(20);
+    expect(sizes.scrolls).toBe(true);
+    await entries.last().scrollIntoViewIfNeeded();
+    await expect(entries.last()).toBeInViewport();
   });
 
   test('the section being read is marked; the keyboard opens and walks the list; Escape closes it first', async ({

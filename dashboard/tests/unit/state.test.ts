@@ -107,6 +107,43 @@ describe('DashboardState', () => {
       expect(urls()).toContain(v1Tasks('p2'));
     });
 
+    it('a task opened on the Omniboard: its project loaded underneath, the overview still shown (T-411)', async () => {
+      fetchMock = server({ projects: [project('p2'), project('p3')] });
+      vi.stubGlobal('fetch', fetchMock);
+      const s = new DashboardState();
+      await s.load();
+      await s.openOnBoard('p3', 'T-004');
+      expect(s.route).toEqual({ page: 'overview' });
+      expect([s.projectId, s.peeking, s.detailOpen, s.detailId]).toEqual(['p3', true, true, 'T-004']);
+      // The refresh keeps it open, and the project's data current
+      fetchMock.mockClear();
+      await s.reload();
+      expect(s.detailOpen).toBe(true);
+      expect(urls()).toContain(v1Tasks('p3'));
+      // Closing ends it: the next refresh loads the overview alone again
+      s.closeDetail();
+      expect(s.peeking).toBe(false);
+      fetchMock.mockClear();
+      await s.reload();
+      expect(urls().filter((u) => u === v1Tasks('p3'))).toHaveLength(2); // the overview's tasks and archive only
+      // The project's page later: its saved view is applied then, as on any first open
+      await s.openOnBoard('p3', 'T-004');
+      history.replaceState(null, '', '/#project=p3');
+      s.onHashChange();
+      await vi.waitFor(() => expect(s.loaded).toBe(true));
+      expect([s.peeking, s.route]).toEqual([false, { page: 'project', id: 'p3' }]);
+    });
+
+    it('a task the Omniboard opens that its project doesn’t have opens the project instead', async () => {
+      fetchMock = server({ projects: [project('p2'), project('p3')] });
+      vi.stubGlobal('fetch', fetchMock);
+      const s = new DashboardState();
+      await s.load();
+      await s.openOnBoard('p2', 'T-999');
+      expect([s.peeking, s.detailOpen]).toEqual([false, false]);
+      expect(location.hash).toContain('project=p2');
+    });
+
     it('a hash change that only switches the tab reloads nothing', async () => {
       const s = new DashboardState();
       await s.load();

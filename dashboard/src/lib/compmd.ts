@@ -88,68 +88,86 @@ export function documentRequest(
     tz: timeZone,
     allowedOrigins: [] as string[],
     host: {},
-    // Each node carries the source range it came from (spec §12.3): the gutter's line numbers for a Markdown document
-    // come from it, through the view's rectsAt (T-400)
+    // Each node carries the source range it came from (spec §12.3): CompMD places each line of the text from it, for
+    // the gutter's line numbers (the view's lines(), T-406)
     origins: true,
   };
 }
 
-/** Where a top-level block came from in a document's text: its first and last source line, and the code-point offset
- * of its start (what the view's rectsAt takes) */
-export interface BlockSource {
+/** A box, in CSS pixels from the top left of the page CompMD renders into */
+export interface LineRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A line of a document where CompMD drew it (the view's `lines()`, CompMD 0.5.0): the boxes its text shows in, one
+ * per visual line it covers. What draws nothing (a blank line, frontmatter, a fence) has none. */
+export interface DrawnLine {
   line: number;
-  endLine: number;
-  offset: number;
-  /** Where it ends, in code points (after its last character) */
-  endOffset: number;
+  rects: readonly LineRect[];
 }
 
-interface SourcePoint {
-  line?: number;
-  offset?: number;
-}
-
-/** A block where it was drawn: its source lines, and its box's top and bottom in the viewport */
-export interface PlacedBlock extends BlockSource {
+/** A row of a Markdown document's gutter: the source lines it numbers (one, or several that share a visual line:
+ * a soft line break shows as a space), where it is, and whether CompMD drew them or they fill a gap */
+export interface GutterRow {
+  from: number;
+  to: number;
   top: number;
-  bottom: number;
+  height: number;
+  drawn: boolean;
 }
 
-/** The blocks of `sources` placed by the boxes `rectsAt` gives at each one's first and last offset: it answers for the
- * innermost node there (a list's first offset is its first item's), so the two together span the block, from its
- * first line to its last; a block that drew nothing is left out */
-export async function placeBlocks(
-  sources: readonly BlockSource[],
-  rectsAt: (offset: number) => Promise<readonly { top: number; bottom: number }[]>,
-): Promise<PlacedBlock[]> {
-  const boxes = await Promise.all(
-    sources.map(async (s) => [...(await rectsAt(s.offset)), ...(await rectsAt(Math.max(s.offset, s.endOffset - 1)))]),
-  );
-  return sources.flatMap((source, i) => {
-    const rects = boxes[i].filter((r) => r.bottom > r.top);
-    if (!rects.length) return [];
-    return [{ ...source, top: Math.min(...rects.map((r) => r.top)), bottom: Math.max(...rects.map((r) => r.bottom)) }];
-  });
-}
-
-/** The top-level blocks of a tree processed with `origins`, in order, each with its source lines (T-400). Blocks
- * without an origin (none, as CompMD makes them) are left out; so are definitions, which draw nothing. */
-export function blockSources(tree: unknown): BlockSource[] {
-  const children = (tree as { children?: unknown[] } | null)?.children ?? [];
-  const blocks: BlockSource[] = [];
-  for (const child of children) {
-    const node = child as { type?: string; origin?: { start?: SourcePoint; end?: SourcePoint } };
-    const start = node.origin?.start;
-    const end = node.origin?.end;
-    if (node.type === 'definition' || !start?.line || start.offset === undefined) continue;
-    blocks.push({
-      line: start.line,
-      endLine: end?.line ?? start.line,
-      offset: start.offset,
-      endOffset: end?.offset ?? start.offset + 1,
-    });
+/**
+ * Every line of a document, 1 to `total`, in its gutter (T-406). A line CompMD drew is numbered at its first box,
+ * as tall as it; lines that share a visual line (the same top) share a row. A line that draws nothing (a blank line,
+ * frontmatter, a fence, a component's lines after its first) goes in the gap around it, the lines of a gap spread
+ * evenly over it: from the end of the line drawn before (its last box; a box much taller than a line, a diagram, ends
+ * a line below its top, so the component's own lines spread over it) to the next one's top, the page's `top` before the
+ * first and its `bottom` after the last. CompMD says where each line is; nothing here matches the text.
+ */
+export function gutterRows(
+  drawn: readonly DrawnLine[],
+  total: number,
+  { top = 0, bottom }: { top?: number; bottom: number },
+): GutterRow[] {
+  const placed = new Map<number, readonly LineRect[]>();
+  for (const d of drawn) {
+    const rects = d.rects.filter((r) => r.height > 0);
+    if (d.line >= 1 && d.line <= total && rects.length && !placed.has(d.line)) placed.set(d.line, rects);
   }
-  return blocks;
+  const heights = [...placed.values()].map((r) => r[0].height).sort((a, b) => a - b);
+  const typical = heights.length ? heights[Math.floor(heights.length / 2)] : 20;
+  const rows: GutterRow[] = [];
+  let gap: number[] = [];
+  let gapStart = top;
+  const fill = (end: number) => {
+    if (!gap.length) return;
+    const step = Math.max(0, end - gapStart) / gap.length;
+    gap.forEach((line, i) => rows.push({ from: line, to: line, top: gapStart + i * step, height: step, drawn: false }));
+    gap = [];
+  };
+  let last: GutterRow | null = null;
+  for (let line = 1; line <= total; line++) {
+    const rects = placed.get(line);
+    if (!rects) {
+      gap.push(line);
+      continue;
+    }
+    const [first] = rects;
+    fill(first.y);
+    const box = rects.length === 1 && first.height > 3 * typical;
+    const height = box ? typical : first.height;
+    if (last && last.to === line - 1 && Math.abs(last.top - first.y) < 1) last.to = line;
+    else {
+      last = { from: line, to: line, top: first.y, height, drawn: true };
+      rows.push(last);
+    }
+    gapStart = box ? first.y + typical : Math.max(...rects.map((r) => r.y + r.height));
+  }
+  fill(Math.max(gapStart, bottom));
+  return rows.sort((a, b) => a.from - b.from);
 }
 
 function localTimeZone(): string {
@@ -183,9 +201,10 @@ export interface CompmdModule {
     ): {
       render(tree: unknown): void;
       scheme(): void;
-      /** The boxes of what the source at `offset` drew, in the viewport (CompMD 0.4.0) */
-      rectsAt(offset: number): Promise<DOMRect[]>;
-      on(type: 'rendered' | 'error', listener: (event: unknown) => void): void;
+      /** Each line of the text that draws something, with its boxes, from the container's top left (CompMD 0.5.0) */
+      lines(from?: number): AsyncGenerator<DrawnLine>;
+      /** `layout`: what the page shows may have moved, so its lines may have (CompMD 0.5.0) */
+      on(type: 'rendered' | 'error' | 'layout', listener: (event: unknown) => void): void;
       destroy(): void;
     };
   };
