@@ -591,6 +591,12 @@ The `/atm:loop-tasks` skill supports flexible git strategies (its pushes go thro
 
 ## Tips & Best Practices
 
+### Ask the agents
+
+You can use natural language to trigger the plugin skills: just say let's plan a sprint for instance, instead of /atm:plan-sprint. If they don't understand mention atm and ask them to read the skills once. Or ask for your agent to help fix, if you need to fix something with the tasks or project.
+
+For instance, if you restructured your project and all file references are now stale, just ask the agent to go through each task and fix the references. With a project with hundreds of tasks, this takes only a minute or two.
+
 ### Task granularity
 
 Each task should be completable by a single agent in under 10 minutes. If a task description is longer than a paragraph, it should probably be split.
