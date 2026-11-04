@@ -855,10 +855,25 @@
       },
       {
         "id": "Viewer fixes",
-        "state": "active",
+        "state": "closed",
         "goal": "Submodule files open in the viewer, CompMD 0.5.0 and every Markdown line numbered, and smaller CLI fixes",
         "release": "0.30.0",
-        "start": "2026-11-04T00:03:31Z"
+        "start": "2026-11-04T00:03:31Z",
+        "end": "2026-11-04T09:31:04Z",
+        "report": {
+          "done": [
+            "T-405",
+            "T-406",
+            "T-408",
+            "T-409",
+            "T-410",
+            "T-411"
+          ],
+          "carried": [],
+          "added": [
+            "T-411"
+          ]
+        }
       }
     ],
     "releases": [
@@ -21598,9 +21613,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-04T02:34:42Z",
+      "updated_at": "2026-11-04T09:31:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:b7be7288",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Document Viewer",
@@ -21627,7 +21642,7 @@
       "commit": "03fa9a04a4c2f8c931c43d6e9864e6c072ada536",
       "completed_at": "2026-11-04T00:27:17Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-04T00:27:17Z",
@@ -21781,9 +21796,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T02:34:42Z",
+      "updated_at": "2026-11-04T09:31:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:b7be7288",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Viewer fixes",
@@ -21806,7 +21821,7 @@
       "commit": "24e8d4e74426f898349fe26b35f4db8bcdbfe50b",
       "completed_at": "2026-11-04T00:17:18Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-04T00:17:18Z",
@@ -21841,9 +21856,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T02:34:42Z",
+      "updated_at": "2026-11-04T09:31:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:b7be7288",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Viewer fixes",
@@ -21863,7 +21878,7 @@
       "commit": "8991cfd176937ea3bdb9e4e2a97ef09c5a5a6d62",
       "completed_at": "2026-11-04T00:29:05Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-04T00:29:05Z",
@@ -21953,9 +21968,9 @@
         "dashboard/tests/unit/state.test.ts"
       ],
       "created_at": "2026-11-04T01:31:16Z",
-      "updated_at": "2026-11-04T02:34:42Z",
+      "updated_at": "2026-11-04T09:31:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:b7be7288",
+      "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "Viewer fixes",
@@ -21972,7 +21987,7 @@
       "commit": "32c591224544db6a530e414383f38ee0ad5c4be4",
       "completed_at": "2026-11-04T01:35:01Z",
       "completed_by": "claude:b7be7288",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-04T01:35:01Z",
