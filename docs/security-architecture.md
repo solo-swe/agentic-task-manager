@@ -415,6 +415,17 @@ used for the agent sandbox, so this written review takes the live run's place:
   hosts (asking the reader before data from a new origin, `host` for trusted components, images in frame mode) don't
   reach atm: its settings allow no data from URLs, no trusted components and no frame-mode pages.
 
+**CompMD 0.5.0 (T-406).** The dashboard renders with CompMD 0.5.0; the guide is its `llms.txt` at `v0.5.0` (commit
+`1faa0724`). Written review, as above:
+- **The guide** is unchanged since `v0.4.0` (the tags' comparison lists no change to it); only atm's header line
+  changes. The spec's one addition, `context.busy` for a component still drawing, is for components, not text.
+- **No skill text changes.**
+- **What the page runs:** the same renderers, Shiki and Temml now shipped once, beside the frames (`highlight.js`,
+  `math.js` in the asset folder), which the host page loads from there as before (I-CSP holds). The viewer's gutter
+  reads where each line was drawn (`view.lines()`, boxes as numbers, checked by CompMD) and draws its own numbers and
+  marks: nothing from the text is run or inserted as HTML. The frame protocol is version 4: a page and frames of
+  different versions refuse each other, and both ship together in `plugin/assets/compmd/0.5.0/`.
+
 **Finding and stopping lost servers (T-390).** `whoami` now also gives `home`, a hash of the server's atm folder path
 (never the path), and `atm serve status` and `stop` ask `whoami` on the 20 ports from `--port`. They act only on a
 server whose `home` is their own folder's, and stop it with signals to its pid on this machine, as `stop` always did;

@@ -21643,7 +21643,7 @@
       "description": "T-400 numbers a Markdown document's blocks, each with its first source line (1, 4, 6, 9…), because CompMD 0.4.0 maps a source offset to the **elements** its node drew (`view.rectsAt`), not to a place in the text: a paragraph written over two lines is one box, so its second line has no place of its own. Hakan: CompMD 0.5.0 adds text-precise positions. When it is out, the gutter numbers every source line, as an editor does.\n\n## Change\n- Upgrade `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to 0.5.0, as T-398 did for 0.4.0: its *Change* list (the runtime folder, `plugin/docs/compmd-llms.txt` read in full, the §3.3 line, the release notes' changes for hosts) applies again. Restart a running `npm run dev` with `--force` after the install.\n- The gutter in [`DocumentViewer.svelte`](dashboard/src/components/DocumentViewer.svelte) for a Markdown document: a number for each source line that draws something, at its exact place through CompMD 0.5.0's text-precise lookup (read its README for the call: a line's start offset to its box in the rendered text); a line that starts with markup (`**bold…`) at the element it starts. Blank lines draw nothing: their numbers go in the gaps between blocks, spread over the gap, so the column reads 1, 2, 3… with no line skipped.\n- `:L<n>-L<m>` marks exactly those lines, not their whole blocks; Copy path and Open on GitHub as now.\n- Replaces T-400's per-block numbers (`blockSources`/`placeBlocks` in [`lib/compmd.ts`](dashboard/src/lib/compmd.ts)): keep what still serves, remove the rest.\n- Never match rendered text to source text to find a line: what drew a line is CompMD's to say (T-400's rule).\n\n## Tests\nUnit tests for the line placement; e2e: a paragraph written over two lines gets two numbers, each beside its words; a frontmatter's lines counted; blank lines numbered in the gaps; `:L7` marks the paragraph's second line only; the existing code-file gutter tests unchanged. Reviewed with Hakan in the browser.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21659,7 +21659,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:56:29Z",
-      "updated_at": "2026-11-04T00:03:30Z",
+      "updated_at": "2026-11-04T02:08:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -21677,7 +21677,9 @@
           "from": "2026-11-04T00:03:30Z"
         }
       ],
-      "sprint": "Viewer fixes"
+      "sprint": "Viewer fixes",
+      "started_at": "2026-11-04T02:08:49Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-407",
@@ -21887,7 +21889,7 @@
       "description": "Clicking a card on the Omniboard (All projects › Omniboard) switches to the project's page and opens the task there (Hakan): it should stay on the Omniboard, with the task's details open over it. The card's project chip and \"+ N more\" still open the project.\n\n## Change\n- `dashboard/src/lib/state.svelte.ts`: `openOnBoard(project, task)` loads the card's project's data (tasks, claims, worktrees; the same as a project page loads) under the Omniboard, without changing the page or the URL, and opens the task's details; the dashboard's refresh keeps it current while the details are open. Closing the details, or going to another page, ends it. The project's saved view isn't applied then (only when its page opens).\n- `AllProjectsBoard.svelte`: a card (click, Enter, Space) calls it.\n- `DocumentViewer.svelte`: opens for that project too, so links in the task's text work on the Omniboard.\n\n## Tests\nThe e2e test in `all-projects-board.spec.ts` (\"a card opens its task…\"): the URL stays the Omniboard's, the board stays, the details show the task; a dependency in the details opens that task; Escape closes them and the board is still there; the chip still opens the project. A unit test for the state.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/state.svelte.ts",
@@ -21897,7 +21899,7 @@
         "dashboard/tests/unit/state.test.ts"
       ],
       "created_at": "2026-11-04T01:31:16Z",
-      "updated_at": "2026-11-04T01:31:18Z",
+      "updated_at": "2026-11-04T01:35:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21912,7 +21914,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-04T01:31:18Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "32c591224544db6a530e414383f38ee0ad5c4be4",
+      "completed_at": "2026-11-04T01:35:01Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T01:35:01Z",
+          "kind": "review",
+          "text": "Check on the Omniboard: a card opens its task’s details over it (same URL, board stays); dependencies and document links work; Escape closes; the chip and “+ N more” still open the project. e2e 409, unit 1019.",
+          "by": "claude:b7be7288"
+        }
+      ]
     }
   ]
 }

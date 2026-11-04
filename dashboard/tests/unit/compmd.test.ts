@@ -13,13 +13,14 @@ import {
   dashboardHash,
   frontmatter,
   FRONTMATTER_LINES,
+  gutterRows,
   loadCompmd,
-  placeBlocks,
   resetCompmd,
   safeHref,
   secureLinks,
   slug,
   taskData,
+  type GutterRow,
 } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
 
@@ -125,30 +126,91 @@ describe('what CompMD is given', () => {
   });
 });
 
-describe('placing a document’s blocks (T-400)', () => {
-  it('a block spans the boxes at its first and last offset; one that drew nothing is left out', async () => {
-    // rectsAt answers for the innermost node: a list's first offset gives its first item, its last its last item
-    const boxes: Record<number, { top: number; bottom: number }[]> = {
-      0: [{ top: 10, bottom: 30 }],
-      19: [{ top: 10, bottom: 30 }],
-      20: [{ top: 40, bottom: 60 }],
-      39: [
-        { top: 80, bottom: 100 },
-        { top: 90, bottom: 90 },
-      ],
-    };
-    const placed = await placeBlocks(
+describe('a Markdown document’s gutter: every line (T-406)', () => {
+  const box = (y: number, height = 20, x = 0, width = 300) => ({ x, y, width, height });
+  const brief = (rows: GutterRow[]) =>
+    rows.map((r) => [r.from === r.to ? r.from : `${r.from}-${r.to}`, r.top, r.height, r.drawn]);
+
+  it('a drawn line at its first box, as tall; the lines that draw nothing spread over the gaps, before and after', () => {
+    // 1–3 frontmatter, 4 a heading, 5 blank, 6–7 a paragraph over two lines (7 wraps), 8 blank, 9 text, 10 blank
+    const rows = gutterRows(
       [
-        { line: 1, endLine: 1, offset: 0, endOffset: 20 },
-        { line: 3, endLine: 5, offset: 20, endOffset: 40 },
-        { line: 7, endLine: 7, offset: 50, endOffset: 60 },
+        { line: 4, rects: [box(30, 30)] },
+        { line: 6, rects: [box(80)] },
+        { line: 7, rects: [box(100), box(120)] },
+        { line: 9, rects: [box(160)] },
       ],
-      async (offset) => boxes[offset] ?? [],
+      10,
+      { top: 0, bottom: 200 },
     );
-    expect(placed.map(({ line, top, bottom }) => [line, top, bottom])).toEqual([
-      [1, 10, 30],
-      [3, 40, 100],
+    expect(brief(rows)).toEqual([
+      [1, 0, 10, false],
+      [2, 10, 10, false],
+      [3, 20, 10, false],
+      [4, 30, 30, true],
+      [5, 60, 20, false],
+      [6, 80, 20, true],
+      [7, 100, 20, true],
+      // after 7's last box (its wrapped second line), up to 9
+      [8, 140, 20, false],
+      [9, 160, 20, true],
+      [10, 180, 20, false],
     ]);
+  });
+
+  it('lines that share a visual line share a row; a later line on its own box', () => {
+    // 2 starts on 1's visual line (a soft break is a space); 3 starts where 2's second box is
+    const rows = gutterRows(
+      [
+        { line: 1, rects: [box(0, 20, 0, 100)] },
+        { line: 2, rects: [box(0, 20, 110, 190), box(20, 20, 0, 50)] },
+        { line: 3, rects: [box(20, 20, 60, 100)] },
+        { line: 4, rects: [box(40)] },
+      ],
+      4,
+      { bottom: 60 },
+    );
+    expect(brief(rows)).toEqual([
+      ['1-2', 0, 20, true],
+      [3, 20, 20, true],
+      [4, 40, 20, true],
+    ]);
+  });
+
+  it('a box much taller than a line (a diagram) is numbered at its top, its own lines spread over the rest', () => {
+    // 1 text, 2 blank, 3–7 a Mermaid block: its fence line draws the diagram, 4–7 nothing of their own, 8 text
+    const rows = gutterRows(
+      [
+        { line: 1, rects: [box(0)] },
+        { line: 3, rects: [box(40, 200)] },
+        { line: 8, rects: [box(260)] },
+      ],
+      8,
+      { bottom: 300 },
+    );
+    expect(brief(rows).slice(1, 4)).toEqual([
+      [2, 20, 20, false],
+      [3, 40, 20, true],
+      // 4–7 over the diagram below its first line's height, to 8: 200 px for four lines
+      [4, 60, 50, false],
+    ]);
+    expect(rows.at(-1)).toMatchObject({ from: 8, top: 260, drawn: true });
+  });
+
+  it('a line past the end, a repeat or an empty box is ignored; nothing drawn: every line spread over the page', () => {
+    const rows = gutterRows(
+      [
+        { line: 2, rects: [box(10, 0)] },
+        { line: 9, rects: [box(10)] },
+      ],
+      2,
+      { bottom: 40 },
+    );
+    expect(brief(rows)).toEqual([
+      [1, 0, 20, false],
+      [2, 20, 20, false],
+    ]);
+    expect(gutterRows([], 0, { bottom: 10 })).toEqual([]);
   });
 });
 

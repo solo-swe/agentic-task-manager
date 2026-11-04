@@ -17,7 +17,23 @@ The sprint *Viewer fixes* (release 0.30.0).
   (`tests/lib/public-surface.json`); the vcs: `changes_under`; `host/git.py`'s `run_git` takes `strip=False`.
   `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` say when to use it.
 
+### Changed
+- **CompMD 0.5.0** (T-406): `@compmd/processor`, `render`, `sandbox` and `vite` at 0.5.0, the runtime in
+  `plugin/assets/compmd/0.5.0/` (0.4.0's removed). Its frames speak frame protocol version 4, so page and frames ship
+  together; Shiki and Temml ship once, beside the frames (`highlight.js`, `math.js`), not also beside `compmd.js`.
+  `plugin/docs/compmd-llms.txt` is its `llms.txt` at `v0.5.0`, unchanged since `v0.4.0` but for atm's header.
+- **A Markdown document's gutter numbers every line** (T-406), 1, 2, 3…, as an editor's does, instead of each block's
+  first line (T-400): each line beside its own text, where CompMD drew it (the view's `lines()`, re-read on its
+  `layout` event), a paragraph's later lines too; lines that share a visual line share a row (`3–4`); lines that draw
+  nothing (blank lines, frontmatter, fences, a diagram's source after its first line) spread over the gaps between,
+  fainter. `:L<n>-L<m>` marks exactly those lines, in the gutter and on their text's boxes, not their whole blocks.
+  `gutterRows` in `lib/compmd.ts` replaces `blockSources` and `placeBlocks`; `CompMd.svelte`'s `onlines` replaces
+  `onblocks`.
+
 ### Fixed
+- **The document viewer's contents stay readable with many headings**: the list's entries were squeezed to fit its
+  height (a flex column whose entries' `overflow: hidden` let them shrink); now each keeps its height and the list
+  scrolls.
 - **A card on the Omniboard opens its task over the Omniboard** (T-411), instead of switching to the project's
   page: `openOnBoard` in `lib/state.svelte.ts` loads the card's project's data underneath (tasks, claims, worktrees,
   as its page would; not its saved view) and opens the details, kept current by the refresh until they close or the
