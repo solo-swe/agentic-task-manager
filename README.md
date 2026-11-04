@@ -599,9 +599,11 @@ Each task should be completable by a single agent in under 10 minutes. If a task
 
 Use dependencies to enforce execution order. A task won't be picked up until all its dependencies are `done`. This prevents issues like "write tests for code that doesn't exist yet."
 
-### Phases
+### Software Development Process
 
-Use phases to group related work. Phase 0 is typically setup/foundation. Higher phases build on earlier ones. The loop processes lower phases first.
+If you are familiar and comfortable with Scrum or agile software development processes, follow a clean Backlog, Sprint separation. Add tasks to a Backlog. Ask your agent to plan a sprint, they will recommend tasks that relate together to create a sprint with a recommended name, goal, etc.
+
+If you rather don't bother with all this, just go straight into creating your tasks and starting them directly. Using sprints give you a lot more flexibility, focus and visibility, though. I'd recommend trying it out.
 
 ### Manual intervention
 
@@ -784,8 +786,9 @@ it when dashboard sources change, and CI fails if the committed file doesn't mat
 
 - **OpenAI Codex CLI**
 - **Cursor** (via `.cursorrules`)
-- **Aider** (via convention files)
-- **Windsurf** (via Cascade rules)
+- Open Code
+- Pi
+- ...
 
 ### Multi-machine coordination
 
