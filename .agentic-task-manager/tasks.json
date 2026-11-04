@@ -21578,7 +21578,7 @@
       "description": "`atm commit` takes files only one `--file` at a time and refuses folders, so that it never commits another agent's work in the same tree. A generated folder makes that a chore: T-398 had to name 230 files of `plugin/assets/compmd/` (the old version's removed, the new one's added) one by one.\n\n## Change\n- `atm commit <id> --dir <folder>` (repeatable, beside `--file`): every change git sees under the folder, as `git status --porcelain --untracked-files=all` lists it (modified, added, deleted, renamed, new files git doesn't ignore), committed with the other files and `tasks.json`. The output names each file, as now.\n- Still refused, with a message: `.` and the repository's root (or anything above it), `.agentic-task-manager/`, a path outside the repository, and a folder with no changes. A changed file under the folder that another task **in progress and claimed by another agent** lists in its `files` makes the whole commit refuse, naming the file and the task: that is the case the rule against folders is there for.\n- [`atm-cli/atm/cli/`](atm-cli/atm/cli/) (the option) and atm-lib's `commit_task` (the expansion, through the vcs layer; `tests/lib/public-surface.json` and the changelog if its signature changes).\n- The skills' commit steps (`/atm:do-task` Step 7, `/atm:loop-tasks` step 5, [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Commit* line): `--dir` for a generated folder the task rebuilt, never for a folder others work in. A skill change and a CLI option that reads a path: a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3, and the invariant on `atm commit` updated.\n\n## Tests\nScenarios or `*.test.mjs` in `tests/scripts/` (a git repository): a folder with a modified, a new and a deleted file commits all three and nothing outside it; `.`, the root, `.agentic-task-manager/` and an empty folder are refused; another agent's claimed task listing a changed file under the folder refuses the commit and commits nothing.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/main.py",
@@ -21593,7 +21593,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-04T00:17:19Z",
+      "updated_at": "2026-11-04T00:27:17Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21618,7 +21618,19 @@
       ],
       "sprint": "Viewer fixes",
       "started_at": "2026-11-04T00:17:19Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "03fa9a04a4c2f8c931c43d6e9864e6c072ada536",
+      "completed_at": "2026-11-04T00:27:17Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:27:17Z",
+          "kind": "review",
+          "text": "Check: `atm commit --dir FOLDER` commits a folder’s changes (modified, new, deleted, renamed); refuses the root, outside, the task folder, a file, nothing changed, and another agent’s claimed files. Skills and CLAUDE.md say: generated folders only. §3.3 review; public surface + `folder_changes`. atm-cli 559.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-406",
@@ -21787,7 +21799,7 @@
       "description": "`atm help`'s overview still gives `edit` its flags from before T-401; `atm edit --help` is right. Add `--add-requirement`/`--remove-requirement` and `--add-use-case`/`--remove-use-case` to the `edit` lines of the overview in atm-cli's help text (in `atm-cli/atm/cli/`), and check every other command's line there against its own `--help` while at it. A scenario in `tests/scripts/scenarios/` (`stdoutIncludes`) for the new flags in `atm help`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/main.py",
@@ -21796,9 +21808,9 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:03:26Z",
+      "updated_at": "2026-11-04T00:27:18Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:b7be7288",
       "sprint_history": [
         {
           "sprint": "Viewer fixes",
@@ -21812,7 +21824,9 @@
       "review": "batch",
       "related": [
         "T-401"
-      ]
+      ],
+      "started_at": "2026-11-04T00:27:18Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-410",

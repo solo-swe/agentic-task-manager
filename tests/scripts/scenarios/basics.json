@@ -40,6 +40,22 @@
     }
   },
   {
+    "name": "help lists the options added since the overview was written (T-409)",
+    "args": ["help"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": [
+        "[--add-requirement/--remove-requirement R] [--add-use-case/--remove-use-case U]",
+        "[--add-component/--remove-component C] [--add-related/--remove-related ID]",
+        "status [--sprint S]... [--backlog] [--release R] [--component C]",
+        "check [--files]",
+        "commit <id> --record REV",
+        "sprints delete <S>",
+        "[--dir FOLDER]..."
+      ]
+    }
+  },
+  {
     "name": "help says every command takes --json and has --help",
     "args": ["help"],
     "expect": { "exit": 0, "stdoutIncludes": ["Every command takes --json"] }

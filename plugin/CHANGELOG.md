@@ -18,6 +18,10 @@ The sprint *Viewer fixes* (release 0.30.0).
   `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` say when to use it.
 
 ### Fixed
+- **`atm help` lists every command's options again** (T-409): its overview had drifted from the commands' own
+  `--help`: `edit`'s requirement, use-case, component, related, release, review and `--with` options, `add`'s, `status`
+  and `list`'s `--release`/`--component` (and `list --archived`), `check --files`, `commit --record` and
+  `sprints close --reviewed` / `sprints delete` are in it now; `add --requirement`'s help says an entry may be a link.
 - **Files inside a git submodule open in the document viewer** (T-408): the viewer refused them as if git ignored
   them, since `git check-ignore` in the project's repository refuses a path inside a submodule and the check fails
   closed. The vcs layer now asks the submodule's own repository (`ignored` and `tracked`, down to the innermost
