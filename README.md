@@ -29,15 +29,27 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 ## What It Does
 
-1. **Decompose requirements into tasks** — Point the agent at your PRD, use cases, ADRs, or just describe what you need. It creates a `tasks.json` file with granular, dependency-aware tasks.
+1. **Decompose requirements into tasks** - Point the agent at your PRD, use cases, ADRs, or just describe what you need. It creates a `tasks.json` file with granular, dependency-aware tasks.
 
-2. **Execute tasks one by one** — The agent picks up a task, marks it in-progress, implements it, verifies it, and marks it done (or asks for a review, or asks you a question when it can't go on without a decision). Every change goes through `atm`, the plugin's command, which writes `tasks.json` immediately.
+2. **Execute tasks one by one** - The agent picks up a task, marks it in-progress, implements it, verifies it, and marks it done (or asks for a review, or asks you a question when it can't go on without a decision). Every change goes through `atm`, the plugin's command, which writes `tasks.json` immediately.
 
-3. **Loop through all tasks** — "Ralph Wiggum mode" 🫠 — the agent continuously picks up the next available task and works through the entire backlog while you watch.
+3. **Loop through all tasks** - "Ralph Wiggum mode" 🫠 - the agent continuously picks up the next available task and works through the entire backlog while you watch.
 
-4. **Push and get CI green** — `/atm:push` pushes the work straight to your main branch or through a pull request, watches CI and fixes what fails.
+4. **Push and get CI green** - `/atm:push` pushes the work straight to your main branch or through a pull request, watches CI and fixes what fails.
 
-5. **Watch progress live** — A self-contained HTML dashboard reads `tasks.json` over HTTP and shows progress, an interactive dependency graph, a Kanban board, task cards and a per-agent timeline, all searchable and filterable. It refreshes itself every few seconds, so you can watch tasks turn green as the agent works, and it tells you when a task needs you.
+5. **Follow an agile Software Development Process along the way** - Either start going right away and use Kanban with the dashboard, or use a more structured agile SDL with a backlog, sprint planning, tracking, etc
+
+6. Keep track of task data - Rick [CompMD](https://compmd.hakanserce.com) powered task descriptions and notes with code highlighting, mermaid diagram, task relations, commit/pr links, related files/documents.
+
+7. Manage project data - releases, components, labels, types, statuses, priorities
+
+8. **Watch progress live** - A self-contained HTML dashboard reads `tasks.json` over HTTP and shows progress, an interactive dependency graph, a Kanban board, task cards and a per-agent timeline, sprints, etc all searchable and filterable. It refreshes itself every few seconds, so you can watch tasks turn green as the agent works, and it tells you when a task needs you.
+
+9. **Track Metrics** - Burndown, velocity, agent time, completion percentage, task per hour/day/week, task time, etc
+
+10. **A multi-project dashboard** - Gives you a birds eye view of all ongoing projects.
+
+11. **Omniboard** - A combined Kanban board allows you to visualize your projects in one board.
 
 ---
 
@@ -78,16 +90,19 @@ it; it otherwise keeps running after you close Claude Code.
 ### Execute tasks
 
 Do a single task:
+
 ```
 /atm:do-task T-001
 ```
 
 Or let the agent pick the next available task:
+
 ```
 /atm:do-task
 ```
 
 Or loop through everything:
+
 ```
 /atm:loop-tasks
 ```
@@ -145,7 +160,8 @@ claude --plugin-dir /path/to/agentic-task-manager/plugin
 
 ### Verify installation
 
-Type `/atm:` in Claude Code — you should see seven skills in autocomplete:
+Type `/atm:` in Claude Code - you should see seven skills in autocomplete:
+
 - `/atm:create-tasks`
 - `/atm:plan-sprint`
 - `/atm:close-sprint`
@@ -170,6 +186,7 @@ Type `/atm:` in Claude Code — you should see seven skills in autocomplete:
 ```
 
 **What it does:**
+
 1. Searches for PRD, use cases, ADRs, roadmap, README, or existing tasks.json
 2. If nothing found, asks you where to look
 3. Decomposes requirements into granular tasks (~10 min each)
@@ -178,6 +195,7 @@ Type `/atm:` in Claude Code — you should see seven skills in autocomplete:
 6. Outputs a summary with task counts and suggested starting tasks
 
 **Supported requirement sources** (searched automatically):
+
 - `**/PRD.md`, `**/requirements.md`
 - `**/use-cases*`, `**/usecases*`
 - `**/adrs/**`, `**/ADR-*`
@@ -195,13 +213,14 @@ Type `/atm:` in Claude Code — you should see seven skills in autocomplete:
 ```
 
 **What it does:**
+
 1. Starts and claims the task with `atm start` (or `atm next --claim` to auto-pick), which checks its dependencies
 2. Reads the task and its notes (a reviewer's rejection, a previous agent's handoff) with `atm show`
 3. Implements the task according to its description, updating later tasks with `atm edit` if it has to
 4. Runs build/test/lint verification
 5. Commits exactly the files it changed with `atm commit`, while the task is still in progress
 6. Only then ends it: `atm done --note "<outcome>"`, or `atm review` when a review is asked for, or `atm block --on
-   user --question "..."` when it can't go on without your decision. A task is never marked done with its work
+user --question "..."` when it can't go on without your decision. A task is never marked done with its work
    uncommitted; one marked done by mistake goes back with `atm reopen <id> --reason "..."`
 7. Reports what was done and what's now unblocked, and suggests `/atm:push` when there are unpushed commits
 
@@ -231,22 +250,22 @@ all dependencies done, not claimed by another agent; the most urgent priority fi
 
 **Flags:**
 
-| Flag | Description |
-|---|---|
-| `--sprint <S>` | Sprint S's tasks (default: the active sprint) |
-| `--tasks <T-1,T-5>` | These tasks, in this order |
-| `--all` | Every task: the active sprint, the planned ones in order, then the backlog |
-| `--backlog` | Only tasks in no sprint |
-| `--continue` | When the sprint is finished, go on to the next planned one; the loop never closes a sprint (`/atm:close-sprint` does, with you) |
-| `--type <type>` | Only tasks of a specific type (feature, test, etc.) |
-| `--max <N>` | Stop after N completed tasks |
-| `--dry-run` | Preview execution order without doing anything |
-| `--pause` | Ask for confirmation before each task |
-| `--no-commit` | Disable the default auto-commit after each task |
-| `--push` | `git commit` + `git push` after each task |
-| `--batch-push` | `git commit` after each, single `git push` at the end |
-| `--push-every <N>` | `git commit` after each, `git push` every N tasks |
-| `--no-watch` | With a push flag: don't watch CI after the last push either |
+| Flag                | Description                                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `--sprint <S>`      | Sprint S's tasks (default: the active sprint)                                                                                   |
+| `--tasks <T-1,T-5>` | These tasks, in this order                                                                                                      |
+| `--all`             | Every task: the active sprint, the planned ones in order, then the backlog                                                      |
+| `--backlog`         | Only tasks in no sprint                                                                                                         |
+| `--continue`        | When the sprint is finished, go on to the next planned one; the loop never closes a sprint (`/atm:close-sprint` does, with you) |
+| `--type <type>`     | Only tasks of a specific type (feature, test, etc.)                                                                             |
+| `--max <N>`         | Stop after N completed tasks                                                                                                    |
+| `--dry-run`         | Preview execution order without doing anything                                                                                  |
+| `--pause`           | Ask for confirmation before each task                                                                                           |
+| `--no-commit`       | Disable the default auto-commit after each task                                                                                 |
+| `--push`            | `git commit` + `git push` after each task                                                                                       |
+| `--batch-push`      | `git commit` after each, single `git push` at the end                                                                           |
+| `--push-every <N>`  | `git commit` after each, `git push` every N tasks                                                                               |
+| `--no-watch`        | With a push flag: don't watch CI after the last push either                                                                     |
 
 Pushes go through [`/atm:push`](#atmpush): those in the middle of the loop don't wait for CI (`--no-watch`); the last
 one watches CI and fixes failures.
@@ -301,6 +320,7 @@ workflow saved in `tasks.json` (`atm workflow` shows it, `atm workflow set direc
 is none yet, `/atm:push` asks once and saves your answer.
 
 **What it does:**
+
 1. Checks the branch fits the workflow and nothing uncommitted belongs to someone else, and runs your verify
 2. Pushes, and in `pull-request` opens the PR (body: the task commits, grouped by phase) and records it on the tasks
    (`atm pr`): the dashboard shows them as **In PR**
@@ -357,11 +377,11 @@ atm keeps everything in one folder at the root of your project (the top of the g
 
 ```
 .agentic-task-manager/
-├── tasks.json             # the task list — committed
-├── .gitignore             # written by atm — committed
-├── .gitattributes         # merges tasks.json task by task (see below) — committed
-├── claims.json            # who works on what, for the dashboard — not committed
-└── .lock/                 # the write lock — not committed
+├── tasks.json             # the task list - committed
+├── .gitignore             # written by atm - committed
+├── .gitattributes         # merges tasks.json task by task (see below) - committed
+├── claims.json            # who works on what, for the dashboard - not committed
+└── .lock/                 # the write lock - not committed
 ```
 
 The dashboard isn't in your project at all: it comes with the plugin and is served by `/atm:serve` for all your
@@ -369,7 +389,7 @@ projects.
 
 **Upgrading from an earlier version:** projects that keep `tasks.json` in `docs/` (or the project root) are moved
 automatically the first time any atm skill runs. The move uses `git mv`, so history is kept; the old
-`tasks-dashboard.html` is removed from git. The change is staged for you to commit — `/atm:loop-tasks` commits it on
+`tasks-dashboard.html` is removed from git. The change is staged for you to commit - `/atm:loop-tasks` commits it on
 its own (`chore: move atm files to .agentic-task-manager/`) before its first task. Projects set up by 0.10.0–0.14.0
 had their own copy of the dashboard and their own server; atm deletes the copy and stops that server the next time
 it runs there (both were never committed).
@@ -418,7 +438,14 @@ against the project's vocabularies and keeps the timestamps and actors right.
       "completed_by": "claude:e5ea9db0",
       "commit": "a1b2c3d…",
       "pr": { "number": 12, "url": "https://github.com/me/my-project/pull/12" },
-      "notes": [{ "at": "2026-04-05T14:30:00Z", "by": "claude:e5ea9db0", "kind": "outcome", "text": "Done." }]
+      "notes": [
+        {
+          "at": "2026-04-05T14:30:00Z",
+          "by": "claude:e5ea9db0",
+          "kind": "outcome",
+          "text": "Done."
+        }
+      ]
     }
   ]
 }
@@ -426,30 +453,30 @@ against the project's vocabularies and keeps the timestamps and actors right.
 
 ### Field reference
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `id` | string | ✅ | Unique task ID (e.g., `T-001`) |
-| `name` | string | ✅ | Short name, ~60 chars max |
-| `phase` | integer | ✅ | Execution phase (0, 1, 2, ...) |
-| `type` | string | ✅ | Task type (see below) |
-| `description` | string | ✅ | Detailed description for the agent |
-| `status` | string | ✅ | Current status (see below) |
-| `dependencies` | string[] | ✅ | Task IDs that must be done first |
-| `requirements` | string[] | ❌ | Requirement IDs (FR-x.x, etc.) |
-| `use_cases` | string[] | ❌ | Use case IDs (UC-xxx, etc.) |
-| `files` | string[] | ❌ | Expected file paths to create/modify |
-| `created_at` | string | ❌ | ISO 8601 UTC timestamp when task was created |
-| `updated_at` | string | ❌ | ISO 8601 UTC timestamp of last status change |
-| `started_at` | string | ❌ | ISO 8601 UTC timestamp when the task moved to `in_progress` |
-| `completed_at` | string | ❌ | ISO 8601 UTC timestamp when the task moved to `done` |
-| `priority` | string | ❌ | `P0` (critical) … `P3` (low), or the project's own; none counts as the default, `P2` |
-| `labels` | string[] | ❌ | Tags that group tasks across phases and types, e.g. `spike-2`, `ux` (lowercase, digits, `-`, `_`) |
-| `created_by`, `updated_by`, `started_by`, `completed_by` | string | ❌ | Who did it: an agent (`claude:e5ea9db0`) or a person (the git user name). `started_by` replaces the older `agent` |
-| `review_requested_at` | string | ❌ | When the task asked for a review (`atm review`); its work ended there |
-| `waiting_on`, `questions`, `blocked_at` | string, string[], string | ❌ | A blocked task: who decides (`user` or `agent`), the open questions, since when |
-| `notes` | object[] | ❌ | `{at, by, kind, text}`: handoffs, outcomes, review requests, rejections, failures, answers (at most 500 characters each) |
-| `commit` | string | ❌ | The SHA of the task's commit (`atm commit`) |
-| `pr`, `merged_at` | object, string | ❌ | The pull request that contains the task (`{number, url}`) and when it was merged |
+| Field                                                    | Type                     | Required | Description                                                                                                              |
+| -------------------------------------------------------- | ------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `id`                                                     | string                   | ✅       | Unique task ID (e.g., `T-001`)                                                                                           |
+| `name`                                                   | string                   | ✅       | Short name, ~60 chars max                                                                                                |
+| `phase`                                                  | integer                  | ✅       | Execution phase (0, 1, 2, ...)                                                                                           |
+| `type`                                                   | string                   | ✅       | Task type (see below)                                                                                                    |
+| `description`                                            | string                   | ✅       | Detailed description for the agent                                                                                       |
+| `status`                                                 | string                   | ✅       | Current status (see below)                                                                                               |
+| `dependencies`                                           | string[]                 | ✅       | Task IDs that must be done first                                                                                         |
+| `requirements`                                           | string[]                 | ❌       | Requirement IDs (FR-x.x, etc.)                                                                                           |
+| `use_cases`                                              | string[]                 | ❌       | Use case IDs (UC-xxx, etc.)                                                                                              |
+| `files`                                                  | string[]                 | ❌       | Expected file paths to create/modify                                                                                     |
+| `created_at`                                             | string                   | ❌       | ISO 8601 UTC timestamp when task was created                                                                             |
+| `updated_at`                                             | string                   | ❌       | ISO 8601 UTC timestamp of last status change                                                                             |
+| `started_at`                                             | string                   | ❌       | ISO 8601 UTC timestamp when the task moved to `in_progress`                                                              |
+| `completed_at`                                           | string                   | ❌       | ISO 8601 UTC timestamp when the task moved to `done`                                                                     |
+| `priority`                                               | string                   | ❌       | `P0` (critical) … `P3` (low), or the project's own; none counts as the default, `P2`                                     |
+| `labels`                                                 | string[]                 | ❌       | Tags that group tasks across phases and types, e.g. `spike-2`, `ux` (lowercase, digits, `-`, `_`)                        |
+| `created_by`, `updated_by`, `started_by`, `completed_by` | string                   | ❌       | Who did it: an agent (`claude:e5ea9db0`) or a person (the git user name). `started_by` replaces the older `agent`        |
+| `review_requested_at`                                    | string                   | ❌       | When the task asked for a review (`atm review`); its work ended there                                                    |
+| `waiting_on`, `questions`, `blocked_at`                  | string, string[], string | ❌       | A blocked task: who decides (`user` or `agent`), the open questions, since when                                          |
+| `notes`                                                  | object[]                 | ❌       | `{at, by, kind, text}`: handoffs, outcomes, review requests, rejections, failures, answers (at most 500 characters each) |
+| `commit`                                                 | string                   | ❌       | The SHA of the task's commit (`atm commit`)                                                                              |
+| `pr`, `merged_at`                                        | object, string           | ❌       | The pull request that contains the task (`{number, url}`) and when it was merged                                         |
 
 atm maintains the timestamps and actors: `started_at`/`started_by` when a task starts, `completed_at`/`completed_by`
 when it is done, and both are removed if a task goes back to `todo`. The dashboard uses them for completion history
@@ -457,32 +484,32 @@ and estimates; files without them still work (`updated_at` is used instead). Old
 `last_failure` fields are still read.
 
 **Vocabularies.** A project can name its own statuses, phases, task types, priorities and labels in `meta`
-(`/atm:create-tasks` asks you). Each status has a **kind** — `todo`, `active`, `review`, `blocked`, `done` or
-`skipped` — and atm and the dashboard work by kind, so `awaiting_user` and `awaiting_agent` can both be review
+(`/atm:create-tasks` asks you). Each status has a **kind** - `todo`, `active`, `review`, `blocked`, `done` or
+`skipped` - and atm and the dashboard work by kind, so `awaiting_user` and `awaiting_agent` can both be review
 statuses, say. **About** in the dashboard shows the vocabularies a project uses.
 
 ### Task types
 
-| Type | Color | Description |
-|---|---|---|
-| `feature` | 🟢 Green | New functionality |
-| `bugfix` | 🔴 Red | Bug fix |
-| `test` | 🟣 Purple | Test writing |
-| `infra` | 🟠 Orange | Infrastructure/tooling |
-| `docs` | 🔵 Cyan | Documentation |
-| `refactor` | 🟡 Yellow | Code restructuring |
-| `polish` | 🩷 Pink | UI/UX improvements |
+| Type       | Color     | Description            |
+| ---------- | --------- | ---------------------- |
+| `feature`  | 🟢 Green  | New functionality      |
+| `bugfix`   | 🔴 Red    | Bug fix                |
+| `test`     | 🟣 Purple | Test writing           |
+| `infra`    | 🟠 Orange | Infrastructure/tooling |
+| `docs`     | 🔵 Cyan   | Documentation          |
+| `refactor` | 🟡 Yellow | Code restructuring     |
+| `polish`   | 🩷 Pink   | UI/UX improvements     |
 
 ### Task statuses
 
-| Status | Kind | Description |
-|---|---|---|
-| `todo` | `todo` | Not started |
-| `in_progress` | `active` | Currently being worked on |
-| `in_review` | `review` | Finished, waiting for approval by you or another agent (`atm review`; `atm done` passes it, `atm reject --reason` sends it back) |
-| `blocked` | `blocked` | Waiting on a decision: the agent asked (`atm block --on user\|agent --question ...`), whoever decides answers with `atm unblock --answer ...` |
-| `done` | `done` | Completed and verified; only done tasks let their dependents start |
-| `skipped` | `skipped` | Intentionally skipped |
+| Status        | Kind      | Description                                                                                                                                   |
+| ------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `todo`        | `todo`    | Not started                                                                                                                                   |
+| `in_progress` | `active`  | Currently being worked on                                                                                                                     |
+| `in_review`   | `review`  | Finished, waiting for approval by you or another agent (`atm review`; `atm done` passes it, `atm reject --reason` sends it back)              |
+| `blocked`     | `blocked` | Waiting on a decision: the agent asked (`atm block --on user\|agent --question ...`), whoever decides answers with `atm unblock --answer ...` |
+| `done`        | `done`    | Completed and verified; only done tasks let their dependents start                                                                            |
+| `skipped`     | `skipped` | Intentionally skipped                                                                                                                         |
 
 A done task can be further along, as **stages** derived from `pr` and `merged_at`: **In PR** and **Merged**. They
 never hold dependent tasks up.
@@ -507,27 +534,27 @@ same local server, loaded the first time a page shows Markdown; nothing is fetch
 
 ### Features
 
-- **All your projects** — A selector next to the title switches projects (a badge counts what needs you in the others); **All projects** shows a card per project with its progress, current phase, agents at work, what needs you (click it for that project's Kanban, filtered) and recent activity. **Active only** hides projects with nothing open and nothing done in two weeks
-- **Top bar** — Stays in view while you scroll. A progress ring (click for completion overall, by phase and by type) and an activity sparkline (click for tasks completed by type, agents working, time per task and idle stretches, over a period you pick: hour, day, week, month, all time or custom, with ‹ › to step back); reload, auto-refresh, mode and theme menus on the right
-- **Needs you** — The header counts the tasks waiting for you: in review, or blocked on a question for you. Click it for the Kanban board
-- **Search and filters** — Keyword search over ID, name, description, type and labels, and filters by phase, type, status, priority, stage, label and who started the task (multi-select) in one line that shows what's selected and how many tasks match. Every filter button shows how many tasks it would show given the other filters, and empty choices are dimmed. **Include archived** adds the archived tasks
-- **Rich task text** — Descriptions, notes and questions render as [CompMD](https://compmd.hakanserce.com/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
-- **Detail panel** — Click a task to see its full description, dependencies (an archived one shows as "archived, done"), files and timestamps, who created, started and completed it (and who tried before), its notes newest first, its commit, and a blocked task's questions with how to answer them
-- **Priorities, labels and stages** — Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
-- **Views** — Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL
-- **Dependency graph** — Interactive SVG graph with topological layout. Tasks outside the search and filters are hidden or, if you choose, greyed out. Opens at a readable scale centered on the active task; drag to pan, Ctrl/⌘ + scroll (or pinch) to zoom, zoom/fit/1:1 buttons, keyboard shortcuts (`+` `-` `0` `F`, arrows) when focused, and a clickable minimap when the graph doesn't fit. Filtering and auto-refresh keep your zoom level
-- **Kanban board** — To Do / In Progress / In Review / Blocked (when used) / Done columns, the same in every workflow; to-do cards show whether they're ready or what they wait on, and **Next up** marks the task `/atm:loop-tasks` will pick next. In Review cards say how long they have waited; Blocked cards say whether they wait on you or an agent, for how long, and how many questions. In a pull-request project, Done is split into In PR (per pull request), Done and Merged. Optional swimlanes per phase
-- **Task List** — Task cards, color-coded by status and type, with dependency links
-- **Agents** — A timeline with a lane per agent (🤖) or person (👤) and a bar per task (start to completion or to the review request, colored by type; work in progress runs to now). A green mark at the end of a bar means someone else completed it, usually a reviewer. Zoom with the buttons, Ctrl/⌘ + scroll or "last hour" presets, drag to move in time, or pick a range on the overview; **Live** keeps it at the current time. Tasks outside the search and filters are greyed out. Agents are recorded by `atm` since 0.12.0; older tasks show as "Unattributed"
-- **Progress** — Burndown chart (remaining vs. scope, with a forecast) and per-phase completion estimates in agent working time; click a phase to focus the chart. Agent utilisation compares agent work time with calendar time (24/7) and working time (8 h, Monday to Friday), overall and per agent. Estimates are most accurate with `started_at`/`completed_at`, which `/atm:do-task` and `/atm:loop-tasks` write since 0.7.0
-- **Saved view per project** — Filters and search, the tab, each tab's options (Kanban, Progress focus, graph hide/grey out) and the zoom of the graph and the Agents timeline come back when you reopen the dashboard. Each project keeps its own (by `meta.id` in `tasks.json`); **Reset view** clears it. A `#view=` link still opens that tab
-- **Light and dark mode** — Follows your system by default; switch between System, Light and Dark in the menu at the top right
-- **Themes** — Default, Nord, Solarized, Catppuccin, Tokyo Night, Ayu, Night Owl, Gruvbox, Noctis, Sublime Material and High contrast, each in light and dark, checked for readable contrast (see [docs/theme-validation.md](docs/theme-validation.md)). Theme and mode are remembered per browser
-- **Live claims** — In-progress tasks show which agent works on them, on which branch, and since when
-- **Auto-refresh** — On by default every 5s; the toggle and interval (in the menu next to the reload button) are remembered per browser. A poll that finds `tasks.json` unchanged transfers and redraws nothing (`304 Not Modified`)
-- **The archive** — The header counts the archived tasks, and the footer says when `tasks.json` has grown big enough to archive. The archive is loaded only for the Progress tab, the activity details and **Include archived**
-- **What's new, Help and About** — The version next to the title opens the release notes (a "new" marker appears after an upgrade); the footer's **Help** explains the dashboard, and **About** shows the plugin and the project's vocabularies and workflow
-- **Manual reload** — Click reload button for instant refresh
+- **All your projects** - A selector next to the title switches projects (a badge counts what needs you in the others); **All projects** shows a card per project with its progress, current phase, agents at work, what needs you (click it for that project's Kanban, filtered) and recent activity. **Active only** hides projects with nothing open and nothing done in two weeks
+- **Top bar** - Stays in view while you scroll. A progress ring (click for completion overall, by phase and by type) and an activity sparkline (click for tasks completed by type, agents working, time per task and idle stretches, over a period you pick: hour, day, week, month, all time or custom, with ‹ › to step back); reload, auto-refresh, mode and theme menus on the right
+- **Needs you** - The header counts the tasks waiting for you: in review, or blocked on a question for you. Click it for the Kanban board
+- **Search and filters** - Keyword search over ID, name, description, type and labels, and filters by phase, type, status, priority, stage, label and who started the task (multi-select) in one line that shows what's selected and how many tasks match. Every filter button shows how many tasks it would show given the other filters, and empty choices are dimmed. **Include archived** adds the archived tasks
+- **Rich task text** - Descriptions, notes and questions render as [CompMD](https://compmd.hakanserce.com/): tables, task lists, alerts, layout components, ` ```mermaid ` diagrams (drawn in a sandboxed frame, in light or dark), and the task's own values (`{{md.data.task.status}}`)
+- **Detail panel** - Click a task to see its full description, dependencies (an archived one shows as "archived, done"), files and timestamps, who created, started and completed it (and who tried before), its notes newest first, its commit, and a blocked task's questions with how to answer them
+- **Priorities, labels and stages** - Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
+- **Views** - Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL
+- **Dependency graph** - Interactive SVG graph with topological layout. Tasks outside the search and filters are hidden or, if you choose, greyed out. Opens at a readable scale centered on the active task; drag to pan, Ctrl/⌘ + scroll (or pinch) to zoom, zoom/fit/1:1 buttons, keyboard shortcuts (`+` `-` `0` `F`, arrows) when focused, and a clickable minimap when the graph doesn't fit. Filtering and auto-refresh keep your zoom level
+- **Kanban board** - To Do / In Progress / In Review / Blocked (when used) / Done columns, the same in every workflow; to-do cards show whether they're ready or what they wait on, and **Next up** marks the task `/atm:loop-tasks` will pick next. In Review cards say how long they have waited; Blocked cards say whether they wait on you or an agent, for how long, and how many questions. In a pull-request project, Done is split into In PR (per pull request), Done and Merged. Optional swimlanes per phase
+- **Task List** - Task cards, color-coded by status and type, with dependency links
+- **Agents** - A timeline with a lane per agent (🤖) or person (👤) and a bar per task (start to completion or to the review request, colored by type; work in progress runs to now). A green mark at the end of a bar means someone else completed it, usually a reviewer. Zoom with the buttons, Ctrl/⌘ + scroll or "last hour" presets, drag to move in time, or pick a range on the overview; **Live** keeps it at the current time. Tasks outside the search and filters are greyed out. Agents are recorded by `atm` since 0.12.0; older tasks show as "Unattributed"
+- **Progress** - Burndown chart (remaining vs. scope, with a forecast) and per-phase completion estimates in agent working time; click a phase to focus the chart. Agent utilisation compares agent work time with calendar time (24/7) and working time (8 h, Monday to Friday), overall and per agent. Estimates are most accurate with `started_at`/`completed_at`, which `/atm:do-task` and `/atm:loop-tasks` write since 0.7.0
+- **Saved view per project** - Filters and search, the tab, each tab's options (Kanban, Progress focus, graph hide/grey out) and the zoom of the graph and the Agents timeline come back when you reopen the dashboard. Each project keeps its own (by `meta.id` in `tasks.json`); **Reset view** clears it. A `#view=` link still opens that tab
+- **Light and dark mode** - Follows your system by default; switch between System, Light and Dark in the menu at the top right
+- **Themes** - Default, Nord, Solarized, Catppuccin, Tokyo Night, Ayu, Night Owl, Gruvbox, Noctis, Sublime Material and High contrast, each in light and dark, checked for readable contrast (see [docs/theme-validation.md](docs/theme-validation.md)). Theme and mode are remembered per browser
+- **Live claims** - In-progress tasks show which agent works on them, on which branch, and since when
+- **Auto-refresh** - On by default every 5s; the toggle and interval (in the menu next to the reload button) are remembered per browser. A poll that finds `tasks.json` unchanged transfers and redraws nothing (`304 Not Modified`)
+- **The archive** - The header counts the archived tasks, and the footer says when `tasks.json` has grown big enough to archive. The archive is loaded only for the Progress tab, the activity details and **Include archived**
+- **What's new, Help and About** - The version next to the title opens the release notes (a "new" marker appears after an upgrade); the footer's **Help** explains the dashboard, and **About** shows the plugin and the project's vocabularies and workflow
+- **Manual reload** - Click reload button for instant refresh
 
 ### Starting the dashboard
 
@@ -551,38 +578,44 @@ says how to push. Either way, `/atm:push` watches CI and fixes failures; see [`/
 
 The `/atm:loop-tasks` skill supports flexible git strategies (its pushes go through `/atm:push`):
 
-| Strategy | Command | When to use |
-|---|---|---|
-| Commit only (default) | `/atm:loop-tasks` | Local history, push manually later |
-| No git | `/atm:loop-tasks --no-commit` | You want full manual control |
-| Commit + push | `/atm:loop-tasks --push` | Real-time backup, CI after every task |
-| Batch push | `/atm:loop-tasks --batch-push` | Clean remote history, single CI run |
-| Periodic push | `/atm:loop-tasks --push-every 5` | Balance: CI every 5 tasks |
-| Human-in-the-loop | `/atm:loop-tasks --pause --push` | Review each task before pushing |
+| Strategy              | Command                          | When to use                           |
+| --------------------- | -------------------------------- | ------------------------------------- |
+| Commit only (default) | `/atm:loop-tasks`                | Local history, push manually later    |
+| No git                | `/atm:loop-tasks --no-commit`    | You want full manual control          |
+| Commit + push         | `/atm:loop-tasks --push`         | Real-time backup, CI after every task |
+| Batch push            | `/atm:loop-tasks --batch-push`   | Clean remote history, single CI run   |
+| Periodic push         | `/atm:loop-tasks --push-every 5` | Balance: CI every 5 tasks             |
+| Human-in-the-loop     | `/atm:loop-tasks --pause --push` | Review each task before pushing       |
 
 ---
 
 ## Tips & Best Practices
 
 ### Task granularity
+
 Each task should be completable by a single agent in under 10 minutes. If a task description is longer than a paragraph, it should probably be split.
 
 ### Dependencies
+
 Use dependencies to enforce execution order. A task won't be picked up until all its dependencies are `done`. This prevents issues like "write tests for code that doesn't exist yet."
 
 ### Phases
+
 Use phases to group related work. Phase 0 is typically setup/foundation. Higher phases build on earlier ones. The loop processes lower phases first.
 
 ### Manual intervention
+
 You can change tasks while the loop runs: ask an agent in another session, or run `atm` yourself, which locks the
 file so your change and an agent's can't overwrite each other. Changes are picked up on the next iteration. Use this
 to:
+
 - Skip a task that's no longer needed (`atm skip <id> --reason '…'`)
 - Block a task so the agent doesn't pick it up (`atm block <id> --on user --question '…'`)
 - Add new tasks mid-loop (`/atm:create-tasks`)
 - Change a task's description or dependencies (`atm edit <id> --description … --add-dep …`)
 
 ### Multiple agents
+
 See [Running agents in parallel](#running-agents-in-parallel).
 
 ---
@@ -603,6 +636,7 @@ cd ../myproject-agent2 && claude      # then /atm:loop-tasks
 Merge each branch back as usual (or open a PR per branch).
 
 **What atm guarantees**
+
 - **One writer at a time.** Every status change goes through the plugin's helper (`atm`), which takes a lock,
   re-reads `tasks.json`, changes one task and writes the file atomically. The dashboard and other agents never see a
   half-written file, and two changes never overwrite each other.
@@ -626,6 +660,7 @@ Merge each branch back as usual (or open a PR per branch).
 - **Live view.** In-progress tasks on the dashboard show who works on them, on which branch, and since when.
 
 **What it doesn't do**
+
 - Two agents in the **same** working tree can still edit the same source files. Use worktrees.
 - Agents on **different machines or clones** don't see each other's claims; they may start the same task, and the
   merge driver then reconciles the statuses.
@@ -637,26 +672,26 @@ plugin's `bin/atm` on its Bash tool's PATH; in your own terminal, use the full p
 (`~/.claude/plugins/cache/solo-swe-plugins/atm/<version>/bin/atm`) or an alias. Every command takes `--json`, and
 `atm help` lists them all.
 
-| Command | What it does |
-|---|---|
-| `atm status` | The overview: counts, what is in progress, in review or blocked, what's next |
-| `atm show <id>...`, `atm deps <id>` | Tasks in full (with notes); what a task waits for and what waits for it |
-| `atm list [--status S] [--sprint S] [--backlog] [--label L] [--ready] [--blocked] [--in-pr] [--archived]` | One line per task |
-| `atm next [--sprint S \| --tasks T-1,T-5 \| --all \| --backlog] [--claim]` | The task the loop would take next (and claim it); the active sprint by default |
-| `atm sprints [add \| edit \| start \| close]`, `atm move <id>... --to <S>`, `atm backlog` | Sprints, moving tasks between them and the backlog |
-| `atm start\|done\|fail\|release <id>` | Change a task's status (`--note` for an outcome or handoff, `--reason` for `fail`) |
-| `atm review <id> --note T`, `atm reject <id> --reason T` | Ask for a review; send a reviewed task back |
-| `atm block <id> --on user\|agent --question Q`, `atm unblock <id> --answer A` | Ask for a decision; answer it |
-| `atm note <id> TEXT` | Add a note to a task |
-| `atm add`, `atm edit <id>`, `atm check` | Add tasks (one, or many with `--json-file`), change a task's definition, check the file |
-| `atm commit <id> --file F...` | Commit exactly those files plus `tasks.json`, with the project's commit message |
-| `atm workflow [set direct\|pull-request]` | Show or set the project's workflow |
-| `atm archive`, `atm unarchive <id>...` | Move finished tasks to `tasks-archive.json`, or bring them back |
-| `atm claims`, `atm heartbeat <id>` | Who works on what, with time left on each lease; extend your claim's lease |
-| `atm init` | Register the `tasks.json` merge driver (the skills do this automatically) |
-| `atm serve [start\|stop\|status] [--open] [--all]` | The dashboard server, one for all your projects |
-| `atm projects [add [PATH] \| remove <id\|PATH> \| prune]` | The projects the dashboard lists |
-| `atm repository [set URL [--from OLD]]` | The repository's web address, for commit and PR links (`atm init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
+| Command                                                                                                   | What it does                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `atm status`                                                                                              | The overview: counts, what is in progress, in review or blocked, what's next                                                                                                              |
+| `atm show <id>...`, `atm deps <id>`                                                                       | Tasks in full (with notes); what a task waits for and what waits for it                                                                                                                   |
+| `atm list [--status S] [--sprint S] [--backlog] [--label L] [--ready] [--blocked] [--in-pr] [--archived]` | One line per task                                                                                                                                                                         |
+| `atm next [--sprint S \| --tasks T-1,T-5 \| --all \| --backlog] [--claim]`                                | The task the loop would take next (and claim it); the active sprint by default                                                                                                            |
+| `atm sprints [add \| edit \| start \| close]`, `atm move <id>... --to <S>`, `atm backlog`                 | Sprints, moving tasks between them and the backlog                                                                                                                                        |
+| `atm start\|done\|fail\|release <id>`                                                                     | Change a task's status (`--note` for an outcome or handoff, `--reason` for `fail`)                                                                                                        |
+| `atm review <id> --note T`, `atm reject <id> --reason T`                                                  | Ask for a review; send a reviewed task back                                                                                                                                               |
+| `atm block <id> --on user\|agent --question Q`, `atm unblock <id> --answer A`                             | Ask for a decision; answer it                                                                                                                                                             |
+| `atm note <id> TEXT`                                                                                      | Add a note to a task                                                                                                                                                                      |
+| `atm add`, `atm edit <id>`, `atm check`                                                                   | Add tasks (one, or many with `--json-file`), change a task's definition, check the file                                                                                                   |
+| `atm commit <id> --file F...`                                                                             | Commit exactly those files plus `tasks.json`, with the project's commit message                                                                                                           |
+| `atm workflow [set direct\|pull-request]`                                                                 | Show or set the project's workflow                                                                                                                                                        |
+| `atm archive`, `atm unarchive <id>...`                                                                    | Move finished tasks to `tasks-archive.json`, or bring them back                                                                                                                           |
+| `atm claims`, `atm heartbeat <id>`                                                                        | Who works on what, with time left on each lease; extend your claim's lease                                                                                                                |
+| `atm init`                                                                                                | Register the `tasks.json` merge driver (the skills do this automatically)                                                                                                                 |
+| `atm serve [start\|stop\|status] [--open] [--all]`                                                        | The dashboard server, one for all your projects                                                                                                                                           |
+| `atm projects [add [PATH] \| remove <id\|PATH> \| prune]`                                                 | The projects the dashboard lists                                                                                                                                                          |
+| `atm repository [set URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
 
 The design is in [docs/v4/atm-cli.md](docs/v4/atm-cli.md).
 
@@ -718,15 +753,15 @@ git with no build step.
 cd dashboard
 npm install          # also enables the pre-commit hook (git core.hooksPath = .githooks)
 npm run dev          # Vite dev server
-npm run verify       # check + unit tests with coverage + build + e2e — run before committing
+npm run verify       # check + unit tests with coverage + build + e2e - run before committing
 ```
 
-| Script | What it does |
-|---|---|
-| `npm run build` | Builds `plugin/templates/tasks-dashboard.html`; the version meta tag comes from `plugin.json` |
-| `npm test` / `npm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib` |
-| `npm run test:e2e` | Build, then the Playwright regression suite (`tests/e2e/`) |
-| `npm run check` | Version consistency, svelte-check, ESLint, Prettier |
+| Script                               | What it does                                                                                  |
+| ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `npm run build`                      | Builds `plugin/templates/tasks-dashboard.html`; the version meta tag comes from `plugin.json` |
+| `npm test` / `npm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib`              |
+| `npm run test:e2e`                   | Build, then the Playwright regression suite (`tests/e2e/`)                                    |
+| `npm run check`                      | Version consistency, svelte-check, ESLint, Prettier                                           |
 
 **Tests.** e2e specs play atm serve's API with fixtures from `tests/fixtures/` as each project's `tasks.json`, and
 fail on any external request.
@@ -744,19 +779,24 @@ it when dashboard sources change, and CI fails if the committed file doesn't mat
 ## Future Vision
 
 ### Multi-tool support
-`tasks.json` is plain JSON — any tool that can read/write files can participate. Future adapters planned for:
+
+`tasks.json` is plain JSON - any tool that can read/write files can participate. Future adapters planned for:
+
 - **OpenAI Codex CLI**
 - **Cursor** (via `.cursorrules`)
 - **Aider** (via convention files)
 - **Windsurf** (via Cascade rules)
 
 ### Multi-machine coordination
+
 Claims shared between clones on different machines, through refs on the shared remote (see the design doc).
 
 ### External tool sync
+
 MCP servers to sync `tasks.json` bidirectionally with GitHub Issues, Linear, or Jira.
 
 ### AI task estimation
+
 Optional `estimated_minutes` and `actual_minutes` fields with burndown chart in the dashboard.
 
 ---
@@ -767,8 +807,8 @@ Contributions welcome! Please open an issue or PR on [GitHub](https://github.com
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ## Author
 
-**Hakan Serce** — [blog.hakanserce.com](https://blog.hakanserce.com) · [GitHub](https://github.com/hakanserce)
+**Hakan Serce** - [blog.hakanserce.com](https://blog.hakanserce.com) · [GitHub](https://github.com/hakanserce)
