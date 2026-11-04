@@ -21578,7 +21578,7 @@
       "description": "`atm commit` takes files only one `--file` at a time and refuses folders, so that it never commits another agent's work in the same tree. A generated folder makes that a chore: T-398 had to name 230 files of `plugin/assets/compmd/` (the old version's removed, the new one's added) one by one.\n\n## Change\n- `atm commit <id> --dir <folder>` (repeatable, beside `--file`): every change git sees under the folder, as `git status --porcelain --untracked-files=all` lists it (modified, added, deleted, renamed, new files git doesn't ignore), committed with the other files and `tasks.json`. The output names each file, as now.\n- Still refused, with a message: `.` and the repository's root (or anything above it), `.agentic-task-manager/`, a path outside the repository, and a folder with no changes. A changed file under the folder that another task **in progress and claimed by another agent** lists in its `files` makes the whole commit refuse, naming the file and the task: that is the case the rule against folders is there for.\n- [`atm-cli/atm/cli/`](atm-cli/atm/cli/) (the option) and atm-lib's `commit_task` (the expansion, through the vcs layer; `tests/lib/public-surface.json` and the changelog if its signature changes).\n- The skills' commit steps (`/atm:do-task` Step 7, `/atm:loop-tasks` step 5, [`plugin/CLAUDE.md`](plugin/CLAUDE.md)'s *Commit* line): `--dir` for a generated folder the task rebuilt, never for a folder others work in. A skill change and a CLI option that reads a path: a written review in [`docs/security-architecture.md`](docs/security-architecture.md) §3.3, and the invariant on `atm commit` updated.\n\n## Tests\nScenarios or `*.test.mjs` in `tests/scripts/` (a git repository): a folder with a modified, a new and a deleted file commits all three and nothing outside it; `.`, the root, `.agentic-task-manager/` and an empty folder are refused; another agent's claimed task listing a changed file under the folder refuses the commit and commits nothing.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/main.py",
@@ -21593,7 +21593,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-04T00:03:30Z",
+      "updated_at": "2026-11-04T00:17:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21616,7 +21616,9 @@
       "related": [
         "T-398"
       ],
-      "sprint": "Viewer fixes"
+      "sprint": "Viewer fixes",
+      "started_at": "2026-11-04T00:17:19Z",
+      "started_by": "claude:b7be7288"
     },
     {
       "id": "T-406",
@@ -21725,7 +21727,7 @@
       "description": "A file inside a git submodule never opens in the viewer: it says the file can't be shown, as for a file git ignores (Hakan).\n\n## Cause\nThe vcs layer's [`ignored`](atm-cli/atm/vcs/git.py#:~:text=def%20ignored) runs `git check-ignore` in the project's repository. For a path inside a submodule, git refuses (\"is in submodule\", exit 128), and the check fails closed: any answer but \"not ignored\" counts as ignored. [`tracked`](atm-cli/atm/vcs/git.py#:~:text=def%20tracked) has the same problem (`ls-files` in the superproject doesn't list the submodule's files), so *Open on GitHub* would be wrong for them too.\n\n## Change\n- `ignored` and `tracked` in [`atm-cli/atm/vcs/git.py`](atm-cli/atm/vcs/git.py): for a path inside a submodule (the nearest submodule from `git submodule status`, or `git ls-files --stage` mode `160000`, cached per call), ask the submodule's own git with the path relative to it. Its ignore rules, and the superproject's for the submodule's folder, decide; any other git error still refuses (fail closed, as now). Nested submodules: the innermost.\n- `head`/`tracked` for *Open on GitHub*: a file in a submodule links to the submodule's own repository at its commit, when its remote is a web address atm knows (`repo.ts`'s hosts); otherwise the button doesn't show. Through the documents route's `tracked`/`commit` fields, plus what the link needs (the submodule's web address and path).\n- The other checks stay as they are for submodule files: no hidden parts, no key files, no symlink on the way, the size limits.\n- [`docs/security-architecture.md`](docs/security-architecture.md): I11 and I12 say what the routes do inside a submodule (its own ignore rules; failing closed).\n\n## Tests\n`serve.test.mjs` with a real submodule (a second repository added with `git submodule add` from a local path): a file in it opens; one its `.gitignore` ignores doesn't; a key file in it doesn't; the documents route gives the submodule's commit. A unit test in `tests/lib/` for the path-to-submodule lookup.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/vcs/git.py",
@@ -21739,7 +21741,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:08:01Z",
+      "updated_at": "2026-11-04T00:17:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21760,7 +21762,19 @@
         "T-392"
       ],
       "started_at": "2026-11-04T00:08:01Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "24e8d4e74426f898349fe26b35f4db8bcdbfe50b",
+      "completed_at": "2026-11-04T00:17:18Z",
+      "completed_by": "claude:b7be7288",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-04T00:17:18Z",
+          "kind": "review",
+          "text": "Check: files in a submodule open (its own ignore rules, failing closed); Open on GitHub goes to the submodule’s repo at its commit. `serve.test.mjs` “files in a git submodule…” with a real submodule; I11/I12 updated. e2e 409, atm-cli 556.",
+          "by": "claude:b7be7288"
+        }
+      ]
     },
     {
       "id": "T-409",

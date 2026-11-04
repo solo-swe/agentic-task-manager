@@ -85,8 +85,9 @@ commands:
                  bring archived tasks back into tasks.json
   workflow [set direct|pull-request] [--base B] [--verify true|false] [--max-rounds N] ...
                  print the project's workflow (meta.workflow), or set it
-  commit <id> --file F [--file F]... [--message TEXT]
-                 commit exactly those files plus tasks.json (message from meta.workflow.commit_template),
+  commit <id> --file F [--file F]... [--dir FOLDER]... [--message TEXT]
+                 commit exactly those files (and every change under a --dir folder, e.g. a generated one the
+                 task rebuilt) plus tasks.json (message from meta.workflow.commit_template),
                  and record the commit on the task
   pr <id>... --number N --url URL
                  record the PR that contains the tasks
@@ -415,7 +416,15 @@ def build_parser():
     commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each; required)"
+        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each)"
+    )
+    commit.add_argument(
+        "--dir",
+        action="append",
+        default=[],
+        metavar="FOLDER",
+        help="every change under a folder the task rebuilt, e.g. a generated one (repeatable; refused for the "
+        "repository's root, the task folder, and a folder holding files another agent's claimed task lists)",
     )
     commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
     commit.add_argument(

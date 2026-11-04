@@ -24,8 +24,9 @@ def git_exit(args, cwd):
         return None
 
 
-def run_git(args, cwd):
-    """Run git as a step that must work: return stdout stripped, or raise with git's own message."""
+def run_git(args, cwd, strip=True):
+    """Run git as a step that must work: return stdout (stripped, unless `strip` is False: a status line starts with
+    a space that means something), or raise with git's own message."""
     try:
         result = subprocess.run(["git"] + args, cwd=cwd, capture_output=True, text=True)
     except OSError as e:
@@ -34,7 +35,7 @@ def run_git(args, cwd):
         message = (result.stderr or result.stdout).strip()
         command = next((a for a in args if not a.startswith("-")), "")
         raise AtmFailure(f"git {command} failed: {message}")
-    return result.stdout.strip()
+    return result.stdout.strip() if strip else result.stdout
 
 
 def in_git(folder):

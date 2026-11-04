@@ -7,7 +7,7 @@ The commit goes through the project's version control (`project.vcs`); the files
 
 import re
 
-from ..common.errors import AtmFailure, Invalid, NotFound
+from ..common.errors import AtmFailure, Invalid, NotFound, Refused
 from ..common.core import now_iso, parse_iso
 from .loop import archived_in
 from ..common.model import WORKFLOW_DEFAULTS, WORKFLOW_TYPES, effective_release, find_task, kind_of, touch, vocabulary, workflow_of
@@ -88,6 +88,31 @@ def repository_paths(project, files, cwd):
     return vcs.paths(files, cwd)
 
 
+def folder_changes(project, task_id, folders, cwd):
+    """`atm commit --dir` (T-405): every changed file under the folders (named relative to `cwd`), relative to the
+    repository, for commit_task. Refused as a whole when one of them is a file another agent's claimed task lists in
+    its `files` (the file, or a folder holding it): the case committing only named files guards against, another
+    agent's unfinished work in the same tree."""
+    vcs = project.vcs
+    if vcs is None or not vcs.in_repository():
+        raise AtmFailure("atm commit needs a git repository")
+    changed = vcs.changes_under(list(folders), cwd)
+    claims = project.store.read_claims()["claims"]
+    for claim in claims.values():
+        if not isinstance(claim, dict) or claim.get("task") == task_id or claim.get("agent") == project.actor:
+            continue
+        other = project.store.get_task(claim.get("task"))
+        listed = [f for f in (other or {}).get("files") or [] if isinstance(f, str)]
+        for path in changed:
+            owner = next((f for f in listed if path == f.rstrip("/") or path.startswith(f.rstrip("/") + "/")), None)
+            if owner:
+                raise Refused(
+                    f"--dir would commit {path}, which {claim['task']} lists ({owner}), claimed by {claim.get('agent')}: "
+                    "name your own files with --file"
+                )
+    return changed
+
+
 def commit_task(project, task_id, files, message=None):
     """`atm commit`: commit exactly `files` (relative to the repository; repository_paths turns names relative to a
     folder into these) plus the task data that travels with code commits, with the workflow's message, then record
@@ -96,7 +121,7 @@ def commit_task(project, task_id, files, message=None):
     if vcs is None or not vcs.in_repository():
         raise AtmFailure("atm commit needs a git repository")
     if not files:
-        raise Invalid("atm commit needs --file (once per file the task changed), or --record REV")
+        raise Invalid("atm commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
     store = project.store
     # The one task, or the error find_task gives (saying when it is archived)
     task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)

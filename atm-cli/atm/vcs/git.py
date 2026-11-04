@@ -63,6 +63,45 @@ class GitVcs:
                 picked.append(relative)
         return picked
 
+    def changes_under(self, folders, cwd=None):
+        """`atm commit --dir` (T-405): every change git sees under each folder (named relative to `cwd`, None: the
+        repository), as `git status` lists it: modified, added, deleted, renamed (both names) and new files git doesn't
+        ignore; relative to the repository, in order. Refuses the repository's root or above, a folder outside it, the
+        task folder (tasks.json goes with every commit anyway), a file, and a folder with nothing changed."""
+        picked = []
+        for name in folders:
+            full = os.path.realpath(os.path.join(cwd or self.root, name))
+            relative = os.path.relpath(full, self.root).replace(os.sep, "/")
+            if relative in (".", "..") or relative.startswith("../"):
+                raise Invalid(f"--dir {name}: name a folder inside the repository, not the repository itself or above it")
+            if relative == ".agentic-task-manager" or relative.startswith(".agentic-task-manager/"):
+                raise Invalid(f"--dir {name}: the task folder isn't committed this way (tasks.json goes with every commit)")
+            if os.path.isfile(full):
+                raise Invalid(f"--dir {name} is a file: name it with --file")
+            status = run_git(
+                LITERAL + ["status", "--porcelain", "-z", "--untracked-files=all", "--", relative], self.root, strip=False
+            )
+            entries = [e for e in status.split("\0") if e]
+            found = []
+            i = 0
+            while i < len(entries):
+                entry = entries[i]
+                i += 1
+                if len(entry) < 4:
+                    continue
+                code, path = entry[:2], entry[3:]
+                found.append(path)
+                # A rename or a copy: the next entry is the name it had, which goes in the commit too
+                if "R" in code or "C" in code:
+                    if i < len(entries):
+                        found.append(entries[i])
+                    i += 1
+            found = [p for p in found if p == relative or p.startswith(relative + "/")]
+            if not found:
+                raise NotFound(f"--dir {name}: nothing changed under it")
+            picked += [p for p in found if p not in picked]
+        return picked
+
     def commit(self, files, message):
         """Commit exactly `files` (relative to the repository); whatever else is staged stays staged and out of this
         commit. Returns the new commit's SHA."""

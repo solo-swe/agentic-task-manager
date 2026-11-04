@@ -204,7 +204,9 @@ while true:
         - Unless --no-commit is set:
           - `atm commit $TASK_ID --file <path> --file <path> ...` with every file from your list, deleted ones too
             (also `.agentic-task-manager/.gitignore` and `.agentic-task-manager/.gitattributes` if `git status`
-            shows atm changed them); the message comes from the project (`feat($TASK_ID): $TASK_NAME` by default)
+            shows atm changed them); the message comes from the project (`feat($TASK_ID): $TASK_NAME` by default).
+            A generated folder the task rebuilt goes in whole with `--dir <folder>` (/atm:do-task Step 7), never a
+            folder of source files others may be working in
           - If the commit fails: the task stays in progress. Fix the cause and commit again; if you can't,
             `atm release $TASK_ID --note '<what is done; why the commit failed>'`, log it and continue with the next
             iteration. Don't mark it done.

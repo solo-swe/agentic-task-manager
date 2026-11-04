@@ -8,6 +8,15 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
 The sprint *Viewer fixes* (release 0.30.0).
 
+### Added
+- **`atm commit <id> --dir FOLDER`** (T-405, repeatable, beside `--file`): every change git lists under the folder
+  (modified, new, deleted, renamed), for a generated folder the task rebuilt, such as CompMD's runtime after an
+  upgrade (T-398 named 230 files one by one). Refused for the repository's root or above, a path outside it, the task
+  folder, a file, a folder with nothing changed, and, as a whole, when a changed file under it is one another agent's
+  claimed task lists in its `files`. atm-lib: `folder_changes(project, task_id, folders, cwd)`
+  (`tests/lib/public-surface.json`); the vcs: `changes_under`; `host/git.py`'s `run_git` takes `strip=False`.
+  `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` say when to use it.
+
 ### Fixed
 - **Files inside a git submodule open in the document viewer** (T-408): the viewer refused them as if git ignored
   them, since `git check-ignore` in the project's repository refuses a path inside a submodule and the check fails

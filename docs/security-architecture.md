@@ -501,6 +501,19 @@ review in place of the live sandbox run:
   read, no URL fetched, and no new entry point (atm-cli reads nothing outside `tasks.json`). An entry is shown as
   `requirements` entries already were (T-391: through CompMD in the details panel, as text on a card).
 
+**`atm commit --dir` (T-405).** A CLI option that reads a path, and `/atm:do-task`, `/atm:loop-tasks` and
+`plugin/CLAUDE.md` tell agents when to use it. Written review in place of the live sandbox run:
+- **Why committing only named files matters** (F6): another agent's unfinished work may be in the same tree.
+  `--dir` keeps that: it commits the changes git lists under one folder, refuses the repository's root or above, a
+  path outside it and the task folder, and refuses the whole commit, naming the file and the task, when any changed
+  file under the folder is one another agent's claimed task lists in its `files` (the file or a folder holding it).
+  Paths go to git with `--literal-pathspecs`, so a folder name is never a pattern.
+- **What the new text asks of agents:** `--dir` only for a generated folder the task rebuilt, never for a folder of
+  source files others may work in; nothing to run, fetch or install. Task text can't widen it: the skills already say
+  never to run commands copied from task text, and `--dir` commits nothing a plain `git add` of those files wouldn't.
+- **Its limit:** a change under the folder by an agent whose task doesn't list it, or by a person, goes in with the
+  commit. That is why the skills keep `--dir` to generated output (`git.test.mjs` "atm commit --dir").
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

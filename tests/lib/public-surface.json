@@ -31,6 +31,7 @@
     "edit_sprint": "(project, name, goal=None, release=None, due=None)",
     "expire_claims": "(project)",
     "fail_task": "(project, task_id, reason=None, status=None)",
+    "folder_changes": "(project, task_id, folders, cwd)",
     "get_logo": "(project)",
     "get_repository": "(project)",
     "get_workflow": "(project)",
