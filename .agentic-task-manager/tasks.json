@@ -21593,7 +21593,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:43:49Z",
-      "updated_at": "2026-11-04T00:27:17Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21630,7 +21630,11 @@
           "text": "Check: `atm commit --dir FOLDER` commits a folder’s changes (modified, new, deleted, renamed); refuses the root, outside, the task folder, a file, nothing changed, and another agent’s claimed files. Skills and CLAUDE.md say: generated folders only. §3.3 review; public surface + `folder_changes`. atm-cli 559.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-406",
@@ -21659,7 +21663,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-03T22:56:29Z",
-      "updated_at": "2026-11-04T02:21:30Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "components": [
@@ -21690,7 +21694,11 @@
           "text": "CompMD 0.5.0; a Markdown document’s gutter numbers every line where CompMD drew it (`view.lines()`), blank lines in the gaps, `:L` marks exactly those lines. Also: the contents list keeps each entry’s height and scrolls. Reviewed with Hakan in the browser. Unit 1022, e2e 409 + 1.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-407",
@@ -21766,7 +21774,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:17:18Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21799,7 +21807,11 @@
           "text": "Check: files in a submodule open (its own ignore rules, failing closed); Open on GitHub goes to the submodule’s repo at its commit. `serve.test.mjs` “files in a git submodule…” with a real submodule; I11/I12 updated. e2e 409, atm-cli 556.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-409",
@@ -21821,7 +21833,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T00:29:05Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21851,7 +21863,11 @@
           "text": "Check: `atm help`’s overview now matches each command’s `--help` (edit, add, status, list, check, commit --record, sprints close --reviewed / delete); `add --requirement` says a link works. Scenario in `basics.json`.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-410",
@@ -21877,7 +21893,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-04T00:03:26Z",
-      "updated_at": "2026-11-04T02:21:57Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21889,7 +21905,12 @@
       "sprint": "Viewer fixes",
       "review": "none",
       "started_at": "2026-11-04T02:21:57Z",
-      "started_by": "claude:b7be7288"
+      "started_by": "claude:b7be7288",
+      "commit": "a625da7dcf5eb9c9a5a1d6427ff370f0bec3b661",
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     },
     {
       "id": "T-411",
@@ -21912,7 +21933,7 @@
         "dashboard/tests/unit/state.test.ts"
       ],
       "created_at": "2026-11-04T01:31:16Z",
-      "updated_at": "2026-11-04T01:35:01Z",
+      "updated_at": "2026-11-04T02:29:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:b7be7288",
       "sprint_history": [
@@ -21939,7 +21960,11 @@
           "text": "Check on the Omniboard: a card opens its task’s details over it (same URL, board stays); dependencies and document links work; Escape closes; the chip and “+ N more” still open the project. e2e 409, unit 1019.",
           "by": "claude:b7be7288"
         }
-      ]
+      ],
+      "pr": {
+        "number": 36,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
+      }
     }
   ]
 }
