@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.30.0] - 2026-11-04
+
+- Markdown documents show a number for every line, beside its text, as code does; a link to a line marks just that line.
+- Clicking a card on the Omniboard opens the task right there, without leaving the board.
+- Files inside a git submodule open in the document viewer too.
+- A long contents list stays readable and scrolls.
+- Agents can commit a whole generated folder at once, such as a rebuilt runtime.
+
 ## [0.29.0] - 2026-11-03
 
 - Files and documents a task links to open right in the dashboard, in a window you can move and resize.
