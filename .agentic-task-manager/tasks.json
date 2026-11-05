@@ -874,6 +874,12 @@
             "T-411"
           ]
         }
+      },
+      {
+        "id": "CLI ergonomics",
+        "state": "planned",
+        "goal": "The atm2 Typer CLI: every command group on atm-lib, shell completion, infra commands kept apart, and the cutover to `atm`; the T-417 regressions fixed",
+        "release": "0.31.0"
       }
     ],
     "releases": [
@@ -1061,6 +1067,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/36"
         },
         "released_at": "2026-11-04T02:34:01Z"
+      },
+      {
+        "id": "0.31.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -22186,13 +22196,20 @@
         "docs/cli-improvements-with-3p.md"
       ],
       "created_at": "2026-11-05T07:21:08Z",
-      "updated_at": "2026-11-05T07:21:08Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-417",
@@ -22246,12 +22263,19 @@
         "atm-cli/atm/lib/state.py"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-419",
@@ -22270,7 +22294,7 @@
         "tests/scripts/lib.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:33Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:c92be4e4",
       "related": [
@@ -22278,7 +22302,14 @@
       ],
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-420",
@@ -22298,12 +22329,19 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-421",
@@ -22327,12 +22365,19 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-422",
@@ -22351,7 +22396,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:33Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:c92be4e4",
       "with": "user",
@@ -22360,7 +22405,14 @@
       ],
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-423",
@@ -22382,12 +22434,19 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-424",
@@ -22410,13 +22469,20 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-425",
@@ -22447,7 +22513,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-05T10:27:33Z",
+      "updated_at": "2026-11-05T10:31:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:c92be4e4",
       "with": "user",
@@ -22458,7 +22524,14 @@
         "cli",
         "skills",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-05T10:31:57Z"
+        }
+      ],
+      "sprint": "CLI ergonomics"
     },
     {
       "id": "T-426",
