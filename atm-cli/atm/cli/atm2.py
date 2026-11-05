@@ -36,13 +36,16 @@ from ..common.dashboard import (
 from ..common.errors import AtmFailure, Invalid
 from ..lib.archive import archive_finished, unarchive_tasks
 from ..lib.edit import check_project
-from .archive import describe_ids, describe_kept
+from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
 from ..lib.settings import (
     ensure_project_id,
     ensure_repository,
     init_meta,
 )
+from ..lib.components import add_component, edit_component, list_components
 from ..boot.jsongit import register_project, set_up_store
+from .archive import describe_ids, describe_kept
+from .components import moved_text
 from ._delegate import run_atm, run_atm_capture
 
 
@@ -811,7 +814,270 @@ def db_init(
 
 
 # ---------------------------------------------------------------------------
-# project group
+# release group
+# ---------------------------------------------------------------------------
+
+release_app = typer.Typer(help="Release management")
+app.add_typer(release_app, name="release")
+
+
+@release_app.command("list")
+def release_list(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="List archived releases too"),
+) -> None:
+    """List releases with their tasks by kind and stage."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out("[dry-run] would list releases")
+        return
+    project = open_project(os.getcwd())
+    listed = list_releases(project, all_)
+    if ctx.obj.get("json_out", False):
+        out(to_json(listed["releases"]))
+        return
+    if not listed["releases"]:
+        out(
+            "No open releases (--all lists the archived ones)."
+            if listed["has_releases"]
+            else "No releases yet: atm releases add <R>."
+        )
+        return
+    for r in listed["releases"]:
+        details = [r["state"]] + ([f"target {r['target']}"] if r.get("target") else [])
+        if r.get("released_at"):
+            details.append(f"released {r['released_at'][:10]}")
+        if isinstance(r.get("pr"), dict) and r["pr"].get("number"):
+            details.append(f"PR #{r['pr']['number']}")
+        title = r["id"] + (f" “{r['name']}”" if r.get("name") else "")
+        kinds = ", ".join(f"{k} {n}" for k, n in r["by_kind"].items())
+        stages = ", ".join(f"{s.replace('_', ' ')} {n}" for s, n in r["by_stage"].items())
+        line = f"{title} · {' · '.join(details)}: {r['tasks']} task{'' if r['tasks'] == 1 else 's'}"
+        line = line + (f" ({kinds})" if kinds else "") + (f"; {stages}" if stages else "")
+        out(line)
+
+
+@release_app.command("add")
+def release_add(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+    name: Optional[str] = typer.Option(None, "--name", help="Add, edit: a name besides its ID (empty: remove it)"),
+    target: Optional[str] = typer.Option(None, "--target", metavar="DATE", help="Add, edit: the planned date, YYYY-MM-DD"),
+    pr: Optional[list[int]] = typer.Option(None, "--pr", metavar="N", help="Add: give it the tasks of pull request N (repeatable)"),
+    released_at: Optional[str] = typer.Option(None, "--released-at", metavar="TIME", help="Add: it shipped already, at this time (e.g. its PR's merge)"),
+) -> None:
+    """Add a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [release_id]
+        if name:
+            parts.append(f"--name {name}")
+        if target:
+            parts.append(f"--target {target}")
+        if pr:
+            for n in pr:
+                parts.append(f"--pr {n}")
+        if released_at:
+            parts.append(f"--released-at {released_at}")
+        out(f"[dry-run] would add release {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = add_release(
+        project, release_id, name=name, target=target, prs=pr or [], released_at=released_at
+    )
+    if ctx.obj.get("json_out", False):
+        out(to_json(result["release"]))
+        return
+    release, given, prs = result["release"], result["tasks"], pr or []
+    line = f'Added the release “{release_id}” ({release["state"]})'
+    if given:
+        numbers = ", ".join(f"#{n}" for n in prs)
+        line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
+    out(line + ".")
+
+
+@release_app.command("edit")
+def release_edit(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+    name: Optional[str] = typer.Option(None, "--name", help="Add, edit: a name besides its ID (empty: remove it)"),
+    target: Optional[str] = typer.Option(None, "--target", metavar="DATE", help="Add, edit: the planned date, YYYY-MM-DD"),
+) -> None:
+    """Edit a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [release_id]
+        if name is not None:
+            parts.append(f"--name {name}")
+        if target is not None:
+            parts.append(f"--target {target}")
+        out(f"[dry-run] would edit release {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = edit_release(project, release_id, name=name, target=target)
+    release, changed = result["release"], result["changed"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(release))
+    else:
+        out(f"{release['id']}: changed {', '.join(changed)}" if changed else f"{release['id']}: nothing changed")
+
+
+@release_app.command("archive")
+def release_archive(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+) -> None:
+    """Archive a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would archive release {release_id}")
+        return
+    project = open_project(os.getcwd())
+    release = archive_release(project, release_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(release))
+    else:
+        out(f'Archived the release "{release["id"]}".')
+
+
+@release_app.command("notes")
+def release_notes_cmd(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+) -> None:
+    """Print a Markdown draft of a release's changes."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would print release notes for {release_id}")
+        return
+    project = open_project(os.getcwd())
+    notes = release_notes(project, release_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(notes))
+        return
+    release = notes["release"]
+    lines = [f"# {release['id']}" + (f" “{release['name']}”" if release.get("name") else "")]
+    if not notes["groups"]:
+        lines += ["", "Nothing done in it yet."]
+    for group in notes["groups"]:
+        lines += ["", f"## {group['label']}", ""]
+        for t in group["tasks"]:
+            lines.append(f"- **{t['id']}** {t['name']}" + (f": {t['outcome']}" if t["outcome"] else ""))
+    if notes["open"]:
+        lines += ["", "## Not done yet", ""]
+        lines += [f"- {t['id']} {t['name']} ({t['status']})" for t in notes["open"]]
+    for line in lines:
+        out(line)
+
+
+# ---------------------------------------------------------------------------
+# component group
+# ---------------------------------------------------------------------------
+
+component_app = typer.Typer(help="Component management")
+app.add_typer(component_app, name="component")
+
+
+@component_app.command("list")
+def component_list(
+    ctx: typer.Context,
+) -> None:
+    """List components with their task counts."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out("[dry-run] would list components")
+        return
+    project = open_project(os.getcwd())
+    listed = list_components(project)
+    if ctx.obj.get("json_out", False):
+        out(to_json(listed))
+        return
+    if not listed:
+        out("No components yet: atm components add <id> --path GLOB.")
+        return
+    for c in listed:
+        details = [f"“{c['label']}”"] if c.get("label") else []
+        details.append(", ".join(c["paths"]) if c["paths"] else "no paths")
+        if c.get("review"):
+            details.append(f"review {c['review']}")
+        out(f"{c['id']} · {' · '.join(details)}: {c['tasks']} task{'' if c['tasks'] == 1 else 's'}")
+
+
+@component_app.command("add")
+def component_add(
+    ctx: typer.Context,
+    component_id: Annotated[str, typer.Argument(help="The component's ID (letters, digits, '.', '-', '_')")],
+    label: Optional[str] = typer.Option(None, "--label", help="Add, edit: the name shown"),
+    path: Optional[list[str]] = typer.Option(None, "--path", metavar="GLOB", help="Add: a glob over its files, e.g. 'dashboard/**' (repeatable)"),
+    review: Optional[str] = typer.Option(None, "--review", help="Add, edit: how its tasks are reviewed"),
+    from_label: Optional[str] = typer.Option(None, "--from-label", metavar="LABEL", help="Add, edit: every task with this label gets the component instead"),
+    assign: bool = typer.Option(False, "--assign", help="Add, edit: also give it to every task whose files its globs match"),
+) -> None:
+    """Add a component."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [component_id]
+        if label:
+            parts.append(f"--label {label}")
+        if path:
+            for p in path:
+                parts.append(f"--path {p}")
+        if review:
+            parts.append(f"--review {review}")
+        if from_label:
+            parts.append(f"--from-label {from_label}")
+        if assign:
+            parts.append("--assign")
+        out(f"[dry-run] would add component {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = add_component(project, component_id, label, path, review, from_label, assign)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    text = moved_text(from_label, result["from_label"], assign, result["by_files"])
+    out(f"Added the component {component_id}" + (f": {text}." if text else "."))
+
+
+@component_app.command("edit")
+def component_edit(
+    ctx: typer.Context,
+    component_id: Annotated[str, typer.Argument(help="The component's ID (letters, digits, '.', '-', '_')")],
+    label: Optional[str] = typer.Option(None, "--label", help="Add, edit: the name shown (add: default the label's own text, with --from-label; edit: empty removes it)"),
+    add_path: Optional[list[str]] = typer.Option(None, "--add-path", metavar="GLOB", help="Edit: add a glob over its files (repeatable)"),
+    review: Optional[str] = typer.Option(None, "--review", help="Add, edit: how its tasks are reviewed (blocker, async, batch, none; edit: empty removes it)"),
+    from_label: Optional[str] = typer.Option(None, "--from-label", metavar="LABEL", help="Add, edit: every task with this label gets the component instead"),
+    assign: bool = typer.Option(False, "--assign", help="Add, edit: also give it to every task whose files its globs match"),
+) -> None:
+    """Edit a component."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [component_id]
+        if label is not None:
+            parts.append(f"--label {label}")
+        if add_path:
+            for p in add_path:
+                parts.append(f"--add-path {p}")
+        if review is not None:
+            parts.append(f"--review {review}")
+        if from_label:
+            parts.append(f"--from-label {from_label}")
+        if assign:
+            parts.append("--assign")
+        out(f"[dry-run] would edit component {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = edit_component(project, component_id, label, add_path, review, from_label, assign)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    moved = moved_text(from_label, result["from_label"], assign, result["by_files"])
+    text = ", ".join(([f"changed {', '.join(result['changed'])}"] if result["changed"] else []) + [t for t in [moved] if t])
+    out(f"{component_id}: {text or 'nothing changed'}")
+
+
+# ---------------------------------------------------------------------------
+# doctor / service
 # ---------------------------------------------------------------------------
 
 project_app = typer.Typer(help="Project-level config")
@@ -973,20 +1239,6 @@ def sprint_add(
 
 # ---------------------------------------------------------------------------
 # release group
-# ---------------------------------------------------------------------------
-
-release_app = typer.Typer(help="Release management")
-app.add_typer(release_app, name="release")
-
-
-# ---------------------------------------------------------------------------
-# component group
-# ---------------------------------------------------------------------------
-
-component_app = typer.Typer(help="Component management")
-app.add_typer(component_app, name="component")
-
-
 # ---------------------------------------------------------------------------
 # doctor / service
 # ---------------------------------------------------------------------------
