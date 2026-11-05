@@ -11,7 +11,6 @@ from ..common.model import (
     REWORK_STATES,
     add_note,
     back_to_todo,
-    change_status,
     find_sprint,
     kind_of,
     natural_key,
@@ -19,6 +18,7 @@ from ..common.model import (
     unfinished_dependencies,
     vocabulary,
 )
+from .state import change_status
 
 DEFAULT_LEASE_MINUTES = 30
 

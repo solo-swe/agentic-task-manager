@@ -41,6 +41,7 @@ const MODULES_ORDER = [
   "db.memory",
   "vcs.git",
   "lib.project",
+  "lib.state",
   "lib.loop",
   "lib.tasks",
   "lib.query",

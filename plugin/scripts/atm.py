@@ -6,6 +6,7 @@ Run through the `atm` launcher, which checks for Python 3.9+. Standard library o
 with nothing to install.
 """
 
+from __future__ import absolute_import, annotations
 import argparse
 import base64
 import contextlib
@@ -27,6 +28,2349 @@ from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
 from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, Tuple, TypedDict
 from urllib.parse import parse_qs, urlsplit
+
+
+# ==== vendored six ====
+# Utilities for writing code that runs on Python 2 and 3
+
+# Copyright (c) 2010-2024 Benjamin Peterson
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+
+import functools
+import itertools
+import operator
+import sys
+import types
+
+__author__ = "Benjamin Peterson <benjamin@python.org>"
+__version__ = "1.17.0"
+
+
+# Useful for very coarse version differentiation.
+PY2 = sys.version_info[0] == 2
+PY3 = sys.version_info[0] == 3
+PY34 = sys.version_info[0:2] >= (3, 4)
+
+if PY3:
+    string_types = str,
+    integer_types = int,
+    class_types = type,
+    text_type = str
+    binary_type = bytes
+
+    MAXSIZE = sys.maxsize
+else:
+    string_types = basestring,
+    integer_types = (int, long)
+    class_types = (type, types.ClassType)
+    text_type = unicode
+    binary_type = str
+
+    if sys.platform.startswith("java"):
+        # Jython always uses 32 bits.
+        MAXSIZE = int((1 << 31) - 1)
+    else:
+        # It's possible to have sizeof(long) != sizeof(Py_ssize_t).
+        class X(object):
+
+            def __len__(self):
+                return 1 << 31
+        try:
+            len(X())
+        except OverflowError:
+            # 32-bit
+            MAXSIZE = int((1 << 31) - 1)
+        else:
+            # 64-bit
+            MAXSIZE = int((1 << 63) - 1)
+        del X
+
+if PY34:
+    from importlib.util import spec_from_loader
+else:
+    spec_from_loader = None
+
+
+def _add_doc(func, doc):
+    """Add documentation to a function."""
+    func.__doc__ = doc
+
+
+def _import_module(name):
+    """Import module, returning the module after the last dot."""
+    __import__(name)
+    return sys.modules[name]
+
+
+class _LazyDescr(object):
+
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, tp):
+        result = self._resolve()
+        setattr(obj, self.name, result)  # Invokes __set__.
+        try:
+            # This is a bit ugly, but it avoids running this again by
+            # removing this descriptor.
+            delattr(obj.__class__, self.name)
+        except AttributeError:
+            pass
+        return result
+
+
+class MovedModule(_LazyDescr):
+
+    def __init__(self, name, old, new=None):
+        super(MovedModule, self).__init__(name)
+        if PY3:
+            if new is None:
+                new = name
+            self.mod = new
+        else:
+            self.mod = old
+
+    def _resolve(self):
+        return _import_module(self.mod)
+
+    def __getattr__(self, attr):
+        _module = self._resolve()
+        value = getattr(_module, attr)
+        setattr(self, attr, value)
+        return value
+
+
+class _LazyModule(types.ModuleType):
+
+    def __init__(self, name):
+        super(_LazyModule, self).__init__(name)
+        self.__doc__ = self.__class__.__doc__
+
+    def __dir__(self):
+        attrs = ["__doc__", "__name__"]
+        attrs += [attr.name for attr in self._moved_attributes]
+        return attrs
+
+    # Subclasses should override this
+    _moved_attributes = []
+
+
+class MovedAttribute(_LazyDescr):
+
+    def __init__(self, name, old_mod, new_mod, old_attr=None, new_attr=None):
+        super(MovedAttribute, self).__init__(name)
+        if PY3:
+            if new_mod is None:
+                new_mod = name
+            self.mod = new_mod
+            if new_attr is None:
+                if old_attr is None:
+                    new_attr = name
+                else:
+                    new_attr = old_attr
+            self.attr = new_attr
+        else:
+            self.mod = old_mod
+            if old_attr is None:
+                old_attr = name
+            self.attr = old_attr
+
+    def _resolve(self):
+        module = _import_module(self.mod)
+        return getattr(module, self.attr)
+
+
+class _SixMetaPathImporter(object):
+
+    """
+    A meta path importer to import six.moves and its submodules.
+
+    This class implements a PEP302 finder and loader. It should be compatible
+    with Python 2.5 and all existing versions of Python3
+    """
+
+    def __init__(self, six_module_name):
+        self.name = six_module_name
+        self.known_modules = {}
+
+    def _add_module(self, mod, *fullnames):
+        for fullname in fullnames:
+            self.known_modules[self.name + "." + fullname] = mod
+
+    def _get_module(self, fullname):
+        return self.known_modules[self.name + "." + fullname]
+
+    def find_module(self, fullname, path=None):
+        if fullname in self.known_modules:
+            return self
+        return None
+
+    def find_spec(self, fullname, path, target=None):
+        if fullname in self.known_modules:
+            return spec_from_loader(fullname, self)
+        return None
+
+    def __get_module(self, fullname):
+        try:
+            return self.known_modules[fullname]
+        except KeyError:
+            raise ImportError("This loader does not know module " + fullname)
+
+    def load_module(self, fullname):
+        try:
+            # in case of a reload
+            return sys.modules[fullname]
+        except KeyError:
+            pass
+        mod = self.__get_module(fullname)
+        if isinstance(mod, MovedModule):
+            mod = mod._resolve()
+        else:
+            mod.__loader__ = self
+        sys.modules[fullname] = mod
+        return mod
+
+    def is_package(self, fullname):
+        """
+        Return true, if the named module is a package.
+
+        We need this method to get correct spec objects with
+        Python 3.4 (see PEP451)
+        """
+        return hasattr(self.__get_module(fullname), "__path__")
+
+    def get_code(self, fullname):
+        """Return None
+
+        Required, if is_package is implemented"""
+        self.__get_module(fullname)  # eventually raises ImportError
+        return None
+    get_source = get_code  # same as get_code
+
+    def create_module(self, spec):
+        return self.load_module(spec.name)
+
+    def exec_module(self, module):
+        pass
+
+_importer = _SixMetaPathImporter(__name__)
+
+
+class _MovedItems(_LazyModule):
+
+    """Lazy loading of moved objects"""
+    __path__ = []  # mark as package
+
+
+_moved_attributes = [
+    MovedAttribute("cStringIO", "cStringIO", "io", "StringIO"),
+    MovedAttribute("filter", "itertools", "builtins", "ifilter", "filter"),
+    MovedAttribute("filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"),
+    MovedAttribute("input", "__builtin__", "builtins", "raw_input", "input"),
+    MovedAttribute("intern", "__builtin__", "sys"),
+    MovedAttribute("map", "itertools", "builtins", "imap", "map"),
+    MovedAttribute("getcwd", "os", "os", "getcwdu", "getcwd"),
+    MovedAttribute("getcwdb", "os", "os", "getcwd", "getcwdb"),
+    MovedAttribute("getoutput", "commands", "subprocess"),
+    MovedAttribute("range", "__builtin__", "builtins", "xrange", "range"),
+    MovedAttribute("reload_module", "__builtin__", "importlib" if PY34 else "imp", "reload"),
+    MovedAttribute("reduce", "__builtin__", "functools"),
+    MovedAttribute("shlex_quote", "pipes", "shlex", "quote"),
+    MovedAttribute("StringIO", "StringIO", "io"),
+    MovedAttribute("UserDict", "UserDict", "collections", "IterableUserDict", "UserDict"),
+    MovedAttribute("UserList", "UserList", "collections"),
+    MovedAttribute("UserString", "UserString", "collections"),
+    MovedAttribute("xrange", "__builtin__", "builtins", "xrange", "range"),
+    MovedAttribute("zip", "itertools", "builtins", "izip", "zip"),
+    MovedAttribute("zip_longest", "itertools", "itertools", "izip_longest", "zip_longest"),
+    MovedModule("builtins", "__builtin__"),
+    MovedModule("configparser", "ConfigParser"),
+    MovedModule("collections_abc", "collections", "collections.abc" if sys.version_info >= (3, 3) else "collections"),
+    MovedModule("copyreg", "copy_reg"),
+    MovedModule("dbm_gnu", "gdbm", "dbm.gnu"),
+    MovedModule("dbm_ndbm", "dbm", "dbm.ndbm"),
+    MovedModule("_dummy_thread", "dummy_thread", "_dummy_thread" if sys.version_info < (3, 9) else "_thread"),
+    MovedModule("http_cookiejar", "cookielib", "http.cookiejar"),
+    MovedModule("http_cookies", "Cookie", "http.cookies"),
+    MovedModule("html_entities", "htmlentitydefs", "html.entities"),
+    MovedModule("html_parser", "HTMLParser", "html.parser"),
+    MovedModule("http_client", "httplib", "http.client"),
+    MovedModule("email_mime_base", "email.MIMEBase", "email.mime.base"),
+    MovedModule("email_mime_image", "email.MIMEImage", "email.mime.image"),
+    MovedModule("email_mime_multipart", "email.MIMEMultipart", "email.mime.multipart"),
+    MovedModule("email_mime_nonmultipart", "email.MIMENonMultipart", "email.mime.nonmultipart"),
+    MovedModule("email_mime_text", "email.MIMEText", "email.mime.text"),
+    MovedModule("BaseHTTPServer", "BaseHTTPServer", "http.server"),
+    MovedModule("CGIHTTPServer", "CGIHTTPServer", "http.server"),
+    MovedModule("SimpleHTTPServer", "SimpleHTTPServer", "http.server"),
+    MovedModule("cPickle", "cPickle", "pickle"),
+    MovedModule("queue", "Queue"),
+    MovedModule("reprlib", "repr"),
+    MovedModule("socketserver", "SocketServer"),
+    MovedModule("_thread", "thread", "_thread"),
+    MovedModule("tkinter", "Tkinter"),
+    MovedModule("tkinter_dialog", "Dialog", "tkinter.dialog"),
+    MovedModule("tkinter_filedialog", "FileDialog", "tkinter.filedialog"),
+    MovedModule("tkinter_scrolledtext", "ScrolledText", "tkinter.scrolledtext"),
+    MovedModule("tkinter_simpledialog", "SimpleDialog", "tkinter.simpledialog"),
+    MovedModule("tkinter_tix", "Tix", "tkinter.tix"),
+    MovedModule("tkinter_ttk", "ttk", "tkinter.ttk"),
+    MovedModule("tkinter_constants", "Tkconstants", "tkinter.constants"),
+    MovedModule("tkinter_dnd", "Tkdnd", "tkinter.dnd"),
+    MovedModule("tkinter_colorchooser", "tkColorChooser",
+                "tkinter.colorchooser"),
+    MovedModule("tkinter_commondialog", "tkCommonDialog",
+                "tkinter.commondialog"),
+    MovedModule("tkinter_tkfiledialog", "tkFileDialog", "tkinter.filedialog"),
+    MovedModule("tkinter_font", "tkFont", "tkinter.font"),
+    MovedModule("tkinter_messagebox", "tkMessageBox", "tkinter.messagebox"),
+    MovedModule("tkinter_tksimpledialog", "tkSimpleDialog",
+                "tkinter.simpledialog"),
+    MovedModule("urllib_parse", __name__ + ".moves.urllib_parse", "urllib.parse"),
+    MovedModule("urllib_error", __name__ + ".moves.urllib_error", "urllib.error"),
+    MovedModule("urllib", __name__ + ".moves.urllib", __name__ + ".moves.urllib"),
+    MovedModule("urllib_robotparser", "robotparser", "urllib.robotparser"),
+    MovedModule("xmlrpc_client", "xmlrpclib", "xmlrpc.client"),
+    MovedModule("xmlrpc_server", "SimpleXMLRPCServer", "xmlrpc.server"),
+]
+# Add windows specific modules.
+if sys.platform == "win32":
+    _moved_attributes += [
+        MovedModule("winreg", "_winreg"),
+    ]
+
+for attr in _moved_attributes:
+    setattr(_MovedItems, attr.name, attr)
+    if isinstance(attr, MovedModule):
+        _importer._add_module(attr, "moves." + attr.name)
+del attr
+
+_MovedItems._moved_attributes = _moved_attributes
+
+moves = _MovedItems(__name__ + ".moves")
+_importer._add_module(moves, "moves")
+
+
+class Module_six_moves_urllib_parse(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_parse"""
+
+
+_urllib_parse_moved_attributes = [
+    MovedAttribute("ParseResult", "urlparse", "urllib.parse"),
+    MovedAttribute("SplitResult", "urlparse", "urllib.parse"),
+    MovedAttribute("parse_qs", "urlparse", "urllib.parse"),
+    MovedAttribute("parse_qsl", "urlparse", "urllib.parse"),
+    MovedAttribute("urldefrag", "urlparse", "urllib.parse"),
+    MovedAttribute("urljoin", "urlparse", "urllib.parse"),
+    MovedAttribute("urlparse", "urlparse", "urllib.parse"),
+    MovedAttribute("urlsplit", "urlparse", "urllib.parse"),
+    MovedAttribute("urlunparse", "urlparse", "urllib.parse"),
+    MovedAttribute("urlunsplit", "urlparse", "urllib.parse"),
+    MovedAttribute("quote", "urllib", "urllib.parse"),
+    MovedAttribute("quote_plus", "urllib", "urllib.parse"),
+    MovedAttribute("unquote", "urllib", "urllib.parse"),
+    MovedAttribute("unquote_plus", "urllib", "urllib.parse"),
+    MovedAttribute("unquote_to_bytes", "urllib", "urllib.parse", "unquote", "unquote_to_bytes"),
+    MovedAttribute("urlencode", "urllib", "urllib.parse"),
+    MovedAttribute("splitquery", "urllib", "urllib.parse"),
+    MovedAttribute("splittag", "urllib", "urllib.parse"),
+    MovedAttribute("splituser", "urllib", "urllib.parse"),
+    MovedAttribute("splitvalue", "urllib", "urllib.parse"),
+    MovedAttribute("uses_fragment", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_netloc", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_params", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_query", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_relative", "urlparse", "urllib.parse"),
+]
+for attr in _urllib_parse_moved_attributes:
+    setattr(Module_six_moves_urllib_parse, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_parse._moved_attributes = _urllib_parse_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_parse(__name__ + ".moves.urllib_parse"),
+                      "moves.urllib_parse", "moves.urllib.parse")
+
+
+class Module_six_moves_urllib_error(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_error"""
+
+
+_urllib_error_moved_attributes = [
+    MovedAttribute("URLError", "urllib2", "urllib.error"),
+    MovedAttribute("HTTPError", "urllib2", "urllib.error"),
+    MovedAttribute("ContentTooShortError", "urllib", "urllib.error"),
+]
+for attr in _urllib_error_moved_attributes:
+    setattr(Module_six_moves_urllib_error, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_error._moved_attributes = _urllib_error_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_error(__name__ + ".moves.urllib.error"),
+                      "moves.urllib_error", "moves.urllib.error")
+
+
+class Module_six_moves_urllib_request(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_request"""
+
+
+_urllib_request_moved_attributes = [
+    MovedAttribute("urlopen", "urllib2", "urllib.request"),
+    MovedAttribute("install_opener", "urllib2", "urllib.request"),
+    MovedAttribute("build_opener", "urllib2", "urllib.request"),
+    MovedAttribute("pathname2url", "urllib", "urllib.request"),
+    MovedAttribute("url2pathname", "urllib", "urllib.request"),
+    MovedAttribute("getproxies", "urllib", "urllib.request"),
+    MovedAttribute("Request", "urllib2", "urllib.request"),
+    MovedAttribute("OpenerDirector", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPDefaultErrorHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPRedirectHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPCookieProcessor", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyHandler", "urllib2", "urllib.request"),
+    MovedAttribute("BaseHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPPasswordMgr", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPPasswordMgrWithDefaultRealm", "urllib2", "urllib.request"),
+    MovedAttribute("AbstractBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("AbstractDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPSHandler", "urllib2", "urllib.request"),
+    MovedAttribute("FileHandler", "urllib2", "urllib.request"),
+    MovedAttribute("FTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("CacheFTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("UnknownHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPErrorProcessor", "urllib2", "urllib.request"),
+    MovedAttribute("urlretrieve", "urllib", "urllib.request"),
+    MovedAttribute("urlcleanup", "urllib", "urllib.request"),
+    MovedAttribute("proxy_bypass", "urllib", "urllib.request"),
+    MovedAttribute("parse_http_list", "urllib2", "urllib.request"),
+    MovedAttribute("parse_keqv_list", "urllib2", "urllib.request"),
+]
+if sys.version_info[:2] < (3, 14):
+    _urllib_request_moved_attributes.extend(
+        [
+            MovedAttribute("URLopener", "urllib", "urllib.request"),
+            MovedAttribute("FancyURLopener", "urllib", "urllib.request"),
+        ]
+    )
+for attr in _urllib_request_moved_attributes:
+    setattr(Module_six_moves_urllib_request, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_request._moved_attributes = _urllib_request_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_request(__name__ + ".moves.urllib.request"),
+                      "moves.urllib_request", "moves.urllib.request")
+
+
+class Module_six_moves_urllib_response(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_response"""
+
+
+_urllib_response_moved_attributes = [
+    MovedAttribute("addbase", "urllib", "urllib.response"),
+    MovedAttribute("addclosehook", "urllib", "urllib.response"),
+    MovedAttribute("addinfo", "urllib", "urllib.response"),
+    MovedAttribute("addinfourl", "urllib", "urllib.response"),
+]
+for attr in _urllib_response_moved_attributes:
+    setattr(Module_six_moves_urllib_response, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_response._moved_attributes = _urllib_response_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_response(__name__ + ".moves.urllib.response"),
+                      "moves.urllib_response", "moves.urllib.response")
+
+
+class Module_six_moves_urllib_robotparser(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_robotparser"""
+
+
+_urllib_robotparser_moved_attributes = [
+    MovedAttribute("RobotFileParser", "robotparser", "urllib.robotparser"),
+]
+for attr in _urllib_robotparser_moved_attributes:
+    setattr(Module_six_moves_urllib_robotparser, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_robotparser._moved_attributes = _urllib_robotparser_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_robotparser(__name__ + ".moves.urllib.robotparser"),
+                      "moves.urllib_robotparser", "moves.urllib.robotparser")
+
+
+class Module_six_moves_urllib(types.ModuleType):
+
+    """Create a six.moves.urllib namespace that resembles the Python 3 namespace"""
+    __path__ = []  # mark as package
+    parse = _importer._get_module("moves.urllib_parse")
+    error = _importer._get_module("moves.urllib_error")
+    request = _importer._get_module("moves.urllib_request")
+    response = _importer._get_module("moves.urllib_response")
+    robotparser = _importer._get_module("moves.urllib_robotparser")
+
+    def __dir__(self):
+        return ['parse', 'error', 'request', 'response', 'robotparser']
+
+_importer._add_module(Module_six_moves_urllib(__name__ + ".moves.urllib"),
+                      "moves.urllib")
+
+
+def add_move(move):
+    """Add an item to six.moves."""
+    setattr(_MovedItems, move.name, move)
+
+
+def remove_move(name):
+    """Remove item from six.moves."""
+    try:
+        delattr(_MovedItems, name)
+    except AttributeError:
+        try:
+            del moves.__dict__[name]
+        except KeyError:
+            raise AttributeError("no such move, %r" % (name,))
+
+
+if PY3:
+    _meth_func = "__func__"
+    _meth_self = "__self__"
+
+    _func_closure = "__closure__"
+    _func_code = "__code__"
+    _func_defaults = "__defaults__"
+    _func_globals = "__globals__"
+else:
+    _meth_func = "im_func"
+    _meth_self = "im_self"
+
+    _func_closure = "func_closure"
+    _func_code = "func_code"
+    _func_defaults = "func_defaults"
+    _func_globals = "func_globals"
+
+
+try:
+    advance_iterator = next
+except NameError:
+    def advance_iterator(it):
+        return it.next()
+next = advance_iterator
+
+
+try:
+    callable = callable
+except NameError:
+    def callable(obj):
+        return any("__call__" in klass.__dict__ for klass in type(obj).__mro__)
+
+
+if PY3:
+    def get_unbound_function(unbound):
+        return unbound
+
+    create_bound_method = types.MethodType
+
+    def create_unbound_method(func, cls):
+        return func
+
+    Iterator = object
+else:
+    def get_unbound_function(unbound):
+        return unbound.im_func
+
+    def create_bound_method(func, obj):
+        return types.MethodType(func, obj, obj.__class__)
+
+    def create_unbound_method(func, cls):
+        return types.MethodType(func, None, cls)
+
+    class Iterator(object):
+
+        def next(self):
+            return type(self).__next__(self)
+
+    callable = callable
+_add_doc(get_unbound_function,
+         """Get the function out of a possibly unbound function""")
+
+
+get_method_function = operator.attrgetter(_meth_func)
+get_method_self = operator.attrgetter(_meth_self)
+get_function_closure = operator.attrgetter(_func_closure)
+get_function_code = operator.attrgetter(_func_code)
+get_function_defaults = operator.attrgetter(_func_defaults)
+get_function_globals = operator.attrgetter(_func_globals)
+
+
+if PY3:
+    def iterkeys(d, **kw):
+        return iter(d.keys(**kw))
+
+    def itervalues(d, **kw):
+        return iter(d.values(**kw))
+
+    def iteritems(d, **kw):
+        return iter(d.items(**kw))
+
+    def iterlists(d, **kw):
+        return iter(d.lists(**kw))
+
+    viewkeys = operator.methodcaller("keys")
+
+    viewvalues = operator.methodcaller("values")
+
+    viewitems = operator.methodcaller("items")
+else:
+    def iterkeys(d, **kw):
+        return d.iterkeys(**kw)
+
+    def itervalues(d, **kw):
+        return d.itervalues(**kw)
+
+    def iteritems(d, **kw):
+        return d.iteritems(**kw)
+
+    def iterlists(d, **kw):
+        return d.iterlists(**kw)
+
+    viewkeys = operator.methodcaller("viewkeys")
+
+    viewvalues = operator.methodcaller("viewvalues")
+
+    viewitems = operator.methodcaller("viewitems")
+
+_add_doc(iterkeys, "Return an iterator over the keys of a dictionary.")
+_add_doc(itervalues, "Return an iterator over the values of a dictionary.")
+_add_doc(iteritems,
+         "Return an iterator over the (key, value) pairs of a dictionary.")
+_add_doc(iterlists,
+         "Return an iterator over the (key, [values]) pairs of a dictionary.")
+
+
+if PY3:
+    def b(s):
+        return s.encode("latin-1")
+
+    def u(s):
+        return s
+    unichr = chr
+    import struct
+    int2byte = struct.Struct(">B").pack
+    del struct
+    byte2int = operator.itemgetter(0)
+    indexbytes = operator.getitem
+    iterbytes = iter
+    import io
+    StringIO = io.StringIO
+    BytesIO = io.BytesIO
+    del io
+    _assertCountEqual = "assertCountEqual"
+    if sys.version_info[1] <= 1:
+        _assertRaisesRegex = "assertRaisesRegexp"
+        _assertRegex = "assertRegexpMatches"
+        _assertNotRegex = "assertNotRegexpMatches"
+    else:
+        _assertRaisesRegex = "assertRaisesRegex"
+        _assertRegex = "assertRegex"
+        _assertNotRegex = "assertNotRegex"
+else:
+    def b(s):
+        return s
+    # Workaround for standalone backslash
+
+    def u(s):
+        return unicode(s.replace(r'\\', r'\\\\'), "unicode_escape")
+    unichr = unichr
+    int2byte = chr
+
+    def byte2int(bs):
+        return ord(bs[0])
+
+    def indexbytes(buf, i):
+        return ord(buf[i])
+    iterbytes = functools.partial(itertools.imap, ord)
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
+    _assertCountEqual = "assertItemsEqual"
+    _assertRaisesRegex = "assertRaisesRegexp"
+    _assertRegex = "assertRegexpMatches"
+    _assertNotRegex = "assertNotRegexpMatches"
+_add_doc(b, """Byte literal""")
+_add_doc(u, """Text literal""")
+
+
+def assertCountEqual(self, *args, **kwargs):
+    return getattr(self, _assertCountEqual)(*args, **kwargs)
+
+
+def assertRaisesRegex(self, *args, **kwargs):
+    return getattr(self, _assertRaisesRegex)(*args, **kwargs)
+
+
+def assertRegex(self, *args, **kwargs):
+    return getattr(self, _assertRegex)(*args, **kwargs)
+
+
+def assertNotRegex(self, *args, **kwargs):
+    return getattr(self, _assertNotRegex)(*args, **kwargs)
+
+
+if PY3:
+    exec_ = getattr(moves.builtins, "exec")
+
+    def reraise(tp, value, tb=None):
+        try:
+            if value is None:
+                value = tp()
+            if value.__traceback__ is not tb:
+                raise value.with_traceback(tb)
+            raise value
+        finally:
+            value = None
+            tb = None
+
+else:
+    def exec_(_code_, _globs_=None, _locs_=None):
+        """Execute code in a namespace."""
+        if _globs_ is None:
+            frame = sys._getframe(1)
+            _globs_ = frame.f_globals
+            if _locs_ is None:
+                _locs_ = frame.f_locals
+            del frame
+        elif _locs_ is None:
+            _locs_ = _globs_
+        exec("""exec _code_ in _globs_, _locs_""")
+
+    exec_("""def reraise(tp, value, tb=None):
+    try:
+        raise tp, value, tb
+    finally:
+        tb = None
+""")
+
+
+if sys.version_info[:2] > (3,):
+    exec_("""def raise_from(value, from_value):
+    try:
+        raise value from from_value
+    finally:
+        value = None
+""")
+else:
+    def raise_from(value, from_value):
+        raise value
+
+
+print_ = getattr(moves.builtins, "print", None)
+if print_ is None:
+    def print_(*args, **kwargs):
+        """The new-style print function for Python 2.4 and 2.5."""
+        fp = kwargs.pop("file", sys.stdout)
+        if fp is None:
+            return
+
+        def write(data):
+            if not isinstance(data, basestring):
+                data = str(data)
+            # If the file has an encoding, encode unicode with it.
+            if (isinstance(fp, file) and
+                    isinstance(data, unicode) and
+                    fp.encoding is not None):
+                errors = getattr(fp, "errors", None)
+                if errors is None:
+                    errors = "strict"
+                data = data.encode(fp.encoding, errors)
+            fp.write(data)
+        want_unicode = False
+        sep = kwargs.pop("sep", None)
+        if sep is not None:
+            if isinstance(sep, unicode):
+                want_unicode = True
+            elif not isinstance(sep, str):
+                raise TypeError("sep must be None or a string")
+        end = kwargs.pop("end", None)
+        if end is not None:
+            if isinstance(end, unicode):
+                want_unicode = True
+            elif not isinstance(end, str):
+                raise TypeError("end must be None or a string")
+        if kwargs:
+            raise TypeError("invalid keyword arguments to print()")
+        if not want_unicode:
+            for arg in args:
+                if isinstance(arg, unicode):
+                    want_unicode = True
+                    break
+        if want_unicode:
+            newline = unicode("\n")
+            space = unicode(" ")
+        else:
+            newline = "\n"
+            space = " "
+        if sep is None:
+            sep = space
+        if end is None:
+            end = newline
+        for i, arg in enumerate(args):
+            if i:
+                write(sep)
+            write(arg)
+        write(end)
+if sys.version_info[:2] < (3, 3):
+    _print = print_
+
+    def print_(*args, **kwargs):
+        fp = kwargs.get("file", sys.stdout)
+        flush = kwargs.pop("flush", False)
+        _print(*args, **kwargs)
+        if flush and fp is not None:
+            fp.flush()
+
+_add_doc(reraise, """Reraise an exception.""")
+
+if sys.version_info[0:2] < (3, 4):
+    # This does exactly the same what the :func:`py3:functools.update_wrapper`
+    # function does on Python versions after 3.2. It sets the ``__wrapped__``
+    # attribute on ``wrapper`` object and it doesn't raise an error if any of
+    # the attributes mentioned in ``assigned`` and ``updated`` are missing on
+    # ``wrapped`` object.
+    def _update_wrapper(wrapper, wrapped,
+                        assigned=functools.WRAPPER_ASSIGNMENTS,
+                        updated=functools.WRAPPER_UPDATES):
+        for attr in assigned:
+            try:
+                value = getattr(wrapped, attr)
+            except AttributeError:
+                continue
+            else:
+                setattr(wrapper, attr, value)
+        for attr in updated:
+            getattr(wrapper, attr).update(getattr(wrapped, attr, {}))
+        wrapper.__wrapped__ = wrapped
+        return wrapper
+    _update_wrapper.__doc__ = functools.update_wrapper.__doc__
+
+    def wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS,
+              updated=functools.WRAPPER_UPDATES):
+        return functools.partial(_update_wrapper, wrapped=wrapped,
+                                 assigned=assigned, updated=updated)
+    wraps.__doc__ = functools.wraps.__doc__
+
+else:
+    wraps = functools.wraps
+
+
+def with_metaclass(meta, *bases):
+    """Create a base class with a metaclass."""
+    # This requires a bit of explanation: the basic idea is to make a dummy
+    # metaclass for one level of class instantiation that replaces itself with
+    # the actual metaclass.
+    class metaclass(type):
+
+        def __new__(cls, name, this_bases, d):
+            if sys.version_info[:2] >= (3, 7):
+                # This version introduced PEP 560 that requires a bit
+                # of extra care (we mimic what is done by __build_class__).
+                resolved_bases = types.resolve_bases(bases)
+                if resolved_bases is not bases:
+                    d['__orig_bases__'] = bases
+            else:
+                resolved_bases = bases
+            return meta(name, resolved_bases, d)
+
+        @classmethod
+        def __prepare__(cls, name, this_bases):
+            return meta.__prepare__(name, bases)
+    return type.__new__(metaclass, 'temporary_class', (), {})
+
+
+def add_metaclass(metaclass):
+    """Class decorator for creating a class with a metaclass."""
+    def wrapper(cls):
+        orig_vars = cls.__dict__.copy()
+        slots = orig_vars.get('__slots__')
+        if slots is not None:
+            if isinstance(slots, str):
+                slots = [slots]
+            for slots_var in slots:
+                orig_vars.pop(slots_var)
+        orig_vars.pop('__dict__', None)
+        orig_vars.pop('__weakref__', None)
+        if hasattr(cls, '__qualname__'):
+            orig_vars['__qualname__'] = cls.__qualname__
+        return metaclass(cls.__name__, cls.__bases__, orig_vars)
+    return wrapper
+
+
+def ensure_binary(s, encoding='utf-8', errors='strict'):
+    """Coerce **s** to six.binary_type.
+
+    For Python 2:
+      - `unicode` -> encoded to `str`
+      - `str` -> `str`
+
+    For Python 3:
+      - `str` -> encoded to `bytes`
+      - `bytes` -> `bytes`
+    """
+    if isinstance(s, binary_type):
+        return s
+    if isinstance(s, text_type):
+        return s.encode(encoding, errors)
+    raise TypeError("not expecting type '%s'" % type(s))
+
+
+def ensure_str(s, encoding='utf-8', errors='strict'):
+    """Coerce *s* to `str`.
+
+    For Python 2:
+      - `unicode` -> encoded to `str`
+      - `str` -> `str`
+
+    For Python 3:
+      - `str` -> `str`
+      - `bytes` -> decoded to `str`
+    """
+    # Optimization: Fast return for the common case.
+    if type(s) is str:
+        return s
+    if PY2 and isinstance(s, text_type):
+        return s.encode(encoding, errors)
+    elif PY3 and isinstance(s, binary_type):
+        return s.decode(encoding, errors)
+    elif not isinstance(s, (text_type, binary_type)):
+        raise TypeError("not expecting type '%s'" % type(s))
+    return s
+
+
+def ensure_text(s, encoding='utf-8', errors='strict'):
+    """Coerce *s* to six.text_type.
+
+    For Python 2:
+      - `unicode` -> `unicode`
+      - `str` -> `unicode`
+
+    For Python 3:
+      - `str` -> `str`
+      - `bytes` -> decoded to `str`
+    """
+    if isinstance(s, binary_type):
+        return s.decode(encoding, errors)
+    elif isinstance(s, text_type):
+        return s
+    else:
+        raise TypeError("not expecting type '%s'" % type(s))
+
+
+def python_2_unicode_compatible(klass):
+    """
+    A class decorator that defines __unicode__ and __str__ methods under Python 2.
+    Under Python 3 it does nothing.
+
+    To support Python 2 and 3 with a single code base, define a __str__ method
+    returning text and apply this decorator to the class.
+    """
+    if PY2:
+        if '__str__' not in klass.__dict__:
+            raise ValueError("@python_2_unicode_compatible cannot be applied "
+                             "to %s because it doesn't define __str__()." %
+                             klass.__name__)
+        klass.__unicode__ = klass.__str__
+        klass.__str__ = lambda self: self.__unicode__().encode('utf-8')
+    return klass
+
+
+# Complete the moves implementation.
+# This code is at the end of this module to speed up module loading.
+# Turn this module into a package.
+__path__ = []  # required for PEP 302 and PEP 451
+__package__ = __name__  # see PEP 366 @ReservedAssignment
+if globals().get("__spec__") is not None:
+    __spec__.submodule_search_locations = []  # PEP 451 @UndefinedVariable
+# Remove other six meta path importers, since they cause problems. This can
+# happen if six is removed from sys.modules and then reloaded. (Setuptools does
+# this for some reason.)
+if sys.meta_path:
+    for i, importer in enumerate(sys.meta_path):
+        # Here's some real nastiness: Another "instance" of the six module might
+        # be floating around. Therefore, we can't use isinstance() to check for
+        # the six meta path importer, since the other six instance will have
+        # inserted an importer with different class.
+        if (type(importer).__name__ == "_SixMetaPathImporter" and
+                importer.name == __name__):
+            del sys.meta_path[i]
+            break
+    del i, importer
+# Finally, add the importer to the meta path import hook.
+sys.meta_path.append(_importer)
+
+
+# ==== vendored transitions.__init__ ====
+# transitions
+# -----------
+#
+# A lightweight, object-oriented state machine implementation in Python. Compatible with Python 2.7+ and 3.0+.
+
+# (vendored) from .version imported inline
+# (vendored) from .core imported inline
+
+__copyright__ = "Copyright (c) 2024 Tal Yarkoni, Alexander Neumann"
+__license__ = "MIT"
+__summary__ = "A lightweight, object-oriented finite state machine implementation in Python with many extensions"
+__uri__ = "https://github.com/pytransitions/transitions"
+
+
+# ==== vendored transitions.core ====
+# transitions.core
+#     ----------------
+#
+#     This module contains the central parts of transitions which are the state machine logic, state
+#     and transition concepts.
+
+try:
+    from builtins import object
+except ImportError:  # pragma: no cover
+    # python2
+    pass
+
+try:
+    # Enums are supported for Python 3.4+ and Python 2.7 with enum34 package installed
+    from enum import Enum, EnumMeta
+except ImportError:  # pragma: no cover
+    # If enum is not available, create dummy classes for type checks
+    class Enum:  # type:ignore
+        """This is just an Enum stub for Python 2 and Python 3.3 and before without Enum support."""
+
+    class EnumMeta:  # type:ignore
+        """This is just an EnumMeta stub for Python 2 and Python 3.3 and before without Enum support."""
+
+import inspect
+import itertools
+import logging
+import warnings
+
+from collections import OrderedDict, defaultdict, deque
+from functools import partial
+
+_LOGGER = logging.getLogger(__name__)
+_LOGGER.addHandler(logging.NullHandler())
+
+warnings.filterwarnings(action='default', message=r".*transitions version.*", category=DeprecationWarning)
+
+
+def listify(obj):
+    """Wraps a passed object into a list in case it has not been a list, tuple before.
+    Returns an empty list in case ``obj`` is None.
+    Args:
+        obj: instance to be converted into a list.
+    Returns:
+        list: May also return a tuple in case ``obj`` has been a tuple before.
+    """
+    if obj is None:
+        return []
+
+    try:
+        return obj if isinstance(obj, (list, tuple, EnumMeta)) else [obj]
+    except ReferenceError:
+        # obj is an empty weakref
+        return [obj]
+
+
+def _prep_ordered_arg(desired_length, arguments=None):
+    """Ensure list of arguments passed to add_ordered_transitions has the proper length.
+    Expands the given arguments and apply same condition, callback
+    to all transitions if only one has been given.
+
+    Args:
+        desired_length (int): The size of the resulting list
+        arguments (optional[str, reference or list]): Parameters to be expanded.
+    Returns:
+        list: Parameter sets with the desired length.
+    """
+    arguments = listify(arguments) if arguments is not None else [None]
+    if len(arguments) != desired_length and len(arguments) != 1:
+        raise ValueError("Argument length must be either 1 or the same length as "
+                         "the number of transitions.")
+    if len(arguments) == 1:
+        return arguments * desired_length
+    return arguments
+
+
+class State(object):
+    """A persistent representation of a state managed by a ``Machine``.
+
+    Attributes:
+        name (str): State name which is also assigned to the model(s).
+        on_enter (list): Callbacks executed when a state is entered.
+        on_exit (list): Callbacks executed when a state is exited.
+        ignore_invalid_triggers (bool): Indicates if unhandled/invalid triggers should raise an exception.
+    """
+
+    # A list of dynamic methods which can be resolved by a ``Machine`` instance for convenience functions.
+    # Dynamic methods for states must always start with `on_`!
+    dynamic_methods = ['on_enter', 'on_exit']
+
+    def __init__(self, name, on_enter=None, on_exit=None,
+                 ignore_invalid_triggers=None, final=False):
+        """
+        Args:
+            name (str or Enum): The name of the state
+            on_enter (str or list): Optional callable(s) to trigger when a
+                state is entered. Can be either a string providing the name of
+                a callable, or a list of strings.
+            on_exit (str or list): Optional callable(s) to trigger when a
+                state is exited. Can be either a string providing the name of a
+                callable, or a list of strings.
+            ignore_invalid_triggers (Boolean): Optional flag to indicate if
+                unhandled/invalid triggers should raise an exception
+
+        """
+        self._name = name
+        self.final = final
+        self.ignore_invalid_triggers = ignore_invalid_triggers
+        self.on_enter = listify(on_enter) if on_enter else []
+        self.on_exit = listify(on_exit) if on_exit else []
+
+    @property
+    def name(self):
+        """The name of the state."""
+        if isinstance(self._name, Enum):
+            return self._name.name
+        return self._name
+
+    @property
+    def value(self):
+        """The state's value. For string states this will be equivalent to the name attribute."""
+        return self._name
+
+    def enter(self, event_data):
+        """Triggered when a state is entered."""
+        _LOGGER.debug("%sEntering state %s. Processing callbacks...", event_data.machine.name, self.name)
+        event_data.machine.callbacks(self.on_enter, event_data)
+        _LOGGER.info("%sFinished processing state %s enter callbacks.", event_data.machine.name, self.name)
+
+    def exit(self, event_data):
+        """Triggered when a state is exited."""
+        _LOGGER.debug("%sExiting state %s. Processing callbacks...", event_data.machine.name, self.name)
+        event_data.machine.callbacks(self.on_exit, event_data)
+        _LOGGER.info("%sFinished processing state %s exit callbacks.", event_data.machine.name, self.name)
+
+    def add_callback(self, trigger, func):
+        """Add a new enter or exit callback.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'enter' or 'exit'.
+            func (str): The name of the callback function.
+        """
+        callback_list = getattr(self, 'on_' + trigger)
+        callback_list.append(func)
+
+    def __repr__(self):
+        return "<%s('%s')@%s>" % (type(self).__name__, self.name, id(self))
+
+
+class Condition(object):
+    """A helper class to call condition checks in the intended way.
+
+    Attributes:
+        func (str or callable): The function to call for the condition check
+        target (bool): Indicates the target state--i.e., when True,
+                the condition-checking callback should return True to pass,
+                and when False, the callback should return False to pass.
+    """
+
+    def __init__(self, func, target=True):
+        """
+        Args:
+            func (str or callable): Name of the condition-checking callable
+            target (bool): Indicates the target state--i.e., when True,
+                the condition-checking callback should return True to pass,
+                and when False, the callback should return False to pass.
+        Notes:
+            This class should not be initialized or called from outside a
+            Transition instance, and exists at module level (rather than
+            nesting under the transition class) only because of a bug in
+            dill that prevents serialization under Python 2.7.
+        """
+        self.func = func
+        self.target = target
+
+    def check(self, event_data):
+        """Check whether the condition passes.
+        Args:
+            event_data (EventData): An EventData instance to pass to the
+                condition (if event sending is enabled) or to extract arguments
+                from (if event sending is disabled). Also contains the data
+                model attached to the current machine which is used to invoke
+                the condition.
+        """
+        predicate = event_data.machine.resolve_callable(self.func, event_data)
+        if event_data.machine.send_event:
+            return predicate(event_data) == self.target
+        return predicate(*event_data.args, **event_data.kwargs) == self.target
+
+    def __repr__(self):
+        return "<%s(%s)@%s>" % (type(self).__name__, self.func, id(self))
+
+
+class Transition(object):
+    """Representation of a transition managed by a ``Machine`` instance.
+
+    Attributes:
+        source (str): Source state of the transition.
+        dest (str): Destination state of the transition.
+        prepare (list): Callbacks executed before conditions checks.
+        conditions (list): Callbacks evaluated to determine if
+            the transition should be executed.
+        before (list): Callbacks executed before the transition is executed
+            but only if condition checks have been successful.
+        after (list): Callbacks executed after the transition is executed
+            but only if condition checks have been successful.
+    """
+
+    dynamic_methods = ['before', 'after', 'prepare']
+    """ A list of dynamic methods which can be resolved by a ``Machine`` instance for convenience functions. """
+    condition_cls = Condition
+    """ The class used to wrap condition checks. Can be replaced to alter condition resolution behaviour
+        (e.g. OR instead of AND for 'conditions' or AND instead of OR for 'unless') """
+
+    def __init__(self, source, dest, conditions=None, unless=None, before=None,
+                 after=None, prepare=None):
+        """
+        Args:
+            source (str): The name of the source State.
+            dest (str): The name of the destination State.
+            conditions (optional[str, callable or list]): Condition(s) that must pass in order for
+                the transition to take place. Either a string providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (optional[str, callable or list]): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (optional[str, callable or list]): callbacks to trigger before the
+                transition.
+            after (optional[str, callable or list]): callbacks to trigger after the transition.
+            prepare (optional[str, callable or list]): callbacks to trigger before conditions are checked
+        """
+        self.source = source
+        self.dest = dest
+        self.prepare = [] if prepare is None else listify(prepare)
+        self.before = [] if before is None else listify(before)
+        self.after = [] if after is None else listify(after)
+
+        self.conditions = []
+        if conditions is not None:
+            for cond in listify(conditions):
+                self.conditions.append(self.condition_cls(cond))
+        if unless is not None:
+            for cond in listify(unless):
+                self.conditions.append(self.condition_cls(cond, target=False))
+
+    def _eval_conditions(self, event_data):
+        for cond in self.conditions:
+            if not cond.check(event_data):
+                _LOGGER.debug("%sTransition condition failed: %s() does not return %s. Transition halted.",
+                              event_data.machine.name, cond.func, cond.target)
+                return False
+        return True
+
+    def execute(self, event_data):
+        """Execute the transition.
+        Args:
+            event_data: An instance of class EventData.
+        Returns: boolean indicating whether the transition was
+            successfully executed (True if successful, False if not).
+        """
+        _LOGGER.debug("%sInitiating transition from state %s to state %s...",
+                      event_data.machine.name, self.source, self.dest)
+
+        event_data.machine.callbacks(self.prepare, event_data)
+        _LOGGER.debug("%sExecuted callbacks before conditions.", event_data.machine.name)
+
+        if not self._eval_conditions(event_data):
+            return False
+
+        event_data.machine.callbacks(itertools.chain(event_data.machine.before_state_change, self.before), event_data)
+        _LOGGER.debug("%sExecuted callback before transition.", event_data.machine.name)
+
+        if self.dest:  # if self.dest is None this is an internal transition with no actual state change
+            self._change_state(event_data)
+
+        event_data.machine.callbacks(itertools.chain(self.after, event_data.machine.after_state_change), event_data)
+        _LOGGER.debug("%sExecuted callback after transition.", event_data.machine.name)
+        return True
+
+    def _change_state(self, event_data):
+        event_data.machine.get_state(self.source).exit(event_data)
+        event_data.machine.set_state(self.dest, event_data.model)
+        event_data.update(getattr(event_data.model, event_data.machine.model_attribute))
+        dest = event_data.machine.get_state(self.dest)
+        dest.enter(event_data)
+        if dest.final:
+            event_data.machine.callbacks(event_data.machine.on_final, event_data)
+
+    def add_callback(self, trigger, func):
+        """Add a new before, after, or prepare callback.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'before', 'after' or 'prepare'.
+            func (str or callable): The name of the callback function or a callable.
+        """
+        callback_list = getattr(self, trigger)
+        callback_list.append(func)
+
+    def __repr__(self):
+        return "<%s('%s', '%s')@%s>" % (type(self).__name__,
+                                        self.source, self.dest, id(self))
+
+
+class EventData(object):
+    """Collection of relevant data related to the ongoing transition attempt.
+
+    Attributes:
+        state (State): The State from which the Event was triggered.
+        event (Event): The triggering Event.
+        machine (Machine): The current Machine instance.
+        model (object): The model/object the machine is bound to.
+        args (list): Optional positional arguments from trigger method
+            to store internally for possible later use.
+        kwargs (dict): Optional keyword arguments from trigger method
+            to store internally for possible later use.
+        transition (Transition): Currently active transition. Will be assigned during triggering.
+        error (Exception): In case a triggered event causes an Error, it is assigned here and passed on.
+        result (bool): True in case a transition has been successful, False otherwise.
+    """
+
+    def __init__(self, state, event, machine, model, args, kwargs):
+        """
+        Args:
+            state (State): The State from which the Event was triggered.
+            event (Event): The triggering Event.
+            machine (Machine): The current Machine instance.
+            model (object): The model/object the machine is bound to.
+            args (tuple): Optional positional arguments from trigger method
+                to store internally for possible later use.
+            kwargs (dict): Optional keyword arguments from trigger method
+                to store internally for possible later use.
+        """
+        self.state = state
+        self.event = event
+        self.machine = machine
+        self.model = model
+        self.args = args
+        self.kwargs = kwargs
+        self.transition = None
+        self.error = None
+        self.result = False
+
+    def update(self, state):
+        """Updates the EventData object with the passed state.
+
+        Attributes:
+            state (State, str or Enum): The state object, enum member or string to assign to EventData.
+        """
+
+        if not isinstance(state, State):
+            self.state = self.machine.get_state(state)
+
+    def __repr__(self):
+        return "<%s(%s, %s, %s)@%s>" % (type(self).__name__, self.event, self.state,
+                                        getattr(self, 'transition'), id(self))
+
+
+class Event(object):
+    """A collection of transitions assigned to the same trigger
+
+    """
+
+    def __init__(self, name, machine):
+        """
+        Args:
+            name (str): The name of the event, which is also the name of the
+                triggering callable (e.g., 'advance' implies an advance()
+                method).
+            machine (Machine): The current Machine instance.
+        """
+        self.name = name
+        self.machine = machine
+        self.transitions = defaultdict(list)
+
+    def add_transition(self, transition):
+        """Add a transition to the list of potential transitions.
+        Args:
+            transition (Transition): The Transition instance to add to the
+                list.
+        """
+        self.transitions[transition.source].append(transition)
+
+    def trigger(self, model, *args, **kwargs):
+        """Executes all transitions that match the current state,
+        halting as soon as one successfully completes. More precisely, it prepares a partial
+        of the internal ``_trigger`` function, passes this to ``Machine._process``.
+        It is up to the machine's configuration of the Event whether processing happens queued (sequentially) or
+        whether further Events are processed as they occur.
+        Args:
+            model (object): The currently processed model
+            args and kwargs: Optional positional or named arguments that will
+                be passed onto the EventData object, enabling arbitrary state
+                information to be passed on to downstream triggered functions.
+        Returns: boolean indicating whether a transition was
+            successfully executed (True if successful, False if not).
+        """
+        func = partial(self._trigger, EventData(None, self, self.machine, model, args=args, kwargs=kwargs))
+        # pylint: disable=protected-access
+        # noinspection PyProtectedMember
+        # Machine._process should not be called somewhere else. That's why it should not be exposed
+        # to Machine users.
+        return self.machine._process(func)
+
+    def _trigger(self, event_data):
+        """Internal trigger function called by the ``Machine`` instance. This should not
+        be called directly but via the public method ``Machine.process``.
+        Args:
+            event_data (EventData): The currently processed event. State, result and (potentially) error might be
+            overridden.
+        Returns: boolean indicating whether a transition was
+            successfully executed (True if successful, False if not).
+        """
+        event_data.state = self.machine.get_model_state(event_data.model)
+        try:
+            if self._is_valid_source(event_data.state):
+                self._process(event_data)
+        except BaseException as err:  # pylint: disable=broad-except; Exception will be handled elsewhere
+            event_data.error = err
+            if self.machine.on_exception:
+                self.machine.callbacks(self.machine.on_exception, event_data)
+            else:
+                raise
+        finally:
+            try:
+                self.machine.callbacks(self.machine.finalize_event, event_data)
+                _LOGGER.debug("%sExecuted machine finalize callbacks", self.machine.name)
+            except BaseException as err:  # pylint: disable=broad-except; Exception will be handled elsewhere
+                _LOGGER.error("%sWhile executing finalize callbacks a %s occurred: %s.",
+                              self.machine.name,
+                              type(err).__name__,
+                              str(err))
+        return event_data.result
+
+    def _process(self, event_data):
+        self.machine.callbacks(self.machine.prepare_event, event_data)
+        _LOGGER.debug("%sExecuted machine preparation callbacks before conditions.", self.machine.name)
+        for trans in self.transitions[event_data.state.name]:
+            event_data.transition = trans
+            if trans.execute(event_data):
+                event_data.result = True
+                break
+
+    def _is_valid_source(self, state):
+        if state.name not in self.transitions:
+            msg = "%sCan't trigger event %s from state %s!" % (self.machine.name, self.name,
+                                                               state.name)
+            ignore = state.ignore_invalid_triggers if state.ignore_invalid_triggers is not None \
+                else self.machine.ignore_invalid_triggers
+            if ignore:
+                _LOGGER.warning(msg)
+                return False
+            raise MachineError(msg)
+        return True
+
+    def __repr__(self):
+        return "<%s('%s')@%s>" % (type(self).__name__, self.name, id(self))
+
+    def add_callback(self, trigger, func):
+        """Add a new before or after callback to all available transitions.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'before', 'after' or 'prepare'.
+            func (str): The name of the callback function.
+        """
+        for trans in itertools.chain(*self.transitions.values()):
+            trans.add_callback(trigger, func)
+
+
+class Machine(object):
+    """Machine manages states, transitions and models. In case it is initialized without a specific model
+    (or specifically no model), it will also act as a model itself. Machine takes also care of decorating
+    models with conveniences functions related to added transitions and states during runtime.
+
+    Attributes:
+        states (OrderedDict): Collection of all registered states.
+        events (dict): Collection of transitions ordered by trigger/event.
+        models (list): List of models attached to the machine.
+        initial (str): Name of the initial state for new models.
+        prepare_event (list): Callbacks executed when an event is triggered.
+        before_state_change (list): Callbacks executed after condition checks but before transition is conducted.
+            Callbacks will be executed BEFORE the custom callbacks assigned to the transition.
+        after_state_change (list): Callbacks executed after the transition has been conducted.
+            Callbacks will be executed AFTER the custom callbacks assigned to the transition.
+        finalize_event (list): Callbacks will be executed after all transitions callbacks have been executed.
+            Callbacks mentioned here will also be called if a transition or condition check raised an error.
+        queued (bool): Whether transitions in callbacks should be executed immediately (False) or sequentially.
+        send_event (bool): When True, any arguments passed to trigger methods will be wrapped in an EventData
+            object, allowing indirect and encapsulated access to data. When False, all positional and keyword
+            arguments will be passed directly to all callback methods.
+        auto_transitions (bool):  When True (default), every state will automatically have an associated
+            to_{state}() convenience trigger in the base model.
+        ignore_invalid_triggers (bool): When True, any calls to trigger methods that are not valid for the
+            present state (e.g., calling an a_to_b() trigger when the current state is c) will be silently
+            ignored rather than raising an invalid transition exception.
+        name (str): Name of the ``Machine`` instance mainly used for easier log message distinction.
+    """
+
+    separator = '_'  # separates callback type from state/transition name
+    wildcard_all = '*'  # will be expanded to ALL states
+    wildcard_same = '='  # will be expanded to source state
+    state_cls = State
+    transition_cls = Transition
+    event_cls = Event
+    self_literal = 'self'
+
+    def __init__(self, model=self_literal, states=None, initial='initial', transitions=None,
+                 send_event=False, auto_transitions=True,
+                 ordered_transitions=False, ignore_invalid_triggers=None,
+                 before_state_change=None, after_state_change=None, name=None,
+                 queued=False, prepare_event=None, finalize_event=None, model_attribute='state', model_override=False,
+                 on_exception=None, on_final=None, **kwargs):
+        """
+        Args:
+            model (object or list): The object(s) whose states we want to manage. If set to `Machine.self_literal`
+                (default value), the current Machine instance will be used as the model (i.e., all
+                triggering events will be attached to the Machine itself). Note that an empty list
+                is treated like no model.
+            states (list or Enum): A list or enumeration of valid states. Each list element can be either a
+                string, an enum member or a State instance. If string or enum member, a new generic State
+                instance will be created that is named according to the string or enum member's name.
+            initial (str, Enum or State): The initial state of the passed model[s].
+            transitions (list): An optional list of transitions. Each element
+                is a dictionary of named arguments to be passed onto the
+                Transition initializer.
+            send_event (boolean): When True, any arguments passed to trigger
+                methods will be wrapped in an EventData object, allowing
+                indirect and encapsulated access to data. When False, all
+                positional and keyword arguments will be passed directly to all
+                callback methods.
+            auto_transitions (boolean): When True (default), every state will
+                automatically have an associated to_{state}() convenience
+                trigger in the base model.
+            ordered_transitions (boolean): Convenience argument that calls
+                add_ordered_transitions() at the end of initialization if set
+                to True.
+            ignore_invalid_triggers: when True, any calls to trigger methods
+                that are not valid for the present state (e.g., calling an
+                a_to_b() trigger when the current state is c) will be silently
+                ignored rather than raising an invalid transition exception.
+            before_state_change: A callable called on every change state before
+                the transition happened. It receives the very same args as normal
+                callbacks.
+            after_state_change: A callable called on every change state after
+                the transition happened. It receives the very same args as normal
+                callbacks.
+            name: If a name is set, it will be used as a prefix for logger output
+            queued (boolean): When True, processes transitions sequentially. A trigger
+                executed in a state callback function will be queued and executed later.
+                Due to the nature of the queued processing, all transitions will
+                _always_ return True since conditional checks cannot be conducted at queueing time.
+            prepare_event: A callable called on for before possible transitions will be processed.
+                It receives the very same args as normal callbacks.
+            finalize_event: A callable called on for each triggered event after transitions have been processed.
+                This is also called when a transition raises an exception.
+            on_exception: A callable called when an event raises an exception. If not set,
+                the exception will be raised instead.
+
+            **kwargs additional arguments passed to next class in MRO. This can be ignored in most cases.
+        """
+
+        # calling super in case `Machine` is used as a mix in
+        # all keyword arguments should be consumed by now if this is not the case
+        try:
+            super(Machine, self).__init__(**kwargs)
+        except TypeError as err:
+            raise ValueError('Passing arguments {0} caused an inheritance error: {1}'.format(kwargs.keys(), err))
+
+        # initialize protected attributes first
+        self._queued = queued
+        self._transition_queue = deque()
+        self._before_state_change = []
+        self._after_state_change = []
+        self._prepare_event = []
+        self._finalize_event = []
+        self._on_exception = []
+        self._on_final = []
+        self._initial = None
+
+        self.states = OrderedDict()
+        self.events = OrderedDict()
+        self.send_event = send_event
+        self.auto_transitions = auto_transitions
+        self.ignore_invalid_triggers = ignore_invalid_triggers
+        self.prepare_event = prepare_event
+        self.before_state_change = before_state_change
+        self.after_state_change = after_state_change
+        self.finalize_event = finalize_event
+        self.on_exception = on_exception
+        self.on_final = on_final
+        self.name = name + ": " if name is not None else ""
+        self.model_attribute = model_attribute
+        self.model_override = model_override
+
+        self.models = []
+
+        if states is not None:
+            self.add_states(states)
+
+        if initial is not None:
+            self.initial = initial
+
+        if transitions is not None:
+            self.add_transitions(transitions)
+
+        if ordered_transitions:
+            self.add_ordered_transitions()
+
+        if model:
+            self.add_model(model)
+
+    def add_model(self, model, initial=None):
+        """Register a model with the state machine, initializing triggers and callbacks."""
+        models = listify(model)
+
+        if initial is None:
+            if self.initial is None:
+                raise ValueError("No initial state configured for machine, must specify when adding model.")
+            initial = self.initial
+
+        for mod in models:
+            mod = self if mod is self.self_literal else mod
+            if mod not in self.models:
+                self._checked_assignment(mod, 'trigger', partial(self._get_trigger, mod))
+                self._checked_assignment(mod, 'may_trigger', partial(self._can_trigger, mod))
+
+                for trigger in self.events:
+                    self._add_trigger_to_model(trigger, mod)
+
+                for state in self.states.values():
+                    self._add_model_to_state(state, mod)
+
+                self.set_state(initial, model=mod)
+                self.models.append(mod)
+
+    def remove_model(self, model):
+        """Remove a model from the state machine. The model will still contain all previously added triggers
+        and callbacks, but will not receive updates when states or transitions are added to the Machine.
+        If an event queue is used, all queued events of that model will be removed."""
+        models = listify(model)
+
+        for mod in models:
+            self.models.remove(mod)
+        if len(self._transition_queue) > 0:
+            # the first element of the list is currently executed. Keeping it for further Machine._process(ing)
+            self._transition_queue = deque(
+                [self._transition_queue[0]] + [e for e in self._transition_queue if e.args[0].model not in models])
+
+    @classmethod
+    def _create_transition(cls, *args, **kwargs):
+        return cls.transition_cls(*args, **kwargs)
+
+    @classmethod
+    def _create_event(cls, *args, **kwargs):
+        return cls.event_cls(*args, **kwargs)
+
+    @classmethod
+    def _create_state(cls, *args, **kwargs):
+        return cls.state_cls(*args, **kwargs)
+
+    @property
+    def initial(self):
+        """Return the initial state."""
+        return self._initial
+
+    @initial.setter
+    def initial(self, value):
+        if isinstance(value, State):
+            if value.name not in self.states:
+                self.add_states(value)
+            else:
+                _ = self._has_state(value, raise_error=True)
+            self._initial = value.name
+        else:
+            state_name = value.name if isinstance(value, Enum) else value
+            if state_name not in self.states:
+                self.add_states(state_name)
+            self._initial = state_name
+
+    @property
+    def has_queue(self):
+        """Return boolean indicating if machine has queue or not"""
+        return self._queued
+
+    @property
+    def model(self):
+        """List of models attached to the machine. For backwards compatibility, the property will
+        return the model instance itself instead of the underlying list  if there is only one attached
+        to the machine.
+        """
+        if len(self.models) == 1:
+            return self.models[0]
+        return self.models
+
+    @property
+    def before_state_change(self):
+        """Callbacks executed after condition checks but before transition is conducted.
+        Callbacks will be executed BEFORE the custom callbacks assigned to the transition."""
+        return self._before_state_change
+
+    # this should make sure that _before_state_change is always a list
+    @before_state_change.setter
+    def before_state_change(self, value):
+        self._before_state_change = listify(value)
+
+    @property
+    def after_state_change(self):
+        """Callbacks executed after the transition has been conducted.
+        Callbacks will be executed AFTER the custom callbacks assigned to the transition."""
+        return self._after_state_change
+
+    # this should make sure that _after_state_change is always a list
+    @after_state_change.setter
+    def after_state_change(self, value):
+        self._after_state_change = listify(value)
+
+    @property
+    def prepare_event(self):
+        """Callbacks executed when an event is triggered."""
+        return self._prepare_event
+
+    # this should make sure that prepare_event is always a list
+    @prepare_event.setter
+    def prepare_event(self, value):
+        self._prepare_event = listify(value)
+
+    @property
+    def finalize_event(self):
+        """Callbacks will be executed after all transitions callbacks have been executed.
+        Callbacks mentioned here will also be called if a transition or condition check raised an error."""
+        return self._finalize_event
+
+    # this should make sure that finalize_event is always a list
+    @finalize_event.setter
+    def finalize_event(self, value):
+        self._finalize_event = listify(value)
+
+    @property
+    def on_exception(self):
+        """Callbacks will be executed when an Event raises an Exception."""
+        return self._on_exception
+
+    # this should make sure that finalize_event is always a list
+    @on_exception.setter
+    def on_exception(self, value):
+        self._on_exception = listify(value)
+
+    @property
+    def on_final(self):
+        """Callbacks will be executed when the reached state is tagged with 'final'"""
+        return self._on_final
+
+    # this should make sure that finalize_event is always a list
+    @on_final.setter
+    def on_final(self, value):
+        self._on_final = listify(value)
+
+    def get_state(self, state):
+        """Return the State instance with the passed name."""
+        if isinstance(state, Enum):
+            state = state.name
+        if state not in self.states:
+            raise ValueError("State '%s' is not a registered state." % state)
+        return self.states[state]
+
+    # In theory this function could be static. This however causes some issues related to inheritance and
+    # pickling down the chain.
+    def is_state(self, state, model):
+        """Check whether the current state matches the named state. This function is not called directly
+            but assigned as partials to model instances (e.g. is_A -> partial(_is_state, 'A', model)).
+        Args:
+            state (str or Enum): name of the checked state or Enum
+            model: model to be checked
+        Returns:
+            bool: Whether the model's current state is state.
+        """
+        return getattr(model, self.model_attribute) == state
+
+    def get_model_state(self, model):
+        """
+            Get the state of a model
+        Args:
+            model (object): the stateful model
+        Returns:
+            State: The State object related to the model's state
+        """
+        return self.get_state(getattr(model, self.model_attribute))
+
+    def set_state(self, state, model=None):
+        """
+            Set the current state.
+        Args:
+            state (str or Enum or State): value of state to be set
+            model (optional[object]): targeted model; if not set, all models will be set to 'state'
+        """
+        if not isinstance(state, State):
+            state = self.get_state(state)
+        models = self.models if model is None else listify(model)
+
+        for mod in models:
+            setattr(mod, self.model_attribute, state.value)
+
+    def add_state(self, states, on_enter=None, on_exit=None, ignore_invalid_triggers=None, **kwargs):
+        """Alias for add_states."""
+        self.add_states(states=states, on_enter=on_enter, on_exit=on_exit,
+                        ignore_invalid_triggers=ignore_invalid_triggers, **kwargs)
+
+    def add_states(self, states, on_enter=None, on_exit=None,
+                   ignore_invalid_triggers=None, **kwargs):
+        """Add new state(s).
+        Args:
+            states (list, str, dict, Enum or State): a list, a State instance, the
+                name of a new state, an enumeration (member) or a dict with keywords to pass on to the
+                State initializer. If a list, each element can be a string, State or enumeration member.
+            on_enter (str or list): callbacks to trigger when the state is
+                entered. Only valid if first argument is string.
+            on_exit (str or list): callbacks to trigger when the state is
+                exited. Only valid if first argument is string.
+            ignore_invalid_triggers: when True, any calls to trigger methods
+                that are not valid for the present state (e.g., calling an
+                a_to_b() trigger when the current state is c) will be silently
+                ignored rather than raising an invalid transition exception.
+                Note that this argument takes precedence over the same
+                argument defined at the Machine level, and is in turn
+                overridden by any ignore_invalid_triggers explicitly
+                passed in an individual state's initialization arguments.
+
+            **kwargs additional keyword arguments used by state mixins.
+        """
+
+        ignore = ignore_invalid_triggers
+        if ignore is None:
+            ignore = self.ignore_invalid_triggers
+
+        states = listify(states)
+
+        for state in states:
+            if isinstance(state, (string_types, Enum)):
+                state = self._create_state(
+                    state, on_enter=on_enter, on_exit=on_exit,
+                    ignore_invalid_triggers=ignore, **kwargs)
+            elif isinstance(state, dict):
+                if 'ignore_invalid_triggers' not in state:
+                    state['ignore_invalid_triggers'] = ignore
+                state = self._create_state(**state)
+            self.states[state.name] = state
+            for model in self.models:
+                self._add_model_to_state(state, model)
+            if self.auto_transitions:
+                for a_state in self.states.keys():
+                    # add all states as sources to auto transitions 'to_<state>' with dest <state>
+                    if a_state == state.name:
+                        if self.model_attribute == 'state':
+                            method_name = 'to_%s' % a_state
+                        else:
+                            method_name = 'to_%s_%s' % (self.model_attribute, a_state)
+                        self.add_transition(method_name, self.wildcard_all, a_state)
+
+                    # add auto transition with source <state> to <a_state>
+                    else:
+                        if self.model_attribute == 'state':
+                            method_name = 'to_%s' % a_state
+                        else:
+                            method_name = 'to_%s_%s' % (self.model_attribute, a_state)
+                        self.add_transition(method_name, state.name, a_state)
+
+    def _add_model_to_state(self, state, model):
+        # Add convenience function 'is_<state_name>' (e.g. 'is_A') to the model.
+        # When model_attribute has been customized, add 'is_<model_attribute>_<state_name>' instead
+        # to potentially support multiple states on one model (e.g. 'is_custom_state_A' and 'is_my_state_B').
+
+        func = partial(self.is_state, state.value, model)
+        if self.model_attribute == 'state':
+            method_name = 'is_%s' % state.name
+        else:
+            method_name = 'is_%s_%s' % (self.model_attribute, state.name)
+        self._checked_assignment(model, method_name, func)
+
+        # Add dynamic method callbacks (enter/exit) if there are existing bound methods in the model
+        # except if they are already mentioned in 'on_enter/exit' of the defined state
+        for callback in self.state_cls.dynamic_methods:
+            method = "{0}_{1}".format(callback, state.name)
+            if hasattr(model, method) and inspect.ismethod(getattr(model, method)) and \
+                    method not in getattr(state, callback):
+                state.add_callback(callback[3:], method)
+
+    def _checked_assignment(self, model, name, func):
+        bound_func = getattr(model, name, None)
+        if (bound_func is None) ^ self.model_override:
+            setattr(model, name, func)
+        else:
+            _LOGGER.warning("%sSkip binding of '%s' to model due to model override policy.", self.name, name)
+
+    def _can_trigger(self, model, trigger, *args, **kwargs):
+        state = self.get_model_state(model)
+        event_data = EventData(state, Event(name=trigger, machine=self), self, model, args, kwargs)
+
+        for trigger_name in self.get_triggers(state):
+            if trigger_name != trigger:
+                continue
+            for transition in self.events[trigger_name].transitions[state.name]:
+                try:
+                    _ = self.get_state(transition.dest) if transition.dest is not None else transition.source
+                except ValueError:
+                    continue
+
+                event_data.transition = transition
+                try:
+                    self.callbacks(self.prepare_event, event_data)
+                    self.callbacks(transition.prepare, event_data)
+                    if all(c.check(event_data) for c in transition.conditions):
+                        return True
+                except BaseException as err:
+                    event_data.error = err
+                    if self.on_exception:
+                        self.callbacks(self.on_exception, event_data)
+                    else:
+                        raise
+        return False
+
+    def _add_may_transition_func_for_trigger(self, trigger, model):
+        self._checked_assignment(model, "may_%s" % trigger, partial(self._can_trigger, model, trigger))
+
+    def _add_trigger_to_model(self, trigger, model):
+        self._checked_assignment(model, trigger, partial(self.events[trigger].trigger, model))
+        self._add_may_transition_func_for_trigger(trigger, model)
+
+    def _get_trigger(self, model, trigger_name, *args, **kwargs):
+        """Convenience function added to the model to trigger events by name.
+        Args:
+            model (object): Model with assigned event trigger.
+            trigger_name (str): Name of the trigger to be called.
+            *args: Variable length argument list which is passed to the triggered event.
+            **kwargs: Arbitrary keyword arguments which is passed to the triggered event.
+        Returns:
+            bool: True if a transitions has been conducted or the trigger event has been queued.
+        """
+        try:
+            event = self.events[trigger_name]
+        except KeyError:
+            state = self.get_model_state(model)
+            ignore = state.ignore_invalid_triggers if state.ignore_invalid_triggers is not None \
+                else self.ignore_invalid_triggers
+            if not ignore:
+                raise AttributeError("Do not know event named '%s'." % trigger_name)
+            return False
+        return event.trigger(model, *args, **kwargs)
+
+    def get_triggers(self, *args):
+        """Collects all triggers FROM certain states.
+        Args:
+            *args: Tuple of source states.
+
+        Returns:
+            list of transition/trigger names.
+        """
+        names = {state.name if hasattr(state, 'name') else state for state in args}
+        return [t for (t, ev) in self.events.items() if any(name in ev.transitions for name in names)]
+
+    def add_transition(self, trigger, source, dest, conditions=None,
+                       unless=None, before=None, after=None, prepare=None, **kwargs):
+        """Create a new Transition instance and add it to the internal list.
+        Args:
+            trigger (str): The name of the method that will trigger the
+                transition. This will be attached to the currently specified
+                model (e.g., passing trigger='advance' will create a new
+                advance() method in the model that triggers the transition.)
+            source(str, Enum or list): The name of the source state--i.e., the state we
+                are transitioning away from. This can be a single state, a
+                list of states or an asterisk for all states.
+            dest (str or Enum): The name of the destination State--i.e., the state
+                we are transitioning into. This can be a single state or an
+                equal sign to specify that the transition should be reflexive
+                so that the destination will be the same as the source for
+                every given source. If dest is None, this transition will be
+                an internal transition (exit/enter callbacks won't be processed).
+            conditions (str or list): Condition(s) that must pass in order
+                for the transition to take place. Either a list providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (str or list): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (str or list): Callables to call before the transition.
+            after (str or list): Callables to call after the transition.
+            prepare (str or list): Callables to call when the trigger is activated
+            **kwargs: Additional arguments which can be passed to the created transition.
+                This is useful if you plan to extend Machine.Transition and require more parameters.
+        """
+        if trigger == self.model_attribute:
+            raise ValueError("Trigger name cannot be same as model attribute name.")
+        if trigger not in self.events:
+            self.events[trigger] = self._create_event(trigger, self)
+            for model in self.models:
+                self._add_trigger_to_model(trigger, model)
+
+        if source == self.wildcard_all:
+            source = list(self.states.keys())
+        else:
+            # states are checked lazily which means we will only raise exceptions when the passed state
+            # is a State object because of potential confusion (see issue #155 for more details)
+            source = [s.name if isinstance(s, State) and self._has_state(s, raise_error=True) or hasattr(s, 'name') else
+                      s for s in listify(source)]
+
+        for state in source:
+            if dest == self.wildcard_same:
+                _dest = state
+            elif dest is not None:
+                if isinstance(dest, State):
+                    _ = self._has_state(dest, raise_error=True)
+                _dest = dest.name if hasattr(dest, 'name') else dest
+            else:
+                _dest = None
+            _trans = self._create_transition(state, _dest, conditions, unless, before,
+                                             after, prepare, **kwargs)
+            self.events[trigger].add_transition(_trans)
+
+    def add_transitions(self, transitions):
+        """Add several transitions.
+
+        Args:
+            transitions (list): A list of transitions.
+
+        """
+        for trans in listify(transitions):
+            if isinstance(trans, list):
+                self.add_transition(*trans)
+            else:
+                self.add_transition(**trans)
+
+    def add_ordered_transitions(self, states=None, trigger='next_state',
+                                loop=True, loop_includes_initial=True,
+                                conditions=None, unless=None, before=None,
+                                after=None, prepare=None, **kwargs):
+        """Add a set of transitions that move linearly from state to state.
+        Args:
+            states (list): A list of state names defining the order of the
+                transitions. E.g., ['A', 'B', 'C'] will generate transitions
+                for A --> B, B --> C, and C --> A (if loop is True). If states
+                is None, all states in the current instance will be used.
+            trigger (str): The name of the trigger method that advances to
+                the next state in the sequence.
+            loop (boolean): Whether to add a transition from the last
+                state to the first state.
+            loop_includes_initial (boolean): If no initial state was defined in
+                the machine, setting this to True will cause the _initial state
+                placeholder to be included in the added transitions. This argument
+                has no effect if the states argument is passed without the
+                initial state included.
+            conditions (str or list): Condition(s) that must pass in order
+                for the transition to take place. Either a list providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (str or list): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (str or list): Callables to call before the transition.
+            after (str or list): Callables to call after the transition.
+            prepare (str or list): Callables to call when the trigger is activated
+            **kwargs: Additional arguments which can be passed to the created transition.
+                This is useful if you plan to extend Machine.Transition and require more parameters.
+        """
+        if states is None:
+            states = list(self.states.keys())  # need to listify for Python3
+        len_transitions = len(states)
+        if len_transitions < 2:
+            raise ValueError("Can't create ordered transitions on a Machine "
+                             "with fewer than 2 states.")
+        if not loop:
+            len_transitions -= 1
+        # ensure all args are the proper length
+        conditions = _prep_ordered_arg(len_transitions, conditions)
+        unless = _prep_ordered_arg(len_transitions, unless)
+        before = _prep_ordered_arg(len_transitions, before)
+        after = _prep_ordered_arg(len_transitions, after)
+        prepare = _prep_ordered_arg(len_transitions, prepare)
+        # reorder list so that the initial state is actually the first one
+        try:
+            idx = states.index(self._initial)
+            states = states[idx:] + states[:idx]
+            first_in_loop = states[0 if loop_includes_initial else 1]
+        except ValueError:
+            # since initial is not part of states it shouldn't be part of the loop either
+            first_in_loop = states[0]
+
+        for i in range(0, len(states) - 1):
+            self.add_transition(trigger, states[i], states[i + 1],
+                                conditions=conditions[i],
+                                unless=unless[i],
+                                before=before[i],
+                                after=after[i],
+                                prepare=prepare[i],
+                                **kwargs)
+        if loop:
+            self.add_transition(trigger, states[-1],
+                                # omit initial if not loop_includes_initial
+                                first_in_loop,
+                                conditions=conditions[-1],
+                                unless=unless[-1],
+                                before=before[-1],
+                                after=after[-1],
+                                prepare=prepare[-1],
+                                **kwargs)
+
+    def get_transitions(self, trigger="", source="*", dest="*"):
+        """Return the transitions from the Machine.
+        Args:
+            trigger (str): Trigger name of the transition.
+            source (str, Enum or State): Limits list to transitions from a certain state.
+            dest (str, Enum or State): Limits list to transitions to a certain state.
+        """
+        if trigger:
+            try:
+                events = (self.events[trigger], )
+            except KeyError:
+                return []
+        else:
+            events = self.events.values()
+        transitions = []
+        for event in events:
+            transitions.extend(
+                itertools.chain.from_iterable(event.transitions.values()))
+        target_source = source.name if hasattr(source, 'name') else source if source != "*" else ""
+        target_dest = dest.name if hasattr(dest, 'name') else dest if dest != "*" else ""
+        return [transition
+                for transition in transitions
+                if (transition.source, transition.dest) == (target_source or transition.source,
+                                                            target_dest or transition.dest)]
+
+    def remove_transition(self, trigger, source="*", dest="*"):
+        """Removes a transition from the Machine and all models.
+        Args:
+            trigger (str): Trigger name of the transition.
+            source (str, Enum or State): Limits removal to transitions from a certain state.
+            dest (str, Enum or State): Limits removal to transitions to a certain state.
+        """
+        source = listify(source) if source != "*" else source
+        dest = listify(dest) if dest != "*" else dest
+        # outer comprehension, keeps events if inner comprehension returns lists with length > 0
+        tmp = {key: value for key, value in
+               {k: [t for t in v
+                    # keep entries if source should not be filtered; same for dest.
+                    if (source != "*" and t.source not in source) or (dest != "*" and t.dest not in dest)]
+                   # }.items() takes the result of the inner comprehension and uses it
+                   # for the outer comprehension (see first line of comment)
+                for k, v in self.events[trigger].transitions.items()}.items()
+               if len(value) > 0}
+        # convert dict back to defaultdict in case tmp is not empty
+        if tmp:
+            self.events[trigger].transitions = defaultdict(list, **tmp)
+        # if no transition is left remove the trigger from the machine and all models
+        else:
+            for model in self.models:
+                delattr(model, trigger)
+            del self.events[trigger]
+
+    def dispatch(self, trigger, *args, **kwargs):
+        """Trigger an event on all models assigned to the machine.
+        Args:
+            trigger (str): Event name
+            *args (list): List of arguments passed to the event trigger
+            **kwargs (dict): Dictionary of keyword arguments passed to the event trigger
+        Returns:
+            bool The truth value of all triggers combined with AND
+        """
+        res = [getattr(model, trigger)(*args, **kwargs) for model in self.models]
+        return all(res)
+
+    def callbacks(self, funcs, event_data):
+        """Triggers a list of callbacks"""
+        for func in funcs:
+            self.callback(func, event_data)
+            _LOGGER.info("%sExecuted callback '%s'", self.name, func)
+
+    def callback(self, func, event_data):
+        """Trigger a callback function with passed event_data parameters. In case func is a string,
+            the callable will be resolved from the passed model in event_data. This function is not intended to
+            be called directly but through state and transition callback definitions.
+        Args:
+            func (str or callable): The callback function.
+                1. First, if the func is callable, just call it
+                2. Second, we try to import string assuming it is a path to a func
+                3. Fallback to a model attribute
+            event_data (EventData): An EventData instance to pass to the
+                callback (if event sending is enabled) or to extract arguments
+                from (if event sending is disabled).
+        """
+
+        func = self.resolve_callable(func, event_data)
+        if self.send_event:
+            func(event_data)
+        else:
+            func(*event_data.args, **event_data.kwargs)
+
+    @staticmethod
+    def resolve_callable(func, event_data):
+        """Converts a model's property name, method name or a path to a callable into a callable.
+            If func is not a string it will be returned unaltered.
+        Args:
+            func (str or callable): Property name, method name or a path to a callable
+            event_data (EventData): Currently processed event
+        Returns:
+            callable function resolved from string or func
+        """
+        if isinstance(func, string_types):
+            try:
+                func = getattr(event_data.model, func)
+                if not callable(func):  # if a property or some other not callable attribute was passed
+                    def func_wrapper(*_, **__):  # properties cannot process parameters
+                        return func
+                    return func_wrapper
+            except AttributeError:
+                try:
+                    module_name, func_name = func.rsplit('.', 1)
+                    module = __import__(module_name)
+                    for submodule_name in module_name.split('.')[1:]:
+                        module = getattr(module, submodule_name)
+                    func = getattr(module, func_name)
+                except (ImportError, AttributeError, ValueError):
+                    raise AttributeError("Callable with name '%s' could neither be retrieved from the passed "
+                                         "model nor imported from a module." % func)
+        return func
+
+    def _has_state(self, state, raise_error=False):
+        found = state in self.states.values()
+        if not found and raise_error:
+            msg = 'State %s has not been added to the machine' % (state.name if hasattr(state, 'name') else state)
+            raise ValueError(msg)
+        return found
+
+    def _process(self, trigger):
+
+        # default processing
+        if not self.has_queue:
+            if not self._transition_queue:
+                # if trigger raises an Error, it has to be handled by the Machine.process caller
+                return trigger()
+            raise MachineError("Attempt to process events synchronously while transition queue is not empty!")
+
+        # process queued events
+        self._transition_queue.append(trigger)
+        # another entry in the queue implies a running transition; skip immediate execution
+        if len(self._transition_queue) > 1:
+            return True
+
+        # execute as long as transition queue is not empty
+        while self._transition_queue:
+            try:
+                self._transition_queue[0]()
+                self._transition_queue.popleft()
+            except BaseException:
+                # if a transition raises an exception, clear queue and delegate exception handling
+                self._transition_queue.clear()
+                raise
+        return True
+
+    def _identify_callback(self, name):
+        # Does the prefix match a known callback?
+        for callback in itertools.chain(self.state_cls.dynamic_methods, self.transition_cls.dynamic_methods):
+            if name.startswith(callback):
+                callback_type = callback
+                break
+        else:
+            return None, None
+
+        # Extract the target by cutting the string after the type and separator
+        target = name[len(callback_type) + len(self.separator):]
+
+        # Make sure there is actually a target to avoid index error and enforce _ as a separator
+        if target == '' or name[len(callback_type)] != self.separator:
+            return None, None
+
+        return callback_type, target
+
+    def __getattr__(self, name):
+        # Machine.__dict__ does not contain double underscore variables.
+        # Class variables will be mangled.
+        if name.startswith('__'):
+            raise AttributeError("'{}' does not exist on <Machine@{}>"
+                                 .format(name, id(self)))
+
+        # Could be a callback
+        callback_type, target = self._identify_callback(name)
+
+        if callback_type is not None:
+            if callback_type in self.transition_cls.dynamic_methods:
+                if target not in self.events:
+                    raise AttributeError("event '{}' is not registered on <Machine@{}>"
+                                         .format(target, id(self)))
+                return partial(self.events[target].add_callback, callback_type)
+
+            if callback_type in self.state_cls.dynamic_methods:
+                state = self.get_state(target)
+                return partial(state.add_callback, callback_type[3:])
+
+        try:
+            return self.__getattribute__(name)
+        except AttributeError:
+            # Nothing matched
+            raise AttributeError("'{}' does not exist on <Machine@{}>".format(name, id(self)))
+
+
+class MachineError(Exception):
+    """MachineError is used for issues related to state transitions and current states.
+    For instance, it is raised for invalid transitions or machine configuration issues.
+    """
+
+    def __init__(self, value):
+        super(MachineError, self).__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+# ==== vendored transitions.version ====
+# Contains the current version of transition which is used in setup.py and can also be used
+#     to determine transitions' version during runtime.
+
+__version__ = '0.9.3'
 
 
 # ==== common/errors.py ====
@@ -981,156 +3325,6 @@ def answer_note(questions, answers):
         a = answers[i] if i < len(answers) else None
         pairs.append(f"{q} → {a}" if q and a else (f"{q} → (no answer)" if q else a))
     return "; ".join(pairs)
-
-
-def change_status(
-    task,
-    data,
-    command,
-    reason=None,
-    agent=None,
-    status=None,
-    note=None,
-    commit=None,
-    waiting_on=None,
-    questions=(),
-    answers=(),
-    resolution=None,
-    duplicate_of=None,
-    *,
-    archived,
-):
-    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
-    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
-    picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
-    `done` as completed_by (both kept when it is done, so the dashboard can show who did what); `note` and `reason`
-    become notes, `commit` the task's commit. `block` records who it waits on and the open questions; `unblock`
-    turns them, with the answers, into an answer note. `done` and `skip` record a `resolution` (SR-2.8), `skip` also
-    `duplicate_of` (the caller checks that task exists, in either file)."""
-    vocab = vocabulary(data)
-    if command in ("done", "skip"):
-        resolution = resolution or ("done" if command == "done" else "wont_do")
-        allowed_resolutions = RESOLUTIONS if command == "done" else SKIP_RESOLUTIONS
-        if resolution not in allowed_resolutions:
-            raise AtmError(f"--resolution must be one of {', '.join(allowed_resolutions)}", 2)
-        if duplicate_of is not None and resolution != "duplicate":
-            raise AtmError("--duplicate-of goes with --resolution duplicate", 2)
-        if duplicate_of == task["id"]:
-            raise AtmError(f"{task['id']} can't be a duplicate of itself", 2)
-    allowed, new_kind = STATUS_CHANGES[command]
-    current = task.get("status")
-    if kind_of(vocab, current) not in allowed:
-        expected = [s for kind in allowed for s in statuses_of(vocab, kind)]
-        raise AtmError(f"can't {command} {task['id']}: it is {current}, not {' or '.join(expected)}")
-    if command == "done":
-        check_review_mode(task, data, agent)
-    if command == "start" and kind_of(vocab, current) == "review" and task.get("review_state") not in REWORK_STATES:
-        raise AtmError(f"can't start {task['id']}: it waits for its review (atm approve or request-changes decides it)")
-    new = status_for(vocab, new_kind, status)
-    if command in ("approve", "request-changes") and status is None:
-        new = current  # it stays in its review status (a project may have several)
-    if command == "start":
-        blocking = unfinished_dependencies(data, task, archived)
-        if blocking:
-            raise AtmError(f"can't start {task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking))
-    if note is not None:
-        check_note(note)
-    if reason is not None:
-        check_note(reason)
-    for question in questions:
-        check_note(question)
-    if command == "block":
-        if waiting_on not in WAITING_ON:
-            raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
-        if not questions and not reason:
-            raise AtmError("say what it waits for: --question (repeatable) or --reason", 2)
-    for answer in answers:
-        check_note(answer)
-    asked = list(task.get("questions") or [])
-    # Each question was checked when the task was blocked, each answer just now: together they may be longer than one
-    # note, and must still be recordable, or the task could never be unblocked
-    answered = answer_note(asked, list(answers)) if command == "unblock" and (asked or answers) else None
-    stamp = now_iso()
-    # A block's or a review's start goes when the task moves on: keep each interval, so waiting time can be measured
-    old_kind = kind_of(vocab, current)
-    if old_kind == "blocked" and task.get("blocked_at"):
-        add_interval(task, "blocks", task["blocked_at"], stamp, on=task.get("waiting_on"))
-    elif old_kind == "review" and new_kind != "review" and task.get("review_requested_at"):
-        # The round ends when the reviewer decided, with its outcome (SR-3.9)
-        outcome = task.get("review_state") if task.get("review_state") in REWORK_STATES else None
-        add_interval(task, "reviews", task["review_requested_at"], task.get("reviewed_at") or stamp, outcome=outcome)
-    if new_kind != "review":
-        task.pop("review_state", None)
-        task.pop("reviewed_at", None)
-    if new_kind == "todo":
-        # Reopening, rejecting or failing a task undoes its work; releasing or unblocking it doesn't
-        back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "reject", "fail"))
-        if answered:
-            add_note(task, "answer", answered, agent, stamp, checked=False)
-        if command == "fail":
-            add_note(task, "failure", reason or "verification failed", agent, stamp)
-        elif command == "reject":
-            add_note(task, "rejection", reason, agent, stamp)
-        elif command == "reopen":
-            add_note(task, "note", f"Reopened: {reason}", agent, stamp)
-        elif note:
-            add_note(task, "handoff", note, agent, stamp)
-        return current
-    task["status"] = new
-    touch(task, agent, stamp)
-    if command == "block":
-        # Who started it stays visible while it waits; unblock returns it to to-do and clears the attempt
-        task["waiting_on"] = waiting_on
-        task["questions"] = list(questions)
-        task["blocked_at"] = stamp
-        if reason:
-            add_note(task, "note", reason, agent, stamp)
-    elif command == "review":
-        # The work ends here: the review isn't agent work (DM-4.1); done keeps this timestamp
-        task["review_requested_at"] = stamp
-        task["review_state"] = "waiting"
-        if note:
-            add_note(task, "review", note, agent, stamp)
-    elif command in ("approve", "request-changes"):
-        # The task stays in review until an agent takes it back (`atm next` offers it first, SR-3.9)
-        task["review_state"] = "approved" if command == "approve" else "changes_requested"
-        task["reviewed_at"] = stamp
-        if command == "request-changes":
-            add_note(task, "rejection", reason, agent, stamp)
-        else:
-            add_note(task, "note", f"Approved: {note}" if note else "Approved", agent, stamp)
-    elif command == "skip":
-        for field in ("waiting_on", "questions", "blocked_at"):
-            task.pop(field, None)
-        task["skipped_at"] = stamp
-        if resolution != "wont_do":
-            task["resolution"] = resolution  # none means the default, won't do
-        if duplicate_of:
-            task["duplicate_of"] = duplicate_of
-        add_note(task, "note", f"Skipped: {reason}", agent, stamp)
-    elif command == "start":
-        task["started_at"] = stamp
-        task.pop("review_requested_at", None)  # taken back from review: a new round of work
-        task.pop("completed_at", None)
-        task.pop("completed_by", None)
-        task.pop("agent", None)  # the old name of started_by
-        if agent:
-            task["started_by"] = agent
-    elif command == "done":
-        task["completed_at"] = stamp
-        if resolution != "done":
-            task["resolution"] = resolution  # none means the default, done
-        if agent:
-            task["completed_by"] = agent
-        if commit:
-            task["commit"] = commit
-        # A batch task an agent finishes waits for the end-of-sprint review (SR-4.4): its note is what to check
-        batch = old_kind == "active" and is_agent(agent) and effective_review(vocab, task) == "batch"
-        if batch:
-            task["sprint_review"] = "pending"
-        if note:
-            add_note(task, "review" if batch else "outcome", note, agent, stamp)
-    return current
 
 
 def is_agent(actor):
@@ -4650,6 +6844,490 @@ class Project:
         self.store = store
         self.vcs = vcs
         self.actor = actor
+
+
+# ==== lib/state.py ====
+# Task state machine using the transitions library.
+#
+# Declares all task status transitions as data, with guards (conditions) and
+# side effects (before/after hooks). Replaces the hand-rolled change_status()
+# in common/model.py.
+#
+# The machine state is always a *kind* (todo, active, review, blocked, done,
+# skipped), never a specific status name. The task's `status` field holds the
+# project-specific status name (e.g. `in_progress` for kind `active`). Hooks map
+# between kind and name via status_for().
+
+class _TaskStateModel:
+    """Wrapper that lets transitions.Machine read/write task['status'] as a kind.
+
+    The machine's .state is always a kind (todo, active, review, blocked, done,
+    skipped). The task dict's "status" field holds the project's specific status
+    name (e.g. "in_progress" for kind "active"). The kind is tracked in
+    "_kind_state" and derived from "status" on first read.
+    """
+
+    def __init__(self, task, vocab):
+        self._task = task
+        self._vocab = vocab
+        self._kind_state = None
+
+    @property
+    def state(self):
+        if self._kind_state is not None:
+            return self._kind_state
+        return kind_of(self._vocab, self._task.get("status")) or "todo"
+
+    @state.setter
+    def state(self, value):
+        self._kind_state = value
+
+
+class TaskMachine:
+    """Declares all task status transitions as data.
+
+    States are the six kinds. Transitions are the 12 status commands.
+    Guards are conditions; side effects are before/after hooks.
+    """
+
+    states = ["todo", "active", "review", "blocked", "done", "skipped"]
+
+    def __init__(self, task, data, agent, archived, stamp):
+        self.task = task
+        self.data = data
+        self.agent = agent
+        self.archived = archived
+        self.stamp = stamp
+        self.vocab = vocabulary(data)
+        self.current_status = task.get("status")
+        self.current_kind = kind_of(self.vocab, self.current_status) or "todo"
+        self._model = _TaskStateModel(task, self.vocab)
+        self._model.state = self.current_kind
+
+        # Declared transitions: trigger -> (source, dest, conditions, before, after)
+        transitions = [
+            # start: todo or review -> active
+            {
+                "trigger": "start",
+                "source": ["todo", "review"],
+                "dest": "active",
+                "conditions": [self.dependencies_done, self.can_start_from_review],
+                "before": [self.create_claim],
+            },
+            # review: active -> review
+            {
+                "trigger": "review",
+                "source": "active",
+                "dest": "review",
+                "before": [self.release_claim],
+            },
+            # done: active or review -> done
+            {
+                "trigger": "done",
+                "source": ["active", "review"],
+                "dest": "done",
+                "conditions": [self.check_done_review_mode],
+                "before": [self.record_completion],
+            },
+            # fail: active -> todo
+            {
+                "trigger": "fail",
+                "source": "active",
+                "dest": "todo",
+                "before": [self.wipe_attempt],
+                "after": [self.add_failure_note],
+            },
+            # release: active -> todo
+            {
+                "trigger": "release",
+                "source": "active",
+                "dest": "todo",
+                "before": [self.wipe_attempt],
+                "after": [self.add_handoff_note],
+            },
+            # reject: review -> todo
+            {
+                "trigger": "reject",
+                "source": "review",
+                "dest": "todo",
+                "before": [self.wipe_attempt],
+                "after": [self.add_rejection_note],
+            },
+            # approve: review -> review (stays)
+            {
+                "trigger": "approve",
+                "source": "review",
+                "dest": "review",
+                "before": [self.mark_approved],
+            },
+            # request-changes: review -> review (stays)
+            {
+                "trigger": "request_changes",
+                "source": "review",
+                "dest": "review",
+                "before": [self.mark_changes_requested],
+            },
+            # block: todo or active -> blocked
+            {
+                "trigger": "block",
+                "source": ["todo", "active"],
+                "dest": "blocked",
+                "before": [self.release_claim],
+            },
+            # unblock: blocked -> todo
+            {
+                "trigger": "unblock",
+                "source": "blocked",
+                "dest": "todo",
+            },
+            # reopen: done or skipped -> todo
+            {
+                "trigger": "reopen",
+                "source": ["done", "skipped"],
+                "dest": "todo",
+            },
+            # skip: todo or blocked -> skipped
+            {
+                "trigger": "skip",
+                "source": ["todo", "blocked"],
+                "dest": "skipped",
+            },
+        ]
+
+        self.machine = Machine(
+            model=self._model,
+            states=TaskMachine.states,
+            transitions=transitions,
+            initial=self.current_kind,
+            send_event=True,
+            auto_transitions=False,
+        )
+
+    # ------------------------------------------------------------------
+    # Conditions (guards)
+    # ------------------------------------------------------------------
+
+    def dependencies_done(self, event):
+        """start: all dependencies must be done."""
+        blocking = unfinished_dependencies(self.data, self.task, self.archived)
+        if blocking:
+            raise Invalid(
+                f"can't start {self.task['id']}: waiting on "
+                + ", ".join(f"{d} ({s})" for d, s in blocking)
+            )
+        return True
+
+    def can_start_from_review(self, event):
+        """start from review: review must be decided (changes_requested or approved)."""
+        if self.current_kind == "review":
+            if self.task.get("review_state") not in REWORK_STATES:
+                raise Invalid(
+                    f"can't start {self.task['id']}: it waits for its review "
+                    f"(atm approve or request-changes decides it)"
+                )
+        return True
+
+    def check_done_review_mode(self, event):
+        """done: by review mode blocker/async, an agent must review first."""
+        if self.current_kind == "active":
+            check_review_mode(self.task, self.data, self.agent)
+        return True
+
+    # ------------------------------------------------------------------
+    # Before hooks
+    # ------------------------------------------------------------------
+
+    def create_claim(self, event):
+        """start: record the claim."""
+        # Claim recording is done by the caller (change_task_status), not here.
+        # This hook is a placeholder for future use.
+        pass
+
+    def release_claim(self, event):
+        """review/block: release the claim."""
+        # Claim release is done by the caller (change_task_status).
+        pass
+
+    def record_completion(self, event):
+        """done: record completion timestamp and by."""
+        if self.agent:
+            self.task["completed_by"] = self.agent
+        self.task["completed_at"] = self.stamp
+        if event.kwargs.get("commit"):
+            self.task["commit"] = event.kwargs["commit"]
+
+    def wipe_attempt(self, event):
+        """fail/release/reject: undo the work attempt."""
+        keep_commit = event.kwargs.get("command") in ("fail", "release")
+        back_to_todo(self.task, self.vocab, self.agent, self.stamp, keep_commit=keep_commit)
+
+    def mark_approved(self, event):
+        """approve: set review_state to approved."""
+        self.task["review_state"] = "approved"
+        self.task["reviewed_at"] = self.stamp
+        note = event.kwargs.get("note")
+        if note:
+            add_note(self.task, "note", f"Approved: {note}" if note else "Approved", self.agent, self.stamp)
+
+    def mark_changes_requested(self, event):
+        """request-changes: set review_state to changes_requested."""
+        self.task["review_state"] = "changes_requested"
+        self.task["reviewed_at"] = self.stamp
+        reason = event.kwargs.get("reason")
+        if reason:
+            add_note(self.task, "rejection", reason, self.agent, self.stamp)
+
+    # ------------------------------------------------------------------
+    # After hooks
+    # ------------------------------------------------------------------
+
+    def add_failure_note(self, event):
+        """fail: add a failure note."""
+        reason = event.kwargs.get("reason")
+        add_note(self.task, "failure", reason or "verification failed", self.agent, self.stamp)
+
+    def add_handoff_note(self, event):
+        """release: add a handoff note."""
+        note = event.kwargs.get("note")
+        if note:
+            add_note(self.task, "handoff", note, self.agent, self.stamp)
+
+    def add_rejection_note(self, event):
+        """reject: add a rejection note."""
+        reason = event.kwargs.get("reason")
+        add_note(self.task, "rejection", reason, self.agent, self.stamp)
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def transition(self, command, **kwargs):
+        """Run the state machine transition for `command`.
+
+        Returns the previous status (before the transition).
+        Raises AtmError if the transition isn't allowed.
+        """
+        prev_status = self.current_status
+
+        # Pre-transition validation that isn't expressible as a condition
+        self._pre_validate(command, kwargs)
+
+        # Map command to trigger name (request-changes -> request_changes)
+        trigger = command.replace("-", "_")
+
+        try:
+            getattr(self._model, trigger)(**kwargs)
+        except Exception as exc:
+            # transitions wraps errors in MachineError; convert to AtmError
+            raise AtmError(f"can't {command} {self.task['id']}: {exc}", 2) from exc
+
+        # Post-transition field updates
+        self._post_transition(command, kwargs)
+
+        # The machine state is now a kind; map back to a specific status name
+        new_kind = self._model.state
+        chosen_status = kwargs.get("status")
+        trigger = command.replace("-", "_")
+        if trigger in ("approve", "request_changes") and chosen_status is None:
+            # Stays in the current review status
+            new_status = self.current_status
+        else:
+            new_status = status_for(self.vocab, new_kind, chosen_status)
+        self.task["status"] = new_status
+        touch(self.task, self.agent, self.stamp)
+
+        return prev_status
+
+    def _pre_validate(self, command, kwargs):
+        """Validation that must happen before the state machine transition."""
+        reason = kwargs.get("reason")
+        note = kwargs.get("note")
+        questions = kwargs.get("questions", [])
+        answers = kwargs.get("answers", [])
+        duplicate_of = kwargs.get("duplicate_of")
+        resolution = kwargs.get("resolution")
+
+        # done/skip: validate resolution
+        if command in ("done", "skip"):
+            resolution = resolution or ("done" if command == "done" else "wont_do")
+            allowed_resolutions = RESOLUTIONS if command == "done" else SKIP_RESOLUTIONS
+            if resolution not in allowed_resolutions:
+                raise AtmError(f"--resolution must be one of {', '.join(allowed_resolutions)}", 2)
+            if duplicate_of is not None and resolution != "duplicate":
+                raise AtmError("--duplicate-of goes with --resolution duplicate", 2)
+            if duplicate_of == self.task["id"]:
+                raise AtmError(f"{self.task['id']} can't be a duplicate of itself", 2)
+
+        # block: validate waiting_on and questions/reason
+        if command == "block":
+            waiting_on = kwargs.get("waiting_on")
+            if waiting_on not in WAITING_ON:
+                raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
+            if not questions and not reason:
+                raise AtmError("say what it waits for: --question (repeatable) or --reason", 2)
+
+        # Validate note/reason/question/answer lengths
+        if note is not None:
+            check_note(note)
+        if reason is not None:
+            check_note(reason)
+        for question in questions:
+            check_note(question)
+        for answer in answers:
+            check_note(answer)
+
+    def _post_transition(self, command, kwargs):
+        """Field updates after the state machine transition."""
+        reason = kwargs.get("reason")
+        note = kwargs.get("note")
+        questions = kwargs.get("questions", [])
+        answers = kwargs.get("answers", [])
+        duplicate_of = kwargs.get("duplicate_of")
+        resolution = kwargs.get("resolution")
+        waiting_on = kwargs.get("waiting_on")
+        stamp = self.stamp
+
+        # done/skip: set default resolution
+        if command in ("done", "skip"):
+            resolution = resolution or ("done" if command == "done" else "wont_do")
+
+        # Blocks and reviews intervals
+        old_kind = self.current_kind
+        new_kind = self._model.state
+
+        if old_kind == "blocked" and self.task.get("blocked_at"):
+            add_interval(self.task, "blocks", self.task["blocked_at"], stamp, on=self.task.get("waiting_on"))
+        elif old_kind == "review" and new_kind != "review" and self.task.get("review_requested_at"):
+            outcome = self.task.get("review_state") if self.task.get("review_state") in REWORK_STATES else None
+            add_interval(
+                self.task, "reviews",
+                self.task["review_requested_at"],
+                self.task.get("reviewed_at") or stamp,
+                outcome=outcome,
+            )
+
+        # Transition out of review: clear review state
+        if new_kind != "review":
+            self.task.pop("review_state", None)
+            self.task.pop("reviewed_at", None)
+
+        # Kind-specific field updates
+        if new_kind == "todo":
+            self._back_to_todo(command, kwargs, stamp, answered=kwargs.get("answered"))
+        elif command == "block":
+            self.task["waiting_on"] = waiting_on
+            self.task["questions"] = list(questions)
+            self.task["blocked_at"] = stamp
+            if reason:
+                add_note(self.task, "note", reason, self.agent, stamp)
+        elif command == "review":
+            self.task["review_requested_at"] = stamp
+            self.task["review_state"] = "waiting"
+            if note:
+                add_note(self.task, "review", note, self.agent, stamp)
+        elif command == "skip":
+            for field in ("waiting_on", "questions", "blocked_at"):
+                self.task.pop(field, None)
+            self.task["skipped_at"] = stamp
+            if resolution != "wont_do":
+                self.task["resolution"] = resolution
+            if duplicate_of:
+                self.task["duplicate_of"] = duplicate_of
+            add_note(self.task, "note", f"Skipped: {reason}", self.agent, stamp)
+        elif command == "start":
+            self.task["started_at"] = stamp
+            self.task.pop("review_requested_at", None)
+            self.task.pop("completed_at", None)
+            self.task.pop("completed_by", None)
+            self.task.pop("agent", None)
+            if self.agent:
+                self.task["started_by"] = self.agent
+        elif command == "done":
+            if resolution != "done":
+                self.task["resolution"] = resolution
+            if self.agent:
+                self.task["completed_by"] = self.agent
+            if kwargs.get("commit"):
+                self.task["commit"] = kwargs["commit"]
+            batch = (
+                old_kind == "active"
+                and is_agent(self.agent)
+                and effective_review(self.vocab, self.task) == "batch"
+            )
+            if batch:
+                self.task["sprint_review"] = "pending"
+            if note:
+                add_note(
+                    self.task, "review" if batch else "outcome", note, self.agent, stamp
+                )
+
+    def _back_to_todo(self, command, kwargs, stamp, answered=None):
+        """Undo the work attempt when moving to todo."""
+        keep_commit = command not in ("reopen", "reject", "fail")
+        back_to_todo(self.task, self.vocab, self.agent, stamp, keep_commit=keep_commit)
+
+        if answered:
+            add_note(self.task, "answer", answered, self.agent, stamp, checked=False)
+
+        if command == "fail":
+            add_note(self.task, "failure", kwargs.get("reason") or "verification failed", self.agent, stamp)
+        elif command == "reject":
+            add_note(self.task, "rejection", kwargs.get("reason"), self.agent, stamp)
+        elif command == "reopen":
+            add_note(self.task, "note", f"Reopened: {kwargs.get('reason')}", self.agent, stamp)
+        elif kwargs.get("note"):
+            add_note(self.task, "handoff", kwargs.get("note"), self.agent, stamp)
+
+
+def change_status(
+    task,
+    data,
+    command,
+    reason=None,
+    agent=None,
+    status=None,
+    note=None,
+    commit=None,
+    waiting_on=None,
+    questions=(),
+    answers=(),
+    resolution=None,
+    duplicate_of=None,
+    *,
+    archived,
+):
+    """Apply one status command to `task` using the transitions state machine.
+
+    Same signature and behavior as common.model.change_status, but the state
+    transition logic is declared as data in TaskMachine rather than hand-rolled
+    if/elif chains.
+    """
+    stamp = now_iso()
+
+    # Build the answered string for unblock before creating the machine
+    asked = list(task.get("questions") or [])
+    answered = (
+        answer_note(asked, list(answers))
+        if command == "unblock" and (asked or answers)
+        else None
+    )
+
+    machine = TaskMachine(task, data, agent, archived, stamp)
+
+    return machine.transition(
+        command,
+        reason=reason,
+        agent=agent,
+        status=status,
+        note=note,
+        commit=commit,
+        waiting_on=waiting_on,
+        questions=questions,
+        answers=answers,
+        resolution=resolution,
+        duplicate_of=duplicate_of,
+        answered=answered,
+    )
 
 
 # ==== lib/loop.py ====

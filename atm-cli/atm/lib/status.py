@@ -9,18 +9,16 @@ common's (`change_status`, common/model.py), the lease and resolution rules lib/
 from ..common.errors import Invalid
 from ..common.core import now_iso
 from ..common.model import (
-    add_note,
     archive_hint_for,
-    change_status,
     find_sprint,
     find_task,
     kind_of,
     move_out_hint,
-    touch,
     vocabulary,
 )
 from .loop import apply_resolutions, archived_in, check_holder, drop_expired_claims, lease_until, own_lease_expired
 from .query import ready_tasks
+from .state import change_status
 from .tasks import view_task
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing

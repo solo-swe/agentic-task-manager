@@ -62,6 +62,7 @@ MODULES = [
     "db.memory",
     "vcs.git",
     "lib.project",
+    "lib.state",
     "lib.loop",
     "lib.tasks",
     "lib.query",
@@ -100,11 +101,11 @@ MODULES = [
 ]
 
 # Third-party packages to vendor into the built plugin/scripts/atm.py.
-# Populated by T-416 when third-party libraries (click, transitions, ...) are adopted.
+# Populated by T-416/T-417 when third-party libraries (transitions, ...) are adopted.
 # Each entry is a package name whose source lives in VENDORED_DIR/<package>/.
 # The build reads each package's .py files, hoists its imports, and concatenates
 # its code ahead of the atm modules (so atm modules can import from them).
-VENDORED_PACKAGES: list[str] = []
+VENDORED_PACKAGES: list[str] = ["six", "transitions"]
 
 # Directory containing vendored third-party source code.
 # T-416 will copy click, transitions, etc. source here (e.g. vendored/click/, vendored/transitions/).
@@ -186,63 +187,107 @@ def build():
     module_imports = {}  # module -> the modules it imports from
     sections = []
 
-    # Vendored third-party packages: hoist their imports and concatenate their code
-    # ahead of the atm modules so atm modules can import from them.
+    # Vendored third-party packages: concatenate their code ahead of the atm modules
+    # so atm modules can import from them. Each package is flattened into one section:
+    # submodule files first, __init__.py last, relative imports stripped (names are
+    # already in the shared flat namespace). Vendored imports stay inline.
     for package in VENDORED_PACKAGES:
         pkg_dir = os.path.join(VENDORED_DIR, package)
         if not os.path.isdir(pkg_dir):
             raise BuildError(f"vendored package {package!r} not found at {pkg_dir}")
+
+        # Collect all .py files, __init__.py last
+        py_files = []
         for root, dirs, files in os.walk(pkg_dir):
             dirs.sort()
             for fname in sorted(files):
-                if not fname.endswith(".py"):
-                    continue
-                fpath = os.path.join(root, fname)
-                rel = os.path.relpath(fpath, VENDORED_DIR)
-                dotted = rel.replace(os.sep, ".")[:-3]  # strip .py -> "click" or "click.decorators"
-                with open(fpath, encoding="utf-8") as f:
-                    source = f.read()
-                tree = ast.parse(source, fpath)
-                lines = source.splitlines()
-                drop = set()  # 1-based line numbers left out of the body
+                if fname.endswith(".py"):
+                    py_files.append(os.path.join(root, fname))
+        py_files.sort(key=lambda p: (os.path.basename(p) != "__init__.py", p))
 
-                doc = docstring_node(tree)
-                comment = []
-                if doc:
-                    drop.update(range(doc.lineno, doc.end_lineno + 1))
-                    comment = ["# " + line if line.strip() else "#" for line in doc.value.value.strip().splitlines()]
+        package_body = []
+        for fpath in py_files:
+            rel = os.path.relpath(fpath, VENDORED_DIR)
+            dotted = rel.replace(os.sep, ".")[:-3]
+            parts = dotted.split(".")
+            if len(parts) == 2 and parts[0] == parts[1]:
+                dotted = parts[0]
+            pkg_root = dotted.split(".")[0]
 
-                for node in tree.body:
-                    if isinstance(node, ast.Import):
-                        plain_imports.update(
-                            alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
-                        )
-                    elif isinstance(node, ast.ImportFrom) and node.level == 0:
-                        from_imports.setdefault(node.module, set()).update(
-                            alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
-                        )
-                    else:
-                        continue
-                    drop.update(range(node.lineno, node.end_lineno + 1))
+            with open(fpath, encoding="utf-8") as f:
+                source = f.read()
 
-                for defined_name in top_level_names(tree):
-                    if defined_name in defined:
-                        raise BuildError(
-                            f"{defined_name} is defined in both {module_file(defined[defined_name])} "
-                            f"and vendored {dotted}"
-                        )
-                    defined[defined_name] = dotted
+            # Strip relative imports: in a flat namespace, submodule names are already
+            # defined by earlier files in this package section.
+            source = re.sub(
+                r"^\s*from \.+([A-Za-z_]\w*)( import .*)?$",
+                lambda m: f"# (vendored) from .{m.group(1)} imported inline",
+                source,
+                flags=re.MULTILINE,
+            )
+            source = re.sub(
+                r"^\s*import \.+([A-Za-z_]\w*)$",
+                lambda m: f"# (vendored) import .{m.group(1)} imported inline",
+                source,
+                flags=re.MULTILINE,
+            )
 
-                body = [line for number, line in enumerate(lines, 1) if number not in drop]
-                while body and not body[0].strip():
-                    body.pop(0)
-                while body and not body[-1].strip():
-                    body.pop()
-                sections.append(
-                    "\n".join(
-                        [f"# ==== vendored {dotted} ===="] + comment + ([""] if comment else []) + body
+            tree = ast.parse(source, fpath)
+            lines = source.splitlines()
+            drop = set()
+
+            doc = docstring_node(tree)
+            comment = []
+            if doc:
+                drop.update(range(doc.lineno, doc.end_lineno + 1))
+                comment = ["# " + line if line.strip() else "#" for line in doc.value.value.strip().splitlines()]
+
+            # Vendored code stays inline (not hoisted): drop only docstrings and
+            # __future__ imports (hoisted to top). Keep all other definitions inline
+            # so they execute in section order, making names available to later files.
+            for node in tree.body:
+                if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module == "__future__":
+                    future_names = from_imports.setdefault("__future__", set())
+                    future_names.update(
+                        alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
                     )
+                    drop.update(range(node.lineno, node.end_lineno + 1))
+                elif isinstance(node, ast.Import):
+                    # Drop imports from vendored packages; keep stdlib imports inline
+                    for alias in node.names:
+                        if alias.name.split(".")[0] in VENDORED_PACKAGES:
+                            drop.update(range(node.lineno, node.end_lineno + 1))
+                            break
+                elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                    if node.module in VENDORED_PACKAGES:
+                        # Drop imports from vendored packages: names are already global
+                        drop.update(range(node.lineno, node.end_lineno + 1))
+                elif isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                    # Bare docstring: drop
+                    drop.update(range(node.lineno, node.end_lineno + 1))
+                # else: keep inline (assignments, function defs, class defs, etc.)
+
+            for defined_name in top_level_names(tree):
+                existing = defined.get(defined_name)
+                if existing is not None and not existing.startswith("vendored "):
+                    raise BuildError(
+                        f"{defined_name} is defined in both {module_file(existing)} "
+                        f"and vendored {dotted}"
+                    )
+                defined[defined_name] = f"vendored {dotted}"
+
+            body = [line for number, line in enumerate(lines, 1) if number not in drop]
+            while body and not body[0].strip():
+                body.pop(0)
+            while body and not body[-1].strip():
+                body.pop()
+            package_body.append(
+                "\n".join(
+                    [f"# ==== vendored {dotted} ===="] + comment + ([""] if comment else []) + body
                 )
+            )
+
+        sections.append("\n\n\n".join(package_body))
 
     for index, name in enumerate(MODULES):
         module_imports[name] = set()
@@ -258,13 +303,31 @@ def build():
 
         for node in tree.body:
             if isinstance(node, ast.Import):
-                plain_imports.update(
-                    alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
-                )
+                for alias in node.names:
+                    mod = alias.name.split(".")[0]
+                    if mod not in VENDORED_PACKAGES:
+                        plain_imports.add(
+                            alias.name + (f" as {alias.asname}" if alias.asname else "")
+                        )
+                # Always drop the import line: vendored names are already global,
+                # stdlib names are hoisted above.
+                drop.update(range(node.lineno, node.end_lineno + 1))
             elif isinstance(node, ast.ImportFrom) and node.level == 0:
-                from_imports.setdefault(node.module, set()).update(
-                    alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
-                )
+                if node.module == "__future__":
+                    # __future__ imports must be hoisted to the top
+                    future_names = from_imports.setdefault("__future__", set())
+                    future_names.update(
+                        alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
+                    )
+                    drop.update(range(node.lineno, node.end_lineno + 1))
+                elif node.module in VENDORED_PACKAGES:
+                    # Drop vendored imports: names are already global in flat namespace
+                    drop.update(range(node.lineno, node.end_lineno + 1))
+                else:
+                    from_imports.setdefault(node.module, set()).update(
+                        alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
+                    )
+                    drop.update(range(node.lineno, node.end_lineno + 1))
             elif isinstance(node, ast.ImportFrom):
                 source_module = resolve(name, node)
                 # Import order: a module may only import from earlier modules (concatenation order).
@@ -278,14 +341,16 @@ def build():
                         raise BuildError(
                             f"{module_file(name)} imports {alias.name} from {source_module}, which doesn't define it"
                         )
+                drop.update(range(node.lineno, node.end_lineno + 1))
             else:
                 continue
-            drop.update(range(node.lineno, node.end_lineno + 1))
 
         for defined_name in top_level_names(tree):
-            if defined_name in defined:
+            existing = defined.get(defined_name)
+            if existing is not None and not existing.startswith("vendored "):
                 raise BuildError(
-                    f"{defined_name} is defined in both {module_file(defined[defined_name])} and {module_file(name)}"
+                    f"{defined_name} is defined in both {module_file(existing)} "
+                    f"and {module_file(name)}"
                 )
             defined[defined_name] = name
 
@@ -300,7 +365,13 @@ def build():
             )
         )
 
+    # __future__ imports must come first in Python (before any other import)
+    future_names = from_imports.pop("__future__", None)
     imports = [f"import {name}" for name in sorted(plain_imports)]
+    if future_names:
+        imports.insert(
+            0, f"from __future__ import {', '.join(sorted(future_names))}"
+        )
     imports += [f"from {module} import {', '.join(sorted(names))}" for module, names in sorted(from_imports.items())]
     docstring = '"""' + package_doc.value.value + '"""'
     for name in ("SERVER_ENTRY", "serve_main", "main"):

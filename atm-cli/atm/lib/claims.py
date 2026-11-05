@@ -6,7 +6,6 @@ from datetime import timedelta
 
 from ..common.errors import Claimed
 from ..common.core import now, now_iso, parse_iso
-from ..common.model import change_status
 from .loop import (
     Selection,
     apply_resolutions,
@@ -18,6 +17,7 @@ from .loop import (
     next_task,
     own_lease_expired,
 )
+from .state import change_status
 from .status import claim_record
 
 # heartbeat --auto renews a claim once its last renewal is this old (CLI-6.2)

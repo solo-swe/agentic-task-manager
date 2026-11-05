@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 417,
+    "next_id": 418,
     "labels": [
       {
         "id": "architecture",
@@ -22130,6 +22130,31 @@
         "cli"
       ],
       "with": "user"
+    },
+    {
+      "id": "T-417",
+      "name": "Replace hand-rolled task state machine with transitions library",
+      "type": "refactor",
+      "description": "Replace the hand-rolled task state machine (change_status in atm/common/model.py)\nwith a declared state machine using the transitions library.\n\nDepends on T-414 (build modernization must vendor third-party code into plugin/scripts/atm.py).\nPart of T-416 (third-party libraries): transitions is one of the libraries to adopt.\n\nWork items:\n1. Add transitions to uv dev dependencies and VENDORED_PACKAGES in build.py\n2. Vendor transitions source into atm-cli/vendored/transitions/\n3. Define TaskState enum and declare all transitions as data:\n   - start: todo, review -> active (conditions: dependencies_done)\n   - review: active -> review\n   - done: active, review -> done\n   - fail: active -> todo\n   - release: active -> todo\n   - reject: review -> todo\n   - approve: review -> review\n   - request-changes: review -> review\n   - block: todo, active -> blocked\n   - unblock: blocked -> todo\n   - reopen: done, skipped -> todo\n   - skip: todo, blocked -> skipped\n4. Implement guards (conditions): dependencies_done, review_decided, claim_holder, etc.\n5. Implement before/after hooks: create_claim, release_claim, record_completion,\n   wipe_attempt, add_failure_note, add_rejection_note, add_handoff_note\n6. Replace change_status in atm/common/model.py with state machine calls\n7. Update CLI commands (start, review, done, fail, release, reject, approve,\n   request-changes, block, unblock, reopen, skip) to use the new state machine\n8. Run full test suite (npm run test:scripts) and verify green\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [
+        "T-414"
+      ],
+      "files": [
+        "docs/modernizing-build-approach.md"
+      ],
+      "created_at": "2026-11-05T08:15:16Z",
+      "updated_at": "2026-11-05T08:15:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli"
+      ],
+      "with": "user",
+      "started_at": "2026-11-05T08:15:19Z",
+      "started_by": "Hakan Serce"
     }
   ]
 }
