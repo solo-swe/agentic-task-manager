@@ -164,10 +164,20 @@ const modules = findModules(ROOT);
 const moduleMap = new Map(modules.map((m) => [m.module, m]));
 const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
 
+// Modules that are NOT part of the atm.py build concatenation.
+// atm2 is a separate CLI entry point (Typer-based) that delegates to `atm` via subprocess.
+// It is not bundled into plugin/scripts/atm.py by build.py.
+const EXCLUDED_MODULES = new Set([
+  "cli._delegate",
+  "cli.atm2",
+  "cli.atm2_main",
+]);
+
 const errors = [];
 
-// 1. Every module is in MODULES_ORDER
+// 1. Every module is in MODULES_ORDER (unless excluded)
 for (const { module } of modules) {
+  if (EXCLUDED_MODULES.has(module)) continue;
   if (!MODULES_ORDER.includes(module)) {
     errors.push(`${module}: not in MODULES_ORDER (build concatenation list)`);
   }
@@ -183,6 +193,7 @@ for (const module of MODULES_ORDER) {
 // Parse each module's imports
 const importsByModule = new Map();
 for (const { module, path: filePath } of modules) {
+  if (EXCLUDED_MODULES.has(module)) continue;
   const source = fs.readFileSync(filePath, "utf8");
   const names = new Set();
 
@@ -221,6 +232,7 @@ for (const { module, path: filePath } of modules) {
 
 // 3. Layer rules: each module's imports must be in ALLOWED[its layer]
 for (const { module } of modules) {
+  if (EXCLUDED_MODULES.has(module)) continue;
   const layer = layerOf(module);
   const allowed = new Set(ALLOWED[layer]);
   const imported = importsByModule.get(module) || new Set();
@@ -253,6 +265,7 @@ for (const { module } of modules) {
 
 // 5. cli/api modules never touch .store directly (§11.3)
 for (const { module, path: filePath } of modules) {
+  if (EXCLUDED_MODULES.has(module)) continue;
   const layer = layerOf(module);
   if (layer !== "cli" && layer !== "api") continue;
   const source = fs.readFileSync(filePath, "utf8");
@@ -274,6 +287,7 @@ for (const { module, path: filePath } of modules) {
 // 6. No duplicate top-level names across modules
 const defined = new Map();
 for (const { module, path: filePath } of modules) {
+  if (EXCLUDED_MODULES.has(module)) continue;
   const source = fs.readFileSync(filePath, "utf8");
   const names = topLevelNames(source);
   for (const name of names) {

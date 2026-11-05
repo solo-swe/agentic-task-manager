@@ -10,10 +10,11 @@ dev = [
     "pytest>=7.0,<9.0",
     "ruff>=0.8,<0.15",
     "mypy>=1.8,<1.12",
+    "typer>=0.9,<0.16",
 ]
-# Third-party libraries adopted by T-416 (vendored into plugin/scripts/atm.py by build.py):
-#   click — CLI parsing (replaces argparse)
+# Third-party libraries adopted by T-416/T-417 (vendored into plugin/scripts/atm.py by build.py):
 #   transitions — task state machine (replaces hand-rolled change_status)
+#   typer — Typer-based CLI entry point (atm2, experimental)
 # These are listed here so uv can manage them, but are not imported by atm-cli modules yet.
 # T-416 will add the imports and update build.py to vendor them.
 
@@ -23,6 +24,7 @@ dev = [
     "ruff>=0.8,<0.15",
     "mypy>=1.8,<1.12",
     "transitions>=0.9.3",
+    "typer>=0.9,<0.16",
 ]
 
 [tool.uv]

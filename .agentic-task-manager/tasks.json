@@ -17490,16 +17490,36 @@
         "docs/code-review-design.md"
       ],
       "created_at": "2026-11-01T08:41:22Z",
-      "updated_at": "2026-11-03T19:56:20Z",
+      "updated_at": "2026-11-05T08:49:32Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:b7be7288",
+      "updated_by": "Hakan Serce",
       "components": [
         "docs",
         "dashboard",
         "cli",
         "skills"
       ],
-      "with": "user"
+      "with": "user",
+      "notes": [
+        {
+          "at": "2026-11-05T08:49:25Z",
+          "kind": "review",
+          "text": "testing atm2 review",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T08:49:32Z",
+          "kind": "rejection",
+          "text": "cleanup after atm2 test",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T08:49:32Z",
+          "kind": "rejection",
+          "text": "cleanup after atm2 test",
+          "by": "Hakan Serce"
+        }
+      ]
     },
     {
       "id": "T-338",
@@ -22006,23 +22026,25 @@
       "id": "T-412",
       "name": "Improve atm cli interface",
       "type": "refactor",
-      "description": "Redesign the atm CLI for consistency and ergonomics.\n\nSee docs/task-states.md for the task state model and transitions (six kinds, all state commands, claims/leases, cross-worktree decisions).\n\nSee docs/improving-atm-cli-ergonomics.md for the proposed command structure (task, project, sprint, release, component, vcs, claim, loop, db, doctor, service), option normalization, risks, and a wrapper→delegate→delete migration plan.\n\nWork items:\n1. organize in subcommands like atm task, atm project, atm sprint, atm component, ...\n2. put a dry run command for all commands that make a change\n3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc.)\n4. Implement dynamic autocompletion for atm for zsh/bash/fish\n",
+      "description": "Redesign the atm CLI for consistency and ergonomics.\n\nSee docs/task-states.md for the task state model and transitions (six kinds, all state commands, claims/leases, cross-worktree decisions).\n\nSee docs/improving-atm-cli-ergonomics.md for the proposed command structure (task, project, sprint, release, component, vcs, claim, loop, db, doctor, service), option normalization, risks, and a wrapper→delegate→delete migration plan.\n\nWork items:\n1. organize in subcommands like atm task, atm project, atm sprint, atm component, ...\n2. put a dry run command for all commands that make a change\n3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc.)\n4. Implement dynamic autocompletion for atm for zsh/bash/fish\n\nTyper experiment (atm2): implement a Typer-based CLI entry point (atm2) as a separate entry point that delegates to the existing atm commands via subprocess. This evaluates Typer's ergonomics (nested groups, type-hinted options, auto-help) without touching the existing atm command surface.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/task-states.md",
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-05T01:56:43Z",
+      "updated_at": "2026-11-05T08:45:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "components": [
         "cli"
       ],
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-05T08:44:52Z",
+      "started_by": "Hakan Serce"
     },
     {
       "id": "T-413",
@@ -22138,7 +22160,7 @@
       "description": "Replace the hand-rolled task state machine (change_status in atm/common/model.py)\nwith a declared state machine using the transitions library.\n\nDepends on T-414 (build modernization must vendor third-party code into plugin/scripts/atm.py).\nPart of T-416 (third-party libraries): transitions is one of the libraries to adopt.\n\nWork items:\n1. Add transitions to uv dev dependencies and VENDORED_PACKAGES in build.py\n2. Vendor transitions source into atm-cli/vendored/transitions/\n3. Define TaskState enum and declare all transitions as data:\n   - start: todo, review -> active (conditions: dependencies_done)\n   - review: active -> review\n   - done: active, review -> done\n   - fail: active -> todo\n   - release: active -> todo\n   - reject: review -> todo\n   - approve: review -> review\n   - request-changes: review -> review\n   - block: todo, active -> blocked\n   - unblock: blocked -> todo\n   - reopen: done, skipped -> todo\n   - skip: todo, blocked -> skipped\n4. Implement guards (conditions): dependencies_done, review_decided, claim_holder, etc.\n5. Implement before/after hooks: create_claim, release_claim, record_completion,\n   wipe_attempt, add_failure_note, add_rejection_note, add_handoff_note\n6. Replace change_status in atm/common/model.py with state machine calls\n7. Update CLI commands (start, review, done, fail, release, reject, approve,\n   request-changes, block, unblock, reopen, skip) to use the new state machine\n8. Run full test suite (npm run test:scripts) and verify green\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-414"
       ],
@@ -22146,7 +22168,7 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T08:15:16Z",
-      "updated_at": "2026-11-05T08:15:19Z",
+      "updated_at": "2026-11-05T08:44:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "components": [
@@ -22154,7 +22176,17 @@
       ],
       "with": "user",
       "started_at": "2026-11-05T08:15:19Z",
-      "started_by": "Hakan Serce"
+      "started_by": "Hakan Serce",
+      "completed_by": "Hakan Serce",
+      "completed_at": "2026-11-05T08:44:52Z",
+      "notes": [
+        {
+          "at": "2026-11-05T08:44:52Z",
+          "kind": "outcome",
+          "text": "state machine implemented with transitions library, vendored into build.py, all 12 transitions working",
+          "by": "Hakan Serce"
+        }
+      ]
     }
   ]
 }

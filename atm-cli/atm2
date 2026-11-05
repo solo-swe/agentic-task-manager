@@ -1,0 +1,12 @@
+#!/bin/sh
+# atm2: the Typer-based ATM CLI entry point (experimental). Delegates to `atm`.
+dir=$(cd "$(dirname "$0")" && pwd)
+
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --directory "$dir" python "$dir/atm/cli/atm2_main.py" "$@"
+fi
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
+  exec python3 "$dir/atm/cli/atm2_main.py" "$@"
+fi
+echo "atm2: needs Python 3.9 or newer (python3). Install it and try again." >&2
+exit 127
