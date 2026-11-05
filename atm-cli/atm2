@@ -3,7 +3,8 @@
 dir=$(cd "$(dirname "$0")" && pwd)
 
 if command -v uv >/dev/null 2>&1; then
-  exec uv run --directory "$dir" python "$dir/atm/cli/atm2_main.py" "$@"
+  # --project, not --directory: atm2 works on the project it is run in, so the working directory must stay
+  exec uv run --quiet --project "$dir" python "$dir/atm/cli/atm2_main.py" "$@"
 fi
 if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null; then
   exec python3 "$dir/atm/cli/atm2_main.py" "$@"

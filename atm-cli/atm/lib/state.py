@@ -31,6 +31,7 @@ from ..common.model import (
     is_agent,
     kind_of,
     status_for,
+    touch,
     unfinished_dependencies,
     vocabulary,
 )

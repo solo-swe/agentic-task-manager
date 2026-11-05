@@ -13,10 +13,33 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from atm.cli.atm2 import app
+from atm.common.core import AtmError, AtmExit, to_json
+from atm.common.errors import AtmFailure
+
+
+def report(error: AtmFailure, as_json: bool) -> None:
+    """An error as atm reports it: `atm: <message>` on stderr, or {"error", "code"} with --json."""
+    if as_json:
+        sys.stderr.write(to_json({"error": str(error), "code": error.code}) + "\n")
+    else:
+        sys.stderr.write(f"atm: {error}\n")
 
 
 def main() -> None:
-    app(prog_name="atm2")
+    as_json = "--json" in sys.argv or "-j" in sys.argv
+    try:
+        app(prog_name="atm2")
+    except AtmFailure as e:
+        report(e, as_json)
+        sys.exit(e.code)
+    except AtmExit as e:
+        sys.exit(e.code)
+    except Exception as e:  # noqa: BLE001 - an error message, not a traceback, as atm does
+        report(
+            AtmError(f"unexpected error ({type(e).__name__}: {e}); run atm check, and report it if that is clean"),
+            as_json,
+        )
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -26,13 +26,13 @@ from ..boot.identity import agent_identity
 from ..boot.jsongit import dashboard_id, migrate_folder, register_project, set_up_store
 from ..boot.open import open_project
 from ..common.core import (
-    AtmError, AtmExit, out, to_json, atm_home, ensure_home,
+    AtmExit, out, to_json, atm_home, ensure_home,
     format_duration, parse_iso, parse_version, pid_alive,
     read_json, whoami, PLUGIN_ROOT, SCRIPT_DIR,
 )
 from ..common.dashboard import (
     SCAN_PORTS, SERVER_LOG, SERVER_RECORD, SERVER_ENTRY, TEMPLATE,
-    dashboard_head, home_id, server_command, DEFAULT_PORT,
+    dashboard_head, home_id, DEFAULT_PORT,
 )
 from ..common.errors import AtmFailure, Invalid
 from ..lib.archive import archive_finished, unarchive_tasks
@@ -44,8 +44,12 @@ from ..lib.code import (
     record_pr,
     repository_paths,
 )
+from ..lib.archive import task_snapshot
 from ..lib.components import add_component, edit_component, list_components
-from ..lib.edit import check_project
+from ..lib.edit import add_new_tasks, check_project, edit_existing_task
+from ..lib.query import Filters, task_dependencies, task_views
+from ..lib.status import STATUS_FUNCTIONS, add_task_note
+from ..lib.tasks import show_tasks
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
 from ..lib.settings import (
     ensure_project_id,
@@ -56,7 +60,10 @@ from ..lib.settings import (
 )
 from .archive import describe_ids, describe_kept
 from .components import moved_text
-from ._delegate import run_atm, run_atm_capture
+from .edit import read_entries, suggestion_line
+from .render import list_lines, render_task, report_expired, view_row
+from .status import COMMAND_OPTIONS, LIST_OPTIONS
+from ._delegate import run_atm
 
 
 # ── constants ported from atm cli/serve.py ──────────────────────────────────
@@ -128,51 +135,51 @@ def task_list(
     ),
     archived: bool = typer.Option(False, "--archived", help="List the archive instead"),
     derived: bool = typer.Option(False, "--derived", help="Each task in full as JSON"),
+    tolerant: bool = typer.Option(
+        False, "--tolerant", help="With --derived: read a malformed tasks.json as far as it can be read"
+    ),
 ) -> None:
     """List tasks: one line per task: ID, status, priority, labels, name."""
-    args: list[str] = ["list"]
-    if status:
-        for s in status:
-            args += ["--status", s]
-    if sprint:
-        for s in sprint:
-            args += ["--sprint", s]
-    if backlog:
-        args.append("--backlog")
-    if release:
-        args += ["--release", release]
-    if component:
-        args += ["--component", component]
-    if type_:
-        args += ["--type", type_]
-    if priority:
-        args += ["--priority", priority]
-    if label:
-        for l in label:
-            args += ["--label", l]
-    if agent:
-        args += ["--agent", agent]
-    if ready:
-        args.append("--ready")
-    if blocked:
-        args.append("--blocked")
-    if in_pr:
-        args.append("--in-pr")
-    if with_user:
-        args.append("--with-user")
-    if archived:
-        args.append("--archived")
+    filters = Filters(
+        sprint=sprint or None,
+        backlog=backlog,
+        release=release,
+        component=component,
+        status=status or None,
+        type=type_,
+        priority=priority,
+        label=label or None,
+        agent=agent,
+        ready=ready,
+        blocked=blocked,
+        in_pr=in_pr,
+        with_user=with_user,
+        archived=archived,
+    )
     if derived:
-        args.append("--derived")
+        # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
+        if tolerant:
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), filters)
+            snapshot.pop("bytes")
+            out(to_json(snapshot))
+        else:
+            out(to_json(task_views(open_project(os.getcwd()), filters)))
+        return
+    rows = [view_row(v) for v in task_views(open_project(os.getcwd()), filters)]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(rows))
+        return
+    if not rows:
+        out("No tasks match.")
+        return
+    for line in list_lines(rows):
+        out(line)
 
 
 @task_app.command("add")
 def task_add(
     ctx: typer.Context,
-    name: str = typer.Option(..., "--name", help="A short name (about 60 characters)"),
+    name: Optional[str] = typer.Option(None, "--name", help="A short name (about 60 characters)"),
     type_: Optional[str] = typer.Option(None, "--type", help="The task type"),
     sprint: Optional[str] = typer.Option(None, "--sprint", help="The sprint it goes into"),
     release: Optional[str] = typer.Option(None, "--release", help="The release it ships in"),
@@ -205,51 +212,48 @@ def task_add(
         None, "--with", help="user: done together with the user"
     ),
     json_file: Optional[str] = typer.Option(None, "--json-file", help="Add many from a JSON file"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Add a task with the next ID, or many from a JSON file."""
-    args = ["add"]
-    args += ["--name", name]
-    if type_:
-        args += ["--type", type_]
-    if sprint:
-        args += ["--sprint", sprint]
-    if release:
-        args += ["--release", release]
-    if priority:
-        args += ["--priority", priority]
-    if label:
-        for l in label:
-            args += ["--label", l]
-    if description:
-        args += ["--description", description]
-    if description_file:
-        args += ["--description-file", description_file]
-    if dep:
-        for d in dep:
-            args += ["--dep", d]
-    if file:
-        for f in file:
-            args += ["--file", f]
-    if requirement:
-        for r in requirement:
-            args += ["--requirement", r]
-    if component:
-        for c in component:
-            args += ["--component", c]
-    if components_auto:
-        args += ["--components", "auto"]
-    if review:
-        args += ["--review", review]
-    if related:
-        for r in related:
-            args += ["--related", r]
-    if with_user:
-        args += ["--with", with_user]
+    if description and description_file:
+        raise Invalid("--description and --description-file can't both be given")
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would add tasks from {json_file}" if json_file else f"[dry-run] would add task {name}")
+        return
     if json_file:
-        args += ["--json-file", json_file]
+        entries = read_entries(json_file)
+    else:
+        if description_file:
+            with open(description_file, encoding="utf-8") as f:
+                description = f.read()
+        entries = [
+            {
+                "name": name,
+                "type": type_,
+                "priority": priority,
+                "labels": label or [],
+                "description": description or "",
+                "dependencies": dep or [],
+                "files": file or [],
+                "requirements": requirement or [],
+                "sprint": sprint,
+                "release": release,
+                "components": "auto" if components_auto else (component or []),
+                "review": review,
+                "with": with_user,
+                "related": related or [],
+            }
+        ]
+    result = add_new_tasks(open_project(os.getcwd(), agent_identity(agent)), entries)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(result["tasks"]))
+        return
+    for task in result["tasks"]:
+        out(f"Added {task['id']} {task['name']}")
+        line = suggestion_line(result["vocab"], task)
+        if line:
+            out(line)
 
 
 @task_app.command("edit")
@@ -281,76 +285,57 @@ def task_edit(
     remove_use_case: Optional[list[str]] = typer.Option(None, "--remove-use-case"),
     components_auto: bool = typer.Option(False, "--components"),
     with_user: Optional[str] = typer.Option(None, "--with"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Change a task's definition (not its status: use `atm2 task state`)."""
-    args = ["edit", task_id]
-    if name:
-        args += ["--name", name]
-    if description:
-        args += ["--description", description]
+    if description is not None and description_file:
+        raise Invalid("--description and --description-file can't both be given")
+    if sprint is not None and backlog:
+        raise Invalid("--sprint and --backlog can't both be given")
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would edit task {task_id}")
+        return
     if description_file:
-        args += ["--description-file", description_file]
-    if sprint:
-        args += ["--sprint", sprint]
-    if backlog:
-        args.append("--backlog")
-    if type_:
-        args += ["--type", type_]
-    if priority:
-        args += ["--priority", priority]
-    if release:
-        args += ["--release", release]
-    if review:
-        args += ["--review", review]
-    if add_file:
-        for f in add_file:
-            args += ["--add-file", f]
-    if remove_file:
-        for f in remove_file:
-            args += ["--remove-file", f]
-    if add_dep:
-        for d in add_dep:
-            args += ["--add-dep", d]
-    if remove_dep:
-        for d in remove_dep:
-            args += ["--remove-dep", d]
-    if add_label:
-        for l in add_label:
-            args += ["--add-label", l]
-    if remove_label:
-        for l in remove_label:
-            args += ["--remove-label", l]
-    if add_component:
-        for c in add_component:
-            args += ["--add-component", c]
-    if remove_component:
-        for c in remove_component:
-            args += ["--remove-component", c]
-    if add_related:
-        for r in add_related:
-            args += ["--add-related", r]
-    if remove_related:
-        for r in remove_related:
-            args += ["--remove-related", r]
-    if add_requirement:
-        for r in add_requirement:
-            args += ["--add-requirement", r]
-    if remove_requirement:
-        for r in remove_requirement:
-            args += ["--remove-requirement", r]
-    if add_use_case:
-        for u in add_use_case:
-            args += ["--add-use-case", u]
-    if remove_use_case:
-        for u in remove_use_case:
-            args += ["--remove-use-case", u]
-    if components_auto:
-        args += ["--components", "auto"]
-    if with_user:
-        args += ["--with", with_user]
+        with open(description_file, encoding="utf-8") as f:
+            description = f.read()
+    result = edit_existing_task(
+        open_project(os.getcwd(), agent_identity(agent)),
+        task_id,
+        name=name,
+        description=description,
+        sprint=sprint,
+        backlog=backlog,
+        task_type=type_,
+        priority=priority,
+        release=release,
+        review=review,
+        with_=with_user,
+        components="auto" if components_auto else None,
+        add_files=add_file or [],
+        remove_files=remove_file or [],
+        add_dependencies=add_dep or [],
+        remove_dependencies=remove_dep or [],
+        add_labels=add_label or [],
+        remove_labels=remove_label or [],
+        add_components=add_component or [],
+        remove_components=remove_component or [],
+        add_related=add_related or [],
+        remove_related=remove_related or [],
+        add_requirements=add_requirement or [],
+        remove_requirements=remove_requirement or [],
+        add_use_cases=add_use_case or [],
+        remove_use_cases=remove_use_case or [],
+    )
+    task, changed = result["task"], result["changed"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(task))
+        return
+    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
+    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
+    line = suggestion_line(result["vocab"], task) if add_file else None
+    if line:
+        out(line)
 
 
 @task_app.command("details")
@@ -359,10 +344,12 @@ def task_details(
     task_ids: Annotated[list[str], typer.Argument(help="Task IDs")],
 ) -> None:
     """Tasks in full (description, dependencies, files, notes)."""
-    args = ["show"] + task_ids
+    views = show_tasks(open_project(os.getcwd()), task_ids)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        # An archived task says so (T-353)
+        out(to_json([{**v["task"], "archived": True} if v["archived"] else v["task"] for v in views]))
+    else:
+        out("\n\n".join(render_task(v) for v in views))
 
 
 @task_app.command("note")
@@ -370,12 +357,18 @@ def task_note(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     text: Annotated[str, typer.Argument(help="The note text")],
+    agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Add a note to a task (at most 500 characters)."""
-    args = ["note", task_id, text]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would add a note to {task_id}")
+        return
+    task = add_task_note(open_project(os.getcwd(), agent_identity(agent)), task_id, text)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(task["notes"][-1]))
+    else:
+        out(f"{task['id']}: note added ({len(task['notes'])} in all)")
 
 
 @task_app.command("deps")
@@ -384,7 +377,13 @@ def task_deps(
     task_id: Annotated[str, typer.Argument(help="The task ID")],
 ) -> None:
     """What a task waits for, and what waits for it."""
-    sys.exit(run_atm(["deps", task_id]))
+    deps = task_dependencies(open_project(os.getcwd()), task_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(deps))
+        return
+    line = lambda items: ", ".join(f"{i['id']} ({i['status']})" for i in items) or "nothing"
+    out(f"{task_id} waits for: {line(deps['waits_for'])}")
+    out(f"{task_id} is waited on by: {line(deps['waited_on_by'])}")
 
 
 @task_app.command("state")
@@ -429,38 +428,73 @@ def task_state(
         )
         raise typer.Exit(2)
 
-    # `todo` from review means reject; `todo` from blocked means unblock; `todo` from done/skipped means reopen
-    # We can't know the current state without asking `atm show`, so default `todo` -> reject (from review).
-    # The user can override with --on/--answer for unblock, or use the specific atm command directly.
+    project = open_project(os.getcwd(), agent_identity(agent))
     if next_state == "todo":
-        cmd = "reject"  # safest default: task in review back to todo
+        # Back to todo is a different command for each kind the task is in now
+        view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
+        if view is None:
+            show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
+            current = "done"
+        else:
+            current = view["derived"].get("kind")
+        todo_commands = {
+            "active": "release" if note is not None else "fail",
+            "review": "reject",
+            "blocked": "unblock",
+            "done": "reopen",
+            "skipped": "reopen",
+        }
+        if current not in todo_commands:
+            raise Invalid(f"{task_id} is already {current}")
+        cmd = todo_commands[current]
 
-    args = [cmd, task_id]
-    if note:
-        args += ["--note", note]
-    if reason:
-        args += ["--reason", reason]
-    if commit:
-        args += ["--commit", commit]
-    if resolution:
-        args += ["--resolution", resolution]
-    if duplicate_of:
-        args += ["--duplicate-of", duplicate_of]
-    if on:
-        args += ["--on", on]
-    if question:
-        for q in question:
-            args += ["--question", q]
-    if answer:
-        for a in answer:
-            args += ["--answer", a]
-    if status:
-        args += ["--status", status]
-    if agent:
-        args += ["--agent", agent]
+    given = {
+        "note": note,
+        "reason": reason,
+        "commit": commit,
+        "resolution": resolution,
+        "duplicate_of": duplicate_of,
+        "on": on,
+        "question": question,
+        "answer": answer,
+    }
+    takes = {name for _, name in COMMAND_OPTIONS[cmd]}
+    extra = [name for name, value in given.items() if value and name not in takes]
+    if extra:
+        flags = ", ".join("--" + name.replace("_", "-") for name in extra)
+        raise Invalid(f"{flags}: not for {next_state} ({cmd}) from where {task_id} is")
+    required = {"reject": "reason", "request-changes": "reason", "reopen": "reason", "skip": "reason", "block": "on"}
+    if cmd in required and not given[required[cmd]]:
+        raise Invalid(f"{next_state} ({cmd}) needs --{required[cmd]}")
+
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would {cmd} {task_id}")
+        return
+    options = {
+        parameter: given[name] or ([] if parameter in LIST_OPTIONS else None)
+        for parameter, name in COMMAND_OPTIONS[cmd]
+    }
+    result = STATUS_FUNCTIONS[cmd](project, task_id, status=status, **options)
+    report_expired(result["expired"])
+    task, hint, stranded = result["task"], result["hint"], result["stranded"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        extra_fields = {"unblocked": result["unblocked"]} if cmd == "done" else {}
+        if hint:
+            extra_fields["suggest"] = {"archive": hint}
+        if stranded:
+            extra_fields["hint"] = stranded
+        out(to_json({**task, "claim": result["claim"], **extra_fields}))
+        return
+    out(f"{task['id']}: {result['previous']} -> {task['status']}")
+    if stranded:
+        out(f"  {stranded}")
+    if cmd == "start":
+        out(render_task(result["view"]))
+    if result["unblocked"]:
+        out("Now ready: " + ", ".join(result["unblocked"]))
+    if hint:
+        out(hint["text"])
 
 
 # ---------------------------------------------------------------------------
