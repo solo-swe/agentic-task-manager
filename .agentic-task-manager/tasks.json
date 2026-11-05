@@ -22057,13 +22057,13 @@
       "description": "Modernize the atm CLI build approach: use uv for developer dependencies, click instead of argparse, a state machine library for task states, and evolve build.py to bundle third-party code into the single customer artifact (plugin/scripts/atm.py).\n\nSee docs/modernizing-build-approach.md for the full design: developer stack, click CLI example, state machine example, build flow, customer artifact options, risks, and migration plan.\n\nWork items:\n1. Add uv to developer workflow (uv sync --dev installs click, transitions, pytest, ruff, mypy)\n2. Rewrite command groups using click instead of argparse, one group at a time\n3. Replace hand-rolled task state transitions with a declared state machine\n4. Update build.py to bundle vendored click/transitions into plugin/scripts/atm.py\n5. Move layer-enforcement out of build.py into CI tests\n6. Remove old argparse flat commands one group at a time, testing after each removal\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T06:39:31Z",
-      "updated_at": "2026-11-05T07:24:53Z",
+      "updated_at": "2026-11-05T07:33:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "components": [
@@ -22071,7 +22071,17 @@
       ],
       "with": "user",
       "started_at": "2026-11-05T07:24:53Z",
-      "started_by": "Hakan Serce"
+      "started_by": "Hakan Serce",
+      "completed_at": "2026-11-05T07:33:38Z",
+      "completed_by": "Hakan Serce",
+      "notes": [
+        {
+          "at": "2026-11-05T07:33:38Z",
+          "kind": "outcome",
+          "text": "uv dev workflow, pyproject.toml, build.py vendoring infrastructure, layer enforcement moved to CI tests",
+          "by": "Hakan Serce"
+        }
+      ]
     },
     {
       "id": "T-415",

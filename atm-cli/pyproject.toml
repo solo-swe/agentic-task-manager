@@ -1,0 +1,38 @@
+[project]
+name = "atm-cli"
+version = "0.30.0"
+description = "Agentic Task Manager CLI — pure Python stdlib implementation bundled into plugin/scripts/atm.py"
+requires-python = ">=3.9"
+authors = [{ name = "Hakan Serce" }]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0,<9.0",
+    "ruff>=0.8,<0.15",
+    "mypy>=1.8,<1.12",
+]
+# Third-party libraries adopted by T-416 (vendored into plugin/scripts/atm.py by build.py):
+#   click — CLI parsing (replaces argparse)
+#   transitions — task state machine (replaces hand-rolled change_status)
+# These are listed here so uv can manage them, but are not imported by atm-cli modules yet.
+# T-416 will add the imports and update build.py to vendor them.
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0,<9.0",
+    "ruff>=0.8,<0.15",
+    "mypy>=1.8,<1.12",
+]
+
+[tool.uv]
+# uv manages the dev environment; requires-python in [project] declares 3.9+ compatibility
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true

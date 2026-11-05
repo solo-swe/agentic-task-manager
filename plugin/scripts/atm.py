@@ -9897,13 +9897,21 @@ def build_parser():
     commands = parser.add_subparsers(dest="command", parser_class=Parser)
 
     def command(name, run, description, hidden=False):
-        sub = commands.add_parser(name, description=description, help=argparse.SUPPRESS if hidden else description)
+        sub = commands.add_parser(
+            name,
+            description=description,
+            help=argparse.SUPPRESS if hidden else description,
+        )
         sub.add_argument("--json", action="store_true", help="print the result as JSON")
         sub.set_defaults(run=run)
         return sub
 
     def agent_option(sub):
-        sub.add_argument("--agent", metavar="NAME", help="who you are (default: ATM_AGENT, else this session)")
+        sub.add_argument(
+            "--agent",
+            metavar="NAME",
+            help="who you are (default: ATM_AGENT, else this session)",
+        )
 
     def status_option(sub):
         sub.add_argument(
@@ -9915,98 +9923,249 @@ def build_parser():
     command("version", cmd_version, "print the plugin version")
     command("help", cmd_help, "show the list of commands")
     command("paths", cmd_paths, "print where this project's task files are")
-    command("migrate", cmd_migrate, "move an old tasks.json into .agentic-task-manager/ and set the folder up")
+    command(
+        "migrate",
+        cmd_migrate,
+        "move an old tasks.json into .agentic-task-manager/ and set the folder up",
+    )
 
-    serve = command("serve", cmd_serve, "run the dashboard server, one for all your projects, in the background")
-    serve.add_argument("action", nargs="?", default="start", choices=["start", "stop", "status"])
-    serve.add_argument("--open", action="store_true", help="also open the dashboard in the browser")
-    serve.add_argument("--all", action="store_true", help="show the overview of all projects, not this project")
+    serve = command(
+        "serve",
+        cmd_serve,
+        "run the dashboard server, one for all your projects, in the background",
+    )
+    serve.add_argument(
+        "action", nargs="?", default="start", choices=["start", "stop", "status"]
+    )
+    serve.add_argument(
+        "--open", action="store_true", help="also open the dashboard in the browser"
+    )
+    serve.add_argument(
+        "--all",
+        action="store_true",
+        help="show the overview of all projects, not this project",
+    )
     serve.add_argument(
         "--refresh",
         action="store_true",
         help="only restart a running server that has an older dashboard than this plugin (the SessionStart hook)",
     )
-    serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="the port to try first")
-    serve.add_argument("--dir", metavar="PATH", help="the project to show (default: the current directory's)")
+    serve.add_argument(
+        "--port", type=int, default=DEFAULT_PORT, help="the port to try first"
+    )
+    serve.add_argument(
+        "--dir",
+        metavar="PATH",
+        help="the project to show (default: the current directory's)",
+    )
 
     for name, description in (
-        ("start", "mark a task in_progress and claim it (its dependencies must be done)"),
-        ("review", "ask for a review of a finished task: in_review, its claim released"),
+        (
+            "start",
+            "mark a task in_progress and claim it (its dependencies must be done)",
+        ),
+        (
+            "review",
+            "ask for a review of a finished task: in_review, its claim released",
+        ),
         ("done", "mark an in_progress or in_review task done and drop its claim"),
         ("fail", "put an in_progress task back to todo, recording why"),
         ("release", "put an in_progress task back to todo"),
         ("reject", "send a task in review back to todo, recording why"),
-        ("approve", "approve a task in review: it stays in review until an agent takes it back to finish"),
-        ("request-changes", "ask for changes to a task in review: its agent takes it back first (a rejection note)"),
-        ("block", "a task that can't go on until someone decides: blocked, with the questions; claim released"),
+        (
+            "approve",
+            "approve a task in review: it stays in review until an agent takes it back to finish",
+        ),
+        (
+            "request-changes",
+            "ask for changes to a task in review: its agent takes it back first (a rejection note)",
+        ),
+        (
+            "block",
+            "a task that can't go on until someone decides: blocked, with the questions; claim released",
+        ),
         ("unblock", "a blocked task goes back to todo, with the answers as a note"),
-        ("reopen", "a done or skipped task goes back to todo, with the reason as a note"),
-        ("skip", "a todo or blocked task that isn't needed: skipped, with the reason as a note"),
+        (
+            "reopen",
+            "a done or skipped task goes back to todo, with the reason as a note",
+        ),
+        (
+            "skip",
+            "a todo or blocked task that isn't needed: skipped, with the reason as a note",
+        ),
     ):
         sub = command(name, cmd_status_change(name), description)
         sub.add_argument("id", help="the task ID")
         agent_option(sub)
         status_option(sub)
         if name == "fail":
-            sub.add_argument("--reason", metavar="TEXT", help="why it failed (kept as a failure note)")
-        if name == "release":
-            sub.add_argument("--note", metavar="TEXT", help="a handoff for whoever picks it up next")
-        if name == "review":
-            sub.add_argument("--note", metavar="TEXT", help="what the reviewer should look at")
-        if name in ("reject", "request-changes"):
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="what needs to change (a rejection note)")
-        if name == "approve":
-            sub.add_argument("--note", metavar="TEXT", help="what is left to do, or a word for the agent")
-        if name == "reopen":
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="why it isn't done after all (a note)")
-        if name == "skip":
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="why it isn't needed (a note)")
             sub.add_argument(
-                "--resolution", choices=["wont_do", "obsolete", "duplicate"], help="why it ended (default: wont_do)"
+                "--reason",
+                metavar="TEXT",
+                help="why it failed (kept as a failure note)",
             )
-            sub.add_argument("--duplicate-of", metavar="ID", help="the task it duplicates (with --resolution duplicate)")
+        if name == "release":
+            sub.add_argument(
+                "--note", metavar="TEXT", help="a handoff for whoever picks it up next"
+            )
+        if name == "review":
+            sub.add_argument(
+                "--note", metavar="TEXT", help="what the reviewer should look at"
+            )
+        if name in ("reject", "request-changes"):
+            sub.add_argument(
+                "--reason",
+                metavar="TEXT",
+                required=True,
+                help="what needs to change (a rejection note)",
+            )
+        if name == "approve":
+            sub.add_argument(
+                "--note",
+                metavar="TEXT",
+                help="what is left to do, or a word for the agent",
+            )
+        if name == "reopen":
+            sub.add_argument(
+                "--reason",
+                metavar="TEXT",
+                required=True,
+                help="why it isn't done after all (a note)",
+            )
+        if name == "skip":
+            sub.add_argument(
+                "--reason",
+                metavar="TEXT",
+                required=True,
+                help="why it isn't needed (a note)",
+            )
+            sub.add_argument(
+                "--resolution",
+                choices=["wont_do", "obsolete", "duplicate"],
+                help="why it ended (default: wont_do)",
+            )
+            sub.add_argument(
+                "--duplicate-of",
+                metavar="ID",
+                help="the task it duplicates (with --resolution duplicate)",
+            )
         if name == "block":
-            sub.add_argument("--on", required=True, choices=["user", "agent"], help="who has to decide")
-            sub.add_argument("--question", action="append", default=[], metavar="TEXT", help="an open question")
-            sub.add_argument("--reason", metavar="TEXT", help="what it waits for, when it isn't a question")
+            sub.add_argument(
+                "--on",
+                required=True,
+                choices=["user", "agent"],
+                help="who has to decide",
+            )
+            sub.add_argument(
+                "--question",
+                action="append",
+                default=[],
+                metavar="TEXT",
+                help="an open question",
+            )
+            sub.add_argument(
+                "--reason",
+                metavar="TEXT",
+                help="what it waits for, when it isn't a question",
+            )
         if name == "unblock":
-            sub.add_argument("--answer", action="append", default=[], metavar="TEXT", help="an answer, in order")
+            sub.add_argument(
+                "--answer",
+                action="append",
+                default=[],
+                metavar="TEXT",
+                help="an answer, in order",
+            )
         if name == "done":
             sub.add_argument("--note", metavar="TEXT", help="a one-line outcome")
             sub.add_argument("--commit", metavar="SHA", help="the task's commit")
             sub.add_argument(
-                "--resolution", choices=["done", "wont_do", "duplicate", "obsolete"], help="how it ended (default: done)"
+                "--resolution",
+                choices=["done", "wont_do", "duplicate", "obsolete"],
+                help="how it ended (default: done)",
             )
 
-    next_ = command("next", cmd_next, "the task /atm:loop-tasks works on next (exit code 3 if there is none)")
+    next_ = command(
+        "next",
+        cmd_next,
+        "the task /atm:loop-tasks works on next (exit code 3 if there is none)",
+    )
     next_.add_argument("--type", help="only this task type")
     next_.add_argument(
-        "--with-user", action="store_true", help="also tasks done together with the user (the user is watching)"
+        "--with-user",
+        action="store_true",
+        help="also tasks done together with the user (the user is watching)",
     )
     pick = next_.add_mutually_exclusive_group()
     pick.add_argument(
-        "--sprint", action="append", metavar="NAME", help="this sprint's tasks (repeatable; default: the active one)"
+        "--sprint",
+        action="append",
+        metavar="NAME",
+        help="this sprint's tasks (repeatable; default: the active one)",
     )
     pick.add_argument("--tasks", metavar="ID,ID", help="these tasks, in this order")
-    pick.add_argument("--all", action="store_true", help="every task: the active sprint, the planned ones, the backlog")
+    pick.add_argument(
+        "--all",
+        action="store_true",
+        help="every task: the active sprint, the planned ones, the backlog",
+    )
     pick.add_argument("--backlog", action="store_true", help="the tasks with no sprint")
-    next_.add_argument("--claim", action="store_true", help="also start and claim it, atomically")
+    next_.add_argument(
+        "--claim", action="store_true", help="also start and claim it, atomically"
+    )
     agent_option(next_)
     status_option(next_)
 
-    show = command("show", cmd_show, "tasks in full: what an agent needs to work on them")
+    show = command(
+        "show", cmd_show, "tasks in full: what an agent needs to work on them"
+    )
     show.add_argument("ids", nargs="+", metavar="id", help="task IDs")
-    list_ = command("list", cmd_list, "one line per task: ID, status, priority, labels, name")
-    list_.add_argument("--status", action="append", metavar="ID", help="only these statuses (repeatable)")
+    list_ = command(
+        "list", cmd_list, "one line per task: ID, status, priority, labels, name"
+    )
+    list_.add_argument(
+        "--status",
+        action="append",
+        metavar="ID",
+        help="only these statuses (repeatable)",
+    )
     list_.add_argument("--type", help="only this task type")
-    list_.add_argument("--priority", help="only this priority (a missing one counts as the default)")
-    list_.add_argument("--label", action="append", help="only tasks with this label (repeatable: all of them)")
-    list_.add_argument("--agent", metavar="NAME", help="only tasks started by this agent")
-    list_.add_argument("--ready", action="store_true", help="only to-do tasks whose dependencies are done")
-    list_.add_argument("--blocked", action="store_true", help="only blocked tasks and to-do tasks still waiting")
-    list_.add_argument("--in-pr", action="store_true", help="only tasks in a PR that isn't recorded as merged")
-    list_.add_argument("--with-user", action="store_true", help="only tasks done together with the user (with: user)")
-    list_.add_argument("--archived", action="store_true", help="list the archive (tasks-archive.json) instead")
+    list_.add_argument(
+        "--priority", help="only this priority (a missing one counts as the default)"
+    )
+    list_.add_argument(
+        "--label",
+        action="append",
+        help="only tasks with this label (repeatable: all of them)",
+    )
+    list_.add_argument(
+        "--agent", metavar="NAME", help="only tasks started by this agent"
+    )
+    list_.add_argument(
+        "--ready",
+        action="store_true",
+        help="only to-do tasks whose dependencies are done",
+    )
+    list_.add_argument(
+        "--blocked",
+        action="store_true",
+        help="only blocked tasks and to-do tasks still waiting",
+    )
+    list_.add_argument(
+        "--in-pr",
+        action="store_true",
+        help="only tasks in a PR that isn't recorded as merged",
+    )
+    list_.add_argument(
+        "--with-user",
+        action="store_true",
+        help="only tasks done together with the user (with: user)",
+    )
+    list_.add_argument(
+        "--archived",
+        action="store_true",
+        help="list the archive (tasks-archive.json) instead",
+    )
     list_.add_argument(
         "--derived",
         action="store_true",
@@ -10025,47 +10184,109 @@ def build_parser():
         "the overview: counts, what is in progress, in review or blocked, the next task, the file's size",
     )
 
-    command("summary", cmd_summary, "the project's numbers as atm serve gives them to the dashboard (JSON)")
+    command(
+        "summary",
+        cmd_summary,
+        "the project's numbers as atm serve gives them to the dashboard (JSON)",
+    )
 
     def scope_options(sub):
-        sub.add_argument("--sprint", action="append", metavar="NAME", help="only this sprint's tasks (repeatable)")
-        sub.add_argument("--backlog", action="store_true", help="only the tasks with no sprint")
-        sub.add_argument("--release", metavar="R", help="only the tasks in this release (their own, or their sprint's)")
-        sub.add_argument("--component", metavar="C", help="only the tasks in this component")
+        sub.add_argument(
+            "--sprint",
+            action="append",
+            metavar="NAME",
+            help="only this sprint's tasks (repeatable)",
+        )
+        sub.add_argument(
+            "--backlog", action="store_true", help="only the tasks with no sprint"
+        )
+        sub.add_argument(
+            "--release",
+            metavar="R",
+            help="only the tasks in this release (their own, or their sprint's)",
+        )
+        sub.add_argument(
+            "--component", metavar="C", help="only the tasks in this component"
+        )
 
     scope_options(list_)
     scope_options(status)
     deps = command("deps", cmd_deps, "what a task waits for, and what waits for it")
     deps.add_argument("id", help="the task ID")
 
-    add = command("add", cmd_add, "add a task with the next ID, or many from a JSON file")
+    add = command(
+        "add", cmd_add, "add a task with the next ID, or many from a JSON file"
+    )
     add.add_argument("--name", help="a short name (about 60 characters)")
     add.add_argument("--type", help="the task type (one of the project's types)")
-    add.add_argument("--priority", help="the priority (default: none, which counts as the project's default)")
-    add.add_argument("--label", action="append", default=[], help="a label (repeatable)")
+    add.add_argument(
+        "--priority",
+        help="the priority (default: none, which counts as the project's default)",
+    )
+    add.add_argument(
+        "--label", action="append", default=[], help="a label (repeatable)"
+    )
     describe = add.add_mutually_exclusive_group()
     describe.add_argument("--description", default="", help="what exactly to do")
-    describe.add_argument("--description-file", metavar="FILE", help="read the description from a file")
-    add.add_argument("--dep", action="append", default=[], metavar="ID", help="a task it depends on (repeatable)")
-    add.add_argument("--file", action="append", default=[], help="a file it will create or change (repeatable)")
+    describe.add_argument(
+        "--description-file", metavar="FILE", help="read the description from a file"
+    )
+    add.add_argument(
+        "--dep",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="a task it depends on (repeatable)",
+    )
+    add.add_argument(
+        "--file",
+        action="append",
+        default=[],
+        help="a file it will create or change (repeatable)",
+    )
     add.add_argument(
         "--requirement",
         action="append",
         default=[],
         help="a requirement: its ID, or a link to where it is defined (repeatable)",
     )
-    add.add_argument("--sprint", metavar="NAME", help="the sprint it goes into (default: none, the backlog)")
-    add.add_argument("--release", metavar="R", help="the release it ships in (default: its sprint's)")
-    add.add_argument("--component", action="append", default=[], metavar="C", help="a component (repeatable)")
     add.add_argument(
-        "--components", choices=["auto"], help="auto: the components its files are in (otherwise only suggested)"
+        "--sprint",
+        metavar="NAME",
+        help="the sprint it goes into (default: none, the backlog)",
     )
     add.add_argument(
-        "--review", choices=list(REVIEW_MODES), help="how it is reviewed (default: its component's, else the project's)"
+        "--release", metavar="R", help="the release it ships in (default: its sprint's)"
     )
-    add.add_argument("--related", action="append", default=[], metavar="ID", help="a related task (repeatable)")
     add.add_argument(
-        "--with", dest="with_", choices=["user"], help="user: done together with the user (unattended loops skip it)"
+        "--component",
+        action="append",
+        default=[],
+        metavar="C",
+        help="a component (repeatable)",
+    )
+    add.add_argument(
+        "--components",
+        choices=["auto"],
+        help="auto: the components its files are in (otherwise only suggested)",
+    )
+    add.add_argument(
+        "--review",
+        choices=list(REVIEW_MODES),
+        help="how it is reviewed (default: its component's, else the project's)",
+    )
+    add.add_argument(
+        "--related",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="a related task (repeatable)",
+    )
+    add.add_argument(
+        "--with",
+        dest="with_",
+        choices=["user"],
+        help="user: done together with the user (unattended loops skip it)",
     )
     add.add_argument(
         "--json-file",
@@ -10075,20 +10296,34 @@ def build_parser():
     )
     agent_option(add)
 
-    edit = command("edit", cmd_edit, "change a task's definition (not its status: use the status commands)")
+    edit = command(
+        "edit",
+        cmd_edit,
+        "change a task's definition (not its status: use the status commands)",
+    )
     edit.add_argument("id", help="the task ID")
     edit.add_argument("--name")
     edit_description = edit.add_mutually_exclusive_group()
     edit_description.add_argument("--description")
     edit_description.add_argument("--description-file", metavar="FILE")
     edit_sprint = edit.add_mutually_exclusive_group()
-    edit_sprint.add_argument("--sprint", metavar="NAME", help="put it in this sprint (planned or active)")
-    edit_sprint.add_argument("--backlog", action="store_true", help="take it out of its sprint, into the backlog")
+    edit_sprint.add_argument(
+        "--sprint", metavar="NAME", help="put it in this sprint (planned or active)"
+    )
+    edit_sprint.add_argument(
+        "--backlog",
+        action="store_true",
+        help="take it out of its sprint, into the backlog",
+    )
     edit.add_argument("--type")
     edit.add_argument("--priority")
-    edit.add_argument("--release", metavar="R", help="the release it ships in (empty: its sprint's)")
     edit.add_argument(
-        "--review", choices=list(REVIEW_MODES) + [""], help="how it is reviewed (empty: its component's, else the project's)"
+        "--release", metavar="R", help="the release it ships in (empty: its sprint's)"
+    )
+    edit.add_argument(
+        "--review",
+        choices=list(REVIEW_MODES) + [""],
+        help="how it is reviewed (empty: its component's, else the project's)",
     )
     for option, help_text in (
         ("file", "a file it creates or changes"),
@@ -10099,47 +10334,123 @@ def build_parser():
         ("requirement", "a requirement: its ID, or a link to where it is defined"),
         ("use-case", "a use case: its ID, or a link to where it is defined"),
     ):
-        edit.add_argument(f"--add-{option}", action="append", default=[], metavar="VALUE", help=f"add {help_text}")
-        edit.add_argument(f"--remove-{option}", action="append", default=[], metavar="VALUE", help=f"remove {help_text}")
+        edit.add_argument(
+            f"--add-{option}",
+            action="append",
+            default=[],
+            metavar="VALUE",
+            help=f"add {help_text}",
+        )
+        edit.add_argument(
+            f"--remove-{option}",
+            action="append",
+            default=[],
+            metavar="VALUE",
+            help=f"remove {help_text}",
+        )
     edit.add_argument(
-        "--components", choices=["auto"], help="auto: add the components its files are in (otherwise only suggested)"
+        "--components",
+        choices=["auto"],
+        help="auto: add the components its files are in (otherwise only suggested)",
     )
     edit.add_argument(
-        "--with", dest="with_", choices=["user", ""], help="user: done together with the user (empty: not any more)"
+        "--with",
+        dest="with_",
+        choices=["user", ""],
+        help="user: done together with the user (empty: not any more)",
     )
     agent_option(edit)
 
-    check = command("check", cmd_check, "check tasks.json: the schema, the vocabularies, dependencies; exit 1 on errors")
-    check.add_argument("--files", action="store_true", help="also warn about missing files listed by finished tasks")
-
-    archive = command("archive", cmd_archive, "move finished tasks to tasks-archive.json, to keep tasks.json small")
-    archive.add_argument("--sprint", action="append", metavar="NAME", help="only this sprint's tasks (repeatable)")
-    archive.add_argument("--before", metavar="DATE", help="only tasks finished before this date (2026-05-01)")
-    archive.add_argument(
-        "--keep-days", type=float, help="keep tasks finished in the last N days (default: meta.archive.keep_days, 14)"
+    check = command(
+        "check",
+        cmd_check,
+        "check tasks.json: the schema, the vocabularies, dependencies; exit 1 on errors",
     )
-    archive.add_argument("--dry-run", action="store_true", help="only say what would move")
-    unarchive = command("unarchive", cmd_unarchive, "bring archived tasks back into tasks.json")
+    check.add_argument(
+        "--files",
+        action="store_true",
+        help="also warn about missing files listed by finished tasks",
+    )
+
+    archive = command(
+        "archive",
+        cmd_archive,
+        "move finished tasks to tasks-archive.json, to keep tasks.json small",
+    )
+    archive.add_argument(
+        "--sprint",
+        action="append",
+        metavar="NAME",
+        help="only this sprint's tasks (repeatable)",
+    )
+    archive.add_argument(
+        "--before",
+        metavar="DATE",
+        help="only tasks finished before this date (2026-05-01)",
+    )
+    archive.add_argument(
+        "--keep-days",
+        type=float,
+        help="keep tasks finished in the last N days (default: meta.archive.keep_days, 14)",
+    )
+    archive.add_argument(
+        "--dry-run", action="store_true", help="only say what would move"
+    )
+    unarchive = command(
+        "unarchive", cmd_unarchive, "bring archived tasks back into tasks.json"
+    )
     unarchive.add_argument("ids", nargs="+", metavar="id", help="task IDs")
 
-    workflow = command("workflow", cmd_workflow, "print the project's workflow, or set it (atm workflow set TYPE)")
-    workflow.add_argument("action", nargs="?", choices=["set"], help="set: change the workflow")
+    workflow = command(
+        "workflow",
+        cmd_workflow,
+        "print the project's workflow, or set it (atm workflow set TYPE)",
+    )
+    workflow.add_argument(
+        "action", nargs="?", choices=["set"], help="set: change the workflow"
+    )
     workflow.add_argument("type", nargs="?", help="direct or pull-request")
-    workflow.add_argument("--base", help="the branch PRs target, or that direct pushes to")
-    workflow.add_argument("--verify", choices=["true", "false"], help="run the project's verify before pushing")
-    workflow.add_argument("--max-rounds", type=int, help="CI fix rounds before /atm:push stops")
-    workflow.add_argument("--commit-template", metavar="TEXT", help='commit messages, e.g. "feat({id}): {name}"')
+    workflow.add_argument(
+        "--base", help="the branch PRs target, or that direct pushes to"
+    )
+    workflow.add_argument(
+        "--verify",
+        choices=["true", "false"],
+        help="run the project's verify before pushing",
+    )
+    workflow.add_argument(
+        "--max-rounds", type=int, help="CI fix rounds before /atm:push stops"
+    )
+    workflow.add_argument(
+        "--commit-template",
+        metavar="TEXT",
+        help='commit messages, e.g. "feat({id}): {name}"',
+    )
     workflow.add_argument(
         "--trailers",
         choices=["forbid", "require", "none"],
         help="forbid Co-Authored-By lines, require the --trailer lines, or leave it to the agent",
     )
-    workflow.add_argument("--trailer", action="append", default=[], metavar="LINE", help="a required trailer line")
+    workflow.add_argument(
+        "--trailer",
+        action="append",
+        default=[],
+        metavar="LINE",
+        help="a required trailer line",
+    )
 
-    commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
+    commit = command(
+        "commit",
+        cmd_commit,
+        "commit exactly the named files plus tasks.json, and record the commit",
+    )
     commit.add_argument("id", help="the task ID")
     commit.add_argument(
-        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each)"
+        "--file",
+        action="append",
+        default=[],
+        metavar="F",
+        help="a file the task changed (repeat for each)",
     )
     commit.add_argument(
         "--dir",
@@ -10149,7 +10460,11 @@ def build_parser():
         help="every change under a folder the task rebuilt, e.g. a generated one (repeatable; refused for the "
         "repository's root, the task folder, and a folder holding files another agent's claimed task lists)",
     )
-    commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
+    commit.add_argument(
+        "--message",
+        metavar="TEXT",
+        help="the message (default: meta.workflow.commit_template)",
+    )
     commit.add_argument(
         "--record",
         metavar="REV",
@@ -10163,9 +10478,15 @@ def build_parser():
     pr.add_argument("--url", required=True, help="the PR's URL")
     agent_option(pr)
 
-    merged = command("merged", cmd_merged, "record that a PR was merged, on the tasks it contains")
-    merged.add_argument("--pr", type=int, required=True, metavar="N", help="the PR number")
-    merged.add_argument("--at", metavar="TIME", help="when it was merged (ISO 8601 UTC; default: now)")
+    merged = command(
+        "merged", cmd_merged, "record that a PR was merged, on the tasks it contains"
+    )
+    merged.add_argument(
+        "--pr", type=int, required=True, metavar="N", help="the PR number"
+    )
+    merged.add_argument(
+        "--at", metavar="TIME", help="when it was merged (ISO 8601 UTC; default: now)"
+    )
     agent_option(merged)
 
     note = command("note", cmd_note, "add a note to a task (at most 500 characters)")
@@ -10182,7 +10503,9 @@ def build_parser():
     )
     agent_option(heartbeat)
 
-    run = command("run", cmd_run, "run a long command while keeping your claim on a task alive")
+    run = command(
+        "run", cmd_run, "run a long command while keeping your claim on a task alive"
+    )
     run.add_argument("id", help="the task ID")
     run.add_argument(
         "--every",
@@ -10192,7 +10515,11 @@ def build_parser():
     )
     agent_option(run)
 
-    init = command("init", cmd_init, "give tasks.json a meta.id, and register the tasks.json merge driver")
+    init = command(
+        "init",
+        cmd_init,
+        "give tasks.json a meta.id, and register the tasks.json merge driver",
+    )
     init.add_argument(
         "--meta-file",
         metavar="F",
@@ -10201,96 +10528,216 @@ def build_parser():
     merge = command("merge-driver", cmd_merge_driver, "git merge driver for tasks.json")
     for side in ("base", "ours", "theirs"):
         merge.add_argument(side)
-    command("claims", cmd_claims, "list live claims, shared by all worktrees of this clone")
-    repository = command("repository", cmd_repository, "print or set the repository's web address (meta.repository)")
+    command(
+        "claims", cmd_claims, "list live claims, shared by all worktrees of this clone"
+    )
+    repository = command(
+        "repository",
+        cmd_repository,
+        "print or set the repository's web address (meta.repository)",
+    )
     repository.add_argument("action", nargs="?", choices=["set"], help="set: change it")
-    repository.add_argument("url", nargs="?", help="an http(s) URL or a git remote (git@host:owner/repo.git)")
+    repository.add_argument(
+        "url",
+        nargs="?",
+        help="an http(s) URL or a git remote (git@host:owner/repo.git)",
+    )
     repository.add_argument(
         "--from",
         dest="old",
         metavar="OLD",
         help="with set: move recorded PR links from this address (default: the address being replaced)",
     )
-    logo = command("logo", cmd_logo, "print, set or unset the project's logo for the dashboard (meta.logo)")
-    logo.add_argument("action", nargs="?", choices=["set", "unset"], help="set or unset it")
-    logo.add_argument("path", nargs="?", help="set: the image (SVG, PNG, WebP or ICO), relative to here")
-    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit, start or delete one")
-    sprints.add_argument(
-        "action", nargs="?", choices=["list", "add", "edit", "start", "close", "delete"], help="what to do"
+    logo = command(
+        "logo",
+        cmd_logo,
+        "print, set or unset the project's logo for the dashboard (meta.logo)",
     )
-    sprints.add_argument("name", nargs="?", help="the sprint's name (add: generated when left out)")
-    sprints.add_argument(
-        "--carry-to", metavar="WHERE", help="close: where unfinished tasks go: a sprint's name, new, or backlog"
+    logo.add_argument(
+        "action", nargs="?", choices=["set", "unset"], help="set or unset it"
+    )
+    logo.add_argument(
+        "path",
+        nargs="?",
+        help="set: the image (SVG, PNG, WebP or ICO), relative to here",
+    )
+    sprints = command(
+        "sprints",
+        cmd_sprints,
+        "the sprints with their task counts; add, edit, start or delete one",
     )
     sprints.add_argument(
-        "--name", dest="new_name", metavar="NAME", help="close --carry-to new: the new sprint's name (default: generated)"
+        "action",
+        nargs="?",
+        choices=["list", "add", "edit", "start", "close", "delete"],
+        help="what to do",
     )
     sprints.add_argument(
-        "--reviewed", action="store_true", help="close: its batch tasks were reviewed with the user (the sprint review)"
+        "name", nargs="?", help="the sprint's name (add: generated when left out)"
+    )
+    sprints.add_argument(
+        "--carry-to",
+        metavar="WHERE",
+        help="close: where unfinished tasks go: a sprint's name, new, or backlog",
+    )
+    sprints.add_argument(
+        "--name",
+        dest="new_name",
+        metavar="NAME",
+        help="close --carry-to new: the new sprint's name (default: generated)",
+    )
+    sprints.add_argument(
+        "--reviewed",
+        action="store_true",
+        help="close: its batch tasks were reviewed with the user (the sprint review)",
     )
     agent_option(sprints)
-    sprints.add_argument("--all", action="store_true", help="list: the closed sprints too")
-    sprints.add_argument("--goal", help="add, edit: what the sprint is for (empty: remove it)")
-    sprints.add_argument("--release", help="add, edit: the release it delivers to (empty: remove it)")
-    sprints.add_argument("--due", metavar="DATE", help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)")
-    sprints.add_argument("--after", metavar="NAME", help="add: put it after this sprint (default: last)")
     sprints.add_argument(
-        "--move-to", metavar="WHERE", help="delete: where its tasks go: a sprint's name or backlog (default)"
+        "--all", action="store_true", help="list: the closed sprints too"
     )
     sprints.add_argument(
-        "--force", action="store_true", help="delete: also a sprint tasks finished in or moved on from"
+        "--goal", help="add, edit: what the sprint is for (empty: remove it)"
     )
-    move = command("move", cmd_move, "move tasks into a sprint, the next sprint, the active one, or the backlog")
+    sprints.add_argument(
+        "--release", help="add, edit: the release it delivers to (empty: remove it)"
+    )
+    sprints.add_argument(
+        "--due",
+        metavar="DATE",
+        help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)",
+    )
+    sprints.add_argument(
+        "--after", metavar="NAME", help="add: put it after this sprint (default: last)"
+    )
+    sprints.add_argument(
+        "--move-to",
+        metavar="WHERE",
+        help="delete: where its tasks go: a sprint's name or backlog (default)",
+    )
+    sprints.add_argument(
+        "--force",
+        action="store_true",
+        help="delete: also a sprint tasks finished in or moved on from",
+    )
+    move = command(
+        "move",
+        cmd_move,
+        "move tasks into a sprint, the next sprint, the active one, or the backlog",
+    )
     move.add_argument("ids", nargs="+", metavar="id", help="task IDs")
     move.add_argument(
-        "--to", required=True, metavar="WHERE", help="a sprint's name, next, active, or backlog"
+        "--to",
+        required=True,
+        metavar="WHERE",
+        help="a sprint's name, next, active, or backlog",
     )
     agent_option(move)
-    backlog = command("backlog", cmd_backlog, "the tasks with no sprint (not finished ones, unless --all)")
-    backlog.add_argument("--all", action="store_true", help="also the finished tasks with no sprint")
-    releases = command("releases", cmd_releases, "the releases with their tasks; add, edit or archive one")
-    releases.add_argument(
-        "action", nargs="?", choices=["list", "add", "edit", "archive", "notes"], help="what to do"
+    backlog = command(
+        "backlog",
+        cmd_backlog,
+        "the tasks with no sprint (not finished ones, unless --all)",
     )
-    releases.add_argument("id", nargs="?", help="the release's ID (letters, digits, '.', '-', '_')")
-    releases.add_argument("--all", action="store_true", help="list: the archived releases too")
-    releases.add_argument("--name", dest="title", help="add, edit: a name besides its ID (empty: remove it)")
-    releases.add_argument("--target", metavar="DATE", help="add, edit: the planned date, YYYY-MM-DD (empty: remove it)")
-    releases.add_argument(
-        "--pr", type=int, action="append", metavar="N", help="add: give it the tasks of pull request N (repeatable)"
+    backlog.add_argument(
+        "--all", action="store_true", help="also the finished tasks with no sprint"
+    )
+    releases = command(
+        "releases",
+        cmd_releases,
+        "the releases with their tasks; add, edit or archive one",
     )
     releases.add_argument(
-        "--released-at", metavar="TIME", help="add: it shipped already, at this time (e.g. its PR's merge)"
+        "action",
+        nargs="?",
+        choices=["list", "add", "edit", "archive", "notes"],
+        help="what to do",
+    )
+    releases.add_argument(
+        "id", nargs="?", help="the release's ID (letters, digits, '.', '-', '_')"
+    )
+    releases.add_argument(
+        "--all", action="store_true", help="list: the archived releases too"
+    )
+    releases.add_argument(
+        "--name",
+        dest="title",
+        help="add, edit: a name besides its ID (empty: remove it)",
+    )
+    releases.add_argument(
+        "--target",
+        metavar="DATE",
+        help="add, edit: the planned date, YYYY-MM-DD (empty: remove it)",
+    )
+    releases.add_argument(
+        "--pr",
+        type=int,
+        action="append",
+        metavar="N",
+        help="add: give it the tasks of pull request N (repeatable)",
+    )
+    releases.add_argument(
+        "--released-at",
+        metavar="TIME",
+        help="add: it shipped already, at this time (e.g. its PR's merge)",
     )
     components = command(
-        "components", cmd_components, "the project's components; define or change one, from a label or by files"
-    )
-    components.add_argument("action", nargs="?", choices=["list", "add", "edit"], help="what to do")
-    components.add_argument("id", nargs="?", help="the component's ID (letters, digits, '.', '-', '_')")
-    components.add_argument(
-        "--label", help="add, edit: the name shown (add: default the label's own text, with --from-label; edit: empty "
-        "removes it)"
+        "components",
+        cmd_components,
+        "the project's components; define or change one, from a label or by files",
     )
     components.add_argument(
-        "--path", action="append", metavar="GLOB", help="add: a glob over its files, e.g. 'dashboard/**' (repeatable)"
+        "action", nargs="?", choices=["list", "add", "edit"], help="what to do"
     )
     components.add_argument(
-        "--add-path", action="append", metavar="GLOB", help="edit: add a glob over its files (repeatable)"
+        "id", nargs="?", help="the component's ID (letters, digits, '.', '-', '_')"
     )
     components.add_argument(
-        "--review", help="add, edit: how its tasks are reviewed (blocker, async, batch, none; edit: empty removes it)"
+        "--label",
+        help="add, edit: the name shown (add: default the label's own text, with --from-label; edit: empty "
+        "removes it)",
     )
     components.add_argument(
-        "--from-label", metavar="LABEL", help="add, edit: every task with this label gets the component instead"
+        "--path",
+        action="append",
+        metavar="GLOB",
+        help="add: a glob over its files, e.g. 'dashboard/**' (repeatable)",
     )
     components.add_argument(
-        "--assign", action="store_true", help="add, edit: also give it to every task whose files its globs match"
+        "--add-path",
+        action="append",
+        metavar="GLOB",
+        help="edit: add a glob over its files (repeatable)",
     )
-    projects = command("projects", cmd_projects, "the projects the dashboard shows: list, add, remove or prune them")
-    projects.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "prune"])
-    projects.add_argument("target", nargs="?", help="add: the project's folder (default: here); remove: its ID or path")
+    components.add_argument(
+        "--review",
+        help="add, edit: how its tasks are reviewed (blocker, async, batch, none; edit: empty removes it)",
+    )
+    components.add_argument(
+        "--from-label",
+        metavar="LABEL",
+        help="add, edit: every task with this label gets the component instead",
+    )
+    components.add_argument(
+        "--assign",
+        action="store_true",
+        help="add, edit: also give it to every task whose files its globs match",
+    )
+    projects = command(
+        "projects",
+        cmd_projects,
+        "the projects the dashboard shows: list, add, remove or prune them",
+    )
+    projects.add_argument(
+        "action", nargs="?", default="list", choices=["list", "add", "remove", "prune"]
+    )
+    projects.add_argument(
+        "target",
+        nargs="?",
+        help="add: the project's folder (default: here); remove: its ID or path",
+    )
 
-    lock_test = command("_lock-test", cmd_lock_test, "test hook: hold the lock", hidden=True)
+    lock_test = command(
+        "_lock-test", cmd_lock_test, "test hook: hold the lock", hidden=True
+    )
     lock_test.add_argument("seconds", type=float, nargs="?", default=0.0)
     return parser, commands.choices
 
@@ -10357,7 +10804,12 @@ def main(argv):
     except Exception as e:  # noqa: BLE001
         # A file atm didn't expect (a hostile or damaged one) is an error message, not a traceback: the skills and
         # the merge driver read stderr (docs/security-review.md F12)
-        report(AtmError(f"unexpected error ({type(e).__name__}: {e}); run atm check, and report it if that is clean"), as_json)
+        report(
+            AtmError(
+                f"unexpected error ({type(e).__name__}: {e}); run atm check, and report it if that is clean"
+            ),
+            as_json,
+        )
         return 1
     return 0
 

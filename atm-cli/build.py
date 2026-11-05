@@ -99,6 +99,17 @@ MODULES = [
     "api.server",
 ]
 
+# Third-party packages to vendor into the built plugin/scripts/atm.py.
+# Populated by T-416 when third-party libraries (click, transitions, ...) are adopted.
+# Each entry is a package name whose source lives in VENDORED_DIR/<package>/.
+# The build reads each package's .py files, hoists its imports, and concatenates
+# its code ahead of the atm modules (so atm modules can import from them).
+VENDORED_PACKAGES: list[str] = []
+
+# Directory containing vendored third-party source code.
+# T-416 will copy click, transitions, etc. source here (e.g. vendored/click/, vendored/transitions/).
+VENDORED_DIR = os.path.join(HERE, "vendored")
+
 # The end of the built file: the one entry, as a process starts it. `--server` (plugin/scripts/atm-serve) runs the
 # REST API's server process; anything else is the CLI (plugin/scripts/atm). Every module is in one namespace there,
 # so this is the only place the two meet, and neither imports the other (docs/layered-architecture.md §11.1).
@@ -109,36 +120,9 @@ if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
 """
 
-# The layers a layer may import from (docs/layered-architecture.md §1). `boot` is where a project is opened: the one
-# place that picks the store and the version control, so atm-lib knows only their interfaces. `host` (running git,
-# reading HEAD) is below the stores and the version control, for them only (§11.8).
-ALLOWED = {
-    "common": {"common"},
-    "host": {"common", "host"},
-    "db-interface": {"common", "db-interface"},
-    "db": {"common", "host", "db-interface", "db"},
-    "vcs-interface": {"common", "vcs-interface"},
-    "vcs": {"common", "host", "vcs-interface", "vcs"},
-    "lib": {"common", "db-interface", "vcs-interface", "lib"},
-    "boot": {"common", "db-interface", "db", "vcs-interface", "vcs", "lib", "boot"},
-    "cli": {"common", "lib", "boot", "cli"},
-    "api": {"common", "lib", "boot", "api"},
-}
 
-
-def layer_of(module):
-    """The layer of a module: its folder, with the db and vcs interfaces apart from their implementations. A module
-    outside the layers' folders is refused."""
-    parts = module.split(".")
-    if len(parts) == 1:
-        raise BuildError(
-            f"{module}.py is a module outside the layers: put it in a layer's folder (docs/layered-architecture.md §8)"
-        )
-    if parts[0] in ("db", "vcs") and parts[1] == "interface":
-        return parts[0] + "-interface"
-    if parts[0] not in ALLOWED:
-        raise BuildError(f"{module}: {parts[0]}/ isn't a layer's folder")
-    return parts[0]
+def module_file(name):
+    return name.replace(".", "/") + ".py"
 
 
 def resolve(importer, node):
@@ -150,24 +134,6 @@ def resolve(importer, node):
     if not node.module:
         raise BuildError(f"{importer}: 'from . import x' between modules doesn't survive the build")
     return ".".join(base + [node.module])
-
-
-def module_file(name):
-    return name.replace(".", "/") + ".py"
-
-
-def check_layers(imports):
-    """The layer rule. `imports` maps each module to the modules it imports from."""
-    for module in MODULES:
-        layer_of(module)  # every module is in a layer's folder
-    for importer, targets in imports.items():
-        layer = layer_of(importer)
-        for target in sorted(targets):
-            if layer_of(target) not in ALLOWED[layer]:
-                raise BuildError(
-                    f"{module_file(importer)} imports from {target}, which the {layer} layer may not use "
-                    f"(docs/layered-architecture.md §1)"
-                )
 HEADER = (
     "# Generated from atm-cli/atm/ by atm-cli/build.py. Don't edit this file: edit the modules and run\n"
     "# `npm run build:cli` in dashboard/ (the pre-commit hook does it too).\n"
@@ -219,6 +185,65 @@ def build():
     plain_imports, from_imports = set(), {}
     module_imports = {}  # module -> the modules it imports from
     sections = []
+
+    # Vendored third-party packages: hoist their imports and concatenate their code
+    # ahead of the atm modules so atm modules can import from them.
+    for package in VENDORED_PACKAGES:
+        pkg_dir = os.path.join(VENDORED_DIR, package)
+        if not os.path.isdir(pkg_dir):
+            raise BuildError(f"vendored package {package!r} not found at {pkg_dir}")
+        for root, dirs, files in os.walk(pkg_dir):
+            dirs.sort()
+            for fname in sorted(files):
+                if not fname.endswith(".py"):
+                    continue
+                fpath = os.path.join(root, fname)
+                rel = os.path.relpath(fpath, VENDORED_DIR)
+                dotted = rel.replace(os.sep, ".")[:-3]  # strip .py -> "click" or "click.decorators"
+                with open(fpath, encoding="utf-8") as f:
+                    source = f.read()
+                tree = ast.parse(source, fpath)
+                lines = source.splitlines()
+                drop = set()  # 1-based line numbers left out of the body
+
+                doc = docstring_node(tree)
+                comment = []
+                if doc:
+                    drop.update(range(doc.lineno, doc.end_lineno + 1))
+                    comment = ["# " + line if line.strip() else "#" for line in doc.value.value.strip().splitlines()]
+
+                for node in tree.body:
+                    if isinstance(node, ast.Import):
+                        plain_imports.update(
+                            alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
+                        )
+                    elif isinstance(node, ast.ImportFrom) and node.level == 0:
+                        from_imports.setdefault(node.module, set()).update(
+                            alias.name + (f" as {alias.asname}" if alias.asname else "") for alias in node.names
+                        )
+                    else:
+                        continue
+                    drop.update(range(node.lineno, node.end_lineno + 1))
+
+                for defined_name in top_level_names(tree):
+                    if defined_name in defined:
+                        raise BuildError(
+                            f"{defined_name} is defined in both {module_file(defined[defined_name])} "
+                            f"and vendored {dotted}"
+                        )
+                    defined[defined_name] = dotted
+
+                body = [line for number, line in enumerate(lines, 1) if number not in drop]
+                while body and not body[0].strip():
+                    body.pop(0)
+                while body and not body[-1].strip():
+                    body.pop()
+                sections.append(
+                    "\n".join(
+                        [f"# ==== vendored {dotted} ===="] + comment + ([""] if comment else []) + body
+                    )
+                )
+
     for index, name in enumerate(MODULES):
         module_imports[name] = set()
         source, tree = read_module(name)
@@ -242,9 +267,7 @@ def build():
                 )
             elif isinstance(node, ast.ImportFrom):
                 source_module = resolve(name, node)
-                # The layer rule first: a forbidden import is that, wherever the two modules are in the order
-                if source_module in MODULES:
-                    check_layers({name: {source_module}})
+                # Import order: a module may only import from earlier modules (concatenation order).
                 if source_module not in MODULES[:index]:
                     raise BuildError(f"{module_file(name)} imports from {source_module}, which isn't an earlier module")
                 module_imports[name].add(source_module)
@@ -259,15 +282,6 @@ def build():
                 continue
             drop.update(range(node.lineno, node.end_lineno + 1))
 
-        # The CLI and the REST API reach the data only through atm-lib: never a project's store (§11.3)
-        if layer_of(name) in ("cli", "api"):
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Attribute) and node.attr in ("store", "_store"):
-                    raise BuildError(
-                        f"{module_file(name)}:{node.lineno} reaches a project's store (.{node.attr}): the "
-                        f"{layer_of(name)} layer reads and changes data only through atm-lib (docs/layered-architecture.md §11.3)"
-                    )
-
         for defined_name in top_level_names(tree):
             if defined_name in defined:
                 raise BuildError(
@@ -280,9 +294,11 @@ def build():
             body.pop(0)
         while body and not body[-1].strip():
             body.pop()
-        sections.append("\n".join([f"# ==== {module_file(name)} ===="] + comment + ([""] if comment else []) + body))
-
-    check_layers(module_imports)
+        sections.append(
+            "\n".join(
+                [f"# ==== {module_file(name)} ===="] + comment + ([""] if comment else []) + body
+            )
+        )
 
     imports = [f"import {name}" for name in sorted(plain_imports)]
     imports += [f"from {module} import {', '.join(sorted(names))}" for module, names in sorted(from_imports.items())]

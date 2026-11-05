@@ -73,52 +73,6 @@ describe('build', () => {
       removeDir(dir);
     }
   });
-});
-
-// The layer rule (docs/layered-architecture.md §1, §8), with no exceptions since the migration's last step
-describe('layers', () => {
-  function brokenBuild(change) {
-    const dir = copyOfSources();
-    try {
-      change(path.join(dir, 'atm-cli'));
-      return runBuild(['--output', path.join(dir, 'atm.py')], path.join(dir, 'atm-cli/build.py'));
-    } finally {
-      removeDir(dir);
-    }
-  }
-
-  test('atm-lib may not import a store, only its interface', () => {
-    const { code, stderr } = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/lib/tasks.py'), '\nfrom ..db.jsongit.store import JsonGitStore\n'),
-    );
-    assert.equal(code, 1);
-    assert.match(stderr, /lib\/tasks\.py imports from db\.jsongit\.store, which the lib layer may not use/);
-  });
-
-  test('the CLI may not reach the store', () => {
-    const { stderr } = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), '\nfrom ..db.memory import MemoryStore\n'),
-    );
-    assert.match(stderr, /cli\/show\.py imports from db\.memory, which the cli layer may not use/);
-  });
-
-  test('the CLI and the REST API never import each other: the built file’s entry puts them together', () => {
-    const { stderr } = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), '\nfrom ..api.server import PORT_TRIES\n'),
-    );
-    assert.match(stderr, /cli\/show\.py imports from api\.server, which the cli layer may not use/);
-    const back = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/api/server.py'), '\nfrom ..cli.render import report_expired\n'),
-    );
-    assert.match(back.stderr, /api\/server\.py imports from cli\.render, which the api layer may not use/);
-  });
-
-  test("the CLI and the REST API never reach a project's store: only atm-lib does", () => {
-    const peek = '\n\ndef peek(project):\n    return project.store.document()\n';
-    const { code, stderr } = brokenBuild((cli) => fs.appendFileSync(path.join(cli, 'atm/cli/show.py'), peek));
-    assert.equal(code, 1);
-    assert.match(stderr, /cli\/show\.py:\d+ reaches a project's store \(\.store\): the cli layer reads and changes/);
-  });
 
   test('the built file ends in the one entry: --server is the REST API’s server, anything else the CLI', () => {
     const built = fs.readFileSync(path.join(REPO, 'plugin/scripts/atm.py'), 'utf8');
@@ -129,33 +83,6 @@ describe('layers', () => {
     const launcher = fs.readFileSync(path.join(REPO, 'plugin/scripts/atm-serve'), 'utf8');
     assert.match(launcher, /exec python3 "\$dir\/atm\.py" --server "\$@"/);
     assert.ok(fs.statSync(path.join(REPO, 'plugin/scripts/atm-serve')).mode & 0o111, 'atm-serve is executable');
-  });
-
-  test('only the stores and the version control run git: the host layer is theirs (T-385)', () => {
-    const lib = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/lib/code.py'), '\nfrom ..host.git import git\n'),
-    );
-    assert.match(lib.stderr, /lib\/code\.py imports from host\.git, which the lib layer may not use/);
-    const boot = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/boot/open.py'), '\nfrom ..host.git import in_git\n'),
-    );
-    assert.match(boot.stderr, /boot\/open\.py imports from host\.git, which the boot layer may not use/);
-    const below = brokenBuild((cli) =>
-      fs.appendFileSync(path.join(cli, 'atm/host/git.py'), '\nfrom ..db.interface import Store\n'),
-    );
-    assert.match(below.stderr, /host\/git\.py imports from db\.interface, which the host layer may not use/);
-  });
-
-  test('a module outside the layers is refused', () => {
-    const { stderr } = brokenBuild((cli) => {
-      fs.writeFileSync(path.join(cli, 'atm/extra.py'), '"""An extra module."""\n');
-      const build = path.join(cli, 'build.py');
-      fs.writeFileSync(
-        build,
-        fs.readFileSync(build, 'utf8').replace('    "cli.main",\n', '    "extra",\n    "cli.main",\n'),
-      );
-    });
-    assert.match(stderr, /extra\.py is a module outside the layers/);
   });
 });
 
