@@ -24,6 +24,17 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 
+
+@app.callback()
+def _global(
+    ctx: typer.Context,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Don't execute, just show what would be done"
+    ),
+) -> None:
+    """Global options for all atm2 subcommands."""
+    ctx.obj = {"dry_run": dry_run}
+
 # ---------------------------------------------------------------------------
 # task group
 # ---------------------------------------------------------------------------
@@ -34,6 +45,7 @@ app.add_typer(task_app, name="task")
 
 @task_app.command("list")
 def task_list(
+    ctx: typer.Context,
     status: Optional[list[str]] = typer.Option(
         None, "--status", help="Only these statuses (repeatable)"
     ),
@@ -92,11 +104,12 @@ def task_list(
         args.append("--derived")
     if json_out:
         args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @task_app.command("add")
 def task_add(
+    ctx: typer.Context,
     name: str = typer.Option(..., "--name", help="A short name (about 60 characters)"),
     type_: Optional[str] = typer.Option(None, "--type", help="The task type"),
     sprint: Optional[str] = typer.Option(None, "--sprint", help="The sprint it goes into"),
@@ -144,11 +157,12 @@ def task_add(
     if with_user: args += ["--with", with_user]
     if json_file: args += ["--json-file", json_file]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @task_app.command("edit")
 def task_edit(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     name: Optional[str] = typer.Option(None, "--name"),
     description: Optional[str] = typer.Option(None, "--description"),
@@ -219,22 +233,24 @@ def task_edit(
     if components_auto: args += ["--components", "auto"]
     if with_user: args += ["--with", with_user]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @task_app.command("details")
 def task_details(
+    ctx: typer.Context,
     task_ids: Annotated[list[str], typer.Argument(help="Task IDs")],
     json_out: bool = typer.Option(False, "--json", help="Print result as JSON"),
 ) -> None:
     """Tasks in full (description, dependencies, files, notes)."""
     args = ["show"] + task_ids
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @task_app.command("note")
 def task_note(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     text: Annotated[str, typer.Argument(help="The note text")],
     json_out: bool = typer.Option(False, "--json", help="Print result as JSON"),
@@ -242,11 +258,12 @@ def task_note(
     """Add a note to a task (at most 500 characters)."""
     args = ["note", task_id, text]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @task_app.command("deps")
 def task_deps(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
 ) -> None:
     """What a task waits for, and what waits for it."""
@@ -255,6 +272,7 @@ def task_deps(
 
 @task_app.command("state")
 def task_state(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     next_state: Annotated[str, typer.Argument(help="Next state: todo, in_progress, in_review, done, blocked, skipped")],
     note: Optional[str] = typer.Option(None, "--note", help="A note"),
@@ -307,7 +325,7 @@ def task_state(
     if status: args += ["--status", status]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +338,7 @@ app.add_typer(loop_app, name="loop")
 
 @loop_app.command("next")
 def loop_next(
+    ctx: typer.Context,
     sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
     tasks: Optional[str] = typer.Option(None, "--tasks"),
     all_tasks: bool = typer.Option(False, "--all"),
@@ -342,11 +361,12 @@ def loop_next(
     if claim: args.append("--claim")
     if json_out: args.append("--json")
     if agent: args += ["--agent", agent]
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @loop_app.command("run")
 def loop_run(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     cmd_and_args: Annotated[
         list[str], typer.Argument(help="The command and its args, e.g. -- npm test --verbose")
@@ -357,7 +377,7 @@ def loop_run(
     args = ["run", task_id]
     if every: args += ["--every", str(every)]
     args += ["--"] + cmd_and_args
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -369,15 +389,19 @@ app.add_typer(claim_app, name="claim")
 
 
 @claim_app.command("list")
-def claim_list(json_out: bool = typer.Option(False, "--json", help="Print result as JSON")) -> None:
+def claim_list(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(False, "--json", help="Print result as JSON"),
+) -> None:
     """List live claims."""
     args = ["claims"]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @claim_app.command("heartbeat")
 def claim_heartbeat(
+    ctx: typer.Context,
     task_id: Optional[str] = typer.Argument(None, help="The task ID"),
     auto: bool = typer.Option(False, "--auto", help="Renew claims silently (plugin's hook)"),
     agent: Optional[str] = typer.Option(None, "--agent"),
@@ -387,7 +411,7 @@ def claim_heartbeat(
     if task_id: args.append(task_id)
     if auto: args.append("--auto")
     if agent: args += ["--agent", agent]
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -400,6 +424,7 @@ app.add_typer(vcs_app, name="vcs")
 
 @vcs_app.command("commit")
 def vcs_commit(
+    ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     file: Optional[list[str]] = typer.Option(None, "--file", help="A file the task changed (repeatable)"),
     dir_: Optional[list[str]] = typer.Option(None, "--dir", help="Every change under a folder (repeatable)"),
@@ -418,11 +443,12 @@ def vcs_commit(
     if record: args += ["--record", record]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @vcs_app.command("pr")
 def vcs_pr(
+    ctx: typer.Context,
     ids: Annotated[list[str], typer.Argument(help="Task IDs")],
     number: int = typer.Option(..., "--number", help="The PR number"),
     url: str = typer.Option(..., "--url", help="The PR's URL"),
@@ -433,11 +459,12 @@ def vcs_pr(
     args = ["pr"] + ids + ["--number", str(number), "--url", url]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @vcs_app.command("pushed")
 def vcs_pushed(
+    ctx: typer.Context,
     pr: int = typer.Option(..., "--pr", help="The PR number"),
     at: Optional[str] = typer.Option(None, "--at", help="When it was merged (ISO 8601 UTC)"),
     agent: Optional[str] = typer.Option(None, "--agent"),
@@ -448,11 +475,12 @@ def vcs_pushed(
     if at: args += ["--at", at]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @vcs_app.command("repository")
 def vcs_repository(
+    ctx: typer.Context,
     url: Optional[str] = typer.Argument(None, help="An http(s) URL or git remote"),
     old: Optional[str] = typer.Option(None, "--from", help="Move recorded PR links from this address"),
     agent: Optional[str] = typer.Option(None, "--agent"),
@@ -464,7 +492,7 @@ def vcs_repository(
     if old: args += ["--from", old]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -476,19 +504,22 @@ app.add_typer(db_app, name="db")
 
 
 @db_app.command("migrate")
-def db_migrate(json_out: bool = typer.Option(False, "--json")) -> None:
+def db_migrate(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
     """Move tasks.json into .agentic-task-manager/ and set up the folder."""
     args = ["migrate"]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @db_app.command("archive")
 def db_archive(
+    ctx: typer.Context,
     sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
     before: Optional[str] = typer.Option(None, "--before"),
     keep_days: Optional[float] = typer.Option(None, "--keep-days"),
-    dry_run: bool = typer.Option(False, "--dry-run"),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
     """Move finished tasks to tasks-archive.json."""
@@ -497,24 +528,25 @@ def db_archive(
         for s in sprint: args += ["--sprint", s]
     if before: args += ["--before", before]
     if keep_days: args += ["--keep-days", str(keep_days)]
-    if dry_run: args.append("--dry-run")
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @db_app.command("unarchive")
 def db_unarchive(
+    ctx: typer.Context,
     ids: Annotated[list[str], typer.Argument(help="Task IDs")],
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
     """Bring archived tasks back into tasks.json."""
     args = ["unarchive"] + ids
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @db_app.command("init")
 def db_init(
+    ctx: typer.Context,
     meta_file: Optional[str] = typer.Option(None, "--meta-file", help="Set tasks.json meta from a JSON object"),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -522,7 +554,7 @@ def db_init(
     args = ["init"]
     if meta_file: args += ["--meta-file", meta_file]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -534,15 +566,19 @@ app.add_typer(project_app, name="project")
 
 
 @project_app.command("config")
-def project_config(json_out: bool = typer.Option(False, "--json")) -> None:
+def project_config(
+    ctx: typer.Context,
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
     """Print where this project's task files are."""
     args = ["paths"]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @project_app.command("status")
 def project_status(
+    ctx: typer.Context,
     sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
     backlog: bool = typer.Option(False, "--backlog"),
     release: Optional[str] = typer.Option(None, "--release"),
@@ -557,11 +593,12 @@ def project_status(
     if release: args += ["--release", release]
     if component: args += ["--component", component]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @project_app.command("workflow")
 def project_workflow(
+    ctx: typer.Context,
     action: Optional[str] = typer.Argument(None, help="set: change the workflow"),
     wf_type: Optional[str] = typer.Argument(None, help="direct or pull-request"),
     base: Optional[str] = typer.Option(None, "--base"),
@@ -584,11 +621,12 @@ def project_workflow(
     if trailer:
         for t in trailer: args += ["--trailer", t]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @project_app.command("logo")
 def project_logo(
+    ctx: typer.Context,
     action: Optional[str] = typer.Argument(None, help="set or unset"),
     path: Optional[str] = typer.Argument(None, help="The image (set)"),
     json_out: bool = typer.Option(False, "--json"),
@@ -598,11 +636,12 @@ def project_logo(
     if action: args.append(action)
     if path: args.append(path)
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @project_app.command("list")
 def project_list(
+    ctx: typer.Context,
     target: Optional[str] = typer.Argument(None, help="Add: project folder; Remove: ID or path"),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -610,7 +649,7 @@ def project_list(
     args = ["projects", "list"]
     if target: args.append(target)
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -623,6 +662,7 @@ app.add_typer(sprint_app, name="sprint")
 
 @sprint_app.command("list")
 def sprint_list(
+    ctx: typer.Context,
     all_: bool = typer.Option(False, "--all", help="List closed sprints too"),
     json_out: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -630,11 +670,12 @@ def sprint_list(
     args = ["sprints", "list"]
     if all_: args.append("--all")
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @sprint_app.command("add")
 def sprint_add(
+    ctx: typer.Context,
     name: Optional[str] = typer.Argument(None, help="The sprint's name"),
     goal: Optional[str] = typer.Option(None, "--goal"),
     release: Optional[str] = typer.Option(None, "--release"),
@@ -652,7 +693,7 @@ def sprint_add(
     if after: args += ["--after", after]
     if agent: args += ["--agent", agent]
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 # ---------------------------------------------------------------------------
@@ -676,15 +717,17 @@ app.add_typer(component_app, name="component")
 # ---------------------------------------------------------------------------
 
 @app.command("doctor")
-def doctor(files: bool = typer.Option(False, "--files", help="Also warn about missing files")) -> None:
+def doctor(
+    ctx: typer.Context,files: bool = typer.Option(False, "--files", help="Also warn about missing files")) -> None:
     """Validate tasks.json: schema, vocabularies, dependencies."""
     args = ["check"]
     if files: args.append("--files")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 @app.command("service")
 def service(
+    ctx: typer.Context,
     action: str = typer.Argument("start", help="start|stop|status"),
     open_: bool = typer.Option(False, "--open", help="Also open the dashboard in the browser"),
     all_projects: bool = typer.Option(False, "--all", help="Show all projects overview"),
@@ -701,7 +744,7 @@ def service(
     if dir_: args += ["--dir", dir_]
     if refresh: args.append("--refresh")
     if json_out: args.append("--json")
-    sys.exit(run_atm(args))
+    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
 
 
 if __name__ == "__main__":

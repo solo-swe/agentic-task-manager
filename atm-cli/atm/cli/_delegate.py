@@ -12,6 +12,7 @@ surface.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -39,23 +40,33 @@ def find_atm_cmd() -> list[str]:
     raise RuntimeError("could not find the `atm` command (not on PATH, and plugin/scripts/atm.py missing)")
 
 
-def run_atm(args: list[str]) -> int:
+def run_atm(args: list[str], dry_run: bool = False) -> int:
     """Run `atm <args>` and passthrough stdout/stderr to the terminal.
 
-    Returns `atm`'s exit code.
+    Returns `atm`'s exit code. When `dry_run` is True, prints the command that
+    would be run instead of executing it.
     """
     cmd = find_atm_cmd() + args
+    if dry_run:
+        quoted = " ".join(shlex.quote(a) for a in cmd)
+        print(f"[dry-run] would run: {quoted}")
+        return 0
     result = subprocess.run(cmd, text=True)
     # Propagate stdout/stderr (subprocess.run with no capture already inherits
     # the parent's stdout/stderr by default).
     return result.returncode
 
 
-def run_atm_capture(args: list[str]) -> tuple[int, str, str]:
+def run_atm_capture(args: list[str], dry_run: bool = False) -> tuple[int, str, str]:
     """Run `atm <args>` and capture stdout/stderr.
 
-    Returns (exit_code, stdout, stderr).
+    Returns (exit_code, stdout, stderr). When `dry_run` is True, prints the
+    command that would be run instead of executing it.
     """
     cmd = find_atm_cmd() + args
+    if dry_run:
+        quoted = " ".join(shlex.quote(a) for a in cmd)
+        print(f"[dry-run] would run: {quoted}")
+        return 0, "", ""
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
