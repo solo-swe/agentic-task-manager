@@ -22,7 +22,7 @@ from typing import Annotated, Optional
 
 import typer
 
-from ..boot.jsongit import dashboard_id, migrate_folder
+from ..boot.jsongit import dashboard_id, migrate_folder, register_project, set_up_store
 from ..boot.open import open_project
 from ..common.core import (
     AtmError, AtmExit, out, to_json, atm_home, ensure_home,
@@ -33,8 +33,16 @@ from ..common.dashboard import (
     SCAN_PORTS, SERVER_LOG, SERVER_RECORD, SERVER_ENTRY, TEMPLATE,
     dashboard_head, home_id, server_command, DEFAULT_PORT,
 )
-from ..common.errors import AtmFailure
+from ..common.errors import AtmFailure, Invalid
+from ..lib.archive import archive_finished, unarchive_tasks
 from ..lib.edit import check_project
+from .archive import describe_ids, describe_kept
+from ..lib.settings import (
+    ensure_project_id,
+    ensure_repository,
+    init_meta,
+)
+from ..boot.jsongit import register_project, set_up_store
 from ._delegate import run_atm, run_atm_capture
 
 
@@ -653,10 +661,16 @@ def db_migrate(
     ctx: typer.Context,
 ) -> None:
     """Move tasks.json into .agentic-task-manager/ and set up the folder."""
-    args = ["migrate"]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out("[dry-run] would run: atm db migrate")
+        return
+    migration = migrate_folder(os.getcwd())
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(migration["result"]))
+    else:
+        for line in migration["lines"]:
+            out(line)
 
 
 @db_app.command("archive")
@@ -667,17 +681,44 @@ def db_archive(
     keep_days: Optional[float] = typer.Option(None, "--keep-days"),
 ) -> None:
     """Move finished tasks to tasks-archive.json."""
-    args = ["archive"]
-    if sprint:
-        for s in sprint:
-            args += ["--sprint", s]
-    if before:
-        args += ["--before", before]
-    if keep_days:
-        args += ["--keep-days", str(keep_days)]
+    dry_run = ctx.obj.get("dry_run", False)
+    result = archive_finished(
+        open_project(os.getcwd()), sprint, before, keep_days, dry_run
+    )
+    ids, dropped, kept, sizes = (
+        result["moved"],
+        result["duplicates_dropped"],
+        result["kept"],
+        result["sizes"],
+    )
+    shown = {
+        "moved": ids,
+        "dry_run": bool(dry_run),
+        "tasks_kb": sizes["tasks"] // 1024,
+        "archive_kb": sizes["archive"] // 1024,
+        "duplicates_dropped": dropped,
+        "kept": kept,
+    }
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(shown))
+        return
+    if dropped and not dry_run:
+        out(
+            f"Kept {describe_ids(dropped)} in tasks.json and dropped the archive's copy (an interrupted move)."
+        )
+    if not ids:
+        out("Nothing to archive.")
+    elif dry_run:
+        out(f"Would archive {len(ids)} task(s): {describe_ids(ids)}.")
+    else:
+        out(
+            f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
+            f"tasks.json is now {shown['tasks_kb']} KB, tasks-archive.json {shown['archive_kb']} KB."
+        )
+    if kept:
+        out(
+            f"{'Would keep' if dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}."
+        )
 
 
 @db_app.command("unarchive")
@@ -686,10 +727,21 @@ def db_unarchive(
     ids: Annotated[list[str], typer.Argument(help="Task IDs")],
 ) -> None:
     """Bring archived tasks back into tasks.json."""
-    args = ["unarchive"] + ids
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would run: atm db unarchive {' '.join(ids)}")
+        return
+    result = unarchive_tasks(open_project(os.getcwd()), ids)
+    again = result["moves_back"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(result))
+        return
+    out(f"Brought back {', '.join(ids)} from the archive.")
+    if again:
+        out(
+            f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
+            f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
+        )
 
 
 @db_app.command("init")
@@ -700,12 +752,50 @@ def db_init(
     ),
 ) -> None:
     """Give tasks.json a meta.id and register the merge driver."""
-    args = ["init"]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would run: atm db init" + (f" --meta-file {meta_file}" if meta_file else ""))
+        return
+    project = open_project(os.getcwd())
     if meta_file:
-        args += ["--meta-file", meta_file]
+        new = read_json(meta_file)
+        if not isinstance(new, dict):
+            raise Invalid(f"{meta_file} must hold a JSON object: the meta keys to set")
+        created, keys = init_meta(project, new)
+        project = open_project(os.getcwd())  # the task data as it is now
+        if not ctx.obj.get("json_out", False):
+            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
+    project_id = ensure_project_id(project)
+    repository = ensure_repository(project)
+    register_project(project)  # the dashboard lists every project atm runs in
+    setup = set_up_store(project)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(
+            to_json(
+                {
+                    "project_id": project_id,
+                    "repository": repository,
+                    "git": setup["git"],
+                    "gitattributes_added": setup["gitattributes_added"],
+                }
+            )
+        )
+        return
+    if project_id:
+        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
+    if repository:
+        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
+    if not setup["git"]:
+        out("Not in a git repository: there is no merge driver to set up.")
+        return
+    out(
+        "Registered the tasks.json merge driver (git config merge.atm)"
+        + (
+            " and added .agentic-task-manager/.gitattributes (staged)."
+            if setup["gitattributes_added"]
+            else "; .gitattributes already set."
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
