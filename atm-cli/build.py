@@ -25,6 +25,7 @@ import json
 import os
 import re
 import sys
+from typing import List
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.join(HERE, "atm")
@@ -105,7 +106,7 @@ MODULES = [
 # Each entry is a package name whose source lives in VENDORED_DIR/<package>/.
 # The build reads each package's .py files, hoists its imports, and concatenates
 # its code ahead of the atm modules (so atm modules can import from them).
-VENDORED_PACKAGES: list[str] = ["six", "transitions"]
+VENDORED_PACKAGES: List[str] = ["six", "transitions"]
 
 # Directory containing vendored third-party source code.
 # T-416 will copy click, transitions, etc. source here (e.g. vendored/click/, vendored/transitions/).
