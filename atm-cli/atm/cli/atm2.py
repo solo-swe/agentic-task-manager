@@ -10,16 +10,40 @@ subprocess, passing through stdout, stderr, and the exit code.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
+import signal
+import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from typing import Annotated, Optional
 
 import typer
 
+from ..boot.jsongit import dashboard_id, migrate_folder
 from ..boot.open import open_project
-from ..common.core import AtmExit, out, to_json
+from ..common.core import (
+    AtmError, AtmExit, out, to_json, atm_home, ensure_home,
+    format_duration, parse_iso, parse_version, pid_alive,
+    read_json, whoami, PLUGIN_ROOT, SCRIPT_DIR,
+)
+from ..common.dashboard import (
+    SCAN_PORTS, SERVER_LOG, SERVER_RECORD, SERVER_ENTRY, TEMPLATE,
+    dashboard_head, home_id, server_command, DEFAULT_PORT,
+)
+from ..common.errors import AtmFailure
 from ..lib.edit import check_project
 from ._delegate import run_atm, run_atm_capture
+
+
+# ── constants ported from atm cli/serve.py ──────────────────────────────────
+
+SERVER_LOCK = "server.lock"
+SERVER_LOCK_WAIT = 15.0
+STOP_WAIT = 5.0
+KILL_WAIT = 2.0
 
 app = typer.Typer(
     name="atm2",
@@ -892,31 +916,273 @@ def doctor(
         raise AtmExit(1)
 
 
+# ---------------------------------------------------------------------------
+# doctor / service
+# ---------------------------------------------------------------------------
+
+
+# ── helpers ported from atm cli/serve.py ──────────────────────────────────
+
+
+def server_url(port, project=None):
+    return f"http://localhost:{port}/" + (f"#project={project}" if project else "")
+
+
+def live_server(home):
+    """The running server's record, or None. A stale record is removed."""
+    record_path = os.path.join(home, SERVER_RECORD)
+    record = read_json(record_path)
+    if record is None:
+        return None
+    info = whoami(record.get("port"))
+    if info and info.get("pid") == record.get("pid"):
+        return record
+    os.remove(record_path)
+    return None
+
+
+def open_browser(url):
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    try:
+        subprocess.Popen([opener, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        out(f"Could not open a browser; open {url} yourself.")
+
+
+@contextlib.contextmanager
+def server_lock(home):
+    """Only one `atm serve` at a time looks for a running server and starts one: a directory, which mkdir creates for
+    exactly one process. A lock whose holder is gone (its pid isn't running) or that outlives the wait is broken."""
+    ensure_home(home)
+    lock = os.path.join(home, SERVER_LOCK)
+    deadline = time.time() + SERVER_LOCK_WAIT
+    while True:
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            holder = read_json(os.path.join(lock, "pid.json")) or {}
+            gone = isinstance(holder.get("pid"), int) and not pid_alive(holder["pid"])
+            if gone or time.time() >= deadline:
+                shutil.rmtree(lock, ignore_errors=True)
+                continue
+            time.sleep(0.05)
+    try:
+        with open(os.path.join(lock, "pid.json"), "w", encoding="utf-8") as f:
+            f.write(to_json({"pid": os.getpid()}))
+        yield
+    finally:
+        shutil.rmtree(lock, ignore_errors=True)
+
+
+def ensure_server(home, port):
+    """The running server's record, starting the server process if none runs. Returns (record, started)."""
+    with server_lock(home):
+        record = live_server(home)
+        if record:
+            return record, False
+        return start_server(home, port), True
+
+
+def start_server(home, port):
+    """Start the server process and wait for its record."""
+    # Find atm.py: works when running from built atm.py (SCRIPT_DIR/atm.py exists)
+    # and from source (plugin/scripts/atm.py relative to repo root).
+    atm_py = os.path.join(SCRIPT_DIR, "atm.py")
+    if not os.path.exists(atm_py):
+        atm_py = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))),
+            "plugin", "scripts", "atm.py",
+        )
+    with open(os.path.join(home, SERVER_LOG), "ab") as log:
+        child = subprocess.Popen(
+            [sys.executable, atm_py, SERVER_ENTRY, home, str(port)],
+            cwd=home,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=log,
+            start_new_session=True,
+        )
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        record = read_json(os.path.join(home, SERVER_RECORD))
+        if record and record.get("pid") == child.pid and whoami(record["port"]):
+            return record
+        if child.poll() is not None:
+            break
+        time.sleep(0.05)
+    raise AtmFailure(f"the dashboard server did not start; see {os.path.join(home, SERVER_LOG)}")
+
+
+def serve_start(cwd, port, overview):
+    """Start (or reuse) the server; returns the URL to show."""
+    project = None
+    if not overview:
+        migration = migrate_folder(cwd, register_it=False)
+        for line in migration["lines"]:
+            if line != "Nothing to migrate.":
+                out(line)
+        if not migration["tasks_exists"]:
+            raise AtmFailure("no tasks.json to serve. Run /atm:create-tasks first.")
+        project, shown = dashboard_id(open_project(cwd))
+        if not shown:
+            out("This project isn't listed on the dashboard (meta.dashboard.listed is false).")
+            project = None
+    home = atm_home()
+    record, started = ensure_server(home, port)
+    url = server_url(record["port"], project)
+    out(f"Dashboard server {'started' if started else 'already running'}: {url}")
+    return url
+
+
+def wait_gone(pid, seconds):
+    deadline = time.time() + seconds
+    while time.time() < deadline and pid_alive(pid):
+        time.sleep(0.05)
+    return not pid_alive(pid)
+
+
+def stop_server(home, pid):
+    """Stop a server of the user's (whose pid whoami confirmed)."""
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    if not wait_gone(pid, STOP_WAIT):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        if not wait_gone(pid, KILL_WAIT):
+            raise AtmFailure(f"the dashboard server (pid {pid}) didn't stop; its record is kept")
+    record_path = os.path.join(home, SERVER_RECORD)
+    if (read_json(record_path) or {}).get("pid") == pid:
+        os.remove(record_path)
+
+
+def unrecorded_servers(home, first_port, record=None):
+    """Servers of this atm folder answering on the usual ports that the record doesn't name."""
+    mine = home_id(home)
+    found = []
+    for port in range(first_port, first_port + SCAN_PORTS):
+        info = whoami(port, timeout=0.5)
+        if info and info.get("home") == mine and info.get("pid") != (record or {}).get("pid"):
+            found.append(info)
+    return found
+
+
+def serve_stop(home, port):
+    record_path = os.path.join(home, SERVER_RECORD)
+    record = read_json(record_path)
+    live = bool(record) and (whoami(record.get("port")) or {}).get("pid") == record.get("pid")
+    strays = unrecorded_servers(home, port, record if live else None)
+    if record is None and not strays:
+        out("Dashboard server is not running.")
+        return
+    if record is not None and not live:
+        os.remove(record_path)
+        if not strays:
+            out(f"Dashboard server is not running (removed a stale record for pid {record.get('pid')}).")
+            return
+    if live:
+        stop_server(home, record["pid"])
+        out(f"Dashboard server stopped (pid {record['pid']}).")
+    for info in strays:
+        stop_server(home, info["pid"])
+        out(f"Stopped a dashboard server the record didn't name (pid {info['pid']}, port {info['port']}).")
+
+
+def outdated(record):
+    """True when the server runs an older dashboard than this plugin's."""
+    mine, mine_build = dashboard_head(TEMPLATE) or ("", "")
+    theirs, theirs_build = str(record.get("version") or ""), str(record.get("build") or "")
+    if parse_version(mine) != parse_version(theirs):
+        return parse_version(mine) > parse_version(theirs)
+    theirs_root = record.get("plugin_root")
+    if theirs_root and os.path.realpath(str(theirs_root)) != os.path.realpath(PLUGIN_ROOT):
+        return False
+    return bool(mine_build) and mine_build != theirs_build
+
+
+def refresh_server(home=None):
+    """Restart the server on the same port if it runs an older dashboard."""
+    home = home or atm_home()
+    record = read_json(os.path.join(home, SERVER_RECORD))
+    if not isinstance(record, dict) or not outdated(record):
+        return None
+    with server_lock(home):
+        live = live_server(home)
+        if not live:
+            return None
+        stop_server(home, live["pid"])
+        return start_server(home, live["port"])
+
+
+def serve_refresh(home):
+    record = refresh_server(home)
+    if record:
+        out(f"Dashboard server restarted with dashboard {record.get('version')}: {server_url(record['port'])}")
+
+
+def serve_status(home, as_json, port):
+    record = live_server(home)
+    strays = unrecorded_servers(home, port, record)
+    if as_json:
+        url = server_url(record["port"]) if record else None
+        unrecorded = [{"pid": s["pid"], "port": s["port"], "version": s.get("version")} for s in strays]
+        out(to_json({"running": bool(record), **(record or {}), "url": url, "unrecorded": unrecorded}))
+        return
+    if not record:
+        out("Dashboard server is not running.")
+    else:
+        up = format_duration((datetime.now(timezone.utc) - parse_iso(record["started_at"])).total_seconds())
+        out(
+            f"Dashboard server running: {server_url(record['port'])} "
+            f"(pid {record['pid']}, dashboard {record.get('version')}, up {up})"
+        )
+    for info in strays:
+        out(
+            f"Also running, without a record: pid {info['pid']} on port {info['port']} "
+            f"(dashboard {info.get('version')}); `atm serve stop` stops it."
+        )
+
+
 @app.command("service")
 def service(
     ctx: typer.Context,
     action: str = typer.Argument("start", help="start|stop|status"),
     open_: bool = typer.Option(False, "--open", help="Also open the dashboard in the browser"),
     all_projects: bool = typer.Option(False, "--all", help="Show all projects overview"),
-    port: int = typer.Option(8765, "--port", help="The port to try first"),
+    port: int = typer.Option(DEFAULT_PORT, "--port", help="The port to try first"),
     dir_: Optional[str] = typer.Option(None, "--dir", help="The project to show"),
     refresh: bool = typer.Option(False, "--refresh", help="Only restart if dashboard is older"),
 ) -> None:
     """Run the dashboard server in the background."""
-    args = ["serve", action]
-    if open_:
-        args.append("--open")
-    if all_projects:
-        args.append("--all")
-    if port != 8765:
-        args += ["--port", str(port)]
-    if dir_:
-        args += ["--dir", dir_]
+    cwd = os.path.abspath(dir_) if dir_ else os.getcwd()
+    if not os.path.isdir(cwd):
+        raise AtmFailure(f"--dir {dir_}: not a directory", 2)
+    home = atm_home()
+    dry_run = ctx.obj.get("dry_run", False)
     if refresh:
-        args.append("--refresh")
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        if dry_run:
+            out("[dry-run] would refresh the dashboard server if outdated")
+        else:
+            serve_refresh(home)
+    elif action == "start":
+        if dry_run:
+            out("[dry-run] would start the dashboard server")
+        else:
+            refresh_server(home)
+            url = serve_start(cwd, port, all_projects)
+            if open_:
+                open_browser(url)
+    elif action == "stop":
+        if dry_run:
+            out("[dry-run] would stop the dashboard server")
+        else:
+            serve_stop(home, port)
+    else:
+        serve_status(home, ctx.obj.get("json_out", False), port)
 
 
 if __name__ == "__main__":
