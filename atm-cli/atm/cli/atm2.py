@@ -22,6 +22,7 @@ from typing import Annotated, Optional
 
 import typer
 
+from ..boot.identity import agent_identity
 from ..boot.jsongit import dashboard_id, migrate_folder, register_project, set_up_store
 from ..boot.open import open_project
 from ..common.core import (
@@ -35,15 +36,24 @@ from ..common.dashboard import (
 )
 from ..common.errors import AtmFailure, Invalid
 from ..lib.archive import archive_finished, unarchive_tasks
+from ..lib.code import (
+    commit_task,
+    folder_changes,
+    record_commit,
+    record_merge,
+    record_pr,
+    repository_paths,
+)
+from ..lib.components import add_component, edit_component, list_components
 from ..lib.edit import check_project
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
 from ..lib.settings import (
     ensure_project_id,
     ensure_repository,
+    get_repository,
     init_meta,
+    set_repository,
 )
-from ..lib.components import add_component, edit_component, list_components
-from ..boot.jsongit import register_project, set_up_store
 from .archive import describe_ids, describe_kept
 from .components import moved_text
 from ._delegate import run_atm, run_atm_capture
@@ -576,22 +586,45 @@ def vcs_commit(
     agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Commit exactly the named files plus tasks.json, and record the commit."""
-    args = ["commit", task_id]
-    if file:
-        for f in file:
-            args += ["--file", f]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm2 vcs commit {task_id}"]
+        if file:
+            for f in file:
+                parts.append(f"--file {f}")
+        if dir_:
+            for d in dir_:
+                parts.append(f"--dir {d}")
+        if message:
+            parts.append(f"--message {message}")
+        if record:
+            parts.append(f"--record {record}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    if record is not None:
+        if file or dir_ or message is not None:
+            raise Invalid("--record records an existing commit: no --file, --dir or --message")
+        result = record_commit(project, task_id, record)
+        if ctx.obj.get("json_out", False):
+            shown = {k: result[k] for k in ("task", "commit", "recorded")}
+            out(to_json({**shown, **({"hint": result["hint"]} if result["hint"] else {})}))
+            return
+        out(f"{result['task']}: recorded {result['commit'][:7]} {result['summary']}".rstrip())
+        if result["hint"]:
+            out(f"  {result['hint']}")
+        return
+    files = repository_paths(project, file or [], os.getcwd())
     if dir_:
-        for d in dir_:
-            args += ["--dir", d]
-    if message:
-        args += ["--message", message]
-    if record:
-        args += ["--record", record]
-    if agent:
-        args += ["--agent", agent]
+        files += [f for f in folder_changes(project, task_id, dir_, os.getcwd()) if f not in files]
+    result = commit_task(project, task_id, files, message)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(result))
+        return
+    out(f"{result['task']}: committed {result['commit'][:7]} {result['message'].splitlines()[0]}")
+    out("  " + ", ".join(result["files"]))
 
 
 @vcs_app.command("pr")
@@ -603,12 +636,19 @@ def vcs_pr(
     agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Record the PR that contains the tasks."""
-    args = ["pr"] + ids + ["--number", str(number), "--url", url]
-    if agent:
-        args += ["--agent", agent]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm2 vcs pr {' '.join(ids)} --number {number} --url {url}"]
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    task_ids = record_pr(project, ids, number, url)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json({"tasks": task_ids, "pr": {"number": number, "url": url}}))
+    else:
+        out(f"{', '.join(task_ids)}: in PR #{number} ({url})")
 
 
 @vcs_app.command("pushed")
@@ -619,14 +659,26 @@ def vcs_pushed(
     agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Record that a PR was merged, on the tasks it contains."""
-    args = ["merged", "--pr", str(pr)]
-    if at:
-        args += ["--at", at]
-    if agent:
-        args += ["--agent", agent]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm2 vcs pushed --pr {pr}"]
+        if at:
+            parts.append(f"--at {at}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    result = record_merge(project, pr, at)
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(result))
+        return
+    task_ids = result["tasks"]
+    out(f"PR #{pr} merged: {', '.join(task_ids)}" if task_ids else f"PR #{pr}: already recorded as merged")
+    for release_id in result["released"]:
+        out(f"Released {release_id}: all its tasks are merged in PR #{pr}.")
+    for release_id, waiting in result["pending"].items():
+        out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{pr}.")
 
 
 @vcs_app.command("repository")
@@ -639,16 +691,36 @@ def vcs_repository(
     agent: Optional[str] = typer.Option(None, "--agent"),
 ) -> None:
     """Print or set the repository's web address."""
-    args = ["repository"]
-    if url:
-        args.append(url)
-    if old:
-        args += ["--from", old]
-    if agent:
-        args += ["--agent", agent]
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = ["atm2 vcs repository"]
+        if url:
+            parts.append(url)
+        if old:
+            parts.append(f"--from {old}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    if url is None:
+        if old is not None:
+            raise Invalid(f"unexpected argument '{old}' (atm repository set URL)")
+        current = get_repository(project)
+        if ctx.obj.get("json_out", False):
+            out(to_json({"repository": current}))
+        elif current:
+            out(current)
+        else:
+            out("No repository address yet. Set it with `atm repository set <url>` (a git remote works too).")
+        return
+    result = set_repository(project, url, old)
+    moved = result["moved_links"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json({"repository": result["repository"], "moved_links": moved}))
+    else:
+        links = f" ({moved} PR link{'' if moved == 1 else 's'} moved from {result['previous']})" if moved else ""
+        out(f"Repository address set: {result['repository']}{links}")
 
 
 # ---------------------------------------------------------------------------
