@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 418,
+    "next_id": 426,
     "labels": [
       {
         "id": "architecture",
@@ -22029,16 +22029,16 @@
       "description": "Redesign the atm CLI for consistency and ergonomics.\n\nSee docs/task-states.md for the task state model and transitions (six kinds, all state commands, claims/leases, cross-worktree decisions).\n\nSee docs/improving-atm-cli-ergonomics.md for the proposed command structure (task, project, sprint, release, component, vcs, claim, loop, db, doctor, service), option normalization, risks, and a wrapper→delegate→delete migration plan.\n\nWork items:\n1. organize in subcommands like atm task, atm project, atm sprint, atm component, ...\n2. put a dry run command for all commands that make a change\n3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc.)\n4. Implement dynamic autocompletion for atm for zsh/bash/fish\n\nTyper experiment (atm2): implement a Typer-based CLI entry point (atm2) as a separate entry point that delegates to the existing atm commands via subprocess. This evaluates Typer's ergonomics (nested groups, type-hinted options, auto-help) without touching the existing atm command surface.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/task-states.md",
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-05T09:56:22Z",
+      "updated_at": "2026-11-05T10:27:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
       ],
@@ -22067,10 +22067,24 @@
           "kind": "note",
           "text": "atm2 Typer experiment status:\n- Done: doctor, service, db (migrate/archive/unarchive/init), vcs (commit/pr/pushed/repository) call atm-lib directly.\n- Still delegate via subprocess: task, loop, claim, project, sprint, release, component.\n- Global --dry-run/-n and --json/-j work on all commands.\n- Build clean, all tests pass.\nRemaining: wrap remaining groups via atm-lib, dynamic autocompletion for zsh/bash/fish.",
           "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T10:27:45Z",
+          "kind": "failure",
+          "text": "lease expired (Hakan Serce)"
+        },
+        {
+          "at": "2026-11-05T10:27:46Z",
+          "kind": "outcome",
+          "text": "atm2 Typer CLI: `task`, `doctor`, `service`, `db`, `vcs`, `release`, `component` call atm-lib directly, with global `--dry-run`/`--json` and parity tests. Remaining work in T-418 to T-425 (loop/claim, project/sprint, completion, infra split, cutover; T-417 regressions).",
+          "by": "claude:c92be4e4"
         }
       ],
-      "started_at": "2026-11-05T08:58:17Z",
-      "started_by": "Hakan Serce"
+      "commit": "7f44e2177d4175b61362cc82374206db1211a7f8",
+      "started_at": "2026-11-05T10:27:45Z",
+      "started_by": "claude:c92be4e4",
+      "completed_at": "2026-11-05T10:27:46Z",
+      "completed_by": "claude:c92be4e4"
     },
     {
       "id": "T-413",
@@ -22142,15 +22156,16 @@
       "dependencies": [
         "T-412",
         "T-414",
-        "T-416"
+        "T-416",
+        "T-425"
       ],
       "files": [
         "docs/porting-to-rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-05T07:23:42Z",
+      "updated_at": "2026-11-05T10:27:34Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
       ],
@@ -22212,6 +22227,237 @@
           "text": "state machine implemented with transitions library, vendored into build.py, all 12 transitions working",
           "by": "Hakan Serce"
         }
+      ]
+    },
+    {
+      "id": "T-418",
+      "name": "Fix the status-command refusal scenarios failing since the T-417 state machine",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "atm2"
+      ],
+      "description": "23 scenarios in `npm run test:scripts` fail on `dev/0.31.0`, all on refusal paths of the status commands: `done` on a todo task, `reopen` on an open one, `review` on a task that isn't in progress, `skip` on one in progress, `start` with unfinished dependencies, and so on (`block.json`, `lease.json`, `notes.json`, `reopen.json`, `review*.json`, `skip.json`, `status.json`, `vocab.json`).\n\nThey failed before T-412's atm2 work (the rebuilt `plugin/scripts/atm.py` was byte-identical), so they most likely come from replacing the hand-rolled transitions with `TaskMachine` in [lib/state.py](atm-cli/atm/lib/state.py) (T-417): its refusals don't give the messages or exit codes the scenarios expect.\n\n## Change\nMake `TaskMachine.transition` refuse exactly as `change_status` did: the same message and exit code for each refusal. Don't change the scenarios to match new messages unless the old message was wrong.\n\n## Tests\n`npm run test:scripts` is green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/state.py"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-419",
+      "name": "Make the atm-lib unit tests run without transitions installed system-wide",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "atm2"
+      ],
+      "description": "The atm-lib unit tests (`tests/lib`, run by [lib.test.mjs](tests/scripts/lib.test.mjs)) fail to import: `lib/state.py` imports `transitions` (T-417), and the tests run the modules with plain `python3`, which doesn't have it. The bundled `plugin/scripts/atm.py` works because it carries its third-party code.\n\n## Change\nGive the unit tests the same third-party code the bundle has, so they pass with Python 3.9 and no packages installed (as CI runs them): e.g. put `atm-cli/vendored/` on the path in `lib.test.mjs`, or run them through `uv`. Coordinate with T-416 (third-party libraries in atm-cli), which decides how they are vendored.\n\n## Tests\n`npm run test:scripts` runs `tests/lib` green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/lib.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
+      "related": [
+        "T-416"
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-420",
+      "name": "atm2: loop and claim groups via atm-lib",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Port `atm2 loop next`, `loop run`, `claim list` and `claim heartbeat` (with `--auto`, the PostToolUse hook's mode) in [atm2.py](atm-cli/atm/cli/atm2.py) from running `atm` (`run_atm`) to calling atm-lib directly: copy what `cmd_next`, `cmd_run`, `cmd_claims`, `cmd_heartbeat` and `auto_heartbeat` in [cli/claims.py](atm-cli/atm/cli/claims.py) do, as T-412 did for the `task` group (commit `7f44e21`). `loop next` takes `--status` as `atm next` does; its selections (`--sprint`, `--tasks`, `--all`, `--backlog`) exclude each other; no task is exit code 3.\n\n## Tests\nParity steps in [atm2.test.mjs](tests/scripts/atm2.test.mjs): `next`, `next --claim`, `claims`, `heartbeat`, `run <id> -- <command>` (exit code passed through).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-421",
+      "name": "atm2: project and sprint groups via atm-lib, then remove _delegate.py",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Port the last groups of [atm2.py](atm-cli/atm/cli/atm2.py) that run `atm` to atm-lib, copying what atm does:\n\n- `project config` (`cmd_paths`), `project status` (`cmd_status`), `project workflow [set …]` (`cmd_workflow`), `project logo [set|unset]` (`cmd_logo`), and `project list|add|remove|prune` (`cmd_projects`);\n- `sprint list|add|edit|start|close|delete` (`cmd_sprints`), `sprint move <id>… --to` (`cmd_move`) and `sprint backlog` (`cmd_backlog`); only `list` and `add` exist in atm2 now.\n\nThen nothing uses `run_atm`: delete [_delegate.py](atm-cli/atm/cli/_delegate.py), its entry in `EXCLUDED_MODULES` in [test_architecture.test.mjs](tests/scripts/test_architecture.test.mjs), and the \"delegates to atm\" wording in atm2's help and docstrings.\n\n## Tests\nParity steps for each command in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-420"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "atm-cli/atm/cli/_delegate.py",
+        "tests/scripts/test_architecture.test.mjs",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-422",
+      "name": "atm2: parity tests for the groups ported earlier, run in CI",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "[atm2.test.mjs](tests/scripts/atm2.test.mjs) checks only the `task` group. Add parity steps (same exit code, stdout, stderr and tasks.json as atm) for the groups ported before it: `vcs commit|pr|pushed|repository`, `db migrate|archive|unarchive|init`, `release list|add|edit|archive|notes`, `component list|add|edit`, `doctor` and `service status`. Fix what they find. `release list` and `component list` print a dry-run message under `--dry-run` although they change nothing: reads should just run.\n\nThe tests skip where atm2 can't run (no Typer), which is CI today. Decide with the user how CI gets Typer (uv in the workflow, or the vendored copy from T-416); this changes the CI workflow, so it is done together with the user, and `docs/security-architecture.md` is updated if a permission changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
+      "with": "user",
+      "related": [
+        "T-416"
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-423",
+      "name": "atm2: shell completion for zsh, bash and fish",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "T-412 work item 4. Typer installs completion scripts (`--install-completion`, `--show-completion`) for zsh, bash and fish; make it complete atm's own values too, read through atm-lib: task IDs (with their names) for every `<id>` argument, sprint names for `--sprint`, releases for `--release`, components for `--component`, the project's statuses for `--status` and the targets of `task state`, types and priorities for `--type` and `--priority`. Completion never fails loudly: outside a project it completes nothing.\n\n## Tests\nCompletion run in-process (Typer's `_TYPER_COMPLETE` environment) for a task ID, a sprint and a status, in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-421"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-424",
+      "name": "atm2: separate infra commands from the everyday ones",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "T-412 work item 3, [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md) §4.5 and §4.8. The commands people and agents use (`task`, `loop`, `claim`, `sprint`, `release`, `component`, `project`, `vcs`) stay at the top of `atm2 --help`; the ones git, hooks and the server call go out of the way:\n\n- `merge-driver` (git runs it) as `db merge-driver`, hidden; `db init` registers it, as now;\n- `heartbeat --auto` stays the hook's entry point;\n- `paths` is `project config`; `summary` (the dashboard's dev server reads it) goes under `project`, hidden;\n- `version` and `help` as top-level meta commands.\n\nUpdate the command tree and the old→new table (§8) in the doc.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-421"
+      ],
+      "files": [
+        "atm-cli/atm/cli/atm2.py",
+        "docs/improving-atm-cli-ergonomics.md",
+        "tests/scripts/atm2.test.mjs"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:26Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-425",
+      "name": "atm2 cutover: the new command tree becomes atm",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "atm2"
+      ],
+      "description": "Phase 5 of [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md#:~:text=Phase%205). With every group native and tested:\n\n1. Answer the doc's open questions (§11) with the user, e.g. whether the old flat commands warn on stderr or delegate silently for a release.\n2. The Typer tree becomes `atm`, bundled into `plugin/scripts/atm.py` by `build.py` with its third-party code (T-416); the old flat commands stay as deprecated aliases with the same exit codes.\n3. Update the skills, `plugin/CLAUDE.md`, [task-states.md](docs/task-states.md) and the other docs to the new names.\n4. The security checklist: skills change, so the agent sandbox run or the written skill review (`docs/security-architecture.md` §3.3), and that document for any new entry point.\n5. Changelog and What's new entries, and the version bump.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-418",
+        "T-419",
+        "T-420",
+        "T-421",
+        "T-422",
+        "T-423",
+        "T-424"
+      ],
+      "files": [
+        "atm-cli/build.py",
+        "plugin/CLAUDE.md",
+        "docs/task-states.md",
+        "docs/improving-atm-cli-ergonomics.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-05T10:27:26Z",
+      "updated_at": "2026-11-05T10:27:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
+      "with": "user",
+      "related": [
+        "T-416"
+      ],
+      "components": [
+        "cli",
+        "skills",
+        "docs"
       ]
     }
   ]
