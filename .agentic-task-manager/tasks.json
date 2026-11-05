@@ -22046,7 +22046,7 @@
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-05T10:32:51Z",
+      "updated_at": "2026-11-05T10:34:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:c92be4e4",
       "components": [
@@ -22094,7 +22094,11 @@
       "started_at": "2026-11-05T10:27:45Z",
       "started_by": "claude:c92be4e4",
       "completed_at": "2026-11-05T10:27:46Z",
-      "completed_by": "claude:c92be4e4"
+      "completed_by": "claude:c92be4e4",
+      "labels": [
+        "atm2"
+      ],
+      "release": "0.31.0"
     },
     {
       "id": "T-413",
@@ -22135,9 +22139,9 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T06:39:31Z",
-      "updated_at": "2026-11-05T07:33:38Z",
+      "updated_at": "2026-11-05T10:34:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
       ],
@@ -22153,7 +22157,11 @@
           "text": "uv dev workflow, pyproject.toml, build.py vendoring infrastructure, layer enforcement moved to CI tests",
           "by": "Hakan Serce"
         }
-      ]
+      ],
+      "labels": [
+        "atm2"
+      ],
+      "release": "0.31.0"
     },
     {
       "id": "T-415",
@@ -22226,9 +22234,9 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T08:15:16Z",
-      "updated_at": "2026-11-05T08:44:52Z",
+      "updated_at": "2026-11-05T10:34:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:c92be4e4",
       "components": [
         "cli"
       ],
@@ -22244,7 +22252,11 @@
           "text": "state machine implemented with transitions library, vendored into build.py, all 12 transitions working",
           "by": "Hakan Serce"
         }
-      ]
+      ],
+      "labels": [
+        "atm2"
+      ],
+      "release": "0.31.0"
     },
     {
       "id": "T-418",
