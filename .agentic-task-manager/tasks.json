@@ -877,9 +877,10 @@
       },
       {
         "id": "CLI ergonomics",
-        "state": "planned",
+        "state": "active",
         "goal": "The atm2 Typer CLI: every command group on atm-lib, shell completion, infra commands kept apart, and the cutover to `atm`; the T-417 regressions fixed",
-        "release": "0.31.0"
+        "release": "0.31.0",
+        "start": "2026-11-05T10:35:06Z"
       }
     ],
     "releases": [
