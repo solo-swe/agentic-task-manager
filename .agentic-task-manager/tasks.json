@@ -22036,14 +22036,40 @@
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-05T08:45:01Z",
+      "updated_at": "2026-11-05T09:56:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "components": [
         "cli"
       ],
       "with": "user",
-      "started_at": "2026-11-05T08:44:52Z",
+      "notes": [
+        {
+          "at": "2026-11-05T08:49:55Z",
+          "kind": "outcome",
+          "text": "Typer-based atm2 CLI entry point implemented, delegates to atm commands via subprocess",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T08:58:14Z",
+          "kind": "note",
+          "text": "Reopened: still scratching the surface of CLI ergonomics redesign",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T08:59:02Z",
+          "kind": "note",
+          "text": "CLI ergonomics redesign in progress. State machine (T-417), build modernization (T-414), and atm2 Typer entry point with --dry-run done. See docs/task-states.md, docs/improving-atm-cli-ergonomics.md, and full note at /tmp/opencode/t412-note.txt. Still TODO: separate infra/interface commands, zsh/bash/fish autocompletion.",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-05T09:56:22Z",
+          "kind": "note",
+          "text": "atm2 Typer experiment status:\n- Done: doctor, service, db (migrate/archive/unarchive/init), vcs (commit/pr/pushed/repository) call atm-lib directly.\n- Still delegate via subprocess: task, loop, claim, project, sprint, release, component.\n- Global --dry-run/-n and --json/-j work on all commands.\n- Build clean, all tests pass.\nRemaining: wrap remaining groups via atm-lib, dynamic autocompletion for zsh/bash/fish.",
+          "by": "Hakan Serce"
+        }
+      ],
+      "started_at": "2026-11-05T08:58:17Z",
       "started_by": "Hakan Serce"
     },
     {
