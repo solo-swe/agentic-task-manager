@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 413,
+    "next_id": 414,
     "labels": [
       {
         "id": "architecture",
@@ -22006,20 +22006,49 @@
       "id": "T-412",
       "name": "Improve atm cli interface",
       "type": "refactor",
-      "description": "1. organize in subcommands like atm task , atm project, atm sprint, atm component, ... \\n 2. put a dry run command for all commands that make a change \\n 3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc,) \\n 4. Implement dynamic autocompletion for atm for zsh/bash/fish",
+      "description": "Redesign the atm CLI for consistency and ergonomics.\n\nSee docs/task-states.md for the task state model and transitions (six kinds, all state commands, claims/leases, cross-worktree decisions).\n\nSee docs/improving-atm-cli-ergonomics.md for the proposed command structure (task, project, sprint, release, component, vcs, claim, loop, db, doctor, service), option normalization, risks, and a wrapper→delegate→delete migration plan.\n\nWork items:\n1. organize in subcommands like atm task, atm project, atm sprint, atm component, ...\n2. put a dry run command for all commands that make a change\n3. separate commands for infra from interface (interface is task/project etc, infra is merge-driver, file path, etc.)\n4. Implement dynamic autocompletion for atm for zsh/bash/fish\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [],
-      "files": [],
+      "files": [
+        "docs/task-states.md",
+        "docs/improving-atm-cli-ergonomics.md"
+      ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-04T09:46:12Z",
+      "updated_at": "2026-11-05T01:56:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "components": [
         "cli"
       ],
       "with": "user"
+    },
+    {
+      "id": "T-413",
+      "name": "Implement multi-harness support for the ATM plugin",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "atm-cli",
+        "dashboard"
+      ],
+      "description": "Implement multi-harness support for the ATM plugin, so it works under Open Code (and other hosts) in addition to Claude Code.\n\n## Overview\n\nThe ATM plugin's core is already harness-agnostic: `atm-cli/` is pure Python stdlib, `plugin/scripts/atm` is a shell launcher, and `dashboard/` is a single-file HTML served over HTTP by `atm serve`. Only the top layer — the `.claude-plugin/` manifest, `plugin/CLAUDE.md`, and Claude Code skill frontmatter — is host-specific.\n\nThe goal is to split the plugin into three layers so any harness can register the same skill bodies:\n\n- **Layer 1 — core (harness-agnostic):** `plugin/scripts/`, `atm-cli/`, `dashboard/`\n- **Layer 2 — skill bodies (harness-neutral):** `plugin/skills/*/SKILL.md`\n- **Layer 3 — adapters (per harness):** `.claude-plugin/` (Claude Code), `plugin/open-code/` (Open Code), `plugin/<harness>/` (future)\n\n## Diagram: three-layer split\n\n```mermaid\ngraph TD\n    subgraph L3[\"Layer 3 — harness adapters (thin)\"]\n        CC[Claude Code<br/>.claude-plugin/<br/>plugin/CLAUDE.md]\n        OC[Open Code<br/>plugin/open-code/]\n        CU[Cursor / Zed / …<br/>plugin/<harness>/]\n    end\n\n    subgraph L2[\"Layer 2 — skill bodies (harness-neutral)\"]\n        SD[do-task / plan-sprint /<br/>close-sprint / loop-tasks /<br/>push / serve / create-tasks<br/>plugin/skills/*/SKILL.md]\n    end\n\n    subgraph L1[\"Layer 1 — core (harness-agnostic)\"]\n        CLI[atm CLI<br/>atm-cli/ + plugin/scripts/<br/>pure Python stdlib 3.9+]\n        DS[Dashboard server<br/>atm serve → localhost:8765<br/>single-file HTML]\n        TD[Task data<br/>.agentic-task-manager/tasks.json<br/>plain JSON]\n    end\n\n    CC --> SD\n    OC --> SD\n    CU --> SD\n    SD --> CLI\n    SD --> DS\n    SD --> TD\n```\n\n## Diagram: data flow\n\n```mermaid\nsequenceDiagram\n    participant H as Harness (Open Code / Claude Code)\n    participant S as Skill body\n    participant A as atm CLI\n    participant T as tasks.json\n    participant D as Dashboard server\n    participant B as Browser\n\n    H->>S: invoke /atm:do-task\n    S->>A: atm next --claim\n    A->>T: read & lock task\n    T-->>A: task JSON\n    A-->>S: task under \"task\"\n    S->>S: implement the work\n    S->>A: atm commit <id> --file <paths>\n    A->>T: write tasks.json + commit\n    S->>A: atm done <id> --note '...'\n    A->>T: mark done, drop claim\n    D->>T: poll tasks.json (every 5s)\n    D->>B: serve dashboard HTML\n```\n\n## What to build\n\n1. `plugin/skills.json` — harness-neutral skill manifest (single source of truth: ids, names, triggers, `atm` commands, bodies)\n2. `plugin/open-code/manifest.json` — Open Code skill registration\n3. `plugin/open-code/install.sh` — copies skills to `~/.opencode/skills/`, puts `plugin/scripts/` on PATH\n4. `plugin/open-code/skills/*.opencode.md` — thin wrappers that `include` the shared `SKILL.md` bodies and declare tool permissions\n5. Split `plugin/skills/*/SKILL.md` frontmatter out of the harness-neutral body (keep Claude Code `allowed-tools` in the Claude Code adapter)\n6. `docs/multi-harness-support.md` — written; keep it in sync as the adapter evolves\n7. Verify `npm run verify` (dashboard) and `npm run test:scripts` (atm-cli) stay green\n\n## Reference\n\n- `docs/multi-harness-support.md` — full design, file layout, `skills.json` example, Open Code adapter, standalone usage, conventions, quick-start checklist\n\n## Files\n\n- `docs/multi-harness-support.md` (reference)\n- `plugin/skills.json` (new)\n- `plugin/open-code/manifest.json` (new)\n- `plugin/open-code/install.sh` (new)\n- `plugin/open-code/skills/*.opencode.md` (new)\n- `plugin/skills/*/SKILL.md` (split frontmatter from body)",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/multi-harness-support.md"
+      ],
+      "created_at": "2026-11-04T19:51:37Z",
+      "updated_at": "2026-11-04T19:51:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "docs"
+      ]
     }
   ]
 }
