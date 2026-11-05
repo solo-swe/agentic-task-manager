@@ -663,7 +663,7 @@ def db_migrate(
     """Move tasks.json into .agentic-task-manager/ and set up the folder."""
     dry_run = ctx.obj.get("dry_run", False)
     if dry_run:
-        out("[dry-run] would run: atm db migrate")
+        out("[dry-run] would move tasks.json into .agentic-task-manager/ and set up the folder")
         return
     migration = migrate_folder(os.getcwd())
     if ctx.obj.get("json_out", False):
@@ -682,6 +682,18 @@ def db_archive(
 ) -> None:
     """Move finished tasks to tasks-archive.json."""
     dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = []
+        if sprint:
+            for s in sprint:
+                parts.append(f"--sprint {s}")
+        if before:
+            parts.append(f"--before {before}")
+        if keep_days:
+            parts.append(f"--keep-days {keep_days}")
+        parts_str = " " + " ".join(parts) if parts else ""
+        out(f"[dry-run] would archive finished tasks{parts_str}")
+        return
     result = archive_finished(
         open_project(os.getcwd()), sprint, before, keep_days, dry_run
     )
@@ -729,7 +741,7 @@ def db_unarchive(
     """Bring archived tasks back into tasks.json."""
     dry_run = ctx.obj.get("dry_run", False)
     if dry_run:
-        out(f"[dry-run] would run: atm db unarchive {' '.join(ids)}")
+        out(f"[dry-run] would unarchive {', '.join(ids)}")
         return
     result = unarchive_tasks(open_project(os.getcwd()), ids)
     again = result["moves_back"]
@@ -754,7 +766,7 @@ def db_init(
     """Give tasks.json a meta.id and register the merge driver."""
     dry_run = ctx.obj.get("dry_run", False)
     if dry_run:
-        out(f"[dry-run] would run: atm db init" + (f" --meta-file {meta_file}" if meta_file else ""))
+        out("[dry-run] would give tasks.json a meta.id and register the merge driver")
         return
     project = open_project(os.getcwd())
     if meta_file:
