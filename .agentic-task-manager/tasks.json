@@ -877,10 +877,48 @@
       },
       {
         "id": "CLI ergonomics",
-        "state": "active",
+        "state": "closed",
         "goal": "The atm2 Typer CLI: every command group on atm-lib, shell completion, infra commands kept apart, and the cutover to `atm`; the T-417 regressions fixed",
         "release": "0.31.0",
-        "start": "2026-11-05T10:35:06Z"
+        "start": "2026-11-05T10:35:06Z",
+        "end": "2026-11-06T19:58:07Z",
+        "report": {
+          "done": [
+            "T-418",
+            "T-419",
+            "T-420",
+            "T-421",
+            "T-422",
+            "T-423",
+            "T-424",
+            "T-425",
+            "T-427",
+            "T-428",
+            "T-429",
+            "T-430",
+            "T-431",
+            "T-432",
+            "T-433",
+            "T-434",
+            "T-435",
+            "T-437",
+            "T-438"
+          ],
+          "carried": [],
+          "added": [
+            "T-427",
+            "T-428",
+            "T-429",
+            "T-430",
+            "T-431",
+            "T-432",
+            "T-433",
+            "T-434",
+            "T-435",
+            "T-437",
+            "T-438"
+          ]
+        }
       }
     ],
     "releases": [
@@ -1071,7 +1109,12 @@
       },
       {
         "id": "0.31.0",
-        "state": "planned"
+        "state": "released",
+        "pr": {
+          "number": 37,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+        },
+        "released_at": "2026-11-06T19:54:27Z"
       }
     ],
     "migrations": [
@@ -20008,7 +20051,7 @@
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20064,7 +20107,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-413",
@@ -20105,7 +20149,7 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T06:39:31Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20131,7 +20175,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-415",
@@ -20218,7 +20263,7 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T08:15:16Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20244,7 +20289,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-418",
@@ -20263,7 +20309,7 @@
         "atm-cli/atm/lib/state.py"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20282,7 +20328,7 @@
       "commit": "c6e4a035563accf4eaf4569b2ed3020c932d91a2",
       "completed_at": "2026-11-06T05:52:19Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T05:52:19Z",
@@ -20294,7 +20340,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-419",
@@ -20313,7 +20360,7 @@
         "tests/scripts/lib.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "related": [
@@ -20335,7 +20382,7 @@
       "commit": "8e723bf361cf0252bdc1fc58789568b7f67fdd43",
       "completed_at": "2026-11-06T06:09:13Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:09:13Z",
@@ -20347,7 +20394,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-420",
@@ -20367,7 +20415,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20386,7 +20434,7 @@
       "commit": "62461cacfaf13cea9223ffe955048e59a72ad9c2",
       "completed_at": "2026-11-06T06:12:14Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:12:14Z",
@@ -20398,7 +20446,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-421",
@@ -20422,7 +20471,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20441,7 +20490,7 @@
       "commit": "53e3ae4fda8a84318cd072ee86392335801b9949",
       "completed_at": "2026-11-06T06:23:02Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:23:02Z",
@@ -20453,7 +20502,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-422",
@@ -20472,7 +20522,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20509,11 +20559,12 @@
       "commit": "76efd8362db52fea30d6b209606f7112eba4efd7",
       "completed_at": "2026-11-06T07:48:35Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-423",
@@ -20535,7 +20586,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20554,7 +20605,7 @@
       "commit": "484d0731b25f7f256a349cadbcd2bfd79c2c9f1a",
       "completed_at": "2026-11-06T06:26:10Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:26:10Z",
@@ -20566,7 +20617,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-424",
@@ -20589,7 +20641,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20609,7 +20661,7 @@
       "commit": "ddc314219483b7d9b5e714710aa1572996736818",
       "completed_at": "2026-11-06T06:34:37Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:34:37Z",
@@ -20621,7 +20673,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-425",
@@ -20652,7 +20705,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20691,11 +20744,12 @@
       "commit": "41010298a5fb1e27b9c3ad865432f53f7f3b80f2",
       "completed_at": "2026-11-06T10:00:28Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-426",
@@ -20757,7 +20811,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20807,11 +20861,12 @@
       "commit": "ef2b13e4b79d1541027f8b313048ab1dbc802f85",
       "completed_at": "2026-11-06T07:14:41Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-428",
@@ -20839,7 +20894,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20885,11 +20940,12 @@
       "commit": "b9ea51babc476f2bf66eae8a62db5e2c2a24d96c",
       "completed_at": "2026-11-06T15:56:29Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-429",
@@ -20918,7 +20974,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20961,11 +21017,12 @@
       "commit": "4763f3d9dd78af158f1c64dadbd0b42249b47778",
       "completed_at": "2026-11-06T18:06:43Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-430",
@@ -20989,7 +21046,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21008,7 +21065,7 @@
       "commit": "df9544e901f29432700dcff2e2875a167a898e16",
       "completed_at": "2026-11-06T16:06:57Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T16:06:57Z",
@@ -21020,7 +21077,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-431",
@@ -21044,7 +21102,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21090,11 +21148,12 @@
       "commit": "38f19fdf37f6784e8ec132f58cf732423c62a1d7",
       "completed_at": "2026-11-06T18:26:08Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-432",
@@ -21118,7 +21177,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21137,7 +21196,7 @@
       "commit": "ba95e68dfafdfc0186ffaafeae4ff201920e5188",
       "completed_at": "2026-11-06T16:15:54Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T16:15:54Z",
@@ -21149,7 +21208,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-433",
@@ -21174,7 +21234,7 @@
         "dashboard/tests/unit/no-hardcoded-colours.test.ts"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21220,11 +21280,12 @@
       "commit": "cce41a89a58955707ef51b72616d21b48cf9d8a1",
       "completed_at": "2026-11-06T18:35:53Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-434",
@@ -21247,7 +21308,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21266,7 +21327,7 @@
       "commit": "a7b1629e6df725c3f8c283a7602b323acaa110d4",
       "completed_at": "2026-11-06T18:40:20Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T18:40:20Z",
@@ -21278,7 +21339,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-435",
@@ -21299,7 +21361,7 @@
         "docs/dashboard-logic-inventory.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21318,7 +21380,7 @@
       "commit": "bad89e5e9347bdc8093682137fba7b857c1bdb1a",
       "completed_at": "2026-11-06T06:40:59Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:40:59Z",
@@ -21336,7 +21398,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-436",
@@ -21407,7 +21470,7 @@
         "tests/scripts/claims.test.mjs"
       ],
       "created_at": "2026-11-06T08:24:13Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21441,7 +21504,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-438",
@@ -21474,7 +21538,7 @@
         "tests/scripts/scenarios/review-states.json"
       ],
       "created_at": "2026-11-06T09:30:13Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21510,7 +21574,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     }
   ]
 }
