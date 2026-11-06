@@ -28,6 +28,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   records what was written, so `uninstall` removes exactly that. `status` says, per skill, linked, copied, missing,
   stale or not atm's. Built into `atm.py` (`common/skills.py`, generated from `skills/`); harnesses are a table in
   `lib/agents.py`, so others (T-413) are an entry each. Opt-in only: nothing installs on its own.
+
+### Development
+- **The Rust port's skeleton** (T-443, `docs/porting-to-rust.md`): a Cargo workspace (`Cargo.toml`,
+  `rust-toolchain.toml` at 1.99.0, `deny.toml`) with a crate per layer under `crates/`, and `atm version` from the
+  binary. CI's new `rust` job builds, lints and tests it on Linux, macOS and Windows, checks its dependencies with
+  cargo-deny, and runs the CLI suite against the binary (`node tests/scripts/run.mjs --rust`; `pnpm run
+  test:scripts:rust`) with the tests it doesn't pass yet listed in `tests/scripts/rust-expected-failures.json`.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

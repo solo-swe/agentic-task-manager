@@ -1,0 +1,17 @@
+[package]
+name = "atm-boot"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+atm-common.workspace = true
+atm-db.workspace = true
+atm-vcs.workspace = true
+atm-lib.workspace = true
+
+[lints]
+workspace = true

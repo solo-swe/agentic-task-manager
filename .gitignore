@@ -14,6 +14,8 @@ node_modules/
 
 # Build artifacts
 mnt/
+# Rust (T-443): cargo's builds
+/target/
 
 # Python bytecode (tests/lib imports atm-cli's modules as a package)
 __pycache__/

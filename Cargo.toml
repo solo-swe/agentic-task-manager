@@ -1,0 +1,35 @@
+# atm in Rust (T-415, docs/porting-to-rust.md): one crate per layer (docs/layered-architecture.md), so the compiler
+# checks the layer rule. The rules: docs/guides/rust.md.
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+# The plugin's version (plugin/.claude-plugin/plugin.json); dashboard/scripts/check-versions.mjs checks they agree
+version = "0.32.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/solo-swe/agentic-task-manager"
+publish = false
+
+[workspace.dependencies]
+atm-common = { path = "crates/atm-common" }
+atm-db = { path = "crates/atm-db" }
+atm-vcs = { path = "crates/atm-vcs" }
+atm-lib = { path = "crates/atm-lib" }
+atm-boot = { path = "crates/atm-boot" }
+atm-api = { path = "crates/atm-api" }
+clap = { version = "4.5", features = ["derive"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

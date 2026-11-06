@@ -21794,7 +21794,7 @@
       "description": "Installing the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3, §5), in the Python atm, **for Claude Code only**; built so other harnesses are an entry in a table later (T-413).\n\n## Change\n- `atm agents install [--harness claude] [--project] [--copy]`: writes the skills of this atm's version to `~/.agentic-task-manager/skills/` and links them into `~/.claude/skills/` (or the project's `.claude/skills/` with `--project`), Claude Code's copy with `allowed-tools`; `--copy` copies instead. Idempotent; prints every path it wrote.\n- `atm agents status`: per harness in the table (Claude Code for now), where atm's skills are (linked, copied, missing, stale) and their version.\n- `atm agents uninstall`: removes exactly what install wrote, nothing else.\n- Harnesses are a table (name, how to detect it, its folders, link or copy, extra frontmatter), so adding `~/.agents/skills/` and the others later touches only the table.\n- Opt-in only: never run by atm on its own. The new entry point (writing into another tool's folder) in [security-architecture.md](docs/security-architecture.md).\n\n## Tests\n`tests/scripts/agents.test.mjs` on a temporary home: install, status, re-install (no change), copy mode, uninstall leaves nothing, a stale link reported.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-441"
       ],
@@ -21805,7 +21805,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T21:40:43Z",
+      "updated_at": "2026-11-06T22:00:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21816,7 +21816,18 @@
       ],
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T21:40:43Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "9d55d0f8621a1317adc9ec2f8ac22ff8dd1464fd",
+      "completed_at": "2026-11-06T22:00:29Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T22:00:29Z",
+          "kind": "outcome",
+          "text": "`atm agents install|status|uninstall` (Claude Code; harness table in `lib/agents.py`): links from `~/.claude/skills`, copies with `--copy`/`--project`, record in `agents.json`, never replaces a folder it didn’t write. Review: the security entry; opt-in only.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-443",
@@ -21829,7 +21840,7 @@
       "description": "Step 1 of [porting-to-rust.md](docs/porting-to-rust.md) §5, following the [Rust guide](docs/guides/rust.md).\n\n## Change\n- `Cargo.toml` (workspace: edition 2024, lints, `[workspace.dependencies]`), `rust-toolchain.toml`, `deny.toml`; the crates of §2 (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`) with their allowed dependencies only; `atm version` from the binary (the plugin's version).\n- `tests/scripts` runs against the Rust binary when `ATM_IMPL=rust` (the launcher it uses picks it); an expected-failures list (by scenario file and test) that a test checks only shrinks.\n- CI: a Rust job on macOS, Linux and Windows (fmt, clippy, tests, cargo-deny, the suite with `ATM_IMPL=rust` and its expected failures); pinned as the CI rules in `AGENTS.md` say.\n- `AGENTS.md`: how to build and test the Rust side.\n\n## Tests\nThe crates' unit tests; `atm version` passes its scenario under `ATM_IMPL=rust`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -21841,16 +21852,18 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T22:00:31Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "Rust and distribution",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T22:00:31Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-444",

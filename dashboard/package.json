@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "pnpm run build:page && playwright test --grep-invert visual",
     "test:scripts": "node ../tests/scripts/run.mjs",
+    "test:scripts:rust": "cargo build --manifest-path ../Cargo.toml && node ../tests/scripts/run.mjs --rust",
     "bench": "node ../tests/scripts/bench.mjs",
     "branding": "node ../branding/generate.mjs",
     "lint": "eslint .",

@@ -7,7 +7,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-export const ATM = path.join(REPO, 'plugin/scripts/atm');
+/** Which atm the suite runs (T-443): the Python one through its launcher, or with ATM_IMPL=rust the Rust binary
+ * (`cargo build` first; ATM_RUST_BIN names another build, e.g. a release one) */
+export const IMPL = process.env.ATM_IMPL === 'rust' ? 'rust' : 'python';
+export const ATM =
+  IMPL === 'rust'
+    ? process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm')
+    : path.join(REPO, 'plugin/scripts/atm');
 export const PLUGIN_VERSION = JSON.parse(
   fs.readFileSync(path.join(REPO, 'plugin/.claude-plugin/plugin.json'), 'utf8'),
 ).version;

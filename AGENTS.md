@@ -113,6 +113,19 @@ through the launcher, exactly as users run it. Prefer data-driven scenarios in `
 `scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
 git merges). CI runs the suite with Python 3.9 and a current version.
 
+## The Rust port (`Cargo.toml`, `crates/`)
+atm is being ported to Rust ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)):
+one crate per layer under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`,
+whose binary is `atm`), the toolchain pinned in `rust-toolchain.toml`, the workspace's version the plugin's
+(`check-versions.mjs` checks it). Until the switch the Python atm is the spec: the same suite runs against the
+binary.
+- `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, `cargo deny check`
+  (from the repository root).
+- `pnpm run test:scripts:rust` in `dashboard/` (or `node tests/scripts/run.mjs --rust` after `cargo build`): the suite
+  against the Rust `atm`. The tests it doesn't pass yet are in `tests/scripts/rust-expected-failures.json`; the run
+  fails on any other failure, and on a listed test that passes: take it out of the list in the change that makes it
+  pass. `--write-expected` rewrites the list from a run, never to hide a failure.
+
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
   `tasksServer` fixture (`openDashboard(page, tasksServer, 'standard')` or an inline object), which plays atm serve's

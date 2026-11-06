@@ -1,0 +1,5 @@
+# The pinned toolchain (docs/guides/rust.md): an upgrade is a commit of its own
+[toolchain]
+channel = "1.99.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
