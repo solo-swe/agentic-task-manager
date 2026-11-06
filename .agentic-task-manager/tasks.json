@@ -20974,7 +20974,7 @@
       "description": "Replace the hand-made interactive primitives with Bits UI (headless, accessible), styled with our tokens, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks: `Dialog.svelte` and the dialogs built on it, the menus (settings, refresh, needs-you, project selector, list options) and the popovers (info tips).\n\n## Change\n- Add `bits-ui` (bundled into the single file; no request leaves the page).\n- Keyboard and focus follow the Bits UI patterns; Esc closes overlays.\n- The e2e DOM hooks keep working (`#detail-overlay.open`, the menus' ids and `data-` attributes), or the specs change with them.\n\n## Tests\nComponent tests for each replaced primitive; the functional e2e suite; `size` reported in the outcome note. The changed screenshots are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-430"
       ],
@@ -20984,7 +20984,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:06:48Z",
+      "updated_at": "2026-11-06T18:26:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21010,6 +21010,12 @@
           "kind": "answer",
           "text": "Bits UI costs about +56 KB (+18 KB gzipped) for the dialog alone, likely +70 to 80 KB with the menus and popovers. Accept it and raise the guardrail (to about 720 KiB)? → Use Bits UI as the guide says. The size limit no longer matters: the dashboard moves to Rust/Tauri soon and new KPIs come with that move. Raise the size guardrail to fit, and keep `pnpm run size` for information.; Or keep the hand-made primitives and take Bits UI out of the Svelte guide (their focus and keyboard handling checked by T-434’s accessibility test instead)? Or Bits UI only for the menus and popovers, where it adds most (keyboard navigation, positioning)? → (no answer)",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:26:08Z",
+          "kind": "review",
+          "text": "Bits UI dialog (About/Help/What’s new), dropdown menus (need-you, sprint scope), popovers (settings, filters, project selector, ⓘ tips), static placement, same ids. Size 788 KB (was 636; +150 KB), guardrail 850 KiB. Review: menus non-modal (`preventScroll={false}`); focus moves a frame after opening.",
+          "by": "claude:34798264"
         }
       ],
       "blocks": [
@@ -21020,7 +21026,11 @@
         }
       ],
       "started_at": "2026-11-06T18:06:48Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "38f19fdf37f6784e8ec132f58cf732423c62a1d7",
+      "completed_at": "2026-11-06T18:26:08Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-432",
@@ -21085,7 +21095,7 @@
       "description": "Gather the dashboard's design values into one tokens file of CSS custom properties (colours, spacing, radii, type), which the themes in `src/themes/*.css` set, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Components use the tokens in their scoped `<style>`; no inline colours and no literal spacing or radii where a token fits.\n\n## Tests\nExtend `tests/unit/no-hardcoded-colours.test.ts` (or a sibling) to catch literal spacing and radii outside the tokens file; `theme-contrast.test.ts` passes; the functional e2e suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-430"
       ],
@@ -21096,7 +21106,7 @@
         "dashboard/tests/unit/no-hardcoded-colours.test.ts"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T17:18:47Z",
+      "updated_at": "2026-11-06T18:26:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21130,7 +21140,9 @@
           "to": "2026-11-06T17:18:47Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-06T18:26:12Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-434",

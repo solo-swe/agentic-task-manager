@@ -1,4 +1,4 @@
-/* Default theme (GitHub-like). Its dark mode is the base token set in app.css (:root), which also serves as the
+/* Default theme (GitHub-like). Its dark mode is the base token set in tokens.css (:root), which also serves as the
    fallback before any theme or mode is set. Light mode overrides every token.
    Selectors: a theme's dark mode is :root[data-theme='x'], its light mode :root[data-theme='x'][data-mode='light'];
    the Default theme's light mode is any :root[data-mode='light'] that no theme block of higher specificity claims.

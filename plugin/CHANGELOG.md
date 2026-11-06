@@ -74,6 +74,13 @@ The sprint *CLI ergonomics* (release 0.31.0).
   static content, no floating positioning), with the same ids and classes; the menus aren't modal. About 150 kB more:
   the size guardrail is 850 KiB, only to catch a runaway build (no size target until the Rust/Tauri move sets new
   ones). `runed`'s SvelteKit 2 peer is allowed for 3 (`pnpm-workspace.yaml`).
+- **The dashboard's design tokens are one file**, `src/tokens.css` (T-433): the colours (moved from `app.css`; the
+  themes set them, as before), a spacing scale (`--space-1` … `--space-10`: 2, 4, 6, 8, 10, 12, 16, 20, 24, 32 px),
+  radii (`--radius-sm|md|lg|xl`: 4, 6, 8, 12 px, `--radius-pill`, `--radius-round`), text sizes (`--text-2xs` …
+  `--text-4xl`) and the page's font. Every padding, margin, gap and radius uses them: a value off the scale moved to
+  the nearest step (105 of 571; mostly 1 to 2 px), radii of 16 px and over are pills; text sizes were replaced where
+  one matched, the others kept, and `em` values and layout sizes stay as they are. `tests/unit/tokens.test.ts` keeps
+  it so.
 - **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
   `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
   version is the plugin's, so the same sources build the same page.

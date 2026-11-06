@@ -87,7 +87,9 @@
         {/if}
       {/if}
       {#if dashboard.filtered.length === 0}
-        <div style="color:var(--text-muted);padding:12px;font-size:14px">No tasks match current filters</div>
+        <div style="color:var(--text-muted);padding:var(--space-6);font-size:var(--text-lg)">
+          No tasks match current filters
+        </div>
       {/if}
       {#if dashboard.archivedCount && !dashboard.includeArchived}
         <!-- Where the list ends, the archive is one click away (T-354, found in T-277) -->

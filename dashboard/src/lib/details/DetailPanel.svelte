@@ -187,7 +187,7 @@
           {#each task.derived.problems as problem (problem)}<li>{problem}</li>{/each}
         </ul>
       {/if}
-      <div class="task-meta" style="margin-bottom:12px">
+      <div class="task-meta" style="margin-bottom:var(--space-6)">
         <span class="badge" style="background:{ts.bg};color:{ts.color}">{task.type}</span>
         <span class="badge" style="background:{ss.bg};color:{ss.color}"
           >{statusLabel(dashboard.vocab, task.status)}</span

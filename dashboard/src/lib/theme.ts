@@ -1,4 +1,4 @@
-// Colors and icons, lifted from the legacy dashboard (v0.4.0). Every color is a CSS token from app.css (or a tint of
+// Colors and icons, lifted from the legacy dashboard (v0.4.0). Every color is a CSS token from tokens.css (or a tint of
 // one), so themes can change them.
 import type { StatusKind } from './vocab';
 

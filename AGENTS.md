@@ -41,7 +41,10 @@ stamps it and writes it where the plugin ships it. The views are routes (T-429):
 the routes and `atm serve`'s `PAGE_PATH` are listed in `docs/multi-project-api.md` §2.7. Navigate with
 `lib/navigation.ts`, never `history` or `location` directly; API URLs are from the server's root. Components live by area in
 `src/lib/<area>/` (`shell/`, `ui/`, `kanban/`, `tasks/`, `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`,
-`agents/`, `overview/`; T-430), beside the logic modules in `src/lib/`. The `atm-dashboard-version` meta tag is
+`agents/`, `overview/`; T-430), beside the logic modules in `src/lib/`. Colours, spacing, radii and text sizes are
+tokens in `src/tokens.css` (T-433; the themes set the colours): use `var(--space-N)`, `var(--radius-…)`,
+`var(--text-…)`, never a px literal for a padding, margin, gap or radius (`tokens.test.ts`). Dialogs, menus and
+popovers are Bits UI's (T-431). The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
 
 `pnpm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.

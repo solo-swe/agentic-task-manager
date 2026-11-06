@@ -7,7 +7,7 @@
   <div
     id="load-error"
     role="alert"
-    style="background:var(--surface);border:1px solid var(--red);border-radius:8px;padding:24px;color:var(--red)"
+    style="background:var(--surface);border:1px solid var(--red);border-radius:var(--radius-lg);padding:var(--space-9);color:var(--red)"
   >
     <strong>Failed to load tasks.json</strong><br />
     <span style="color:var(--text-muted)"

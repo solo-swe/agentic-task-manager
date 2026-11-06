@@ -1,35 +1,5 @@
 /* Lifted verbatim from the legacy dashboard (v0.4.0). Global on purpose: the e2e suite and screenshots rely on these class names. */
-/* Colour tokens: every colour in the dashboard comes from these (tests/unit/no-hardcoded-colours.test.ts checks it).
-   Tints are color-mix() of a token with transparent, so a theme only defines the base colours. */
-:root {
-  --bg: #0d1117;
-  --surface: #161b22;
-  --surface2: #21262d;
-  --border: #30363d;
-  --text: #e6edf3;
-  --text-muted: #8b949e;
-  --accent: #58a6ff;
-  --green: #3fb950;
-  --yellow: #d29922;
-  --red: #f85149;
-  --purple: #bc8cff;
-  --pink: #f778ba;
-  --orange: #d18616;
-  --cyan: #39d2c0;
-  color-scheme: dark;
-  /* Text and marks on an accent-coloured background (active filter buttons) */
-  --on-accent: #000;
-  /* Behind the detail and What's new panels */
-  --overlay: rgba(0, 0, 0, 0.6);
-  /* Dependency graph node fills, by task type: dark versions of the type colours */
-  --node-feature: #1a3324;
-  --node-bugfix: #3d1518;
-  --node-test: #2d1f4e;
-  --node-infra: #3d2a0f;
-  --node-docs: #1a3333;
-  --node-refactor: #33300a;
-  --node-polish: #3d1a2e;
-}
+/* The tokens (colours, spacing, radii, type) are in tokens.css, loaded before this (T-433). */
 
 * {
   margin: 0;
@@ -39,10 +9,10 @@
 
 /* A column filling the window: the top bar, then the views, which take the rest of the height */
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-family: var(--font-sans);
   background: var(--bg);
   color: var(--text);
-  padding: 24px;
+  padding: var(--space-9);
   line-height: 1.5;
   min-height: 100vh;
   display: flex;
@@ -62,9 +32,9 @@ body {
 .title-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-6);
   /* Room for the hairline under the title row (.topbar::before) */
-  margin-bottom: 13px;
+  margin-bottom: var(--space-6);
 }
 .title-row h1 {
   margin-bottom: 0;
@@ -81,11 +51,11 @@ body {
   display: block;
 }
 .version-chip {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 500;
-  padding: 2px 10px;
+  padding: var(--space-1) var(--space-5);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface2);
   color: var(--text-muted);
   cursor: pointer;
@@ -100,12 +70,12 @@ body {
   border-color: var(--accent);
 }
 .version-new {
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
+  margin-left: var(--space-3);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
   background: var(--accent);
   color: var(--bg);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
@@ -118,15 +88,15 @@ body {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px 16px;
+  gap: var(--space-4) var(--space-7);
   position: sticky;
   bottom: 0;
   z-index: 40;
-  margin: 16px -24px -24px;
-  padding: 10px 24px 12px;
+  margin: var(--space-7) calc(-1 * var(--space-9)) calc(-1 * var(--space-9));
+  padding: var(--space-5) var(--space-9) var(--space-6);
   background: var(--bg);
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 /* The ATM logo and name, then the copyright: one group, so they stay together when the bar wraps */
@@ -134,19 +104,19 @@ body {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
+  gap: var(--space-2) var(--space-6);
 }
 .footer-brand {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   color: var(--text);
   font-weight: 600;
 }
 .footer-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--space-2) var(--space-7);
 }
 .footer-link {
   font: inherit;
@@ -168,36 +138,36 @@ body {
 .about .about-name {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 16px;
+  gap: var(--space-5);
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 .about .about-description {
-  font-size: 14px;
+  font-size: var(--text-lg);
   color: var(--text-muted);
-  margin: 4px 0 16px;
+  margin: var(--space-2) 0 var(--space-7);
 }
 /* A task's description in the detail panel: Markdown in a box of its own, so its headings don't read as the panel's
    sections. The page background sets it apart from the panel and keeps code blocks (surface2) visible inside it */
 .detail-description {
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-6);
   min-width: 0;
 }
 /* Headings stay below the panel's section labels: smaller, and the lower levels muted */
 .detail-description .compmd-page h1 {
-  font-size: 14px;
-  margin-top: 14px;
+  font-size: var(--text-lg);
+  margin-top: var(--space-6);
 }
 .detail-description .compmd-page h2 {
-  font-size: 13px;
-  margin-top: 12px;
+  font-size: var(--text-md);
+  margin-top: var(--space-6);
 }
 .detail-description .compmd-page :is(h3, h4, h5, h6) {
-  font-size: 12px;
-  margin-top: 10px;
+  font-size: var(--text-sm);
+  margin-top: var(--space-5);
 }
 /* Markdown rendered with CompMD (CompMd.svelte, docs/compmd-rendering-design.md): task text, Help and What's new.
    CompMD's h1–h6 at the dashboard's sizes, h3 and below muted; tables, task lists and alerts. CompMD's own theme
@@ -206,7 +176,7 @@ body {
   --compmd-accent: var(--accent);
   --compmd-border-subtle-color: var(--border);
   --compmd-border-strong: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--text-lg);
   line-height: 1.6;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -218,39 +188,39 @@ body {
   margin-bottom: 0;
 }
 .compmd-page :is(h1, h2, h3, h4, h5, h6) {
-  margin: 20px 0 6px;
+  margin: var(--space-8) 0 var(--space-3);
   font-weight: 600;
 }
 .compmd-page h1 {
-  font-size: 16px;
+  font-size: var(--text-xl);
 }
 .compmd-page h2 {
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 .compmd-page :is(h3, h4, h5, h6) {
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 .compmd-page :is(p, ul, ol, pre, blockquote, table, .compmd-alert) {
-  margin: 6px 0;
+  margin: var(--space-3) 0;
 }
 .compmd-page :is(ul, ol) {
-  padding-left: 20px;
+  padding-left: var(--space-8);
 }
 .compmd-page li {
-  margin-bottom: 3px;
+  margin-bottom: var(--space-1);
 }
 .compmd-page code {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   background: var(--surface2);
-  padding: 0 4px;
-  border-radius: 4px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
 }
 .compmd-page pre {
   background: var(--surface2);
-  padding: 8px 10px;
-  border-radius: 6px;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
   overflow-x: auto;
 }
 .compmd-page pre code {
@@ -266,7 +236,7 @@ body {
 .compmd-page hr {
   border: 0;
   border-top: 1px solid var(--border);
-  margin: 10px 0;
+  margin: var(--space-5) 0;
 }
 /* A wide table scrolls inside the text rather than widening the panel */
 .compmd-page table {
@@ -274,11 +244,11 @@ body {
   max-width: 100%;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .compmd-page :is(th, td) {
   border: 1px solid var(--border);
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-4);
 }
 .compmd-page th {
   background: var(--surface2);
@@ -289,7 +259,7 @@ body {
 }
 .compmd-page .compmd-alert-title {
   font-weight: 600;
-  margin: 0 0 2px;
+  margin: 0 0 var(--space-1);
 }
 /* What a text shows when CompMD can't render it: as written, line breaks kept (R2) */
 .compmd-plain {
@@ -304,24 +274,24 @@ body {
   line-height: inherit;
 }
 .about .about-section-title {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--text-muted);
-  margin: 20px 0 8px;
+  margin: var(--space-8) 0 var(--space-4);
 }
 /* The open project's section is headed by its name, with its logo or monogram */
 .about #about-project {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: var(--space-4);
+  font-size: var(--text-lg);
   color: var(--text);
 }
 .about .about-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
-  font-size: 13px;
+  gap: var(--space-3) var(--space-7);
+  font-size: var(--text-md);
 }
 .about dt {
   color: var(--text-muted);
@@ -334,8 +304,8 @@ body {
 }
 /* "Project details": the Project tab has the rest (T-255) */
 .about .about-project-details {
-  margin: 12px 0 0;
-  font-size: 13px;
+  margin: var(--space-6) 0 0;
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 .about #about-project-details {
@@ -361,19 +331,19 @@ body {
   transition: padding-top 0.2s ease;
 }
 .detail-panel.scrolling.scrolled {
-  padding-top: 16px;
+  padding-top: var(--space-7);
 }
 .detail-panel.scrolling > h3 {
   margin: 0;
-  padding-bottom: 14px;
+  padding-bottom: var(--space-6);
   border-bottom: 1px solid var(--border);
   transition:
     font-size 0.2s ease,
     padding 0.2s ease;
 }
 .detail-panel.scrolling.scrolled > h3 {
-  font-size: 16px;
-  padding-bottom: 8px;
+  font-size: var(--text-xl);
+  padding-bottom: var(--space-4);
 }
 .detail-panel.scrolling > .detail-close {
   transition: top 0.2s ease;
@@ -385,15 +355,15 @@ body {
   flex: 1 1 auto;
 }
 .dialog-scroll .hint-scroll-body {
-  padding-top: 14px;
+  padding-top: var(--space-6);
 }
 .dialog-scroll .kanban-more.bottom {
   border-radius: 0;
 }
 /* Under the newest releases: where the older ones are */
 .whats-new-older {
-  margin: 18px 0 4px;
-  font-size: 12px;
+  margin: var(--space-7) 0 var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .whats-new-older a {
@@ -401,38 +371,38 @@ body {
 }
 /* What's new keeps its tighter padding, and compacts from it */
 #whats-new-panel {
-  padding: 18px 20px;
+  padding: var(--space-7) var(--space-8);
 }
 #whats-new-panel.scrolled {
-  padding-top: 10px;
+  padding-top: var(--space-5);
 }
 .whats-new .release + .release {
-  margin-top: 18px;
+  margin-top: var(--space-7);
 }
 .whats-new .release > h4 {
   font-size: 15px;
   font-weight: 600;
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .whats-new .release-date {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 400;
   color: var(--text-muted);
 }
 /* A release's notes, rendered by CompMD */
 .whats-new .compmd {
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 1.55;
 }
 .whats-new .compmd-page ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-7);
 }
 .whats-new .compmd-page h4 {
-  margin: 8px 0 0;
-  font-size: 11px;
+  margin: var(--space-4) 0 0;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -441,20 +411,20 @@ body {
 }
 
 h1 {
-  font-size: 28px;
+  font-size: var(--text-4xl);
   font-weight: 600;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 
 .subtitle {
   color: var(--text-muted);
-  font-size: 14px;
-  margin-bottom: 24px;
+  font-size: var(--text-lg);
+  margin-bottom: var(--space-9);
 }
 
 .filters {
   display: flex;
-  gap: 8px;
+  gap: var(--space-4);
   align-items: center;
 }
 
@@ -462,9 +432,9 @@ h1 {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text-muted);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-md);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -479,9 +449,9 @@ h1 {
   background: none;
   border: 1px dashed var(--border);
   color: var(--accent);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .filter-more:hover {
@@ -498,12 +468,12 @@ h1 {
 .filter-count {
   display: inline-block;
   min-width: 18px;
-  margin-left: 6px;
-  padding: 0 5px;
-  border-radius: 9px;
+  margin-left: var(--space-3);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--text) 15%, transparent);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   line-height: 16px;
   text-align: center;
@@ -523,14 +493,14 @@ h1 {
   flex-wrap: wrap;
   /* Top-aligned: the pills on the right line up with the title row, not with the title and subtitle together */
   align-items: flex-start;
-  gap: 14px 20px;
+  gap: var(--space-6) var(--space-8);
   /* Pinned at the top, edge to edge (cancelling the body padding), over the page background */
   position: sticky;
   top: 0;
   z-index: 40;
   /* Little room under the subtitle: the tabs sit right below it (T-334) */
-  margin: -24px -24px 0;
-  padding: 24px 24px 12px;
+  margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
+  padding: var(--space-9) var(--space-9) var(--space-6);
   background: var(--bg);
   transition:
     padding 0.2s ease,
@@ -552,8 +522,8 @@ h1 {
   display: none;
 }
 .topbar.scrolled {
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding-top: var(--space-5);
+  padding-bottom: var(--space-5);
   border-bottom: 1px solid var(--border);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
 }
@@ -561,7 +531,7 @@ h1 {
   transition: font-size 0.2s ease;
 }
 .topbar.scrolled h1 {
-  font-size: 20px;
+  font-size: var(--text-2xl);
 }
 .topbar.scrolled .subtitle {
   display: none;
@@ -578,7 +548,7 @@ h1 {
   align-items: center;
   /* The title row's height (.title-row h1), so the pills centre on the title */
   height: 36px;
-  gap: 12px;
+  gap: var(--space-6);
   flex: 1;
   justify-content: flex-end;
   /* Never narrower than the two pills: on small screens they wrap to their own line instead of overlapping */
@@ -591,12 +561,12 @@ h1 {
 .widget-card {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
   height: 32px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0 10px 0 14px;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-5) 0 var(--space-6);
   white-space: nowrap;
   color: var(--text-muted);
   font: inherit;
@@ -612,16 +582,16 @@ h1 {
 .widget-body {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .widget-card .label {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .progress-card .number {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--green);
 }
@@ -646,23 +616,23 @@ h1 {
   overflow-y: auto;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
   box-shadow: 0 12px 32px color-mix(in srgb, var(--overlay) 70%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-7);
 }
 .insights-panel.wide {
   width: 700px;
 }
 .panel-heading {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.6px;
   color: var(--text-muted);
-  margin-bottom: -6px;
+  margin-bottom: calc(-1 * var(--space-3));
 }
 .panel-heading span {
   text-transform: none;
@@ -672,75 +642,75 @@ h1 {
 .insights-hero {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: var(--space-9);
 }
 .insights-hero-text {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .insights-title {
-  font-size: 16px;
+  font-size: var(--text-xl);
   font-weight: 600;
 }
 .status-bar {
   display: flex;
-  gap: 2px;
+  gap: var(--space-1);
   height: 10px;
 }
 .status-bar > span:first-child {
-  border-radius: 5px 0 0 5px;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
 }
 .status-bar > span:last-child {
-  border-radius: 0 5px 5px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .status-bar > span:only-child {
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 .status-legend {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
-  font-size: 12px;
+  gap: var(--space-2) var(--space-7);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .status-legend li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .status-legend strong {
   color: var(--text);
-  margin-left: 2px;
+  margin-left: var(--space-1);
 }
 .legend-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
 }
 .insights-section {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .ring-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 8px;
+  gap: var(--space-4);
 }
 /* Each group of rings (By phase, By type) is one card, like the Activity charts (.dive-chart): theme tokens only */
 .ring-group {
   background: color-mix(in srgb, var(--surface2) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px 8px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6) var(--space-4);
 }
 .ring-group-head {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 /* The popover's links (T-243): a ring opens the Progress tab on its phase, a finished-phase chip too, a status the
    Kanban filtered to it; Go to does either */
@@ -750,7 +720,7 @@ h1 {
 .go-to-link {
   background: none;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -758,7 +728,7 @@ h1 {
 .status-legend-link {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   padding: 0;
 }
 .ring-cell-button:hover,
@@ -773,18 +743,18 @@ h1 {
 .go-to-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .finished-chip,
 .go-to-link {
   background: var(--surface2);
   border-color: var(--border);
-  padding: 2px 9px;
-  font-size: 12px;
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
   color: var(--text);
 }
 .finished-chip {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .go-to-link:disabled {
   color: var(--text-muted);
@@ -803,16 +773,16 @@ h1 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 4px 4px 2px;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2) var(--space-1);
 }
 .ring-label {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 .ring-count {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -840,12 +810,12 @@ h1 {
 .kpi-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .kpi {
   background: var(--surface2);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   display: flex;
   flex-direction: column;
   flex: 1 1 100px;
@@ -853,14 +823,14 @@ h1 {
 .kpi-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 /* Time per task: agents alone and with you side by side, the ⓘ in the corner */
 .kpi-pair {
   flex: 1 1 210px;
   flex-direction: row;
   align-items: flex-start;
-  gap: 14px;
+  gap: var(--space-6);
 }
 .kpi-side {
   display: flex;
@@ -872,20 +842,20 @@ h1 {
 }
 .kpi-where {
   flex: 2 1 300px;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .kpi-where strong {
   white-space: nowrap;
 }
 /* One line: "75 h 39 m" must not leave its "m" on a line of its own */
 .kpi-value {
-  font-size: 20px;
+  font-size: var(--text-2xl);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .kpi-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 .deep-dive {
@@ -893,7 +863,7 @@ h1 {
 }
 .chart-tick {
   fill: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 .chart-axis {
   stroke: var(--border);
@@ -919,7 +889,7 @@ h1 {
 .legend-swatch {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 /* Placed beside the pointer by ActivityDeepDive (T-350), against the window: never part of the popup's content, so
    it can't change the popup's size (scrollbar flicker) */
@@ -929,9 +899,9 @@ h1 {
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   pointer-events: none;
   max-width: 260px;
@@ -942,26 +912,26 @@ h1 {
 .tooltip-title {
   color: var(--text);
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
 }
 .tooltip-type {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .type-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .type-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   background: var(--surface2);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 12px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-5);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .type-chip strong {
@@ -981,14 +951,14 @@ h1 {
 .menu-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
-  padding: 5px 10px;
+  padding: var(--space-2) var(--space-5);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 button.menu-trigger:hover,
 .menu-trigger[aria-expanded='true'] {
@@ -1017,12 +987,12 @@ button.menu-trigger:hover,
 }
 .swatch-dots {
   display: inline-flex;
-  gap: 2px;
+  gap: var(--space-1);
 }
 .swatch-dots span {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
 }
 .menu {
   position: absolute;
@@ -1031,12 +1001,12 @@ button.menu-trigger:hover,
   min-width: 220px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .settings .menu {
   right: 0;
@@ -1046,10 +1016,10 @@ button.menu-trigger:hover,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-6);
 }
 .settings-menu .menu-label:not(:first-child) {
-  margin-top: 6px;
+  margin-top: var(--space-3);
 }
 
 /* The project selector next to the title (ProjectSelector.svelte) */
@@ -1061,7 +1031,7 @@ button.menu-trigger:hover,
   width: 28px;
   height: 28px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text-muted);
   cursor: pointer;
@@ -1076,11 +1046,11 @@ button.menu-trigger:hover,
   top: -6px;
   right: -8px;
   min-width: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
   background: var(--yellow);
   color: var(--bg);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   line-height: 16px;
   text-align: center;
@@ -1091,13 +1061,13 @@ button.menu-trigger:hover,
 }
 .project-filter {
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface2);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .project-options {
   list-style: none;
@@ -1109,10 +1079,10 @@ button.menu-trigger:hover,
 .project-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  font-size: 13px;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
   color: var(--text);
   cursor: pointer;
 }
@@ -1148,7 +1118,7 @@ button.menu-trigger:hover,
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   line-height: 1;
 }
 .project-logo img {
@@ -1167,23 +1137,23 @@ button.menu-trigger:hover,
 }
 .project-option-note,
 .project-option-empty {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .project-option-empty {
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
 }
 .project-option-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--yellow);
   flex-shrink: 0;
 }
 .project-option-bar {
   width: 48px;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--surface2);
   overflow: hidden;
   flex-shrink: 0;
@@ -1197,25 +1167,25 @@ button.menu-trigger:hover,
   display: flex;
   align-items: center;
   height: 36px;
-  gap: 8px;
+  gap: var(--space-4);
   flex-shrink: 0;
   /* At the right edge on every page, with or without the charts before them */
   margin-left: auto;
 }
 .menu-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .menu-note {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .mode-switch {
   display: flex;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .mode-btn {
@@ -1223,12 +1193,12 @@ button.menu-trigger:hover,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: var(--space-2);
   background: var(--surface);
   border: none;
   color: var(--text-muted);
-  font-size: 12px;
-  padding: 5px 8px;
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-4);
   cursor: pointer;
 }
 .mode-btn + .mode-btn {
@@ -1246,7 +1216,7 @@ button.menu-trigger:hover,
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 /* Our own selects (the theme picker, .select-box): drawn by the page, not the platform, whose native control (its
    font, padding and arrow) differs between macOS and Chromium versions and so between screenshots (T-281). The arrow
@@ -1266,15 +1236,15 @@ button.menu-trigger:hover,
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font: inherit;
-  font-size: 13px;
-  padding: 5px 28px 5px 8px;
+  font-size: var(--text-md);
+  padding: var(--space-2) var(--space-9) var(--space-2) var(--space-4);
   cursor: pointer;
 }
 .select-box select {
-  font-size: 12px;
-  padding: 3px 24px 3px 8px;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-9) var(--space-1) var(--space-4);
 }
 .theme-picker .select-chevron,
 .select-box .select-chevron {
@@ -1293,7 +1263,7 @@ button.menu-trigger:hover,
 }
 .theme-swatch {
   display: inline-flex;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   border: 1px solid var(--border);
 }
@@ -1302,14 +1272,14 @@ button.menu-trigger:hover,
   height: 16px;
 }
 .refresh-state {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 .refresh-interval {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: var(--space-3);
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 
@@ -1317,15 +1287,15 @@ button.menu-trigger:hover,
 .filters-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   height: 32px;
-  padding: 0 10px;
+  padding: 0 var(--space-5);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 .filters-toggle:hover,
@@ -1338,11 +1308,11 @@ button.menu-trigger:hover,
 }
 .filters-badge {
   min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-lg);
   background: var(--accent);
   color: var(--on-accent);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -1350,15 +1320,15 @@ button.menu-trigger:hover,
 .task-search {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   height: 32px;
   /* A magnifier until used: a click, "/", or a search it holds opens it */
   width: 34px;
-  padding: 0 9px;
+  padding: 0 var(--space-4);
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: text;
   transition: width 0.2s ease;
@@ -1380,11 +1350,11 @@ button.menu-trigger:hover,
   color: transparent;
 }
 .search-key {
-  padding: 0 5px;
+  padding: 0 var(--space-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 16px;
   color: var(--text-muted);
 }
@@ -1397,7 +1367,7 @@ button.menu-trigger:hover,
   outline: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .task-search input::-webkit-search-cancel-button {
   display: none;
@@ -1409,8 +1379,8 @@ button.menu-trigger:hover,
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  padding: 2px;
-  border-radius: 50%;
+  padding: var(--space-1);
+  border-radius: var(--radius-round);
 }
 .search-clear:hover,
 .chip-clear:hover {
@@ -1422,25 +1392,25 @@ button.menu-trigger:hover,
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: 999px;
+  padding: 0 var(--space-2) 0 var(--space-5);
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .chip-group {
   color: var(--text-muted);
 }
 .filter-none {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .filter-panel {
@@ -1451,14 +1421,14 @@ button.menu-trigger:hover,
   width: min(680px, calc(100vw - 48px));
   max-height: min(70vh, 640px);
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: var(--space-6) var(--space-6);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--overlay) 60%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-5);
   text-align: left;
 }
 .filter-panel[hidden] {
@@ -1468,16 +1438,16 @@ button.menu-trigger:hover,
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding-bottom: 8px;
+  gap: var(--space-4) var(--space-6);
+  padding-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 .filter-panel-foot {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding-top: 8px;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--border);
 }
 .filter-panel-foot .include-archived {
@@ -1486,37 +1456,37 @@ button.menu-trigger:hover,
 .filter-group {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-6);
 }
 /* The group's name, and "clear" once something in it is selected */
 .filter-group-label {
   display: flex;
   align-items: baseline;
-  gap: 6px;
+  gap: var(--space-3);
   width: 104px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .filter-group-buttons {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 2px 4px;
+  gap: var(--space-1) var(--space-2);
   min-width: 0;
 }
 /* Quiet chips, like the menus' rows: text until hovered or selected, a muted count after the name */
 .filter-panel .filter-btn {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 3px 8px;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-4);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 400;
 }
 .filter-panel .filter-btn:hover {
@@ -1534,7 +1504,7 @@ button.menu-trigger:hover,
   padding: 0;
   background: none;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 400;
   line-height: inherit;
 }
@@ -1545,7 +1515,7 @@ button.menu-trigger:hover,
 }
 .filter-panel .filter-btn.filter-all {
   padding: 0;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--accent);
 }
 .filter-panel .filter-btn.filter-all:hover {
@@ -1553,23 +1523,23 @@ button.menu-trigger:hover,
   text-decoration: underline;
 }
 .filter-panel .filter-more {
-  padding: 3px 8px;
+  padding: var(--space-1) var(--space-4);
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
 }
 .filter-panel .filter-more:hover {
   background: var(--surface2);
 }
 /* The foot's buttons: small and bordered, like the title bar's triggers */
 .panel-button {
-  padding: 4px 12px;
+  padding: var(--space-2) var(--space-6);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   color: var(--text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 .panel-button:hover:not(:disabled) {
@@ -1583,17 +1553,17 @@ button.menu-trigger:hover,
 .filter-find {
   width: 120px;
   height: 22px;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--surface2);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 .match-count {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -1611,8 +1581,8 @@ button.menu-trigger:hover,
 .auto-refresh-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: var(--space-3);
+  font-size: var(--text-md);
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -1627,7 +1597,7 @@ button.menu-trigger:hover,
   height: 18px;
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   position: relative;
   transition:
     background 0.2s,
@@ -1642,7 +1612,7 @@ button.menu-trigger:hover,
   width: 12px;
   height: 12px;
   background: var(--text-muted);
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   transition:
     transform 0.2s,
     background 0.2s;
@@ -1662,9 +1632,9 @@ button.menu-trigger:hover,
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
-  padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 12px;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
   width: 44px;
   text-align: center;
 }
@@ -1685,31 +1655,31 @@ button.menu-trigger:hover,
 
 .task-grid {
   display: grid;
-  gap: 8px;
+  gap: var(--space-4);
 }
 /* Velocity (VelocityChart.svelte, T-323): a bar per closed sprint, anchored to the baseline, the average dashed */
 .velocity {
-  margin-top: 24px;
+  margin-top: var(--space-9);
 }
 /* The Progress tab's By component table (T-323) */
 .component-progress {
-  margin-top: 24px;
+  margin-top: var(--space-9);
 }
 .component-table .progress-fill {
   background: var(--accent);
 }
 .velocity-sub {
-  margin-left: 6px;
-  font-size: 12px;
+  margin-left: var(--space-3);
+  font-size: var(--text-sm);
   font-weight: 400;
   color: var(--text-muted);
 }
 .velocity-plot {
   position: relative;
   display: flex;
-  gap: 2px;
+  gap: var(--space-1);
   height: 110px;
-  margin-top: 26px;
+  margin-top: var(--space-9);
   /* A gutter on the right for the average's label, clear of the bars */
   padding-right: 64px;
   border-bottom: 1px solid var(--border);
@@ -1725,7 +1695,7 @@ button.menu-trigger:hover,
   left: 50%;
   width: min(60%, 36px);
   transform: translateX(-50%);
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   background: var(--accent);
 }
 .velocity-column:hover .velocity-bar {
@@ -1740,7 +1710,7 @@ button.menu-trigger:hover,
   flex-direction: column-reverse;
   width: min(60%, 36px);
   transform: translateX(-50%);
-  border-radius: 4px 4px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   overflow: hidden;
 }
 .velocity-segment {
@@ -1753,24 +1723,24 @@ button.menu-trigger:hover,
 .velocity-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: 4px;
-  font-size: 12px;
+  gap: var(--space-2) var(--space-6);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .velocity-legend > span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
 }
 .velocity-value {
   position: absolute;
   left: 50%;
   z-index: 2;
   transform: translateX(-50%);
-  margin-bottom: 2px;
-  padding: 0 3px;
-  font-size: 11px;
+  margin-bottom: var(--space-1);
+  padding: 0 var(--space-1);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--surface);
 }
@@ -1786,15 +1756,15 @@ button.menu-trigger:hover,
   position: absolute;
   right: 0;
   transform: translateY(-50%);
-  padding-left: 6px;
-  font-size: 11px;
+  padding-left: var(--space-3);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   background: var(--surface);
 }
 .velocity-names {
   display: flex;
-  gap: 2px;
-  margin-top: 4px;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
   padding-right: 64px;
 }
 .velocity-names span {
@@ -1803,7 +1773,7 @@ button.menu-trigger:hover,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--text-xs);
   text-align: center;
   color: var(--text-muted);
 }
@@ -1812,18 +1782,18 @@ button.menu-trigger:hover,
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 18px;
+  gap: var(--space-7);
 }
 .list-group-header {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 10px;
-  margin-bottom: 8px;
-  font-size: 13px;
+  gap: var(--space-2) var(--space-5);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
 }
 .list-group-name {
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 .list-group-count,
 .list-group-goal,
@@ -1838,18 +1808,18 @@ button.menu-trigger:hover,
   white-space: nowrap;
 }
 .list-group-hint code {
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--surface2);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .list-closed-toggle,
 .list-archived-toggle {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
 }
 /* The subtitle's "N archived": a toggle for Include archived (T-354), looking like a link */
 .archived-toggle {
@@ -1869,11 +1839,11 @@ button.menu-trigger:hover,
 .task-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-7);
   display: grid;
   grid-template-columns: 60px 1fr 220px auto;
-  gap: 12px 20px;
+  gap: var(--space-6) var(--space-8);
   align-items: start;
   transition:
     border-color 0.15s,
@@ -1890,17 +1860,17 @@ button.menu-trigger:hover,
   -webkit-line-clamp: 2;
   line-clamp: 2;
   overflow: hidden;
-  margin: -2px 0 8px;
-  font-size: 13px;
+  margin: calc(-1 * var(--space-1)) 0 var(--space-4);
+  font-size: var(--text-md);
   line-height: 18px;
   color: var(--text-muted);
 }
 .task-note {
-  margin-top: 6px;
+  margin-top: var(--space-3);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .task-note-kind {
@@ -1910,11 +1880,11 @@ button.menu-trigger:hover,
 .task-facts {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: var(--space-1);
   min-width: 0;
-  padding-left: 16px;
+  padding-left: var(--space-7);
   border-left: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 17px;
   color: var(--text-muted);
 }
@@ -1924,7 +1894,7 @@ button.menu-trigger:hover,
 }
 .task-fact {
   display: flex;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
 }
 .task-fact-label {
@@ -1938,7 +1908,7 @@ button.menu-trigger:hover,
   color: var(--text);
 }
 .task-fact-time {
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 /* Narrow windows: today's single column, the facts under the body */
 @media (max-width: 760px) {
@@ -1984,7 +1954,7 @@ button.menu-trigger:hover,
 
 .task-id {
   font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -1994,9 +1964,9 @@ button.menu-trigger:hover,
 }
 
 .task-name {
-  font-size: 14px;
+  font-size: var(--text-lg);
   font-weight: 500;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-3);
   cursor: pointer;
 }
 .task-name:hover {
@@ -2005,31 +1975,31 @@ button.menu-trigger:hover,
 
 .task-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--space-4);
   flex-wrap: wrap;
   align-items: center;
 }
 
 .badge {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius-lg);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .task-tags {
   display: flex;
-  gap: 6px;
+  gap: var(--space-3);
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
 }
 
 .uc-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 6px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--cyan) 12%, transparent);
   color: var(--cyan);
   font-family: 'SF Mono', 'Fira Code', monospace;
@@ -2044,8 +2014,8 @@ button.menu-trigger:hover,
 .include-archived {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   white-space: nowrap;
   cursor: pointer;
@@ -2062,10 +2032,10 @@ button.menu-trigger:hover,
 
 /* Stages of Done (D-4.2) */
 .stage-chip {
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
-  padding: 1px 7px;
-  border-radius: 10px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
   white-space: nowrap;
   text-decoration: none;
 }
@@ -2086,13 +2056,13 @@ button.stage-chip:hover {
 .branch-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-1);
   max-width: 160px;
   overflow: hidden;
   font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 10px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
   color: var(--cyan);
   background: color-mix(in srgb, var(--cyan) 12%, transparent);
   white-space: nowrap;
@@ -2122,8 +2092,8 @@ button.repo-ref {
 }
 /* Next to a commit link that may not work yet: nothing says the commit was pushed */
 .commit-unpushed {
-  margin-left: 8px;
-  font-size: 12px;
+  margin-left: var(--space-4);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .repo-hint {
@@ -2132,30 +2102,30 @@ button.repo-ref {
   top: calc(100% + 4px);
   left: 0;
   width: 260px;
-  padding: 8px 10px;
+  padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 50%, transparent);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 400;
   white-space: normal;
 }
 .kanban-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .kanban-section-header {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
-  padding: 4px 2px 0;
+  padding: var(--space-2) var(--space-1) 0;
 }
 .kanban-section-header a {
   color: inherit;
@@ -2165,13 +2135,13 @@ button.repo-ref {
 .label-chips {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-2);
 }
 
 .label-chip {
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 10px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   color: var(--text-muted);
   white-space: nowrap;
@@ -2195,7 +2165,7 @@ button.repo-ref {
   max-width: none;
   background: none;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   cursor: pointer;
 }
 .label-more:hover,
@@ -2208,26 +2178,26 @@ button.repo-ref {
   z-index: 50;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-2);
   max-width: 280px;
-  padding: 8px;
+  padding: var(--space-4);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
 }
 
 .req-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 6px;
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--pink) 12%, transparent);
   color: var(--pink);
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 .dep-link {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--accent);
   text-decoration: none;
   cursor: pointer;
@@ -2239,9 +2209,9 @@ button.repo-ref {
 }
 
 .deps-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-right: 2px;
+  margin-right: var(--space-1);
 }
 
 /* Detail panel */
@@ -2254,7 +2224,7 @@ button.repo-ref {
   flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   box-shadow: 0 12px 36px color-mix(in srgb, var(--overlay) 60%, transparent);
   overflow: hidden;
   min-width: 0;
@@ -2266,8 +2236,8 @@ button.repo-ref {
 .doc-titlebar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 10px 8px;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--border);
   cursor: move;
   user-select: none;
@@ -2291,11 +2261,11 @@ button.repo-ref {
   max-height: 16px;
 }
 .doc-viewer.scrolled .doc-titlebar {
-  padding-top: 5px;
-  padding-bottom: 5px;
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
 }
 .doc-viewer.scrolled .doc-title {
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .doc-viewer.scrolled .doc-path {
   max-height: 0;
@@ -2320,7 +2290,7 @@ button.repo-ref {
 }
 .doc-path {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
@@ -2329,10 +2299,10 @@ button.repo-ref {
 .doc-back,
 .doc-close {
   display: inline-flex;
-  padding: 4px;
+  padding: var(--space-2);
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -2341,11 +2311,11 @@ button.repo-ref {
   position: absolute;
   top: 4px;
   right: 4px;
-  padding: 3px;
-  border-radius: 5px;
+  padding: var(--space-1);
+  border-radius: var(--radius-sm);
 }
 .doc-titlebar {
-  padding-right: 28px;
+  padding-right: var(--space-9);
 }
 .doc-viewer.scrolled .doc-close {
   top: 2px;
@@ -2358,14 +2328,14 @@ button.repo-ref {
 .doc-action {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   flex-shrink: 0;
-  padding: 4px 9px;
-  font-size: 12px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   text-decoration: none;
   cursor: pointer;
 }
@@ -2390,7 +2360,7 @@ button.repo-ref {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: var(--space-9);
   background: var(--doc-desk);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
@@ -2413,7 +2383,7 @@ button.repo-ref {
   position: relative;
 }
 .doc-page:is([data-kind='code'], [data-kind='text']) {
-  padding: 20px 24px 20px 64px;
+  padding: var(--space-8) var(--space-9) var(--space-8) 64px;
 }
 .doc-page:is([data-kind='code'], [data-kind='text']) .compmd-page pre {
   white-space: pre;
@@ -2447,7 +2417,7 @@ button.repo-ref {
   bottom: 0;
   left: 4px;
   width: 30px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   line-height: 1.6;
 }
 .doc-gutter-lines div {
@@ -2464,7 +2434,7 @@ button.repo-ref {
 .doc-line-mark.doc-text-mark {
   right: auto;
   border-left: none;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 /* The contents (T-402): one box at the page's top left that stays in view as the document scrolls (sticky, taking no
    room). Closed, it is a faint button, brighter while the pointer is over the window; hovered or focused, the box
@@ -2488,7 +2458,7 @@ button.repo-ref {
   overflow: hidden;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   opacity: 0.3;
   transition:
     width 0.18s ease,
@@ -2503,18 +2473,18 @@ button.repo-ref {
   width: 280px;
   max-height: min(60vh, 440px);
   opacity: 1;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
 }
 .doc-toc-button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   flex-shrink: 0;
   width: 100%;
   height: 26px;
-  padding: 0 6px;
-  font-size: 12px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
   background: none;
@@ -2538,7 +2508,7 @@ button.repo-ref {
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: 2px 6px 6px;
+  padding: var(--space-1) var(--space-3) var(--space-3);
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
@@ -2557,13 +2527,13 @@ button.repo-ref {
 /* Each entry keeps its height (overflow: hidden would let flex shrink it to nothing): many headings scroll the list */
 .doc-toc-list button {
   flex-shrink: 0;
-  padding: 4px 8px;
-  font-size: 12px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
   text-align: left;
   color: var(--text-muted);
   background: none;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -2579,7 +2549,7 @@ button.repo-ref {
   color: var(--text);
 }
 .doc-toc-list .doc-toc-level-3 {
-  padding-left: 22px;
+  padding-left: var(--space-8);
 }
 .doc-toc-list .current {
   color: var(--accent);
@@ -2593,12 +2563,12 @@ button.repo-ref {
 }
 .doc-note {
   max-width: 820px;
-  margin: 0 auto 12px;
-  padding: 6px 12px;
-  font-size: 12px;
+  margin: 0 auto var(--space-6);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 /* The lines a #L link names, marked across the page */
 .doc-line-mark {
@@ -2610,10 +2580,10 @@ button.repo-ref {
   pointer-events: none;
 }
 .doc-viewer.narrow .doc-body {
-  padding: 12px;
+  padding: var(--space-6);
 }
 .doc-viewer.narrow .doc-page {
-  padding: 20px 18px 28px;
+  padding: var(--space-8) var(--space-7) var(--space-9);
 }
 .doc-body::-webkit-scrollbar {
   width: 8px;
@@ -2621,7 +2591,7 @@ button.repo-ref {
 }
 .doc-body::-webkit-scrollbar-thumb {
   background: var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 .doc-body::-webkit-scrollbar-track {
   background: transparent;
@@ -2629,13 +2599,13 @@ button.repo-ref {
 .doc-fallback {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2);
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .doc-fallback strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 /* The corner grip: two diagonal strokes, the cursor saying it resizes */
 .doc-grip {
@@ -2650,7 +2620,7 @@ button.repo-ref {
     linear-gradient(135deg, transparent 55%, var(--text-muted) 55%, var(--text-muted) 62%, transparent 62%),
     linear-gradient(135deg, transparent 75%, var(--text-muted) 75%, var(--text-muted) 82%, transparent 82%);
   opacity: 0.7;
-  border-radius: 0 0 10px 0;
+  border-radius: 0 0 var(--radius-lg) 0;
 }
 .doc-grip:hover {
   opacity: 1;
@@ -2676,8 +2646,8 @@ button.repo-ref {
 .detail-panel {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 28px;
+  border-radius: var(--radius-xl);
+  padding: var(--space-9);
   max-width: 640px;
   width: 90%;
   max-height: 80vh;
@@ -2687,7 +2657,7 @@ button.repo-ref {
 /* T-280: a task's details (not the dialogs sharing .detail-panel): the title and badges stay; below, the section
    rail and the sections, scrolling without a scrollbar */
 #detail-panel {
-  padding: 18px 20px;
+  padding: var(--space-7) var(--space-8);
   max-width: 680px;
   overflow: hidden;
   display: flex;
@@ -2695,28 +2665,28 @@ button.repo-ref {
 }
 .detail-main {
   display: flex;
-  gap: 10px;
+  gap: var(--space-5);
   flex: 1 1 auto;
   min-height: 0;
 }
 .detail-rail {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-right: 4px;
+  gap: var(--space-2);
+  padding-right: var(--space-2);
   border-right: 1px solid var(--border);
 }
 .detail-rail-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 10px 4px;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-2);
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -2762,16 +2732,16 @@ button.repo-ref {
 }
 
 .detail-panel h3 {
-  font-size: 20px;
-  margin-bottom: 16px;
-  padding-right: 30px;
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-7);
+  padding-right: var(--space-10);
 }
 /* The title and the close button on one line; a long title wraps beside it */
 .detail-head {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 10px;
+  gap: var(--space-6);
+  margin-bottom: var(--space-5);
 }
 .detail-head h3 {
   flex: 1 1 auto;
@@ -2793,7 +2763,7 @@ button.repo-ref {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 24px;
+  font-size: var(--text-3xl);
   cursor: pointer;
   line-height: 1;
 }
@@ -2803,30 +2773,30 @@ button.repo-ref {
 }
 
 .detail-section {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-7);
 }
 
 .detail-section .label {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 
 .detail-section .value {
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 
 /* The sprints a task was in (SR-4.5): flagged once carried over twice */
 .detail-sprint-history {
   margin: 0;
-  padding-left: 18px;
-  font-size: 13px;
+  padding-left: var(--space-7);
+  font-size: var(--text-md);
 }
 .detail-sprint-history li {
   display: flex;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .detail-carried {
   color: var(--orange);
@@ -2835,17 +2805,17 @@ button.repo-ref {
 .detail-deps {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 
 .detail-dep-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
   background: var(--surface2);
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
@@ -2872,13 +2842,13 @@ button.repo-ref {
 .detail-files,
 .detail-refs {
   font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
 .detail-files div,
 .detail-refs .detail-ref {
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
 }
 /* A file, or a reference written as a link, opens in the document viewer */
 .detail-files .file-link,
@@ -2908,8 +2878,8 @@ button.repo-ref {
    the page below */
 .view-tabs {
   display: flex;
-  gap: 2px;
-  padding-left: 8px;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
 /* Between the task views and the project views (T-251) */
@@ -2917,21 +2887,21 @@ button.repo-ref {
   align-self: center;
   width: 1px;
   height: 18px;
-  margin: 0 8px;
+  margin: 0 var(--space-4);
   background: var(--border);
 }
 .view-tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: var(--space-3);
   position: relative;
   background: none;
   border: 1px solid transparent;
   border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  padding: 8px 14px 9px;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  padding: var(--space-4) var(--space-6) var(--space-4);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-lg);
   /* Whole pixels, so the page's height is (the footer sits exactly at the window's bottom) */
   line-height: 18px;
   font-weight: 600;
@@ -2953,7 +2923,7 @@ button.repo-ref {
   color: var(--text);
   background: var(--bg);
   border-color: var(--border);
-  margin-bottom: -1px;
+  margin-bottom: calc(-1 * var(--space-1));
   z-index: 1;
 }
 .view-tab[aria-selected='true'] .icon {
@@ -2994,30 +2964,30 @@ button.repo-ref {
 }
 /* The releases on the Progress tab (SR-7.5) */
 .release-view {
-  margin-top: 20px;
+  margin-top: var(--space-8);
 }
 .release-row {
-  padding: 10px 0;
+  padding: var(--space-5) 0;
   border-top: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .release-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 10px;
+  gap: var(--space-2) var(--space-5);
 }
 .release-counts {
-  margin-top: 4px;
+  margin-top: var(--space-2);
   color: var(--text-muted);
 }
 .release-notes summary {
-  margin-top: 6px;
+  margin-top: var(--space-3);
   cursor: pointer;
   color: var(--text-muted);
 }
 .release-notes .link-button {
-  margin-left: 6px;
+  margin-left: var(--space-3);
   background: none;
   border: none;
   padding: 0;
@@ -3026,12 +2996,12 @@ button.repo-ref {
   cursor: pointer;
 }
 .release-notes pre {
-  margin: 6px 0 0;
-  padding: 8px 10px;
-  border-radius: 6px;
+  margin: var(--space-3) 0 0;
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
   background: var(--surface2);
   white-space: pre-wrap;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 /* The scope bar (T-323, SR-7.2): at the top of the Kanban, List and Graph panels, which sprint they show */
 /* One row that wraps when it must: the sprint and its goal, its facts, then the board's options at the end */
@@ -3039,10 +3009,10 @@ button.repo-ref {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  padding: 6px 16px;
+  gap: var(--space-2) var(--space-6);
+  padding: var(--space-3) var(--space-7);
   border-bottom: 1px solid var(--border);
-  font-size: 13px;
+  font-size: var(--text-md);
   line-height: 20px;
 }
 .scope-head,
@@ -3064,7 +3034,7 @@ button.repo-ref {
   order: 1;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-7);
   margin-left: auto;
   /* Whole pixels (as the trigger): the bar's height adds to the page's, and the footer sits at its very bottom */
   height: 28px;
@@ -3072,12 +3042,12 @@ button.repo-ref {
 .scope-trigger {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   height: 28px;
-  margin-left: -8px;
-  padding: 0 8px;
+  margin-left: calc(-1 * var(--space-4));
+  padding: 0 var(--space-4);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: none;
   color: var(--text);
   font: inherit;
@@ -3093,24 +3063,24 @@ button.repo-ref {
   min-width: 260px;
   max-height: 60vh;
   overflow-y: auto;
-  gap: 2px;
+  gap: var(--space-1);
 }
 .scope-menu .menu-label {
-  margin-top: 6px;
-  padding: 0 8px;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-4);
 }
 .scope-choice {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
-  padding: 5px 8px;
+  padding: var(--space-2) var(--space-4);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
 }
@@ -3130,24 +3100,24 @@ button.repo-ref {
   white-space: nowrap;
 }
 .scope-choice-note {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 400;
   color: var(--text-muted);
 }
 .scope-menu .menu-note {
-  margin-top: 6px;
-  padding: 0 8px;
+  margin-top: var(--space-3);
+  padding: 0 var(--space-4);
 }
 .scope-filtered {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   color: var(--accent);
 }
 .scope-done {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   color: var(--green);
   font-weight: 600;
 }
@@ -3155,14 +3125,14 @@ button.repo-ref {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 4px;
+  gap: 0 var(--space-2);
 }
 /* Open tasks left in closed sprints (T-323): in orange, as work nothing will pick up */
 .scope-leftovers {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0 4px;
+  gap: 0 var(--space-2);
   color: var(--orange);
 }
 .badge.leftover {
@@ -3179,11 +3149,11 @@ button.repo-ref {
   cursor: pointer;
 }
 .scope-leftovers code {
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--surface2);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .scope-hint .link-button {
   padding: 0;
@@ -3195,11 +3165,11 @@ button.repo-ref {
   text-decoration: underline;
 }
 .scope-hint code {
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
   background: var(--surface2);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 /* ▶ the active sprint, ✓ a closed one (SprintMarker.svelte): in the scope bar, its menu, the filters and lanes */
 .sprint-marker {
@@ -3209,7 +3179,7 @@ button.repo-ref {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  margin-right: 2px;
+  margin-right: var(--space-1);
 }
 .sprint-marker.active {
   color: var(--green);
@@ -3221,10 +3191,10 @@ button.repo-ref {
   font-size: 15px;
 }
 .sprint-state {
-  padding: 1px 7px;
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 11px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 .sprint-goal,
@@ -3243,13 +3213,13 @@ button.repo-ref {
 .sprint-progress {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .sprint-bar {
   display: inline-block;
   width: 80px;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--border);
   overflow: hidden;
 }
@@ -3262,7 +3232,7 @@ button.repo-ref {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16px 0;
+  padding: var(--space-7) 0;
   min-width: 0;
 }
 .view-panel > * {
@@ -3277,7 +3247,7 @@ button.repo-ref {
 
 .graph-container {
   position: relative;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   /* Takes exactly the panel's height (basis 0), so the SVG's size never pushes the page longer */
   flex: 1 1 0;
   min-height: 400px;
@@ -3302,8 +3272,8 @@ svg.dep-graph.panning {
   cursor: grabbing;
 }
 svg.dep-graph text {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-  font-size: 11px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
 }
 
 .graph-controls {
@@ -3312,21 +3282,21 @@ svg.dep-graph text {
   right: 10px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px;
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
 }
 .graph-controls button {
   min-width: 28px;
   height: 26px;
-  padding: 0 6px;
+  padding: 0 var(--space-3);
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--text-lg);
   cursor: pointer;
 }
 /* Graph: tasks outside the search and filters, when shown greyed out */
@@ -3365,14 +3335,14 @@ svg.dep-graph text {
 .graph-zoom-level {
   min-width: 44px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 /* The graph's toolbar (T-341): groups separated by a rule; a segmented switch for each choice */
 .graph-toolbar {
-  gap: 4px 0;
-  padding: 4px;
+  gap: var(--space-2) 0;
+  padding: var(--space-2);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--overlay) 25%, transparent);
   /* A narrow panel wraps the groups, right-aligned, instead of running off its left edge */
   flex-wrap: wrap;
@@ -3388,11 +3358,11 @@ svg.dep-graph text {
 .graph-group {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 8px;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
 }
 .graph-group:first-child {
-  padding-left: 4px;
+  padding-left: var(--space-2);
 }
 .graph-group:last-child {
   padding-right: 0;
@@ -3401,26 +3371,26 @@ svg.dep-graph text {
   border-left: 1px solid var(--border);
 }
 .graph-group-label {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 .graph-seg {
   display: inline-flex;
   align-items: center;
-  padding: 2px;
-  gap: 2px;
+  padding: var(--space-1);
+  gap: var(--space-1);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .graph-toolbar button {
   height: 22px;
   min-width: 24px;
-  padding: 0 8px;
-  font-size: 11px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: nowrap;
 }
 .graph-toolbar .graph-seg button.active {
@@ -3441,18 +3411,18 @@ svg.dep-graph text {
 .graph-toolbar .graph-zoom button {
   min-width: 22px;
   padding: 0;
-  font-size: 14px;
+  font-size: var(--text-lg);
   line-height: 1;
 }
 .graph-toolbar .graph-zoom .graph-zoom-level {
   min-width: 38px;
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .graph-hint {
   position: absolute;
   top: 14px;
   left: 12px;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -3462,7 +3432,7 @@ svg.graph-minimap {
   bottom: 10px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   touch-action: none;
   opacity: 0.92;
@@ -3474,20 +3444,20 @@ svg.graph-minimap.hidden {
 .progress-bar {
   height: 6px;
   background: var(--surface2);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  margin-top: 8px;
+  margin-top: var(--space-4);
 }
 .progress-fill {
   height: 100%;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   transition: width 0.3s;
 }
 
 .phase-badge {
-  font-size: 12px;
-  padding: 2px 10px;
-  border-radius: 12px;
+  font-size: var(--text-sm);
+  padding: var(--space-1) var(--space-5);
+  border-radius: var(--radius-xl);
   font-weight: 600;
 }
 
@@ -3506,27 +3476,27 @@ svg.graph-minimap.hidden {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 16px;
-  margin-bottom: 8px;
+  gap: var(--space-7);
+  margin-bottom: var(--space-4);
 }
 .kanban-lane + .kanban-lane {
-  margin-top: 16px;
+  margin-top: var(--space-7);
 }
 .kanban-lane-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-4);
 }
 .kanban-lane-progress {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .kanban-option {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -3559,11 +3529,11 @@ svg.graph-minimap.hidden {
    --board-ink (the headings' colour, instead of their status colour) */
 .kanban-board {
   display: flex;
-  gap: var(--board-gap, 12px);
+  gap: var(--board-gap, var(--space-6));
   /* --board-align: stretch makes every column as tall as the board (lines drawn between them run the full height) */
   align-items: var(--board-align, flex-start);
   overflow-x: auto;
-  padding: var(--board-padding, 0 0 4px);
+  padding: var(--board-padding, 0 0 var(--space-2));
   background: var(--board-surface, none);
   border: var(--board-frame, none);
   border-radius: var(--board-radius, 0);
@@ -3577,7 +3547,7 @@ svg.graph-minimap.hidden {
   flex-direction: column;
   background: var(--column-bg, var(--surface));
   border: var(--column-border, 1px solid var(--border));
-  border-radius: var(--column-radius, 8px);
+  border-radius: var(--column-radius, var(--radius-lg));
 }
 .kanban-column + .kanban-column {
   border-left: var(--column-divider, var(--column-border, 1px solid var(--border)));
@@ -3613,8 +3583,8 @@ svg.graph-minimap.hidden {
 .kanban-column.folded .kanban-column-header {
   flex-direction: column;
   justify-content: flex-start;
-  gap: 8px;
-  padding: 10px 0;
+  gap: var(--space-4);
+  padding: var(--space-5) 0;
   border-bottom: none;
 }
 .kanban-column.folded .kanban-column-title {
@@ -3651,10 +3621,10 @@ svg.graph-minimap.hidden {
   left: 0;
   right: 0;
   z-index: 1;
-  padding: 10px 0 4px;
+  padding: var(--space-5) 0 var(--space-2);
   border: none;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -3663,20 +3633,20 @@ svg.graph-minimap.hidden {
 }
 .kanban-more.top {
   top: 0;
-  padding: 4px 0 10px;
+  padding: var(--space-2) 0 var(--space-5);
   border-radius: 0;
   background: linear-gradient(var(--surface) 55%, transparent);
 }
 .kanban-more.bottom {
   bottom: 0;
-  border-radius: 0 0 8px 8px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: linear-gradient(transparent, var(--surface) 45%);
 }
 .kanban-column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: var(--space-5) var(--space-6);
   border-bottom: var(--column-header-line, 1px solid var(--border));
   /* --column-header-image: a drawn line under the heading instead of the border (8px tall); with
      --column-header-overhang it reaches on into the next column, to meet that column's drawn line */
@@ -3687,25 +3657,25 @@ svg.graph-minimap.hidden {
 .kanban-column-title {
   color: var(--board-ink, var(--column-color));
   font-family: var(--board-font, inherit);
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
   text-transform: var(--board-title-transform, uppercase);
   letter-spacing: 0.5px;
 }
 .kanban-count {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   background: var(--surface2);
-  border-radius: 10px;
-  padding: 0 8px;
+  border-radius: var(--radius-lg);
+  padding: 0 var(--space-4);
   font-variant-numeric: tabular-nums;
 }
 .kanban-cards {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px;
+  gap: var(--space-4);
+  padding: var(--space-5);
   overflow-y: auto;
   min-height: 0;
   scrollbar-width: none;
@@ -3718,11 +3688,11 @@ svg.graph-minimap.hidden {
 .kanban-card {
   background: var(--card-bg, var(--surface2));
   border: 1px solid var(--card-border, var(--border));
-  border-radius: var(--card-radius, 6px);
+  border-radius: var(--card-radius, var(--radius-md));
   box-shadow: var(--card-shadow, none);
   rotate: var(--card-tilt, 0deg);
   color: var(--text);
-  padding: 10px;
+  padding: var(--space-5);
   cursor: pointer;
   transition:
     rotate 0.15s ease,
@@ -3747,36 +3717,36 @@ svg.graph-minimap.hidden {
 .kanban-card-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 .kanban-card-id {
   font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-muted);
 }
 .kanban-next-up {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--bg);
   background: var(--accent);
-  border-radius: 999px;
-  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  padding: var(--space-1) var(--space-3);
 }
 .kanban-card-name {
-  margin-top: 6px;
+  margin-top: var(--space-3);
   font-family: var(--card-font, inherit);
-  font-size: var(--card-font-size, 13px);
+  font-size: var(--card-font-size, var(--text-md));
   font-weight: var(--card-font-weight, normal);
   line-height: 1.4;
 }
 .kanban-readiness {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
 }
 .kanban-readiness.ready {
   color: var(--green);
@@ -3786,8 +3756,8 @@ svg.graph-minimap.hidden {
 }
 .task-claim,
 .kanban-claim {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
   color: var(--accent);
 }
 .task-claim::before,
@@ -3797,8 +3767,8 @@ svg.graph-minimap.hidden {
 /* Waiting on someone rather than on agent work (waiting.ts) */
 .task-waiting,
 .kanban-waiting {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
 }
 .review-wait {
   color: var(--yellow);
@@ -3807,7 +3777,7 @@ svg.graph-minimap.hidden {
   content: '◷ ';
 }
 .review-note {
-  margin-top: 4px;
+  margin-top: var(--space-2);
 }
 /* Blocked on a decision (D-3.2): waiting on you stands out; waiting on an agent stays quiet */
 .block-wait {
@@ -3821,11 +3791,11 @@ svg.graph-minimap.hidden {
   content: '✋ ';
 }
 .block-questions {
-  margin: 6px 0;
-  padding-left: 20px;
+  margin: var(--space-3) 0;
+  padding-left: var(--space-8);
 }
 .block-questions li {
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 /* Notes in the detail panel (D-4.1), newest first */
 .detail-notes {
@@ -3834,12 +3804,12 @@ svg.graph-minimap.hidden {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .detail-note {
   border-left: 2px solid var(--border);
-  padding: 2px 0 2px 10px;
-  font-size: 13px;
+  padding: var(--space-1) 0 var(--space-1) var(--space-5);
+  font-size: var(--text-md);
 }
 .detail-note.note-failure,
 .detail-note.note-rejection {
@@ -3854,7 +3824,7 @@ svg.graph-minimap.hidden {
 }
 .note-head {
   display: flex;
-  gap: 8px;
+  gap: var(--space-4);
   align-items: baseline;
 }
 .note-kind {
@@ -3862,10 +3832,10 @@ svg.graph-minimap.hidden {
 }
 .note-meta {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .note-text {
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 /* Notes, review notes and questions are Markdown (T-219): at the size of the text around them, without the margins
    of a description's paragraphs above the first block and below the last */
@@ -3876,11 +3846,11 @@ svg.graph-minimap.hidden {
 }
 /* The header's "need you" count (D-3.3) */
 .attention-chip {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
-  padding: 1px 8px;
-  margin-left: 8px;
-  border-radius: 10px;
+  padding: var(--space-1) var(--space-4);
+  margin-left: var(--space-4);
+  border-radius: var(--radius-lg);
   border: 1px solid color-mix(in srgb, var(--yellow) 50%, transparent);
   background: color-mix(in srgb, var(--yellow) 12%, transparent);
   color: var(--yellow);
@@ -3891,8 +3861,8 @@ svg.graph-minimap.hidden {
   left: 8px;
   width: 340px;
   max-width: calc(100vw - 32px);
-  padding: 6px;
-  gap: 2px;
+  padding: var(--space-3);
+  gap: var(--space-1);
 }
 .needs-you-menu.align-right {
   left: auto;
@@ -3901,15 +3871,15 @@ svg.graph-minimap.hidden {
 .needs-you-row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-4);
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--space-3) var(--space-4);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: none;
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
 }
@@ -3920,7 +3890,7 @@ svg.graph-minimap.hidden {
 }
 .needs-you-id {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
@@ -3933,38 +3903,38 @@ svg.graph-minimap.hidden {
 }
 .needs-you-reason {
   color: var(--yellow);
-  font-size: 12px;
+  font-size: var(--text-sm);
   flex-shrink: 0;
 }
 .kanban-empty {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   text-align: center;
-  padding: 12px 0;
+  padding: var(--space-6) 0;
 }
 .kanban-show-all {
   background: none;
   border: 1px dashed var(--border);
-  border-radius: 6px;
-  padding: 6px;
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
   color: var(--accent);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
 /* Progress tab */
 .progress-view {
-  padding: 0 4px;
+  padding: 0 var(--space-2);
 }
 .progress-basis {
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-muted);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-6);
 }
 .progress-basis code {
   font-family: 'SF Mono', Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 /* An ⓘ that explains a section (InfoTip.svelte, T-240) */
 .infotip {
@@ -3974,9 +3944,9 @@ svg.graph-minimap.hidden {
 }
 .infotip-button {
   display: inline-flex;
-  padding: 2px;
+  padding: var(--space-1);
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: none;
   color: var(--text-muted);
   cursor: pointer;
@@ -3993,12 +3963,12 @@ svg.graph-minimap.hidden {
   display: block;
   width: 340px;
   max-width: calc(100vw - 48px);
-  padding: 12px 14px;
+  padding: var(--space-6) var(--space-6);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: normal;
   line-height: 1.45;
   color: var(--text);
@@ -4007,7 +3977,7 @@ svg.graph-minimap.hidden {
   white-space: normal;
 }
 .infotip-popover p {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-4);
 }
 .infotip-popover p:last-child {
   margin-bottom: 0;
@@ -4021,14 +3991,14 @@ svg.graph-minimap.hidden {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
-  margin-bottom: 12px;
-  padding: 8px 12px;
+  gap: var(--space-2) var(--space-6);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-6);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--surface);
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 .progress-filter-banner strong {
@@ -4049,26 +4019,26 @@ svg.graph-minimap.hidden {
 
 .progress-empty {
   color: var(--text-muted);
-  font-size: 14px;
-  padding: 12px 0;
+  font-size: var(--text-lg);
+  padding: var(--space-6) 0;
 }
 .phase-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .phase-table th {
   text-align: left;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  padding: 6px 10px;
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--border);
 }
 .phase-table td {
-  padding: 10px;
+  padding: var(--space-5);
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -4086,38 +4056,33 @@ svg.graph-minimap.hidden {
   margin-top: 0;
 }
 .phase-blocked {
-  margin-left: 8px;
-  font-size: 11px;
+  margin-left: var(--space-4);
+  font-size: var(--text-xs);
   color: var(--red);
 }
 .phase-in-review {
   color: var(--yellow);
 }
 .estimate-calendar {
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .estimate-none {
   color: var(--text-muted);
 }
 
-/* Burndown chart. Series colors are validated for the dark surface (dataviz validator: blue/orange slots); themes
-   override them per mode (src/themes/). */
-:root {
-  --series-remaining: #3987e5;
-  --series-scope: #d95926;
-}
+/* Burndown chart. Its series colours are tokens (tokens.css), which the themes set per mode (src/themes/). */
 .burndown {
   position: relative;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-7);
 }
 .burndown-legend {
   display: flex;
-  gap: 16px;
-  font-size: 12px;
+  gap: var(--space-7);
+  font-size: var(--text-sm);
   color: var(--text-muted);
-  margin-bottom: 4px;
+  margin-bottom: var(--space-2);
 }
 .burndown-legend .swatch {
   display: inline-block;
@@ -4125,7 +4090,7 @@ svg.graph-minimap.hidden {
   height: 0;
   border-top: 2px solid;
   vertical-align: middle;
-  margin-right: 6px;
+  margin-right: var(--space-3);
 }
 .burndown-legend .swatch.remaining {
   border-color: var(--series-remaining);
@@ -4147,7 +4112,7 @@ svg.graph-minimap.hidden {
 }
 .burndown-axis {
   fill: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 .burndown-now {
@@ -4198,7 +4163,7 @@ svg.graph-minimap.hidden {
 }
 .burndown-label {
   fill: var(--text);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 .burndown-forecast-label,
@@ -4218,36 +4183,36 @@ svg.graph-minimap.hidden {
 .burndown-tooltip {
   position: absolute;
   min-width: 150px;
-  padding: 6px 10px;
+  padding: var(--space-3) var(--space-5);
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
   color: var(--text);
   pointer-events: none;
 }
 .burndown-tooltip .title {
   color: var(--text-muted);
-  margin-bottom: 2px;
+  margin-bottom: var(--space-1);
 }
 
 .burndown-scope-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: var(--space-5);
+  margin-bottom: var(--space-2);
 }
 .burndown-focus {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 /* "Burndown · all phases" with its ⓘ, and the time range at the row's end (T-240) */
 .burndown-title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 .burndown-range {
@@ -4258,7 +4223,7 @@ svg.graph-minimap.hidden {
   border: none;
   padding: 0;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--accent);
   cursor: pointer;
 }
@@ -4276,8 +4241,8 @@ svg.graph-minimap.hidden {
 }
 /* T-241: phase names next to the badge, not-started phases muted, finished phases folded into one row */
 .phase-table .phase-name {
-  margin-left: 8px;
-  font-size: 13px;
+  margin-left: var(--space-4);
+  font-size: var(--text-md);
   color: var(--text);
 }
 .phase-table tr.not-started td {
@@ -4290,13 +4255,13 @@ svg.graph-minimap.hidden {
 .phase-finished-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   width: 100%;
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   color: var(--text-muted);
   text-align: left;
   cursor: pointer;
@@ -4306,7 +4271,7 @@ svg.graph-minimap.hidden {
   color: var(--accent);
 }
 .phase-table-hint {
-  margin-left: 6px;
+  margin-left: var(--space-3);
   color: var(--text-muted);
 }
 .phase-table tr:focus-visible {
@@ -4318,22 +4283,22 @@ svg.graph-minimap.hidden {
 .agents-view {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-6);
 }
 .agents-empty {
   color: var(--text-muted);
-  font-size: 14px;
-  padding: 12px 4px;
+  font-size: var(--text-lg);
+  padding: var(--space-6) var(--space-2);
 }
 .agents-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .agents-grid {
   display: grid;
   grid-template-columns: 210px 1fr;
-  column-gap: 16px;
+  column-gap: var(--space-7);
 }
 .agents-axis {
   position: relative;
@@ -4344,20 +4309,20 @@ svg.graph-minimap.hidden {
   position: absolute;
   bottom: 4px;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--text-muted);
   white-space: nowrap;
 }
 .agent-info {
-  padding: 10px 0;
+  padding: var(--space-5) 0;
   border-bottom: 1px solid var(--border);
   min-width: 0;
 }
 .agent-name {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--space-4);
+  font-size: var(--text-md);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
@@ -4366,7 +4331,7 @@ svg.graph-minimap.hidden {
 .agent-dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   flex-shrink: 0;
   background: var(--border);
 }
@@ -4376,20 +4341,20 @@ svg.graph-minimap.hidden {
 }
 .agent-stats,
 .agent-now {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
-  margin-top: 2px;
+  margin-top: var(--space-1);
 }
 .agent-now {
   color: var(--accent);
 }
 /* On the overview's Agents tab (T-333): the projects the agent worked in */
 .agent-projects {
-  margin-top: 2px;
+  margin-top: var(--space-1);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text);
 }
 /* The overview's Agents tab fills the page's width, like the board */
@@ -4400,26 +4365,26 @@ svg.graph-minimap.hidden {
 .overview-progress {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-7);
   min-width: 0;
 }
 .overview-progress-projects {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .overview-progress-row {
   display: grid;
   grid-template-columns: minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(200px, 1.4fr) minmax(140px, 1fr);
   align-items: center;
-  gap: 16px;
-  padding: 10px 14px;
+  gap: var(--space-7);
+  padding: var(--space-5) var(--space-6);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   color: var(--text);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   text-align: left;
   cursor: pointer;
 }
@@ -4432,7 +4397,7 @@ svg.graph-minimap.hidden {
 .overview-progress-name {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   font-weight: 600;
 }
 .overview-progress-name > span:last-child,
@@ -4444,12 +4409,12 @@ svg.graph-minimap.hidden {
 .overview-progress-total {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .overview-progress-bar {
   flex: 1;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--surface2);
   overflow: hidden;
 }
@@ -4460,14 +4425,14 @@ svg.graph-minimap.hidden {
 }
 .overview-progress-count {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 .overview-progress-sprint {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   white-space: nowrap;
 }
 .overview-progress-sprint .overdue {
@@ -4476,12 +4441,12 @@ svg.graph-minimap.hidden {
 .overview-progress-releases {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
-  font-size: 12px;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
 }
 .overview-progress-release {
-  padding: 1px 7px;
-  border-radius: 8px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--purple) 12%, transparent);
   color: var(--purple);
   font-variant-numeric: tabular-nums;
@@ -4510,7 +4475,7 @@ svg.graph-minimap.hidden {
   top: 50%;
   transform: translateY(-50%);
   height: 24px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--bar);
   background: color-mix(in srgb, var(--bar) 35%, var(--surface));
   color: var(--text);
@@ -4538,9 +4503,9 @@ svg.graph-minimap.hidden {
 }
 .agent-bar-label {
   display: block;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 600;
-  padding: 0 5px;
+  padding: 0 var(--space-2);
   line-height: 22px;
   white-space: nowrap;
 }
@@ -4552,13 +4517,13 @@ svg.graph-minimap.hidden {
   bottom: 0;
   width: 4px;
   background: var(--green);
-  border-radius: 0 3px 3px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .agent-kind {
   display: inline-flex;
   color: var(--text-muted);
   vertical-align: -1px;
-  margin-right: 2px;
+  margin-right: var(--space-1);
 }
 .live-swatch {
   background: repeating-linear-gradient(-45deg, var(--accent) 0 3px, transparent 3px 6px);
@@ -4574,7 +4539,7 @@ svg.graph-minimap.hidden {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-5);
 }
 .graph-controls.agents-controls {
   position: static;
@@ -4585,22 +4550,22 @@ svg.graph-minimap.hidden {
   background: transparent;
 }
 .agents-range {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
-  padding: 0 6px;
+  padding: 0 var(--space-3);
   white-space: nowrap;
 }
 .agents-presets {
   display: inline-flex;
-  gap: 2px;
-  padding: 0 4px;
-  margin: 0 2px;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  margin: 0 var(--space-1);
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
 }
 .graph-controls .agents-presets button {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 .graph-controls .agents-presets button.active {
@@ -4610,7 +4575,7 @@ svg.graph-minimap.hidden {
 }
 .agents-grid {
   cursor: grab;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .agents-grid:focus-visible {
   outline: 2px solid var(--accent);
@@ -4639,16 +4604,16 @@ svg.graph-minimap.hidden {
 }
 .agents-overview-label {
   align-self: center;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   text-align: right;
-  padding-top: 12px;
+  padding-top: var(--space-6);
 }
 .agents-overview {
   position: relative;
   height: 34px;
-  margin-top: 12px;
-  border-radius: 6px;
+  margin-top: var(--space-6);
+  border-radius: var(--radius-md);
   background: var(--surface2);
   border: 1px solid var(--border);
   overflow: hidden;
@@ -4657,7 +4622,7 @@ svg.graph-minimap.hidden {
 }
 .overview-bar {
   position: absolute;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   opacity: 0.75;
   pointer-events: none;
 }
@@ -4667,7 +4632,7 @@ svg.graph-minimap.hidden {
   bottom: 0;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border: 1px solid var(--accent);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 0 0 9999px color-mix(in srgb, var(--bg) 55%, transparent);
   cursor: grab;
 }
@@ -4700,19 +4665,19 @@ svg.graph-minimap.hidden {
   top: 9px;
   bottom: 9px;
   width: 2px;
-  border-radius: 1px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
 }
 .agents-hint {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 .agents-live {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 8px 0 4px;
-  font-size: 12px;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) 0 var(--space-2);
+  font-size: var(--text-sm);
   color: var(--text-muted);
   cursor: pointer;
   border-right: 1px solid var(--border);
@@ -4724,7 +4689,7 @@ svg.graph-minimap.hidden {
 .agents-live .live-dot {
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--border);
 }
 .agents-live:has(input:checked) {
@@ -4746,25 +4711,25 @@ svg.graph-minimap.hidden {
 
 /* Progress tab: where the time went, for the burndown's range (T-242) */
 .progress-time-use {
-  margin-top: 28px;
+  margin-top: var(--space-9);
   max-width: 640px;
 }
 
 /* Project tab (T-252): the logo and name, then Information and Stats side by side, stacked when narrow */
 .project-view {
-  padding: 4px 4px 12px;
+  padding: var(--space-2) var(--space-2) var(--space-6);
 }
 .project-head {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: var(--space-6);
+  margin-bottom: var(--space-7);
 }
 .project-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 20px;
+  gap: var(--space-4);
+  font-size: var(--text-2xl);
 }
 .project-view .muted {
   color: var(--text-muted);
@@ -4773,64 +4738,64 @@ svg.graph-minimap.hidden {
 .project-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 16px;
+  gap: var(--space-7);
   align-items: stretch;
 }
 .project-card {
   background: var(--surface2);
-  border-radius: 8px;
-  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-6) var(--space-7);
 }
 .project-card h4 {
-  margin-top: 16px;
+  margin-top: var(--space-7);
 }
 .project-card-title {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 /* Stats (T-253): the numbers in a grid, each with its label under it */
 .project-numbers {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 14px 16px;
-  margin-top: 12px;
+  gap: var(--space-6) var(--space-7);
+  margin-top: var(--space-6);
 }
 .project-number {
   display: flex;
   flex-direction: column;
 }
 .project-parallelism {
-  margin-top: 14px;
-  font-size: 13px;
+  margin-top: var(--space-6);
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 /* Time per task (T-254): one hue, agents alone solid, with you hatched like the bars */
 .time-histogram {
-  margin-top: 18px;
+  margin-top: var(--space-7);
 }
 .time-histogram-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 8px;
-  margin-bottom: 6px;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-3);
 }
 .time-histogram-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: var(--space-2) var(--space-6);
   margin-left: auto;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .hist-swatch {
   display: inline-block;
   width: 10px;
   height: 10px;
-  margin-right: 5px;
+  margin-right: var(--space-2);
   vertical-align: -1px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 .hist-swatch.alone {
   background: var(--accent);
@@ -4850,16 +4815,16 @@ svg.graph-minimap.hidden {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
-  margin-top: 6px;
-  font-size: 12px;
+  gap: var(--space-2) var(--space-6);
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
 }
 .project-facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 8px 16px;
-  margin-top: 10px;
-  font-size: 13px;
+  gap: var(--space-4) var(--space-7);
+  margin-top: var(--space-5);
+  font-size: var(--text-md);
 }
 .project-facts dt {
   color: var(--text-muted);
@@ -4867,14 +4832,14 @@ svg.graph-minimap.hidden {
 .project-facts dd {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .project-vocab dd {
   flex-direction: row;
   flex-wrap: wrap;
-  gap: 4px 12px;
+  gap: var(--space-2) var(--space-6);
 }
 .vocab-item strong {
   font-variant-numeric: tabular-nums;
@@ -4893,14 +4858,14 @@ svg.graph-minimap.hidden {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-6);
   flex-wrap: wrap;
 }
 .activity-range {
   display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
   background: var(--surface2);
   text-transform: none;
   letter-spacing: 0;
@@ -4908,10 +4873,10 @@ svg.graph-minimap.hidden {
 .activity-range button {
   background: none;
   border: none;
-  border-radius: 5px;
-  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-4);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
@@ -4927,19 +4892,19 @@ svg.graph-minimap.hidden {
 }
 .activity-custom {
   display: flex;
-  gap: 14px;
-  margin: -4px 0 12px;
-  font-size: 12px;
+  gap: var(--space-6);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-6);
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 .activity-custom input {
-  margin-left: 6px;
+  margin-left: var(--space-3);
   font: inherit;
   color: var(--text);
   background: var(--surface2);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-3);
   color-scheme: light dark;
 }
 
@@ -4948,22 +4913,22 @@ svg.graph-minimap.hidden {
 .dive-chart {
   background: color-mix(in srgb, var(--surface2) 60%, transparent);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px 8px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6) var(--space-4);
 }
 .dive-chart + .dive-chart {
-  margin-top: 10px;
+  margin-top: var(--space-5);
 }
 .dive-chart header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-bottom: 4px;
+  gap: var(--space-3) var(--space-6);
+  margin-bottom: var(--space-2);
 }
 .dive-chart h4 {
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 .dive-chart h4 span {
@@ -4981,20 +4946,20 @@ svg.graph-minimap.hidden {
   fill: color-mix(in srgb, var(--text) 7%, transparent);
 }
 .chart-empty {
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
 }
 .dive-axis {
   display: flex;
   justify-content: space-between;
-  padding-left: 34px;
-  font-size: 10px;
+  padding-left: var(--space-10);
+  font-size: var(--text-2xs);
   color: var(--text-muted);
-  margin-top: 4px;
+  margin-top: var(--space-2);
 }
 .tooltip-section {
-  margin-top: 4px;
-  font-size: 10px;
+  margin-top: var(--space-2);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
@@ -5004,7 +4969,7 @@ svg.graph-minimap.hidden {
 .activity-period {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
   margin-left: auto;
   text-transform: none;
   letter-spacing: 0;
@@ -5012,7 +4977,7 @@ svg.graph-minimap.hidden {
 .period-label {
   min-width: 96px;
   text-align: center;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -5024,7 +4989,7 @@ svg.graph-minimap.hidden {
   width: 22px;
   height: 22px;
   border: none;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   background: none;
   color: var(--text-muted);
   cursor: pointer;
@@ -5049,7 +5014,7 @@ svg.graph-minimap.hidden {
   fill: color-mix(in srgb, var(--yellow) 30%, transparent);
 }
 .idle-label {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   fill: var(--text-muted);
 }
 /* The idle number's key: a small sample of the charts' idle hatching (.idle-band) */
@@ -5057,9 +5022,9 @@ svg.graph-minimap.hidden {
   display: inline-block;
   width: 10px;
   height: 10px;
-  margin-right: 5px;
+  margin-right: var(--space-2);
   vertical-align: -1px;
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--yellow) 12%, transparent);
   border: 1px dashed color-mix(in srgb, var(--yellow) 45%, transparent);
 }
@@ -5069,12 +5034,12 @@ svg.graph-minimap.hidden {
 .time-split {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-4);
 }
 .time-split-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
 }
 .time-split-working {
   background: var(--accent);
@@ -5087,7 +5052,7 @@ svg.graph-minimap.hidden {
   border: 1px dashed color-mix(in srgb, var(--yellow) 45%, transparent);
 }
 .time-split-agents {
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -5102,23 +5067,23 @@ svg.graph-minimap.hidden {
   max-width: calc(100vw - 48px);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: var(--space-5);
+  padding: var(--space-4) var(--space-6);
   border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   /* Opaque: the toast floats over cards */
   background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   box-shadow: 0 6px 18px color-mix(in srgb, var(--overlay) 45%, transparent);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .update-reload {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-5);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: var(--on-accent);
   font: inherit;
@@ -5127,7 +5092,7 @@ svg.graph-minimap.hidden {
 }
 .update-dismiss {
   margin-left: auto;
-  padding: 2px;
+  padding: var(--space-1);
   border: none;
   background: none;
   color: var(--text-muted);
@@ -5141,7 +5106,7 @@ svg.graph-minimap.hidden {
    taking the rest of the window, so the board can fill it (T-265). No room above: the overview's tabs sit right
    under the title bar, as a project's do (T-334) */
 .landing {
-  padding: 0 0 24px;
+  padding: 0 0 var(--space-9);
   flex: 1 0 auto;
   display: flex;
   flex-direction: column;
@@ -5149,12 +5114,12 @@ svg.graph-minimap.hidden {
 .landing-note {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 20px 24px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-8) var(--space-9);
   max-width: 640px;
 }
 .landing-note h2 {
-  margin: 0 0 8px;
+  margin: 0 0 var(--space-4);
   font-size: 1.1rem;
 }
 .landing-note p,
@@ -5172,29 +5137,29 @@ svg.graph-minimap.hidden {
 .projects-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  font-size: 13px;
+  gap: var(--space-6);
+  margin-bottom: var(--space-6);
+  font-size: var(--text-md);
   color: var(--text-muted);
 }
 /* The Omniboard's Active sprints / All tasks switch (T-340), like the graph toolbar's switches */
 .board-scope {
   display: inline-flex;
   align-items: center;
-  padding: 2px;
-  gap: 2px;
+  padding: var(--space-1);
+  gap: var(--space-1);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 .board-scope button {
   height: 24px;
-  padding: 0 10px;
+  padding: 0 var(--space-5);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-sm);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -5210,13 +5175,13 @@ svg.graph-minimap.hidden {
 .projects-active-only {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   color: var(--text);
   cursor: pointer;
 }
 /* Projects | Omniboard (T-259), looking like a project's tabs (T-346) */
 .overview-tabs {
-  margin-bottom: 12px;
+  margin-bottom: var(--space-6);
 }
 /* The All projects board (AllProjectsBoard.svelte), like a project's Kanban (T-262, T-265): the page doesn't
    scroll; the board takes the height down to the status bar (basis 0) and each column scrolls inside it. Grouped by
@@ -5243,14 +5208,14 @@ svg.graph-minimap.hidden {
 .board-project-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
   max-width: 120px;
-  padding: 1px 6px 1px 2px;
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   background: var(--surface);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-xs);
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -5262,12 +5227,12 @@ svg.graph-minimap.hidden {
 .board-lane-name {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-4);
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text);
   cursor: pointer;
@@ -5283,16 +5248,16 @@ svg.graph-minimap.hidden {
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
+  gap: var(--space-6);
 }
 .project-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-6);
   min-height: 220px;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px 20px 16px;
+  border-radius: var(--radius-lg);
+  padding: var(--space-7) var(--space-8) var(--space-7);
   /* Some depth (T-335): a light top edge, a soft shadow below; the card lifts a little on hover */
   background: linear-gradient(to bottom, color-mix(in srgb, var(--text) 3%, var(--surface)), var(--surface) 60%);
   box-shadow:
@@ -5324,10 +5289,10 @@ svg.graph-minimap.hidden {
 .project-card-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
   /* With the card's 12px gap: room between the title band and the rings */
-  margin-bottom: 8px;
+  margin-bottom: var(--space-4);
   border-bottom: 1px solid var(--border);
   box-shadow: 0 3px 4px -2px color-mix(in srgb, var(--overlay) 30%, transparent);
 }
@@ -5403,7 +5368,7 @@ svg.graph-minimap.hidden {
   flex: 1;
   /* Shrinks, so the sparkline beside it stays inside the card, its right edge under the title hairline's end */
   min-width: 0;
-  gap: 8px;
+  gap: var(--space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5414,7 +5379,7 @@ svg.graph-minimap.hidden {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-1);
 }
 .project-card-ring .ring {
   width: 100%;
@@ -5426,7 +5391,7 @@ svg.graph-minimap.hidden {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
@@ -5446,22 +5411,22 @@ svg.graph-minimap.hidden {
   left: calc(50% - 2px);
   width: 4px;
   height: 4px;
-  border-radius: 50%;
+  border-radius: var(--radius-round);
   background: var(--accent);
 }
 /* The whole project, quietly under the rings */
 .project-card-counts {
   display: flex;
   justify-content: space-between;
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: var(--space-3);
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 .project-card-phase,
 .project-card-note {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
 }
 .project-card-note {
   color: var(--text-muted);
@@ -5472,7 +5437,7 @@ svg.graph-minimap.hidden {
   display: flex;
   min-width: 0;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: var(--text-lg);
 }
 .project-card-phase-name {
   min-width: 0;
@@ -5491,7 +5456,7 @@ svg.graph-minimap.hidden {
    purpose (T-335) */
 .project-card > .project-card-note {
   margin: auto 0;
-  padding: 0 8px;
+  padding: 0 var(--space-4);
   text-align: center;
   line-height: 1.6;
 }
@@ -5508,20 +5473,20 @@ svg.graph-minimap.hidden {
   /* The mini card (52px), the deepest card's drop (12px) and a little room */
   min-height: 70px;
   margin: 0;
-  padding: 2px 0 0;
+  padding: var(--space-1) 0 0;
   list-style: none;
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 17px;
 }
 .project-card-task {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--space-1);
   min-width: 0;
-  padding: 7px 10px;
+  padding: var(--space-3) var(--space-5);
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--task-bg);
   white-space: nowrap;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 25%, transparent);
@@ -5545,7 +5510,7 @@ svg.graph-minimap.hidden {
   /* The mini card's height: two 17px lines, a 2px gap, 7px padding and the border, top and bottom */
   height: 52px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--task-layer);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--overlay) 20%, transparent);
   transform: translate(calc(var(--depth) * 5px), calc(var(--depth) * 4px)) rotate(var(--tilt));
@@ -5555,7 +5520,7 @@ svg.graph-minimap.hidden {
 .project-card-task-top {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   color: var(--text-muted);
 }
@@ -5568,7 +5533,7 @@ svg.graph-minimap.hidden {
   text-overflow: ellipsis;
 }
 .project-card-task .project-card-work-name {
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text);
 }
@@ -5576,8 +5541,8 @@ svg.graph-minimap.hidden {
 .project-card-label {
   flex-shrink: 0;
   align-self: center;
-  margin-right: 6px;
-  font-size: 10px;
+  margin-right: var(--space-3);
+  font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -5612,7 +5577,7 @@ svg.graph-minimap.hidden {
 /* One line of stats (T-255); on the narrowest cards it wraps rather than cut the agent time off */
 .project-card-stats {
   /* Right under the sprint line it belongs with (T-335), in place of the card's 12px gap */
-  margin: -14px 0 0;
+  margin: calc(-1 * var(--space-6)) 0 0;
   font-size: 10.5px;
   line-height: 15px;
   color: var(--text-muted);
@@ -5621,11 +5586,11 @@ svg.graph-minimap.hidden {
 .project-card-git {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-3);
   min-width: 0;
   min-height: 20px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   white-space: nowrap;
   color: var(--text-muted);
 }
@@ -5645,9 +5610,9 @@ a.project-card-pr {
   color: var(--accent);
 }
 .project-card-pr-state {
-  font-size: 11px;
-  padding: 0 6px;
-  border-radius: 8px;
+  font-size: var(--text-xs);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-lg);
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
@@ -5659,7 +5624,7 @@ a.project-card-pr {
 .project-card-last:has(.project-card-last-name) {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--space-2);
   min-width: 0;
 }
 .project-card-last .icon {
@@ -5677,7 +5642,7 @@ a.project-card-pr {
   align-items: center;
   min-width: 0;
   margin-top: auto;
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 .project-card-foot > * {
   max-width: 100%;
@@ -5688,7 +5653,7 @@ a.project-card-pr {
 .project-card-agents {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2);
 }
 .project-card-agents,
 .project-card-last {

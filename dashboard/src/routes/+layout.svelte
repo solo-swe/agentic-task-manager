@@ -3,6 +3,7 @@
   // address moves from one page to another, and the pages under it (the route files beside this one) are its
   // addresses, with nothing of their own to show. lib/address.ts reads and writes them; the router's history entries
   // are the dashboard's own (lib/navigation.ts).
+  import '../tokens.css';
   import '../app.css';
   import '../themes/default.css';
   import '../themes/nord.css';

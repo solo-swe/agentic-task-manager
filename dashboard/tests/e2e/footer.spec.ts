@@ -35,7 +35,9 @@ test.describe('Footer', () => {
     for (const y of [0, 600, 100_000]) {
       await page.evaluate((top) => window.scrollTo(0, top), y);
       const box = (await page.locator('#site-footer').boundingBox())!;
-      expect(box.y + box.height).toBeCloseTo(viewport.height, 0);
+      // Within a pixel: the page's height can end on a half pixel (1.5 line heights of odd text sizes), and the
+      // browser scrolls in whole ones
+      expect(Math.abs(box.y + box.height - viewport.height)).toBeLessThan(1);
     }
   });
 
