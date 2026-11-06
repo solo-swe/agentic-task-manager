@@ -4,8 +4,9 @@
 COMMAND_OPTIONS = {
     "start": (),
     "review": (("note", "note"),),
-    "done": (("note", "note"), ("commit", "commit"), ("resolution", "resolution")),
+    "done": (("note", "note"), ("commit", "commit")),
     "reject": (("reason", "reason"),),
+    "drop": (),
     "approve": (("note", "note"),),
     "request-changes": (("reason", "reason"),),
     "block": (("on", "on"), ("questions", "question"), ("reason", "reason")),

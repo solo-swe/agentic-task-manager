@@ -6,7 +6,7 @@ The short version, for people using atm. The full list of changes, for developer
 
 - atm's commands are grouped by what they act on: tasks, the work loop, sprints, releases and the project.
 - One command moves a task to any state, so there are fewer commands to remember.
-- Approving a review, or asking for changes, is always your decision: agents ask you before doing either.
+- Approving, rejecting or asking for changes on a review is always your decision, and a task leaves review only by it.
 - Your shell can complete atm's commands, task IDs and sprint names as you type.
 - Nothing to install: everything atm needs comes with the plugin.
 - atm never runs commands for an agent: agents run their own, each with your permission rules.

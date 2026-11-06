@@ -12,6 +12,7 @@ from atm.lib.status import (
     approve_task,
     block_task,
     done_task,
+    drop_task,
     fail_task,
     reject_task,
     release_task,
@@ -72,8 +73,13 @@ class StatusChanges(unittest.TestCase):
         self.assertEqual(review_task(a, "T-1", note="Check the tests")["claim"], None)
         request_changes(Project(s, actor="Ada"), "T-1", reason="Name it better")
         self.assertEqual(s.tasks[0]["review_state"], "changes_requested")
+        # A decision leaves it in review (T-438); a rejected one goes back to to do with drop_task
         reject_task(Project(s, actor="Ada"), "T-1", reason="Start over")
+        self.assertEqual((status(0), s.tasks[0]["review_state"]), ("in_review", "rejected"))
+        self.assertEqual(s.claims["waiting"]["T-1"]["review_state"], "rejected")  # for every worktree
+        drop_task(Project(s, actor="Ada"), "T-1")
         self.assertEqual(status(0), "todo")
+        self.assertNotIn("T-1", s.claims["waiting"])
         start_task(a, "T-2")
         release_task(a, "T-2", note="Half done")
         start_task(a, "T-2")
@@ -84,8 +90,12 @@ class StatusChanges(unittest.TestCase):
         self.assertEqual(status(2), "todo")
         start_task(a, "T-3")
         review_task(a, "T-3")
+        with self.assertRaises(AtmFailure):  # undecided: nobody passes it (T-438)
+            done_task(Project(s, actor="Ada"), "T-3")
         approve_task(Project(s, actor="Ada"), "T-3", note="Good")
         self.assertEqual(s.tasks[2]["review_state"], "approved")
+        done_task(Project(s, actor="Ada"), "T-3")
+        self.assertEqual(status(2), "done")
 
     def test_a_refused_change_changes_nothing(self):
         s = store(task("T-1", status="done"))

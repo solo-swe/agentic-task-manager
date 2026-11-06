@@ -122,14 +122,20 @@
     }
   },
   {
-    "name": "done --resolution: stored when it isn't done; reopen clears it",
+    "name": "skipped from in progress --resolution obsolete (T-438): stored; reopen clears it",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [{ "id": "T-1", "status": "in_progress", "started_by": "bob" }]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" task state T-1 done --agent bob --resolution obsolete"]]
+      "commands": [
+        [
+          "sh",
+          "-c",
+          "ATM_NOW=2026-05-01T12:00:00Z \"$ATM\" task state T-1 skipped --agent bob --reason 'Not needed' --resolution obsolete"
+        ]
+      ]
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
     "args": ["task", "state", "T-1", "todo", "--reason", "Needed after all", "--json"],
@@ -139,10 +145,24 @@
         "status": "todo",
         "updated_at": "2026-05-01T12:00:00Z",
         "updated_by": "bob",
-        "notes": [{ "at": "2026-05-01T12:00:00Z", "by": "bob", "kind": "note", "text": "Reopened: Needed after all" }],
+        "notes": [
+          { "at": "2026-05-01T12:00:00Z", "by": "bob", "kind": "note", "text": "Skipped: Not needed" },
+          { "at": "2026-05-01T12:00:00Z", "by": "bob", "kind": "note", "text": "Reopened: Needed after all" }
+        ],
         "claim": null
       }
     }
+  },
+  {
+    "name": "done takes no --resolution (T-438): a task that ends without its work done is skipped",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_progress", "started_by": "bob" }] }
+      }
+    },
+    "env": { "ATM_AGENT": "bob" },
+    "args": ["task", "state", "T-1", "done", "--resolution", "obsolete"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: --resolution: not for done (done) from where T-1 is"] }
   },
   {
     "name": "show: the resolution, related tasks on both sides, and what duplicates it",

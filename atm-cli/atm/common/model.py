@@ -14,30 +14,13 @@ from .core import AtmError, now, now_iso, parse_iso
 # The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
-# command: (kinds a task may be in, kind it moves to)
-STATUS_CHANGES = {
-    # From review only once the review asked for rework or approved it (SR-3.9)
-    "start": (("todo", "review"), "active"),
-    "review": (("active",), "review"),
-    "done": (("active", "review"), "done"),
-    "fail": (("active",), "todo"),
-    "release": (("active",), "todo"),
-    "reject": (("review",), "todo"),
-    # The review's outcome; the task stays in review until an agent takes it back (SR-6.1)
-    "approve": (("review",), "review"),
-    "request-changes": (("review",), "review"),
-    "block": (("todo", "active"), "blocked"),
-    "unblock": (("blocked",), "todo"),
-    # Undo a done (or skipped) by mistake, or work that turns out unfinished; the reason is kept as a note
-    "reopen": (("done", "skipped"), "todo"),
-    # A task that turns out not to be needed; reopen undoes it
-    "skip": (("todo", "blocked"), "skipped"),
-}
 WAITING_ON = ("user", "agent")
 # Review states that make a task in review work for an agent again (SR-3.9)
 REWORK_STATES = ("changes_requested", "approved")
+# A review's decisions (T-438): each leaves the task in review, with its review_state, and opens one way out of it
+REVIEW_DECISIONS = {"approve": "approved", "request-changes": "changes_requested", "reject": "rejected"}
 # How a finished task ended (SR-2.8): stored only when it isn't the default, `done` for a done task and `wont_do` for
-# a skipped one
+# a skipped one. A done task is done; a task that ends without its work done is skipped (T-438), with a reason
 RESOLUTIONS = ("done", "wont_do", "duplicate", "obsolete")
 SKIP_RESOLUTIONS = ("wont_do", "obsolete", "duplicate")
 

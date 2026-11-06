@@ -227,12 +227,13 @@ while true:
          A review held with the user (a draft or proposal the task says to review with them): `atm task state <id> in_review` as soon
          as the draft is committed, *before* opening the review, so the dashboard shows it waiting on them; address
          their comments while it stays in review. A review's decision is the user's: they record it with
-         `atm task review approve <id>` or `atm task review request-changes <id> --reason '…'` (no skill pre-approves
-         either; if they ask you to run one, it asks them for permission). Once it is approved, check what the task
-         still asks for; if anything is left, take it back to in progress (`atm task state <id> in_progress`) and carry
-         on; only when nothing is left, `atm task state <id> done` it (/atm:do-task Step 7b). `atm loop next` hands
-         tasks back from review (approved, or with changes asked for) before new ones: read the latest `rejection` or
-         approval note first.
+         `atm task review approve <id>`, `request-changes <id> --reason '…'` or `reject <id> --reason '…'` (no skill
+         pre-approves them; if they ask you to run one, it asks them for permission). atm lets a task out of review
+         only by its decision. Once it is approved, check what the task still asks for; if anything is left, take it
+         back to in progress (`atm task state <id> in_progress`) and carry on; only when nothing is left,
+         `atm task state <id> done` it (/atm:do-task Step 7b). `atm loop next` hands tasks back from review (approved,
+         or with changes asked for) before new ones: read the latest `rejection` or approval note first. A rejected
+         task isn't handed back: the user sends it back to to do (`atm task state <id> todo`) or skips it.
        - If it needs a decision: `atm task state $TASK_ID blocked --on user --question '<question>' [--question ...]`
          (`--on agent` when the project or the user hands such decisions to a reviewer agent). The claim is
          released and its dependents wait; the loop goes on with other ready tasks. Count it as blocked. Whoever
@@ -276,7 +277,7 @@ review, blocked or waiting, and what's next) and output a final summary:
 > **Failed:** N tasks that failed verification (if any)
 > **Archived:** N finished tasks (if the loop archived; or the archive hint, if it was only relayed)
 >
-> To pass a review: `atm task review approve <id>`; to ask for changes: `atm task review request-changes <id> --reason '...'`. To answer a block:
+> To decide a review: `atm task review approve <id>`, `request-changes <id> --reason '...'` or `reject <id> --reason '...'`. To answer a block:
 > `atm task state <id> todo --answer '...'` (one per question).
 >
 > **Next steps:** (list tasks that are now available to work on, if any)

@@ -22,8 +22,18 @@ The sprint *CLI ergonomics* (release 0.31.0).
   `--reason`), here or, for a task claimed, blocked or in review in another worktree, there (`todo_command` in
   `lib/status.py`). It refuses options that aren't for the change (`--commit: not for in_progress (start)`) and asks
   for the ones it needs. The agent comes from `--agent`, `ATM_AGENT` or the session, as before.
-- **A review's decisions are `atm task review approve <id> [--note]` and `atm task review request-changes <id>
-  --reason`**: the decision first, so a permission rule tells them apart. No skill pre-approves them (I23).
+- **A review's decisions are `atm task review approve <id> [--note]`, `request-changes <id> --reason` and `reject
+  <id> --reason`** (T-425, T-438): the decision first, so a permission rule tells them apart. No skill pre-approves
+  them (I23). Each leaves the task in review with its `review_state` (`approved`, `changes_requested`, `rejected`)
+  and opens one way out, which atm guards for agents and people alike: approved, `done` (or `in_progress` for what
+  is left); changes requested, `in_progress`; rejected, `todo` (its work dropped; atm-lib `drop_task`) or
+  `skipped`. Without the decision, atm refuses (`can't finish T-1: its review isn't approved …`). The task's
+  `waiting` record carries the decision, so an exit taken in another worktree meets the same guard. A rejected task
+  isn't handed out by `atm loop next`. The dashboard labels `rejected`. `reject_task` is the decision now (it used to
+  send the task back to to do).
+- **`skipped` from any open state** (T-438): to do, blocked, in progress (its claim dropped) or in review (once
+  rejected). **`done` takes no `--resolution`**: a done task is done; one that ends without its work done is skipped,
+  with its resolution. atm-lib's `done_task` loses `resolution` (`tests/lib/public-surface.json`).
 - **`--json` (`-j`) and `--dry-run` (`-n`) go anywhere on the line** (before a `--`); `atm --dir PATH <command>`
   as before. Errors are `atm: <message>`, or `{"error", "code"}` with `--json`; a usage error (Click's: a missing
   argument, an unknown option or command) has the command's usage line and exit code 2. Shell completion for zsh,

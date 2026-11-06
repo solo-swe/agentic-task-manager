@@ -32,12 +32,17 @@ COMMAND_STATES = {"done": "done", "release": "todo", "fail": "todo", "review": "
 
 # Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
 # waiting task must have there
-REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
+REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked", "review"), "done": ("review",), "drop": ("review",)}
+
+# The commands that leave a task waiting (blocked or in review) and record it for every worktree: asking, and a
+# review's decisions, which the record carries (`review_state`), so an exit from review taken in another worktree
+# meets the same guard (T-438)
+WAITING_COMMANDS = ("block", "review", "approve", "request-changes", "reject")
 
 
 def todo_command(project, task_id, failing=False):
     """The status function `atm task state <id> todo` runs, by the kind the task is in: in progress, a failure
-    (`failing`, it says why) or a release; in review, reject; blocked, unblock; done or skipped, reopen. A task that is
+    (`failing`, it says why) or a release; in review, drop (once rejected); blocked, unblock; done or skipped, reopen. A task that is
     to do here but claimed (in progress in another worktree, T-202), or blocked or in review in another worktree
     (T-204), is decided as it is there. Raises Invalid when it is to do already."""
     view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
@@ -55,7 +60,7 @@ def todo_command(project, task_id, failing=False):
             kind = kind_of(vocabulary({"meta": project.store.get_settings()}), record.get("status"))
     commands = {
         "active": "fail" if failing else "release",
-        "review": "reject",
+        "review": "drop",
         "blocked": "unblock",
         "done": "reopen",
         "skipped": "reopen",
@@ -92,6 +97,7 @@ def waiting_entry(work, task):
         "status": task.get("status"),
         "waiting_on": task.get("waiting_on"),
         "questions": list(task.get("questions") or []),
+        "review_state": task.get("review_state"),
         "worktree": here["worktree"],
         "branch": here["branch"],
         "at": now_iso(),
@@ -115,6 +121,8 @@ def adopt_waiting(task, data, store, here, command):
         task["waiting_on"] = record["waiting_on"]
     if record.get("questions"):
         task["questions"] = list(record["questions"])
+    if record.get("review_state"):
+        task["review_state"] = record["review_state"]
     return record.get("worktree")
 
 
@@ -176,8 +184,9 @@ def change_task_status(project, command, task_id, **options):
             claims.pop(task_id, None)
         if command == "done":
             store["completed"][task_id] = completion_record(work, task_id, agent)
-        # Blocked or in review: recorded for every worktree (T-204); any other change ends the wait
-        if command in ("block", "review"):
+        # Blocked or in review, with its review's decision: recorded for every worktree (T-204); any other change
+        # ends the wait
+        if command in WAITING_COMMANDS:
             store["waiting"][task_id] = waiting_entry(work, task)
         else:
             store["waiting"].pop(task_id, None)
@@ -240,24 +249,31 @@ def review_task(project, task_id, note=None, status=None):
     return change_task_status(project, "review", task_id, note=note, status=status)
 
 
-def done_task(project, task_id, note=None, commit=None, resolution=None, status=None):
-    """Done (or waiting for the sprint review, by its review mode); the claim dropped."""
-    return change_task_status(project, "done", task_id, note=note, commit=commit, resolution=resolution, status=status)
-
-
-def reject_task(project, task_id, reason, status=None):
-    """A task in review back to to do, for anyone."""
-    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+def done_task(project, task_id, note=None, commit=None, status=None):
+    """Done (or waiting for the sprint review, by its review mode); the claim dropped. From review only once it is
+    approved (T-438)."""
+    return change_task_status(project, "done", task_id, note=note, commit=commit, status=status)
 
 
 def approve_task(project, task_id, note=None, status=None):
-    """Approves a review; it stays in review until its agent takes it back."""
+    """A review's decision: approved. It stays in review until its agent takes it back, or finishes it."""
     return change_task_status(project, "approve", task_id, note=note, status=status)
 
 
 def request_changes(project, task_id, reason, status=None):
-    """Asks for changes; its agent gets it back first."""
+    """A review's decision: changes asked for (`reason`). It stays in review; its agent gets it back first."""
     return change_task_status(project, "request-changes", task_id, reason=reason, status=status)
+
+
+def reject_task(project, task_id, reason, status=None):
+    """A review's decision: rejected (`reason`, T-438). It stays in review until it goes back to to do (drop_task) or
+    is skipped."""
+    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+
+
+def drop_task(project, task_id, status=None):
+    """A rejected task in review back to to do, its work dropped, for anyone (T-438)."""
+    return change_task_status(project, "drop", task_id, status=status)
 
 
 def block_task(project, task_id, on, questions, reason=None, status=None):
@@ -276,7 +292,8 @@ def reopen_task(project, task_id, reason, status=None):
 
 
 def skip_task(project, task_id, reason, resolution=None, duplicate_of=None, status=None):
-    """Not needed: skipped (a to-do or blocked task)."""
+    """Not needed: skipped, from any open state (T-438: to do, blocked, in progress, or in review once rejected); the
+    claim dropped."""
     return change_task_status(
         project, "skip", task_id, reason=reason, resolution=resolution, duplicate_of=duplicate_of, status=status
     )
@@ -298,6 +315,7 @@ STATUS_FUNCTIONS = {
     "review": review_task,
     "done": done_task,
     "reject": reject_task,
+    "drop": drop_task,
     "approve": approve_task,
     "request-changes": request_changes,
     "block": block_task,

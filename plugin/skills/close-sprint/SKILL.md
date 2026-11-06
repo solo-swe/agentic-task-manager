@@ -68,7 +68,8 @@ follow-ups.
 For each unfinished task (to do, blocked, in review), propose one of:
 - **carry it over** to the next sprint (the default);
 - **back to the backlog**: `atm sprint move <id>... --to backlog`;
-- **skip it**, when it's no longer needed: `atm task state <id> skipped --reason '<why>'` (to-do and blocked tasks;
+- **skip it**, when it's no longer needed: `atm task state <id> skipped --reason '<why>'` (any open task; one in
+  review only once the user rejected it, `atm task review reject <id> --reason '…'`;
   it asks the user for permission, as this skill pre-approves no status change).
 
 A task in review keeps its status when it's carried: its review goes on in the next sprint.

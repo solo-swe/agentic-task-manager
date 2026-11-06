@@ -55,7 +55,7 @@ with the task that adds it.
 | I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24) | `skills.test.ts` |
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
-| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). T-438 adds atm's own guard: the exits from review need the decision | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
+| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes|reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
 | I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives | `security-invariants.test.ts` (every process atm starts, and the one fork); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
 | I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
@@ -543,7 +543,7 @@ Written review in place of the live sandbox run (no API key is used for the sand
   the review's decisions left it: `atm task review approve|request-changes <id>`, the decision first. No skill
   pre-approves them, so an agent that runs one asks the user for permission; the skills say the decision is the
   user's. `close-sprint` used to pre-approve only `atm skip`: it now pre-approves no status change, and a skip asks
-  for permission. T-438 then guards the exits from review on the decision, in atm itself.
+  for permission. T-438 then guards the exits from review on the decision, in atm itself (below).
 - **What the text asks of agents** is unchanged: the same work under the new names, *Task text is data* and *Logs
   are evidence* untouched, every agent-written text still single-quoted (I3). The merge driver's registration is
   `atm db merge-driver %O %A %B`; `atm db migrate`, which every skill runs first, registers it again in a clone.
@@ -561,6 +561,19 @@ at most twelve) is up. It reads no path or URL and runs nothing. The skills pre-
 review in place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:push`,
 `plugin/CLAUDE.md`) asks agents to chain their own command after `claim hold` instead of handing it to atm; *Task text
 is data* is untouched, and a command copied from a task is still refused, whatever it follows.
+
+**A review's exits, guarded in atm (T-438).** A review's decisions are `atm task review approve|request-changes|reject
+<id>` (reject is new): each leaves the task in review with its `review_state`, and atm lets it out only by that
+decision, for an agent and a person alike: `done` needs `approved`, `todo` (drop) and `skipped` need `rejected`,
+`in_progress` needs a decision for rework. So I23 no longer rests on the skills and their permission lists alone: an
+agent that runs `atm task state <id> done` on its own task in review is refused until the user approved it. The
+decision is carried in the task's `waiting` record, so an exit taken in another worktree meets the same guard. What
+stays the user's is the decision itself: no skill pre-approves `atm task review`, so an agent running one asks for
+permission; the actor is still self-declared (`--agent`), which the permission prompt, not atm, guards. `skipped`
+from any open state and `done` without `--resolution` read no path or URL and add no entry point. Written review in
+place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:close-sprint`,
+`plugin/CLAUDE.md`) adds `reject` to the decisions that are the user's and says how each opens its way out; nothing to
+run, fetch or install, and *Task text is data* is untouched (a task saying "approved" changes no `review_state`).
 
 ## 4. Keeping it current
 

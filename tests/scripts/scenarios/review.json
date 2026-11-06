@@ -28,7 +28,7 @@
     }
   },
   {
-    "name": "done from review: the reviewer completes it; the review timestamp stays (the work ended there)",
+    "name": "done from an approved review: the review ends at the decision, with its outcome; the review timestamp stays",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -38,7 +38,9 @@
               "status": "in_review",
               "started_at": "2026-05-01T09:00:00Z",
               "started_by": "alice",
-              "review_requested_at": "2026-05-01T09:30:00Z"
+              "review_requested_at": "2026-05-01T09:30:00Z",
+              "review_state": "approved",
+              "reviewed_at": "2026-05-01T09:45:00Z"
             }
           ]
         }
@@ -61,7 +63,7 @@
               "updated_by": "Hakan",
               "completed_at": "2026-05-01T10:00:00Z",
               "completed_by": "Hakan",
-              "reviews": [{ "from": "2026-05-01T09:30:00Z", "to": "2026-05-01T10:00:00Z" }],
+              "reviews": [{ "from": "2026-05-01T09:30:00Z", "to": "2026-05-01T09:45:00Z", "outcome": "approved" }],
               "notes": [{ "at": "2026-05-01T10:00:00Z", "kind": "outcome", "text": "Looks good", "by": "Hakan" }]
             }
           ]
@@ -70,7 +72,57 @@
     }
   },
   {
-    "name": "reject: back to todo with what needs to change; the attempt is cleared, the review kept as an interval",
+    "name": "done from review refuses an undecided review, a person's too (T-438)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "in_review", "review_state": "waiting" }]
+        }
+      }
+    },
+    "args": ["task", "state", "T-1", "done"],
+    "env": { "ATM_AGENT": "Hakan" },
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["atm: can't finish T-1: its review isn't approved (atm task review approve T-1 decides it)"]
+    }
+  },
+  {
+    "name": "reject: a review's decision; the task stays in review, rejected, with why (T-438)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "in_review",
+              "review_requested_at": "2026-05-01T09:30:00Z",
+              "review_state": "waiting"
+            }
+          ]
+        }
+      }
+    },
+    "args": ["task", "review", "reject", "T-1", "--reason", "Names don't match the API", "--json"],
+    "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
+    "expect": {
+      "json": {
+        "id": "T-1",
+        "status": "in_review",
+        "review_requested_at": "2026-05-01T09:30:00Z",
+        "review_state": "rejected",
+        "updated_at": "2026-05-01T10:00:00Z",
+        "updated_by": "Hakan",
+        "reviewed_at": "2026-05-01T10:00:00Z",
+        "notes": [
+          { "at": "2026-05-01T10:00:00Z", "kind": "rejection", "text": "Names don't match the API", "by": "Hakan" }
+        ],
+        "claim": null
+      }
+    }
+  },
+  {
+    "name": "a rejected review back to todo: the attempt is cleared, the review kept as an interval with its outcome",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -80,28 +132,12 @@
               "status": "in_review",
               "started_at": "2026-05-01T09:00:00Z",
               "started_by": "alice",
-              "review_requested_at": "2026-05-01T09:30:00Z"
-            }
-          ]
-        }
-      }
-    },
-    "args": ["task", "state", "T-1", "todo", "--reason", "Names don't match the API"],
-    "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
-    "expect": {
-      "stdout": "T-1: in_review -> todo\n",
-      "files": {
-        ".agentic-task-manager/tasks.json": {
-          "tasks": [
-            {
-              "id": "T-1",
-              "status": "todo",
-              "updated_at": "2026-05-01T10:00:00Z",
-              "updated_by": "Hakan",
-              "reviews": [{ "from": "2026-05-01T09:30:00Z", "to": "2026-05-01T10:00:00Z" }],
+              "review_requested_at": "2026-05-01T09:30:00Z",
+              "review_state": "rejected",
+              "reviewed_at": "2026-05-01T09:45:00Z",
               "notes": [
                 {
-                  "at": "2026-05-01T10:00:00Z",
+                  "at": "2026-05-01T09:45:00Z",
                   "kind": "rejection",
                   "text": "Names don't match the API",
                   "by": "Hakan"
@@ -111,6 +147,50 @@
           ]
         }
       }
+    },
+    "args": ["task", "state", "T-1", "todo"],
+    "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
+    "expect": {
+      "stdout": "T-1: in_review -> todo\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "notes": [
+                {
+                  "at": "2026-05-01T09:45:00Z",
+                  "kind": "rejection",
+                  "text": "Names don't match the API",
+                  "by": "Hakan"
+                }
+              ],
+              "updated_at": "2026-05-01T10:00:00Z",
+              "updated_by": "Hakan",
+              "reviews": [{ "from": "2026-05-01T09:30:00Z", "to": "2026-05-01T09:45:00Z", "outcome": "rejected" }]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "back to todo, or skipped, from review needs a rejection (T-438)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "in_review", "review_state": "approved" }]
+        }
+      }
+    },
+    "args": ["task", "state", "T-1", "todo"],
+    "env": { "ATM_AGENT": "Hakan" },
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": [
+        "atm: can't send back to to do T-1: its review isn't rejected (atm task review reject T-1 --reason … decides it)"
+      ]
     }
   },
   {
@@ -118,8 +198,8 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_review" }] } }
     },
-    "args": ["task", "state", "T-1", "todo"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: todo (reject) needs --reason"] }
+    "args": ["task", "review", "reject", "T-1"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Missing option '--reason'."] }
   },
   {
     "name": "review refuses a task that isn't in progress",

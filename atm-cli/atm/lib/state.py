@@ -21,7 +21,7 @@ from transitions import Machine
 
 from ..common.core import AtmError, now_iso
 from ..common.model import (
-    RESOLUTIONS,
+    REVIEW_DECISIONS,
     REWORK_STATES,
     SKIP_RESOLUTIONS,
     WAITING_ON,
@@ -79,24 +79,32 @@ class TaskMachine:
                 "conditions": [self.review_decided, self.dependencies_done, *args],
             },
             {"trigger": "review", "source": "active", "dest": "review", "conditions": args},
+            # From review only once it is approved (T-438): nobody, agent or person, passes a review undecided
             {
                 "trigger": "done",
                 "source": ["active", "review"],
                 "dest": "done",
-                "conditions": [self.review_mode_allows_done, *args],
+                "conditions": [self.review_mode_allows_done, self.review_approved, *args],
             },
             {"trigger": "fail", "source": "active", "dest": "todo", "conditions": args},
             {"trigger": "release", "source": "active", "dest": "todo", "conditions": args},
-            {"trigger": "reject", "source": "review", "dest": "todo", "conditions": args},
-            # The review's outcome; the task stays in review until an agent takes it back (SR-6.1)
+            # A review's decisions (SR-6.1, T-438): the task stays in review, and each opens one way out of it
             {"trigger": "approve", "source": "review", "dest": "review", "conditions": args},
             {"trigger": "request_changes", "source": "review", "dest": "review", "conditions": args},
+            {"trigger": "reject", "source": "review", "dest": "review", "conditions": args},
+            # A rejected review's way out: back to to do, the work dropped (T-438)
+            {"trigger": "drop", "source": "review", "dest": "todo", "conditions": [self.review_rejected, *args]},
             {"trigger": "block", "source": ["todo", "active"], "dest": "blocked", "conditions": args},
             {"trigger": "unblock", "source": "blocked", "dest": "todo", "conditions": args},
             # Undo a done (or skipped) by mistake, or work that turns out unfinished
             {"trigger": "reopen", "source": ["done", "skipped"], "dest": "todo", "conditions": args},
-            # A task that turns out not to be needed; reopen undoes it
-            {"trigger": "skip", "source": ["todo", "blocked"], "dest": "skipped", "conditions": args},
+            # A task that turns out not to be needed, from any open state (T-438); from review once it is rejected
+            {
+                "trigger": "skip",
+                "source": ["todo", "blocked", "active", "review"],
+                "dest": "skipped",
+                "conditions": [self.review_rejected, *args],
+            },
         ]
 
         self.machine = Machine(
@@ -117,6 +125,25 @@ class TaskMachine:
         if self.current_kind == "review" and self.task.get("review_state") not in REWORK_STATES:
             raise AtmError(
                 f"can't start {self.task['id']}: it waits for its review (atm task review approve or request-changes {self.task['id']} decides it)"
+            )
+        return True
+
+    def review_approved(self, event):
+        """done from review: only once the review approved it (T-438)."""
+        if self.current_kind == "review" and self.task.get("review_state") != "approved":
+            raise AtmError(
+                f"can't finish {self.task['id']}: its review isn't approved (atm task review approve {self.task['id']} "
+                "decides it)"
+            )
+        return True
+
+    def review_rejected(self, event):
+        """drop, and skip from review: only once the review rejected it (T-438)."""
+        if self.current_kind == "review" and self.task.get("review_state") != "rejected":
+            way = "send back to to do" if event.event.name == "drop" else "skip"
+            raise AtmError(
+                f"can't {way} {self.task['id']}: its review isn't rejected (atm task review reject {self.task['id']} "
+                "--reason … decides it)"
             )
         return True
 
@@ -144,6 +171,8 @@ class TaskMachine:
             check_note(reason)
         for question in kwargs.get("questions") or ():
             check_note(question)
+        if event.event.name in ("reject", "request_changes") and not reason:
+            raise AtmError("a review that isn't approved says why: --reason", 2)
         if event.event.name == "block":
             if kwargs.get("waiting_on") not in WAITING_ON:
                 raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
@@ -160,7 +189,7 @@ class TaskMachine:
     def transition(self, command, **kwargs):
         """Run `command` on the task. Returns its status before the command; raises AtmError if it isn't allowed."""
         trigger = command.replace("-", "_")
-        if command in ("done", "skip"):
+        if command == "skip":
             kwargs["resolution"] = self._check_resolution(command, kwargs)
         if not self.machine.get_transitions(trigger, source=self.current_kind):
             allowed = sorted(
@@ -177,9 +206,9 @@ class TaskMachine:
         return self.current_status
 
     def _check_resolution(self, command, kwargs):
-        """done and skip record a resolution (SR-2.8); skip may name the task it duplicates."""
-        resolution = kwargs.get("resolution") or ("done" if command == "done" else "wont_do")
-        allowed = RESOLUTIONS if command == "done" else SKIP_RESOLUTIONS
+        """skip records a resolution (SR-2.8; a done task is done, T-438), and may name the task it duplicates."""
+        resolution = kwargs.get("resolution") or "wont_do"
+        allowed = SKIP_RESOLUTIONS
         if resolution not in allowed:
             raise AtmError(f"--resolution must be one of {', '.join(allowed)}", 2)
         duplicate_of = kwargs.get("duplicate_of")
@@ -204,28 +233,27 @@ class TaskMachine:
             add_interval(task, "blocks", task["blocked_at"], stamp, on=task.get("waiting_on"))
         elif old_kind == "review" and new_kind != "review" and task.get("review_requested_at"):
             # The round ends when the reviewer decided, with its outcome (SR-3.9)
-            outcome = task.get("review_state") if task.get("review_state") in REWORK_STATES else None
+            decided = task.get("review_state")
+            outcome = decided if decided in REVIEW_DECISIONS.values() else None
             add_interval(task, "reviews", task["review_requested_at"], task.get("reviewed_at") or stamp, outcome=outcome)
         if new_kind != "review":
             task.pop("review_state", None)
             task.pop("reviewed_at", None)
 
         if new_kind == "todo":
-            # Reopening, rejecting or failing a task undoes its work; releasing or unblocking it doesn't
-            back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "reject", "fail"))
+            # Reopening, dropping a rejected task or failing one undoes its work; releasing or unblocking it doesn't
+            back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "drop", "fail"))
             if kwargs.get("answered"):
                 add_note(task, "answer", kwargs["answered"], agent, stamp, checked=False)
             if command == "fail":
                 add_note(task, "failure", reason or "verification failed", agent, stamp)
-            elif command == "reject":
-                add_note(task, "rejection", reason, agent, stamp)
             elif command == "reopen":
                 add_note(task, "note", f"Reopened: {reason}", agent, stamp)
             elif note:
                 add_note(task, "handoff", note, agent, stamp)
             return
 
-        if command in ("approve", "request-changes") and kwargs.get("status") is None:
+        if command in REVIEW_DECISIONS and kwargs.get("status") is None:
             task["status"] = self.current_status  # it stays in its review status (a project may have several)
         else:
             task["status"] = status_for(vocab, new_kind, kwargs.get("status"))
@@ -244,14 +272,15 @@ class TaskMachine:
             task["review_state"] = "waiting"
             if note:
                 add_note(task, "review", note, agent, stamp)
-        elif command in ("approve", "request-changes"):
-            # The task stays in review until an agent takes it back (`atm next` offers it first, SR-3.9)
-            task["review_state"] = "approved" if command == "approve" else "changes_requested"
+        elif command in REVIEW_DECISIONS:
+            # The task stays in review: approved or with changes asked for, an agent takes it back (`atm loop next`
+            # offers it first, SR-3.9); rejected, it goes back to to do or is skipped (T-438)
+            task["review_state"] = REVIEW_DECISIONS[command]
             task["reviewed_at"] = stamp
-            if command == "request-changes":
-                add_note(task, "rejection", reason, agent, stamp)
-            else:
+            if command == "approve":
                 add_note(task, "note", f"Approved: {note}" if note else "Approved", agent, stamp)
+            else:
+                add_note(task, "rejection", reason, agent, stamp)
         elif command == "skip":
             for field in ("waiting_on", "questions", "blocked_at"):
                 task.pop(field, None)
@@ -271,8 +300,6 @@ class TaskMachine:
                 task["started_by"] = agent
         elif command == "done":
             task["completed_at"] = stamp
-            if kwargs["resolution"] != "done":
-                task["resolution"] = kwargs["resolution"]  # none means the default, done
             if agent:
                 task["completed_by"] = agent
             if kwargs.get("commit"):
@@ -306,8 +333,10 @@ def change_status(
     the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
     picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
     `done` as completed_by; `note` and `reason` become notes, `commit` the task's commit. `block` records who it
-    waits on and the open questions; `unblock` turns them, with the answers, into an answer note. `done` and `skip`
-    record a `resolution` (SR-2.8), `skip` also `duplicate_of` (the caller checks that task exists)."""
+    waits on and the open questions; `unblock` turns them, with the answers, into an answer note. `approve`,
+    `request-changes` and `reject` decide a review (it stays in review); `done`, `start` and `drop` (back to to do) or
+    `skip` leave it by its decision (T-438). `skip` records a `resolution` (SR-2.8) and `duplicate_of` (the caller
+    checks that task exists)."""
     # Each question was checked when the task was blocked, each answer when it is given: together they may be longer
     # than one note, and must still be recordable, or the task could never be unblocked
     asked = list(task.get("questions") or [])

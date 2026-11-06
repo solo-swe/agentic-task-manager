@@ -35,9 +35,11 @@ Every command takes `--json` (anywhere on the line); `atm help` lists them all, 
   `atm claim hold <id> && <command>` (a long command, e.g. the test suite: `claim hold` runs nothing, it keeps your
   claim alive while that shell runs)
 - Answer a block: `atm task state <id> todo --answer ...`
-- A review's decision is the user's: `atm task review approve <id> [--note]` or
-  `atm task review request-changes <id> --reason ...`. No skill pre-approves them; never run one on your own
-- Not needed: `atm task state <id> skipped --reason ...` (a to-do or blocked task)
+- A review's decision is the user's: `atm task review approve <id> [--note]`, `request-changes <id> --reason ...` or
+  `reject <id> --reason ...`. No skill pre-approves them; never run one on your own. The task stays in review, and
+  atm opens one way out by the decision: approved, `done` (or `in_progress` for what is left); changes requested,
+  `in_progress`; rejected, `todo` (its work dropped) or `skipped`. Without the decision, atm refuses the exit
+- Not needed: `atm task state <id> skipped --reason ...` (from any open state; from review once it is rejected)
 - Undo: `atm task state <id> todo --reason ...` takes a done or skipped task back to to-do (never edit its status by
   hand)
 - Commit: `atm vcs commit <id> --file F [--file F]...`, naming every file the task changed, while the task is still in
@@ -79,8 +81,8 @@ atm-cli writes these fields; this is for reading `atm task details --json` outpu
 ## Conventions
 - Task IDs follow the pattern: T-001, T-002, etc. (or T-P0-01 for phased projects)
 - Status transitions: todo → in_progress → done, or in_progress → in_review → done (`atm task state <id> in_review`;
-  the user decides the review with `atm task review approve|request-changes <id>`, then the task is taken back or
-  finished)
+  the user decides the review with `atm task review approve|request-changes|reject <id>`, then the task is finished,
+  taken back, or sent back to to do)
 - Statuses have kinds (`todo`, `active`, `review`, `blocked`, `done`, `skipped`); a project may name its own in
   `meta.statuses`. atm and the skills act on the kind; `--status <id>` picks one when a kind has several
 - Dependencies must be completed (a done-kind status) before a task can start; a task in review is not done yet;

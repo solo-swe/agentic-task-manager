@@ -375,9 +375,13 @@ describe('claims', () => {
       assert.deepEqual(notes(root, 'T-001'), [['answer', 'Which provider? → Postmark']]);
       assert.equal(store().resolved['T-001'], undefined);
 
-      // bob sends T-002 for review in his worktree; the review is passed from the main worktree
+      // bob sends T-002 for review in his worktree; erin approves it there, and it is passed from the main worktree:
+      // the shared record carries the decision, so the guard on done from review holds there too (T-438)
       assert.equal(runAtm(['task', 'state', 'T-002', 'in_review', '--note', 'check it'], wt, as('bob', 6)).code, 0);
       assert.equal(store().waiting['T-002'].status, 'in_review');
+      assert.equal(runAtm(['task', 'state', 'T-002', 'done'], root, as('erin', 7)).code, 1); // undecided
+      assert.equal(runAtm(['task', 'review', 'approve', 'T-002'], wt, as('erin', 7)).code, 0);
+      assert.equal(store().waiting['T-002'].review_state, 'approved');
       const pass = runAtm(['task', 'state', 'T-002', 'done'], root, as('erin', 7));
       assert.equal(pass.code, 0, pass.stderr);
       assert.equal(statusOf(root, 'T-002').status, 'done');

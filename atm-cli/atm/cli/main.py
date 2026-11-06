@@ -433,7 +433,9 @@ def task_state(
     note: Optional[str] = typer.Option(None, "--note", help="A note"),
     reason: Optional[str] = typer.Option(None, "--reason", help="A reason"),
     commit: Optional[str] = typer.Option(None, "--commit", help="The task's commit SHA"),
-    resolution: Optional[str] = typer.Option(None, "--resolution", help="How it ended"),
+    resolution: Optional[str] = typer.Option(
+        None, "--resolution", help="skipped: why it isn't needed (wont_do, obsolete or duplicate; default wont_do)"
+    ),
     duplicate_of: Optional[str] = typer.Option(
         None, "--duplicate-of", help="The task it duplicates"
     ),
@@ -482,7 +484,7 @@ def task_state(
     if extra:
         flags = ", ".join("--" + name.replace("_", "-") for name in extra)
         raise Invalid(f"{flags}: not for {next_state} ({cmd}) from where {task_id} is")
-    required = {"reject": "reason", "reopen": "reason", "skip": "reason", "block": "on"}
+    required = {"reopen": "reason", "skip": "reason", "block": "on"}
     if cmd in required and not given[required[cmd]]:
         raise Invalid(f"{next_state} ({cmd}) needs --{required[cmd]}")
     run_status(ctx, project, cmd, task_id, status, given)
@@ -519,9 +521,10 @@ def run_status(ctx, project, cmd, task_id, status, given):
         out(hint["text"])
 
 
-# A review's decisions: the task stays in review (T-438 adds reject and guards the exits from review). The decision
-# comes first, so a permission rule can tell them apart; no skill pre-approves them (I23)
-review_app = typer.Typer(help="Decide a task's review: approve it or ask for changes; it stays in review")
+# A review's decisions (T-438): the task stays in review, and each opens one way out of it, which `task state` takes:
+# approved, `done` (or `in_progress` for what is left); changes requested, `in_progress`; rejected, `todo` or
+# `skipped`. The decision comes first, so a permission rule can tell them apart; no skill pre-approves them (I23)
+review_app = typer.Typer(help="Decide a task's review: approve it, ask for changes, or reject it; it stays in review")
 task_app.add_typer(review_app, name="review")
 
 
@@ -533,7 +536,7 @@ def review_approve(
     status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
     agent: Optional[str] = typer.Option(None, "--agent", help="Who decides"),
 ) -> None:
-    """Approve a task in review: it stays in review until an agent takes it back to finish."""
+    """Approve a task in review: then it can be done, or taken back for what is left."""
     run_status(ctx, open_project(os.getcwd(), agent_identity(agent)), "approve", task_id, status, {"note": note})
 
 
@@ -549,6 +552,18 @@ def review_request_changes(
     run_status(
         ctx, open_project(os.getcwd(), agent_identity(agent)), "request-changes", task_id, status, {"reason": reason}
     )
+
+
+@review_app.command("reject")
+def review_reject(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    reason: str = typer.Option(..., "--reason", help="Why (a rejection note)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who decides"),
+) -> None:
+    """Reject a task in review: then it goes back to to do (its work dropped) or is skipped."""
+    run_status(ctx, open_project(os.getcwd(), agent_identity(agent)), "reject", task_id, status, {"reason": reason})
 
 
 # ---------------------------------------------------------------------------
@@ -1657,7 +1672,7 @@ STATE_TARGETS = [
     ("in_progress", "start"),
     ("in_review", "review"),
     ("done", "done"),
-    ("todo", "back to to do: fail, release, reject, unblock or reopen"),
+    ("todo", "back to to do: fail, release, drop (rejected), unblock or reopen"),
     ("blocked", "block"),
     ("skipped", "skip"),
 ]

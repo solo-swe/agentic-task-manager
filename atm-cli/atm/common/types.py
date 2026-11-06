@@ -334,7 +334,7 @@ Task = TypedDict(
         "components": List[str],
         # How it is reviewed: blocker, async, batch or none
         "review": str,
-        # In the review kind: waiting, changes_requested or approved (SR-6.1)
+        # In the review kind: waiting, changes_requested, approved or rejected (SR-6.1, T-438)
         "review_state": str,
         # ISO 8601 UTC; when the review was decided
         "reviewed_at": str,

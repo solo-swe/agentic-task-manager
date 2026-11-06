@@ -689,7 +689,7 @@ plugin's `bin/atm` on its Bash tool's PATH; in your own terminal, use the full p
 | `atm loop next [--sprint S \| --tasks T-1,T-5 \| --all \| --backlog] [--claim]`                                | The task the loop would take next (and claim it); the active sprint by default                                                                                                            |
 | `atm sprint list \| add \| edit \| start \| close`, `atm sprint move <id>... --to <S>`, `atm sprint backlog`                 | Sprints, moving tasks between them and the backlog                                                                                                                                        |
 | `atm task state <id> in_progress \| done \| todo \| skipped`                                                                     | Change a task's status (`--note` for an outcome or handoff; back to `todo` with `--reason` when it failed, or to reopen it)                                                                                                        |
-| `atm task state <id> in_review --note T`, `atm task review approve \| request-changes <id>`                                                  | Ask for a review; decide it (yours: no skill does it on its own)                                                                                                                                               |
+| `atm task state <id> in_review --note T`, `atm task review approve \| request-changes \| reject <id>`                                                  | Ask for a review; decide it (yours: no skill does it on its own). A task leaves review only by its decision                                                                                                                                               |
 | `atm task state <id> blocked --on user\|agent --question Q`, `atm task state <id> todo --answer A`                             | Ask for a decision; answer it                                                                                                                                                             |
 | `atm task note <id> TEXT`                                                                                      | Add a note to a task                                                                                                                                                                      |
 | `atm task add`, `atm task edit <id>`, `atm doctor`                                                                   | Add tasks (one, or many with `--json-file`), change a task's definition, check the file                                                                                                   |
@@ -721,7 +721,7 @@ they keep working across plugin upgrades:
 }
 ```
 
-Don't allow `Bash(atm *)` or a whole group: `atm task review` (approving a review or asking for changes) is yours to
+Don't allow `Bash(atm *)` or a whole group: `atm task review` (approving, rejecting or asking for changes) is yours to
 decide, and an agent should have to ask before it runs one.
 
 ---
