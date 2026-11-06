@@ -8,9 +8,9 @@
           "tasks": [{ "id": "T-1", "status": "todo" }]
         }
       },
-      "commands": [["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" start T-1 --agent alice"]]
+      "commands": [["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" task state T-1 in_progress --agent alice"]]
     },
-    "args": ["review", "T-1", "--note", "Check the column order", "--json"],
+    "args": ["task", "state", "T-1", "in_review", "--note", "Check the column order", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:10:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": {
@@ -44,7 +44,7 @@
         }
       }
     },
-    "args": ["done", "T-1", "--note", "Looks good"],
+    "args": ["task", "state", "T-1", "done", "--note", "Looks good"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "stdout": "T-1: in_review -> done\n",
@@ -86,7 +86,7 @@
         }
       }
     },
-    "args": ["reject", "T-1", "--reason", "Names don't match the API"],
+    "args": ["task", "state", "T-1", "todo", "--reason", "Names don't match the API"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "stdout": "T-1: in_review -> todo\n",
@@ -118,26 +118,26 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_review" }] } }
     },
-    "args": ["reject", "T-1"],
-    "expect": { "exit": 2, "stderrIncludes": ["the following arguments are required: --reason"] }
+    "args": ["task", "state", "T-1", "todo"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: todo (reject) needs --reason"] }
   },
   {
     "name": "review refuses a task that isn't in progress",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } }
     },
-    "args": ["review", "T-1"],
+    "args": ["task", "state", "T-1", "in_review"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "exit": 1, "stderrIncludes": ["can't review T-1: it is todo, not in_progress"] }
   },
   {
-    "name": "reject refuses a task that isn't in review",
+    "name": "a review decision refuses a task that isn't in review",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_progress" }] } }
     },
-    "args": ["reject", "T-1", "--reason", "x"],
+    "args": ["task", "review", "request-changes", "T-1", "--reason", "x"],
     "env": { "ATM_AGENT": "alice" },
-    "expect": { "exit": 1, "stderrIncludes": ["can't reject T-1: it is in_progress, not in_review"] }
+    "expect": { "exit": 1, "stderrIncludes": ["can't request-changes T-1: it is in_progress, not in_review"] }
   },
   {
     "name": "a task in review keeps its dependents waiting; next says why",
@@ -151,7 +151,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 3, "stdout": "No task available: 1 todo task(s) waiting on dependencies.\n" }
   },
   {
@@ -172,7 +172,7 @@
         }
       }
     },
-    "args": ["review", "T-1", "--status", "awaiting_agent"],
+    "args": ["task", "state", "T-1", "in_review", "--status", "awaiting_agent"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "stdout": "T-1: doing -> awaiting_agent\n" }
   }

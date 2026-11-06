@@ -16,7 +16,7 @@
         }
       }
     },
-    "args": ["request-changes", "T-1", "--reason", "Name the columns", "--json"],
+    "args": ["task", "review", "request-changes", "T-1", "--reason", "Name the columns", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "json": {
@@ -52,7 +52,7 @@
         }
       }
     },
-    "args": ["next", "--claim", "--json"],
+    "args": ["loop", "next", "--claim", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:05:00Z", "ATM_AGENT": "claude:aaaa1111" },
     "expect": {
       "stdoutIncludes": ["\"id\": \"T-1\"", "\"status\": \"in_progress\""],
@@ -94,9 +94,11 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "ATM_NOW=2026-05-01T10:05:00Z ATM_AGENT=claude:bbbb2222 \"$ATM\" next > early.txt"]]
+      "commands": [
+        ["sh", "-c", "ATM_NOW=2026-05-01T10:05:00Z ATM_AGENT=claude:bbbb2222 \"$ATM\" loop next > early.txt"]
+      ]
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "env": { "ATM_NOW": "2026-05-01T10:31:00Z", "ATM_AGENT": "claude:bbbb2222" },
     "expect": {
       "stdoutIncludes": ["Next: T-1"],
@@ -114,14 +116,14 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" start T-2 2> err.txt; true"]]
+      "commands": [["sh", "-c", "\"$ATM\" task state T-2 in_progress 2> err.txt; true"]]
     },
-    "args": ["approve", "T-1", "--note", "Ship it after the docs"],
+    "args": ["task", "review", "approve", "T-1", "--note", "Ship it after the docs"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "stdout": "T-1: in_review -> in_review\n",
       "files": {
-        "err.txt": "atm: can't start T-2: it waits for its review (atm approve or request-changes decides it)\n",
+        "err.txt": "atm: can't start T-2: it waits for its review (atm task review approve or request-changes T-2 decides it)\n",
         ".agentic-task-manager/tasks.json": {
           "tasks": [
             {
@@ -158,7 +160,7 @@
         }
       }
     },
-    "args": ["next", "--json"],
+    "args": ["loop", "next", "--json"],
     "env": { "ATM_AGENT": "claude:cccc3333", "ATM_NOW": "2026-05-01T10:00:00Z" },
     "expect": { "stdoutIncludes": ["\"task\": {", "\"id\": \"T-1\""] }
   }

@@ -4,9 +4,21 @@
     "setup": {
       "git": true,
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } },
-      "commands": [["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" start T-1 --agent alice"]]
+      "commands": [["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" task state T-1 in_progress --agent alice"]]
     },
-    "args": ["block", "T-1", "--on", "user", "--question", "Which API?", "--question", "Keep v1?", "--json"],
+    "args": [
+      "task",
+      "state",
+      "T-1",
+      "blocked",
+      "--on",
+      "user",
+      "--question",
+      "Which API?",
+      "--question",
+      "Keep v1?",
+      "--json"
+    ],
     "env": { "ATM_NOW": "2026-05-01T10:10:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": {
@@ -26,7 +38,16 @@
   {
     "name": "block a to-do task on another agent, with a reason",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["block", "T-1", "--on", "agent", "--reason", "Needs the reviewer agent's call on the schema"],
+    "args": [
+      "task",
+      "state",
+      "T-1",
+      "blocked",
+      "--on",
+      "agent",
+      "--reason",
+      "Needs the reviewer agent's call on the schema"
+    ],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdout": "T-1: todo -> blocked\n",
@@ -74,7 +95,7 @@
         }
       }
     },
-    "args": ["unblock", "T-1", "--answer", "The REST one", "--answer", "No"],
+    "args": ["task", "state", "T-1", "todo", "--answer", "The REST one", "--answer", "No"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "stdout": "T-1: blocked -> todo\n",
@@ -110,7 +131,7 @@
         }
       }
     },
-    "args": ["unblock", "T-1", "--answer", "Yes", "--json"],
+    "args": ["task", "state", "T-1", "todo", "--answer", "Yes", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "json": {
@@ -130,12 +151,20 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } },
       "commands": [
-        ["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" block T-1 --on user --question A? --agent alice"],
-        ["sh", "-c", "ATM_NOW=2026-05-01T11:00:00Z \"$ATM\" unblock T-1 --answer Yes --agent Hakan"],
-        ["sh", "-c", "ATM_NOW=2026-05-01T12:00:00Z \"$ATM\" block T-1 --on agent --reason Schema --agent alice"]
+        [
+          "sh",
+          "-c",
+          "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" task state T-1 blocked --on user --question A? --agent alice"
+        ],
+        ["sh", "-c", "ATM_NOW=2026-05-01T11:00:00Z \"$ATM\" task state T-1 todo --answer Yes --agent Hakan"],
+        [
+          "sh",
+          "-c",
+          "ATM_NOW=2026-05-01T12:00:00Z \"$ATM\" task state T-1 blocked --on agent --reason Schema --agent alice"
+        ]
       ]
     },
-    "args": ["skip", "T-1", "--reason", "Not needed", "--json"],
+    "args": ["task", "state", "T-1", "skipped", "--reason", "Not needed", "--json"],
     "env": { "ATM_NOW": "2026-05-01T12:30:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "json": {
@@ -192,7 +221,7 @@
         }
       }
     },
-    "args": ["merge-driver", "base.json", "ours.json", "theirs.json"],
+    "args": ["db", "merge-driver", "base.json", "ours.json", "theirs.json"],
     "expect": {
       "exit": 0,
       "files": {
@@ -219,29 +248,29 @@
   {
     "name": "block needs --on, and a question or a reason",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["block", "T-1", "--on", "user"],
+    "args": ["task", "state", "T-1", "blocked", "--on", "user"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "exit": 2, "stderrIncludes": ["say what it waits for: --question (repeatable) or --reason"] }
   },
   {
     "name": "block --on must be user or agent",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["block", "T-1", "--on", "team", "--question", "?"],
-    "expect": { "exit": 2, "stderrIncludes": ["argument --on: invalid choice: 'team'"] }
+    "args": ["task", "state", "T-1", "blocked", "--on", "team", "--question", "?"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--on': 'team' is not one of 'user', 'agent'."] }
   },
   {
     "name": "block refuses a finished task; unblock refuses a task that isn't blocked",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "done" }] } } },
-    "args": ["block", "T-1", "--on", "user", "--question", "?"],
+    "args": ["task", "state", "T-1", "blocked", "--on", "user", "--question", "?"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "exit": 1, "stderrIncludes": ["can't block T-1: it is done, not todo or in_progress"] }
   },
   {
-    "name": "unblock refuses a task that isn't blocked",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["unblock", "T-1"],
+    "name": "an answer goes only to a blocked task",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_progress" }] } } },
+    "args": ["task", "state", "T-1", "todo", "--answer", "Yes"],
     "env": { "ATM_AGENT": "alice" },
-    "expect": { "exit": 1, "stderrIncludes": ["can't unblock T-1: it is todo, not blocked"] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: --answer: not for todo (release) from where T-1 is"] }
   },
   {
     "name": "a blocked task keeps its dependents waiting; status says what it waits on",
@@ -255,7 +284,7 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": [
         "blocked: T-1 Decide (on user)\n",

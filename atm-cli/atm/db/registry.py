@@ -226,7 +226,7 @@ class FileRegistry:
     def remove_project(self, target):
         """Unregister the project with the ID or path `target`. {removed: its entry, damaged}."""
         if not target:
-            raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
+            raise AtmError("remove needs a project ID or path (see `atm project list`)", 2)
         candidates = {target, os.path.abspath(os.path.expanduser(target))}
         if os.path.isdir(target):
             candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
@@ -238,7 +238,7 @@ class FileRegistry:
             if entry or damaged:
                 write_registry(self.home, registry)
         if entry is None:
-            raise AtmError(f"no registered project {target} (see `atm projects`)")
+            raise AtmError(f"no registered project {target} (see `atm project list`)")
         return {"removed": entry, "damaged": damaged}
 
     def prune(self):

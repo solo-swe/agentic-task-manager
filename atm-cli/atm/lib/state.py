@@ -116,7 +116,7 @@ class TaskMachine:
         """start from review: only once the review asked for changes or approved it."""
         if self.current_kind == "review" and self.task.get("review_state") not in REWORK_STATES:
             raise AtmError(
-                f"can't start {self.task['id']}: it waits for its review (atm approve or request-changes decides it)"
+                f"can't start {self.task['id']}: it waits for its review (atm task review approve or request-changes {self.task['id']} decides it)"
             )
         return True
 

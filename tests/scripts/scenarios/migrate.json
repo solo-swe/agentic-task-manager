@@ -14,7 +14,7 @@
         "docs/plan.md": "plans stay"
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json (staged with git mv, not committed); removed docs/tasks-dashboard.html (the dashboard now comes with the plugin: /atm:serve).\n",
       "files": {
@@ -53,7 +53,7 @@
         "docs/tasks-dashboard.html": "old"
       }
     },
-    "args": ["migrate", "--json"],
+    "args": ["db", "migrate", "--json"],
     "expect": {
       "json": {
         "moved": {
@@ -82,7 +82,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Moved tasks.json to .agentic-task-manager/tasks.json.\n",
       "files": {
@@ -108,7 +108,7 @@
       }
     },
     "cwd": "docs",
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json; removed docs/tasks-dashboard.html (the dashboard now comes with the plugin: /atm:serve).\n",
       "files": {
@@ -134,7 +134,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "warning: both docs/tasks.json and .agentic-task-manager/tasks.json exist; using .agentic-task-manager/tasks.json. Remove the old file when you no longer need it.\n",
       "files": {
@@ -160,7 +160,7 @@
         ".agentic-task-manager/.gitignore": "tasks-dashboard.html\n.server.json\n.server.log\nclaims.json\nclaims-store.json\n.lock/\n"
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n",
       "files": {
@@ -179,7 +179,7 @@
         ".agentic-task-manager/.gitignore": "notes.txt\n.server.json"
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n",
       "files": {
@@ -198,7 +198,7 @@
         ".agentic-task-manager/tasks-dashboard.html": "<meta name=\"atm-dashboard-version\" content=\"0.14.0\">"
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Removed this project's old dashboard files: one dashboard for all your projects now comes with the plugin (/atm:serve).\n",
       "files": {
@@ -222,7 +222,7 @@
         ".agentic-task-manager/.server.log": "old log\n"
       }
     },
-    "args": ["migrate", "--json"],
+    "args": ["db", "migrate", "--json"],
     "expect": {
       "json": {
         "moved": null,
@@ -246,7 +246,7 @@
     "setup": {
       "git": true
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "No tasks.json found. Run /atm:create-tasks to create one.\n",
       "files": {
@@ -264,9 +264,9 @@
         },
         "docs/tasks-dashboard.html": "old"
       },
-      "commands": [["sh", "-c", "\"$ATM\" migrate"]]
+      "commands": [["sh", "-c", "\"$ATM\" db migrate"]]
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n"
     }

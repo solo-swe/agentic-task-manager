@@ -44,10 +44,10 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now", "--carry-to", "Next"],
+    "args": ["sprint", "close", "Now", "--carry-to", "Next"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
-      "stdout": "Closed the sprint “Now”: 2 done, 1 carried to “Next” (T-2), 1 added mid-sprint.\nNo sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.\n",
+      "stdout": "Closed the sprint “Now”: 2 done, 1 carried to “Next” (T-2), 1 added mid-sprint.\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -107,7 +107,7 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now", "--carry-to", "new", "--name", "Polish", "--json"],
+    "args": ["sprint", "close", "Now", "--carry-to", "new", "--name", "Polish", "--json"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": {
@@ -166,7 +166,7 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now", "--carry-to", "backlog"],
+    "args": ["sprint", "close", "Now", "--carry-to", "backlog"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdoutIncludes": ["Closed the sprint “Now”: 0 done, 1 carried to the backlog (T-1)."],
@@ -205,7 +205,7 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now"],
+    "args": ["sprint", "close", "Now"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z" },
     "expect": {
       "stdoutIncludes": ["Closed the sprint “Now”: 1 done."]
@@ -224,7 +224,7 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now", "--carry-to", "backlog"],
+    "args": ["sprint", "close", "Now", "--carry-to", "backlog"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["T-1 is in progress: finish or release it before closing the sprint"],
@@ -252,7 +252,7 @@
         }
       }
     },
-    "args": ["sprints", "close", "Now"],
+    "args": ["sprint", "close", "Now"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["T-1, T-2 aren't finished: say where they go with --carry-to <sprint>, new or backlog"]
@@ -276,11 +276,11 @@
         [
           "sh",
           "-c",
-          "\"$ATM\" sprints close Old 2>> out.txt; \"$ATM\" sprints close Now --carry-to Now 2>> out.txt; \"$ATM\" sprints close Now --carry-to backlog --name X 2>> out.txt; true"
+          "\"$ATM\" sprint close Old 2>> out.txt; \"$ATM\" sprint close Now --carry-to Now 2>> out.txt; \"$ATM\" sprint close Now --carry-to backlog --name X 2>> out.txt; true"
         ]
       ]
     },
-    "args": ["sprints", "close", "Now", "--carry-to", "Old"],
+    "args": ["sprint", "close", "Now", "--carry-to", "Old"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["closed"],

@@ -3,7 +3,7 @@
     "name": "skip: a todo task that isn't needed; the reason stays as a note",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-001", "--reason", "Covered by T-002"],
+    "args": ["task", "state", "T-001", "skipped", "--reason", "Covered by T-002"],
     "expect": {
       "stdout": "T-001: todo -> skipped\n",
       "files": {
@@ -42,7 +42,7 @@
       }
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-001", "--reason", "Not needed"],
+    "args": ["task", "state", "T-001", "skipped", "--reason", "Not needed"],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -64,13 +64,13 @@
   {
     "name": "skip needs a reason",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
-    "args": ["skip", "T-001"],
+    "args": ["task", "state", "T-001", "skipped"],
     "expect": { "exit": 2, "stderrIncludes": ["--reason"] }
   },
   {
     "name": "skip refuses a task that is in progress or done",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["skip", "T-001", "--reason", "x"],
+    "args": ["task", "state", "T-001", "skipped", "--reason", "x"],
     "expect": { "exit": 1, "stderrIncludes": ["can't skip T-001: it is done, not todo or blocked"] }
   }
 ]

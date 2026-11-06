@@ -60,7 +60,7 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
       continue;
     }
     try {
-      execFileSync('python3', [ATM, 'projects', 'add', project], { env, stdio: 'pipe' });
+      execFileSync('python3', [ATM, 'project', 'add', project], { env, stdio: 'pipe' });
     } catch (e) {
       log(`  atm: can't list ${dir}: ${String((e as { stderr?: Buffer }).stderr ?? e).trim()}`);
     }

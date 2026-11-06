@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 437,
+    "next_id": 439,
     "labels": [
       {
         "id": "architecture",
@@ -20138,14 +20138,16 @@
       "dependencies": [
         "T-412",
         "T-414",
-        "T-425"
+        "T-425",
+        "T-437",
+        "T-438"
       ],
       "files": [
         "docs/porting-to-rust.md",
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T06:52:25Z",
+      "updated_at": "2026-11-06T09:30:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20610,7 +20612,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T08:01:12Z",
+      "updated_at": "2026-11-06T08:13:38Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20639,7 +20641,8 @@
         }
       ],
       "started_at": "2026-11-06T08:01:12Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "1056129805aa3edec09e9a6397175b0286411030"
     },
     {
       "id": "T-426",
@@ -21138,6 +21141,105 @@
           "text": "Waits for a `@compmd/vite` release that reads every document of `pnpm-lock.yaml` (the CompMD task the user is creating in that project). Unblock it once that release is out.",
           "by": "claude:34798264"
         }
+      ]
+    },
+    {
+      "id": "T-437",
+      "name": "Remove atm run; atm claim hold keeps a claim alive instead",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "atm2",
+        "security"
+      ],
+      "description": "atm must not be able to run commands (the user's security decision, 2026-11-06): `atm run <id> -- <command>` (`loop run` in the new tree) goes. Today a permission prompt covers the whole line, but once `atm run *` is allowed, any command runs through it unchecked. What it gave, a claim kept alive during a long command (a test suite, a wait on CI), comes from a new `atm claim hold <id>` that runs nothing.\n\n## `claim hold <id>`\n- The agent writes `atm claim hold T-1 && npm test` in one Bash call. `claim hold` renews the claim once, starts a detached watcher and returns at once; the shell then runs the command itself. atm never sees it.\n- The watcher follows the shell that called `claim hold` (its parent process): it renews the claim at the usual interval (three times per lease) while that process lives, and exits when it is gone. It checks the process's start time as well as its ID, so a reused ID doesn't keep it going.\n- It stops after a cap (default 4 hours, `--max` to change it within bounds), and when the claim is released, finished or taken over. It renews only that claim, as that agent, and never fails loudly: an error ends the watcher, and the claim then lapses as usual.\n- `--json` prints the claim and the watcher's PID and cap.\n\n## Remove\n`loop run` and its code (the child process, the renewal loop, exit-code passing), its tests, and its mentions in the skills (`do-task`, `loop-tasks`, `push`), `plugin/CLAUDE.md` and the docs (`docs/improving-atm-cli-ergonomics.md`, `docs/v4/atm-cli.md`, `docs/security-architecture.md`).\n\n## Security\n`docs/security-architecture.md`: atm runs no command an agent or a task text passes it, as an invariant with its check (a test that the command tree has no command taking a command to run). The watcher runs nothing and only writes claims; record it as such. Skills change, so the written skill review (§3.3).\n\n## Tests\nScenarios or `claims.test.mjs`: `claim hold` renews while its parent lives and stops when it exits; it stops at the cap; it stops when the claim is released; a reused PID with another start time doesn't count. The changelog and What's new entries go with T-425's release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-425"
+      ],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/lib/claims.py",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/push/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/security-architecture.md",
+        "docs/improving-atm-cli-ergonomics.md",
+        "tests/scripts/claims.test.mjs"
+      ],
+      "created_at": "2026-11-06T08:24:13Z",
+      "updated_at": "2026-11-06T08:24:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T08:24:13Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "related": [
+        "T-425"
+      ]
+    },
+    {
+      "id": "T-438",
+      "name": "Review decisions as their own commands; guarded exits from review; one skip",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "atm2",
+        "security"
+      ],
+      "description": "Agreed with the user (2026-11-06). A review decision changes no state; the exits from review need the right decision. T-425 already moved approve and request-changes out of `task state` into `atm task review approve|request-changes <id>`; this finishes the model.\n\n## Review decisions: `atm task review <decision> <id>`\nThe decision comes before the ID, so a permission prefix tells them apart.\n- `approve <id> [--note]`, `review_state: approved`\n- `request-changes <id> --reason`, `review_state: changes_requested`\n- `reject <id> --reason`, `review_state: rejected` (new)\n\nAll three only on a task in review, and the task stays in review. **No skill pre-approves any of them:** they are the user's, and an agent asking for one gets a permission prompt the user answers.\n\n## The exits from review, guarded in atm (`atm-cli/atm/lib/state.py`)\n| Decision | Exit (`task state <id> …`) |\n|---|---|\n| `approved` | `done` |\n| `changes_requested` | `in_progress` (its agent first, as now) |\n| `rejected` | `todo` (back to the pool, the work dropped) or `skipped` |\n\nWithout the matching decision, atm refuses the exit, for an agent and a person alike: nobody passes, reworks or drops a review without the decision. The old `reject` transition (review to todo in one step) goes; `task state <id> todo` from review is the rejected exit.\n\n## One skip\n`skipped` from any open state (todo, blocked, in progress, in review; from review only once rejected), with `--resolution wont_do|obsolete|duplicate` and `--duplicate-of`; it releases the claim. `done` loses `--resolution`: done means the work is done.\n\n## Update\n- the skills (`do-task`, `loop-tasks`, `close-sprint`: an approval or a rejection is something the user runs, e.g. `! atm task review approve T-1`; no skill pre-approves `task review`), `plugin/CLAUDE.md`, `docs/task-states.md` (the diagram), `docs/improving-atm-cli-ergonomics.md`\n- `docs/security-architecture.md`: I23 rests on atm's guards (the exits need the decision) and on no skill pre-approving `task review`; its check becomes the scenarios plus `skills.test.ts`\n- the dashboard where it shows `review_state` (a `rejected` label)\n- the skill review (§3.3), and the changelog with T-425's release\n\n## Tests\nScenarios: each decision, refused outside review; each exit refused without its decision and allowed with it (an agent and a person); skip from each open state, from review only when rejected; done without `--resolution`. `skills.test.ts`: no skill pre-approves `task review`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-425"
+      ],
+      "files": [
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/atm/lib/state.py",
+        "atm-cli/atm/lib/status.py",
+        "atm-cli/atm/common/model.py",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/close-sprint/SKILL.md",
+        "plugin/CLAUDE.md",
+        "docs/task-states.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/unit/skills.test.ts",
+        "tests/scripts/scenarios/review-states.json"
+      ],
+      "created_at": "2026-11-06T09:30:13Z",
+      "updated_at": "2026-11-06T09:30:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T09:30:13Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "cli",
+        "skills",
+        "docs"
+      ],
+      "related": [
+        "T-425",
+        "T-437"
       ]
     }
   ]

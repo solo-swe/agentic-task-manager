@@ -1,6 +1,5 @@
-"""`atm projects`: list, add, remove or prune the projects the dashboard shows, through atm-lib."""
+"""`atm project list|add|remove|prune`: the projects the dashboard shows, through atm-lib."""
 
-from ..boot.open import open_registry
 from ..common.errors import Invalid
 from ..common.core import out, to_json
 from ..lib.projects import add_project, list_projects, prune_projects, remove_project
@@ -14,12 +13,8 @@ def damaged_notice(damaged):
     return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
 
 
-def cmd_projects(args):
-    projects_action(open_registry(), args.action, args.target, args.json)
-
-
 def projects_action(registry, action, target, as_json):
-    """List, add, remove or prune the dashboard's projects (`atm projects`, `atm2 project list|add|remove|prune`)."""
+    """List, add, remove or prune the dashboard's projects (`atm project list|add|remove|prune`)."""
     if action == "add":
         result = add_project(registry, target)
         if as_json:
@@ -55,6 +50,6 @@ def projects_action(registry, action, target, as_json):
         if result["damaged"]:
             out(damaged_notice(result["damaged"]))
         if not result["projects"]:
-            out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
+            out("No projects registered. `atm project add [PATH]` adds one; atm adds a project when it runs there.")
         for e in result["projects"]:
             out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))

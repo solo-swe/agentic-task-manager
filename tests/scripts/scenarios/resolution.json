@@ -8,7 +8,18 @@
       }
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-2", "--reason", "Same as T-1", "--resolution", "duplicate", "--duplicate-of", "T-1"],
+    "args": [
+      "task",
+      "state",
+      "T-2",
+      "skipped",
+      "--reason",
+      "Same as T-1",
+      "--resolution",
+      "duplicate",
+      "--duplicate-of",
+      "T-1"
+    ],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -39,10 +50,10 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" skip T-2 --reason 'Not needed' --agent bob"]]
+      "commands": [["sh", "-c", "\"$ATM\" task state T-2 skipped --reason 'Not needed' --agent bob"]]
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-1", "--reason", "Gone", "--resolution", "obsolete", "--json"],
+    "args": ["task", "state", "T-1", "skipped", "--reason", "Gone", "--resolution", "obsolete", "--json"],
     "expect": {
       "json": {
         "id": "T-1",
@@ -61,7 +72,7 @@
     "name": "...and the task skipped with the default has no resolution stored",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "status": "todo" }] } } },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-2", "--reason", "Not needed", "--json"],
+    "args": ["task", "state", "T-2", "skipped", "--reason", "Not needed", "--json"],
     "expect": {
       "json": {
         "id": "T-2",
@@ -86,11 +97,15 @@
         }
       },
       "commands": [
-        ["sh", "-c", "\"$ATM\" skip T-2 --reason x --duplicate-of T-1 2> no-resolution.txt; true"],
-        ["sh", "-c", "\"$ATM\" skip T-2 --reason x --resolution duplicate --duplicate-of T-2 2> itself.txt; true"]
+        ["sh", "-c", "\"$ATM\" task state T-2 skipped --reason x --duplicate-of T-1 2> no-resolution.txt; true"],
+        [
+          "sh",
+          "-c",
+          "\"$ATM\" task state T-2 skipped --reason x --resolution duplicate --duplicate-of T-2 2> itself.txt; true"
+        ]
       ]
     },
-    "args": ["skip", "T-2", "--reason", "x", "--resolution", "duplicate", "--duplicate-of", "T-9"],
+    "args": ["task", "state", "T-2", "skipped", "--reason", "x", "--resolution", "duplicate", "--duplicate-of", "T-9"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["atm: T-2 can't be a duplicate of T-9, which doesn't exist"],
@@ -114,10 +129,10 @@
           "tasks": [{ "id": "T-1", "status": "in_progress", "started_by": "bob" }]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" done T-1 --agent bob --resolution obsolete"]]
+      "commands": [["sh", "-c", "\"$ATM\" task state T-1 done --agent bob --resolution obsolete"]]
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["reopen", "T-1", "--reason", "Needed after all", "--json"],
+    "args": ["task", "state", "T-1", "todo", "--reason", "Needed after all", "--json"],
     "expect": {
       "json": {
         "id": "T-1",
@@ -150,7 +165,7 @@
         }
       }
     },
-    "args": ["show", "T-1", "T-2", "T-3"],
+    "args": ["task", "details", "T-1", "T-2", "T-3"],
     "expect": {
       "stdout": "T-1  One\n  done · backlog · feature · P2\n  related: T-3\n  duplicated by: T-2\n\nT-2  Two\n  skipped · backlog · feature · P2\n  resolution: duplicate (of T-1)\n\nT-3  Three\n  todo · backlog · feature · P2\n  related: T-4, T-1\n"
     }
@@ -167,7 +182,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-1 One (backlog, feature)\n" }
   },
   {
@@ -184,7 +199,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": {
       "exit": 1,
       "stdout": "error: T-1: has a resolution (obsolete) but isn't done or skipped\nerror: T-2: the resolution 'finished' is not one of done, wont_do, duplicate, obsolete\nerror: T-3: duplicate_of needs the resolution duplicate\nerror: T-3: duplicate_of 'T-9' isn't another task\nerror: T-4: related to T-4, which isn't another task\nerror: T-4: related to T-8, which isn't another task\n"
@@ -199,7 +214,7 @@
         "theirs.json": { "tasks": [{ "id": "T-1", "status": "todo", "related": ["T-3", "T-5"] }] }
       }
     },
-    "args": ["merge-driver", "base.json", "ours.json", "theirs.json"],
+    "args": ["db", "merge-driver", "base.json", "ours.json", "theirs.json"],
     "expect": {
       "exit": 0,
       "files": { "ours.json": { "tasks": [{ "id": "T-1", "status": "todo", "related": ["T-3", "T-4", "T-5"] }] } }

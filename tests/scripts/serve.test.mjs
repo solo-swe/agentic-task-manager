@@ -113,7 +113,7 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    const started = atm(['serve', '--port', String(port)], root);
+    const started = atm(['service', '--port', String(port)], root);
     assert.equal(started.code, 0, started.stderr);
     assert.match(started.stdout, new RegExp(`Dashboard server started: http://localhost:${port}/#project=abcd1234\n`));
     // The launching process has exited; the server keeps running, recorded in ATM_HOME
@@ -138,21 +138,21 @@ describe('serve', () => {
     });
     assert.equal(r.home, homeId(atmHome));
 
-    const again = atm(['serve', 'start', '--port', String(port + 5)], root);
+    const again = atm(['service', 'start', '--port', String(port + 5)], root);
     assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/#project=abcd1234`));
     assert.equal(record(atmHome).pid, r.pid);
 
-    const running = atm(['serve', 'status'], root).stdout;
+    const running = atm(['service', 'status'], root).stdout;
     assert.match(running, new RegExp(`running: http://localhost:${port}/ .*pid ${r.pid}`));
-    const status = JSON.parse(atm(['serve', 'status', '--json'], root).stdout);
+    const status = JSON.parse(atm(['service', 'status', '--json'], root).stdout);
     assert.equal(status.running, true);
     assert.equal(status.url, `http://localhost:${port}/`);
 
-    assert.equal(atm(['serve', 'stop'], root).stdout, `Dashboard server stopped (pid ${r.pid}).\n`);
+    assert.equal(atm(['service', 'stop'], root).stdout, `Dashboard server stopped (pid ${r.pid}).\n`);
     assert.equal(alive(r.pid), false);
     assert.equal(record(atmHome), null);
-    assert.equal(atm(['serve', 'status'], root).stdout, 'Dashboard server is not running.\n');
-    assert.equal(atm(['serve', 'stop'], root).stdout, 'Dashboard server is not running.\n');
+    assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
+    assert.equal(atm(['service', 'stop'], root).stdout, 'Dashboard server is not running.\n');
   });
 
   test('one server for two projects; /api/projects lists them', async () => {
@@ -161,8 +161,8 @@ describe('serve', () => {
     const a = project();
     const b = project({ meta: { id: 'bbbb2222', project: 'Second' }, tasks: [] });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], a).code, 0);
-    const second = atm(['serve', '--port', String(port)], b);
+    assert.equal(atm(['service', '--port', String(port)], a).code, 0);
+    const second = atm(['service', '--port', String(port)], b);
     assert.match(second.stdout, new RegExp(`already running: http://localhost:${port}/#project=bbbb2222`));
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     assert.match(api.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
@@ -174,7 +174,7 @@ describe('serve', () => {
       ],
     );
     assert.equal((await v1Tasks(port, 'bbbb2222')).meta.project, 'Second');
-    atm(['serve', 'stop'], a);
+    atm(['service', 'stop'], a);
   });
 
   test('/api/projects summarizes each project by status kind; skipped tasks count as neither done nor open', async () => {
@@ -200,9 +200,9 @@ describe('serve', () => {
     const skippedOnly = project({ meta: { id: 'eeee5555', project: 'Skipped' }, tasks: [task('T-1', 'skipped')] });
     const gone = project({ meta: { id: 'ffff6666', project: 'Gone' }, tasks: [] });
     const port = ports();
-    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['projects', 'add'], p).code, 0);
+    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['project', 'add'], p).code, 0);
     removeDir(gone);
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = `http://localhost:${port}/api/projects`;
     const first = await fetch(url);
     const byId = Object.fromEntries((await first.json()).projects.map((p) => [p.id, p]));
@@ -255,7 +255,7 @@ describe('serve', () => {
     // A claim (an agent at work) changes the summary and the ETag
     const etag = first.headers.get('etag');
     assert.equal((await fetch(url, { headers: { 'If-None-Match': etag } })).status, 304);
-    assert.equal(atm(['start', 'T-7', '--agent', 'claude:test'], root).code, 0);
+    assert.equal(atm(['task', 'state', 'T-7', 'in_progress', '--agent', 'claude:test'], root).code, 0);
     const changed = await fetch(url, { headers: { 'If-None-Match': etag } });
     assert.equal(changed.status, 200);
     const summary = (await changed.json()).projects.find((p) => p.id === 'abcd1234').summary;
@@ -264,7 +264,7 @@ describe('serve', () => {
     // (the branch HEAD names, as the project card's: the test repository has no commit yet, but HEAD is main, T-385)
     assert.deepEqual(summary.working, [{ task: 'T-7', name: 'T-7', agent: 'claude:test', branch: 'main' }]);
     assert.deepEqual(summary.next, []);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('working, next and last_done: the next two by the loop rule; names capped at 80 characters', async () => {
@@ -285,7 +285,7 @@ describe('serve', () => {
       ],
     });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const summary = api.projects.find((p) => p.id === 'cccc3333').summary;
     // P0 before P2 before P3; T-4 waits on T-5, which is done together with the user, so not next for an agent
@@ -296,7 +296,7 @@ describe('serve', () => {
     assert.equal(summary.next[0].name.length, 80);
     assert.ok(summary.next[0].name.endsWith('…'));
     assert.deepEqual(summary.last_done, { id: 'T-6', name: 'T-6', completed_at: '2026-03-02T10:00:00Z' });
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test("stats: started, tasks and agent time, archived tasks included; a symlinked archive isn't read (T-255)", async () => {
@@ -350,18 +350,18 @@ describe('serve', () => {
       { '.agentic-task-manager/tasks-archive.json': archive },
     );
     const linked = project({ meta: { id: 'eeee5555', project: 'Linked' }, tasks: [task('L', 'todo')] });
-    assert.equal(atm(['projects', 'add'], linked).code, 0);
+    assert.equal(atm(['project', 'add'], linked).code, 0);
     const elsewhere = path.join(atmHome, 'archive.json');
     fs.writeFileSync(elsewhere, JSON.stringify(archive));
     fs.symlinkSync(elsewhere, path.join(linked, '.agentic-task-manager/tasks-archive.json'));
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const stats = (id) => api.projects.find((p) => p.id === id).summary.stats;
     assert.deepEqual(stats('abcd1234'), { started: '2026-02-20T08:00:00Z', tasks: 5, agent_minutes: 180 });
     // A task folder with a linked file is refused whole: listed without a summary, nothing read through the link
     assert.equal(api.projects.find((p) => p.id === 'eeee5555').summary, null);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('board: to-do tasks, the ready ones in the loop’s order (10 at most), the longest running first, 30 done today at most (T-257)', async () => {
@@ -389,7 +389,7 @@ describe('serve', () => {
       ],
     });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const { board } = api.projects.find((p) => p.id === 'bbbb2222').summary;
     assert.equal(board.todo.count, 13);
@@ -423,7 +423,7 @@ describe('serve', () => {
     assert.equal(board.done.cards.length, 30);
     assert.equal(board.done.cards[0].id, 'D-31');
     assert.ok(!board.done.cards.some((c) => c.id === 'OLD'));
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('git: the branch and the latest PR recorded on the tasks; a branch switch changes the ETag', async () => {
@@ -441,7 +441,7 @@ describe('serve', () => {
       ],
     });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = `http://localhost:${port}/api/projects`;
     const first = await fetch(api);
     const gitOf = (body) => body.projects.find((p) => p.id === 'dddd4444').summary.git;
@@ -455,7 +455,7 @@ describe('serve', () => {
     const switched = await fetch(api, { headers: { 'If-None-Match': first.headers.get('etag') } });
     assert.equal(switched.status, 200);
     assert.equal(gitOf(await switched.json()).branch, 'feature');
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a project with sprints: the active sprint with its progress, recent sprints for the rings, next from the active sprint (SR-7.7)', async () => {
@@ -481,7 +481,7 @@ describe('serve', () => {
     ];
     const root = project({ meta: { id: 'sprinted', project: 'sprinted', sprints }, tasks });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const summary = api.projects.find((p) => p.id === 'sprinted').summary;
     assert.deepEqual(summary.active_sprint, {
@@ -508,7 +508,7 @@ describe('serve', () => {
       summary.next.map((n) => n.id),
       ['T-5'],
     );
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a project logo: served at p/<id>/logo with its type, listed in api/projects; none, outside or too large is 404', async () => {
@@ -532,9 +532,9 @@ describe('serve', () => {
       { meta: { id: 'logo0005', project: 'Big' }, tasks: [] },
       { 'logo.png': 'x'.repeat(513 * 1024) },
     );
-    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['projects', 'add'], p).code, 0);
+    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['project', 'add'], p).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], withLogo).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], withLogo).code, 0);
     const base = `http://localhost:${port}`;
 
     const api = await (await fetch(`${base}/api/projects`)).json();
@@ -566,7 +566,7 @@ describe('serve', () => {
     const changed = await fetch(`${base}/api/projects`, { headers: { 'If-None-Match': etag } });
     assert.equal(changed.status, 200);
     assert.equal((await changed.json()).projects.find((p) => p.id === 'logo0003').logo, 'p/logo0003/logo');
-    atm(['serve', 'stop'], withLogo);
+    atm(['service', 'stop'], withLogo);
   });
 
   test("a project's files for the document viewer: documents and files, read-only, with their checks (T-392)", async () => {
@@ -595,9 +595,9 @@ describe('serve', () => {
     cleanups.push(() => removeDir(elsewhere));
     fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
     fs.symlinkSync(elsewhere, path.join(root, 'linked'));
-    assert.equal(atm(['projects', 'add'], root).code, 0);
+    assert.equal(atm(['project', 'add'], root).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const base = `http://localhost:${port}/api/v1/projects/docs0001`;
     const get = (route, file, headers = {}) => fetch(`${base}/${route}?path=${encodeURIComponent(file)}`, { headers });
 
@@ -660,7 +660,7 @@ describe('serve', () => {
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/documents?path=docs/x.md`)).status, 404);
     // Read-only, like every route
     assert.equal((await fetch(`${base}/documents?path=docs/x.md`, { method: 'POST' })).status, 405);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('files in a git submodule: its own ignore rules decide, and the document names its repository (T-408)', async () => {
@@ -687,9 +687,9 @@ describe('serve', () => {
     fs.writeFileSync(path.join(sub, 'local.md'), '# Ignored by the submodule\n');
     fs.writeFileSync(path.join(sub, 'new.md'), '# Not committed yet\n');
     fs.writeFileSync(path.join(sub, 'id_rsa'), 'nope');
-    assert.equal(atm(['projects', 'add'], root).code, 0);
+    assert.equal(atm(['project', 'add'], root).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const get = (file) =>
       fetch(`http://localhost:${port}/api/v1/projects/subm0001/documents?path=${encodeURIComponent(file)}`);
 
@@ -711,7 +711,7 @@ describe('serve', () => {
     assert.equal((await get('vendor/lib/id_rsa')).status, 403);
     // A file of the project itself: no submodule
     assert.equal((await (await get('docs/x.md')).json()).submodule, null);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('tasks and /api/projects have ETags; a poll with one gets 304 until something changes', async () => {
@@ -719,7 +719,7 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
     const first = await fetch(url);
     const etag = first.headers.get('etag');
@@ -731,7 +731,7 @@ describe('serve', () => {
     const apiEtag = (await fetch(apiUrl)).headers.get('etag');
     assert.equal((await fetch(apiUrl, { headers: { 'If-None-Match': apiEtag } })).status, 304);
     // An atm change right away (same second): new ETags and the new content
-    assert.equal(atm(['add', '--name', 'New', '--type', 'feature'], root).code, 0);
+    assert.equal(atm(['task', 'add', '--name', 'New', '--type', 'feature'], root).code, 0);
     const changed = await fetch(url, { headers: { 'If-None-Match': etag } });
     assert.equal(changed.status, 200);
     assert.notEqual(changed.headers.get('etag'), etag);
@@ -739,7 +739,7 @@ describe('serve', () => {
     assert.equal((await fetch(apiUrl, { headers: { 'If-None-Match': apiEtag } })).status, 200);
     // Not for the dashboard
     assert.equal((await fetch(`http://localhost:${port}/`)).headers.get('etag'), null);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a detached HEAD is one branch everywhere: the claim, the project card and the worktree list (T-385)', async () => {
@@ -763,14 +763,14 @@ describe('serve', () => {
     git(['worktree', 'add', '-q', '--detach', linked], root);
     const short = git(['rev-parse', '--short=7', 'HEAD'], root).trim();
     // A claim in each worktree records the short SHA, not `HEAD`
-    assert.equal(atm(['start', 'T-1', '--agent', 'claude:main'], root).code, 0);
-    const claims = JSON.parse(atm(['claims', '--json'], root).stdout);
+    assert.equal(atm(['task', 'state', 'T-1', 'in_progress', '--agent', 'claude:main'], root).code, 0);
+    const claims = JSON.parse(atm(['claim', 'list', '--json'], root).stdout);
     assert.deepEqual(
       claims.map((c) => c.branch),
       [short],
     );
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const [project] = api.projects;
     assert.equal(project.summary.git.branch, short);
@@ -782,7 +782,7 @@ describe('serve', () => {
       project.summary.working.map((w) => w.branch),
       [short],
     );
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test("a project's git worktrees: listed, their changed tasks in worktrees.json, their claims in claims.json", async () => {
@@ -805,7 +805,7 @@ describe('serve', () => {
     );
     git(['worktree', 'add', '-q', linked, '-b', 'agent-2'], root);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const base = `http://localhost:${port}`;
     const api = await (await fetch(`${base}/api/projects`)).json();
     assert.deepEqual(api.projects[0].worktrees, [
@@ -818,7 +818,7 @@ describe('serve', () => {
 
     // An agent starts T-1 in the linked worktree: only that worktree's tasks.json says so, but the main project's
     // claims.json (from the shared claims store) and worktrees.json both show it
-    assert.equal(atm(['start', 'T-1', '--agent', 'claude:tree'], linked).code, 0);
+    assert.equal(atm(['task', 'state', 'T-1', 'in_progress', '--agent', 'claude:tree'], linked).code, 0);
     const after = await fetch(`${base}/p/abcd1234/worktrees.json`, { headers: { 'If-None-Match': etag } });
     assert.equal(after.status, 200);
     const changed = (await after.json()).worktrees[1].tasks;
@@ -828,7 +828,7 @@ describe('serve', () => {
     );
     // A copy's derived values are worked out in its own worktree (§11.10 A, T-387): there T-2 now waits for T-1,
     // which is in progress there
-    assert.equal(atm(['edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
+    assert.equal(atm(['task', 'edit', 'T-2', '--add-dep', 'T-1'], linked).code, 0);
     const copies = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
     const t2 = copies.find((v) => v.task.id === 'T-2');
     assert.deepEqual([t2.derived.kind, t2.derived.ready, t2.derived.waiting_for], ['todo', false, ['T-1']]);
@@ -851,13 +851,13 @@ describe('serve', () => {
         ['T-2', 'todo', null],
       ],
     );
-    assert.equal(atm(['unblock', 'T-1', '--answer', 'This one'], root).code, 0);
+    assert.equal(atm(['task', 'state', 'T-1', 'todo', '--answer', 'This one'], root).code, 0);
     const left = (await (await fetch(`${base}/p/abcd1234/worktrees.json`)).json()).worktrees[1].tasks;
     assert.deepEqual(
       left.map((v) => v.task.id),
       ['T-2'],
     );
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a registered project has its v1 tasks, claims.json and worktrees.json; no task file is served; the rest is 404 or 405', async () => {
@@ -868,7 +868,7 @@ describe('serve', () => {
       '.agentic-task-manager/tasks-archive.json': { meta: {}, tasks: [] },
     });
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const get = async (p, init) => {
       const r = await fetch(`http://localhost:${port}${p}`, init);
       return [r.status, (await r.json()).error];
@@ -887,14 +887,14 @@ describe('serve', () => {
     assert.deepEqual(await get('/tasks-dashboard.html'), [404, 'not found']);
     assert.deepEqual(await get('/p/'), [404, 'not found']);
     assert.deepEqual(await get('/api/projects', { method: 'POST' }), [405, 'only GET and HEAD']);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('security headers: the page has the CSP the e2e suite runs under; every response is nosniff, same-origin (T-226)', async () => {
     const atm = atmIn(home());
     const root = project(TASKS);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const page = await fetch(`http://localhost:${port}/`);
     const body = Buffer.from(await page.arrayBuffer());
     const policy = page.headers.get('content-security-policy');
@@ -915,7 +915,7 @@ describe('serve', () => {
       assert.equal(r.headers.get('x-content-type-options'), 'nosniff', p);
       assert.equal(r.headers.get('cross-origin-resource-policy'), 'same-origin', p);
     }
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js, .wasm and .html, no symlinks (T-284)', async () => {
@@ -940,7 +940,7 @@ describe('serve', () => {
         encoding: 'utf8',
         env: { ...baseEnv(), ATM_HOME: atmHome },
       });
-    assert.equal(run(['serve', '--port', String(port)]).status, 0);
+    assert.equal(run(['service', '--port', String(port)]).status, 0);
     try {
       const base = `http://localhost:${port}/assets/compmd/${version}/`;
       const js = await fetch(base + 'compmd.js');
@@ -987,7 +987,7 @@ describe('serve', () => {
         assert.equal((await rawGet(port, p, host)).status, 404, why);
       }
     } finally {
-      run(['serve', 'stop']);
+      run(['service', 'stop']);
     }
   });
 
@@ -1019,7 +1019,7 @@ describe('serve', () => {
     const root = project();
     // Not spawnSync: the stand-in is this process's child, which Node reaps only while its event loop runs (a real
     // server is detached, and the system reaps it)
-    const stopped = await atmAsync(['serve', 'stop', '--port', String(port)], root, atmHome);
+    const stopped = await atmAsync(['service', 'stop', '--port', String(port)], root, atmHome);
     assert.equal(stopped.code, 0);
     assert.match(stopped.stdout, new RegExp(`stopped \\(pid ${stubborn.pid}\\)`));
     assert.equal(alive(stubborn.pid), false);
@@ -1031,8 +1031,8 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const both = await Promise.all([
-      atmAsync(['serve', 'start', '--port', String(port)], root, atmHome),
-      atmAsync(['serve', 'start', '--port', String(port)], root, atmHome),
+      atmAsync(['service', 'start', '--port', String(port)], root, atmHome),
+      atmAsync(['service', 'start', '--port', String(port)], root, atmHome),
     ]);
     assert.deepEqual(
       both.map((r) => r.code),
@@ -1042,10 +1042,10 @@ describe('serve', () => {
       'already running',
       'started',
     ]);
-    const status = JSON.parse(atmIn(atmHome)(['serve', 'status', '--json', '--port', String(port)], root).stdout);
+    const status = JSON.parse(atmIn(atmHome)(['service', 'status', '--json', '--port', String(port)], root).stdout);
     assert.equal(status.running, true);
     assert.deepEqual(status.unrecorded, []);
-    atmIn(atmHome)(['serve', 'stop', '--port', String(port)], root);
+    atmIn(atmHome)(['service', 'stop', '--port', String(port)], root);
   });
 
   test('a server whose record was overwritten is reported by status and stopped by stop (T-390)', async () => {
@@ -1053,7 +1053,7 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const atm = atmIn(atmHome);
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const { pid } = record(atmHome);
     // Another server's record took its place (as a start from another copy of atm did), and that one is gone
     fs.writeFileSync(
@@ -1066,14 +1066,14 @@ describe('serve', () => {
         started_at: new Date().toISOString(),
       }),
     );
-    const status = JSON.parse(atm(['serve', 'status', '--json', '--port', String(port)], root).stdout);
+    const status = JSON.parse(atm(['service', 'status', '--json', '--port', String(port)], root).stdout);
     assert.equal(status.running, false);
     assert.deepEqual(
       status.unrecorded.map((s) => s.pid),
       [pid],
     );
-    assert.match(atm(['serve', 'status', '--port', String(port)], root).stdout, /without a record: pid \d+/);
-    const stopped = atm(['serve', 'stop', '--port', String(port)], root);
+    assert.match(atm(['service', 'status', '--port', String(port)], root).stdout, /without a record: pid \d+/);
+    const stopped = atm(['service', 'stop', '--port', String(port)], root);
     assert.match(stopped.stdout, new RegExp(`didn't name \\(pid ${pid}, port ${port}\\)`));
     assert.equal(alive(pid), false);
   });
@@ -1089,8 +1089,8 @@ describe('serve', () => {
       squatter.listen(port, '::1', () => resolve(true));
     });
     try {
-      assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
-      const status = JSON.parse(atm(['serve', 'status', '--json'], root).stdout);
+      assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+      const status = JSON.parse(atm(['service', 'status', '--json'], root).stdout);
       if (v6) assert.notEqual(status.port, port, 'moved past the taken [::1] port');
       if (v6) {
         // [::1] on the server's own port answers as atm, and can't be taken by anyone else
@@ -1116,7 +1116,7 @@ describe('serve', () => {
         second.close();
         assert.equal(taken, 'EADDRINUSE');
       }
-      atm(['serve', 'stop'], root);
+      atm(['service', 'stop'], root);
     } finally {
       squatter.close();
     }
@@ -1127,15 +1127,15 @@ describe('serve', () => {
     const good = project(TASKS);
     const bad = project({ meta: { id: 'bad00000', project: 'Bad' }, tasks: [] });
     const port = ports();
-    assert.equal(atm(['projects', 'add'], bad).code, 0);
+    assert.equal(atm(['project', 'add'], bad).code, 0);
     fs.writeFileSync(path.join(bad, '.agentic-task-manager/tasks.json'), '['.repeat(100000) + ']'.repeat(100000));
-    assert.equal(atm(['serve', '--port', String(port)], good).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], good).code, 0);
     const r = await fetch(`http://localhost:${port}/api/projects`);
     assert.equal(r.status, 200);
     const projects = Object.fromEntries((await r.json()).projects.map((p) => [p.id, p]));
     assert.equal(projects.abcd1234.missing, false);
     assert.equal(projects.bad00000.missing, true);
-    atm(['serve', 'stop'], good);
+    atm(['service', 'stop'], good);
   });
 
   test('two projects with the same meta.id both stay reachable; ATM_HOME is private (T-227, F18)', async () => {
@@ -1152,19 +1152,19 @@ describe('serve', () => {
       meta: { id: 'abcd1234', project: 'Copy' },
       tasks: [{ id: 'T-1', name: 'x', phase: 0, type: 'feature', status: 'todo' }],
     });
-    assert.equal(atm(['projects', 'add'], first).code, 0);
-    assert.equal(atm(['projects', 'add'], second).code, 0);
+    assert.equal(atm(['project', 'add'], first).code, 0);
+    assert.equal(atm(['project', 'add'], second).code, 0);
     assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
-    const listed = JSON.parse(atm(['projects', '--json'], first).stdout);
+    const listed = JSON.parse(atm(['project', 'list', '--json'], first).stdout);
     const ids = listed.projects.map((p) => p.id);
     assert.equal(new Set(ids).size, 2, ids.join(', '));
     assert.ok(ids.includes('abcd1234'));
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], first).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], first).code, 0);
     for (const id of ids) {
       assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/${id}/tasks`)).status, 200, id);
     }
-    atm(['serve', 'stop'], first);
+    atm(['service', 'stop'], first);
     removeDir(path.dirname(atmHome));
   });
 
@@ -1173,7 +1173,7 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project(TASKS);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const v1 = `http://localhost:${port}/api/v1/projects/abcd1234/tasks`;
     assert.equal((await fetch(v1)).status, 200);
     // Linked after the server started (atm itself refuses such a folder): an archive pointing at a private file
@@ -1185,7 +1185,7 @@ describe('serve', () => {
       assert.equal(r.status, 404, url);
       assert.doesNotMatch(await r.text(), /PRIVATE KEY/, url);
     }
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a request for another Host is refused (DNS rebinding)', async () => {
@@ -1193,13 +1193,13 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     assert.equal((await rawGet(port, '/', `127.0.0.1:${port}`)).status, 200);
     const refused = await rawGet(port, '/api/v1/projects/abcd1234/tasks', `evil.example:${port}`);
     assert.equal(refused.status, 403);
     assert.deepEqual(JSON.parse(refused.body), { error: 'unexpected Host header' });
     assert.equal((await rawGet(port, '/', `localhost:${port + 1}`)).status, 403);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('api/search: every word, in any field or the project name, case-insensitive, read-only, capped (T-258)', async () => {
@@ -1219,9 +1219,9 @@ describe('serve', () => {
       meta: { id: 'bbbb2222', project: 'Blog' },
       tasks: Array.from({ length: 205 }, (_, i) => task(`B-${i + 1}`, { name: 'Write a post' })),
     });
-    for (const p of [shop, blog]) assert.equal(atm(['projects', 'add'], p).code, 0);
+    for (const p of [shop, blog]) assert.equal(atm(['project', 'add'], p).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], shop).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], shop).code, 0);
     const search = async (q, extra = '') =>
       (await fetch(`http://localhost:${port}/api/search?q=${encodeURIComponent(q)}${extra}`)).json();
 
@@ -1245,7 +1245,7 @@ describe('serve', () => {
     const refused = await rawGet(port, '/api/search?q=checkout', `evil.example:${port}`);
     assert.equal(refused.status, 403);
     assert.equal((await fetch(`http://localhost:${port}/api/search?q=x`, { method: 'POST' })).status, 405);
-    atm(['serve', 'stop'], shop);
+    atm(['service', 'stop'], shop);
   });
 
   test('api/v1/projects/<id>/tasks: the tasks with what atm derives, filtered, conditional (T-364)', async () => {
@@ -1259,9 +1259,9 @@ describe('serve', () => {
         task('T-3', { dependencies: ['T-2'] }),
       ],
     });
-    assert.equal(atm(['projects', 'add'], root).code, 0);
+    assert.equal(atm(['project', 'add'], root).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = (query = '') => `http://localhost:${port}/api/v1/projects/cccc3333/tasks${query}`;
 
     const response = await fetch(url());
@@ -1290,7 +1290,7 @@ describe('serve', () => {
     // An unknown project; another Host
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/tasks`)).status, 404);
     assert.equal((await rawGet(port, '/api/v1/projects/cccc3333/tasks', `evil.example:${port}`)).status, 403);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
@@ -1300,11 +1300,11 @@ describe('serve', () => {
       meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
       tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
     });
-    assert.equal(atm(['projects', 'add'], root).code, 0);
+    assert.equal(atm(['project', 'add'], root).code, 0);
     // Every atm command still refuses it
-    assert.notEqual(atm(['list'], root).code, 0);
+    assert.notEqual(atm(['task', 'list'], root).code, 0);
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const response = await fetch(`http://localhost:${port}/api/v1/projects/dddd4444/tasks`);
     assert.equal(response.status, 200);
     const body = await response.json();
@@ -1318,7 +1318,7 @@ describe('serve', () => {
     assert.equal(body.problems.length, 2); // the entry left out, and the priorities
     assert.match(body.problems.join('\n'), /isn't a task/);
     assert.match(body.problems.join('\n'), /meta\.priorities/);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('a busy port moves the server to the next free one', async () => {
@@ -1328,11 +1328,11 @@ describe('serve', () => {
     const blocker = net.createServer();
     await new Promise((resolve) => blocker.listen(port, '127.0.0.1', resolve));
     try {
-      const started = atm(['serve', '--port', String(port)], root);
+      const started = atm(['service', '--port', String(port)], root);
       assert.equal(portOf(started.stdout), port + 1, started.stdout + started.stderr);
     } finally {
       blocker.close();
-      atm(['serve', 'stop'], root);
+      atm(['service', 'stop'], root);
     }
   });
 
@@ -1343,12 +1343,12 @@ describe('serve', () => {
     const port = ports();
     const stale = { pid: 999999, port, version: '0.0.0', build: 'x', started_at: 'x' };
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(stale));
-    assert.equal(atm(['serve', 'status'], root).stdout, 'Dashboard server is not running.\n');
+    assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
     assert.equal(record(atmHome), null);
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(stale));
-    assert.match(atm(['serve', '--port', String(port)], root).stdout, /Dashboard server started/);
+    assert.match(atm(['service', '--port', String(port)], root).stdout, /Dashboard server started/);
     assert.notEqual(record(atmHome).pid, 999999);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('stop never kills a process that is not the recorded server', () => {
@@ -1360,17 +1360,17 @@ describe('serve', () => {
     cleanups.push(() => sleeper.kill());
     const fake = { pid: sleeper.pid, port, version: '0.0.0', build: 'x', started_at: 'x' };
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(fake));
-    assert.match(atm(['serve', 'stop'], root).stdout, /not running \(removed a stale record for pid \d+\)/);
+    assert.match(atm(['service', 'stop'], root).stdout, /not running \(removed a stale record for pid \d+\)/);
     assert.equal(alive(sleeper.pid), true);
 
     // Another user's (another ATM_HOME's) real server, wrongly recorded as ours
     const otherHome = home();
-    atmIn(otherHome)(['serve', '--port', String(port + 1)], root);
+    atmIn(otherHome)(['service', '--port', String(port + 1)], root);
     const theirs = record(otherHome);
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify({ ...theirs, pid: sleeper.pid }));
-    assert.match(atm(['serve', 'stop'], root).stdout, /removed a stale record/);
+    assert.match(atm(['service', 'stop'], root).stdout, /removed a stale record/);
     assert.equal(alive(theirs.pid), true);
-    atmIn(otherHome)(['serve', 'stop'], root);
+    atmIn(otherHome)(['service', 'stop'], root);
     assert.equal(alive(theirs.pid), false);
   });
 
@@ -1378,10 +1378,10 @@ describe('serve', () => {
     const atm = atmIn(home());
     const root = project(TASKS, { 'sub/x.txt': 'x' });
     const port = ports();
-    atm(['serve', '--port', String(port)], path.join(root, 'sub'));
+    atm(['service', '--port', String(port)], path.join(root, 'sub'));
     removeDir(path.join(root, 'sub'));
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/abcd1234/tasks`)).status, 200);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('the dashboard is served from memory: deleting the plugin folder later changes nothing', async () => {
@@ -1398,12 +1398,12 @@ describe('serve', () => {
         encoding: 'utf8',
         env: { ...baseEnv(), ATM_HOME: atmHome },
       });
-    assert.equal(run(['serve', '--port', String(port)]).status, 0);
+    assert.equal(run(['service', '--port', String(port)]).status, 0);
     fs.rmSync(path.join(plugin, 'templates/tasks-dashboard.html'));
     const page = await fetch(`http://localhost:${port}/`);
     assert.equal(page.status, 200);
     assert.match(await page.text(), /atm-dashboard-version/);
-    run(['serve', 'stop']);
+    run(['service', 'stop']);
   });
 
   /** Stamps `version` and `build` into the dashboard of the plugin copy at `plugin`, as a rebuild would. */
@@ -1444,10 +1444,10 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     assert.equal(await pageBuild(port), PLUGIN_BUILD);
     assert.equal((await whoami(port)).build, await pageBuild(port));
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test("another install of the same version doesn't take the server over, so they don't restart it in turn", async () => {
@@ -1456,15 +1456,15 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const other = pluginAt(PLUGIN_VERSION, 'other-build');
-    assert.equal(other(['serve', '--port', String(port)], root, atmHome).status, 0);
+    assert.equal(other(['service', '--port', String(port)], root, atmHome).status, 0);
     const pid = record(atmHome).pid;
-    assert.equal(atm(['serve', '--refresh'], root).stdout, '');
-    assert.equal(atm(['status'], root).code, 0);
+    assert.equal(atm(['service', '--refresh'], root).stdout, '');
+    assert.equal(atm(['project', 'status'], root).code, 0);
     assert.equal(record(atmHome).pid, pid, 'left alone');
-    assert.equal(other(['serve', '--refresh'], root, atmHome).stdout, '');
+    assert.equal(other(['service', '--refresh'], root, atmHome).stdout, '');
     assert.equal(record(atmHome).pid, pid);
     assert.equal((await whoami(port)).build, await pageBuild(port));
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('serve --refresh restarts a server whose own dashboard was rebuilt under the same version', async () => {
@@ -1472,18 +1472,18 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const install = pluginAt(PLUGIN_VERSION, 'first-build');
-    assert.equal(install(['serve', '--port', String(port)], root, atmHome).status, 0);
+    assert.equal(install(['service', '--port', String(port)], root, atmHome).status, 0);
     const old = await whoami(port);
     assert.equal(old.build, 'first-build');
     stamp(install.plugin, PLUGIN_VERSION, 'second-build');
-    const refreshed = install(['serve', '--refresh'], root, atmHome);
+    const refreshed = install(['service', '--refresh'], root, atmHome);
     assert.equal(refreshed.status, 0, refreshed.stderr);
     assert.match(refreshed.stdout, /restarted/);
     const now = await whoami(port);
     assert.notEqual(now.pid, old.pid);
     assert.equal(now.build, 'second-build');
     assert.equal(await pageBuild(port), 'second-build');
-    install(['serve', 'stop'], root, atmHome);
+    install(['service', 'stop'], root, atmHome);
   });
 
   test('serve --refresh restarts a server with an older dashboard, on the same port', async () => {
@@ -1491,10 +1491,10 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(pluginAt('0.0.1')(['serve', '--port', String(port)], root, atmHome).status, 0);
+    assert.equal(pluginAt('0.0.1')(['service', '--port', String(port)], root, atmHome).status, 0);
     const old = await whoami(port);
     assert.equal(old.version, '0.0.1');
-    const refreshed = atm(['serve', '--refresh'], root);
+    const refreshed = atm(['service', '--refresh'], root);
     assert.equal(refreshed.code, 0, refreshed.stderr);
     assert.equal(
       refreshed.stdout,
@@ -1504,7 +1504,7 @@ describe('serve', () => {
     assert.deepEqual([now.version, now.build, now.port], [PLUGIN_VERSION, PLUGIN_BUILD, port]);
     assert.notEqual(now.pid, old.pid);
     assert.equal(alive(old.pid), false);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('serve --refresh leaves a current or newer server alone, and starts none', async () => {
@@ -1512,22 +1512,22 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(atm(['serve', '--refresh'], root).stdout, '');
+    assert.equal(atm(['service', '--refresh'], root).stdout, '');
     assert.equal(record(atmHome), null, 'nothing started');
 
-    assert.equal(atm(['serve', '--port', String(port)], root).code, 0);
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const current = record(atmHome).pid;
-    assert.equal(atm(['serve', '--refresh'], root).stdout, '');
+    assert.equal(atm(['service', '--refresh'], root).stdout, '');
     assert.equal(record(atmHome).pid, current);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
 
     // A newer plugin's server (another session already updated) is never downgraded
-    assert.equal(pluginAt('99.0.0')(['serve', '--port', String(port + 1)], root, atmHome).status, 0);
+    assert.equal(pluginAt('99.0.0')(['service', '--port', String(port + 1)], root, atmHome).status, 0);
     const newer = record(atmHome).pid;
-    assert.equal(atm(['serve', '--refresh'], root).stdout, '');
-    assert.equal(atm(['status'], root).code, 0);
+    assert.equal(atm(['service', '--refresh'], root).stdout, '');
+    assert.equal(atm(['project', 'status'], root).code, 0);
     assert.equal(record(atmHome).pid, newer);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('any atm command, and the PostToolUse hook, bring an outdated server along', async () => {
@@ -1536,18 +1536,18 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const older = pluginAt('0.0.1');
-    assert.equal(older(['serve', '--port', String(port)], root, atmHome).status, 0);
-    const status = atm(['status'], root);
+    assert.equal(older(['service', '--port', String(port)], root, atmHome).status, 0);
+    const status = atm(['project', 'status'], root);
     assert.equal(status.code, 0, status.stderr);
     assert.doesNotMatch(status.stdout, /restarted/, 'the command prints only its own output');
     assert.equal((await whoami(port)).version, PLUGIN_VERSION);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
 
-    assert.equal(older(['serve', '--port', String(port + 1)], root, atmHome).status, 0);
-    const hook = atm(['heartbeat', '--auto'], root);
+    assert.equal(older(['service', '--port', String(port + 1)], root, atmHome).status, 0);
+    const hook = atm(['claim', 'heartbeat', '--auto'], root);
     assert.equal(hook.stdout + hook.stderr, '');
     assert.equal((await whoami(port + 1)).version, PLUGIN_VERSION);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   /** A stand-in for a 0.10.0-0.14.0 per-project server: answers whoami with `folder` and its own pid. */
@@ -1571,7 +1571,7 @@ describe('serve', () => {
     const mine = await oldServer(taskDir);
     fs.writeFileSync(path.join(taskDir, '.server.json'), JSON.stringify({ ...mine, folder: taskDir }));
     fs.writeFileSync(path.join(taskDir, 'tasks-dashboard.html'), 'old copy');
-    const r = atm(['migrate'], root);
+    const r = atm(['db', 'migrate'], root);
     assert.match(r.stdout, new RegExp(`stopped its old dashboard server \\(pid ${mine.pid}\\)`));
     for (let i = 0; i < 50 && alive(mine.pid); i++) await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(alive(mine.pid), false);
@@ -1581,7 +1581,7 @@ describe('serve', () => {
     // A record pointing at another project's server: the record goes, the server stays
     const theirs = await oldServer('/somewhere/else/.agentic-task-manager');
     fs.writeFileSync(path.join(taskDir, '.server.json'), JSON.stringify({ ...theirs, folder: taskDir }));
-    assert.doesNotMatch(atm(['migrate'], root).stdout, /stopped/);
+    assert.doesNotMatch(atm(['db', 'migrate'], root).stdout, /stopped/);
     assert.equal(alive(theirs.pid), true);
     assert.equal(fs.existsSync(path.join(taskDir, '.server.json')), false);
   });
@@ -1590,10 +1590,10 @@ describe('serve', () => {
     const atm = atmIn(home());
     const root = makeProject({ commit: true, files: { 'docs/tasks.json': TASKS } });
     cleanups.push(() => removeDir(root));
-    const r = atm(['serve', '--port', String(ports())], root);
+    const r = atm(['service', '--port', String(ports())], root);
     assert.match(r.stdout, /Moved docs\/tasks.json to .agentic-task-manager\/tasks.json/);
     assert.match(r.stdout, /#project=abcd1234/);
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('--dir shows another project: start, status and stop from elsewhere', async () => {
@@ -1603,13 +1603,13 @@ describe('serve', () => {
     const elsewhere = makeProject({});
     cleanups.push(() => removeDir(elsewhere));
     const port = ports();
-    const started = atm(['serve', '--dir', root, '--port', String(port)], elsewhere);
+    const started = atm(['service', '--dir', root, '--port', String(port)], elsewhere);
     assert.equal(started.code, 0, started.stderr);
     assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/#project=abcd1234`));
-    assert.match(atm(['serve', 'status', '--dir', root], elsewhere).stdout, new RegExp(`localhost:${port}/`));
-    assert.match(atm(['serve', 'stop', '--dir', root], elsewhere).stdout, /Dashboard server stopped/);
+    assert.match(atm(['service', 'status', '--dir', root], elsewhere).stdout, new RegExp(`localhost:${port}/`));
+    assert.match(atm(['service', 'stop', '--dir', root], elsewhere).stdout, /Dashboard server stopped/);
     assert.equal(record(atmHome), null);
-    assert.equal(atm(['serve', 'status', '--dir', path.join(root, 'nope')], elsewhere).code, 2);
+    assert.equal(atm(['service', 'status', '--dir', path.join(root, 'nope')], elsewhere).code, 2);
   });
 
   test('--all starts the server for the overview, from anywhere', async () => {
@@ -1617,21 +1617,21 @@ describe('serve', () => {
     const elsewhere = makeProject({});
     cleanups.push(() => removeDir(elsewhere));
     const port = ports();
-    const started = atm(['serve', '--all', '--port', String(port)], elsewhere);
+    const started = atm(['service', '--all', '--port', String(port)], elsewhere);
     assert.equal(started.code, 0, started.stderr);
     assert.equal(started.stdout, `Dashboard server started: http://localhost:${port}/\n`);
     assert.deepEqual((await (await fetch(`http://localhost:${port}/api/projects`)).json()).projects, []);
-    atm(['serve', 'stop'], elsewhere);
+    atm(['service', 'stop'], elsewhere);
   });
 
   test('a project that opted out is not listed; the overview is shown', () => {
     const atm = atmIn(home());
     const root = project({ meta: { id: 'abcd1234', dashboard: { listed: false } }, tasks: [] });
     const port = ports();
-    const started = atm(['serve', '--port', String(port)], root);
+    const started = atm(['service', '--port', String(port)], root);
     assert.match(started.stdout, /isn't listed on the dashboard/);
     assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/\n`));
-    atm(['serve', 'stop'], root);
+    atm(['service', 'stop'], root);
   });
 
   test('without a task file: an error, nothing started', () => {
@@ -1639,10 +1639,10 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = makeProject({ git: true });
     cleanups.push(() => removeDir(root));
-    const r = atm(['serve'], root);
+    const r = atm(['service'], root);
     assert.equal(r.code, 1);
     assert.match(r.stderr, /no tasks.json to serve/);
     assert.equal(record(atmHome), null);
-    assert.equal(atm(['serve', 'restart'], root).code, 2);
+    assert.equal(atm(['service', 'restart'], root).code, 2);
   });
 });

@@ -10,9 +10,9 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" next --with-user > together.txt"]]
+      "commands": [["sh", "-c", "\"$ATM\" loop next --with-user > together.txt"]]
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "stdout": "Next: T-2 Alone (backlog, feature)\n",
       "files": { "together.txt": "Next: T-1 Together (backlog, feature)\n" }
@@ -27,10 +27,14 @@
         }
       },
       "commands": [
-        ["sh", "-c", "\"$ATM\" next > next.txt; \"$ATM\" list --with-user > list.txt; \"$ATM\" start T-1 > start.txt"]
+        [
+          "sh",
+          "-c",
+          "\"$ATM\" loop next > next.txt; \"$ATM\" task list --with-user > list.txt; \"$ATM\" task state T-1 in_progress > start.txt"
+        ]
       ]
     },
-    "args": ["show", "T-1", "--json"],
+    "args": ["task", "details", "T-1", "--json"],
     "expect": {
       "stdoutIncludes": ["\"status\": \"in_progress\""],
       "files": {
@@ -45,9 +49,9 @@
       "files": {
         ".agentic-task-manager/tasks.json": { "tasks": [] }
       },
-      "commands": [["sh", "-c", "\"$ATM\" add --name A --type docs --with user > add.txt"]]
+      "commands": [["sh", "-c", "\"$ATM\" task add --name A --type docs --with user > add.txt"]]
     },
-    "args": ["edit", "T-001", "--with", ""],
+    "args": ["task", "edit", "T-001", "--with", ""],
     "expect": {
       "stdout": "T-001: changed with\n",
       "files": { "add.txt": "Added T-001 A\n" }
@@ -67,7 +71,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Gave 1 task labelled interactive `with: user` (done together with you; unattended loops skip them).\n",
       "files": {
@@ -93,7 +97,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": { "stdout": "Nothing to migrate.\n" }
   }
 ]

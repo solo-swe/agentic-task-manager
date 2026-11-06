@@ -8,11 +8,11 @@
         }
       }
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "env": { "ATM_AGENT": "claude:abcd1234" },
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm review T-1 --note '<what to check>'"]
+      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review --note '<what to check>'"]
     }
   },
   {
@@ -24,13 +24,13 @@
           "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "in_progress" }]
         }
       },
-      "commands": [["sh", "-c", "ATM_AGENT=claude:abcd1234 \"$ATM\" done T-1 2> err.txt; true"]]
+      "commands": [["sh", "-c", "ATM_AGENT=claude:abcd1234 \"$ATM\" task state T-1 done 2> err.txt; true"]]
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "env": { "ATM_AGENT": "Hakan" },
     "expect": {
       "stdoutIncludes": ["T-1: in_progress -> done"],
-      "files": { "err.txt": "atm: T-1 is reviewed (async): ask for it with atm review T-1 --note '<what to check>'\n" }
+      "files": { "err.txt": "atm: T-1 is reviewed (async): ask for it with atm task state T-1 in_review --note '<what to check>'\n" }
     }
   },
   {
@@ -43,7 +43,7 @@
         }
       }
     },
-    "args": ["done", "T-1", "--note", "Check the colours"],
+    "args": ["task", "state", "T-1", "done", "--note", "Check the colours"],
     "env": { "ATM_AGENT": "claude:abcd1234", "ATM_NOW": "2026-05-02T10:00:00Z" },
     "expect": {
       "stdoutIncludes": ["T-1: in_progress -> done"],
@@ -80,7 +80,7 @@
         }
       }
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "env": { "ATM_AGENT": "claude:abcd1234" },
     "expect": { "stdoutIncludes": ["T-1: in_progress -> done"] }
   },
@@ -106,17 +106,17 @@
         [
           "sh",
           "-c",
-          "\"$ATM\" status > status.txt; \"$ATM\" sprints > sprints.txt; \"$ATM\" sprints close Now 2> err.txt; true"
+          "\"$ATM\" project status > status.txt; \"$ATM\" sprint list > sprints.txt; \"$ATM\" sprint close Now 2> err.txt; true"
         ]
       ]
     },
-    "args": ["sprints", "close", "Now", "--reviewed"],
+    "args": ["sprint", "close", "Now", "--reviewed"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z", "ATM_AGENT": "Hakan" },
     "expect": {
       "stdoutIncludes": ["Closed the sprint “Now”: 1 done."],
       "files": {
         "err.txt": "atm: T-1 waits for the end-of-sprint review: review it with the user (/atm:close-sprint), then close with --reviewed\n",
-        "sprints.txt": "Now · active: 1 task (done 1); 1 waiting for the sprint review\nbacklog: 0 tasks (atm backlog)\n",
+        "sprints.txt": "Now · active: 1 task (done 1); 1 waiting for the sprint review\nbacklog: 0 tasks (atm sprint backlog)\n",
         ".agentic-task-manager/tasks.json": {
           "meta": {
             "sprints": [
@@ -163,7 +163,7 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": [
         "sprint: Now (active): 1 of 1 done\n  waiting for the sprint review: T-1 (/atm:close-sprint)\n"

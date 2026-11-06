@@ -7,6 +7,7 @@
       }
     },
     "args": [
+      "task",
       "add",
       "--name",
       "New",
@@ -64,7 +65,7 @@
         ]
       }
     },
-    "args": ["add", "--json-file", "new.json", "--json"],
+    "args": ["task", "add", "--json-file", "new.json", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": [
@@ -112,7 +113,7 @@
         }
       }
     },
-    "args": ["add", "--name", "N", "--type", "docs"],
+    "args": ["task", "add", "--name", "N", "--type", "docs"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "stdout": "Added T-020 N\n" }
   },
@@ -123,7 +124,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "next_id": 2 }, "tasks": [{ "id": "T-005", "status": "done" }] }
       }
     },
-    "args": ["add", "--name", "N", "--type", "docs"],
+    "args": ["task", "add", "--name", "N", "--type", "docs"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "stdout": "Added T-006 N\n" }
   },
@@ -144,7 +145,7 @@
         }
       }
     },
-    "args": ["add", "--name", "Try it", "--type", "spike", "--json"],
+    "args": ["task", "add", "--name", "Try it", "--type", "spike", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": [
@@ -169,7 +170,7 @@
   {
     "name": "add refuses an unknown type, and nothing changes",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["add", "--name", "N", "--type", "spike"],
+    "args": ["task", "add", "--name", "N", "--type", "spike"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["atm: unknown type 'spike'; use one of feature, bugfix, test, infra, docs, refactor, polish"],
@@ -179,13 +180,13 @@
   {
     "name": "add refuses an unknown priority",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["add", "--name", "N", "--type", "docs", "--priority", "urgent"],
+    "args": ["task", "add", "--name", "N", "--type", "docs", "--priority", "urgent"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: unknown priority 'urgent'; use one of P0, P1, P2, P3"] }
   },
   {
     "name": "add refuses a dependency that doesn't exist",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["add", "--name", "N", "--type", "docs", "--dep", "T-404"],
+    "args": ["task", "add", "--name", "N", "--type", "docs", "--dep", "T-404"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: T-001 (N) depends on T-404, which doesn't exist"] }
   },
   {
@@ -201,7 +202,7 @@
         }
       }
     },
-    "args": ["add", "--json-file", "new.json"],
+    "args": ["task", "add", "--json-file", "new.json"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["atm: these dependencies would make a cycle: T-001 -> T-002 -> T-001"],
@@ -211,13 +212,13 @@
   {
     "name": "add refuses a label that isn't lowercase letters, digits, - and _",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["add", "--name", "N", "--type", "docs", "--label", "Spike 2"],
+    "args": ["task", "add", "--name", "N", "--type", "docs", "--label", "Spike 2"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: label 'Spike 2': use lowercase letters, digits, - and _"] }
   },
   {
     "name": "add needs a name and a type",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["add", "--type", "docs"],
+    "args": ["task", "add", "--type", "docs"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: a new task needs a name"] }
   },
   {
@@ -234,7 +235,7 @@
         ]
       }
     },
-    "args": ["add", "--json-file", "new.json"],
+    "args": ["task", "add", "--json-file", "new.json"],
     "env": { "ATM_NOW": "2026-05-02T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdoutIncludes": ["T-001", "T-002"],
@@ -284,7 +285,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [] }, "new.json": { "name": "not a list" } }
     },
-    "args": ["add", "--json-file", "new.json"],
+    "args": ["task", "add", "--json-file", "new.json"],
     "expect": { "exit": 2, "stderrIncludes": ["new.json: expected a JSON list of tasks"] }
   }
 ]

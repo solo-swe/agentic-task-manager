@@ -5,17 +5,17 @@
     "expect": { "exit": 0, "stdout": "{version}\n" }
   },
   {
-    "name": "no command prints usage",
+    "name": "no command prints the help",
     "args": [],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["usage: atm [--dir PATH] <command>", "paths [--json]"]
+      "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]...", "  task ", "  loop ", "  project "]
     }
   },
   {
-    "name": "help prints usage",
+    "name": "help prints the help",
     "args": ["help"],
-    "expect": { "exit": 0, "stdoutIncludes": ["usage: atm [--dir PATH] <command>"] }
+    "expect": { "exit": 0, "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]..."] }
   },
   {
     "name": "an unknown command is a usage error",
@@ -23,7 +23,7 @@
     "expect": {
       "exit": 2,
       "stdout": "",
-      "stderrIncludes": ["atm: unknown command 'frobnicate'", "usage: atm"]
+      "stderrIncludes": ["atm: No such command 'frobnicate'.", "Usage: atm [OPTIONS] COMMAND [ARGS]..."]
     }
   },
   {
@@ -33,64 +33,59 @@
   },
   {
     "name": "--help on a command describes it",
-    "args": ["start", "--help"],
+    "args": ["task", "state", "--help"],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["usage: atm start", "--agent NAME", "--json", "mark a task in_progress and claim it"]
+      "stdoutIncludes": ["Usage: atm task state [OPTIONS] TASK_ID NEXT_STATE", "--agent", "--question", "Move a task to another state"]
     }
   },
   {
-    "name": "help lists the options added since the overview was written (T-409)",
+    "name": "a group's help lists its commands",
+    "args": ["vcs", "--help"],
+    "expect": { "exit": 0, "stdoutIncludes": ["Usage: atm vcs [OPTIONS] COMMAND [ARGS]...", "commit", "pr", "repository"] }
+  },
+  {
+    "name": "help says every command takes --json, anywhere on the line, and how --dir works",
     "args": ["help"],
     "expect": {
       "exit": 0,
       "stdoutIncludes": [
-        "[--add-requirement/--remove-requirement R] [--add-use-case/--remove-use-case U]",
-        "[--add-component/--remove-component C] [--add-related/--remove-related ID]",
-        "status [--sprint S]... [--backlog] [--release R] [--component C]",
-        "check [--files]",
-        "commit <id> --record REV",
-        "sprints delete <S>",
-        "[--dir FOLDER]..."
+        "Every command takes --json (-j) and --dry-run (-n), anywhere on the line.",
+        "atm --dir PATH <command> runs as if started in PATH."
       ]
     }
   },
   {
-    "name": "help says every command takes --json and has --help",
-    "args": ["help"],
-    "expect": { "exit": 0, "stdoutIncludes": ["Every command takes --json"] }
-  },
-  {
     "name": "a usage error names the problem and the command's usage",
-    "args": ["next", "--bogus"],
+    "args": ["loop", "next", "--bogus"],
     "expect": {
       "exit": 2,
       "stdout": "",
-      "stderrIncludes": ["atm: unrecognized arguments: --bogus", "usage: atm next"]
+      "stderrIncludes": ["atm: No such option: --bogus", "Usage: atm loop next [OPTIONS]"]
     }
   },
   {
     "name": "an option's value is checked",
-    "args": ["releases", "add", "1.0", "--pr", "one"],
-    "expect": { "exit": 2, "stderrIncludes": ["argument --pr: invalid int value: 'one'"] }
+    "args": ["release", "add", "1.0", "--pr", "one"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--pr': 'one' is not a valid integer."] }
   },
   {
     "name": "with --json, a usage error is JSON on stderr, with the same exit code",
-    "args": ["start", "--json"],
+    "args": ["task", "state", "--json"],
     "expect": {
       "exit": 2,
       "stdout": "",
-      "stderrIncludes": ["\"error\": \"the following arguments are required: id", "\"code\": 2"]
+      "stderrIncludes": ["\"error\": \"Missing argument 'TASK_ID'.\"", "\"code\": 2"]
     }
   },
   {
     "name": "with --json, any other error is JSON too",
-    "args": ["done", "T-1", "--json"],
+    "args": ["task", "state", "T-1", "done", "--json"],
     "expect": { "exit": 1, "stderrIncludes": ["\"error\": \"no tasks.json in", "\"code\": 1"] }
   },
   {
     "name": "with --json, an unknown command is JSON",
     "args": ["frobnicate", "--json"],
-    "expect": { "exit": 2, "stdout": "", "stderrIncludes": ["\"error\": \"unknown command 'frobnicate'\""] }
+    "expect": { "exit": 2, "stdout": "", "stderrIncludes": ["\"error\": \"No such command 'frobnicate'.\""] }
   }
 ]

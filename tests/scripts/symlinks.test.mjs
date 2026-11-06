@@ -43,7 +43,7 @@ describe('symlinks in the task folder', () => {
     const root = makeProject({ git: true, files: { 'README.md': 'x\n' } });
     try {
       fs.symlinkSync(elsewhere, path.join(root, '.agentic-task-manager'));
-      const r = runAtm(['init'], root, { ATM_HOME: path.join(root, '.atm-home') });
+      const r = runAtm(['db', 'init'], root, { ATM_HOME: path.join(root, '.atm-home') });
       assert.equal(r.code, 1, r.stdout + r.stderr);
       assert.match(r.stderr, /is a symlink/);
       assert.deepEqual(fs.readdirSync(elsewhere), ['tasks.json']); // no .gitignore or .gitattributes written there

@@ -13,7 +13,7 @@
         }
       }
     },
-    "args": ["next", "--json"],
+    "args": ["loop", "next", "--json"],
     "expect": {
       "json": {
         "task": { "id": "T-3", "status": "todo", "sprint": "A", "priority": "P3" },
@@ -32,7 +32,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: no active sprint: plan one with /atm:plan-sprint, or run with --all.\n"
@@ -51,7 +51,7 @@
         }
       }
     },
-    "args": ["next", "--sprint", "b", "--json"],
+    "args": ["loop", "next", "--sprint", "b", "--json"],
     "expect": { "json": { "task": { "id": "T-2", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
   },
   {
@@ -61,7 +61,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "Old", "state": "closed" }] }, "tasks": [] }
       }
     },
-    "args": ["next", "--sprint", "Old"],
+    "args": ["loop", "next", "--sprint", "Old"],
     "expect": { "exit": 2, "stderrIncludes": ["the sprint 'Old' is closed"] }
   },
   {
@@ -77,13 +77,13 @@
         }
       }
     },
-    "args": ["next", "--tasks", "T-3,T-1", "--json"],
+    "args": ["loop", "next", "--tasks", "T-3,T-1", "--json"],
     "expect": { "json": { "task": { "id": "T-3", "status": "todo" }, "claim": null, "reason": null } }
   },
   {
     "name": "next --tasks with a task that doesn't exist is refused",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["next", "--tasks", "T-1,T-9"],
+    "args": ["loop", "next", "--tasks", "T-1,T-9"],
     "expect": { "exit": 2, "stderrIncludes": ["--tasks: no task T-9"] }
   },
   {
@@ -101,7 +101,7 @@
         }
       }
     },
-    "args": ["next", "--all", "--json"],
+    "args": ["loop", "next", "--all", "--json"],
     "expect": { "json": { "task": { "id": "T-3", "status": "todo", "sprint": "B" }, "claim": null, "reason": null } }
   },
   {
@@ -117,7 +117,7 @@
         }
       }
     },
-    "args": ["next", "--backlog", "--json"],
+    "args": ["loop", "next", "--backlog", "--json"],
     "expect": { "json": { "task": { "id": "T-2", "status": "todo" }, "claim": null, "reason": null } }
   },
   {
@@ -135,7 +135,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 3, "stdout": "No task available: the sprint “A” is finished: 2 done, 1 skipped.\n" }
   },
   {
@@ -152,7 +152,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: nothing ready in the sprint “A”: the rest is waiting (1 in review, 1 blocked).\n"
@@ -168,7 +168,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 3, "stdout": "No task available: the sprint “A” has no tasks.\n" }
   },
   {
@@ -188,7 +188,7 @@
         }
       }
     },
-    "args": ["list", "--release", "1.0"],
+    "args": ["task", "list", "--release", "1.0"],
     "expect": { "stdout": "T-1  todo  P2  In A\nT-2  todo  P2  In B, for 1.0\n" }
   },
   {
@@ -204,13 +204,13 @@
         }
       }
     },
-    "args": ["list", "--backlog"],
+    "args": ["task", "list", "--backlog"],
     "expect": { "stdout": "T-3  todo  P2  Backlog\n" }
   },
   {
     "name": "list --sprint of a sprint that doesn't exist is refused",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["list", "--sprint", "Nope"],
+    "args": ["task", "list", "--sprint", "Nope"],
     "expect": { "exit": 2, "stderrIncludes": ["no sprint 'Nope'"] }
   },
   {
@@ -229,7 +229,7 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": ["sprint: A (active): 1 of 2 done · due 2026-06-01 · release 1.0\n  goal: Ship it\n"]
     }
@@ -241,7 +241,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": { "stdoutIncludes": ["sprint: none active (plan one with /atm:plan-sprint)\n"] }
   },
   {
@@ -255,6 +255,7 @@
       }
     },
     "args": [
+      "task",
       "add",
       "--name",
       "a",
@@ -314,13 +315,25 @@
         }
       }
     },
-    "args": ["edit", "T-2", "--release", "", "--review", "", "--remove-component", "cli", "--remove-related", "T-1"],
+    "args": [
+      "task",
+      "edit",
+      "T-2",
+      "--release",
+      "",
+      "--review",
+      "",
+      "--remove-component",
+      "cli",
+      "--remove-related",
+      "T-1"
+    ],
     "expect": { "stdout": "T-2: changed release, review, components, related\n" }
   },
   {
     "name": "a related task must exist, and isn't the task itself",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["edit", "T-1", "--add-related", "T-1"],
+    "args": ["task", "edit", "T-1", "--add-related", "T-1"],
     "expect": { "exit": 2, "stderrIncludes": ["T-1 can't be related to itself"] }
   },
   {
@@ -333,7 +346,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--release", "1.0; rm -rf /"],
+    "args": ["task", "edit", "T-1", "--release", "1.0; rm -rf /"],
     "expect": { "exit": 2, "stderrIncludes": ["no release '1.0; rm -rf /'; the releases: 1.0"] }
   },
   {
@@ -354,7 +367,7 @@
         }
       }
     },
-    "args": ["archive", "--sprint", "A", "--dry-run", "--json"],
+    "args": ["db", "archive", "--sprint", "A", "--dry-run", "--json"],
     "env": { "ATM_NOW": "2026-05-02T10:00:00Z" },
     "expect": { "stdoutIncludes": ["\"T-1\""] }
   }

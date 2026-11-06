@@ -101,7 +101,10 @@ function benchCli(n) {
     const writes = [];
     for (const t of todo) {
       // Each round's task depends on the previous one, which the round before finished
-      writes.push(timeAtm(['start', t.id], root), timeAtm(['done', t.id], root));
+      writes.push(
+        timeAtm(['task', 'state', t.id, 'in_progress'], root),
+        timeAtm(['task', 'state', t.id, 'done'], root),
+      );
     }
     // The merge driver parses three versions: each side finished a different task
     const ours = structuredClone(data);
@@ -114,7 +117,7 @@ function benchCli(n) {
       ['theirs.json', theirs],
     ])
       fs.writeFileSync(path.join(root, name), json(value));
-    const merge = timeAtm(['merge-driver', 'base.json', 'ours.json', 'theirs.json'], root);
+    const merge = timeAtm(['db', 'merge-driver', 'base.json', 'ours.json', 'theirs.json'], root);
     return { size, write: median(writes), merge };
   } finally {
     removeDir(root);

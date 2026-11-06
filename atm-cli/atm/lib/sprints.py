@@ -143,7 +143,7 @@ def stored_sprint(data, name):
     vocab = vocabulary(data)
     found = find_sprint(vocab, name)
     if found is None:
-        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprints add"
+        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprint add"
         raise NotFound(f"no sprint {name!r}; the sprints: {known}", 2)
     return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
 
@@ -363,13 +363,13 @@ def delete_sprint(project, name, move_to=None, force=False):
 
 
 def move_target(vocab, task, to):
-    """The sprint ID (or None, the backlog) `atm move --to` means for `task`."""
+    """The sprint ID (or None, the backlog) `atm sprint move --to` means for `task`."""
     if to == "backlog":
         return None
     if to == "active":
         active = [s["id"] for s in vocab["sprints"] if s["state"] == "active"]
         if not active:
-            raise Invalid("no sprint is active (atm sprints start <name>)")
+            raise Invalid("no sprint is active (atm sprint start <name>)")
         return active[0]
     if to == "next":
         # The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
@@ -381,7 +381,7 @@ def move_target(vocab, task, to):
         if not following:
             raise Invalid(
                 f"{task['id']}: no planned sprint after {current['id'] if current else 'the active one'}; "
-                'add one with atm sprints add ["<name>"]'
+                'add one with atm sprint add ["<name>"]'
             )
         return following[0]
     return open_sprint(vocab, to)

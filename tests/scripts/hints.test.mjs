@@ -20,16 +20,16 @@ describe('archive hint', () => {
   test('more archivable tasks than threshold_tasks: status and migrate suggest archiving', () => {
     const root = project(finished(4), { archive: { threshold_tasks: 3 } });
     try {
-      const status = runAtm(['status'], root, { ATM_NOW: NOW });
+      const status = runAtm(['project', 'status'], root, { ATM_NOW: NOW });
       assert.match(status.stdout, /tasks\.json is \d+ KB with 4 finished tasks; `atm archive` would move 4 of them/);
-      const json = JSON.parse(runAtm(['status', '--json'], root, { ATM_NOW: NOW }).stdout);
+      const json = JSON.parse(runAtm(['project', 'status', '--json'], root, { ATM_NOW: NOW }).stdout);
       assert.deepEqual(
         [json.suggest.archive.finished, json.suggest.archive.archivable, json.suggest.archive.auto],
         [4, 4, true],
       );
-      assert.match(runAtm(['migrate'], root, { ATM_NOW: NOW }).stdout, /`atm archive` would move 4/);
+      assert.match(runAtm(['db', 'migrate'], root, { ATM_NOW: NOW }).stdout, /`atm archive` would move 4/);
       assert.equal(
-        JSON.parse(runAtm(['migrate', '--json'], root, { ATM_NOW: NOW }).stdout).suggest.archive.archivable,
+        JSON.parse(runAtm(['db', 'migrate', '--json'], root, { ATM_NOW: NOW }).stdout).suggest.archive.archivable,
         4,
       );
     } finally {
@@ -40,7 +40,7 @@ describe('archive hint', () => {
   test('meta.archive.auto false still shows the hint, marked for the skills to only relay it', () => {
     const root = project(finished(4), { archive: { threshold_tasks: 3, auto: false } });
     try {
-      const json = JSON.parse(runAtm(['status', '--json'], root, { ATM_NOW: NOW }).stdout);
+      const json = JSON.parse(runAtm(['project', 'status', '--json'], root, { ATM_NOW: NOW }).stdout);
       assert.equal(json.suggest.archive.auto, false);
     } finally {
       removeDir(root);
@@ -51,7 +51,7 @@ describe('archive hint', () => {
     const big = finished(2).map((t) => ({ ...t, description: 'x'.repeat(3000) }));
     const root = project(big, { archive: { threshold_kb: 4 } });
     try {
-      assert.match(runAtm(['status'], root, { ATM_NOW: NOW }).stdout, /`atm archive` would move 2 of them/);
+      assert.match(runAtm(['project', 'status'], root, { ATM_NOW: NOW }).stdout, /`atm archive` would move 2 of them/);
     } finally {
       removeDir(root);
     }
@@ -65,8 +65,11 @@ describe('archive hint', () => {
     ]) {
       const root = project(tasks, meta);
       try {
-        assert.doesNotMatch(runAtm(['status'], root, { ATM_NOW: NOW }).stdout, /atm archive/);
-        assert.equal(JSON.parse(runAtm(['status', '--json'], root, { ATM_NOW: NOW }).stdout).suggest, undefined);
+        assert.doesNotMatch(runAtm(['project', 'status'], root, { ATM_NOW: NOW }).stdout, /atm archive/);
+        assert.equal(
+          JSON.parse(runAtm(['project', 'status', '--json'], root, { ATM_NOW: NOW }).stdout).suggest,
+          undefined,
+        );
       } finally {
         removeDir(root);
       }
@@ -83,12 +86,12 @@ describe('archive hint', () => {
     const root = project(tasks, { archive: { threshold_tasks: 3 } });
     try {
       const env = { ATM_AGENT: 'alice' };
-      const first = runAtm(['done', 'T-100'], root, { ...env, ATM_NOW: NOW });
+      const first = runAtm(['task', 'state', 'T-100', 'done'], root, { ...env, ATM_NOW: NOW });
       assert.match(first.stdout, /`atm archive` would move 4/);
-      const second = runAtm(['done', 'T-101'], root, { ...env, ATM_NOW: '2026-05-01T18:00:00Z' });
+      const second = runAtm(['task', 'state', 'T-101', 'done'], root, { ...env, ATM_NOW: '2026-05-01T18:00:00Z' });
       assert.doesNotMatch(second.stdout, /atm archive/);
       // The next day it comes back once
-      const nextDay = runAtm(['done', 'T-102'], root, { ...env, ATM_NOW: '2026-05-02T09:10:00Z' });
+      const nextDay = runAtm(['task', 'state', 'T-102', 'done'], root, { ...env, ATM_NOW: '2026-05-02T09:10:00Z' });
       assert.equal(nextDay.code, 0, nextDay.stderr);
       assert.match(nextDay.stdout, /`atm archive` would move/);
     } finally {

@@ -20,7 +20,7 @@
         }
       }
     },
-    "args": ["start", "T-2"],
+    "args": ["task", "state", "T-2", "in_progress"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": { "stdoutIncludes": ["T-2: backlog -> coding\n", "depends on: T-1 (shipped)"] }
   },
@@ -41,7 +41,7 @@
         }
       }
     },
-    "args": ["start", "T-1", "--status", "testing"],
+    "args": ["task", "state", "T-1", "in_progress", "--status", "testing"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "stdoutIncludes": ["T-1: backlog -> testing\n"] }
   },
@@ -61,7 +61,7 @@
         }
       }
     },
-    "args": ["start", "T-1", "--status", "shipped"],
+    "args": ["task", "state", "T-1", "in_progress", "--status", "shipped"],
     "env": { "ATM_AGENT": "alice" },
     "expect": {
       "exit": 2,
@@ -92,7 +92,7 @@
         }
       }
     },
-    "args": ["start", "T-2"],
+    "args": ["task", "state", "T-2", "in_progress"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "exit": 1, "stderrIncludes": ["can't start T-2: waiting on T-1 (in_review)"] }
   },
@@ -132,7 +132,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-4 Ready (backlog, feature)\n" }
   },
   {
@@ -152,7 +152,7 @@
         }
       }
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "expect": { "stdout": "T-1: coding -> shipped\n" }
   },
   {
@@ -171,7 +171,7 @@
         }
       }
     },
-    "args": ["fail", "T-2", "--reason", "broken"],
+    "args": ["task", "state", "T-2", "todo", "--reason", "broken"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdout": "T-2: in_progress -> backlog\n",
@@ -212,7 +212,7 @@
         }
       }
     },
-    "args": ["start", "T-1"],
+    "args": ["task", "state", "T-1", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": [
@@ -246,7 +246,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.statuses needs at least one status of the kind 'done'"] }
   },
   {
@@ -266,7 +266,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.statuses: \"doing\" is listed twice"] }
   },
   {
@@ -276,7 +276,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "types": [{ "label": "Spike" }] }, "tasks": [] }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.types: every entry needs an \"id\""] }
   },
   {
@@ -289,7 +289,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.default_priority 'P2' is not one of meta.priorities"] }
   },
   {
@@ -299,7 +299,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "workflow": { "type": "trunk" } }, "tasks": [] }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.workflow.type must be one of direct, pull-request"] }
   },
   {
@@ -309,7 +309,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "phases": [{ "id": "one", "name": "x" }] }, "tasks": [] }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "exit": 3, "stdout": "No task available: nothing left to do.\n" }
   },
   {
@@ -348,7 +348,7 @@
         }
       }
     },
-    "args": ["merge-driver", "base.json", "ours.json", "theirs.json"],
+    "args": ["db", "merge-driver", "base.json", "ours.json", "theirs.json"],
     "expect": {
       "exit": 0,
       "files": {

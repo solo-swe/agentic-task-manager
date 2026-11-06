@@ -90,7 +90,7 @@ def add_component(project, component_id, label=None, paths=(), review=None, from
     def change(work):
         data = work.document
         if any(c["id"] == component_id for c in vocabulary(data)["components"]):
-            raise Invalid(f"there is already a component {component_id!r} (atm components edit changes it)")
+            raise Invalid(f"there is already a component {component_id!r} (atm component edit changes it)")
         meta = data.setdefault("meta", {})
         component = {"id": component_id}
         # The name shown: the label given, else the label's own text (meta.labels), else none

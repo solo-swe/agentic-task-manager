@@ -54,15 +54,15 @@ def load_tasks(paths):
         # Every command looks tasks up by ID and follows dependencies: a malformed task stops them all with a clear
         # message instead of a traceback halfway through (docs/security-review.md F12). atm check lists them all.
         if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm check")
+            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm doctor")
         if not valid_task_id(task["id"]):
             raise AtmError(
                 f"{paths['tasks']}: the task ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', "
-                "'_' and '-' only): fix it in the file, then run atm check"
+                "'_' and '-' only): fix it in the file, then run atm doctor"
             )
         deps = task.get("dependencies", [])
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
+            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm doctor")
     return data
 
 

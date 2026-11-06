@@ -26,6 +26,10 @@ from .tasks import view_task
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
 OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
 
+# The state `atm task state <id> <state>` names for the commands an agent runs on its own claim, for the hint that
+# says what to run again
+COMMAND_STATES = {"done": "done", "release": "todo", "fail": "todo", "review": "in_review", "block": "blocked"}
+
 # Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
 # waiting task must have there
 REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
@@ -107,9 +111,9 @@ def change_task_status(project, command, task_id, **options):
         apply_resolutions(here, data, store, archived)
         task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
-            own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
+            own = own_lease_expired(expired, data, task_id, agent, f"atm task state {task_id} {COMMAND_STATES[command]}")
             if own:
-                work.defer(own)  # the expiry is written first, so `atm show` agrees with the error
+                work.defer(own)  # the expiry is written first, so `atm task details` agrees with the error
                 return {"task": task, "expired": expired}
         check_holder(claims, task_id, agent, command)
         duplicate_of = options.get("duplicate_of")

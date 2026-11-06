@@ -230,7 +230,7 @@ def find_release(vocab, release_id):
 def known_release(vocab, release_id):
     """`release_id`, when meta.releases has it; else an AtmError naming the releases."""
     if find_release(vocab, release_id) is None:
-        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm release add <R>"
         raise AtmError(f"no release {release_id!r}; the releases: {known}", 2)
     return release_id
 
@@ -370,7 +370,7 @@ def open_in_closed_sprints(vocab, tasks):
 def move_out_hint(task_id, sprint):
     """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
     nothing on its own."""
-    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm sprint move {task_id} --to backlog (or --to active)"
 
 
 def priority_rank(vocab, priority):
@@ -470,7 +470,7 @@ def archive_hint_for(data, size):
         "finished": finished,
         "archivable": movable,
         "auto": settings["auto"],  # false: the skills only relay the hint (S-3.5)
-        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm archive` would move "
+        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm db archive` would move "
         f"{movable} of them to tasks-archive.json.",
     }
 
@@ -504,7 +504,7 @@ def find_task(data, task_id, archived=None):
     for task in data["tasks"]:
         if task.get("id") == task_id:
             return task
-    hint = " (it is archived: atm unarchive brings it back)" if archived and archived(task_id) else ""
+    hint = " (it is archived: atm db unarchive brings it back)" if archived and archived(task_id) else ""
     raise AtmError(f"no task {task_id}{hint}")
 
 
@@ -616,5 +616,5 @@ def check_review_mode(task, data, agent):
     mode = effective_review(vocab, task)
     if mode in ("blocker", "async") and is_agent(agent) and kind_of(vocab, task.get("status")) == "active":
         raise AtmError(
-            f"{task['id']} is reviewed ({mode}): ask for it with atm review {task['id']} --note '<what to check>'", 2
+            f"{task['id']} is reviewed ({mode}): ask for it with atm task state {task['id']} in_review --note '<what to check>'", 2
         )

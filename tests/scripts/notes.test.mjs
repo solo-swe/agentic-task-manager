@@ -15,13 +15,13 @@ describe('note length', () => {
     });
     try {
       const env = { ATM_AGENT: 'alice' };
-      const tooLong = runAtm(['release', 'T-1', '--note', 'x'.repeat(501)], root, env);
+      const tooLong = runAtm(['task', 'state', 'T-1', 'todo', '--note', 'x'.repeat(501)], root, env);
       assert.equal(tooLong.code, 2);
       assert.match(tooLong.stderr, /a note is at most 500 characters \(this one has 501\); put longer text in a file/);
       assert.deepEqual(tasks(root), { tasks: [{ id: 'T-1', status: 'in_progress' }] });
 
-      assert.equal(runAtm(['note', 'T-1', 'y'.repeat(501)], root, env).code, 2);
-      assert.equal(runAtm(['note', 'T-1', 'y'.repeat(500)], root, env).code, 0);
+      assert.equal(runAtm(['task', 'note', 'T-1', 'y'.repeat(501)], root, env).code, 2);
+      assert.equal(runAtm(['task', 'note', 'T-1', 'y'.repeat(500)], root, env).code, 0);
       assert.equal(tasks(root).tasks[0].notes[0].text.length, 500);
     } finally {
       removeDir(root);

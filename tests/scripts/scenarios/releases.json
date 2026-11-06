@@ -31,7 +31,7 @@
         }
       }
     },
-    "args": ["releases", "notes", "1.0"],
+    "args": ["release", "notes", "1.0"],
     "expect": {
       "stdout": "# 1.0 “First”\n\n## Feature\n\n- **T-3** Sign-in page\n\n## Bugfix\n\n- **T-2** Fix the login: Sessions survive a restart\n\n## Infra\n\n- **T-1** Repository\n\n## Not done yet\n\n- T-4 Dark mode (todo)\n"
     }
@@ -40,9 +40,9 @@
     "name": "atm releases notes --json; a release with nothing done; an unknown release is refused",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "2.0" }] }, "tasks": [] } },
-      "commands": [["sh", "-c", "\"$ATM\" releases notes 2.0 > out.txt; \"$ATM\" releases notes 9.9 2> err.txt; true"]]
+      "commands": [["sh", "-c", "\"$ATM\" release notes 2.0 > out.txt; \"$ATM\" release notes 9.9 2> err.txt; true"]]
     },
-    "args": ["releases", "notes", "2.0", "--json"],
+    "args": ["release", "notes", "2.0", "--json"],
     "expect": {
       "json": { "release": { "id": "2.0", "state": "planned" }, "groups": [], "open": [] },
       "files": {
@@ -84,7 +84,7 @@
         }
       }
     },
-    "args": ["releases"],
+    "args": ["release", "list"],
     "expect": {
       "stdout": "1.0 “First” · planned · target 2026-06-01: 4 tasks (todo 1, done 3); done 1, in pr 1, merged 1\n1.1 · planned: 1 task (todo 1)\n"
     }
@@ -99,21 +99,21 @@
         }
       }
     },
-    "args": ["releases", "--all", "--json"],
+    "args": ["release", "list", "--all", "--json"],
     "expect": { "json": [{ "id": "0.9", "state": "archived", "tasks": 0, "by_kind": {}, "by_stage": {} }] }
   },
   {
     "name": "no releases yet says how to add one",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["releases"],
-    "expect": { "stdout": "No releases yet: atm releases add <R>.\n" }
+    "args": ["release", "list"],
+    "expect": { "stdout": "No releases yet: atm release add <R>.\n" }
   },
   {
     "name": "atm releases add, with a name and a target date",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
     },
-    "args": ["releases", "add", "1.1", "--name", "Sprints", "--target", "2026-07-01"],
+    "args": ["release", "add", "1.1", "--name", "Sprints", "--target", "2026-07-01"],
     "expect": {
       "stdout": "Added the release “1.1” (planned).\n",
       "files": {
@@ -144,7 +144,7 @@
         }
       }
     },
-    "args": ["releases", "add", "0.22.0", "--pr", "27", "--json"],
+    "args": ["release", "add", "0.22.0", "--pr", "27", "--json"],
     "expect": {
       "json": {
         "release": {
@@ -200,7 +200,7 @@
       }
     },
     "args": [
-      "releases",
+      "release",
       "add",
       "0.14.0",
       "--pr",
@@ -257,7 +257,7 @@
   {
     "name": "add --released-at needs an ISO time",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["releases", "add", "1.0", "--released-at", "last week"],
+    "args": ["release", "add", "1.0", "--released-at", "last week"],
     "expect": { "exit": 2, "stderrIncludes": ["--released-at needs a time like"] }
   },
   {
@@ -268,11 +268,11 @@
         [
           "sh",
           "-c",
-          "\"$ATM\" releases add 1.0 2>> out.txt; \"$ATM\" releases add '1.0; rm -rf /' 2>> out.txt; \"$ATM\" releases add 1.1 --target 'July' 2>> out.txt; true"
+          "\"$ATM\" release add 1.0 2>> out.txt; \"$ATM\" release add '1.0; rm -rf /' 2>> out.txt; \"$ATM\" release add 1.1 --target 'July' 2>> out.txt; true"
         ]
       ]
     },
-    "args": ["releases", "add", "1.2", "--pr", "9"],
+    "args": ["release", "add", "1.2", "--pr", "9"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["no task is in pull request #9"],
@@ -292,7 +292,7 @@
         }
       }
     },
-    "args": ["releases", "edit", "1.0", "--name", "First", "--target", ""],
+    "args": ["release", "edit", "1.0", "--name", "First", "--target", ""],
     "expect": {
       "stdout": "1.0: changed name, target\n",
       "files": {
@@ -304,9 +304,9 @@
     "name": "atm releases archive; an archived release isn't archived again",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } },
-      "commands": [["sh", "-c", "\"$ATM\" releases archive 1.0 > out.txt"]]
+      "commands": [["sh", "-c", "\"$ATM\" release archive 1.0 > out.txt"]]
     },
-    "args": ["releases", "archive", "1.0"],
+    "args": ["release", "archive", "1.0"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["the release '1.0' is already archived"],
@@ -324,15 +324,15 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
     },
-    "args": ["sprints", "edit", "A", "--release", "2.0"],
-    "expect": { "exit": 2, "stderrIncludes": ["no release '2.0'; the releases: none yet: atm releases add <R>"] }
+    "args": ["sprint", "edit", "A", "--release", "2.0"],
+    "expect": { "exit": 2, "stderrIncludes": ["no release '2.0'; the releases: none yet: atm release add <R>"] }
   },
   {
     "name": "list --release of a release that doesn't exist is refused",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
     },
-    "args": ["list", "--release", "2.0"],
+    "args": ["task", "list", "--release", "2.0"],
     "expect": { "exit": 2, "stderrIncludes": ["no release '2.0'; the releases: 1.0"] }
   },
   {
@@ -345,7 +345,7 @@
         }
       }
     },
-    "args": ["releases"],
+    "args": ["release", "list"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["meta.releases: '1.0' has the state 'shipped'; use one of planned, released, archived"]
@@ -361,7 +361,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": {
       "exit": 1,
       "stdout": "error: T-1: the release '2.0' is not one of meta.releases\nerror: the sprint 'A': the release '1.0' is not one of meta.releases\n"

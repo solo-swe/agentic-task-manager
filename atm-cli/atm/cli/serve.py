@@ -267,24 +267,5 @@ def serve_status(home, as_json, port):
     for info in strays:
         out(
             f"Also running, without a record: pid {info['pid']} on port {info['port']} "
-            f"(dashboard {info.get('version')}); `atm serve stop` stops it."
+            f"(dashboard {info.get('version')}); `atm service stop` stops it."
         )
-
-
-def cmd_serve(args):
-    # --dir acts on another project without a cd (which permission rules can't check)
-    cwd = os.path.abspath(args.dir) if args.dir else os.getcwd()
-    if not os.path.isdir(cwd):
-        raise AtmFailure(f"--dir {args.dir}: not a directory", 2)
-    home = atm_home()
-    if args.refresh:
-        serve_refresh(home)
-    elif args.action == "start":
-        refresh_server(home)  # an outdated server is replaced before its URL is shown
-        url = serve_start(cwd, args.port, args.all)
-        if args.open:
-            open_browser(url)
-    elif args.action == "stop":
-        serve_stop(home, args.port)
-    else:
-        serve_status(home, args.json, args.port)

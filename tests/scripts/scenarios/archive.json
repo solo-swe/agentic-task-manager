@@ -14,7 +14,7 @@
         }
       }
     },
-    "args": ["archive", "--dry-run", "--sprint", "One", "--json"],
+    "args": ["db", "archive", "--dry-run", "--sprint", "One", "--json"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "json": {
@@ -42,7 +42,7 @@
         }
       }
     },
-    "args": ["archive", "--dry-run", "--before", "2026-03-15"],
+    "args": ["db", "archive", "--dry-run", "--before", "2026-03-15"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdout": "Would archive 1 task(s): T-001.\nWould keep 1 finished: T-002 (finished on or after 2026-03-15).\n"
@@ -68,7 +68,7 @@
         }
       }
     },
-    "args": ["archive"],
+    "args": ["db", "archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdoutIncludes": [
@@ -116,7 +116,7 @@
         }
       }
     },
-    "args": ["archive"],
+    "args": ["db", "archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdoutIncludes": ["Archived 1 task(s): T-002."],
@@ -147,7 +147,7 @@
         }
       }
     },
-    "args": ["archive"],
+    "args": ["db", "archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdout": "Nothing to archive.\nKept 1 finished: T-2 (finished in the last 14 days).\n",
@@ -171,7 +171,7 @@
         }
       }
     },
-    "args": ["archive", "--dry-run"],
+    "args": ["db", "archive", "--dry-run"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdout": "Would archive 1 task(s): T-001.\n",
@@ -196,7 +196,7 @@
         }
       }
     },
-    "args": ["archive", "--before", "2026-04-01", "--keep-days", "0", "--json"],
+    "args": ["db", "archive", "--before", "2026-04-01", "--keep-days", "0", "--json"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "json": {
@@ -224,7 +224,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-2 Next (backlog, feature)\n" }
   },
   {
@@ -235,7 +235,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["add", "--name", "New", "--type", "feature", "--dep", "T-1", "--json"],
+    "args": ["task", "add", "--name", "New", "--type", "feature", "--dep", "T-1", "--json"],
     "expect": { "stdoutIncludes": ["\"id\": \"T-3\"", "\"dependencies\": [\n      \"T-1\"\n    ]"] }
   },
   {
@@ -246,7 +246,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["add", "--name", "New", "--type", "feature", "--dep", "T-9"],
+    "args": ["task", "add", "--name", "New", "--type", "feature", "--dep", "T-9"],
     "expect": { "exit": 2, "stderrIncludes": ["T-3 (New) depends on T-9, which doesn't exist"] }
   },
   {
@@ -256,9 +256,9 @@
         ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-2", "name": "Now", "status": "todo" }] },
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       },
-      "commands": [["sh", "-c", "\"$ATM\" edit T-2 --add-dep T-1"]]
+      "commands": [["sh", "-c", "\"$ATM\" task edit T-2 --add-dep T-1"]]
     },
-    "args": ["deps", "T-2"],
+    "args": ["task", "deps", "T-2"],
     "expect": { "stdout": "T-2 waits for: T-1 (done, archived)\nT-2 is waited on by: nothing\n" }
   },
   {
@@ -269,7 +269,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["edit", "T-2", "--add-dep", "T-9"],
+    "args": ["task", "edit", "T-2", "--add-dep", "T-9"],
     "expect": { "exit": 2, "stderrIncludes": ["T-2 can't depend on T-9, which doesn't exist"] }
   },
   {
@@ -280,7 +280,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["deps", "T-2"],
+    "args": ["task", "deps", "T-2"],
     "expect": { "stdout": "T-2 waits for: T-1 (done, archived)\nT-2 is waited on by: nothing\n" }
   },
   {
@@ -301,7 +301,7 @@
         }
       }
     },
-    "args": ["deps", "T-2"],
+    "args": ["task", "deps", "T-2"],
     "expect": { "stdout": "T-2 waits for: nothing\nT-2 is waited on by: T-5 (todo), T-3 (done, archived)\n" }
   },
   {
@@ -322,7 +322,7 @@
         }
       }
     },
-    "args": ["deps", "T-2", "--json"],
+    "args": ["task", "deps", "T-2", "--json"],
     "expect": {
       "json": {
         "id": "T-2",
@@ -342,7 +342,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "name": "Old", "status": "done" }] }
       }
     },
-    "args": ["show", "T-1", "T-2", "--json"],
+    "args": ["task", "details", "T-1", "T-2", "--json"],
     "expect": {
       "json": [
         { "id": "T-1", "name": "Old", "status": "done", "archived": true },
@@ -360,7 +360,7 @@
         }
       }
     },
-    "args": ["show", "T-1"],
+    "args": ["task", "details", "T-1"],
     "expect": { "stdout": "T-1  Old\n  done · backlog · archived · feature · P2\n" }
   },
   {
@@ -371,9 +371,9 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
       }
     },
-    "args": ["start", "T-1"],
+    "args": ["task", "state", "T-1", "in_progress"],
     "env": { "ATM_AGENT": "alice" },
-    "expect": { "exit": 1, "stderrIncludes": ["atm: no task T-1 (it is archived: atm unarchive brings it back)"] }
+    "expect": { "exit": 1, "stderrIncludes": ["atm: no task T-1 (it is archived: atm db unarchive brings it back)"] }
   },
   {
     "name": "list --archived lists the archive",
@@ -385,7 +385,7 @@
         }
       }
     },
-    "args": ["list", "--archived"],
+    "args": ["task", "list", "--archived"],
     "expect": { "stdout": "T-1  done  P2  Old\n" }
   },
   {
@@ -402,9 +402,9 @@
         }
       }
     },
-    "args": ["unarchive", "T-1"],
+    "args": ["db", "unarchive", "T-1"],
     "expect": {
-      "stdout": "Brought back T-1 from the archive.\nT-1 is finished: the next `atm archive` moves it back, unless reopened (`atm reopen <id> --reason …`).\n",
+      "stdout": "Brought back T-1 from the archive.\nT-1 is finished: the next `atm db archive` moves it back, unless reopened (`atm task state <id> todo --reason …`).\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
@@ -434,9 +434,9 @@
         }
       }
     },
-    "args": ["unarchive", "T-3", "T-1"],
+    "args": ["db", "unarchive", "T-3", "T-1"],
     "expect": {
-      "stdout": "Brought back T-3, T-1 from the archive.\nT-3, T-1 are finished: the next `atm archive` moves them back, unless reopened (`atm reopen <id> --reason …`).\n",
+      "stdout": "Brought back T-3, T-1 from the archive.\nT-3, T-1 are finished: the next `atm db archive` moves them back, unless reopened (`atm task state <id> todo --reason …`).\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": { "archived": 1 },
@@ -460,7 +460,7 @@
         }
       }
     },
-    "args": ["list", "--archived", "--json"],
+    "args": ["task", "list", "--archived", "--json"],
     "expect": {
       "json": [
         {
@@ -478,7 +478,7 @@
   {
     "name": "unarchive of a task that isn't archived",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["unarchive", "T-9"],
+    "args": ["db", "unarchive", "T-9"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: not in the archive: T-9 (no such task)"] }
   },
   {
@@ -494,7 +494,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
       }
     },
-    "args": ["unarchive", "T-1", "T-2", "T-9", "T-3"],
+    "args": ["db", "unarchive", "T-1", "T-2", "T-9", "T-3"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["atm: not in the archive: T-2, T-3 (already in tasks.json); T-9 (no such task)"],
@@ -517,7 +517,7 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-02T09:00:00Z" },
-    "args": ["unarchive", "T-1", "T-2"],
+    "args": ["db", "unarchive", "T-1", "T-2"],
     "expect": { "stdout": "Brought back T-1, T-2 from the archive.\n" }
   },
   {
@@ -534,7 +534,7 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-02T09:00:00Z" },
-    "args": ["unarchive", "T-1", "T-2", "--json"],
+    "args": ["db", "unarchive", "T-1", "T-2", "--json"],
     "expect": { "json": { "restored": ["T-1", "T-2"], "moves_back": ["T-1"] } }
   },
   {
@@ -549,7 +549,7 @@
         }
       }
     },
-    "args": ["archive"],
+    "args": ["db", "archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "stdoutIncludes": [
@@ -583,10 +583,10 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": {
       "exit": 1,
-      "stdout": "error: T-1: in both tasks.json and the archive (atm archive keeps the tasks.json copy)\n"
+      "stdout": "error: T-1: in both tasks.json and the archive (atm db archive keeps the tasks.json copy)\n"
     }
   },
   {
@@ -599,7 +599,7 @@
         }
       }
     },
-    "args": ["archive"],
+    "args": ["db", "archive"],
     "env": { "ATM_NOW": "2026-05-01T00:00:00Z" },
     "expect": {
       "files": {
@@ -615,7 +615,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done" }] }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": { "stdoutIncludes": ["archive: 1 tasks, 0 KB\n"] }
   }
 ]

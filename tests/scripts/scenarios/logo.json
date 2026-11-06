@@ -2,9 +2,9 @@
   {
     "name": "logo without one says how to set it",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["logo"],
+    "args": ["project", "logo"],
     "expect": {
-      "stdout": "No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).\n"
+      "stdout": "No logo. Set one with `atm project logo set <path>` (SVG, PNG, WebP or ICO, inside the project).\n"
     }
   },
   {
@@ -16,7 +16,7 @@
       }
     },
     "cwd": "docs",
-    "args": ["logo", "set", "img/mark.svg"],
+    "args": ["project", "logo", "set", "img/mark.svg"],
     "expect": {
       "stdout": "Logo set: docs/img/mark.svg\n",
       "files": {
@@ -33,7 +33,7 @@
         "logo.svg": "<svg/>"
       }
     },
-    "args": ["logo", "--json"],
+    "args": ["project", "logo", "--json"],
     "expect": { "json": { "logo": "brand/icon.png", "source": "set", "set": "brand/icon.png" } }
   },
   {
@@ -46,8 +46,8 @@
         "public/favicon.png": "png"
       }
     },
-    "args": ["logo"],
-    "expect": { "stdout": "public/favicon.png (found; set one with `atm logo set <path>`)\n" }
+    "args": ["project", "logo"],
+    "expect": { "stdout": "public/favicon.png (found; set one with `atm project logo set <path>`)\n" }
   },
   {
     "name": "logo auto-detect prefers the root's logo.svg",
@@ -58,13 +58,13 @@
         "logo.svg": "<svg/>"
       }
     },
-    "args": ["logo", "--json"],
+    "args": ["project", "logo", "--json"],
     "expect": { "json": { "logo": "logo.svg", "source": "found", "set": null } }
   },
   {
     "name": "logo set refuses a missing file, and nothing changes",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["logo", "set", "logo.png"],
+    "args": ["project", "logo", "set", "logo.png"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["logo.png: no such file"],
@@ -77,7 +77,7 @@
       "files": { "project/.agentic-task-manager/tasks.json": { "tasks": [] }, "outside.svg": "<svg/>" }
     },
     "cwd": "project",
-    "args": ["logo", "set", "../outside.svg"],
+    "args": ["project", "logo", "set", "../outside.svg"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["../outside.svg: the logo must be inside the project folder"],
@@ -90,7 +90,7 @@
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } },
       "commands": [["dd", "if=/dev/zero", "of=big.png", "bs=1024", "count=513"]]
     },
-    "args": ["logo", "set", "big.png"],
+    "args": ["project", "logo", "set", "big.png"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["big.png: the logo is larger than 512 KB"],
@@ -100,7 +100,7 @@
   {
     "name": "logo set refuses a file that isn't an SVG, PNG, WebP or ICO image",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] }, "logo.gif": "gif" } },
-    "args": ["logo", "set", "logo.gif"],
+    "args": ["project", "logo", "set", "logo.gif"],
     "expect": { "exit": 2, "stderrIncludes": ["logo.gif: a logo is an SVG, PNG, WebP or ICO image"] }
   },
   {
@@ -111,7 +111,7 @@
         "logo.svg": "<svg/>"
       }
     },
-    "args": ["logo"],
+    "args": ["project", "logo"],
     "expect": {
       "stdout": "meta.logo is gone.svg, which isn't a usable logo (missing, too large, or outside the project).\n"
     }
@@ -121,7 +121,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "project": "P", "logo": "logo.svg" }, "tasks": [] } }
     },
-    "args": ["logo", "unset"],
+    "args": ["project", "logo", "unset"],
     "expect": {
       "stdout": "Logo unset.\n",
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "project": "P" }, "tasks": [] } }

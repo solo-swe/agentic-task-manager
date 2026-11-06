@@ -15,6 +15,7 @@
       }
     },
     "args": [
+      "task",
       "add",
       "--name",
       "Both",
@@ -26,7 +27,7 @@
       "dashboard/src/a.ts"
     ],
     "expect": {
-      "stdout": "Added T-001 Both\n  T-001: its files suggest the components dashboard, atm-cli (atm edit T-001 --add-component dashboard --add-component atm-cli)\n"
+      "stdout": "Added T-001 Both\n  T-001: its files suggest the components dashboard, atm-cli (atm task edit T-001 --add-component dashboard --add-component atm-cli)\n"
     }
   },
   {
@@ -45,6 +46,7 @@
       }
     },
     "args": [
+      "task",
       "add",
       "--name",
       "A",
@@ -101,13 +103,13 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" edit T-1 --add-file docs/guide.md > out.txt"]]
+      "commands": [["sh", "-c", "\"$ATM\" task edit T-1 --add-file docs/guide.md > out.txt"]]
     },
-    "args": ["edit", "T-1", "--components", "auto"],
+    "args": ["task", "edit", "T-1", "--components", "auto"],
     "expect": {
       "stdout": "T-1: changed components\n",
       "files": {
-        "out.txt": "T-1: changed files\n  T-1: its files suggest the component docs (atm edit T-1 --add-component docs)\n"
+        "out.txt": "T-1: changed files\n  T-1: its files suggest the component docs (atm task edit T-1 --add-component docs)\n"
       }
     }
   },
@@ -121,7 +123,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--add-component", "server"],
+    "args": ["task", "edit", "T-1", "--add-component", "server"],
     "expect": { "exit": 2, "stderrIncludes": ["no component 'server'; the components: dashboard"] }
   },
   {
@@ -138,7 +140,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": {
       "stdout": "warning: T-1: its files match no component (meta.components' paths)\ntasks.json is fine (3 tasks, 1 warnings)\n"
     }
@@ -153,7 +155,7 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["meta.components: 'dashboard''s paths must be a list of globs (strings)"]
@@ -178,7 +180,7 @@
       }
     },
     "args": [
-      "components",
+      "component",
       "add",
       "dashboard",
       "--path",
@@ -232,7 +234,7 @@
       }
     },
     "args": [
-      "components",
+      "component",
       "add",
       "api",
       "--label",
@@ -285,7 +287,7 @@
         }
       }
     },
-    "args": ["components"],
+    "args": ["component", "list"],
     "expect": {
       "stdout": "dashboard · “Dashboard” · dashboard/** · review async: 2 tasks\ncompmd · no paths: 0 tasks\n"
     }
@@ -293,8 +295,8 @@
   {
     "name": "components without any says how to add one (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["components"],
-    "expect": { "stdout": "No components yet: atm components add <id> --path GLOB.\n" }
+    "args": ["component", "list"],
+    "expect": { "stdout": "No components yet: atm component add <id> --path GLOB.\n" }
   },
   {
     "name": "components add refuses a component already there, writing nothing (T-324)",
@@ -303,7 +305,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] }
       }
     },
-    "args": ["components", "add", "cli", "--path", "atm-cli/**"],
+    "args": ["component", "add", "cli", "--path", "atm-cli/**"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["there is already a component 'cli'"],
@@ -317,7 +319,7 @@
         ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "labels": ["dashboard"] }] }
       }
     },
-    "args": ["components", "add", "dashboard", "--from-label", "dashbaord"],
+    "args": ["component", "add", "dashboard", "--from-label", "dashbaord"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["no task has the label 'dashbaord'"],
@@ -329,13 +331,13 @@
   {
     "name": "components add checks its ID (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["components", "add", "a b"],
+    "args": ["component", "add", "a b"],
     "expect": { "exit": 2, "stderrIncludes": ["'a b': a component ID is letters, digits"] }
   },
   {
     "name": "components add --assign needs a glob (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["components", "add", "api", "--assign"],
+    "args": ["component", "add", "api", "--assign"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["--assign gives the component to the tasks its globs match: it needs --path"]
@@ -363,7 +365,7 @@
       }
     },
     "args": [
-      "components",
+      "component",
       "edit",
       "cli",
       "--add-path",
@@ -405,7 +407,7 @@
         }
       }
     },
-    "args": ["components", "edit", "api", "--label", "", "--review", "blocker", "--json"],
+    "args": ["component", "edit", "api", "--label", "", "--review", "blocker", "--json"],
     "expect": {
       "json": {
         "component": { "id": "api", "paths": ["server.py"], "review": "blocker" },
@@ -428,7 +430,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "api", "paths": ["a"] }] }, "tasks": [] }
       }
     },
-    "args": ["components", "edit", "api", "--add-path", "a"],
+    "args": ["component", "edit", "api", "--add-path", "a"],
     "expect": { "stdout": "api: nothing changed\n" }
   },
   {
@@ -438,7 +440,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] }
       }
     },
-    "args": ["components", "edit", "api", "--from-label", "server"],
+    "args": ["component", "edit", "api", "--from-label", "server"],
     "expect": { "exit": 2, "stderrIncludes": ["no component 'api'; the components: cli"] }
   },
   {
@@ -448,7 +450,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "compmd" }] }, "tasks": [] }
       }
     },
-    "args": ["components", "edit", "compmd", "--assign"],
+    "args": ["component", "edit", "compmd", "--assign"],
     "expect": { "exit": 2, "stderrIncludes": ["--assign gives compmd to the tasks its globs match, and it has none"] }
   },
   {
@@ -458,13 +460,13 @@
         ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] }
       }
     },
-    "args": ["components", "edit", "cli", "--path", "x/**"],
-    "expect": { "exit": 2, "stderrIncludes": ["--path is for atm components add (edit takes --add-path)"] }
+    "args": ["component", "edit", "cli", "--path", "x/**"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --path", "Usage: atm component edit"] }
   },
   {
     "name": "components: add's options are refused when listing (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["components", "--from-label", "x"],
-    "expect": { "exit": 2, "stderrIncludes": ["--from-label is for atm components add"] }
+    "args": ["component", "list", "--from-label", "x"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --from-label"] }
   }
 ]

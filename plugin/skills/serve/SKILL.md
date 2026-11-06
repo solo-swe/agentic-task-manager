@@ -4,7 +4,7 @@ description: >
   Start, stop or check the local server for the task dashboard, one for all your projects. Use when the user says
   "serve the dashboard", "start the dashboard", "open the dashboard", "show all projects", "stop the dashboard
   server", or "is the dashboard running".
-allowed-tools: Bash(atm serve:*), Bash(atm projects:*), Bash(atm repository:*), Bash(atm status:*), Bash(atm show:*), Bash(atm list:*)
+allowed-tools: Bash(atm service:*), Bash(atm project list:*), Bash(atm project add:*), Bash(atm project remove:*), Bash(atm project prune:*), Bash(atm vcs repository:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*)
 ---
 
 # Serve the Dashboard
@@ -12,7 +12,7 @@ allowed-tools: Bash(atm serve:*), Bash(atm projects:*), Bash(atm repository:*), 
 You start, stop or report the background HTTP server that shows the task dashboard. There is **one server for all of
 the user's projects**: it shows this project, the others atm has run in, and an overview of all of them. The plugin's
 `atm` command does the work; you run it and relay what it prints. Never read or edit `tasks.json` or
-`tasks-archive.json` directly: `atm status`, `atm show` and `atm list` answer questions about the tasks.
+`tasks-archive.json` directly: `atm project status`, `atm task details` and `atm task list` answer questions about the tasks.
 
 ## Step 1: Parse arguments
 
@@ -33,7 +33,7 @@ the user's projects**: it shows this project, the others atm has run in, and an 
 From the project root, run:
 
 ```bash
-atm serve <action> [--open] [--all] [--port N] [--dir PATH]
+atm service <action> [--open] [--all] [--port N] [--dir PATH]
 ```
 
 (`atm` is atm-cli, the plugin's command; its `bin/` is on your PATH while the plugin is enabled. If the shell says
@@ -42,7 +42,7 @@ atm serve <action> [--open] [--all] [--port N] [--dir PATH]
 The helper:
 - moves an old `docs/tasks.json` (or `tasks.json` in the root) into `.agentic-task-manager/` first, and cleans up
   after older versions (a project's own copy of the dashboard and its own server);
-- adds the project to the dashboard's list of projects (`atm projects` shows them);
+- adds the project to the dashboard's list of projects (`atm project list` shows them);
 - serves the dashboard on `localhost` in a background process that keeps running after this session ends. The
   dashboard comes with the plugin, so updating the plugin updates it: the server restarts itself on the new version.
 
@@ -62,5 +62,5 @@ Relay the helper's output. After a successful `start`, add:
 If the output included a line about moving `tasks.json`, also say the move is staged (not committed) and that it
 should be committed.
 
-Then run `atm repository`. If it says there is no address yet, add one line: commits and pull requests on the
-dashboard become links once the repository's address is set, with `atm repository set <url>` (or ask me to set it).
+Then run `atm vcs repository`. If it says there is no address yet, add one line: commits and pull requests on the
+dashboard become links once the repository's address is set, with `atm vcs repository <url>` (or ask me to set it).

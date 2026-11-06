@@ -19,7 +19,7 @@
       }
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["reopen", "T-001", "--reason", "Marked done before its commit went in"],
+    "args": ["task", "state", "T-001", "todo", "--reason", "Marked done before its commit went in"],
     "expect": {
       "stdout": "T-001: done -> todo\n",
       "files": {
@@ -48,19 +48,19 @@
     "name": "reopen a skipped task; then it can be blocked or started again",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "skipped" }] } } },
     "env": { "ATM_AGENT": "bob" },
-    "args": ["reopen", "T-001", "--reason", "Needed after all", "--json"],
+    "args": ["task", "state", "T-001", "todo", "--reason", "Needed after all", "--json"],
     "expect": { "stdoutIncludes": ["\"status\": \"todo\""] }
   },
   {
     "name": "reopen needs a reason",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["reopen", "T-001"],
+    "args": ["task", "state", "T-001", "todo"],
     "expect": { "exit": 2, "stderrIncludes": ["--reason"] }
   },
   {
-    "name": "reopen refuses a task that isn't done or skipped",
+    "name": "back to todo refuses a task that is todo already",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
-    "args": ["reopen", "T-001", "--reason", "x"],
-    "expect": { "exit": 1, "stderrIncludes": ["can't reopen T-001: it is todo, not done or skipped"] }
+    "args": ["task", "state", "T-001", "todo", "--reason", "x"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: T-001 is already todo"] }
   }
 ]

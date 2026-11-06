@@ -34,7 +34,7 @@
         }
       }
     },
-    "args": ["start", "T-002"],
+    "args": ["task", "state", "T-002", "in_progress"],
     "expect": {
       "stdoutIncludes": ["T-002: todo -> in_progress\nT-002  Task T-002\n", "depends on: T-001 (done)"],
       "files": {
@@ -109,7 +109,7 @@
         }
       }
     },
-    "args": ["start", "T-002"],
+    "args": ["task", "state", "T-002", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["can't start T-002: waiting on T-001 (in_progress), T-404 (missing)"],
@@ -172,7 +172,7 @@
         }
       }
     },
-    "args": ["done", "T-001", "--json"],
+    "args": ["task", "state", "T-001", "done", "--json"],
     "expect": {
       "json": {
         "id": "T-001",
@@ -220,7 +220,7 @@
         }
       }
     },
-    "args": ["fail", "T-001", "--reason", "tests failed twice"],
+    "args": ["task", "state", "T-001", "todo", "--reason", "tests failed twice"],
     "expect": {
       "stdout": "T-001: in_progress -> todo\n",
       "files": {
@@ -258,57 +258,6 @@
     }
   },
   {
-    "name": "fail without --reason records a default reason",
-    "setup": {
-      "files": {
-        ".agentic-task-manager/tasks.json": {
-          "meta": {
-            "project": "S"
-          },
-          "tasks": [
-            {
-              "id": "T-001",
-              "name": "Task T-001",
-              "phase": 0,
-              "type": "feature",
-              "description": "d",
-              "status": "in_progress",
-              "dependencies": [],
-              "updated_at": "2026-04-01T00:00:00Z"
-            }
-          ]
-        }
-      }
-    },
-    "args": ["fail", "T-001", "--json"],
-    "expect": {
-      "json": {
-        "id": "T-001",
-        "name": "Task T-001",
-        "phase": 0,
-        "type": "feature",
-        "description": "d",
-        "status": "todo",
-        "dependencies": [],
-        "updated_at": "2026-05-01T10:00:00Z",
-        "updated_by": "alice",
-        "notes": [
-          {
-            "at": "2026-05-01T10:00:00Z",
-            "kind": "failure",
-            "text": "verification failed",
-            "by": "alice"
-          }
-        ],
-        "claim": null
-      }
-    },
-    "env": {
-      "ATM_NOW": "2026-05-01T10:00:00Z",
-      "ATM_AGENT": "alice"
-    }
-  },
-  {
     "name": "release: back to todo, no failure recorded",
     "setup": {
       "files": {
@@ -332,7 +281,7 @@
         }
       }
     },
-    "args": ["release", "T-001"],
+    "args": ["task", "state", "T-001", "todo"],
     "expect": {
       "stdout": "T-001: in_progress -> todo\n",
       "files": {
@@ -384,7 +333,7 @@
         }
       }
     },
-    "args": ["done", "T-001"],
+    "args": ["task", "state", "T-001", "done"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["can't done T-001: it is todo, not in_progress"],
@@ -436,7 +385,7 @@
         }
       }
     },
-    "args": ["start", "T-001"],
+    "args": ["task", "state", "T-001", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["can't start T-001: it is done, not todo"],
@@ -466,7 +415,7 @@
     }
   },
   {
-    "name": "release refuses a task that is done",
+    "name": "back to todo from done is a reopen, which needs a reason",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -488,10 +437,10 @@
         }
       }
     },
-    "args": ["release", "T-001"],
+    "args": ["task", "state", "T-001", "todo"],
     "expect": {
-      "exit": 1,
-      "stderrIncludes": ["can't release T-001: it is done, not in_progress"],
+      "exit": 2,
+      "stderrIncludes": ["atm: todo (reopen) needs --reason"],
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -518,7 +467,7 @@
     }
   },
   {
-    "name": "fail refuses a task that is todo",
+    "name": "back to todo refuses a task that is todo already",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -540,10 +489,10 @@
         }
       }
     },
-    "args": ["fail", "T-001"],
+    "args": ["task", "state", "T-001", "todo"],
     "expect": {
-      "exit": 1,
-      "stderrIncludes": ["can't fail T-001: it is todo, not in_progress"],
+      "exit": 2,
+      "stderrIncludes": ["atm: T-001 is already todo"],
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -592,7 +541,7 @@
         }
       }
     },
-    "args": ["start", "T-999"],
+    "args": ["task", "state", "T-999", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["no task T-999"]
@@ -625,10 +574,10 @@
         }
       }
     },
-    "args": ["done"],
+    "args": ["task", "state"],
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["atm: the following arguments are required: id", "usage: atm done"]
+      "stderrIncludes": ["atm: Missing argument 'TASK_ID'.", "Usage: atm task state [OPTIONS] TASK_ID NEXT_STATE"]
     },
     "env": {
       "ATM_NOW": "2026-05-01T10:00:00Z",
@@ -640,7 +589,7 @@
     "setup": {
       "git": true
     },
-    "args": ["start", "T-001"],
+    "args": ["task", "state", "T-001", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["no tasks.json in"]
@@ -653,7 +602,7 @@
         ".agentic-task-manager/tasks.json": "[1, 2]"
       }
     },
-    "args": ["start", "T-001"],
+    "args": ["task", "state", "T-001", "in_progress"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["is not a valid task file"]
@@ -670,7 +619,7 @@
       "ATM_NOW": "2026-05-01T10:00:00Z",
       "ATM_AGENT": "alice"
     },
-    "args": ["start", "T-002"],
+    "args": ["task", "state", "T-002", "in_progress"],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": "{\n  \"meta\": {\n    \"project\": \"Ünïcode ✓\"\n  },\n  \"tasks\": [\n    {\n      \"id\": \"T-001\",\n      \"status\": \"done\",\n      \"name\": \"Erste Aufgabe — fertig\",\n      \"dependencies\": []\n    },\n    {\n      \"status\": \"in_progress\",\n      \"id\": \"T-002\",\n      \"dependencies\": [\n        \"T-001\"\n      ],\n      \"updated_at\": \"2026-05-01T10:00:00Z\",\n      \"updated_by\": \"alice\",\n      \"started_at\": \"2026-05-01T10:00:00Z\",\n      \"started_by\": \"alice\"\n    }\n  ]\n}\n"
@@ -706,7 +655,7 @@
       "ATM_NOW": "2026-05-01T10:00:00Z",
       "ATM_AGENT": "alice"
     },
-    "args": ["done", "T-001"],
+    "args": ["task", "state", "T-001", "done"],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -763,7 +712,7 @@
       "ATM_NOW": "2026-05-01T10:00:00Z",
       "ATM_AGENT": "alice"
     },
-    "args": ["release", "T-001"],
+    "args": ["task", "state", "T-001", "todo"],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": {

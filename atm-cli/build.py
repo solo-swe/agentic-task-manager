@@ -91,7 +91,6 @@ MODULES = [
     "cli.sprints",
     "cli.releases",
     "cli.archive",
-    "cli.show",
     "cli.code",
     "cli.projects",
     "cli.settings",
@@ -109,8 +108,12 @@ MODULES = [
 VENDORED_PACKAGES: List[str] = ["six", "transitions"]
 
 # Directory containing vendored third-party source code.
-# T-416 will copy click, transitions, etc. source here (e.g. vendored/click/, vendored/transitions/).
 VENDORED_DIR = os.path.join(HERE, "vendored")
+
+# Third-party packages the plugin ships as they are, beside atm.py in plugin/scripts/vendor/ (its README): Typer and
+# Click, which can't be flattened into one namespace. The built file puts that folder first on its import path.
+SHIPPED_PACKAGES = ("click", "typer")
+SHIPPED_PATH = 'sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "vendor"))'
 
 # The end of the built file: the one entry, as a process starts it. `--server` (plugin/scripts/atm-serve) runs the
 # REST API's server process; anything else is the CLI (plugin/scripts/atm). Every module is in one namespace there,
@@ -368,12 +371,24 @@ def build():
 
     # __future__ imports must come first in Python (before any other import)
     future_names = from_imports.pop("__future__", None)
-    imports = [f"import {name}" for name in sorted(plain_imports)]
+    shipped = {name for name in plain_imports if name.split(" ")[0].split(".")[0] in SHIPPED_PACKAGES}
+    imports = [f"import {name}" for name in sorted(plain_imports - shipped)]
     if future_names:
         imports.insert(
             0, f"from __future__ import {', '.join(sorted(future_names))}"
         )
-    imports += [f"from {module} import {', '.join(sorted(names))}" for module, names in sorted(from_imports.items())]
+    imports += [
+        f"from {module} import {', '.join(sorted(names))}"
+        for module, names in sorted(from_imports.items())
+        if module.split(".")[0] not in SHIPPED_PACKAGES
+    ]
+    # The shipped packages come from plugin/scripts/vendor/, before any copy installed on the machine
+    imports += ["", SHIPPED_PATH] + [f"import {name}" for name in sorted(shipped)]
+    imports += [
+        f"from {module} import {', '.join(sorted(names))}"
+        for module, names in sorted(from_imports.items())
+        if module.split(".")[0] in SHIPPED_PACKAGES
+    ]
     docstring = '"""' + package_doc.value.value + '"""'
     for name in ("SERVER_ENTRY", "serve_main", "main"):
         if name not in defined:
