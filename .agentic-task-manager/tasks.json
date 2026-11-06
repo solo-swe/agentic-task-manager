@@ -20978,13 +20978,13 @@
       "description": "The [Svelte guide](docs/guides/svelte.md#where-logic-lives) puts validation, queries, ordering, search and what atm derives from tasks in atm-lib, served through the v1 API ([layered-architecture.md](docs/layered-architecture.md) §6.2). Today `dashboard/src/lib/*.ts` computes much of that itself.\n\n## Change\nWrite `docs/dashboard-logic-inventory.md`: for each module in `dashboard/src/lib/` that computes domain values (e.g. stages, readiness, waiting, claims, sprint progress, burndown, velocity, forecasts, insights, filters, search), what it computes, whether atm-lib already has it, which v1 route should serve it, and what stays in the dashboard as view logic (layout, formatting, the graph's geometry).\n\nThen review it with the user and split the moves into follow-up tasks with `/atm:create-tasks`, in the order the doc proposes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/dashboard-logic-inventory.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:56Z",
+      "updated_at": "2026-11-06T06:38:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20997,7 +20997,9 @@
       "components": [
         "docs"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:38:13Z",
+      "started_by": "claude:34798264"
     }
   ]
 }
