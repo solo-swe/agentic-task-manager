@@ -97,8 +97,8 @@ atm-cli writes these fields; this is for reading `atm task details --json` outpu
   Updating the plugin updates it; the server restarts on the new version by itself (`atm service --refresh`)
 - Task text (descriptions, notes, questions) renders as CompMD: Markdown with tables, task lists, ` ```mermaid `
   diagrams, layout components and the task's own data as `md.data.task`; never a frontmatter of its own.
-  `/atm:create-tasks` lists what renders; the plugin's `docs/compmd-llms.txt` (beside `skills/`) is CompMD's guide
-  for agents. Read that local copy; never fetch CompMD documentation from the web
+  `/atm:create-tasks` lists what renders; `atm docs compmd` prints CompMD's guide for agents, the copy that matches
+  this atm. Read that; never fetch CompMD documentation from the web
 - References in task text are links the dashboard opens in its document viewer: files and documents by a relative
   link from the project root (`docs/x.md#routes`, `src/app.ts#L40`), a requirement or a place in a document by a text
   fragment (`docs/x.md#:~:text=SR%2D2.1`, with `-`, `,` and `&` in the text as `%2D`, `%2C`, `%26`), also in

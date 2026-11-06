@@ -15,12 +15,12 @@ function runBuild(args, build = BUILD) {
   return { code: result.status, stderr: result.stderr };
 }
 
-/** A copy of atm-cli/ (and docs/agent/, which it builds in) in a temporary directory, so a test can break a module
- * without touching the repo. */
+/** A copy of atm-cli/ (and docs/agent/ and skills/, which it builds from) in a temporary directory, so a test can
+ * break a module without touching the repo. */
 function copyOfSources() {
   const dir = tempDir('atm-build-');
-  fs.cpSync(path.join(REPO, 'atm-cli'), path.join(dir, 'atm-cli'), { recursive: true });
-  fs.cpSync(path.join(REPO, 'docs/agent'), path.join(dir, 'docs/agent'), { recursive: true });
+  for (const part of ['atm-cli', 'docs/agent', 'skills'])
+    fs.cpSync(path.join(REPO, part), path.join(dir, part), { recursive: true });
   return dir;
 }
 

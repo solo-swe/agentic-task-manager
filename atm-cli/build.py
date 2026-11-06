@@ -618,7 +618,14 @@ def agent_docs():
         topics[name] = (first[2:].split(": ", 1)[1].strip(), text.rstrip("\n") + "\n")
     if not topics:
         raise BuildError("docs/agent/ has no topics")
-    return topics
+    # CompMD's own guide for language models, pinned at the version the dashboard renders with (its first line says
+    # which): what task text may contain
+    with open(os.path.join(AGENT_DOCS_DIR, "compmd-llms.txt"), encoding="utf-8") as f:
+        topics["compmd"] = (
+            "CompMD, the Markdown task text renders as: its guide for agents (what renders: atm docs tasks)",
+            f.read().rstrip("\n") + "\n",
+        )
+    return dict(sorted(topics.items()))
 
 
 def generated_python_agent_docs(topics):
@@ -635,8 +642,50 @@ def generated_python_agent_docs(topics):
     return "\n".join(lines) + "\n"
 
 
+SKILLS_DIR = os.path.join(os.path.dirname(HERE), "skills")
+PLUGIN_SKILLS_DIR = os.path.join(os.path.dirname(HERE), "plugin", "skills")
+PLUGIN_CHECK = "**First, check atm:**"
+PLUGIN_FALLBACK = (
+    "(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write\n"
+    '`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)\n\n'
+)
+SKILL_FILE = re.compile(r"---\nname: (atm-[a-z-]+)\ndescription: >\n((?:  [^\n]*\n)+)---\n(.*)", re.S)
+
+
+def plugin_skills():
+    """The Claude Code plugin's copies of the skills (T-441), from the one source in skills/: each under its name without
+    `atm-` (the plugin adds the `/atm:` namespace), with Claude Code's pre-approved commands from skills/claude-code.json,
+    and its links to the other skills as `/atm:<name>`. {path: text}."""
+    with open(os.path.join(SKILLS_DIR, "claude-code.json"), encoding="utf-8") as f:
+        allowed = json.load(f)["allowed-tools"]
+    names = sorted(d for d in os.listdir(SKILLS_DIR) if os.path.isdir(os.path.join(SKILLS_DIR, d)))
+    short = "|".join(re.escape(n[len("atm-"):]) for n in names)
+    link = re.compile(rf"(?<![\w/.-])/atm-({short})\b")
+    files = {}
+    for name in names:
+        source = os.path.join("skills", name, "SKILL.md")
+        with open(os.path.join(SKILLS_DIR, name, "SKILL.md"), encoding="utf-8") as f:
+            match = SKILL_FILE.fullmatch(f.read())
+        if not match or match.group(1) != name:
+            raise BuildError(f"{source}: starts with a frontmatter of `name: {name}` and `description: >` only")
+        if name not in allowed:
+            raise BuildError(f"skills/claude-code.json: no allowed-tools for {name}")
+        front = f"---\nname: {name[len('atm-'):]}\ndescription: >\n{match.group(2)}allowed-tools: {allowed[name]}\n---\n"
+        note = f"<!-- Generated from {source} by atm-cli/build.py: edit that file and run {GENERATED_HOW} -->\n"
+        body = link.sub(r"/atm:\1", match.group(3))
+        if PLUGIN_CHECK not in body:
+            raise BuildError(f"{source}: no '{PLUGIN_CHECK}' paragraph (the version check every skill starts with)")
+        # The plugin brings its own atm: where its bin/ isn't on PATH, the skill finds it beside itself
+        body = body.replace(PLUGIN_CHECK, PLUGIN_FALLBACK + PLUGIN_CHECK, 1)
+        files[os.path.join(PLUGIN_SKILLS_DIR, name[len("atm-"):], "SKILL.md")] = front + note + body
+    extra = set(allowed) - set(names)
+    if extra:
+        raise BuildError(f"skills/claude-code.json: no skill named {', '.join(sorted(extra))}")
+    return files
+
+
 def generated_files():
-    """The files generated from the schemas, the vocabularies and the agents' reference, by path."""
+    """The files generated from the schemas, the vocabularies, the agents' reference and the skills, by path."""
     types = schema_types()
     vocabularies = vocabulary_data()
     return {
@@ -645,6 +694,7 @@ def generated_files():
         PY_VOCABULARIES: generated_python_vocabularies(vocabularies),
         TS_VOCABULARIES: generated_typescript_vocabularies(vocabularies),
         PY_AGENT_DOCS: generated_python_agent_docs(agent_docs()),
+        **plugin_skills(),
     }
 
 

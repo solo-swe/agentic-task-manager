@@ -1,0 +1,11 @@
+{
+  "allowed-tools": {
+    "atm-close-sprint": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint:*), Bash(atm task list:*), Bash(atm task details:*), Bash(atm task deps:*)",
+    "atm-create-tasks": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm db init:*), Bash(atm vcs repository:*), Bash(atm sprint:*), Bash(atm project workflow:*), Bash(atm task add:*), Bash(atm task edit:*), Bash(atm doctor:*)",
+    "atm-do-task": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*), Bash(atm db unarchive:*)",
+    "atm-loop-tasks": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint list:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*)",
+    "atm-plan-sprint": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint:*), Bash(atm task list:*), Bash(atm task details:*), Bash(atm task deps:*)",
+    "atm-push": "Bash(atm project workflow:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm vcs commit:*), Bash(atm vcs pr:*), Bash(atm vcs pushed:*), Bash(atm claim hold:*)",
+    "atm-serve": "Bash(atm service:*), Bash(atm project list:*), Bash(atm project add:*), Bash(atm project remove:*), Bash(atm project prune:*), Bash(atm vcs repository:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*)"
+  }
+}

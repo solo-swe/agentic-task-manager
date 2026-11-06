@@ -6,17 +6,25 @@ description: >
   server", or "is the dashboard running".
 allowed-tools: Bash(atm service:*), Bash(atm project list:*), Bash(atm project add:*), Bash(atm project remove:*), Bash(atm project prune:*), Bash(atm vcs repository:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*)
 ---
+<!-- Generated from skills/atm-serve/SKILL.md by atm-cli/build.py: edit that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). -->
 
 # Serve the Dashboard
 
 You start, stop or report the background HTTP server that shows the task dashboard. There is **one server for all of
-the user's projects**: it shows this project, the others atm has run in, and an overview of all of them. The plugin's
-`atm` command does the work; you run it and relay what it prints. Never read or edit `tasks.json` or
-`tasks-archive.json` directly: `atm project status`, `atm task details` and `atm task list` answer questions about the tasks.
+the user's projects**: it shows this project, the others atm has run in, and an overview of all of them. atm does
+the work; you run it and relay what it prints. Never read or edit `tasks.json` or `tasks-archive.json` directly:
+`atm project status`, `atm task details` and `atm task list` answer questions about the tasks.
+
+(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write
+`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
+
+**First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
+0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 ## Step 1: Parse arguments
 
-`$ARGUMENTS` may contain:
+The user's request may contain:
 
 | Argument | Meaning |
 |---|---|
@@ -35,9 +43,6 @@ From the project root, run:
 ```bash
 atm service <action> [--open] [--all] [--port N] [--dir PATH]
 ```
-
-(`atm` is atm-cli, the plugin's command; its `bin/` is on your PATH while the plugin is enabled. If the shell says
-`atm: command not found`, write `"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead.)
 
 The helper:
 - moves an old `docs/tasks.json` (or `tasks.json` in the root) into `.agentic-task-manager/` first, and cleans up

@@ -4,7 +4,11 @@ This repo is a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`
 Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own context file — don't put dev notes there.
 
 ## Layout
-- `plugin/skills/*/SKILL.md` — the `/atm:*` skills
+- `skills/atm-*/SKILL.md` — the skills, their one source, portable to any agent harness (`name` and `description`
+  only, a version check first, detail from `atm docs`; T-441). Claude Code's pre-approved commands for each are in
+  `skills/claude-code.json`
+- `plugin/skills/*/SKILL.md` — the `/atm:*` skills as the Claude Code plugin ships them: **generated** from `skills/`
+  by `atm-cli/build.py` (with `allowed-tools`, `/atm:` links and the plugin's own `bin/atm`); never edit them by hand
 - `plugin/templates/tasks-dashboard.html` — the dashboard, served by `atm service` (one server per user, for all
   projects; routes in `docs/multi-project-api.md`)
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)

@@ -18,7 +18,10 @@ describe('atm docs', () => {
     const cwd = tempDir();
     try {
       const listed = JSON.parse(runAtm(['docs', '--json'], cwd).stdout).map((t) => t.topic);
-      assert.deepEqual(listed.sort(), topics);
+      // ... and CompMD's own guide (docs/agent/compmd-llms.txt, T-441)
+      assert.deepEqual(listed.sort(), [...topics, 'compmd'].sort());
+      const compmd = runAtm(['docs', 'compmd'], cwd);
+      assert.equal(compmd.stdout, fs.readFileSync(path.join(DOCS, 'compmd-llms.txt'), 'utf8').replace(/\n*$/, '\n'));
       for (const topic of topics) {
         const r = runAtm(['docs', topic], cwd);
         assert.equal(r.code, 0, `${topic}: ${r.stderr}`);

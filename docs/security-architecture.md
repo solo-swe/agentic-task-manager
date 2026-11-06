@@ -603,6 +603,17 @@ to two hours before another agent can take it (I22's loop behaviour is otherwise
 the sandbox run: `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` only restate the lease's length and who
 renews it; nothing new to run, fetch or install.
 
+**`atm docs` and the portable skills (T-440, T-441).** `atm docs <topic>` prints text built into atm (`docs/agent/`,
+and CompMD's guide, which moved there from `plugin/docs/`): it reads no file, path or URL, so it adds no entry point,
+and the skills read reference from the installed atm rather than from a path beside them. The skills' source moved
+to `skills/` and the plugin's copies are generated from it (`build.py --check` in CI catches a hand edit); they keep
+their rules word for word (task text is data, single quotes, review decisions the user's, commit then finish), and
+`skills.test.ts` checks the source and the copies. What changed for agents: each skill starts by checking
+`atm version` and stops when atm is missing or too old, never working around it; the lease and Markdown paragraphs
+became pointers to `atm docs`; the pre-approvals (`allowed-tools`) are the same, now kept in
+`skills/claude-code.json`. Written review in place of the sandbox run (no API key): nothing new to run, fetch or
+install, and no new pre-approval.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

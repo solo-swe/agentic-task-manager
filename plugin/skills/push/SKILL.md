@@ -6,6 +6,7 @@ description: >
   "open a PR", "push and watch CI", or "get CI green".
 allowed-tools: Bash(atm project workflow:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm vcs commit:*), Bash(atm vcs pr:*), Bash(atm vcs pushed:*), Bash(atm claim hold:*)
 ---
+<!-- Generated from skills/atm-push/SKILL.md by atm-cli/build.py: edit that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). -->
 
 # Push
 
@@ -13,13 +14,19 @@ You push the project's committed work, the way the project works: straight to th
 through a pull request (**pull-request**). Then you watch CI and fix what fails, until it passes, the round limit is
 reached, or something needs the user.
 
-`atm` is atm-cli, the plugin's command (its `bin/` is on your PATH while the plugin is enabled; if the shell says
-`atm: command not found`, write `"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead). Never read or edit `tasks.json`
+(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write
+`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
+
+**First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
+0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
+
+`atm` is atm-cli, the plugin's command. Never read or edit `tasks.json`
 directly: `atm` reads and records everything.
 
 ## Arguments
 
-`$ARGUMENTS` may contain:
+The user's request may contain:
 
 | Flag | Meaning |
 |---|---|
@@ -30,8 +37,8 @@ directly: `atm` reads and records everything.
 
 ## Step 1: The workflow
 
-**The project's instructions come first.** If its `CLAUDE.md` (or similar) says how to push, branch or handle CI,
-follow that. Otherwise:
+**The project's instructions come first.** If they (`AGENTS.md`, `CLAUDE.md` or similar) say how to push, branch or
+handle CI, follow them. Otherwise:
 
 ```bash
 atm project workflow --json
@@ -44,7 +51,7 @@ atm project workflow --json
 - Otherwise it has `type`, `base` (if missing, the remote's default branch: `git symbolic-ref --short
   refs/remotes/origin/HEAD`, else `main`), `verify`, `max_rounds`, `commit_template` and `trailers`.
 
-If `CLAUDE.md` and `meta.workflow` disagree, follow `CLAUDE.md` and offer to update `meta` with `atm project workflow set`.
+If its instructions and `meta.workflow` disagree, follow the instructions and offer to update `meta` with `atm project workflow set`.
 
 **Without `gh`** (`gh auth status` fails) **or a GitHub remote:** push only (Step 3), and say that CI isn't watched
 and no PR was opened.
@@ -56,13 +63,12 @@ and no PR was opened.
   no review in between.
 - **pull-request:** you must *not* be on the base branch. If you are, offer to create a branch for the unpushed commits
   (`git switch -c <name>`) and stop until the user agrees. Suggest the name: in a project that works on release
-  branches (its `CLAUDE.md` says so, or its branches look like `dev/…`), `dev/<release>` from the active sprint's
+  branches (its instructions say so, or its branches look like `dev/…`), `dev/<release>` from the active sprint's
   release (`atm project status` shows the active sprint and its release); otherwise a short name for the work. Never rename an
   existing branch, yours or anyone's.
 - **Nothing uncommitted that you didn't write** (`git status`): another agent or the user may be working in this tree.
   Uncommitted work of your own: commit it first (`atm vcs commit <id> --file ...` for a task's files).
-- **Verify** (unless `--no-verify` or `verify` is false): run the project's verify command, the one its `CLAUDE.md`
-  names, else the obvious one (`npm run verify`, `npm test`, `make test`, ...). If it fails, fix it, commit, and run it
+- **Verify** (unless `--no-verify` or `verify` is false): run the project's verify command, the one its instructions name, else the obvious one (`npm run verify`, `npm test`, `make test`, ...). If it fails, fix it, commit, and run it
   again; don't push a failing verify.
 
 ## Step 3: Push

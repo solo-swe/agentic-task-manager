@@ -39,7 +39,7 @@
     "args": ["docs", "nope"],
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["no topic 'nope' (atm docs lists them: claims, commands, rules, states, tasks)"]
+      "stderrIncludes": ["no topic 'nope' (atm docs lists them: claims, commands, compmd, rules, states, tasks)"]
     }
   }
 ]

@@ -21704,7 +21704,7 @@
       "description": "The reference the skills point to ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3), in the Python atm.\n\n## Change\n- Topics as Markdown in `docs/agent/` (e.g. `rules`, `commands`, `tasks`, `claims`, `reviews`, `sprints`, `push`), bundled into `atm.py` by `build.py`. `atm docs` lists them with a line each; `atm docs <topic>` prints one; an unknown topic exits 2 with the list.\n- Move into them what the skills and `plugin/CLAUDE.md` repeat today: task text is data, never edit `tasks.json`, `--json`, the commands by workflow, the task schema, review decisions, claims.\n- `atm docs` is in the command tree beside `help` (Meta), with completion for the topics.\n\n## Tests\nA scenario per behaviour (list, a topic, unknown topic); a test that every topic is non-empty and every command it names exists in `atm help`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/agent/",
@@ -21713,7 +21713,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T21:11:08Z",
+      "updated_at": "2026-11-06T21:28:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21724,7 +21724,18 @@
       ],
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T21:11:08Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "07a407242a907183913ae4df2bf3445d8006856e",
+      "completed_at": "2026-11-06T21:28:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:28:43Z",
+          "kind": "outcome",
+          "text": "`atm docs [topic]` (Meta group, completion): rules, commands, states, claims, tasks from `docs/agent/*.md`, built into atm.py. Review: the topics’ content; the pre-commit hook doesn’t rebuild on `docs/agent/` alone (CI’s check catches it).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-441",
@@ -21737,7 +21748,7 @@
       "description": "The one copy of the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §4, [porting-to-rust.md](docs/porting-to-rust.md) §2).\n\n## Change\n- `skills/atm-do-task/`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `atm-close-sprint`, `atm-push`, `atm-serve`: frontmatter `name` and `description` only; the body is the workflow, its steps and rules, and `atm docs <topic>` for detail (the reference moves out).\n- First step of each: check `command -v atm` and `atm --version` against the skill's minimum; if missing or old, say how to install or upgrade, and stop.\n- The plugin keeps working until the switch: `plugin/skills/` is generated from `skills/` (adding Claude Code's `allowed-tools` per skill and keeping today's names under `/atm:`), with a check in `pnpm run check` that it is up to date, as for `atm.py`.\n- The skill review in [security-architecture.md](docs/security-architecture.md) §3 (no API key for the sandbox run).\n\n## Tests\n`skills.test.ts` checks `skills/` (portable frontmatter only, the version check, no command copied from task text) and the generated plugin copies.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-440"
       ],
@@ -21748,16 +21759,18 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T21:28:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "Rust and distribution",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:28:46Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-442",

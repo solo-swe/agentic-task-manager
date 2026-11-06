@@ -293,7 +293,8 @@ The dashboard can, but it is read-only by design (I11: nothing changes state ove
 guide for language models, `llms.txt`. A check (A, or E once CompMD has a command-line tool) can come later.
 
 How the guidance is shipped:
-- **A pinned copy in the plugin,** `plugin/docs/compmd-llms.txt`, taken from the CompMD repository at the commit of
+- **A pinned copy in atm,** `docs/agent/compmd-llms.txt` (in `plugin/docs/` until T-441; agents read it with
+  `atm docs compmd`, built into atm), taken from the CompMD repository at the commit of
   the shipped processor version, with that version and commit in a header line, and updated with CompMD. Skills
   never send agents to fetch it from the web: a fetched text could change under us and is outside text an agent
   would act on (the security document's rule for skills).
