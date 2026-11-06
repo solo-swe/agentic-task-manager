@@ -20464,7 +20464,7 @@
       "description": "T-412 work item 4. Typer installs completion scripts (`--install-completion`, `--show-completion`) for zsh, bash and fish; make it complete atm's own values too, read through atm-lib: task IDs (with their names) for every `<id>` argument, sprint names for `--sprint`, releases for `--release`, components for `--component`, the project's statuses for `--status` and the targets of `task state`, types and priorities for `--type` and `--priority`. Completion never fails loudly: outside a project it completes nothing.\n\n## Tests\nCompletion run in-process (Typer's `_TYPER_COMPLETE` environment) for a task ID, a sprint and a status, in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-421"
       ],
@@ -20473,7 +20473,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T06:23:08Z",
+      "updated_at": "2026-11-06T06:26:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20488,7 +20488,19 @@
       "sprint": "CLI ergonomics",
       "review": "batch",
       "started_at": "2026-11-06T06:23:08Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "484d0731b25f7f256a349cadbcd2bfd79c2c9f1a",
+      "completed_at": "2026-11-06T06:26:10Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:26:10Z",
+          "kind": "review",
+          "text": "Check the `COMPLETIONS` table at the end of `atm-cli/atm/cli/atm2.py`: completers attach by command and parameter name to the Click command Typer builds (`command()`, which `atm2_main` now runs), not to each parameter. They complete task IDs (with names), open sprints, releases, components, statuses, types, priorities and `task state` targets, and give nothing on any error. Tested through fish’s format; zsh and bash use the same completers. The launcher no longer says it delegates.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-424",
@@ -20501,7 +20513,7 @@
       "description": "T-412 work item 3, [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md) §4.5 and §4.8. The commands people and agents use (`task`, `loop`, `claim`, `sprint`, `release`, `component`, `project`, `vcs`) stay at the top of `atm2 --help`; the ones git, hooks and the server call go out of the way:\n\n- `merge-driver` (git runs it) as `db merge-driver`, hidden; `db init` registers it, as now;\n- `heartbeat --auto` stays the hook's entry point;\n- `paths` is `project config`; `summary` (the dashboard's dev server reads it) goes under `project`, hidden;\n- `version` and `help` as top-level meta commands.\n\nUpdate the command tree and the old→new table (§8) in the doc.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-421"
       ],
@@ -20511,7 +20523,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:49Z",
+      "updated_at": "2026-11-06T06:26:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20525,7 +20537,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:26:14Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-425",

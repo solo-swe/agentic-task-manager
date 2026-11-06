@@ -88,8 +88,8 @@ New top-level commands (verbs for actions, nouns for domains):
 | `version` | `version` | print plugin version |
 | `doctor` | `check` | validate tasks.json (schema, vocab, deps) |
 | `service [start\|stop\|status]` | `serve` | dashboard server |
-| `db <subcmd>` | `migrate`, `archive`, `unarchive`, `init` | database / file maintenance |
-| `project <subcmd>` | `paths`, `workflow`, `logo`, `projects` | project-level config |
+| `db <subcmd>` | `migrate`, `archive`, `unarchive`, `init`, `merge-driver` (hidden) | database / file maintenance |
+| `project <subcmd>` | `paths`, `status`, `workflow`, `logo`, `projects`, `summary` (hidden) | project-level config |
 | `sprint <subcmd>` | `sprints`, `backlog`, `move --to <sprint>` | sprint management |
 | `release <subcmd>` | `releases` | release management |
 | `component <subcmd>` | `components` | component management |
@@ -100,40 +100,48 @@ New top-level commands (verbs for actions, nouns for domains):
 
 ### Command tree (mermaid)
 
+The tree as `atm2` has it (T-424). `atm2 --help` shows three panels: the everyday commands first, then **Maintenance**
+(`db`, `doctor`, `service`), then **Meta** (`help`, `version`). What git, hooks and the dashboard's dev server call is
+hidden from the help but still runs (dashed below): `db merge-driver` (git, during a merge; `db init` registers it),
+`project summary` (the dev server), and `claim heartbeat --auto` (the plugin's PostToolUse hook).
+
 ```mermaid
 graph TD
     atm[atm]
-    atm --> help[help]
-    atm --> version[version]
-    atm --> doctor[doctor]
-    atm --> service[service]
-    atm --> db[db]
-    atm --> project[project]
-    atm --> sprint[sprint]
+    atm --> task[task]
+    atm --> loop[loop]
+    atm --> claim[claim]
+    atm --> vcs[vcs]
     atm --> release[release]
     atm --> component[component]
-    atm --> vcs[vcs]
-    atm --> claim[claim]
-    atm --> loop[loop]
-    atm --> task[task]
+    atm --> project[project]
+    atm --> sprint[sprint]
+    atm --> maintenance{{Maintenance}}
+    maintenance --> db[db]
+    maintenance --> doctor[doctor]
+    maintenance --> service[service]
+    atm --> meta{{Meta}}
+    meta --> help[help]
+    meta --> version[version]
 
-    db --> db_migrate[migrate]
-    db --> db_archive[archive]
-    db --> db_unarchive[unarchive]
-    db --> db_init[init]
+    task --> task_list[list]
+    task --> task_add[add]
+    task --> task_edit[edit]
+    task --> task_details[details]
+    task --> task_note[note]
+    task --> task_deps[deps]
+    task --> task_state[state]
 
-    project --> project_config[config]
-    project --> project_status[status]
-    project --> project_workflow[workflow]
-    project --> project_logo[logo]
-    project --> project_list[list\|add\|delete\|edit]
+    loop --> loop_next[next]
+    loop --> loop_run[run]
 
-    sprint --> sprint_list[list]
-    sprint --> sprint_add[add]
-    sprint --> sprint_edit[edit]
-    sprint --> sprint_start[start]
-    sprint --> sprint_close[close]
-    sprint --> sprint_delete[delete]
+    claim --> claim_list[list]
+    claim --> claim_heartbeat["heartbeat (--auto: the hook)"]
+
+    vcs --> vcs_commit[commit]
+    vcs --> vcs_pr[pr]
+    vcs --> vcs_pushed[pushed]
+    vcs --> vcs_repository[repository]
 
     release --> release_list[list]
     release --> release_add[add]
@@ -145,28 +153,27 @@ graph TD
     component --> component_add[add]
     component --> component_edit[edit]
 
-    vcs --> vcs_commit[commit]
-    vcs --> vcs_pr[pr]
-    vcs --> vcs_pushed[pushed]
-    vcs --> vcs_repository[repository]
+    project --> project_config[config]
+    project --> project_status[status]
+    project --> project_workflow[workflow]
+    project --> project_logo[logo]
+    project --> project_list["list | add | remove | prune"]
+    project -.-> project_summary["summary (hidden)"]
 
-    claim --> claim_list[list]
-    claim --> claim_add[add]
-    claim --> claim_heartbeat[heartbeat]
+    sprint --> sprint_list[list]
+    sprint --> sprint_add[add]
+    sprint --> sprint_edit[edit]
+    sprint --> sprint_start[start]
+    sprint --> sprint_close[close]
+    sprint --> sprint_delete[delete]
+    sprint --> sprint_move[move]
+    sprint --> sprint_backlog[backlog]
 
-    loop --> loop_start[start]
-    loop --> loop_status[status]
-    loop --> loop_edit[edit]
-    loop --> loop_delete[delete]
-    loop --> loop_next[next]
-
-    task --> task_list[list]
-    task --> task_add[add]
-    task --> task_edit[edit]
-    task --> task_details[details]
-    task --> task_note[note]
-    task --> task_deps[deps]
-    task --> task_state[state]
+    db --> db_migrate[migrate]
+    db --> db_archive[archive]
+    db --> db_unarchive[unarchive]
+    db --> db_init[init]
+    db -.-> db_merge["merge-driver (hidden)"]
 ```
 
 ---
@@ -226,14 +233,18 @@ The `task state` command unifies all state transitions:
 | `vcs pushed --pr N` | `merged` | pr number, `--at` | record PR merged |
 | `vcs repository [set URL]` | `repository` | url, `--from` | print/set repository URL |
 
-### 4.5 `db` — database / file maintenance (replaces `migrate`, `archive`, `unarchive`, `init`; `merge-driver` absorbed into `init`)
+### 4.5 `db` — database / file maintenance (replaces `migrate`, `archive`, `unarchive`, `init`, `merge-driver`)
 
 | Subcommand | Replaces | Arguments | Purpose |
 |------------|----------|-----------|---------|
 | `db migrate` | `migrate` | | move tasks.json into `.agentic-task-manager/`, set up folder |
 | `db archive` | `archive` | `--sprint`, `--before`, `--keep-days`, `--dry-run` | move finished tasks to archive |
 | `db unarchive <id>…` | `unarchive` | ids | bring archived tasks back |
-| `db init` | `init` (+ `merge-driver`) | `--meta-file` | give tasks.json a meta.id, register merge driver |
+| `db init` | `init` | `--meta-file` | give tasks.json a meta.id, register the merge driver |
+| `db merge-driver BASE OURS THEIRS` (hidden) | `merge-driver` | the three versions git passes | git's merge driver for tasks.json; git runs it during a merge, `db init` registers it |
+
+`merge-driver` can't be absorbed into `init`: git calls a command for every merge of `tasks.json`. It stays a command,
+hidden from `atm2 db --help`, since nobody types it.
 
 ### 4.6 `project` — project config (replaces `paths`, `workflow`, `logo`, `projects`)
 
@@ -243,7 +254,8 @@ The `task state` command unifies all state transitions:
 | `project status` | `status` | `--sprint`, `--backlog`, `--release`, `--component` | project overview |
 | `project workflow [set …]` | `workflow` | `--base`, `--verify`, `--max-rounds`, `--commit-template`, `--trailers`, `--trailer` | print/set workflow |
 | `project logo [set\|unset]` | `logo` | path | print/set/unset logo |
-| `project list\|add\|delete\|edit` | `projects` | action, target | manage dashboard projects |
+| `project list`, `project add [PATH]`, `project remove ID\|PATH`, `project prune` | `projects` | target | manage dashboard projects |
+| `project summary` (hidden) | `summary` | | the project's numbers as JSON, as `atm serve` gives them; the dashboard's dev server reads it |
 
 ### 4.7 `sprint`, `release`, `component`
 
@@ -255,8 +267,11 @@ These keep their existing subcommand shapes (`list|add|edit|start|close|delete`,
 |---------|----------|---------|
 | `doctor` | `check` | validate tasks.json: schema, vocabularies, dependencies; `--files` also warns about missing files |
 | `service [start\|stop\|status]` | `serve` | run the dashboard server |
-| `help` | `help` | show usage |
+| `help` | `help` | show usage (the same list as `--help`) |
 | `version` | `version` | print plugin version |
+
+In `atm2 --help`, `doctor` and `service` are listed under **Maintenance** with `db`; `help` and `version` under
+**Meta**, after the everyday commands.
 
 ---
 
@@ -361,12 +376,13 @@ The user-suggested strategy: introduce the new command structure as a **wrapper*
 | `atm archive` | `atm db archive` | |
 | `atm unarchive` | `atm db unarchive` | |
 | `atm init` | `atm db init` | also registers merge-driver |
-| `atm merge-driver` | `atm db init` | absorbed; git hook wired by init |
+| `atm merge-driver` | `atm db merge-driver` | hidden; git runs it, `db init` registers it |
 | `atm paths` | `atm project config` | |
 | `atm status` | `atm project status` | |
+| `atm summary` | `atm project summary` | hidden; the dashboard's dev server reads it |
 | `atm workflow` | `atm project workflow` | |
 | `atm logo` | `atm project logo` | |
-| `atm projects` | `atm project list\|add\|delete\|edit` | |
+| `atm projects` | `atm project list\|add\|remove\|prune` | |
 | `atm sprints` | `atm sprint list\|add\|edit\|start\|close\|delete` | |
 | `atm backlog` | `atm sprint backlog` | or `atm task list --backlog` |
 | `atm move` | `atm sprint move` | `--to <sprint\|next\|active\|backlog>` |
@@ -377,7 +393,7 @@ The user-suggested strategy: introduce the new command structure as a **wrapper*
 | `atm merged` | `atm vcs pushed` | `--pr N` |
 | `atm repository` | `atm vcs repository` | |
 | `atm claims` | `atm claim list` | |
-| `atm heartbeat` | `atm claim heartbeat` | |
+| `atm heartbeat` | `atm claim heartbeat` | `--auto`: the plugin's PostToolUse hook |
 | `atm next` | `atm loop next` | `--claim` → `atm loop start` or `atm task state <id> in_progress` |
 | `atm run` | `atm loop run` | |
 | `atm show` | `atm task details` | |

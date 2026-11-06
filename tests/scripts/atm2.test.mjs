@@ -476,6 +476,111 @@ describe('atm2 sprint group', { skip: !available && 'atm2 needs Typer (uv sync -
   });
 });
 
+describe('atm2 infra commands, kept apart', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+  const WIDE = { ...ENV, COLUMNS: '120' };
+
+  test('--help lists the everyday commands first; Maintenance and Meta after them', () => {
+    const root = makeProject(SETUP);
+    try {
+      const help = runAtm2(['--help'], root, WIDE);
+      assert.equal(help.code, 0, help.stderr);
+      const at = (word) => {
+        const i = help.stdout.search(new RegExp(`\\b${word}\\b`));
+        assert.notEqual(i, -1, `${word} in atm2 --help:\n${help.stdout}`);
+        return i;
+      };
+      const everyday = ['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'];
+      const maintenance = at('Maintenance');
+      for (const name of everyday) assert.ok(at(name) < maintenance, `${name} before Maintenance`);
+      for (const name of ['db', 'doctor', 'service']) assert.ok(at(name) > maintenance, `${name} under Maintenance`);
+      const meta = at('Meta');
+      for (const name of ['help', 'version'])
+        assert.ok(help.stdout.indexOf(` ${name} `, meta) > meta, `${name} under Meta`);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('db merge-driver and project summary work but are hidden', () => {
+    const root = makeProject(SETUP);
+    try {
+      const db = runAtm2(['db', '--help'], root, WIDE);
+      assert.equal(db.code, 0, db.stderr);
+      assert.doesNotMatch(db.stdout, /merge-driver/);
+      assert.match(db.stdout, /init/);
+      const project = runAtm2(['project', '--help'], root, WIDE);
+      assert.doesNotMatch(project.stdout, /summary/);
+      assert.match(project.stdout, /config/);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('help prints the same list as --help', () => {
+    const root = makeProject(SETUP);
+    try {
+      const help = runAtm2(['help'], root, WIDE);
+      assert.equal(help.code, 0, help.stderr);
+      assert.equal(help.stdout, runAtm2(['--help'], root, WIDE).stdout);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('version, summary and the merge driver give what atm gives', () => {
+    parity([
+      [['version'], ['version']],
+      [
+        ['version', '--json'],
+        ['-j', 'version'],
+      ],
+      [['summary'], ['project', 'summary']],
+    ]);
+  });
+
+  test('the merge driver merges both branches’ tasks, and reports a conflict, as atm does', () => {
+    const sides = (dir, ours) => {
+      const write = (name, tasks) => {
+        const file = path.join(dir, name);
+        fs.writeFileSync(file, JSON.stringify({ tasks }, null, 2) + '\n');
+        return file;
+      };
+      const base = [{ id: 'T-1', name: 'One', type: 'feature', status: 'todo' }];
+      return [
+        write('base.json', base),
+        write('ours.json', [{ ...base[0], name: ours }]),
+        write('theirs.json', [...base, { id: 'T-2', name: 'Two', type: 'feature', status: 'todo' }]),
+      ];
+    };
+    for (const [oursName, theirsName] of [
+      ['One, renamed', null],
+      ['Ours', 'Theirs'],
+    ]) {
+      const one = makeProject({});
+      const two = makeProject({});
+      try {
+        const [b1, o1, t1] = sides(one, oursName);
+        const [b2, o2, t2] = sides(two, oursName);
+        if (theirsName) {
+          // Both branches renamed T-1: a conflict
+          for (const t of [t1, t2]) {
+            const doc = JSON.parse(fs.readFileSync(t, 'utf8'));
+            doc.tasks[0].name = theirsName;
+            fs.writeFileSync(t, JSON.stringify(doc, null, 2) + '\n');
+          }
+        }
+        const expected = runAtm(['merge-driver', b1, o1, t1], one, ENV);
+        const actual = runAtm2(['db', 'merge-driver', b2, o2, t2], two);
+        assert.deepEqual(relative(actual, two, two), relative(expected, one, one));
+        assert.equal(fs.readFileSync(o2, 'utf8'), fs.readFileSync(o1, 'utf8'));
+      } finally {
+        removeDir(one);
+        removeDir(two);
+      }
+    }
+  });
+});
+
 /** What the shell would offer after `line` (fish's format: one `value<TAB>help` per line). */
 function complete(line, cwd) {
   const env = {

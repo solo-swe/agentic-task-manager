@@ -22,11 +22,19 @@ from typing import Annotated, Optional
 import typer
 
 from ..boot.identity import agent_identity, session_identity
-from ..boot.jsongit import dashboard_id, hook_project, migrate_folder, register_project, set_up_store, task_paths
+from ..boot.jsongit import (
+    dashboard_id,
+    hook_project,
+    merge_versions,
+    migrate_folder,
+    register_project,
+    set_up_store,
+    task_paths,
+)
 from ..boot.open import open_project, open_registry
 from ..common.core import (
     AtmExit, out, to_json, atm_home, ensure_home,
-    format_duration, now, parse_iso, parse_version, pid_alive,
+    format_duration, now, parse_iso, parse_version, pid_alive, plugin_version,
     read_json, whoami, PLUGIN_ROOT, SCRIPT_DIR,
 )
 from ..common.dashboard import (
@@ -49,7 +57,7 @@ from ..lib.archive import task_snapshot
 from ..lib.claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
 from ..lib.components import add_component, edit_component, list_components
 from ..lib.edit import add_new_tasks, check_project, edit_existing_task
-from ..lib.query import Filters, status_report, summary, task_dependencies, task_views
+from ..lib.query import Filters, project_summary, status_report, summary, task_dependencies, task_views
 from ..lib.status import STATUS_FUNCTIONS, add_task_note
 from ..lib.tasks import show_tasks
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
@@ -92,10 +100,16 @@ KILL_WAIT = 2.0
 
 app = typer.Typer(
     name="atm2",
-    help="atm2: atm's commands in groups (task, loop, claim, vcs, db, release, component, project, sprint)",
+    help="atm2: atm's commands, by group",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
+
+
+# `atm2 --help` lists the commands people and agents use first (task, loop, claim, vcs, release, component, project,
+# sprint); what git, hooks and the server call is hidden (db merge-driver, project summary) or under Maintenance
+MAINTENANCE = "Maintenance"
+META = "Meta"
 
 
 @app.callback()
@@ -859,7 +873,7 @@ def vcs_repository(
 # ---------------------------------------------------------------------------
 
 db_app = typer.Typer(help="Database / file maintenance")
-app.add_typer(db_app, name="db")
+app.add_typer(db_app, name="db", rich_help_panel=MAINTENANCE)
 
 
 @db_app.command("migrate")
@@ -877,6 +891,24 @@ def db_migrate(
     else:
         for line in migration["lines"]:
             out(line)
+
+
+@db_app.command("merge-driver", hidden=True)
+def db_merge_driver(
+    ctx: typer.Context,
+    base: Annotated[str, typer.Argument(help="The common ancestor's tasks.json")],
+    ours: Annotated[str, typer.Argument(help="This branch's tasks.json (written with the result)")],
+    theirs: Annotated[str, typer.Argument(help="The other branch's tasks.json")],
+) -> None:
+    """git's merge driver for tasks.json (git runs it; `db init` registers it)."""
+    conflicts = merge_versions(base, ours, theirs)
+    if ctx.obj.get("json_out", False):
+        out(to_json({"conflicts": conflicts}))
+    if conflicts:
+        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
+        for conflict in conflicts:
+            sys.stderr.write(f"  {conflict}\n")
+        raise AtmExit(1)
 
 
 @db_app.command("archive")
@@ -1310,6 +1342,12 @@ def project_config(
     show_paths(task_paths(os.getcwd()), ctx.obj.get("json_out", False))
 
 
+@project_app.command("summary", hidden=True)
+def project_summary_cmd(ctx: typer.Context) -> None:
+    """The project's numbers as atm serve gives them to the dashboard (JSON; the dashboard's dev server reads it)."""
+    out(to_json(project_summary(open_project(os.getcwd()))))
+
+
 @project_app.command("status")
 def project_status(
     ctx: typer.Context,
@@ -1571,7 +1609,7 @@ def sprint_backlog(
 # ---------------------------------------------------------------------------
 
 
-@app.command("doctor")
+@app.command("doctor", rich_help_panel=MAINTENANCE)
 def doctor(
     ctx: typer.Context,
     files: bool = typer.Option(False, "--files", help="Also warn about missing files"),
@@ -1828,7 +1866,7 @@ def serve_status(home, as_json, port):
         )
 
 
-@app.command("service")
+@app.command("service", rich_help_panel=MAINTENANCE)
 def service(
     ctx: typer.Context,
     action: str = typer.Argument("start", help="start|stop|status"),
@@ -1864,6 +1902,19 @@ def service(
             serve_stop(home, port)
     else:
         serve_status(home, ctx.obj.get("json_out", False), port)
+
+
+@app.command("version", rich_help_panel=META)
+def version(ctx: typer.Context) -> None:
+    """Print the plugin version."""
+    out(to_json({"version": plugin_version()}) if ctx.obj.get("json_out", False) else plugin_version())
+
+
+@app.command("help", rich_help_panel=META)
+def help_(ctx: typer.Context) -> None:
+    """Show the list of commands."""
+    usage = ctx.parent.get_help()
+    out(to_json({"usage": usage}) if ctx.obj.get("json_out", False) else usage)
 
 
 # ---------------------------------------------------------------------------

@@ -2516,7 +2516,14 @@ DEFAULT_PRIORITY = "P2"
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
+# Built, this is plugin/scripts/atm.py and the plugin is its parent folder. Run from source (atm2, atm-lib's unit
+# tests), this is atm-cli/atm/common/core.py, and the plugin is plugin/ in the same checkout.
+_SOURCE = os.path.basename(SCRIPT_DIR) == "common" and os.path.basename(os.path.dirname(SCRIPT_DIR)) == "atm"
+PLUGIN_ROOT = (
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))), "plugin")
+    if _SOURCE
+    else os.path.dirname(SCRIPT_DIR)
+)
 TASK_DIR = ".agentic-task-manager"
 TASKS_FILE = "tasks.json"
 DASHBOARD_FILE = "tasks-dashboard.html"
