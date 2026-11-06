@@ -919,6 +919,11 @@
             "T-438"
           ]
         }
+      },
+      {
+        "id": "Rust and distribution",
+        "state": "planned",
+        "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks"
       }
     ],
     "releases": [
@@ -20128,13 +20133,20 @@
         "docs/multi-harness-support.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-04T19:51:37Z",
+      "updated_at": "2026-11-06T20:02:02Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
     },
     {
       "id": "T-414",
@@ -20200,13 +20212,20 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T09:30:13Z",
+      "updated_at": "2026-11-06T20:02:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "cli"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
     },
     {
       "id": "T-416",
@@ -20772,7 +20791,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-06T05:34:03Z",
+      "updated_at": "2026-11-06T20:02:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20785,7 +20804,14 @@
         "docs",
         "skills",
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
     },
     {
       "id": "T-427",
