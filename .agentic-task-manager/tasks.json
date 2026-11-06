@@ -20659,7 +20659,7 @@
       "description": "Move `dashboard/` from npm to pnpm, as the [Svelte guide](docs/guides/svelte.md#toolchain) asks.\n\n## Change\n- `pnpm-lock.yaml` replaces `package-lock.json` (same resolved versions where pnpm allows; `overrides` move to `pnpm.overrides`).\n- `package.json` gets `devEngines` pinning pnpm and Node.js 24 with `\"onFail\": \"download\"`, as in the guide.\n- The npm scripts, the Docker screenshot scripts (`test:e2e:visual`, `test:e2e:visual:update`), the `prepare` script, the pre-commit hook in `.githooks/` and CI's install steps use pnpm.\n- AGENTS.md: every `npm ci` / `npm run …` becomes the pnpm form; the rule \"install exactly the locked versions, never update the lockfile\" stays (`pnpm install --frozen-lockfile`).\n- Dependabot's npm ecosystem config keeps working with the pnpm lockfile.\n\n> [!NOTE]\n> The user approved the CI workflow and git hook changes this task needs, in the session of 2026-11-05. Change only the install and run steps; keep the pinning rules (actions by SHA, images by digest, read-only token).\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite and `pnpm run test:scripts` pass; CI is green.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -20671,7 +20671,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T06:52:55Z",
+      "updated_at": "2026-11-06T07:14:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20698,6 +20698,12 @@
           "kind": "answer",
           "text": "With `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents: the pinned pnpm and Node first, then the packages. `@compmd/vite` 0.5.0 (the latest) reads the first document with `packages` (`dist/packs.js:142`), so the mermaid pack’s `integrity` becomes `null` in `compmd.js`: its pin is lost. Fix it in CompMD (read every document) and wait for that release, or migrate without `devEngines` for now, or something else? → Migrate without `devEngines` for now; T-436 adds the pins once CompMD reads every document of the lockfile. The user writes the CompMD task in that project.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:14:41Z",
+          "kind": "review",
+          "text": "Check: `pnpm-lock.yaml` from `pnpm import` (same versions), the `minimatch` security override in `pnpm-workspace.yaml`, and no `devEngines` (T-436). CI and the Docker screenshot scripts install pnpm 12.14.0 from the npm registry (no new action) and use `--frozen-lockfile`, with a new unit test checking both. The hook, AGENTS.md, README, security doc I19 and the build messages say pnpm. Results: check, 1023 unit, 576 atm-cli, 410 e2e pass; the build is byte-identical. CI not run yet.",
+          "by": "claude:34798264"
         }
       ],
       "blocks": [
@@ -20711,7 +20717,11 @@
         "T-436"
       ],
       "started_at": "2026-11-06T06:52:55Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "ef2b13e4b79d1541027f8b313048ab1dbc802f85",
+      "completed_at": "2026-11-06T07:14:41Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-428",
@@ -21044,7 +21054,7 @@
       "description": "T-427 moved the dashboard to pnpm without the `devEngines` pins the [Svelte guide](docs/guides/svelte.md#toolchain) asks for, because of a CompMD bug: with `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents (the pinned pnpm and Node first, then the packages), and `@compmd/vite` 0.5.0 reads only the first document that has `packages` (`dist/packs.js`, `integrities`). The mermaid pack's `integrity` then becomes `null` in `plugin/assets/compmd/<version>/compmd.js`, and its pin is lost.\n\n**Wait for** a `@compmd/vite` release that reads every document of the lockfile. Until then this task stays in the backlog.\n\n## Change\n- Bump `@compmd/vite` (and the other `@compmd/*` packages it goes with) to that release.\n- Add `devEngines` to `dashboard/package.json`: `packageManager` pnpm 12.14.0 (or the version in use then) and `runtime` node 24, both with `\"onFail\": \"download\"`, as in the guide; `pnpm install` records them in the lockfile.\n- Update the guide's example version if it changed, and AGENTS.md if it says the pins are missing.\n\n## Tests\n`pnpm run build`, then `compmd.js` holds the mermaid pack's `integrity` (a `sha512-…`, not `null`); `pnpm run check` passes (it fails on a stale CompMD build); unit and functional e2e tests; CI green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-427"
       ],
@@ -21055,11 +21065,22 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-06T06:52:44Z",
+      "updated_at": "2026-11-06T07:14:50Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "components": [
         "dashboard"
+      ],
+      "waiting_on": "user",
+      "questions": [],
+      "blocked_at": "2026-11-06T07:14:50Z",
+      "notes": [
+        {
+          "at": "2026-11-06T07:14:50Z",
+          "kind": "note",
+          "text": "Waits for a `@compmd/vite` release that reads every document of `pnpm-lock.yaml` (the CompMD task the user is creating in that project). Unblock it once that release is out.",
+          "by": "claude:34798264"
+        }
       ]
     }
   ]
