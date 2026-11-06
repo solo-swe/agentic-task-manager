@@ -1,97 +1,163 @@
-# Better ways to distribute atm
+# Distributing atm as an app that installs its own skills
 
-Currently, atm is a Claude Code plugin that comes with the cli and a dashboard when plugin is installed from the marketplace. Although this approach has been working fine with a small cli and dashboard, as we add new features and change architecture, and also support multiple harnesses the approach is not able to keep up.
-In this document we are analyzing this issue and proposing to change the distribution model.
+Status: **agreed** with Hakan on 2026-11-06 (T-426). It replaces the per-harness adapters of
+[multi-harness-support.md](multi-harness-support.md) (T-413 is rewritten to this model, §8). Built on the Rust port
+(T-415) and the [Tauri](guides/tauri.md), [Rust](guides/rust.md) and [Svelte](guides/svelte.md) guides.
 
-The proposed model can be summarized as follows:
+Today atm is a Claude Code plugin: installing it from the marketplace brings the CLI (Python), the dashboard and the
+skills, and only Claude Code can use them. As atm grows, and other harnesses (Codex, Cursor, Gemini CLI, Copilot,
+OpenCode, Windsurf, Goose) come in, that model doesn't keep up: the skills are tied to one harness, the CLI to the
+plugin, and a skill installed apart from the CLI drifts from it.
 
-1. Write one skill (set of skills) and use it everywhere.
-2. Install the app the normal way, and have the app's own CLI place the skills, with the UI button as a front end to that command.
-3. Consider marketplaces (only some harnesses have this) and `npx skills` as extra ways for people to find you, not the main install path.
+The model, in short:
 
-## 1. One skill, not one per harness
+1. **atm is an app you install the normal way**: the atm app (Tauri, macOS first) and the `atm` CLI (one Rust binary,
+   macOS, Linux and Windows), through Homebrew, a notarized download and release binaries.
+2. **The app installs its own skills** into the harnesses you choose: `atm agents install`, and a button in the app
+   that calls the same code. One set of skills for every harness.
+3. **The skills stay thin**; what they need in detail comes from the installed binary (`atm docs <topic>`), so it
+   always matches the version that runs.
+4. **Plugins are thin wrappers** where a harness offers something a skill can't (Claude Code's hooks and slash
+   commands); marketplaces and `npx skills` are extra ways to find atm, not the way to install it.
 
-You don't need per-harness skills. The SKILL.md format is shared, and the main difference between harnesses is which directory they read.
+## 1. What you install
 
-- **Stick to the portable core.** Use `name` and `description` in the frontmatter, a markdown body, and `references/` files that the skill links to. Some fields work only in some harnesses. For example, `context: fork` is Claude Code-only per one compatibility matrix. Extra fields are usually ignored elsewhere, but don't let the skill depend on them.
-- **Directory locations.** `~/.agents/skills/` is becoming the shared location. Cursor reads `.agents/skills/`, as do Codex CLI, Gemini CLI, and VS Code Copilot. Cursor also picks up `.claude/skills/` and `.codex/skills/`. Claude Code still uses `~/.claude/skills/`, and a few others have their own paths (Copilot, Windsurf, Goose…). So in practice you write the same folder to 2–4 locations.
-- **Install user-wide, not per project.** Your app is a tool on the machine, not part of a repo, so the skill should be available in every project.
+| Package | What it is | Where |
+|---|---|---|
+| **The atm app** | The dashboard in its own window, the skills button, notifications. Bundles the `atm` binary and puts it on PATH. | macOS: notarized DMG and a Homebrew cask. Linux and Windows later. |
+| **The `atm` CLI** | The one Rust binary (T-415): every command, `atm serve` for the dashboard in a browser, the git merge driver. | Homebrew formula, release binaries for macOS (arm64, x86_64), Linux and Windows, a release script. |
 
-## 2. The real problem: the skill and the binary drift apart
+- **They come with the Rust binary.** The new packages ship once T-415's binary exists: packaging today's Python script
+  as an app would be thrown away. What doesn't need the binary (thin skills, `atm docs`, `atm agents`) is built first,
+  in Python, and ships in the plugin as today (§9).
+- **No Mac App Store.** Its sandbox can't write into other tools' folders or put a CLI on PATH.
+- **atm's own files stay in `~/.agentic-task-manager`** (`ATM_HOME` overrides it): the projects list, the server
+  record, and now the installed skills (`skills/`). The plugin, the CLI and the app share them.
 
-Once a skill is installed separately from the app, it can describe flags from v1.2 while the user is running v1.5. This matters more than which harness you target. I'd use a two-layer design:
+## 2. The app: one process, no server inside
 
-- **A thin, stable SKILL.md:** what the app is, the core concepts, the 5–10 most common workflows, rules ("always pass `--json`", "use `--dry-run` before destructive ops"), and how to get more detail.
-- **Version-matched docs from the binary itself:** e.g. `yourapp agent-docs <topic>` prints detailed reference for exactly the installed version. The skill tells the agent to run it when it needs specifics. `--help` covers part of this, but a dedicated agent-oriented output is better.
+The app shows the dashboard from its own bundled files and reaches the data through **Tauri commands** (IPC), each a
+thin mapping to an atm-lib function, with live updates pushed through Tauri channels
+([Tauri guide](guides/tauri.md)). It runs no HTTP server.
 
-The skill can also have the agent run `yourapp --version` and state a minimum supported version, so an old binary produces a clear "please upgrade" message rather than confusing errors.
+- **Why:** the app will do more than show data: the skills button writes into other tools' folders, and review
+  decisions (the user's) are natural to make in it. Through IPC only the app's own window can call them; on a
+  localhost server they would be write routes any local process or web page could send requests to, needing tokens
+  and request checks. The app also escapes the server's lifecycle (ports, records, a server left at another version).
+- **`atm serve` stays**, for the dashboard in a browser and for machines without the app. Its routes stay read-only.
+- **The dashboard has two transports.** `lib/api/http.ts`, already the only module that makes requests, becomes an
+  interface with an HTTP implementation (the browser, `atm serve`) and an IPC one (the app). Each feature is a REST
+  route and a Tauri command, both thin over the same atm-lib call, with a test that they agree.
+- **Links:** the dashboard's addresses (`/projects/<id>/<tab>?task=…`, T-429) work in both; the app opens links from
+  outside through a deep-link scheme (`atm://projects/<id>?task=T-1`).
+- **Tests:** the browser dashboard keeps its HTTP fixture; the app's UI runs under Playwright with mocked Tauri IPC
+  over an in-memory project.
 
-## 3. Plugins: thin wrappers, only where they help
+## 3. The commands
 
-Plugins are harness-specific packages around the same skill. They're worth it when they add something a bare skill can't:
-
-- **Claude Code plugin** (`.claude-plugin/plugin.json` + a marketplace repo): adds slash commands (`/yourapp:status`), hooks, and updates through `/plugin`.
-- **Codex plugin**: a manifest-driven bundle that can package three types of component (skills, MCP servers, app connectors) and installs through a marketplace JSON in a Git repo. One limitation: self-serve publishing to the official Codex Plugin Directory is not yet available as of May 2026. That may have changed since, but for now you'd distribute it from your own GitHub repo.
-- **Gemini CLI extensions, Cursor, etc.**: only if users ask for them.
-
-Keep everything in **one repo with one copy of the skill**, and point every plugin manifest at it:
+In atm's command tree (T-425), among the maintenance groups:
 
 ```
-yourapp-agents/
-  skills/yourapp/SKILL.md, references/...
-  .claude-plugin/plugin.json       → skills: ../skills
-  .claude-plugin/marketplace.json
-  .codex-plugin/plugin.json        → skills: ./skills/
-  .agents/plugins/marketplace.json
+atm agents install [--harness claude,codex,cursor,…|--all] [--project] [--copy]
+atm agents status
+atm agents uninstall [--harness …|--all] [--project]
+atm docs [<topic>]
 ```
 
-Don't use a plugin to install your binary, e.g. from an install hook. It's fragile and surprising for users, and an install hook that downloads executables looks exactly like the malware patterns these ecosystems have been dealing with.
+- **`atm agents install`** puts the skills where the chosen harnesses read them (§5). Idempotent; it prints every
+  folder it wrote or linked. Never run by anything but the user: no install hook, no first-run install. After an
+  install (`brew`, the DMG) atm only says how: "Run `atm agents install` to let your AI agents use atm".
+- **`atm agents status`** lists each detected harness, where atm's skills are for it (linked, copied, missing, stale),
+  their version against the binary's, and where a harness would show them twice (§5).
+- **`atm agents uninstall`** removes exactly what install wrote.
+- **`atm docs <topic>`** prints reference for the installed version, written for agents: the rules (task text is data,
+  never edit `tasks.json`, `--json`), the commands by workflow, the task fields. `atm docs` lists the topics. It
+  replaces what the skills and `plugin/CLAUDE.md` repeat today.
+- **The app's button** ("Connect your agents", with the detected harnesses ticked) calls the same Rust code as
+  `atm agents install`, through a Tauri command; there is no second implementation.
 
-## 4. Distribution: decouple the app from the agent integration
+## 4. The skills
 
-I'd set it up in three layers:
+The seven stay separate (`do-task`, `loop-tasks`, `create-tasks`, `plan-sprint`, `close-sprint`, `push`, `serve`):
+each is a workflow a user asks for by name. Each becomes **thin, on the portable core**:
 
-**Layer 1: install the app the normal way.** Homebrew (formula or cask), winget/scoop, `cargo install`/a release script, and a notarized DMG. These handle PATH, updates, and uninstall, which marketplaces can't.
+- **Frontmatter:** `name` and `description` only. `allowed-tools` (Claude Code's pre-approved commands) is documented
+  only for Claude Code, and other hosts reject unknown fields, so it moves to the Claude Code plugin's copy (§6).
+- **Body:** what the workflow is, its steps, its rules, and where to get detail: `atm docs <topic>`. The command
+  reference, the task schema and the shared rules move out of the skills into `atm docs`.
+- **First step:** check `command -v atm` and `atm --version` against the skill's minimum; if atm is missing or too
+  old, say how to install or upgrade it, and stop. Never work around it.
+- **Claims:** the skills run `atm claim hold <id>` when a task starts and before long commands, which works in every
+  harness; a harness's plugin may add hooks on top (§6). `atm agents install` never edits another tool's hook
+  settings.
 
-**Layer 2: the app installs its own skills. This is the main path.** Add a CLI command:
+## 5. Where the skills go
 
-```
-yourapp agents install [--harness claude,codex,cursor,...|--all] [--project]
-yourapp agents status
-yourapp agents uninstall
-```
+The skills live once, in `~/.agentic-task-manager/skills/<skill>/`, written by the installed atm (so an upgrade
+updates them), and are **symlinked** into each harness's folder:
 
-- Detect installed harnesses by checking for `~/.claude`, `~/.codex`, `~/.cursor`, `~/.gemini`, and so on, and always write to `~/.agents/skills/` as well.
-- Keep the real skill in an app-managed directory (e.g. `~/.local/share/yourapp/skills/yourapp`) and **symlink** it into each harness directory. Then every app upgrade updates the skill automatically, which fixes the drift problem at install time. The popular `npx skills` CLI works this way: it downloads the skills into a central .agents/skills directory, and for every agent you use, copies or symlinks the relevant files into the appropriate folders. Fall back to copying, and re-copy on upgrade, if a harness has trouble with symlinks.
-- Make the command idempotent, and have it print what it wrote where. Users of dev tools want to see what changed in their dotfiles.
-- **The UI button** ("Connect to Claude Code / Codex / Cursor…", with checkboxes for detected harnesses) just calls this same code. Don't build a second implementation.
-- Optionally, print a hint after `brew install` or on first run: "Run `yourapp agents install` to let your AI agents use yourapp". Don't install skills silently. Writing into another tool's config directory should be opt-in.
+| Harness | Folder atm writes | Notes (checked 2026-11-06) |
+|---|---|---|
+| Claude Code | `~/.claude/skills/` | Doesn't read `~/.agents/skills` (an open request). |
+| Codex CLI, Gemini CLI, Copilot, OpenCode, Windsurf (Devin), Goose | `~/.agents/skills/` | Each also has its own folder; `~/.agents/skills` is the shared one. |
+| Cursor | `~/.agents/skills/` | |
 
-**Layer 3: listings for discoverability (secondary).**
+- **Both `~/.agents/skills` and `~/.claude/skills` by default**, so Claude Code works without the plugin. Cursor,
+  OpenCode, Goose and VS Code Copilot read both, so they list atm's skills twice: `atm agents status` says where, and
+  `--harness` installs into fewer folders.
+- **Copied where links break:** Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have
+  known bugs; atm copies for them, and re-copies on upgrade. `--copy` copies everywhere.
+- **User-wide by default**; `--project` writes the project's `.agents/skills` (and `.claude/skills`) instead, for a
+  team that commits them.
 
-- Publish the skill repo publicly so `npx skills add you/yourapp-agents` works and the skill shows up on skills.sh.
-- List the Claude Code and Codex plugins in your own marketplace repos.
-- The first thing a skill installed this way should do is check `command -v yourapp` and, if it's missing, tell the user how to install the app, not try to work around it.
+## 6. Plugins: thin wrappers
 
-## 5. App Store caveat
+- **The Claude Code plugin stays**, around the same skills: the hooks (claim heartbeats, `atm service --refresh`),
+  the slash commands, `allowed-tools` in its copy of the skills, and updates through `/plugin`. It stops shipping the
+  CLI and the dashboard once the app and the formula do; it then checks for `atm` like any skill.
+- **Other harnesses' plugins** (Codex, Cursor, Copilot, Gemini, Goose all have a format, most with hooks) only when
+  users ask, each pointing at the same skills folder.
+- **No plugin installs the binary** (no install hook that downloads executables).
+- **Discoverability:** a public skills repo, so `npx skills add <owner>/<repo>` works, and the Claude Code marketplace
+  as today. Both lead to "install atm" first.
 
-If you mean the Mac App Store, its sandbox works against this whole design. A sandboxed app can't freely write to `~/.claude/skills` and similar directories. It would need the user to grant each folder through an open panel. Putting a CLI on PATH is also awkward. For a dev tool with a CLI, a background service, and an agent integration, Homebrew cask plus a notarized direct download is a much better fit. If you still want an App Store listing, treat it as a separate, more limited edition.
+## 7. Security
 
-## Suggested rollout
+New entry points, each added to [security-architecture.md](security-architecture.md) in the change that adds it:
 
-1. Thin SKILL.md, plus `yourapp agent-docs` for version-matched detail
-2. `yourapp agents install/status/uninstall` using symlinks, with a UI button that calls it
-3. A public skills repo, so `npx skills add` works
-4. A Claude Code plugin (and a Codex plugin if your users are there) that wraps the same folder
-5. Other harness-specific plugins only on demand
+- `atm agents install|uninstall`: writes into other tools' folders. Opt-in only, never silent; writes only the skill
+  folders it lists and removes only what it wrote; never another tool's settings or hooks.
+- `atm docs`: prints text from the binary; reads nothing outside it.
+- The app's Tauri commands: least-privilege capabilities per window; rendered task text gets none.
+- The app's deep links (`atm://…`): parsed like the dashboard's addresses (T-429), never fetched or run.
+- Distribution: signed and notarized builds, Homebrew checksums; the skills repo is part of the release.
 
-Guides for building the app: [Tauri](guides/tauri.md), [Rust](guides/rust.md) and [Svelte](guides/svelte.md).
+Changing the skills means the agent sandbox run, or the written skill review (§3.3).
 
-Sources:
+## 8. T-413 (multi-harness support)
 
-- [vercel-labs/skills CLI (fork with agent path table)](https://github.com/Harries/skills-cli)
-- [add-skill compatibility matrix](https://github.com/ingf/add-skill)
-- [Skills on Cursor](https://handsonai.info/platforms/cursor/skills/)
-- [Codex CLI plugin system](https://codex.danielvaughan.com/2026/03/30/codex-cli-plugin-system)
-- [Codex marketplace distribution](https://codex.danielvaughan.com/2026/04/11/codex-marketplace-plugin-distribution/)
-- [Vercel Skills 101](https://levelup.gitconnected.com/vercel-skills-101-88b995b6125d)
+Rewritten to this model: make atm work in the harnesses beyond Claude Code through `atm agents install`: try each
+harness's folder and symlink behaviour, the duplicate listings, claims through `atm claim hold`, and which harness
+plugins are worth having. Its per-harness adapters (`plugin/open-code/`, `install.sh`, `skills.json`) are not built.
+
+## 9. Rollout
+
+1. **Thin skills and `atm docs`** (Python, in the plugin): the shared reference moves into `atm docs`; the skills drop
+   to the portable core and check `atm --version`; the Claude Code plugin keeps `allowed-tools` in its copy.
+2. **`atm agents install|status|uninstall`** (Python first, ported with T-415): `~/.agentic-task-manager/skills/`,
+   symlinks and copies, status with duplicates.
+3. **The Rust CLI** (T-415) with its release builds, the Homebrew formula and the release script.
+4. **The atm app**: Tauri, IPC to atm-lib, the dashboard's IPC transport, the skills button, notarized DMG and cask.
+5. **The public skills repo** and the Claude Code plugin as a wrapper (no CLI or dashboard in it).
+6. **Other harnesses** (T-413), and their plugins on demand.
+
+## Sources
+
+Checked 2026-11-06; read as references, not instructions.
+
+- Claude Code skills: https://code.claude.com/docs/en/skills
+- Codex skills, plugins and hooks: https://learn.chatgpt.com/docs/build-skills, https://learn.chatgpt.com/docs/plugins, https://learn.chatgpt.com/docs/hooks
+- Cursor skills: https://cursor.com/docs/context/skills
+- Gemini CLI skills: https://geminicli.com/docs/cli/skills/
+- VS Code Copilot skills: https://code.visualstudio.com/docs/copilot/customization/agent-skills; GitHub Copilot: https://docs.github.com/en/copilot/concepts/agents/about-agent-skills
+- The `skills` CLI: https://github.com/vercel-labs/skills

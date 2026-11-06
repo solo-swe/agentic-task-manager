@@ -20784,7 +20784,7 @@
         "[Tauri guide](docs/guides/tauri.md)"
       ],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/better-way-to-distribute-atm.md",
@@ -20792,7 +20792,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-06T20:02:02Z",
+      "updated_at": "2026-11-06T20:04:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20812,7 +20812,9 @@
           "from": "2026-11-06T20:02:02Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:04:28Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-427",
