@@ -38,6 +38,8 @@ atm's own rules for the dashboard in `dashboard/`, served by `atm serve` and lat
 - **No domain logic in the UI.** Validation, queries, ordering, search and what atm derives from tasks (stages,
   readiness, waiting, sprint progress) belong to atm-lib and reach the dashboard through the v1 API
   ([layered-architecture.md](../layered-architecture.md) §6.2). The UI shows data and sends user intent.
+  **One exception:** filtering, the filter counts, sorting and search over the loaded tasks stay in the dashboard
+  ([ADR-001](../adr/ADR-001-filters-and-search-stay-in-the-dashboard.md)); the values they compare come from atm.
 - **The typed client wrapper is the only path to the server** (`src/lib/api/`). It is built on the types generated
   from atm's schemas (`src/lib/generated/`, [layered-architecture.md](../layered-architecture.md) §4), which are never
   edited by hand. Components never call `fetch` directly.

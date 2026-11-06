@@ -51,7 +51,7 @@ everything they would carry.
 | `velocity.ts` | tasks done per closed sprint, from its report | **Moves** to `sprints` (step 3): the reports are atm's |
 | `list-groups.ts` | the List tab's groups: the active sprint, the planned ones in order, the backlog | Order: **moves** with `sprints` (atm's loop order, SR-7.4); grouping: view |
 | `scope.ts`, `sprint-hash.ts` | which sprint the Kanban, List and Graph show, and its URL | **View** (the page's selection), on the sprints the server lists |
-| `filters.ts` `filterValues`, `filterTasks`, `facetCounts`, `sortTasks`, `searchTasks` | what each filter value means for a task (its sprint or the backlog, its release, its components), which tasks match, the counts beside each value, the List's sort, the search box | **Decide in review.** The guide puts queries and search in atm-lib, and the v1 tasks route filters as `atm list` does. But filtering the loaded tasks is instant, and a round trip per click isn't. Proposal: the **meaning** moves (each task's `derived` carries what a filter compares: sprint id or backlog, effective release, components, priority), so the client only compares values; matching, counting and sorting the loaded list stay client-side; the search box uses `api/search` (atm's matching) and keeps the loaded order |
+| `filters.ts` `filterValues`, `filterTasks`, `facetCounts`, `sortTasks`, `searchTasks` | what each filter value means for a task (its sprint or the backlog, its release, its components), which tasks match, the counts beside each value, the List's sort, the search box | **Stays**, decided in [ADR-001](adr/ADR-001-filters-and-search-stay-in-the-dashboard.md): matching, counting, sorting and search stay client-side over the loaded tasks, until a server-side design keeps them as fast, counts the values and covers the archive. What a task's values are comes from atm's `derived` values |
 | `kanban.ts` | a column per status of the vocabulary, cards in atm's order (`nextUp`), readiness from `derived` | Columns follow the vocabulary (step 2); the order is atm's already. **View** otherwise |
 | `forecast.ts` | completion estimates: pace from recent work time, remaining work in loop order | **Moves** (step 4): an estimate is a query over atm's data with atm's loop order; one answer for the dashboard and a future `atm status --forecast` |
 | `burndown.ts` | remaining tasks and scope over time, with the forecast | **Moves** (step 4): the series; the chart's geometry stays |
@@ -99,8 +99,8 @@ the e2e fixture (`tasksServer`) serving the new fields.
 4. **Activity and progress**: an `api/v1/projects/<p>/activity` (or a richer `stats`) with the series the charts draw:
    time use, burndown, forecast, completion shares, the project's stats. The largest step, and the one with the most
    tests to move; it can be split by chart.
-5. **Filters and search**, as decided in review: `derived` carries what each filter compares, the search box asks
-   `api/search`.
+5. **Filters and search: deferred** ([ADR-001](adr/ADR-001-filters-and-search-stay-in-the-dashboard.md)). They stay in
+   the dashboard until a server-side design handles them properly; only the values they compare come from atm.
 
 Every new route or field is an entry point or a field the dashboard acts on: each step updates
 [security-architecture.md](security-architecture.md) and [multi-project-api.md](multi-project-api.md) in the same
