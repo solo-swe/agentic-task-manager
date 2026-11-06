@@ -85,7 +85,7 @@ test.describe('scope bar (T-323)', () => {
     tasksServer,
   }) => {
     tasksServer.use('sprints');
-    await page.goto('tasks-dashboard.html#view=kanban&sprint=foundations');
+    await page.goto('/?view=kanban&sprint=foundations');
     const trigger = page.locator('#scope-trigger');
     await expect(trigger).toHaveText('Foundations');
     // A closed sprint's board: its empty columns fold, Done takes the width
@@ -99,7 +99,7 @@ test.describe('scope bar (T-323)', () => {
     await expect(trigger).toHaveText('Foundations');
 
     // An unknown name (a renamed sprint in an old link) is dropped: all tasks
-    await page.goto('tasks-dashboard.html#view=kanban&sprint=Renamed');
+    await page.goto('/?view=kanban&sprint=Renamed');
     await expect(trigger).toHaveText('All tasks');
   });
 

@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
-import { expect, openDashboard, openMenu, projectDocument, test, type TasksServer } from './helpers';
+import { expect, openDashboard, openMenu, projectDocument, test, type TasksServer, follow, addressOf } from './helpers';
 
 // The document viewer (T-393, docs/compmd-viewer-design.md §2, §6): a window over the details panel that shows a
-// file of the project through the documents route, rendered by CompMD. Opened here by the URL hash (#doc=), as a
+// file of the project through the documents route, rendered by CompMD. Opened here by its address (?doc=), as a
 // link to it does; T-395 adds the links in task text.
 const PROJECT = {
   meta: { project: 'Docs', repository: 'https://github.com/o/r' },
@@ -14,10 +14,10 @@ const DESIGN = '# The design\n\nIt has **two** parts.\n\n## Routes\n\nOne route.
 
 const viewer = (page: Page) => page.locator('#doc-viewer');
 
-async function openWithDocument(page: Page, tasksServer: TasksServer, hash = 'doc=docs/design.md') {
+async function openWithDocument(page: Page, tasksServer: TasksServer, query = 'doc=docs/design.md') {
   tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
   await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-  await page.evaluate((h) => (location.hash = h), hash);
+  await follow(page, `${addressOf(page)}?${query}`);
   await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
 }
 
@@ -43,19 +43,18 @@ test.describe('the document viewer', () => {
     page,
     tasksServer,
   }) => {
-    await openWithDocument(page, tasksServer, 'view=list&doc=docs/design.md');
+    await openWithDocument(page, tasksServer);
     await page.reload();
     await expect(page.locator('#doc-title')).toHaveText('The design');
     await page.locator('#doc-back').click();
     await expect(viewer(page)).toHaveCount(0);
-    expect(new URL(page.url()).hash).not.toContain('doc=');
-    expect(new URL(page.url()).hash).toContain('view=list');
+    expect(addressOf(page)).toMatch(/^\/projects\/fixture\/list(\?sprint=[^&]+)?$/);
   });
 
   test("the browser's Back goes to the document before", async ({ page, tasksServer }) => {
     tasksServer.setDocument(projectDocument('docs/other.md', '# Other\n'));
     await openWithDocument(page, tasksServer);
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/other.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/other.md');
     await expect(page.locator('#doc-title')).toHaveText('Other');
     await page.goBack();
     await expect(page.locator('#doc-title')).toHaveText('The design');
@@ -66,17 +65,17 @@ test.describe('the document viewer', () => {
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     await page.locator('.task-card[data-id="T-1"] .task-name').click();
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
-    await page.evaluate(() => (location.hash = location.hash + '&doc=docs/design.md'));
+    await follow(page, `${addressOf(page)}&doc=docs/design.md`);
     await expect(page.locator('#doc-title')).toHaveText('The design');
     await page.keyboard.press('Escape');
     await expect(viewer(page)).toHaveCount(0);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     // × closes it too, the task staying open
-    await page.evaluate(() => (location.hash = location.hash + '&doc=docs/design.md'));
+    await follow(page, `${addressOf(page)}&doc=docs/design.md`);
     await expect(page.locator('#doc-title')).toHaveText('The design');
     await page.locator('#doc-close').click();
     await expect(viewer(page)).toHaveCount(0);
-    expect(new URL(page.url()).hash).not.toContain('doc=');
+    expect(new URL(page.url()).search).not.toContain('doc=');
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
     await page.keyboard.press('Escape');
     await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
@@ -178,7 +177,7 @@ test.describe('the document viewer', () => {
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
 
     tasksServer.setDocument(projectDocument('docs/draft.md', '# Draft\n', { tracked: false }));
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/draft.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/draft.md');
     await expect(page.locator('#doc-title')).toHaveText('Draft');
     await expect(page.locator('#doc-repo')).toHaveCount(0);
   });
@@ -186,11 +185,11 @@ test.describe('the document viewer', () => {
   test('says when a file is not in the project, or not shown', async ({ page, tasksServer }) => {
     tasksServer.refuseDocument('.env', 403, ".env: hidden files and folders aren't shown");
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/gone.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/gone.md');
     await expect(page.locator('#doc-fallback')).toHaveAttribute('data-error', 'missing');
     await expect(page.locator('#doc-fallback')).toContainText('Not in the project');
     await expect(page.locator('#doc-title')).toHaveText('gone.md');
-    await page.evaluate(() => (location.hash = 'view=list&doc=.env'));
+    await follow(page, '/projects/fixture/list?doc=.env');
     await expect(page.locator('#doc-fallback')).toHaveAttribute('data-error', 'refused');
     await expect(page.locator('#doc-fallback')).toContainText("Can't be shown here");
     await expect(page.locator('#doc-fallback')).toContainText('hidden files');
@@ -198,7 +197,7 @@ test.describe('the document viewer', () => {
 
   test('a link that would leave the project opens nothing', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=../secrets.md'));
+    await follow(page, '/projects/fixture/list?doc=../secrets.md');
     await expect(viewer(page)).toHaveCount(0);
     expect(tasksServer.documentRequests).toEqual([]);
   });
@@ -207,7 +206,7 @@ test.describe('the document viewer', () => {
     await page.clock.install();
     tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list', autoRefresh: true });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/design.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/design.md');
     await expect(page.locator('#doc-title')).toHaveText('The design');
     await page.clock.runFor(5_000);
     await expect.poll(() => tasksServer.documentsNotModified).toBe(1);
@@ -223,7 +222,7 @@ test.describe('the document viewer', () => {
     const long = '# A long design\n\n' + Array.from({ length: 60 }, (_, i) => `Paragraph ${i + 1}.`).join('\n\n');
     tasksServer.setDocument(projectDocument('docs/long.md', long));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/long.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/long.md');
     await expect(viewer(page).locator('.doc-page .compmd')).toHaveAttribute('data-compmd', 'ready');
     // The page stands apart from the desk under it
     const colours = await viewer(page).evaluate((el) => ({
@@ -250,7 +249,7 @@ test.describe('the document viewer', () => {
     await page.addInitScript(() =>
       localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', mode: 'light', autoRefresh: false })),
     );
-    await openWithDocument(page, tasksServer, 'view=list&doc=docs/design.md');
+    await openWithDocument(page, tasksServer);
     const page_ = viewer(page).locator('.doc-page');
     expect(await page_.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain('repeating-linear-gradient');
     expect(await page_.locator('.compmd').evaluate((el) => getComputedStyle(el).lineHeight)).toBe('26px');
@@ -266,7 +265,7 @@ test.describe('the document viewer', () => {
         localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', autoRefresh: false }));
       }
     });
-    await openWithDocument(page, tasksServer, 'view=list&doc=docs/design.md');
+    await openWithDocument(page, tasksServer);
     const page_ = viewer(page).locator('.doc-page');
     const style = (prop: 'fontFamily' | 'fontSize' | 'maxWidth' | 'backgroundImage', sel = '.compmd') =>
       (sel ? page_.locator(sel) : page_).evaluate((el, p) => getComputedStyle(el)[p], prop);
@@ -321,7 +320,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
   }) => {
     tasksServer.setDocument(codeDoc());
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    await follow(page, '/projects/fixture/list?doc=src/app.ts');
     const gutter = page.locator('#doc-gutter');
     await expect(gutter.locator('div')).toHaveCount(120);
     const sizes = await page.locator('#doc-viewer').evaluate((el) => {
@@ -339,7 +338,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
   }) => {
     tasksServer.setDocument(codeDoc());
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    await follow(page, '/projects/fixture/list?doc=src/app.ts');
     const code = page.locator('#doc-viewer .compmd-page pre code');
     // The keyword `const` is a token of its own, coloured unlike the plain text around it
     const keyword = code.locator('span', { hasText: /^const$/ }).first();
@@ -365,7 +364,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
   test('#L40 opens at line 40, marked; a range marks its lines', async ({ page, tasksServer }) => {
     tasksServer.setDocument(codeDoc());
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts:L40-L42'));
+    await follow(page, '/projects/fixture/list?doc=src/app.ts:L40-L42');
     const mark = page.locator('#doc-line-mark');
     await expect(mark).toBeInViewport();
     await expect.poll(() => page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBeGreaterThan(200);
@@ -397,7 +396,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
   }) => {
     tasksServer.setDocument(projectDocument('docs/spec.md', MARKDOWN));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/spec.md');
     const numbers = page.locator('#doc-gutter div');
     await expect(numbers).toHaveCount(MARKDOWN_LINES);
     // No line skipped: the frontmatter's three lines and the blank ones count
@@ -448,7 +447,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     tasksServer.setDocument(projectDocument('docs/spec.md', MARKDOWN));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     // Line 7 is the paragraph's second line only
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7'));
+    await follow(page, '/projects/fixture/list?doc=docs/spec.md:L7');
     await expect(page.locator('#doc-gutter .marked')).toHaveText(['7']);
     const covered = await page.locator('#doc-viewer').evaluate((el) => {
       const marks = [...el.querySelectorAll('.doc-text-mark')].map((m) => m.getBoundingClientRect());
@@ -467,10 +466,10 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     // Not the paragraph's first line
     expect(covered.marksTop).toBeGreaterThan(covered.firstTop + 5);
     // A range: its lines marked, the blank one between too
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L7-L9'));
+    await follow(page, '/projects/fixture/list?doc=docs/spec.md:L7-L9');
     await expect(page.locator('#doc-gutter .marked')).toHaveText(['7', '8', '9']);
     // A line far down (the last of the 40 paragraphs, every other line from 16): the viewer scrolls to it
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/spec.md:L94'));
+    await follow(page, '/projects/fixture/list?doc=docs/spec.md:L94');
     await expect(page.locator('#doc-gutter .marked')).toHaveText(['94']);
     await expect(page.locator('#doc-line-mark')).toBeInViewport();
     await expect.poll(() => page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBeGreaterThan(300);
@@ -480,7 +479,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     await page.clock.install();
     tasksServer.setDocument(codeDoc());
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list', autoRefresh: true });
-    await page.evaluate(() => (location.hash = 'view=list&doc=src/app.ts'));
+    await follow(page, '/projects/fixture/list?doc=src/app.ts');
     await expect(page.locator('#doc-gutter div')).toHaveCount(120);
     await page.locator('#doc-body').evaluate((el) => el.scrollTo({ top: 600 }));
     const before = await page.locator('#doc-body').evaluate((el) => el.scrollTop);
@@ -506,7 +505,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
       ),
     );
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/design.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/design.md');
     const img = viewer(page).locator('.compmd-page img');
     await expect(img).toHaveCount(1);
     await expect(img).toHaveAttribute('src', /api\/v1\/projects\/[^/]+\/files\?path=docs%2Fimg%2Fflow\.png$/);
@@ -522,7 +521,7 @@ test.describe('the document viewer: lines, images, refreshing', () => {
     tasksServer.setDocument(
       projectDocument('docs/index.md', `# Index\n\n[the design](${here}#view=list&doc=docs/design.md)\n`),
     );
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/index.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/index.md');
     const link = viewer(page).locator('.compmd-page a');
     await expect(link).toHaveText('the design');
     await expect(link).not.toHaveAttribute('target', '_blank');
@@ -558,7 +557,7 @@ test.describe('the document viewer: links that open it', () => {
     await link.click();
     await expect(page.locator('#doc-title')).toHaveText('The design');
     await expect(viewer(page).locator('.compmd-page h2', { hasText: 'Routes' })).toBeInViewport();
-    expect(new URL(page.url()).hash).toContain('doc=docs/design.md%23routes');
+    expect(new URL(page.url()).search).toContain('doc=docs/design.md%23routes');
     await page.locator('#doc-back').click();
     await expect(viewer(page)).toHaveCount(0);
     await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
@@ -671,7 +670,7 @@ test.describe('the document viewer: contents', () => {
   async function open(page: Page, tasksServer: TasksServer, text = LONG) {
     tasksServer.setDocument(projectDocument('docs/guide.md', text));
     await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
-    await page.evaluate(() => (location.hash = 'view=list&doc=docs/guide.md'));
+    await follow(page, '/projects/fixture/list?doc=docs/guide.md');
     await expect(viewer(page).locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
   }
 

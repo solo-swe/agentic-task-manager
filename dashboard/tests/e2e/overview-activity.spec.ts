@@ -6,7 +6,7 @@ test.describe('Projects Overview: Activity across projects', () => {
     tasksServer.use('agents');
     tasksServer.addProject('second', 'agents', 'Second Project');
     tasksServer.addProject('third', 'minimal', 'Third Project');
-    await page.goto('tasks-dashboard.html#overview');
+    await page.goto('/projects');
   });
 
   test('the chart sums every project; the popup is stacked and coloured by project', async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe('Projects Overview: Activity across projects', () => {
     await page.locator('#activity-card').click();
     await page.locator('#activity-panel [data-range="week"]').click();
     await expect(page.locator('#activity-panel [data-range="week"]')).toHaveAttribute('aria-pressed', 'true');
-    await page.goto('tasks-dashboard.html#project=second');
+    await page.goto('/projects/second');
     await page.locator('#activity-card').click();
     await expect(page.locator('#activity-panel [data-range="all"]')).toHaveAttribute('aria-pressed', 'true');
     // A project's page colours by type, as before

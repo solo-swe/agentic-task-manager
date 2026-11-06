@@ -48,7 +48,7 @@ describe('a new dashboard build on the server', () => {
   it("reads the server's build from __atm/whoami; anything else is unknown", async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ atm: true, build: 'b2' }));
     expect(await serverBuild(fetchFn)).toBe('b2');
-    expect(fetchFn).toHaveBeenCalledWith('__atm/whoami', { cache: 'no-store' });
+    expect(fetchFn).toHaveBeenCalledWith('/__atm/whoami', { cache: 'no-store' });
     expect(await serverBuild(vi.fn().mockResolvedValue(jsonResponse('nope', 404)))).toBeNull();
     expect(await serverBuild(vi.fn().mockResolvedValue(jsonResponse({ atm: true })))).toBeNull();
     expect(await serverBuild(vi.fn().mockRejectedValue(new TypeError('offline')))).toBeNull();
@@ -69,7 +69,7 @@ describe('searchProjects (T-261)', () => {
   it('asks api/search past the cache, and keeps only task IDs per project', async () => {
     const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ a1: ['T-1', 2, 'T-3'], b2: 'nope', c3: [] }));
     const found = await searchProjects('a b&c', fetchFn);
-    expect(fetchFn).toHaveBeenCalledWith('api/search?q=a%20b%26c', { cache: 'no-store' });
+    expect(fetchFn).toHaveBeenCalledWith('/api/search?q=a%20b%26c', { cache: 'no-store' });
     expect([...found].map(([id, ids]) => [id, [...ids]])).toEqual([
       ['a1', ['T-1', 'T-3']],
       ['c3', []],
@@ -79,15 +79,15 @@ describe('searchProjects (T-261)', () => {
 
   it('throws on a failed request', async () => {
     await expect(searchProjects('x', vi.fn().mockResolvedValue(jsonResponse('no', 500)))).rejects.toThrow(
-      'api/search: HTTP 500',
+      '/api/search: HTTP 500',
     );
   });
 });
 
 describe('projectFileUrl', () => {
-  it("is the file under the project's id, relative to the page", () => {
-    expect(projectFileUrl('abcd1234', 'worktrees.json')).toBe('p/abcd1234/worktrees.json');
-    expect(projectFileUrl('a b/c', 'claims.json')).toBe('p/a%20b%2Fc/claims.json');
+  it("is the file under the project's id, from the server's root", () => {
+    expect(projectFileUrl('abcd1234', 'worktrees.json')).toBe('/p/abcd1234/worktrees.json');
+    expect(projectFileUrl('a b/c', 'claims.json')).toBe('/p/a%20b%2Fc/claims.json');
   });
 });
 
@@ -107,7 +107,7 @@ describe('loadProjects', () => {
     const body = { projects: [{ id: 'abcd1234', name: 'Demo', path: '/x', missing: false, summary }] };
     const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { headers: { ETag: '"p1"' } }));
     const result = await loadProjects(fetchFn);
-    expect(fetchFn).toHaveBeenCalledWith('api/projects', { cache: 'no-store', headers: {} });
+    expect(fetchFn).toHaveBeenCalledWith('/api/projects', { cache: 'no-store', headers: {} });
     expect(result).toEqual({
       unchanged: false,
       projects: [{ ...body.projects[0], worktrees: [], logo: null }],
@@ -115,7 +115,7 @@ describe('loadProjects', () => {
     });
     const again = vi.fn().mockResolvedValue(new Response(null, { status: 304 }));
     expect(await loadProjects(again, { etag: '"p1"' })).toEqual({ unchanged: true });
-    expect(again).toHaveBeenCalledWith('api/projects', { cache: 'no-store', headers: { 'If-None-Match': '"p1"' } });
+    expect(again).toHaveBeenCalledWith('/api/projects', { cache: 'no-store', headers: { 'If-None-Match': '"p1"' } });
   });
 
   it('leaves out entries without an id and fills in what is missing', async () => {
@@ -142,12 +142,12 @@ describe('loadProjects', () => {
     ]);
   });
 
-  it("takes a project's logo only as the server's own p/<id>/logo route", async () => {
+  it("takes a project's logo only as the server's own p/<id>/logo route, from the root (T-429)", async () => {
     const logos = ['p/x1/logo', 'https://example.com/logo.png', '//evil/logo', 'p/x1/../../logo', 'javascript:x', 7];
     const body = { projects: logos.map((logo, i) => ({ id: `x${i + 1}`, logo })) };
     const result = await loadProjects(vi.fn().mockResolvedValue(jsonResponse(body)));
     expect(!result.unchanged && result.projects.map((p) => p.logo)).toEqual([
-      'p/x1/logo',
+      '/p/x1/logo',
       null,
       null,
       null,

@@ -8,16 +8,16 @@ test.describe('About', () => {
     await page.locator('#footer-about').click();
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#about-panel')).toContainText('Hakan Serce');
-    await expect(page).toHaveURL(/#.*about/);
+    await expect(page).toHaveURL(/\?(.*&)?about(&|$)/);
     await page.keyboard.press('Escape');
     await expect(page.locator(overlay)).toBeHidden();
     await expect(page.locator('#footer-about')).toBeFocused();
-    expect(new URL(page.url()).hash).not.toContain('about');
+    expect(new URL(page.url()).search).not.toContain('about');
   });
 
   test('#about in the URL opens it, together with a view', async ({ page, tasksServer }) => {
     tasksServer.use('standard');
-    await page.goto('tasks-dashboard.html#view=kanban&about');
+    await page.goto('/?view=kanban&about');
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
   });

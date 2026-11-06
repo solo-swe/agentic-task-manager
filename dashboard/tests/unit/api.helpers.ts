@@ -13,4 +13,4 @@ export function asTaskViews(data: { meta?: unknown; tasks?: unknown[] }, bytes =
 }
 
 /** A project's v1 tasks URL, as the dashboard asks for it */
-export const v1Tasks = (project: string) => `api/v1/projects/${project}/tasks`;
+export const v1Tasks = (project: string) => `/api/v1/projects/${project}/tasks`;

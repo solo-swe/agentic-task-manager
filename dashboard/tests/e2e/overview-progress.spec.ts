@@ -8,9 +8,9 @@ test.describe('Projects Overview: the Progress tab', () => {
   }) => {
     tasksServer.use('agents');
     tasksServer.addProject('second', 'sprints', 'Second Project');
-    await page.goto('tasks-dashboard.html#overview');
+    await page.goto('/projects');
     await page.locator('#overview-tab-progress').click();
-    await expect(page).toHaveURL(/view=progress/);
+    await expect(page).toHaveURL(/\/progress(\?|$)/);
     const rows = page.locator('#overview-progress .overview-progress-row');
     await expect(rows).toHaveCount(2);
     // The agents fixture: 6 of its 8 tasks done, no sprints
@@ -28,18 +28,19 @@ test.describe('Projects Overview: the Progress tab', () => {
     await page.locator('#overview-velocity-unit [data-unit="month"]').click();
     await expect(page.locator('#overview-velocity .velocity-column')).toHaveCount(6);
     await rows.filter({ hasText: 'Second Project' }).click();
-    await expect(page).toHaveURL(/project=second/);
+    await expect(page).toHaveURL(/\/projects\/second(\/|\?|$)/);
     await expect(page.locator('#tab-progress')).toHaveAttribute('aria-selected', 'true');
   });
 
   test('a project’s own Progress tab does not change the overview’s tab', async ({ page, tasksServer }) => {
     tasksServer.use('agents');
     tasksServer.addProject('second', 'sprints', 'Second Project');
-    await page.goto('tasks-dashboard.html#overview');
+    await page.goto('/projects');
     await page.locator('#overview-tab-board').click();
-    await page.goto('tasks-dashboard.html#project=second&view=progress');
+    await page.goto('/projects/second/progress');
     await expect(page.locator('#progress')).toBeVisible();
-    await page.goto('tasks-dashboard.html#overview');
+    // The landing page: the overview on its last tab
+    await page.goto('/');
     await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
   });
 });

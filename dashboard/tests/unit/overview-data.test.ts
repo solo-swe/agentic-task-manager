@@ -204,7 +204,7 @@ describe('loadProjectSources', () => {
       const u = String(url);
       if (u.startsWith(v1Tasks('a')))
         return json(asTaskViews({ meta: { project: 'A' }, tasks: [task('T-1', 'Ada', '2026-01-02T08:00:00Z', null)] }));
-      if (u.startsWith('p/a/claims.json')) return json({ claims: [] });
+      if (u.startsWith('/p/a/claims.json')) return json({ claims: [] });
       return new Response('', { status: 404 });
     }) as unknown as typeof fetch;
     const sources = await loadProjectSources([project('a'), project('gone', true)], [], fetchFn);

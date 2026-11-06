@@ -1,6 +1,6 @@
 <script lang="ts">
   // The pages without a project: the overview of all projects, how to add a project when none is registered, and a
-  // project the URL names but the server doesn't list (lib/routes.ts). Their title bar is Header's.
+  // project the address names but the server doesn't list (lib/routes.ts). Their title bar is Header's.
   import { dashboard } from '../state.svelte';
   import ProjectsOverview from '../overview/ProjectsOverview.svelte';
 
@@ -12,7 +12,7 @@
     <section class="landing-note" id="unknown-project" role="alert">
       <h2>No project “{dashboard.route.id}”</h2>
       <p>
-        The atm server doesn't list it, or its folder or tasks.json is gone. <a href="#overview">See all projects</a>.
+        The atm server doesn't list it, or its folder or tasks.json is gone. <a href="/projects">See all projects</a>.
       </p>
     </section>
   {:else if dashboard.route.page === 'none' || (dashboard.projectsLoaded && present.length === 0)}

@@ -36,18 +36,29 @@ import {
   type Filters,
   type ListSort,
 } from './filters';
-import { parseDialogHash, withDialogHash, type DialogId } from './dialogs';
-import { parseDocHash, withDocHash, type DocumentRef } from './documents';
+import { dialogOf, withDialog, type DialogId } from './dialogs';
+import { docOf, withDoc, type DocumentRef } from './documents';
+import { currentAddress, entryState, navigate } from './navigation';
 
 /** How many of the document viewer's own history entries lead to this one (0: not the viewer's) */
 function documentDepth(): number {
-  const state = history.state as { atmDocument?: boolean; atmDocumentDepth?: number } | null;
-  if (!state?.atmDocument) return 0;
+  const state = entryState();
+  if (!state.atmDocument) return 0;
   return typeof state.atmDocumentDepth === 'number' && state.atmDocumentDepth > 0 ? state.atmDocumentDepth : 1;
 }
-import { hasViewHash, parseViewHash, withViewHash, type ViewId } from './tabs';
-import { isOverviewTab, parseOverviewTab, routeFor, withProjectHash, type OverviewTab, type Route } from './routes';
-import { formatHash, hashParams } from './hash';
+import { namesView, viewOf, withView, type ViewId } from './tabs';
+import {
+  isOverviewTab,
+  overviewTabOf,
+  projectOf,
+  routeFor,
+  taskOf,
+  withProject,
+  withTask,
+  type OverviewTab,
+  type Route,
+} from './routes';
+import { addressParams, formatAddress } from './address';
 import type { BoardScope } from './allboard';
 import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
@@ -56,7 +67,7 @@ import type { Task } from './types';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
 import { leftovers as leftoversOf, scopeOf } from './scope';
-import { parseSprintHash, withSprintHash } from './sprint-hash';
+import { sprintParamOf, withSprintParam } from './sprint-param';
 import { sprintModel } from './sprints';
 import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab';
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
@@ -95,8 +106,8 @@ export class DashboardState {
   newVersionReady = $state(false);
   /** The overview shows only active projects (open work, or activity lately); remembered per browser */
   overviewActiveOnly = $state(getPref('overviewActiveOnly', true));
-  /** The overview's tab, project cards or the board (T-259): "#view=board" in a link, else the last one chosen */
-  overviewTab = $state<OverviewTab>(parseOverviewTab(location.hash) ?? savedOverviewTab());
+  /** The overview's tab, project cards or the board (T-259): /board in a link, else the last one chosen */
+  overviewTab = $state<OverviewTab>(overviewTabOf(currentAddress()) ?? savedOverviewTab());
   /** The All projects board in a lane per project (T-260); remembered per browser */
   boardGroupByProject = $state(getPref('boardGroupByProject', false));
   /** The All projects board's search (T-261), over every project's tasks through api/search; remembered per browser */
@@ -209,8 +220,8 @@ export class DashboardState {
   /** A task of the Omniboard is open over it (T-411): its project's data is loaded, the page is still the overview */
   peeking = $state(false);
 
-  /** The selected view tab; mirrored in the URL hash ("#view=kanban") */
-  tab = $state<ViewId>(parseViewHash(location.hash));
+  /** The selected view tab; mirrored in the address (/projects/<id>/kanban) */
+  tab = $state<ViewId>(viewOf(currentAddress()));
   kanbanGroupBySprint = $state(false);
   kanbanShowSkipped = $state(false);
   /** The Kanban done column shows every card, not just the most recent */
@@ -252,11 +263,11 @@ export class DashboardState {
   viewKey = $state<string | null>(null);
 
   whatsNewOpen = $state(false);
-  /** The open About or Help dialog; mirrored in the URL hash ("#about") so it can be linked */
-  dialog = $state<DialogId | null>(parseDialogHash(location.hash));
-  /** The file open in the document viewer, from the URL hash (#doc=<path>:L<n>), so it can be linked and Reload
+  /** The open About or Help dialog; mirrored in the address ("?about") so it can be linked */
+  dialog = $state<DialogId | null>(dialogOf(currentAddress()));
+  /** The file open in the document viewer, from the address (?doc=<path>:L<n>), so it can be linked and Reload
    * keeps it (docs/compmd-viewer-design.md V2) */
-  docRef = $state.raw<DocumentRef | null>(parseDocHash(location.hash));
+  docRef = $state.raw<DocumentRef | null>(docOf(currentAddress()));
   /** "New" on the version until this version's release notes are opened once (FR-1.5). Without working storage
    * it could never be cleared, so it is not shown at all. */
   releaseNotesUnseen = $state(releaseNotesUnseen());
@@ -279,9 +290,9 @@ export class DashboardState {
   #validators: Validators | undefined;
   #projectsValidators: Validators | undefined;
   #pendingNeedsYou = false;
-  /** #sprint= in the URL (syncSprintHash): not until the project's view is restored, then replaced once, then pushed */
-  #sprintHash: 'pending' | 'restored' | 'synced' = 'pending';
-  #pendingTask: string | null = null;
+  /** ?sprint= in the address (syncSprintParam): not until the project's view is restored, then replaced once, then
+   * pushed */
+  #sprintParam: 'pending' | 'restored' | 'synced' = 'pending';
   // The build the server last said it holds, and the one dismissed in this page (for when storage is unavailable)
   #serverBuild: string | null = null;
   #dismissedBuild = '';
@@ -351,7 +362,7 @@ export class DashboardState {
       this.projects = result.projects;
     }
     this.projectsLoaded = true;
-    this.route = routeFor(this.projects, location.hash);
+    this.route = routeFor(this.projects, currentAddress());
     if (this.route.page !== 'project') {
       // A task's details belong to its project's page (Back from a task opened on the overview), unless the task was
       // opened on the Omniboard (T-411)
@@ -359,9 +370,11 @@ export class DashboardState {
       return null;
     }
     this.peeking = false;
+    // The landing page showing the one project: the address becomes the project's, so tabs and links name it
+    if (projectOf(currentAddress()) === null) navigate(withProject(currentAddress(), this.route.id), { replace: true });
     if (this.route.id !== this.projectId) this.switchProject(this.route.id);
-    // The project page wasn't shown, so nothing followed a #view= in the link that opened it
-    if (hasViewHash(location.hash)) this.tab = parseViewHash(location.hash);
+    // The project page wasn't shown, so nothing followed the tab in the link that opened it
+    if (namesView(currentAddress())) this.tab = viewOf(currentAddress());
     return this.route.id;
   }
 
@@ -393,7 +406,7 @@ export class DashboardState {
     this.detailOpen = false;
     this.detailId = null;
     this.viewKey = null;
-    this.#sprintHash = 'pending';
+    this.#sprintParam = 'pending';
   }
 
   /** Show project `id`, or the overview for null (a new history entry, so Back returns). With `needsYou`, the project
@@ -404,26 +417,33 @@ export class DashboardState {
     { needsYou = false, task, view }: { needsYou?: boolean; task?: string; view?: ViewId } = {},
   ) {
     // Another project's sprints are not this one's: its own saved Sprint filter applies
-    let hash = withSprintHash(withProjectHash(location.hash, id), null);
+    let address = withSprintParam(withProject(currentAddress(), id, this.overviewTab), null);
     if (id !== null && needsYou) {
-      hash = withViewHash(hash, 'kanban');
+      address = withView(address, 'kanban');
       this.#pendingNeedsYou = true;
-    } else if (id !== null && view) hash = withViewHash(hash, view);
-    if (id !== null && task) this.#pendingTask = task;
-    location.hash = hash;
+    } else if (id !== null && view) address = withView(address, view);
+    // The task's details open once its project has loaded (fetchAndApply)
+    if (id !== null && task) address = withTask(address, task);
+    navigate(address);
   }
 
-  /** The URL changed (a link, Back): pick up the dialog, and the page when it names another one. */
-  onHashChange() {
-    this.dialog = parseDialogHash(location.hash);
-    this.docRef = parseDocHash(location.hash);
-    // An overview tab from the URL (Back, a link) is the last one shown, so it is remembered too
-    const overviewTab = parseOverviewTab(location.hash);
+  /** The address changed (a link, Back, or the dashboard's own move): pick up the dialog, the document, the tab and
+   * the task, and the page when it names another one. */
+  onNavigate() {
+    const address = currentAddress();
+    this.dialog = dialogOf(address);
+    // The same document stays the same reference (its own moves land here too): the viewer doesn't load it again
+    const docRef = docOf(address);
+    if (JSON.stringify(docRef) !== JSON.stringify(this.docRef)) this.docRef = docRef;
+    // Before the project list is in, the first load reads the page from the address itself
+    if (!this.projectsLoaded) return;
+    // An overview tab from the address (Back, a link) is the last one shown, so it is remembered too
+    const overviewTab = overviewTabOf(address);
     if (overviewTab) {
       this.overviewTab = overviewTab;
       setPref('overviewTab', overviewTab);
     }
-    const route = routeFor(this.projects, location.hash);
+    const route = routeFor(this.projects, address);
     if (JSON.stringify(route) !== JSON.stringify(this.route)) {
       // Another page: a task opened on the Omniboard closes with it
       if (this.peeking) {
@@ -433,8 +453,16 @@ export class DashboardState {
       void this.reload();
       return;
     }
+    if (route.page !== 'project' || !this.loaded) return;
+    this.tab = viewOf(address);
+    // Back past a task's details closes them, Forward opens them again
+    if (!this.peeking) {
+      const task = taskOf(address);
+      if (task === null) this.detailOpen = false;
+      else if (!this.detailOpen || this.detailId !== task) this.openDetail(task);
+    }
     // Back, or a link to another sprint of the project shown (T-323)
-    const linked = this.#sprintHash === 'pending' ? null : parseSprintHash(location.hash, this.sprints);
+    const linked = this.#sprintParam === 'pending' ? null : sprintParamOf(address, this.sprints);
     if (linked && !sameSelection(linked, [...this.filters.sprint])) this.setSprintScope(linked);
   }
 
@@ -468,7 +496,8 @@ export class DashboardState {
       return;
     }
     await this.loadProjectData(project);
-    if (!this.loaded) this.restoreView();
+    const first = !this.loaded;
+    if (first) this.restoreView();
     if (this.#pendingNeedsYou) {
       // Opened from an overview card's "needs you": only what waits for a review or a decision
       this.#pendingNeedsYou = false;
@@ -477,11 +506,9 @@ export class DashboardState {
       this.filters = filtersFrom({ ...none, status });
     }
     this.loaded = true;
-    if (this.#pendingTask) {
-      // Opened from an overview card's "needs you" list: that task's details
-      this.showDetail(this.#pendingTask);
-      this.#pendingTask = null;
-    }
+    // A task's address (?task=, a link, or an overview card's "needs you" list): its details
+    const task = first ? taskOf(currentAddress()) : null;
+    if (task) this.openDetail(task);
   }
 
   /** A task of the Omniboard's (T-411): its details open over the board, which stays (the page and the URL don't
@@ -536,9 +563,11 @@ export class DashboardState {
   selectOverviewTab(tab: OverviewTab) {
     setPref('overviewTab', tab);
     if (tab !== this.overviewTab) {
-      const params = hashParams(location.hash);
+      const params = addressParams(currentAddress());
+      params.delete('project');
+      params.set('overview', '');
       params.set('view', tab);
-      location.hash = formatHash(params);
+      navigate(formatAddress(params));
     }
     this.overviewTab = tab;
   }
@@ -620,15 +649,28 @@ export class DashboardState {
     this.query = '';
   }
 
+  /** A task's details, in the address (?task=) on a project's page: opening them is a new history entry, so Back
+   * closes them; another task's replace them in place. A task opened on the Omniboard isn't in the address (T-411). */
   showDetail(id: string) {
-    if (!this.taskMap.has(id) && !this.archiveMap.has(id)) return;
+    const wasOpen = this.detailOpen;
+    if (!this.openDetail(id) || this.peeking || this.route.page !== 'project') return;
+    const address = withTask(currentAddress(), id);
+    if (address !== currentAddress()) navigate(address, { replace: wasOpen });
+  }
+
+  /** Shows a task's details without changing the address (it names them already) */
+  private openDetail(id: string): boolean {
+    if (!this.taskMap.has(id) && !this.archiveMap.has(id)) return false;
     this.detailId = id;
     this.detailOpen = true;
+    return true;
   }
 
   closeDetail() {
     this.detailOpen = false;
     this.peeking = false;
+    const address = withTask(currentAddress(), null);
+    if (address !== currentAddress()) navigate(address, { replace: true });
   }
 
   openWhatsNew() {
@@ -644,13 +686,13 @@ export class DashboardState {
 
   openDialog(id: DialogId) {
     this.dialog = id;
-    location.hash = withDialogHash(location.hash, id);
+    navigate(withDialog(currentAddress(), id));
   }
 
   /** Closes the dialog without a new history entry, so Back doesn't reopen it. */
   closeDialog() {
     this.dialog = null;
-    history.replaceState(null, '', withDialogHash(location.hash, null));
+    navigate(withDialog(currentAddress(), null), { replace: true });
   }
 
   /** Opens a file of the project in the document viewer: a new history entry, marked as the viewer's, so the
@@ -659,7 +701,7 @@ export class DashboardState {
     this.docRef = ref;
     // How many of the viewer's entries lead here, so Close can go back past all of them
     const depth = documentDepth() + 1;
-    history.pushState({ atmDocument: true, atmDocumentDepth: depth }, '', withDocHash(location.hash, ref));
+    navigate(withDoc(currentAddress(), ref), { state: { atmDocument: true, atmDocumentDepth: depth } });
   }
 
   /** The viewer's Back (its button, Escape): the previous history entry when this one was the viewer's own; for a
@@ -681,11 +723,11 @@ export class DashboardState {
       return;
     }
     this.docRef = null;
-    history.replaceState(null, '', withDocHash(location.hash, null));
+    navigate(withDoc(currentAddress(), null), { replace: true });
   }
 
   selectTab(tab: ViewId) {
-    if (tab !== this.tab) location.hash = withViewHash(location.hash, tab);
+    if (tab !== this.tab) navigate(withView(currentAddress(), tab));
     this.tab = tab;
   }
 
@@ -729,36 +771,34 @@ export class DashboardState {
     this.applyView(defaultView(), true);
   }
 
-  /** After the first load: bring back this project's view. A #view= in the URL wins over the saved tab. */
+  /** After the first load: bring back this project's view. A tab in the address wins over the saved tab. */
   private restoreView() {
     // The server's project id is meta.id (or stands in for it), so views saved before 0.15.0 are found again
     this.viewKey = projectKey(this.projectId ? { id: this.projectId } : this.meta);
     this.applyView(
       sanitizeView(readView(this.viewKey), this.tasks, this.vocab, this.sprints),
-      !hasViewHash(location.hash),
+      !namesView(currentAddress()),
     );
-    // A #sprint= in the link wins over the saved Sprint filter (T-323)
-    const linked = parseSprintHash(location.hash, this.sprints);
+    // A ?sprint= in the link wins over the saved Sprint filter (T-323)
+    const linked = sprintParamOf(currentAddress(), this.sprints);
     if (linked) this.setSprintScope(linked);
-    this.#sprintHash = 'restored';
+    this.#sprintParam = 'restored';
   }
 
   /**
-   * The Sprint filter into the URL (#sprint=, T-323), so the address shares the sprint shown and Back returns to the
+   * The Sprint filter into the address (?sprint=, T-323), so it shares the sprint shown and Back returns to the
    * previous one; App runs it on every change. The first write after a project's view is restored replaces the entry.
    */
-  syncSprintHash() {
+  syncSprintParam() {
     const selection = [...this.filters.sprint];
-    if (this.#sprintHash === 'pending' || this.route.page !== 'project' || !this.sprints.sprints.length) return;
-    const linked = parseSprintHash(location.hash, this.sprints);
+    if (this.#sprintParam === 'pending' || this.route.page !== 'project' || !this.sprints.sprints.length) return;
+    const linked = sprintParamOf(currentAddress(), this.sprints);
     if (linked && sameSelection(linked, selection)) {
-      this.#sprintHash = 'synced';
+      this.#sprintParam = 'synced';
       return;
     }
-    const hash = withSprintHash(location.hash, selection);
-    if (this.#sprintHash === 'restored') history.replaceState(null, '', hash);
-    else location.hash = hash;
-    this.#sprintHash = 'synced';
+    navigate(withSprintParam(currentAddress(), selection), { replace: this.#sprintParam === 'restored' });
+    this.#sprintParam = 'synced';
   }
 
   private applyView(view: SavedView, includeTab: boolean) {
@@ -782,7 +822,7 @@ export class DashboardState {
     this.agentsLive = view.agentsLive;
     this.activityRange = view.activity;
     if (includeTab && view.tab !== this.tab) {
-      history.replaceState(null, '', withViewHash(location.hash, view.tab));
+      navigate(withView(currentAddress(), view.tab), { replace: true });
       this.tab = view.tab;
     }
   }

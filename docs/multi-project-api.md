@@ -21,7 +21,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 
 | Route | Answer | ETag |
 |---|---|---|
-| `GET /` | the dashboard (`text/html`), from the plugin, held in memory since the server started | no |
+| `GET /` and the dashboard's other pages (§2.7) | the dashboard (`text/html`), from the plugin, held in memory since the server started | no |
 | `GET /api/projects` | the registered projects with their summaries (§3) | yes |
 | `GET /api/search?q=<text>` | the tasks matching a search, in every project (§2.4) | no |
 | `GET /p/<id>/claims.json` | that project's live claims, from every worktree (§2.1) | yes |
@@ -163,6 +163,25 @@ reads the working copy through the version control. `path` is relative to the pr
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
   folder, a key file (`*.pem`, `id_rsa*`, …) or one git ignores `403`; a missing file, or one reached through a
   symlink, `404`; over 1 MB (5 MB for an image) `413`. Each with `{"error": …}`.
+
+### 2.7 The dashboard's pages
+
+The dashboard's views have addresses (T-429), and the server answers each with the same page, with the same
+Content-Security-Policy, as `/`; the page reads its address and shows that view (`dashboard/src/lib/address.ts`,
+SvelteKit routes in `dashboard/src/routes/`). The server sends nothing else under these paths: an ID or a tab in one is
+text the page reads, never a file it looks up.
+
+| Path | The page shows |
+|---|---|
+| `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
+| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
+| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`) |
+
+What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
+document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
+query. The paths are `PAGE_PATH` in `api/server.py` (a tab is lowercase letters; nothing deeper than a tab), any other
+path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
+old parameters from its hash and moves to the new address.
 
 ## 3. `GET /api/projects`
 

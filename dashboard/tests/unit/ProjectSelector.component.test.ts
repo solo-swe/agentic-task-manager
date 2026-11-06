@@ -51,14 +51,14 @@ describe('ProjectSelector', () => {
     expect(container.querySelector('[data-id="a"] .project-option-dot')).not.toBeNull();
   });
 
-  it('typing filters; Enter opens the active project in the URL', async () => {
+  it('typing filters; Enter opens the active project’s address', async () => {
     const { container } = render(ProjectSelector);
     await fireEvent.click(container.querySelector('#project-selector')!);
     const filter = container.querySelector('#project-filter') as HTMLInputElement;
     await fireEvent.input(filter, { target: { value: 'bet' } });
     expect([...container.querySelectorAll('[role=option]')].map((o) => o.getAttribute('data-id'))).toEqual(['b']);
     await fireEvent.keyDown(filter, { key: 'Enter' });
-    expect(location.hash).toBe('#project=b');
+    expect(location.pathname).toBe('/projects/b');
     expect(container.querySelector('#project-menu')).toBeNull();
   });
 
@@ -70,6 +70,6 @@ describe('ProjectSelector', () => {
       'overview',
     ]);
     await fireEvent.click(container.querySelector('[data-id="overview"]')!);
-    expect(location.hash).toBe('#overview');
+    expect(location.pathname).toBe('/projects');
   });
 });

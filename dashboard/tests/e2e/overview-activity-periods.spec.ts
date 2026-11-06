@@ -30,7 +30,7 @@ async function openActivity(page: Page, tasksServer: TasksServer) {
   await page.clock.setFixedTime(NOW);
   tasksServer.use(project('Alpha', 'A'));
   tasksServer.addProject('beta', project('Beta', 'B'), 'Beta');
-  await page.goto('tasks-dashboard.html#overview');
+  await page.goto('/projects');
   await page.locator('#activity-card').click();
   await expect(page.locator('#activity-panel')).toBeVisible();
 }

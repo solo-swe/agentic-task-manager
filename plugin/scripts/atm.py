@@ -13474,6 +13474,9 @@ LOGO_HEADERS = {
 # published files), and a frame document is sandboxed even when opened alone, as @compmd/vite serves them
 ASSETS = "/assets/"
 COMPMD_ASSETS = ASSETS + "compmd/"
+# The dashboard's pages (T-429; dashboard/src/lib/address.ts PAGE_PATH): the same page at each, which shows the one
+# its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
+PAGE_PATH = re.compile(r"/(?:projects(?:/[^/]+(?:/[a-z]+)?)?|board|progress|agents)?/?")
 ASSET_TYPES = {
     ".js": "text/javascript; charset=utf-8",
     ".wasm": "application/wasm",
@@ -13843,7 +13846,7 @@ def serve(home, port):
                 self.send_error_json(403, "unexpected Host header")
                 return
             path = urlsplit(self.path).path
-            if path == "/":
+            if PAGE_PATH.fullmatch(path):
                 host = self.headers.get("Host")
                 if host not in page_policies:
                     page_policies[host] = page_csp(page, "http://" + host)

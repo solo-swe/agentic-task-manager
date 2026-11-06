@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import {
-    dashboardHash,
+    dashboardAddress,
     loadCompmd,
     processText,
     safeHref,
@@ -11,7 +11,8 @@
     type CompmdModule,
     type DrawnLine,
   } from '../compmd';
-  import { parseDocHash, referenceTo, withDocHash } from '../documents';
+  import { docOf, referenceTo, viewerLink } from '../documents';
+  import { navigate } from '../navigation';
   import { scrollBehavior } from '../scroll';
   import { dashboard } from '../state.svelte';
   import type { Task } from '../types';
@@ -49,7 +50,7 @@
     task || path
       ? (url: string) => {
           const ref = referenceTo(url, path);
-          return ref ? withDocHash('', ref) : null;
+          return ref ? viewerLink(ref) : null;
         }
       : undefined,
   );
@@ -120,8 +121,9 @@
     view?.destroy();
   });
 
-  /** Links open as the dashboard's always have (§3): `#` ones scroll to the heading in this text, the URL hash being
-   * the dashboard's state; external ones in a new tab without access to this page; any other one not at all */
+  /** Links open as the dashboard's always have (§3): `#` ones scroll to the heading in this text (or, a viewer link,
+   * open the document); a link to the dashboard itself here; external ones in a new tab without access to this page;
+   * any other one not at all */
   function follow(e: MouseEvent) {
     const a = (e.target as Element | null)?.closest('a[href]');
     if (!a || !host?.contains(a)) return;
@@ -133,7 +135,7 @@
     if (href.startsWith('#')) {
       e.preventDefault();
       // A document of the project (a relative link, made a viewer link by safeTree): the viewer opens it
-      const doc = parseDocHash(href);
+      const doc = docOf(href);
       if (doc) {
         dashboard.openDocument(doc);
         return;
@@ -146,10 +148,10 @@
       return;
     }
     // A link to the dashboard itself (a task's or a document's URL) opens here, a new history entry for Back
-    const hash = dashboardHash(href);
-    if (hash !== null) {
+    const address = dashboardAddress(href);
+    if (address !== null) {
       e.preventDefault();
-      location.hash = hash;
+      navigate(address);
       return;
     }
     a.setAttribute('target', '_blank');

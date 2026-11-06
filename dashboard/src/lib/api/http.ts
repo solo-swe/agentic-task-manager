@@ -1,8 +1,8 @@
 // The dashboard's client layer (docs/layered-architecture.md §1, §9 step 5): the only module that makes requests.
 // Everything the dashboard reads comes from atm serve's REST API (docs/multi-project-api.md), through here; the rest
 // of the dashboard takes a `Fetch` it can be given (tests pass their own) and never calls the network itself. An
-// ESLint rule (eslint.config.js) keeps `fetch` out of every other module. URLs are relative to the page, which the
-// server serves at /.
+// ESLint rule (eslint.config.js) keeps `fetch` out of every other module. URLs are from the server's root, since the
+// page is served at several paths (/projects/<id>/…, T-429).
 
 /** How the dashboard makes a request: the browser's fetch, or a test's */
 export type Fetch = typeof fetch;
@@ -15,22 +15,22 @@ export type ProjectFile = 'claims.json' | 'worktrees.json';
 
 /** Where a project's file is served */
 export function projectFileUrl(project: string, file: ProjectFile): string {
-  return `p/${encodeURIComponent(project)}/${file}`;
+  return `/p/${encodeURIComponent(project)}/${file}`;
 }
 
 /** A project's tasks with what atm derives for them, and its meta (GET api/v1/projects/<id>/tasks, T-364) */
 export function v1TasksUrl(project: string): string {
-  return `api/v1/projects/${encodeURIComponent(project)}/tasks`;
+  return `/api/v1/projects/${encodeURIComponent(project)}/tasks`;
 }
 
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
-  return `api/v1/projects/${encodeURIComponent(project)}/documents?path=${encodeURIComponent(path)}`;
+  return `/api/v1/projects/${encodeURIComponent(project)}/documents?path=${encodeURIComponent(path)}`;
 }
 
 /** An image file of the project, its bytes, for an <img> (T-392) */
 export function v1FileUrl(project: string, path: string): string {
-  return `api/v1/projects/${encodeURIComponent(project)}/files?path=${encodeURIComponent(path)}`;
+  return `/api/v1/projects/${encodeURIComponent(project)}/files?path=${encodeURIComponent(path)}`;
 }
 
 /** What the server said identifies this version of a file, sent back to ask "has it changed?" */

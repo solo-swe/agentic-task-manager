@@ -43,7 +43,7 @@ describe('HelpDialog', () => {
     expect(dialog.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
     expect(heading(dialog, 'Statuses and kinds')?.tagName).toBe('H2');
     expect(dialog).toHaveTextContent('/atm:loop-tasks');
-    expect(location.hash).toBe('#help');
+    expect(location.search).toBe('?help');
     // Headings have no IDs: an element with the ID "help" would make the browser jump to it on "#help"
     expect(document.getElementById('help')).toBeNull();
   });
@@ -69,7 +69,7 @@ describe('HelpDialog', () => {
     opener.remove();
   });
 
-  it('links within the page scroll to the heading and leave the URL hash alone', async () => {
+  it('links within the page scroll to the heading and leave the address alone', async () => {
     render(HelpDialog);
     const dialog = await openHelp();
     const target = heading(dialog, 'Priorities and labels')!;
@@ -77,7 +77,7 @@ describe('HelpDialog', () => {
     target.scrollIntoView = () => (scrolled = true);
     await fireEvent.click(screen.getByRole('link', { name: 'priorities and labels' }));
     expect(scrolled).toBe(true);
-    expect(location.hash).toBe('#help');
+    expect(location.search).toBe('?help');
   });
 });
 

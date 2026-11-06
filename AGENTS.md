@@ -35,8 +35,11 @@ updates that document in the same PR.
 Coding rules: the [Svelte guide](docs/guides/svelte.md). SvelteKit (T-428), its options in `vite.config.ts`'s `sveltekit({ … })` call: a single-page app, rendered in the
 browser only, from the static adapter's fallback page with every script and style inlined
 (`output.bundleStrategy: 'inline'`), so it builds to a **single self-contained HTML file**; `build/finish-page.ts`
-stamps it and writes it where the plugin ships it. Until T-429 gives the views routes, one catch-all route
-(`src/routes/[...path]/`) shows the app at any path; its views live in the hash. Components live by area in
+stamps it and writes it where the plugin ships it. The views are routes (T-429): the app is in the root layout
+(`src/routes/+layout.svelte`), the route files under it are its addresses (`/projects/<id>/<tab>`, `/board`, …), and
+`src/lib/address.ts` reads and writes them (what is open over a page in the query: `?task=`, `?doc=`, `?sprint=`);
+the routes and `atm serve`'s `PAGE_PATH` are listed in `docs/multi-project-api.md` §2.7. Navigate with
+`lib/navigation.ts`, never `history` or `location` directly; API URLs are from the server's root. Components live by area in
 `src/lib/<area>/` (`shell/`, `ui/`, `kanban/`, `tasks/`, `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`,
 `agents/`, `overview/`; T-430), beside the logic modules in `src/lib/`. The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.

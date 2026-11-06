@@ -77,7 +77,10 @@ function home() {
 
 /** A project with tasks.json in the new folder, removed when the tests end. */
 function project(tasks = TASKS, files = {}) {
-  const root = makeProject({ git: true, files: { '.agentic-task-manager/tasks.json': tasks, ...files } });
+  const root = makeProject({
+    git: true,
+    files: { '.agentic-task-manager/tasks.json': tasks, ...files },
+  });
   cleanups.push(() => removeDir(root));
   return root;
 }
@@ -159,7 +162,10 @@ describe('serve', () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const a = project();
-    const b = project({ meta: { id: 'bbbb2222', project: 'Second' }, tasks: [] });
+    const b = project({
+      meta: { id: 'bbbb2222', project: 'Second' },
+      tasks: [],
+    });
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], a).code, 0);
     const second = atm(['service', '--port', String(port)], b);
@@ -181,7 +187,13 @@ describe('serve', () => {
     const atmHome = home();
     const env = { ATM_HOME: atmHome, ATM_NOW: '2026-03-15T12:00:00Z' };
     const atm = (args, cwd) => runAtm(args, cwd, env);
-    const task = (id, status, extra = {}) => ({ id, name: id, type: 'feature', status, ...extra });
+    const task = (id, status, extra = {}) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status,
+      ...extra,
+    });
     const root = project({
       meta: { id: 'abcd1234', project: 'Summary' },
       tasks: [
@@ -189,16 +201,35 @@ describe('serve', () => {
         task('T-2', 'done', { completed_at: '2026-03-13T10:00:00Z' }),
         task('T-3', 'skipped', { updated_at: '2026-03-14T09:00:00Z' }),
         task('T-4', 'done', { completed_at: '2026-02-01T10:00:00Z' }),
-        task('T-5', 'in_review', { review_requested_at: '2026-03-15T09:00:00Z' }),
-        task('T-6', 'blocked', { waiting_on: 'user', questions: ['?'], blocked_at: '2026-03-15T11:00:00Z' }),
+        task('T-5', 'in_review', {
+          review_requested_at: '2026-03-15T09:00:00Z',
+        }),
+        task('T-6', 'blocked', {
+          waiting_on: 'user',
+          questions: ['?'],
+          blocked_at: '2026-03-15T11:00:00Z',
+        }),
         task('T-7', 'todo'),
         // Blocked on an agent: open, but it doesn't need the user
         task('T-8', 'blocked', { waiting_on: 'agent', questions: ['?'] }),
       ],
     });
-    const card = (id) => ({ id, name: id, type: 'feature', sprint: null, priority: 'P2', labels: [] });
-    const skippedOnly = project({ meta: { id: 'eeee5555', project: 'Skipped' }, tasks: [task('T-1', 'skipped')] });
-    const gone = project({ meta: { id: 'ffff6666', project: 'Gone' }, tasks: [] });
+    const card = (id) => ({
+      id,
+      name: id,
+      type: 'feature',
+      sprint: null,
+      priority: 'P2',
+      labels: [],
+    });
+    const skippedOnly = project({
+      meta: { id: 'eeee5555', project: 'Skipped' },
+      tasks: [task('T-1', 'skipped')],
+    });
+    const gone = project({
+      meta: { id: 'ffff6666', project: 'Gone' },
+      tasks: [],
+    });
     const port = ports();
     for (const p of [root, skippedOnly, gone]) assert.equal(atm(['project', 'add'], p).code, 0);
     removeDir(gone);
@@ -216,7 +247,11 @@ describe('serve', () => {
       agents_working: 0,
       working: [],
       next: [{ id: 'T-7', name: 'T-7' }],
-      last_done: { id: 'T-1', name: 'T-1', completed_at: '2026-03-15T10:00:00Z' },
+      last_done: {
+        id: 'T-1',
+        name: 'T-1',
+        completed_at: '2026-03-15T10:00:00Z',
+      },
       needs_you: { review: 1, blocked_on_user: 1, together: 0 },
       needs_you_tasks: [
         { id: 'T-5', name: 'T-5', reason: 'review' },
@@ -231,15 +266,26 @@ describe('serve', () => {
       board: {
         todo: { count: 1, cards: [card('T-7')] },
         active: { count: 0, cards: [] },
-        review: { count: 1, cards: [{ ...card('T-5'), since: '2026-03-15T09:00:00Z' }] },
+        review: {
+          count: 1,
+          cards: [{ ...card('T-5'), since: '2026-03-15T09:00:00Z' }],
+        },
         blocked: {
           count: 2,
           cards: [
-            { ...card('T-6'), since: '2026-03-15T11:00:00Z', waiting_on: 'user', questions: 1 },
+            {
+              ...card('T-6'),
+              since: '2026-03-15T11:00:00Z',
+              waiting_on: 'user',
+              questions: 1,
+            },
             { ...card('T-8'), since: null, waiting_on: 'agent', questions: 1 },
           ],
         },
-        done: { count: 1, cards: [{ ...card('T-1'), completed_at: '2026-03-15T10:00:00Z' }] },
+        done: {
+          count: 1,
+          cards: [{ ...card('T-1'), completed_at: '2026-03-15T10:00:00Z' }],
+        },
       },
       // No sprints, so no active sprint's board (T-340)
       board_active_sprint: null,
@@ -271,7 +317,13 @@ describe('serve', () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
     const long = 'A very long task name '.repeat(6);
-    const task = (id, status, extra = {}) => ({ id, name: id, type: 'feature', status, ...extra });
+    const task = (id, status, extra = {}) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status,
+      ...extra,
+    });
     const root = project({
       meta: { id: 'cccc3333', project: 'Next' },
       tasks: [
@@ -295,7 +347,11 @@ describe('serve', () => {
     );
     assert.equal(summary.next[0].name.length, 80);
     assert.ok(summary.next[0].name.endsWith('…'));
-    assert.deepEqual(summary.last_done, { id: 'T-6', name: 'T-6', completed_at: '2026-03-02T10:00:00Z' });
+    assert.deepEqual(summary.last_done, {
+      id: 'T-6',
+      name: 'T-6',
+      completed_at: '2026-03-02T10:00:00Z',
+    });
     atm(['service', 'stop'], root);
   });
 
@@ -303,7 +359,13 @@ describe('serve', () => {
     const atmHome = home();
     const env = { ATM_HOME: atmHome, ATM_NOW: '2026-03-15T12:00:00Z' };
     const atm = (args, cwd) => runAtm(args, cwd, env);
-    const task = (id, status, extra = {}) => ({ id, name: id, type: 'feature', status, ...extra });
+    const task = (id, status, extra = {}) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status,
+      ...extra,
+    });
     const tasks = [
       // claude:x on two tasks at once, 10:00–11:00 (until the review request) and 10:30–11:30: 90 minutes
       task('A', 'done', {
@@ -349,7 +411,10 @@ describe('serve', () => {
       { meta: { id: 'abcd1234', project: 'Stats' }, tasks },
       { '.agentic-task-manager/tasks-archive.json': archive },
     );
-    const linked = project({ meta: { id: 'eeee5555', project: 'Linked' }, tasks: [task('L', 'todo')] });
+    const linked = project({
+      meta: { id: 'eeee5555', project: 'Linked' },
+      tasks: [task('L', 'todo')],
+    });
     assert.equal(atm(['project', 'add'], linked).code, 0);
     const elsewhere = path.join(atmHome, 'archive.json');
     fs.writeFileSync(elsewhere, JSON.stringify(archive));
@@ -358,7 +423,11 @@ describe('serve', () => {
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     const stats = (id) => api.projects.find((p) => p.id === id).summary.stats;
-    assert.deepEqual(stats('abcd1234'), { started: '2026-02-20T08:00:00Z', tasks: 5, agent_minutes: 180 });
+    assert.deepEqual(stats('abcd1234'), {
+      started: '2026-02-20T08:00:00Z',
+      tasks: 5,
+      agent_minutes: 180,
+    });
     // A task folder with a linked file is refused whole: listed without a summary, nothing read through the link
     assert.equal(api.projects.find((p) => p.id === 'eeee5555').summary, null);
     atm(['service', 'stop'], root);
@@ -368,7 +437,13 @@ describe('serve', () => {
     const atmHome = home();
     const env = { ATM_HOME: atmHome, ATM_NOW: '2026-03-15T12:00:00Z' };
     const atm = (args, cwd) => runAtm(args, cwd, env);
-    const task = (id, status, extra = {}) => ({ id, name: id, type: 'feature', status, ...extra });
+    const task = (id, status, extra = {}) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status,
+      ...extra,
+    });
     const ready = Array.from({ length: 12 }, (_, i) => task(`T-${String(i + 1).padStart(2, '0')}`, 'todo'));
     const done = Array.from({ length: 31 }, (_, i) =>
       task(`D-${String(i + 1).padStart(2, '0')}`, 'done', {
@@ -381,8 +456,15 @@ describe('serve', () => {
         ...ready,
         // Waiting on a dependency: on the board after the ready ones (T-349), so not among the first 10
         task('T-20', 'todo', { dependencies: ['A'] }),
-        task('A', 'in_progress', { started_by: 'claude:x', started_at: '2026-03-15T10:00:00Z' }),
-        task('B', 'in_progress', { started_by: 'claude:y', started_at: '2026-03-15T09:00:00Z', labels: ['ux'] }),
+        task('A', 'in_progress', {
+          started_by: 'claude:x',
+          started_at: '2026-03-15T10:00:00Z',
+        }),
+        task('B', 'in_progress', {
+          started_by: 'claude:y',
+          started_at: '2026-03-15T09:00:00Z',
+          labels: ['ux'],
+        }),
         // Finished yesterday morning: more than 24 hours ago
         task('OLD', 'done', { completed_at: '2026-03-14T11:00:00Z' }),
         ...done,
@@ -429,12 +511,25 @@ describe('serve', () => {
   test('git: the branch and the latest PR recorded on the tasks; a branch switch changes the ETag', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
-    const task = (id, extra = {}) => ({ id, name: id, type: 'feature', status: 'done', ...extra });
+    const task = (id, extra = {}) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status: 'done',
+      ...extra,
+    });
     const url = (n) => `https://github.com/acme/demo/pull/${n}`;
     const root = project({
-      meta: { id: 'dddd4444', project: 'Git', description: '  A tool for agents. '.repeat(20) },
+      meta: {
+        id: 'dddd4444',
+        project: 'Git',
+        description: '  A tool for agents. '.repeat(20),
+      },
       tasks: [
-        task('T-1', { pr: { number: 3, url: url(3) }, merged_at: '2026-03-01T10:00:00Z' }),
+        task('T-1', {
+          pr: { number: 3, url: url(3) },
+          merged_at: '2026-03-01T10:00:00Z',
+        }),
         task('T-2', { pr: { number: 5 } }),
         task('T-3', { pr: { number: 5, url: url(5) } }),
         task('T-4'),
@@ -446,13 +541,18 @@ describe('serve', () => {
     const first = await fetch(api);
     const gitOf = (body) => body.projects.find((p) => p.id === 'dddd4444').summary.git;
     const body = await first.json();
-    assert.deepEqual(gitOf(body), { branch: 'main', pr: { number: 5, url: url(5), state: 'open' } });
+    assert.deepEqual(gitOf(body), {
+      branch: 'main',
+      pr: { number: 5, url: url(5), state: 'open' },
+    });
     // meta.description, trimmed and capped at 200 characters (T-209: the name's tooltip on the card)
     const summaryDescription = body.projects.find((p) => p.id === 'dddd4444').summary.description;
     assert.equal(summaryDescription.length, 200);
     assert.ok(summaryDescription.startsWith('A tool for agents.') && summaryDescription.endsWith('…'));
     git(['checkout', '-q', '-b', 'feature'], root);
-    const switched = await fetch(api, { headers: { 'If-None-Match': first.headers.get('etag') } });
+    const switched = await fetch(api, {
+      headers: { 'If-None-Match': first.headers.get('etag') },
+    });
     assert.equal(switched.status, 200);
     assert.equal(gitOf(await switched.json()).branch, 'feature');
     atm(['service', 'stop'], root);
@@ -461,7 +561,13 @@ describe('serve', () => {
   test('a project with sprints: the active sprint with its progress, recent sprints for the rings, next from the active sprint (SR-7.7)', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
-    const task = (id, status, sprint) => ({ id, name: id, type: 'feature', status, ...(sprint ? { sprint } : {}) });
+    const task = (id, status, sprint) => ({
+      id,
+      name: id,
+      type: 'feature',
+      status,
+      ...(sprint ? { sprint } : {}),
+    });
     const sprints = [
       { id: 'Old', state: 'closed', end: '2026-01-01T00:00:00Z' },
       { id: 'Older', state: 'closed', end: '2025-12-01T00:00:00Z' },
@@ -479,7 +585,10 @@ describe('serve', () => {
       // In the backlog, and first by ID: the loop doesn't take it while a sprint is active
       task('T-0', 'todo'),
     ];
-    const root = project({ meta: { id: 'sprinted', project: 'sprinted', sprints }, tasks });
+    const root = project({
+      meta: { id: 'sprinted', project: 'sprinted', sprints },
+      tasks,
+    });
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
@@ -516,16 +625,26 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>';
     const withLogo = project(
-      { meta: { id: 'logo0001', project: 'Set', logo: 'brand/mark.svg' }, tasks: [] },
+      {
+        meta: { id: 'logo0001', project: 'Set', logo: 'brand/mark.svg' },
+        tasks: [],
+      },
       { 'brand/mark.svg': svg },
     );
     const found = project({ meta: { id: 'logo0002', project: 'Found' }, tasks: [] }, { '.github/logo.png': 'png' });
-    const none = project({ meta: { id: 'logo0003', project: 'None' }, tasks: [] });
+    const none = project({
+      meta: { id: 'logo0003', project: 'None' },
+      tasks: [],
+    });
     const elsewhere = tempDir('atm-elsewhere-');
     cleanups.push(() => removeDir(elsewhere));
     fs.writeFileSync(path.join(elsewhere, 'logo.svg'), svg);
     const outside = project({
-      meta: { id: 'logo0004', project: 'Outside', logo: path.join(elsewhere, 'logo.svg') },
+      meta: {
+        id: 'logo0004',
+        project: 'Outside',
+        logo: path.join(elsewhere, 'logo.svg'),
+      },
       tasks: [],
     });
     const big = project(
@@ -552,7 +671,9 @@ describe('serve', () => {
     assert.equal(logo.headers.get('cache-control'), 'no-cache');
     assert.match(logo.headers.get('content-security-policy'), /default-src 'none'.*sandbox/);
     assert.equal(await logo.text(), svg);
-    const again = await fetch(`${base}/p/logo0001/logo`, { headers: { 'If-None-Match': logo.headers.get('etag') } });
+    const again = await fetch(`${base}/p/logo0001/logo`, {
+      headers: { 'If-None-Match': logo.headers.get('etag') },
+    });
     assert.equal(again.status, 304);
     assert.equal((await fetch(`${base}/p/logo0002/logo`)).headers.get('content-type'), 'image/png');
     for (const id of ['logo0003', 'logo0004', 'logo0005']) {
@@ -563,7 +684,9 @@ describe('serve', () => {
     // A logo added later changes the ETag of api/projects
     const etag = (await fetch(`${base}/api/projects`)).headers.get('etag');
     fs.writeFileSync(path.join(none, 'logo.svg'), svg);
-    const changed = await fetch(`${base}/api/projects`, { headers: { 'If-None-Match': etag } });
+    const changed = await fetch(`${base}/api/projects`, {
+      headers: { 'If-None-Match': etag },
+    });
     assert.equal(changed.status, 200);
     assert.equal((await changed.json()).projects.find((p) => p.id === 'logo0003').logo, 'p/logo0003/logo');
     atm(['service', 'stop'], withLogo);
@@ -610,10 +733,14 @@ describe('serve', () => {
       ['markdown', '# The design\n\nBody.\n', 0, 3, true, head],
     );
     // Unchanged: a 304 without reading it again; changed: a new ETag
-    const again = await get('documents', 'docs/x.md', { 'If-None-Match': doc.headers.get('etag') });
+    const again = await get('documents', 'docs/x.md', {
+      'If-None-Match': doc.headers.get('etag'),
+    });
     assert.equal(again.status, 304);
     fs.writeFileSync(path.join(root, 'docs/x.md'), '# Changed\n');
-    const changed = await get('documents', 'docs/x.md', { 'If-None-Match': doc.headers.get('etag') });
+    const changed = await get('documents', 'docs/x.md', {
+      'If-None-Match': doc.headers.get('etag'),
+    });
     assert.equal(changed.status, 200);
 
     // Code in a fence of its language, untracked
@@ -632,7 +759,14 @@ describe('serve', () => {
     assert.equal(image.headers.get('cross-origin-resource-policy'), 'same-origin');
     assert.match(image.headers.get('content-security-policy'), /default-src 'none'.*sandbox/);
     assert.deepEqual(Buffer.from(await image.arrayBuffer()), png);
-    assert.equal((await get('files', 'img/a.png', { 'If-None-Match': image.headers.get('etag') })).status, 304);
+    assert.equal(
+      (
+        await get('files', 'img/a.png', {
+          'If-None-Match': image.headers.get('etag'),
+        })
+      ).status,
+      304,
+    );
     // files serves images only
     assert.equal((await get('files', 'docs/x.md')).status, 403);
 
@@ -819,7 +953,9 @@ describe('serve', () => {
     // An agent starts T-1 in the linked worktree: only that worktree's tasks.json says so, but the main project's
     // claims.json (from the shared claims store) and worktrees.json both show it
     assert.equal(atm(['task', 'state', 'T-1', 'in_progress', '--agent', 'claude:tree'], linked).code, 0);
-    const after = await fetch(`${base}/p/abcd1234/worktrees.json`, { headers: { 'If-None-Match': etag } });
+    const after = await fetch(`${base}/p/abcd1234/worktrees.json`, {
+      headers: { 'If-None-Match': etag },
+    });
     assert.equal(after.status, 200);
     const changed = (await after.json()).worktrees[1].tasks;
     assert.deepEqual(
@@ -887,6 +1023,44 @@ describe('serve', () => {
     assert.deepEqual(await get('/tasks-dashboard.html'), [404, 'not found']);
     assert.deepEqual(await get('/p/'), [404, 'not found']);
     assert.deepEqual(await get('/api/projects', { method: 'POST' }), [405, 'only GET and HEAD']);
+    atm(['service', 'stop'], root);
+  });
+
+  test("the dashboard's pages (T-429): the same page, with its CSP, at each of its paths; nothing else under them", async () => {
+    const atm = atmIn(home());
+    const root = project(TASKS);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const home_ = await fetch(`http://localhost:${port}/`);
+    const body = await home_.text();
+    const policy = home_.headers.get('content-security-policy');
+    const pages = [
+      '/projects',
+      '/projects/abcd1234',
+      '/projects/abcd1234/list',
+      '/projects/any-id/',
+      '/board',
+      '/progress',
+    ];
+    for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {
+      const r = await fetch(`http://localhost:${port}${p}`);
+      assert.equal(r.status, 200, p);
+      assert.equal(r.headers.get('content-type'), 'text/html; charset=utf-8', p);
+      assert.equal(r.headers.get('content-security-policy'), policy, p);
+      assert.equal(await r.text(), body, p);
+    }
+    // A project's files are never served under its page's path, nor anything deeper than a tab
+    for (const p of [
+      '/projects/abcd1234/tasks.json',
+      '/projects/abcd1234/list/x',
+      '/projects/abcd1234/List',
+      '/boards',
+      '/board/x',
+    ]) {
+      const r = await fetch(`http://localhost:${port}${p}`);
+      assert.notEqual(r.headers.get('content-type'), 'text/html; charset=utf-8', p);
+      assert.equal(r.status, 404, p);
+    }
     atm(['service', 'stop'], root);
   });
 
@@ -966,7 +1140,9 @@ describe('serve', () => {
       assert.equal(mermaid.status, 200);
       assert.equal(mermaid.headers.get('content-type'), 'text/javascript; charset=utf-8');
       // Unchanged since it was last fetched: a 304, as for the other files the dashboard asks for again
-      const again = await fetch(base + 'compmd.js', { headers: { 'If-None-Match': js.headers.get('etag') } });
+      const again = await fetch(base + 'compmd.js', {
+        headers: { 'If-None-Match': js.headers.get('etag') },
+      });
       assert.equal(again.status, 304);
       assert.equal((await fetch(base + 'compmd.js', { method: 'HEAD' })).status, 200);
       assert.equal((await fetch(base + 'compmd.js', { method: 'POST' })).status, 405);
@@ -994,7 +1170,10 @@ describe('serve', () => {
   /** `atm args...` in the background, so several can run at once; resolves to { code, stdout } */
   const atmAsync = (args, cwd, atmHome) =>
     new Promise((resolve) => {
-      const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_HOME: atmHome } });
+      const child = spawn(ATM, args, {
+        cwd,
+        env: { ...baseEnv(), ATM_HOME: atmHome },
+      });
       let stdout = '';
       child.stdout.on('data', (d) => (stdout += d));
       child.on('exit', (code) => resolve({ code, stdout }));
@@ -1009,12 +1188,20 @@ describe('serve', () => {
       `http.createServer((q, r) => { r.setHeader('content-type', 'application/json');` +
       ` r.end(JSON.stringify({ atm: true, pid: process.pid, port: ${port}, home: ${JSON.stringify(homeId(atmHome))} })); })` +
       `.listen(${port}, () => console.log('ready'));`;
-    const stubborn = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+    const stubborn = spawn(process.execPath, ['-e', script], {
+      stdio: ['ignore', 'pipe', 'inherit'],
+    });
     cleanups.push(() => alive(stubborn.pid) && process.kill(stubborn.pid, 'SIGKILL'));
     await new Promise((resolve) => stubborn.stdout.once('data', resolve));
     fs.writeFileSync(
       path.join(atmHome, 'server.json'),
-      JSON.stringify({ pid: stubborn.pid, port, version: '0.0.1', build: 'x', started_at: new Date().toISOString() }),
+      JSON.stringify({
+        pid: stubborn.pid,
+        port,
+        version: '0.0.1',
+        build: 'x',
+        started_at: new Date().toISOString(),
+      }),
     );
     const root = project();
     // Not spawnSync: the stand-in is this process's child, which Node reaps only while its event loop runs (a real
@@ -1096,7 +1283,12 @@ describe('serve', () => {
         // [::1] on the server's own port answers as atm, and can't be taken by anyone else
         const res = await new Promise((resolve, reject) => {
           const req = http.request(
-            { host: '::1', port: status.port, path: '/__atm/whoami', headers: { Host: `localhost:${status.port}` } },
+            {
+              host: '::1',
+              port: status.port,
+              path: '/__atm/whoami',
+              headers: { Host: `localhost:${status.port}` },
+            },
             (r2) => {
               let body = '';
               r2.on('data', (c) => (body += c));
@@ -1125,7 +1317,10 @@ describe('serve', () => {
   test('one project with unreadable (deeply nested) JSON is listed as missing; the others are fine (T-227, F18)', async () => {
     const atm = atmIn(home());
     const good = project(TASKS);
-    const bad = project({ meta: { id: 'bad00000', project: 'Bad' }, tasks: [] });
+    const bad = project({
+      meta: { id: 'bad00000', project: 'Bad' },
+      tasks: [],
+    });
     const port = ports();
     assert.equal(atm(['project', 'add'], bad).code, 0);
     fs.writeFileSync(path.join(bad, '.agentic-task-manager/tasks.json'), '['.repeat(100000) + ']'.repeat(100000));
@@ -1197,7 +1392,9 @@ describe('serve', () => {
     assert.equal((await rawGet(port, '/', `127.0.0.1:${port}`)).status, 200);
     const refused = await rawGet(port, '/api/v1/projects/abcd1234/tasks', `evil.example:${port}`);
     assert.equal(refused.status, 403);
-    assert.deepEqual(JSON.parse(refused.body), { error: 'unexpected Host header' });
+    assert.deepEqual(JSON.parse(refused.body), {
+      error: 'unexpected Host header',
+    });
     assert.equal((await rawGet(port, '/', `localhost:${port + 1}`)).status, 403);
     atm(['service', 'stop'], root);
   });
@@ -1205,14 +1402,29 @@ describe('serve', () => {
   test('api/search: every word, in any field or the project name, case-insensitive, read-only, capped (T-258)', async () => {
     const atmHome = home();
     const atm = atmIn(atmHome);
-    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, phase: 0, type: 'feature', status: 'todo', ...extra });
+    const task = (id, extra = {}) => ({
+      id,
+      name: `Task ${id}`,
+      phase: 0,
+      type: 'feature',
+      status: 'todo',
+      ...extra,
+    });
     const shop = project({
       meta: { id: 'aaaa1111', project: 'Shop' },
       tasks: [
         task('T-1', { name: 'Checkout page' }),
         task('T-2', { description: 'Pay with a CARD' }),
         task('T-3', { type: 'bugfix', labels: ['payments'] }),
-        task('T-4', { notes: [{ at: '2026-01-01T00:00:00Z', kind: 'note', text: 'Ask about refunds' }] }),
+        task('T-4', {
+          notes: [
+            {
+              at: '2026-01-01T00:00:00Z',
+              kind: 'note',
+              text: 'Ask about refunds',
+            },
+          ],
+        }),
       ],
     });
     const blog = project({
@@ -1237,22 +1449,41 @@ describe('serve', () => {
     // At most 200 per project; an empty query finds nothing; other parameters are ignored
     assert.equal((await search('post')).bbbb2222.length, 200);
     assert.deepEqual(await search('  '), {});
-    assert.deepEqual(await search('checkout', '&x=1&project=bbbb2222'), { aaaa1111: ['T-1'] });
+    assert.deepEqual(await search('checkout', '&x=1&project=bbbb2222'), {
+      aaaa1111: ['T-1'],
+    });
     // Only the first 200 characters of the query count
     assert.deepEqual(await search('checkout' + ' '.repeat(192) + 'nothing-like-this'), { aaaa1111: ['T-1'] });
 
     // The same checks as every route: another Host is refused, and nothing but GET and HEAD
     const refused = await rawGet(port, '/api/search?q=checkout', `evil.example:${port}`);
     assert.equal(refused.status, 403);
-    assert.equal((await fetch(`http://localhost:${port}/api/search?q=x`, { method: 'POST' })).status, 405);
+    assert.equal(
+      (
+        await fetch(`http://localhost:${port}/api/search?q=x`, {
+          method: 'POST',
+        })
+      ).status,
+      405,
+    );
     atm(['service', 'stop'], shop);
   });
 
   test('api/v1/projects/<id>/tasks: the tasks with what atm derives, filtered, conditional (T-364)', async () => {
     const atm = atmIn(home());
-    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const task = (id, extra = {}) => ({
+      id,
+      name: `Task ${id}`,
+      type: 'feature',
+      status: 'todo',
+      ...extra,
+    });
     const root = project({
-      meta: { id: 'cccc3333', project: 'Shop', sprints: [{ id: 'One', state: 'active' }] },
+      meta: {
+        id: 'cccc3333',
+        project: 'Shop',
+        sprints: [{ id: 'One', state: 'active' }],
+      },
       tasks: [
         task('T-1', { status: 'done', sprint: 'One', pr: { number: 2 } }),
         task('T-2', { dependencies: ['T-1'], sprint: 'One' }),
@@ -1285,7 +1516,9 @@ describe('serve', () => {
     assert.deepEqual(await ids('?status=done&status=todo&backlog=1'), ['T-3']);
     assert.equal((await fetch(url('?sprint=Nope'))).status, 400);
     // Unchanged files: 304, as for every conditional route
-    const again = await fetch(url(), { headers: { 'If-None-Match': response.headers.get('etag') } });
+    const again = await fetch(url(), {
+      headers: { 'If-None-Match': response.headers.get('etag') },
+    });
     assert.equal(again.status, 304);
     // An unknown project; another Host
     assert.equal((await fetch(`http://localhost:${port}/api/v1/projects/nope/tasks`)).status, 404);
@@ -1295,7 +1528,13 @@ describe('serve', () => {
 
   test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
     const atm = atmIn(home());
-    const task = (id, extra = {}) => ({ id, name: `Task ${id}`, type: 'feature', status: 'todo', ...extra });
+    const task = (id, extra = {}) => ({
+      id,
+      name: `Task ${id}`,
+      type: 'feature',
+      status: 'todo',
+      ...extra,
+    });
     const root = project({
       meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
       tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
@@ -1341,7 +1580,13 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    const stale = { pid: 999999, port, version: '0.0.0', build: 'x', started_at: 'x' };
+    const stale = {
+      pid: 999999,
+      port,
+      version: '0.0.0',
+      build: 'x',
+      started_at: 'x',
+    };
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(stale));
     assert.equal(atm(['service', 'status'], root).stdout, 'Dashboard server is not running.\n');
     assert.equal(record(atmHome), null);
@@ -1358,7 +1603,13 @@ describe('serve', () => {
     const port = ports();
     const sleeper = spawn('sleep', ['30'], { stdio: 'ignore' });
     cleanups.push(() => sleeper.kill());
-    const fake = { pid: sleeper.pid, port, version: '0.0.0', build: 'x', started_at: 'x' };
+    const fake = {
+      pid: sleeper.pid,
+      port,
+      version: '0.0.0',
+      build: 'x',
+      started_at: 'x',
+    };
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(fake));
     assert.match(atm(['service', 'stop'], root).stdout, /not running \(removed a stale record for pid \d+\)/);
     assert.equal(alive(sleeper.pid), true);
@@ -1588,7 +1839,10 @@ describe('serve', () => {
 
   test('migrates an old docs/tasks.json before serving', () => {
     const atm = atmIn(home());
-    const root = makeProject({ commit: true, files: { 'docs/tasks.json': TASKS } });
+    const root = makeProject({
+      commit: true,
+      files: { 'docs/tasks.json': TASKS },
+    });
     cleanups.push(() => removeDir(root));
     const r = atm(['service', '--port', String(ports())], root);
     assert.match(r.stdout, /Moved docs\/tasks.json to .agentic-task-manager\/tasks.json/);
@@ -1626,7 +1880,10 @@ describe('serve', () => {
 
   test('a project that opted out is not listed; the overview is shown', () => {
     const atm = atmIn(home());
-    const root = project({ meta: { id: 'abcd1234', dashboard: { listed: false } }, tasks: [] });
+    const root = project({
+      meta: { id: 'abcd1234', dashboard: { listed: false } },
+      tasks: [],
+    });
     const port = ports();
     const started = atm(['service', '--port', String(port)], root);
     assert.match(started.stdout, /isn't listed on the dashboard/);

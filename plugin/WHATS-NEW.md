@@ -4,12 +4,12 @@ The short version, for people using atm. The full list of changes, for developer
 
 ## [0.31.0] - 2026-11-06
 
-- atm's commands are grouped by what they act on: tasks, the work loop, sprints, releases and the project.
-- One command moves a task to any state, so there are fewer commands to remember.
+- atm's commands are grouped by what they act on, and one command moves a task to any state: fewer to remember.
 - Approving, rejecting or asking for changes on a review is always your decision, and a task leaves review only by it.
 - Your shell can complete atm's commands, task IDs and sprint names as you type.
 - Nothing to install: everything atm needs comes with the plugin.
 - atm never runs commands for an agent: agents run their own, each with your permission rules.
+- Every dashboard page and every task has its own address, so you can bookmark and share them; old links still work.
 
 ## [0.30.0] - 2026-11-04
 

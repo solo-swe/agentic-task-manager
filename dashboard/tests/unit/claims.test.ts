@@ -44,7 +44,7 @@ describe('loadClaims', () => {
   it("fetches the project's claims.json with a cache-busting timestamp", async () => {
     const fetchFn = vi.fn().mockResolvedValue(json({ claims: [claim('T-1')] }));
     const claims = await loadClaims('abcd1234', fetchFn, () => NOW);
-    expect(fetchFn).toHaveBeenCalledWith('p/abcd1234/claims.json?' + NOW);
+    expect(fetchFn).toHaveBeenCalledWith('/p/abcd1234/claims.json?' + NOW);
     expect(claims.has('T-1')).toBe(true);
   });
 

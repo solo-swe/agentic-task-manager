@@ -83,7 +83,7 @@ test.describe('All projects board', () => {
     await expect(page.locator('#overview-tab-projects')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#projects-grid')).toBeVisible();
     await page.locator('#overview-tab-board').click();
-    await expect(page).toHaveURL(/view=board/);
+    await expect(page).toHaveURL(/\/board(\?|$)/);
     await expect(page.locator('#projects-grid')).toHaveCount(0);
 
     await expect(column(page, 'todo').locator('.kanban-column-title')).toHaveText('To Do');
@@ -149,12 +149,12 @@ test.describe('All projects board', () => {
     expect(page.url()).toBe(url);
     // A card whose task its project's data doesn't have (B-1: the Blog fixture's tasks are others) opens the project
     await page.locator('#all-board .board-card[data-project="blog"][data-id="B-1"]').click();
-    await expect(page).toHaveURL(/project=blog/);
+    await expect(page).toHaveURL(/\/projects\/blog(\/|\?|$)/);
     await page.goBack();
     await expect(page.locator('#all-board')).toBeVisible();
 
     await page.locator('#all-board .board-card[data-id="B-1"] .board-project-chip').click();
-    await expect(page).toHaveURL(/project=blog/);
+    await expect(page).toHaveURL(/\/projects\/blog(\/|\?|$)/);
     await expect(page.locator('#detail-overlay.open')).toHaveCount(0);
   });
 
@@ -163,21 +163,24 @@ test.describe('All projects board', () => {
     const more = column(page, 'todo').locator('.board-more');
     await expect(more).toHaveText(['+ 10 more in Shop']);
     await more.click();
-    await expect(page).toHaveURL(/project=shop/);
+    await expect(page).toHaveURL(/\/projects\/shop(\/|\?|$)/);
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('the tab is remembered, #view= links to it, and Back returns to the other', async ({ page, tasksServer }) => {
+  test('the tab is remembered, its address links to it, and Back returns to the other', async ({
+    page,
+    tasksServer,
+  }) => {
     await openBoard(page, tasksServer);
     await page.locator('#overview-tab-projects').click();
     await expect(page.locator('#projects-grid')).toBeVisible();
     await page.goBack();
     await expect(page.locator('#all-board')).toBeVisible();
-    // Without a view in the link: the last tab chosen
-    await page.goto('tasks-dashboard.html#overview');
+    // The landing page, without a tab in its address: the last tab chosen
+    await page.goto('/');
     await page.reload();
     await expect(page.locator('#overview-tab-board')).toHaveAttribute('aria-selected', 'true');
-    await page.goto('tasks-dashboard.html#overview&view=projects');
+    await page.goto('/projects');
     await expect(page.locator('#projects-grid')).toBeVisible();
   });
 
@@ -207,7 +210,7 @@ test.describe('All projects board', () => {
     await expect(page.locator('#board-group-by-project')).toBeChecked();
     await expect(lanes).toHaveCount(2);
     await page.locator('.board-lane[data-project="shop"] .board-lane-name').click();
-    await expect(page).toHaveURL(/project=shop/);
+    await expect(page).toHaveURL(/\/projects\/shop(\/|\?|$)/);
   });
 
   test('search: a match in a description narrows the board, asked once per pause; clearing restores it (T-261)', async ({
@@ -312,7 +315,7 @@ test.describe('All projects board', () => {
     await openBoard(page, tasksServer);
     await expect(page.locator('#overview-tab-board')).toHaveText('Omniboard');
     // The link keeps its name
-    await expect(page).toHaveURL(/view=board/);
+    await expect(page).toHaveURL(/\/board(\?|$)/);
     await page.getByRole('button', { name: 'About the Omniboard' }).click();
     const about = page.getByRole('dialog', { name: 'About the Omniboard' });
     await expect(about).toContainText('done in the last 24 hours');

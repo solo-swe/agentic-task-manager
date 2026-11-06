@@ -54,11 +54,19 @@ The sprint *CLI ergonomics* (release 0.31.0).
   options in `vite.config.ts`'s `sveltekit({ … })` call (no `svelte.config.js`); rendered in the browser only, from
   the adapter's fallback page with every script and style inlined (`output.bundleStrategy: 'inline'`), so it is still
   one self-contained file, which `build/finish-page.ts` stamps (version, favicon, build ID) and writes to
-  `plugin/templates/tasks-dashboard.html` (`pnpm run build:page`). One catch-all route shows the app at any path; the
-  views stay in the hash until T-429. About 60 kB more (SvelteKit's runtime; 23 kB gzipped): the size guardrail is
+  `plugin/templates/tasks-dashboard.html` (`pnpm run build:page`). About 60 kB more (SvelteKit's runtime; 23 kB gzipped): the size guardrail is
   650 KiB. The dev page's Content-Security-Policy is now worked out from each page as sent (SvelteKit renders it per
   request, with its own inline start-up script): its inline scripts by hash, as `atm serve` allows the built page's
   (`dev-api.test.mjs` checks it). `vite-plugin-singlefile` is gone.
+- **The dashboard's views have addresses** (T-429, SvelteKit routes): `/projects/<id>/<tab>` a project on a tab
+  (`/projects/<id>` on its saved one), `/projects` the overview's cards, `/board`, `/progress` and `/agents` its other
+  tabs, `/` the landing page (a single project then takes its own address). What is open over a page is in the query:
+  `?task=T-1` a task's details (new: linkable; opening them is a history entry, so Back closes them), `?doc=` a
+  document, `?sprint=` the Sprint filter, `?about`, `?help`. `atm serve` answers those paths with the page
+  (`PAGE_PATH`, `docs/multi-project-api.md` §2.7) and nothing else under them. Old `#project=…&view=…` links still
+  open and move to the new address. A link in task text to a dashboard page opens in place. The page's API requests
+  are from the server's root (`/api/…`, `/p/<id>/…`), and so is a project's logo. `lib/routes.ts` and `lib/address.ts`
+  (instead of `lib/hash.ts`), `lib/navigation.ts` (SvelteKit's `goto`), `lib/sprint-param.ts` (was `sprint-hash.ts`).
 - **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
   `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
   version is the plugin's, so the same sources build the same page.

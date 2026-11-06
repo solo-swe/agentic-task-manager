@@ -6,7 +6,7 @@ test('the dashboard is served with a strict Content-Security-Policy, nosniff and
   page,
   tasksServer,
 }) => {
-  const headers = (await page.request.get('tasks-dashboard.html')).headers();
+  const headers = (await page.request.get('/')).headers();
   const csp = headers['content-security-policy'];
   expect(csp).toContain("default-src 'none'");
   // The page's own scripts by hash, and the CompMD runtime from its asset folder only, which may compile WebAssembly

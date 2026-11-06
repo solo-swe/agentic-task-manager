@@ -20851,7 +20851,7 @@
       "description": "Give the dashboard's views real addresses, as the [Svelte guide](docs/guides/svelte.md#navigation) asks: the all-projects overview, a project and its tabs, a task's details and a document in the viewer.\n\n## Change\n- SvelteKit routes replace `src/lib/routes.ts` and `src/lib/hash.ts`; back, forward and deep links keep working.\n- `atm serve` answers the new paths with the page (SPA fallback), without serving anything else under them; the routes go into [multi-project-api.md](docs/multi-project-api.md).\n- Old `#…` links (bookmarks, links in task text) redirect to the new addresses.\n- The new paths are entry points: update [security-architecture.md](docs/security-architecture.md) in the same change.\n\n## Tests\nUnit tests for the route mapping and the redirect of old links; `serve.test.mjs` for the fallback; the e2e specs that navigate (tabs, detail, documents, projects) use the new addresses.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-428"
       ],
@@ -20866,7 +20866,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T15:57:13Z",
+      "updated_at": "2026-11-06T17:18:55Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20883,14 +20883,23 @@
         "docs"
       ],
       "review": "batch",
-      "started_at": "2026-11-06T15:56:35Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "Address scheme (each path becomes an atm serve entry point): `/` the overview, `/board` `/progress` `/agents` its tabs; `/projects/<id>` a project, `/projects/<id>/<tab>` its tabs; details and documents as `?task=T-1` and `?doc=docs/x.md#L40` over any view; sprint and dialogs as query parameters. Old `#…` links redirect. OK?",
-        "Or task and document as path segments instead (`/projects/<id>/tasks/T-1`, `/projects/<id>/docs/<path>`)?"
+      "blocks": [
+        {
+          "from": "2026-11-06T15:57:13Z",
+          "to": "2026-11-06T17:16:08Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-06T15:57:13Z"
+      "notes": [
+        {
+          "at": "2026-11-06T17:16:08Z",
+          "kind": "answer",
+          "text": "Address scheme (each path becomes an atm serve entry point): `/` the overview, `/board` `/progress` `/agents` its tabs; `/projects/<id>` a project, `/projects/<id>/<tab>` its tabs; details and documents as `?task=T-1` and `?doc=docs/x.md#L40` over any view; sprint and dialogs as query parameters. Old `#…` links redirect. OK? → The proposed scheme, as is: `/` overview (`/board`, `/progress`, `/agents`), `/projects/<id>[/<tab>]`, `?task=` and `?doc=` in the query; old `#…` links redirect.; Or task and document as path segments instead (`/projects/<id>/tasks/T-1`, `/projects/<id>/docs/<path>`)? → (no answer)",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-06T17:18:55Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-430",
@@ -20955,7 +20964,7 @@
       "description": "Replace the hand-made interactive primitives with Bits UI (headless, accessible), styled with our tokens, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks: `Dialog.svelte` and the dialogs built on it, the menus (settings, refresh, needs-you, project selector, list options) and the popovers (info tips).\n\n## Change\n- Add `bits-ui` (bundled into the single file; no request leaves the page).\n- Keyboard and focus follow the Bits UI patterns; Esc closes overlays.\n- The e2e DOM hooks keep working (`#detail-overlay.open`, the menus' ids and `data-` attributes), or the specs change with them.\n\n## Tests\nComponent tests for each replaced primitive; the functional e2e suite; `size` reported in the outcome note. The changed screenshots are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-430"
       ],
@@ -20965,7 +20974,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T16:08:54Z",
+      "updated_at": "2026-11-06T17:16:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20979,22 +20988,27 @@
         "dashboard"
       ],
       "review": "batch",
-      "started_at": "2026-11-06T16:07:02Z",
-      "started_by": "claude:34798264",
       "notes": [
         {
           "at": "2026-11-06T16:08:54Z",
           "kind": "note",
           "text": "Measured (undone): `bits-ui` 2.20.6 for `Dialog.svelte` alone takes the page from 636 KB to 692 KB (+56 KB; 195 to 213 KB gzipped), over the 650 KiB guardrail; menus and popovers add Floating UI on top (estimate +70 to 80 KB in all). `runed`, a Bits UI dependency, declares SvelteKit ^2 as a peer (we have 3). Three dialog specs needed fixing (scrolling, closing).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T17:16:09Z",
+          "kind": "answer",
+          "text": "Bits UI costs about +56 KB (+18 KB gzipped) for the dialog alone, likely +70 to 80 KB with the menus and popovers. Accept it and raise the guardrail (to about 720 KiB)? → Use Bits UI as the guide says. The size limit no longer matters: the dashboard moves to Rust/Tauri soon and new KPIs come with that move. Raise the size guardrail to fit, and keep `pnpm run size` for information.; Or keep the hand-made primitives and take Bits UI out of the Svelte guide (their focus and keyboard handling checked by T-434’s accessibility test instead)? Or Bits UI only for the menus and popovers, where it adds most (keyboard navigation, positioning)? → (no answer)",
+          "by": "claude:34798264"
         }
       ],
-      "waiting_on": "user",
-      "questions": [
-        "Bits UI costs about +56 KB (+18 KB gzipped) for the dialog alone, likely +70 to 80 KB with the menus and popovers. Accept it and raise the guardrail (to about 720 KiB)?",
-        "Or keep the hand-made primitives and take Bits UI out of the Svelte guide (their focus and keyboard handling checked by T-434’s accessibility test instead)? Or Bits UI only for the menus and popovers, where it adds most (keyboard navigation, positioning)?"
-      ],
-      "blocked_at": "2026-11-06T16:08:54Z"
+      "blocks": [
+        {
+          "from": "2026-11-06T16:08:54Z",
+          "to": "2026-11-06T17:16:09Z",
+          "on": "user"
+        }
+      ]
     },
     {
       "id": "T-432",
@@ -21008,7 +21022,7 @@
       "description": "Replace `src/lib/icons.ts` and `Icon.svelte` with lucide's Svelte package, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks.\n\nThe icons are Lucide's already: `icons.ts` embeds their SVG paths, fetched from Iconify when it was written. So this is no change of look: the package replaces the embedded copies, and new icons come from it instead of being copied in. Keep sizes, colours (`currentColor`) and labels, and import icons one by one so only the used ones are bundled.\n\n## Tests\nThe unit and e2e tests that look for icons; `size` reported in the outcome note (it must not grow by more than a few KB). If the package makes the single file noticeably larger than the embedded paths, say so in the outcome and keep the smaller one.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-430"
       ],
@@ -21018,7 +21032,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T16:08:59Z",
+      "updated_at": "2026-11-06T16:15:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21033,7 +21047,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-06T16:08:59Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "ba95e68dfafdfc0186ffaafeae4ff201920e5188",
+      "completed_at": "2026-11-06T16:15:54Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T16:15:54Z",
+          "kind": "review",
+          "text": "Icons from `lucide` 1.69.0 (data, imported by name, drawn as elements; no more `{@html}` in Icon.svelte). Size: +3.3 KB (+2.2 KB gzipped). `@lucide/svelte` was +14.3 KB (+4.9 KB gzipped), so per the task I kept the smaller: the guide says the Svelte package.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-433",
@@ -21058,7 +21084,7 @@
         "dashboard/tests/unit/no-hardcoded-colours.test.ts"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:54Z",
+      "updated_at": "2026-11-06T17:18:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21071,7 +21097,28 @@
       "components": [
         "dashboard"
       ],
-      "review": "batch"
+      "review": "batch",
+      "notes": [
+        {
+          "at": "2026-11-06T16:16:34Z",
+          "kind": "note",
+          "text": "Measured: 609 literal spacing and radius values, no spacing or radius tokens yet. Spacing: 8px 90, 6px 88, 4px 70, 10px 59, 2px 55, 12px 49, 16px 32, 14px 27, 5px 22, 24px 20, 20px 15, 3px 14, 1px 13, 18px 12, 7px 8; then a long tail (9, 13, 22–64px, and em values). Radii: 6px 30, 8px 21, pill 14, 4px 13, 10px 11, round 9, 5px 8, and 1, 2, 3, 7, 9, 12, 20px.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T17:18:47Z",
+          "kind": "answer",
+          "text": "Tokens for spacing and radii: a scale (spacing 2, 4, 6, 8, 12, 16, 24, 32 px; radii 4, 6, 8, 12 px, pill, round), the odd values snapped to it (most move 1 to 2 px; the screenshots change, regenerated in the release task), done by a script that rewrites the values? Or one token per value used today (nothing visible changes, but no real scale)? → Snap every spacing and radius value to the scale: spacing 2/4/6/8/10/12/16/24px (plus larger steps where the tail needs them), radii a few steps plus pill and round. Visible 1–2px changes are accepted; the screenshots are regenerated in the release task. `em` values and large layout sizes (component widths and heights) stay outside the tokens.; em-based values (relative to the text, e.g. `0.3em`) and the large layout widths (40 to 64 px): keep them as they are, outside the tokens? → (no answer)",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T16:16:35Z",
+          "to": "2026-11-06T17:18:47Z",
+          "on": "user"
+        }
+      ]
     },
     {
       "id": "T-434",

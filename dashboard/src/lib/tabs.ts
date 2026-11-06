@@ -1,6 +1,6 @@
-// The selected dashboard view lives in the URL hash ("#view=kanban") so it survives reloads and can be shared.
-// Other hash parameters are preserved.
-import { formatHash, hashParams } from './hash';
+// The selected dashboard view lives in the address (/projects/<id>/kanban, lib/address.ts) so it survives reloads and
+// can be shared. The address's other parameters are kept.
+import { addressParams, formatAddress } from './address';
 
 // The task views first, then the views about the project (docs/project-stats-proposal.md §1.1, T-251); a divider
 // sits between the groups, after GROUP_END
@@ -31,22 +31,22 @@ function isView(value: string | null): value is ViewId {
   return (VIEWS as readonly string[]).includes(value ?? '');
 }
 
-/** The view named in a location hash; anything missing or unknown means the default view. */
-export function parseViewHash(hash: string): ViewId {
-  const view = hashParams(hash).get('view');
+/** The view an address names; anything missing or unknown means the default view. */
+export function viewOf(address: string): ViewId {
+  const view = addressParams(address).get('view');
   return isView(view) ? view : DEFAULT_VIEW;
 }
 
-/** Whether the hash names a view at all (a link that should win over the saved tab). */
-export function hasViewHash(hash: string): boolean {
-  return hashParams(hash).has('view');
+/** Whether the address names a view at all (a link that should win over the saved tab). */
+export function namesView(address: string): boolean {
+  return addressParams(address).has('view');
 }
 
-/** `hash` with its view parameter set to `view`, keeping any other parameters. */
-export function withViewHash(hash: string, view: ViewId): string {
-  const params = hashParams(hash);
+/** `address` on view `view`, keeping any other parameters. */
+export function withView(address: string, view: ViewId): string {
+  const params = addressParams(address);
   params.set('view', view);
-  return formatHash(params);
+  return formatAddress(params);
 }
 
 /** The neighbouring view for arrow-key navigation, wrapping around at the ends. */

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { adjacentView, GROUP_END, parseViewHash, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
+  import { adjacentView, GROUP_END, VIEW_ICONS, VIEW_LABELS, VIEWS, type ViewId } from '../tabs';
   import { dashboard } from '../state.svelte';
   import AgentsTab from '../agents/AgentsTab.svelte';
   import DepGraph from '../graph/DepGraph.svelte';
@@ -13,7 +13,8 @@
   const view = $derived(dashboard.tab);
   const tabs: Partial<Record<ViewId, HTMLButtonElement>> = {};
 
-  // The hash is the source of truth (FR-2.2): selecting a tab writes it, back/forward and edits read it.
+  // The address is the source of truth (FR-2.2): selecting a tab writes it, back/forward and links read it
+  // (state.svelte.ts onNavigate).
   function select(next: ViewId, focus = false) {
     dashboard.selectTab(next);
     if (focus) tabs[next]?.focus();
@@ -26,8 +27,6 @@
     select(adjacentView(view, step), true);
   }
 </script>
-
-<svelte:window onhashchange={() => (dashboard.tab = parseViewHash(location.hash))} />
 
 <div class="graph-section" id="graph-section">
   <div class="view-header">

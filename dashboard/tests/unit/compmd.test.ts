@@ -10,7 +10,7 @@ import { request as base, sandbox } from 'virtual:compmd';
 import {
   compmdAssetUrl,
   compmdRequest,
-  dashboardHash,
+  dashboardAddress,
   frontmatter,
   FRONTMATTER_LINES,
   gutterRows,
@@ -247,17 +247,22 @@ describe('the links CompMD renders', () => {
     }
   });
 
-  it('a link to the dashboard itself opens in place: its hash; any other address opens in a new tab', () => {
-    const page = 'http://localhost:8765/';
-    expect(dashboardHash('http://localhost:8765/#project=p1&doc=docs/x.md:L3', page)).toBe(
-      '#project=p1&doc=docs/x.md:L3',
+  it('a link to the dashboard itself opens in place: its address; any other one opens in a new tab', () => {
+    const page = 'http://localhost:8765/projects/p2/list';
+    expect(dashboardAddress('http://localhost:8765/projects/p1?doc=docs/x.md:L3', page)).toBe(
+      '/projects/p1?doc=docs/x.md:L3',
     );
-    expect(dashboardHash('http://localhost:8765/', page)).toBeNull(); // no hash: nothing to open in place
-    expect(dashboardHash('http://localhost:9999/#doc=x.md', page)).toBeNull(); // another server
-    expect(dashboardHash('http://localhost:8765/other#doc=x.md', page)).toBeNull(); // another page
-    expect(dashboardHash('https://example.com/#doc=x.md', page)).toBeNull();
-    expect(dashboardHash('mailto:a@b.c', page)).toBeNull();
-    expect(dashboardHash('not a url', page)).toBeNull();
+    expect(dashboardAddress('http://localhost:8765/board', page)).toBe('/board');
+    // An old link (T-429): its new address
+    expect(dashboardAddress('http://localhost:8765/#project=p1&doc=docs/x.md:L3', page)).toBe(
+      '/projects/p1?doc=docs/x.md:L3',
+    );
+    expect(dashboardAddress('http://localhost:9999/projects/p1', page)).toBeNull(); // another server
+    expect(dashboardAddress('http://localhost:8765/other#doc=x.md', page)).toBeNull(); // not a page of it
+    expect(dashboardAddress('http://localhost:8765/api/projects', page)).toBeNull();
+    expect(dashboardAddress('https://example.com/#doc=x.md', page)).toBeNull();
+    expect(dashboardAddress('mailto:a@b.c', page)).toBeNull();
+    expect(dashboardAddress('not a url', page)).toBeNull();
     const here = `${location.origin}${location.pathname}#doc=docs/x.md`;
     const a = rendered(`<a href="${here}">the design</a>`).querySelector('a');
     expect(a?.getAttribute('target')).toBeNull();

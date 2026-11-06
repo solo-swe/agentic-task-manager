@@ -10,9 +10,9 @@ const PROJECTS = { projects: [project('p1')] };
 const server = (projects: unknown = PROJECTS) =>
   vi.fn((url: string) =>
     ok(
-      String(url).startsWith('api/projects')
+      String(url).startsWith('/api/projects')
         ? projects
-        : String(url).startsWith('api/v1/')
+        : String(url).startsWith('/api/v1/')
           ? asTaskViews(standard)
           : standard,
     ),
@@ -24,6 +24,8 @@ describe('DashboardState', () => {
   beforeEach(() => {
     fetchMock = server();
     vi.stubGlobal('fetch', fetchMock);
+    // A load with one project moves the address to it (T-429): each test starts on the landing page
+    history.replaceState(null, '', '/');
   });
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -55,7 +57,7 @@ describe('DashboardState', () => {
     });
     // What the page loads (the server's whoami is asked alongside, for the "new version" notice)
     const urls = () =>
-      fetchMock.mock.calls.map(([url]) => String(url).split('?')[0]).filter((u) => u !== '__atm/whoami');
+      fetchMock.mock.calls.map(([url]) => String(url).split('?')[0]).filter((u) => u !== '/__atm/whoami');
 
     it('with one project, loads the project list, then its tasks (v1) and its files from p/<id>/', async () => {
       fetchMock = server({ projects: [project('gone', true), project('p2')] });
@@ -64,7 +66,7 @@ describe('DashboardState', () => {
       await s.load();
       expect(s.route).toEqual({ page: 'project', id: 'p2' });
       expect(s.projectId).toBe('p2');
-      expect(urls()).toEqual(['api/projects', v1Tasks('p2'), 'p/p2/claims.json', 'p/p2/worktrees.json']);
+      expect(urls()).toEqual(['/api/projects', v1Tasks('p2'), '/p/p2/claims.json', '/p/p2/worktrees.json']);
     });
 
     it('with several, lands on the overview without opening a project; it reads every project’s tasks', async () => {
@@ -76,22 +78,22 @@ describe('DashboardState', () => {
       expect([s.loaded, s.loadError, s.projectsLoaded]).toEqual([false, null, true]);
       // For the overview's views across projects (T-333, T-328): each project's tasks, archive (T-355) and claims, no
       // project opened
-      expect(urls()[0]).toBe('api/projects');
+      expect(urls()[0]).toBe('/api/projects');
       expect(urls().slice(1).sort()).toEqual([
         v1Tasks('p2'),
         v1Tasks('p2'), // ?archived=true: the archive (T-372)
         v1Tasks('p3'),
         v1Tasks('p3'),
-        'p/p2/claims.json',
-        'p/p3/claims.json',
+        '/p/p2/claims.json',
+        '/p/p3/claims.json',
       ]);
       expect(s.projectSources.map((p) => p.project.id)).toEqual(['p2', 'p3']);
     });
 
-    it('#project= picks one; a later hash change switches project and restores that one’s view', async () => {
+    it('/projects/<id> picks one; moving to another switches project and restores that one’s view', async () => {
       fetchMock = server({ projects: [project('p2'), project('p3')] });
       vi.stubGlobal('fetch', fetchMock);
-      history.replaceState(null, '', '/#project=p3');
+      history.replaceState(null, '', '/projects/p3');
       const s = new DashboardState();
       await s.load();
       expect([s.projectId, s.loaded]).toEqual(['p3', true]);
@@ -99,8 +101,8 @@ describe('DashboardState', () => {
       s.saveView();
       s.showDetail('T-004');
 
-      history.replaceState(null, '', '/#project=p2');
-      s.onHashChange();
+      history.replaceState(null, '', '/projects/p2');
+      s.onNavigate();
       await vi.waitFor(() => expect(s.projectId).toBe('p2'));
       await vi.waitFor(() => expect(s.loaded).toBe(true));
       expect([s.detailOpen, s.query]).toEqual([false, '']);
@@ -128,8 +130,8 @@ describe('DashboardState', () => {
       expect(urls().filter((u) => u === v1Tasks('p3'))).toHaveLength(2); // the overview's tasks and archive only
       // The project's page later: its saved view is applied then, as on any first open
       await s.openOnBoard('p3', 'T-004');
-      history.replaceState(null, '', '/#project=p3');
-      s.onHashChange();
+      history.replaceState(null, '', '/projects/p3');
+      s.onNavigate();
       await vi.waitFor(() => expect(s.loaded).toBe(true));
       expect([s.peeking, s.route]).toEqual([false, { page: 'project', id: 'p3' }]);
     });
@@ -141,15 +143,46 @@ describe('DashboardState', () => {
       await s.load();
       await s.openOnBoard('p2', 'T-999');
       expect([s.peeking, s.detailOpen]).toEqual([false, false]);
-      expect(location.hash).toContain('project=p2');
+      expect(location.pathname).toBe('/projects/p2');
     });
 
-    it('a hash change that only switches the tab reloads nothing', async () => {
+    it("a task's address opens its details; closing them takes it out; Back past them closes them (T-429)", async () => {
+      fetchMock = server({ projects: [project('p2'), project('p3')] });
+      vi.stubGlobal('fetch', fetchMock);
+      history.replaceState(null, '', '/projects/p3/list?task=T-004');
+      const s = new DashboardState();
+      await s.load();
+      expect([s.tab, s.detailOpen, s.detailId]).toEqual(['list', true, 'T-004']);
+      // Closing them: no new history entry
+      const length = history.length;
+      s.closeDetail();
+      expect(location.pathname + location.search).toBe('/projects/p3/list');
+      expect(history.length).toBe(length);
+      // Opening them is one; another task's replace them
+      s.showDetail('T-005');
+      expect(location.search).toBe('?task=T-005');
+      s.showDetail('T-004');
+      expect(location.search).toBe('?task=T-004');
+      expect(history.length).toBe(length + 1);
+      // Back (to the address without them) closes them, Forward opens them again
+      history.replaceState(null, '', '/projects/p3/list');
+      s.onNavigate();
+      expect(s.detailOpen).toBe(false);
+      history.replaceState(null, '', '/projects/p3/list?task=T-005');
+      s.onNavigate();
+      expect([s.detailOpen, s.detailId]).toEqual([true, 'T-005']);
+      // An unknown task opens nothing
+      history.replaceState(null, '', '/projects/p3/list?task=T-999');
+      s.onNavigate();
+      expect(s.detailId).toBe('T-005');
+    });
+
+    it('an address that only switches the tab reloads nothing', async () => {
       const s = new DashboardState();
       await s.load();
       fetchMock.mockClear();
-      history.replaceState(null, '', '/#view=kanban');
-      s.onHashChange();
+      history.replaceState(null, '', '/?view=kanban');
+      s.onNavigate();
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -158,7 +191,7 @@ describe('DashboardState', () => {
       const s = new DashboardState();
       await s.load();
       expect([s.route, s.loadError]).toEqual([{ page: 'none' }, null]);
-      history.replaceState(null, '', '/#project=nope');
+      history.replaceState(null, '', '/projects/nope');
       await s.load();
       expect(s.route).toEqual({ page: 'unknown', id: 'nope' });
     });
@@ -262,7 +295,7 @@ describe('DashboardState update notice', () => {
     const whoami = () => ok({ atm: true, build: held });
     vi.stubGlobal(
       'fetch',
-      vi.fn((url: string) => (url === '__atm/whoami' ? whoami() : files(url))),
+      vi.fn((url: string) => (url === '/__atm/whoami' ? whoami() : files(url))),
     );
   });
   afterEach(() => {
@@ -368,9 +401,9 @@ describe('DashboardState saved view', () => {
     expect([...next.filters.type]).toEqual(['feature']);
   });
 
-  it('a tab in the URL wins over the saved one', async () => {
+  it('a tab in the address wins over the saved one', async () => {
     await changeEverything();
-    history.replaceState(null, '', '/#view=kanban');
+    history.replaceState(null, '', '/?view=kanban');
     const next = new DashboardState();
     await next.load();
     expect(next.tab).toBe('kanban');

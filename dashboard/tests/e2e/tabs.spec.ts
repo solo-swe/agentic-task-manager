@@ -44,12 +44,12 @@ test.describe('view tabs', () => {
     await expect(page.locator('#dep-graph')).toBeVisible();
   });
 
-  test('clicking a tab switches views and writes the URL hash', async ({ page, tasksServer }) => {
+  test("clicking a tab switches views and writes the project's address", async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, 'standard');
     await tab(page, 'graph').click();
     await expectSelected(page, 'graph');
-    // The hash also holds the Sprint filter (#sprint=, T-323)
-    const view = () => new URLSearchParams(new URL(page.url()).hash.slice(1)).get('view');
+    // /projects/<id>/<tab> (T-429); the query holds the Sprint filter (?sprint=, T-323)
+    const view = () => new URL(page.url()).pathname.split('/')[3] ?? null;
     expect(view()).toBe('graph');
     await tab(page, 'progress').click();
     await expectSelected(page, 'progress');
@@ -70,7 +70,7 @@ test.describe('view tabs', () => {
 
   test('a deep link opens that view, and it survives a reload', async ({ page, tasksServer }) => {
     tasksServer.use('standard');
-    await page.goto('tasks-dashboard.html#view=kanban');
+    await page.goto('/?view=kanban');
     await expectSelected(page, 'kanban');
     await page.reload();
     await expectSelected(page, 'kanban');

@@ -1,34 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import { parseDialogHash, withDialogHash } from '../../src/lib/dialogs';
-import { formatHash, hashParams } from '../../src/lib/hash';
+import { dialogOf, withDialog } from '../../src/lib/dialogs';
 
-describe('formatHash', () => {
-  it('writes flags without "=" and keeps the order', () => {
-    expect(formatHash(hashParams('#view=kanban&about'))).toBe('#view=kanban&about');
-    expect(formatHash(hashParams('#about='))).toBe('#about');
-    expect(formatHash(hashParams(''))).toBe('#');
-  });
-});
-
-describe('parseDialogHash', () => {
+describe('dialogOf', () => {
   it('reads the dialog flag', () => {
-    expect(parseDialogHash('#about')).toBe('about');
-    expect(parseDialogHash('#view=list&about')).toBe('about');
+    expect(dialogOf('/?about')).toBe('about');
+    expect(dialogOf('/projects/p1/list?about')).toBe('about');
   });
 
   it('is null without one', () => {
-    expect(parseDialogHash('')).toBeNull();
-    expect(parseDialogHash('#view=about')).toBeNull();
+    expect(dialogOf('/')).toBeNull();
+    expect(dialogOf('/?view=about')).toBeNull();
   });
 });
 
-describe('withDialogHash', () => {
+describe('withDialog', () => {
   it('opens a dialog, keeping the other parameters', () => {
-    expect(withDialogHash('#view=kanban', 'about')).toBe('#view=kanban&about');
-    expect(withDialogHash('', 'about')).toBe('#about');
+    expect(withDialog('/projects/p1/kanban', 'about')).toBe('/projects/p1/kanban?about');
+    expect(withDialog('/', 'about')).toBe('/?about');
   });
 
   it('closes it', () => {
-    expect(withDialogHash('#view=kanban&about', null)).toBe('#view=kanban');
+    expect(withDialog('/projects/p1/kanban?sprint=all&about', null)).toBe('/projects/p1/kanban?sprint=all');
   });
 });

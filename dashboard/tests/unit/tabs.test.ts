@@ -1,32 +1,34 @@
 import { describe, expect, it } from 'vitest';
-import { adjacentView, DEFAULT_VIEW, parseViewHash, VIEWS, withViewHash } from '../../src/lib/tabs';
+import { adjacentView, DEFAULT_VIEW, namesView, viewOf, VIEWS, withView } from '../../src/lib/tabs';
 
-describe('parseViewHash', () => {
-  it('reads the view parameter', () => {
-    expect(parseViewHash('#view=kanban')).toBe('kanban');
-    expect(parseViewHash('view=progress')).toBe('progress');
-    expect(parseViewHash('#foo=1&view=kanban')).toBe('kanban');
+describe('viewOf', () => {
+  it("reads the project's tab from its address (T-429)", () => {
+    expect(viewOf('/projects/p1/kanban')).toBe('kanban');
+    expect(viewOf('/projects/p1/progress?about')).toBe('progress');
+    expect(viewOf('/?view=list')).toBe('list');
+    expect(namesView('/projects/p1/list')).toBe(true);
+    expect(namesView('/projects/p1')).toBe(false);
   });
 
   it('falls back to the Kanban (T-251)', () => {
     expect(DEFAULT_VIEW).toBe('kanban');
-    expect(parseViewHash('')).toBe('kanban');
-    expect(parseViewHash('#')).toBe('kanban');
-    expect(parseViewHash('#view=nope')).toBe('kanban');
-    expect(parseViewHash('#something-else')).toBe('kanban');
-    expect(parseViewHash('#view=graph')).toBe('graph');
+    expect(viewOf('')).toBe('kanban');
+    expect(viewOf('/')).toBe('kanban');
+    expect(viewOf('/projects/p1')).toBe('kanban');
+    expect(viewOf('/projects/p1/nope')).toBe('kanban');
+    expect(viewOf('/projects/p1/graph')).toBe('graph');
   });
 });
 
-describe('withViewHash', () => {
+describe('withView', () => {
   it('sets the view and keeps other parameters', () => {
-    expect(withViewHash('', 'kanban')).toBe('#view=kanban');
-    expect(withViewHash('#view=graph', 'progress')).toBe('#view=progress');
-    expect(withViewHash('#foo=1', 'kanban')).toBe('#foo=1&view=kanban');
+    expect(withView('/projects/p1', 'kanban')).toBe('/projects/p1/kanban');
+    expect(withView('/projects/p1/graph', 'progress')).toBe('/projects/p1/progress');
+    expect(withView('/projects/p1?about', 'kanban')).toBe('/projects/p1/kanban?about');
   });
 
-  it('round-trips through parseViewHash', () => {
-    for (const v of VIEWS) expect(parseViewHash(withViewHash('#x=y', v))).toBe(v);
+  it('round-trips through viewOf', () => {
+    for (const v of VIEWS) expect(viewOf(withView('/projects/p1?x=y', v))).toBe(v);
   });
 });
 

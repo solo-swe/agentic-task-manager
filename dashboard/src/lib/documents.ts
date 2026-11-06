@@ -1,8 +1,8 @@
-// The document viewer (docs/compmd-viewer-design.md): which file a reference names, the URL hash that says what is
-// open (#doc=<path>:L<n>), and loading a file through the documents route (T-392). atm renders nothing itself: the
-// route gives the CompMD document atm wrapped the file in, and CompMd.svelte renders it.
+// The document viewer (docs/compmd-viewer-design.md): which file a reference names, the address parameter that says
+// what is open (?doc=<path>:L<n>), and loading a file through the documents route (T-392). atm renders nothing itself:
+// the route gives the CompMD document atm wrapped the file in, and CompMd.svelte renders it.
 import { type Fetch, v1DocumentUrl, type Validators } from './api/http';
-import { formatHash, hashParams } from './hash';
+import { addressParams, formatAddress } from './address';
 import { markdownPlainText } from './plain-text';
 
 /** What the documents route answers (docs/multi-project-api.md §2.6) */
@@ -44,8 +44,8 @@ export function repositoryFile(
   return doc.commit ? { meta, commit: doc.commit, path } : null;
 }
 
-/** A file and, optionally, the lines to show (#doc=<path>:L<n> or :L<n>-L<m>) or the heading to open at (by its
- * slug, #doc=<path>#<slug>) */
+/** A file and, optionally, the lines to show (?doc=<path>:L<n> or :L<n>-L<m>) or the heading to open at (by its
+ * slug, ?doc=<path>#<slug>) */
 export interface DocumentRef {
   path: string;
   lines?: [number, number];
@@ -197,9 +197,10 @@ export function formatLines(lines: [number, number]): string {
   return lines[0] === lines[1] ? `L${lines[0]}` : `L${lines[0]}-L${lines[1]}`;
 }
 
-/** The document a location hash opens (#doc=<path>[:L<n>[-L<m>]][#<heading>]), if any */
-export function parseDocHash(hash: string): DocumentRef | null {
-  const value = hashParams(hash).get('doc');
+/** The document an address opens (?doc=<path>[:L<n>[-L<m>]][#<heading>]), if any; also a viewer link in rendered
+ * text (`#doc=…`, safeTree's docLink) */
+export function docOf(address: string): DocumentRef | null {
+  const value = (address.startsWith('#') ? new URLSearchParams(address.slice(1)) : addressParams(address)).get('doc');
   if (!value) return null;
   const sharp = value.indexOf('#');
   const target = sharp >= 0 ? value.slice(0, sharp) : value;
@@ -212,18 +213,24 @@ export function parseDocHash(hash: string): DocumentRef | null {
   return { path, ...(lines ? { lines } : {}), ...(heading && !lines ? { heading } : {}) };
 }
 
-/** A ref as the value of #doc= */
-export function docHashValue(ref: DocumentRef): string {
+/** A ref as the value of ?doc= */
+export function docParamValue(ref: DocumentRef): string {
   const fragment = ref.text ?? ref.heading;
   return ref.path + (ref.lines ? `:${formatLines(ref.lines)}` : '') + (fragment ? `#${fragment}` : '');
 }
 
-/** `hash` with `ref` open (or none, for null), keeping the other parameters */
-export function withDocHash(hash: string, ref: DocumentRef | null): string {
-  const params = hashParams(hash);
+/** `address` with `ref` open (or none, for null), keeping the other parameters */
+export function withDoc(address: string, ref: DocumentRef | null): string {
+  const params = addressParams(address);
   params.delete('doc');
-  if (ref) params.set('doc', docHashValue(ref));
-  return formatHash(params).replace(/%2F/g, '/').replace(/%3A/g, ':');
+  if (ref) params.set('doc', docParamValue(ref));
+  return formatAddress(params);
+}
+
+/** A viewer link in rendered text (`#doc=docs/x.md:L40`): an in-page link CompMd.svelte opens in the viewer, never
+ * one the browser follows */
+export function viewerLink(ref: DocumentRef): string {
+  return '#' + formatAddress(new URLSearchParams({ doc: docParamValue(ref) })).slice('/?'.length);
 }
 
 /**

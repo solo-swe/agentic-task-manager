@@ -93,7 +93,7 @@ describe('loadWorktrees', () => {
     const body = { worktrees: [main, { ...linked('a', []), tasks: views, extra: 1 }, { branch: 'x' }] };
     const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { headers: { ETag: '"w1"' } }));
     const result = await loadWorktrees('abcd1234', fetchFn);
-    expect(fetchFn).toHaveBeenCalledWith('p/abcd1234/worktrees.json', { cache: 'no-store', headers: {} });
+    expect(fetchFn).toHaveBeenCalledWith('/p/abcd1234/worktrees.json', { cache: 'no-store', headers: {} });
     expect(result).toEqual({
       unchanged: false,
       worktrees: [main, linked('a', [{ ...task('T-1', 'done'), derived }])],

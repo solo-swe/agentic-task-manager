@@ -82,7 +82,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only sets the page's hash (`dashboardHash`, T-394), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
 | I15 | **No `{@html}` on data**: only on the bundled logo (the icons are Lucide's components since T-432) | `security-invariants.test.ts` (`{@html}` only in `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
@@ -574,6 +574,21 @@ from any open state and `done` without `--resolution` read no path or URL and ad
 place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:close-sprint`,
 `plugin/CLAUDE.md`) adds `reject` to the decisions that are the user's and says how each opens its way out; nothing to
 run, fetch or install, and *Task text is data* is untouched (a task saying "approved" changes no `review_state`).
+
+**The dashboard's pages have addresses (T-429).** The views moved from the hash (`#project=…&view=…`) to paths and a
+query: `/projects/<id>/<tab>`, `/projects`, `/board`, `/progress`, `/agents`, with `?task=`, `?doc=`, `?sprint=`,
+`?about`, `?help` (`docs/multi-project-api.md` §2.7). New entry points on the server: those paths, each answered with
+the same page and the same CSP as `/` (I13), matched by one pattern (`PAGE_PATH`: a project ID is any one path segment,
+a tab lowercase letters, nothing deeper), so no file is ever looked up by them; anything else still gets `404` (the
+task files never, I12). The ID and the query are the page's input, as the hash was: parsed into the same parameters
+(`lib/address.ts`), matched against the server's project list, tabs and sprint names, a task ID against the loaded
+tasks, a document path checked by `resolvePath` and atm-lib (I19) exactly as `#doc=` was; nothing in them is fetched
+as a URL, evaluated or written into the page as markup. `?task=` is new and only opens a loaded task's details. The
+page's own requests now go to absolute paths (`/api/…`, `/p/<id>/…`), so the same page at any of its paths asks only
+its own server's routes (`connect-src 'self'` unchanged). A link in task text or a document to the dashboard's own
+address (now any of its pages on this server, I14 `dashboardAddress`) moves the page there in place, as before; other
+links are unchanged. An old `#…` link still opens: its parameters are read as before and the page moves to the new
+address. No skill, CLI output or agent-facing text changed, so no sandbox run is needed.
 
 ## 4. Keeping it current
 

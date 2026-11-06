@@ -27,8 +27,8 @@
 
   // Remember the view per project (FR-5): every change to filters, tab, panel or board options is saved
   $effect(() => dashboard.saveView());
-  // The Sprint filter in the URL (#sprint=, T-323)
-  $effect(() => dashboard.syncSprintHash());
+  // The Sprint filter in the address (?sprint=, T-323)
+  $effect(() => dashboard.syncSprintParam());
 </script>
 
 <UpdateNotice />
@@ -48,5 +48,3 @@
 <WhatsNew />
 <AboutDialog />
 <HelpDialog />
-
-<svelte:window onhashchange={() => dashboard.onHashChange()} />

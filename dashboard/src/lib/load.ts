@@ -8,7 +8,7 @@ import type { Task, TasksFile } from './types';
 export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
 
 export const DEFAULT_PROJECT_NAME = 'Task Dashboard';
-export const PROJECTS_URL = 'api/projects';
+export const PROJECTS_URL = '/api/projects';
 
 // A project's summary, as the server computes it (api.schema.json, generated: T-382)
 export type { BoardCard, ProjectBoard, ProjectSummary, SprintNumbers } from './generated/types';
@@ -71,7 +71,8 @@ export function problemCount(problems: readonly string[], tasks: readonly Task[]
   return problems.length + tasks.reduce((n, t) => n + (t.derived?.problems?.length ?? 0), 0);
 }
 
-/** A project's logo, as api/projects gives it: p/<id>/logo, relative to the dashboard */
+/** A project's logo, as api/projects gives it: p/<id>/logo, relative to the server's root (where the dashboard was
+ * before its pages had paths, T-429); the dashboard uses it from the root, /p/<id>/logo */
 const LOGO_URL = /^p\/[^/?#:]+\/logo$/;
 
 const isProject = (p: unknown): p is ProjectEntry =>
@@ -100,12 +101,12 @@ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Valida
           .map((w) => ({ path: w.path, branch: typeof w.branch === 'string' ? w.branch : null, main: w.main === true }))
       : [],
     // Only the server's own route: never an address elsewhere (the dashboard makes no outside requests)
-    logo: typeof p.logo === 'string' && LOGO_URL.test(p.logo) ? p.logo : null,
+    logo: typeof p.logo === 'string' && LOGO_URL.test(p.logo) ? `/${p.logo}` : null,
   }));
   return { unchanged: false, projects, validators: file.validators };
 }
 
-export const SEARCH_URL = 'api/search';
+export const SEARCH_URL = '/api/search';
 
 /**
  * The tasks matching `query` in every project (api/search, T-258): their IDs per project id. Anything unexpected in
@@ -122,7 +123,7 @@ export async function searchProjects(query: string, fetchFn: Fetch = browserFetc
   return found;
 }
 
-export const WHOAMI_URL = '__atm/whoami';
+export const WHOAMI_URL = '/__atm/whoami';
 
 /**
  * The build of the dashboard the server holds now (its /__atm/whoami), or null when it doesn't say (a server or dev

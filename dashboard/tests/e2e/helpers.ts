@@ -562,7 +562,25 @@ export async function openDashboard(
       }
     }, `atm-dashboard:view:id:${tasksServer.projectId}`);
   }
-  await page.goto('tasks-dashboard.html' + (tab ? `#view=${tab}` : ''));
+  await page.goto(tab ? `/projects/${encodeURIComponent(tasksServer.projectId)}/${tab}` : '/');
+}
+
+/** Follow a link to `address` in the page (`/projects/fixture/list?doc=docs/x.md`), as a link in task text or another
+ * page does: the dashboard moves there without loading again (T-429) */
+export async function follow(page: Page, address: string) {
+  await page.evaluate((href) => {
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }, address);
+}
+
+/** The page's address as the dashboard writes it: its path and query (`/projects/fixture/list?about`) */
+export function addressOf(page: Page): string {
+  const url = new URL(page.url());
+  return url.pathname + url.search;
 }
 
 /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */
