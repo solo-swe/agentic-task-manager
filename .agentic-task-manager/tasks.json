@@ -20281,13 +20281,13 @@
       "description": "The atm-lib unit tests (`tests/lib`, run by [lib.test.mjs](tests/scripts/lib.test.mjs)) fail to import: `lib/state.py` imports `transitions` (T-417), and the tests run the modules with plain `python3`, which doesn't have it. The bundled `plugin/scripts/atm.py` works because it carries its third-party code.\n\n## Change\nGive the unit tests the same third-party code the bundle has, so they pass with Python 3.9 and no packages installed (as CI runs them): e.g. put `atm-cli/vendored/` on the path in `lib.test.mjs`, or run them through `uv`. Coordinate with T-416 (third-party libraries in atm-cli), which decides how they are vendored.\n\n## Tests\n`npm run test:scripts` runs `tests/lib` green.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "tests/scripts/lib.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:52:45Z",
+      "updated_at": "2026-11-06T06:09:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "related": [
@@ -20305,7 +20305,19 @@
       "sprint": "CLI ergonomics",
       "review": "batch",
       "started_at": "2026-11-06T05:52:45Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "8e723bf361cf0252bdc1fc58789568b7f67fdd43",
+      "completed_at": "2026-11-06T06:09:13Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:09:13Z",
+          "kind": "review",
+          "text": "Check `tests/lib/support.py`: it puts `atm-cli/vendored/` (and `vendored/six/`, since `six` is one module in a folder) on the path, the same copy the bundle carries. Also check `tests/scripts/test_architecture.test.mjs`: since T-417 it read `atm-cli/atm` relative to the current directory, so under the suite it never checked the layer rules and made the run exit 1. It now uses `REPO` and is a real `node:test`. `test:scripts`: 561 pass, exit 0. Not tried on Python 3.9.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-420",
@@ -20318,14 +20330,14 @@
       "description": "Port `atm2 loop next`, `loop run`, `claim list` and `claim heartbeat` (with `--auto`, the PostToolUse hook's mode) in [atm2.py](atm-cli/atm/cli/atm2.py) from running `atm` (`run_atm`) to calling atm-lib directly: copy what `cmd_next`, `cmd_run`, `cmd_claims`, `cmd_heartbeat` and `auto_heartbeat` in [cli/claims.py](atm-cli/atm/cli/claims.py) do, as T-412 did for the `task` group (commit `7f44e21`). `loop next` takes `--status` as `atm next` does; its selections (`--sprint`, `--tasks`, `--all`, `--backlog`) exclude each other; no task is exit code 3.\n\n## Tests\nParity steps in [atm2.test.mjs](tests/scripts/atm2.test.mjs): `next`, `next --claim`, `claims`, `heartbeat`, `run <id> -- <command>` (exit code passed through).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/atm2.py",
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:46Z",
+      "updated_at": "2026-11-06T06:09:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20338,7 +20350,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:09:18Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-421",

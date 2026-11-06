@@ -33,6 +33,13 @@ const SETUP = {
   commit: true,
 };
 
+/** A result with its project's own folder (claims name their worktree) written as <root>, so two projects compare. */
+function relative(result, root) {
+  const roots = [fs.realpathSync(root), root];
+  const strip = (text) => roots.reduce((t, r) => t.split(r).join('<root>'), text);
+  return { ...result, stdout: strip(result.stdout), stderr: strip(result.stderr) };
+}
+
 /** Run each [atm args, atm2 args] step on both projects, in order, comparing every result. */
 function parity(steps) {
   const one = makeProject(SETUP);
@@ -40,8 +47,8 @@ function parity(steps) {
   try {
     for (const [atmArgs, atm2Args] of steps) {
       const label = `atm ${atmArgs.join(' ')} / atm2 ${atm2Args.join(' ')}`;
-      const expected = runAtm(atmArgs, one, ENV);
-      const actual = runAtm2(atm2Args, two);
+      const expected = relative(runAtm(atmArgs, one, ENV), one);
+      const actual = relative(runAtm2(atm2Args, two), two);
       assert.deepEqual(actual, expected, label);
       assert.equal(tasksOf(two), tasksOf(one), `${label}: tasks.json`);
     }
@@ -204,6 +211,90 @@ describe('atm2 task group', { skip: !available && 'atm2 needs Typer (uv sync --d
         ['task', 'state', 'T-2', 'in_progress'],
       ],
     ]);
+  });
+});
+
+describe('atm2 loop and claim groups', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+  test('next, next --claim, claims and heartbeat read and change the same', () => {
+    parity([
+      [['next'], ['loop', 'next']],
+      [
+        ['next', '--json', '--type', 'chore'],
+        ['-j', 'loop', 'next', '--type', 'chore'],
+      ],
+      [
+        ['next', '--tasks', 'T-2,T-3'],
+        ['loop', 'next', '--tasks', 'T-2,T-3'],
+      ],
+      [['claims'], ['claim', 'list']],
+      [
+        ['next', '--claim', '--json'],
+        ['-j', 'loop', 'next', '--claim'],
+      ],
+      [['claims'], ['claim', 'list']],
+      [
+        ['claims', '--json'],
+        ['-j', 'claim', 'list'],
+      ],
+      [
+        ['heartbeat', 'T-1'],
+        ['claim', 'heartbeat', 'T-1'],
+      ],
+      [
+        ['heartbeat', 'T-1', '--json'],
+        ['-j', 'claim', 'heartbeat', 'T-1'],
+      ],
+      [['heartbeat'], ['claim', 'heartbeat']],
+      [
+        ['heartbeat', 'T-9'],
+        ['claim', 'heartbeat', 'T-9'],
+      ],
+    ]);
+  });
+
+  test('next with nothing ready exits 3, the same', () => {
+    parity([
+      [
+        ['next', '--tasks', 'T-2'],
+        ['loop', 'next', '--tasks', 'T-2'],
+      ],
+      [
+        ['next', '--json', '--tasks', 'T-2'],
+        ['-j', 'loop', 'next', '--tasks', 'T-2'],
+      ],
+    ]);
+  });
+
+  test('run keeps the claim and passes the command’s exit code through', () => {
+    parity([
+      [
+        ['start', 'T-1'],
+        ['task', 'state', 'T-1', 'in_progress'],
+      ],
+      [
+        ['run', 'T-1', '--', 'sh', '-c', 'echo running; exit 0'],
+        ['loop', 'run', 'T-1', '--', 'sh', '-c', 'echo running; exit 0'],
+      ],
+      [
+        ['run', 'T-1', '--', 'sh', '-c', 'exit 7'],
+        ['loop', 'run', 'T-1', '--', 'sh', '-c', 'exit 7'],
+      ],
+      [
+        ['run', 'T-3', '--', 'true'],
+        ['loop', 'run', 'T-3', '--', 'true'],
+      ],
+    ]);
+  });
+
+  test('next refuses two selections at once', () => {
+    const root = makeProject(SETUP);
+    try {
+      const result = runAtm2(['loop', 'next', '--all', '--backlog'], root);
+      assert.equal(result.code, 2);
+      assert.match(result.stderr, /--all and --backlog can't both be given/);
+    } finally {
+      removeDir(root);
+    }
   });
 });
 

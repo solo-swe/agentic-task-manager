@@ -22,12 +22,12 @@ from typing import Annotated, Optional
 
 import typer
 
-from ..boot.identity import agent_identity
-from ..boot.jsongit import dashboard_id, migrate_folder, register_project, set_up_store
+from ..boot.identity import agent_identity, session_identity
+from ..boot.jsongit import dashboard_id, hook_project, migrate_folder, register_project, set_up_store
 from ..boot.open import open_project
 from ..common.core import (
     AtmExit, out, to_json, atm_home, ensure_home,
-    format_duration, parse_iso, parse_version, pid_alive,
+    format_duration, now, parse_iso, parse_version, pid_alive,
     read_json, whoami, PLUGIN_ROOT, SCRIPT_DIR,
 )
 from ..common.dashboard import (
@@ -45,6 +45,7 @@ from ..lib.code import (
     repository_paths,
 )
 from ..lib.archive import task_snapshot
+from ..lib.claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
 from ..lib.components import add_component, edit_component, list_components
 from ..lib.edit import add_new_tasks, check_project, edit_existing_task
 from ..lib.query import Filters, task_dependencies, task_views
@@ -59,6 +60,7 @@ from ..lib.settings import (
     set_repository,
 )
 from .archive import describe_ids, describe_kept
+from .claims import hook_input
 from .components import moved_text
 from .edit import read_entries, suggestion_line
 from .render import list_lines, render_task, report_expired, view_row
@@ -508,37 +510,50 @@ app.add_typer(loop_app, name="loop")
 @loop_app.command("next")
 def loop_next(
     ctx: typer.Context,
-    sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
-    tasks: Optional[str] = typer.Option(None, "--tasks"),
-    all_tasks: bool = typer.Option(False, "--all"),
-    backlog: bool = typer.Option(False, "--backlog"),
-    type_: Optional[str] = typer.Option(None, "--type"),
-    with_user: bool = typer.Option(False, "--with-user"),
+    sprint: Optional[list[str]] = typer.Option(
+        None, "--sprint", help="This sprint's tasks (repeatable; default: the active one)"
+    ),
+    tasks: Optional[str] = typer.Option(None, "--tasks", metavar="ID,ID", help="These tasks, in this order"),
+    all_tasks: bool = typer.Option(
+        False, "--all", help="Every task: the active sprint, the planned ones, the backlog"
+    ),
+    backlog: bool = typer.Option(False, "--backlog", help="The tasks with no sprint"),
+    type_: Optional[str] = typer.Option(None, "--type", help="Only this task type"),
+    with_user: bool = typer.Option(
+        False, "--with-user", help="Also tasks done together with the user (the user is watching)"
+    ),
     claim: bool = typer.Option(False, "--claim", help="Also start and claim it, atomically"),
-    agent: Optional[str] = typer.Option(None, "--agent"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
 ) -> None:
     """The task /atm:loop-tasks works on next (exit code 3 if there is none)."""
-    args = ["next"]
-    if sprint:
-        for s in sprint:
-            args += ["--sprint", s]
-    if tasks:
-        args += ["--tasks", tasks]
-    if all_tasks:
-        args.append("--all")
-    if backlog:
-        args.append("--backlog")
-    if type_:
-        args += ["--type", type_]
-    if with_user:
-        args.append("--with-user")
-    if claim:
-        args.append("--claim")
+    given = [flag for flag, value in (("--sprint", sprint), ("--tasks", tasks), ("--all", all_tasks), ("--backlog", backlog)) if value]
+    if len(given) > 1:
+        raise Invalid(f"{' and '.join(given)} can't both be given: they choose the tasks in different ways")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would {'claim' if claim else 'show'} the next task")
+        return
+    sel = selection(
+        sprints=sprint or None,
+        tasks=[i.strip() for i in (tasks or "").split(",") if i.strip()],
+        all_tasks=all_tasks,
+        backlog=backlog,
+        task_type=type_,
+    )
+    project = open_project(os.getcwd(), agent_identity(agent))
+    result = next_task_for(project, sel, with_user=with_user, claim=claim, status=status)
+    report_expired(result["expired"])
+    task, claimed, reason = result["task"], result["claim"], result["reason"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    if agent:
-        args += ["--agent", agent]
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json({"task": task, "claim": claimed, "reason": reason}))
+    elif task:
+        verb = "Claimed" if claimed else "Next"
+        where = task.get("sprint") or "backlog"
+        out(f"{verb}: {task['id']} {task.get('name', '')} ({where}, {task.get('type')})")
+    else:
+        out(f"No task available: {reason}.")
+    if not task:
+        raise AtmExit(3)
 
 
 @loop_app.command("run")
@@ -546,16 +561,47 @@ def loop_run(
     ctx: typer.Context,
     task_id: Annotated[str, typer.Argument(help="The task ID")],
     cmd_and_args: Annotated[
-        list[str], typer.Argument(help="The command and its args, e.g. -- npm test --verbose")
-    ],
-    every: Optional[float] = typer.Option(None, "--every", help="Renew claim this often (seconds)"),
+        Optional[list[str]], typer.Argument(help="The command and its args, after --: -- npm test --verbose")
+    ] = None,
+    every: Optional[float] = typer.Option(
+        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
 ) -> None:
-    """Run a long command while keeping your claim on a task alive."""
-    args = ["run", task_id]
-    if every:
-        args += ["--every", str(every)]
-    args += ["--"] + cmd_and_args
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    """Run a long command while keeping your claim on a task alive; exits with the command's exit code."""
+    if not cmd_and_args:
+        raise Invalid("atm run needs a command after --: atm run <id> -- <command> [args...]")
+    if every is not None and every <= 0:
+        raise Invalid("--every must be more than 0 seconds")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would run {' '.join(cmd_and_args)} while keeping the claim on {task_id}")
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    renew = lambda: renew_lease(open_project(os.getcwd(), project.actor), task_id, expire=False)
+    minutes = renew()["minutes"]
+    interval = every if every is not None else max(60.0, minutes * 60 / 3)
+    try:
+        child = subprocess.Popen(cmd_and_args)
+    except OSError as e:
+        raise AtmFailure(f"can't run {cmd_and_args[0]}: {e.strerror}", 127)
+    # Renewed from this (the main) thread between waits: the lock uses signals, which only work here
+    renewing = True
+    while True:
+        try:
+            code = child.wait(timeout=interval)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+        except KeyboardInterrupt:  # the command got the same interrupt; wait for it to end
+            continue
+        if renewing:
+            try:
+                renew()
+            except Exception as e:  # never stops the command; say so once and stop renewing
+                sys.stderr.write(f"atm run: stopped renewing the claim on {task_id}: {e}\n")
+                renewing = False
+    if code:
+        raise AtmExit(128 - code if code < 0 else code)  # a signal -N ends like a shell's 128+N
 
 
 # ---------------------------------------------------------------------------
@@ -570,29 +616,65 @@ app.add_typer(claim_app, name="claim")
 def claim_list(
     ctx: typer.Context,
 ) -> None:
-    """List live claims."""
-    args = ["claims"]
+    """List live claims, shared by all worktrees of this clone."""
+    if ctx.obj.get("dry_run", False):
+        out("[dry-run] would list live claims")
+        return
+    live = expire_claims(open_project(os.getcwd()))["claims"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(live))
+        return
+    if not live:
+        out("No live claims.")
+        return
+    current = now()
+    for c in live:
+        left = format_duration((parse_iso(c["lease_expires_at"]) - current).total_seconds())
+        out(f"{c['task']}  {c.get('agent')}  {c.get('branch') or '-'}  {left} left  ({c.get('worktree')})")
+
+
+def _auto_heartbeat(agent):
+    """`heartbeat --auto`, run by the plugin's PostToolUse hook after every tool call (CLI-6.2): renew this agent's
+    live claims once their last renewal is ten minutes old. It never prints and never fails, so a tool call is never
+    disturbed."""
+    try:
+        payload = hook_input()
+        cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) and os.path.isdir(payload["cwd"]) else os.getcwd()
+        if payload.get("session_id") and not (agent or os.environ.get("ATM_AGENT")):
+            # The same identity atm commands get in that folder: a subagent in a linked worktree renews its own claims
+            actor = session_identity(payload["session_id"], cwd)
+        else:
+            actor = agent_identity(agent)
+        project = hook_project(cwd, actor)  # also lists the project on the dashboard
+        if project is not None:
+            renew_due_claims(project)
+    except Exception:  # a hook must never break the tool call it follows
+        return
 
 
 @claim_app.command("heartbeat")
 def claim_heartbeat(
     ctx: typer.Context,
     task_id: Optional[str] = typer.Argument(None, help="The task ID"),
-    auto: bool = typer.Option(False, "--auto", help="Renew claims silently (plugin's hook)"),
-    agent: Optional[str] = typer.Option(None, "--agent"),
+    auto: bool = typer.Option(
+        False, "--auto", help="Renew your claims if their last renewal is ten minutes old; silent (the plugin's hook)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
 ) -> None:
     """Extend your claim's lease."""
-    args = ["heartbeat"]
-    if task_id:
-        args.append(task_id)
+    if ctx.obj.get("dry_run", False):
+        out("[dry-run] would renew claims due for it" if auto else f"[dry-run] would extend the lease on {task_id}")
+        return
     if auto:
-        args.append("--auto")
-    if agent:
-        args += ["--agent", agent]
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        _auto_heartbeat(agent)
+        return
+    if not task_id:
+        raise Invalid("atm heartbeat needs a task ID (or --auto)")
+    claim = renew_lease(open_project(os.getcwd(), agent_identity(agent)), task_id)["claim"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(claim))
+    else:
+        out(f"{task_id}: lease extended to {claim['lease_expires_at']}")
 
 
 # ---------------------------------------------------------------------------
