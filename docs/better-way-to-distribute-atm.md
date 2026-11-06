@@ -17,8 +17,9 @@ The model, in short:
    that calls the same code. One set of skills for every harness.
 3. **The skills stay thin**; what they need in detail comes from the installed binary (`atm docs <topic>`), so it
    always matches the version that runs.
-4. **Plugins are thin wrappers** where a harness offers something a skill can't (Claude Code's hooks and slash
-   commands); marketplaces and `npx skills` are extra ways to find atm, not the way to install it.
+4. **No plugins of atm's own**: the Claude Code plugin is retired when the Rust binary replaces Python, and what its
+   hooks did moves into atm ([porting-to-rust.md](porting-to-rust.md) §4, §6). Marketplaces and `npx skills` are
+   ways to find atm, not to install it.
 
 ## 1. What you install
 
@@ -78,17 +79,20 @@ atm docs [<topic>]
 
 ## 4. The skills
 
-The seven stay separate (`do-task`, `loop-tasks`, `create-tasks`, `plan-sprint`, `close-sprint`, `push`, `serve`):
-each is a workflow a user asks for by name. Each becomes **thin, on the portable core**:
+The seven stay separate: each is a workflow a user asks for by name. Without the plugin's `/atm:` namespace they are
+named `atm-do-task`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `atm-close-sprint`, `atm-push` and
+`atm-serve`, so they don't clash with other skills. Each becomes **thin, on the portable core**:
 
 - **Frontmatter:** `name` and `description` only. `allowed-tools` (Claude Code's pre-approved commands) is documented
-  only for Claude Code, and other hosts reject unknown fields, so it moves to the Claude Code plugin's copy (§6).
+  only for Claude Code, and other hosts reject unknown fields, so `atm agents install` adds it to Claude Code's copy
+  only (§5).
 - **Body:** what the workflow is, its steps, its rules, and where to get detail: `atm docs <topic>`. The command
   reference, the task schema and the shared rules move out of the skills into `atm docs`.
 - **First step:** check `command -v atm` and `atm --version` against the skill's minimum; if atm is missing or too
   old, say how to install or upgrade it, and stop. Never work around it.
-- **Claims:** the skills run `atm claim hold <id>` when a task starts and before long commands, which works in every
-  harness; a harness's plugin may add hooks on top (§6). `atm agents install` never edits another tool's hook
+- **Claims:** atm keeps them alive itself, in every harness: each atm command an agent runs renews its claims, and
+  the lease is longer where nothing renews it between commands; the skills run `atm claim hold <id>` before long
+  commands ([porting-to-rust.md](porting-to-rust.md) §4). `atm agents install` never edits another tool's hook
   settings.
 
 ## 5. Where the skills go
@@ -110,16 +114,16 @@ updates them), and are **symlinked** into each harness's folder:
 - **User-wide by default**; `--project` writes the project's `.agents/skills` (and `.claude/skills`) instead, for a
   team that commits them.
 
-## 6. Plugins: thin wrappers
+## 6. Plugins
 
-- **The Claude Code plugin stays**, around the same skills: the hooks (claim heartbeats, `atm service --refresh`),
-  the slash commands, `allowed-tools` in its copy of the skills, and updates through `/plugin`. It stops shipping the
-  CLI and the dashboard once the app and the formula do; it then checks for `atm` like any skill.
-- **Other harnesses' plugins** (Codex, Cursor, Copilot, Gemini, Goose all have a format, most with hooks) only when
-  users ask, each pointing at the same skills folder.
-- **No plugin installs the binary** (no install hook that downloads executables).
-- **Discoverability:** a public skills repo, so `npx skills add <owner>/<repo>` works, and the Claude Code marketplace
-  as today. Both lead to "install atm" first.
+- **The Claude Code plugin is retired at the switch** to the Rust binary ([porting-to-rust.md](porting-to-rust.md)
+  §6 lists where each of its parts goes). Until then it ships as today; its last release says how to move to the app
+  or the formula.
+- **Other harnesses' plugins** (Codex, Cursor, Copilot, Gemini, Goose all have a format) only if users ask for
+  something a skill can't do, each pointing at the same skills.
+- **Nothing installs the binary but the user** (no install hook that downloads executables).
+- **Discoverability:** a public skills repo, generated from `skills/` at each release, so
+  `npx skills add <owner>/<repo>` works; it leads to "install atm" first.
 
 ## 7. Security
 
@@ -142,14 +146,17 @@ plugins are worth having. Its per-harness adapters (`plugin/open-code/`, `instal
 
 ## 9. Rollout
 
-1. **Thin skills and `atm docs`** (Python, in the plugin): the shared reference moves into `atm docs`; the skills drop
-   to the portable core and check `atm --version`; the Claude Code plugin keeps `allowed-tools` in its copy.
-2. **`atm agents install|status|uninstall`** (Python first, ported with T-415): `~/.agentic-task-manager/skills/`,
-   symlinks and copies, status with duplicates.
-3. **The Rust CLI** (T-415) with its release builds, the Homebrew formula and the release script.
-4. **The atm app**: Tauri, IPC to atm-lib, the dashboard's IPC transport, the skills button, notarized DMG and cask.
-5. **The public skills repo** and the Claude Code plugin as a wrapper (no CLI or dashboard in it).
-6. **Other harnesses** (T-413), and their plugins on demand.
+1. **Claims renewed by atm itself** and the longer lease ([porting-to-rust.md](porting-to-rust.md) §4), in Python,
+   so nothing depends on the plugin's hooks.
+2. **Thin skills and `atm docs`** (Python, in the plugin): the shared reference moves into `atm docs`; the skills drop
+   to the portable core, take their `atm-` names and check `atm --version`.
+3. **`atm agents install|status|uninstall`** (Python first, ported with T-415): `~/.agentic-task-manager/skills/`,
+   symlinks and copies, Claude Code's copy with `allowed-tools`, status with duplicates.
+4. **The Rust CLI** (T-415) with its release builds, the Homebrew formula and the release script; at the switch the
+   Python atm and the plugin are retired.
+5. **The atm app**: Tauri, IPC to atm-lib, the dashboard's IPC transport, the skills button, notarized DMG and cask.
+6. **The public skills repo**, generated at release.
+7. **Other harnesses** (T-413).
 
 ## Sources
 

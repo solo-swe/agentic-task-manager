@@ -20200,7 +20200,7 @@
         "[Rust guide](docs/guides/rust.md)"
       ],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-412",
         "T-414",
@@ -20213,7 +20213,7 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T20:02:02Z",
+      "updated_at": "2026-11-06T20:31:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20226,7 +20226,9 @@
           "from": "2026-11-06T20:02:02Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:31:56Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-416",
@@ -20792,7 +20794,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-06T20:04:28Z",
+      "updated_at": "2026-11-06T20:21:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20814,7 +20816,8 @@
       ],
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T20:04:28Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "74b97ab676923133270fe8462d66e8eb412eb31d"
     },
     {
       "id": "T-427",

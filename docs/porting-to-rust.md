@@ -1,151 +1,155 @@
-# Porting `atm-cli` to Rust
+# Porting atm to Rust
 
-**Status:** proposal — not yet implemented. Depends on the Python modernization tasks (T-412, T-414).
+Status: **agreed** with Hakan on 2026-11-06 (T-415). The Python spec it ports is frozen: the command tree of
+[improving-atm-cli-ergonomics.md](improving-atm-cli-ergonomics.md) (T-425), the task states and guards of
+[task-states.md](task-states.md) (T-438), the layers of [layered-architecture.md](layered-architecture.md). How the
+result reaches users is [better-way-to-distribute-atm.md](better-way-to-distribute-atm.md) (T-426); how it is written,
+the [Rust guide](guides/rust.md).
 
-This document explores replacing the Python `atm-cli` implementation with a Rust implementation, producing a single static executable for customers while preserving the `atm` command interface.
+atm becomes **one Rust binary**, `atm`: every command, `atm serve` (the dashboard for browsers), the git merge driver,
+`atm agents` and `atm docs`. Nothing to install alongside it (no Python), one file per platform, the task states as
+Rust enums, the layer rule checked by the compiler. The atm app (Tauri) links the same library.
 
----
+## 1. What stays, and what may change
 
-## 1. The case for Rust
+- **The command structure stays** as in the ergonomics doc: the same groups, commands, arguments and flags. Where clap
+  offers a better way (a flag's form, a value parser, how a group is entered), the change is proposed to Hakan first
+  and made only with his approval.
+- **`--json` output is identical**, field for field: it is what agents and other tools read.
+- **Text output is the same or better.** clap's help, usage lines and argument errors may replace Click's where they
+  read better; atm's own messages and hints stay as they are. A scenario whose text check changes says so in the
+  change that changes it.
+- **Exit codes and files are identical:** 0, 1, 2 (usage), 3 (nothing to do), 4 (claimed), 127 (missing runtime, which
+  goes away); `tasks.json`, `tasks-archive.json`, the claims store, `projects.json`, the server record, the merge
+  driver's results.
+- **`tests/scripts/` is the spec.** Its scenarios and `*.test.mjs` run against the Rust binary as they run against
+  Python (§5).
 
-Today `atm-cli` is pure Python standard library, bundled into `plugin/scripts/atm.py` by `atm-cli/build.py`. Customers need only `python3 >= 3.9`. Developers have no third-party dependencies (by design).
-
-Rust changes the tradeoffs:
-
-| Benefit | What it means for `atm` |
-|---------|------------------------|
-| **Single static binary** | Customers need nothing — not even Python 3.9. Even better than the current "one `.py` file" story. |
-| **Compile-time checks** | Type errors, enum exhaustiveness (task states!), and borrow-checker safety catch bugs before users run it. |
-| **`cargo` ecosystem** | `clap` for CLI, `serde` for JSON, `axum`/`actix` or std HTTP for the server — no hand-rolling parsers. |
-| **Performance** | Negligible for most CLI commands, but welcome for the JSON merge driver and large `tasks.json` files. |
-| **Existing skill** | You already use Rust productively in other projects. |
-
----
-
-## 2. What you give up (ATM-specific costs)
-
-### A. The "readable script" ethos
-`plugin/scripts/atm.py` is a committed, human-readable file. Users can inspect what the plugin runs before executing it. AGENTS.md and `docs/helper-runtime-proposal.md` both emphasize this transparency. A compiled Rust binary is opaque. You lose that unless you commit source and require users to build — which violates the "no build step for customers" rule.
-
-### B. Cross-platform distribution
-Today the "build" is `cat modules → atm.py`, running wherever Python 3.9 runs (macOS, Linux, WSL). With Rust you must compile and ship binaries for:
-- macOS x86_64 + Apple Silicon (arm64)
-- Linux x86_64 (+ arm64?)
-- Windows
-
-That's a CI matrix, code signing considerations, checksums, and release machinery — entirely new infrastructure for a project that currently has none.
-
-### C. The git merge driver
-`atm merge-driver` runs inside `git merge`'s environment. A Rust binary works fine, but it must be on `PATH` and behave identically across platforms. Currently one `atm.py` covers both CLI and merge driver. With Rust you'd still ship one binary, but you'd need to ensure it's registered correctly in `.gitattributes` / git config on every checkout.
-
-### D. `atm serve` / REST API
-The dashboard server is a separate process (`plugin/scripts/atm-serve`). Rust handles this well (Axum, Actix, or std HTTP), but it's another binary to ship and version alongside the CLI.
-
----
-
-## 3. What the Rust port would look like (sketch)
-
-```rust
-// atm-cli/src/lib/
-mod common;    // vocabularies, errors, model
-mod db;        // store interface + jsongit implementation
-mod vcs;       // git interface
-mod lib;       // project, loop, tasks, status (state machine here)
-mod cli;       // clap-based subcommands
-mod api;       // REST server (axum or std)
-```
-
-Rust enums make the task-state machine far safer than the current Python dict-based dispatch:
-
-```rust
-// lib/status.rs — compile-time exhaustiveness
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TaskState { Todo, Active, Review, Blocked, Done, Skipped }
-
-impl TaskState {
-    fn allowed_transitions(&self) -> Vec<TaskState> { ... }
-    fn can_transition(&self, to: TaskState) -> bool { ... }
-}
-```
-
-Invalid transitions become compile errors rather than runtime `AtmError`s. The `STATUS_CHANGES` table in `atm/common/model.py` becomes a Rust `match` or transition table checked at compile time.
-
-### CLI with `clap`
-
-```rust
-// cli/task.rs
-use clap::{Args, Subcommand};
-
-#[derive(Subcommand)]
-enum TaskCmd {
-    List { .. },
-    Add { .. },
-    Edit { id: String, .. },
-    State {
-        id: String,
-        #[arg(value_enum)]
-        state: TaskState,
-        note: Option<String>,
-    },
-}
-```
-
----
-
-## 4. Sequence: improve Python first, then port
-
-**Do not port to Rust right now.** The CLI redesign (`docs/improving-atm-cli-ergonomics.md`) and build modernization (`docs/modernizing-build-approach.md`) are still proposals. Porting a work-in-progress means designing the CLI twice.
-
-### Recommended sequence
+## 2. The repository after the port
 
 ```
-Phase 1: Python — design & stabilize
-  └─ Decide Click vs Typer
-  ├─ Rewrite command groups with nested subcommands
-  ├─ Replace hand-rolled status machine with a state machine
-  ├─ Freeze the command structure and behavior
-  └─ (T-412, T-414)
-
-Phase 2: Rust port
-  └─ Translate the now-stable Python spec to Rust
-  ├─ clap for CLI (mirrors the Click/Typer design)
-  ├─ serde + enums for task states (compile-time exhaustiveness)
-  ├─ Cross-compile CI matrix for macOS/Linux/Windows
-  └─ Ship single static binary; keep `atm.sh` launcher as a thin wrapper
+Cargo.toml              the workspace: edition, lints, [workspace.dependencies]
+rust-toolchain.toml     the pinned toolchain (the minimum Rust version is this one)
+deny.toml               cargo-deny: licences, advisories, bans
+crates/
+  atm-common/           model (task, sprint, release, …), vocabularies, errors, the JSON schema
+  atm-db/               the store interface; jsongit (files, lock, merge, migrations, claims store); memory
+  atm-vcs/              the version-control interface; git (running git, reading HEAD)
+  atm-lib/              the domain: tasks and their states, claims, the loop, sprints, releases, components,
+                        archive, settings, projects, documents, agents (installing the skills)
+  atm-boot/             opening a project or the registry: picks the store and the vcs, the actor
+  atm-api/              the REST routes `atm serve` serves (axum), the page and its assets, read-only
+  atm-cli/              the `atm` binary: clap, renderers (text, --json), exit codes, `serve`, `docs`
+app/                    the Tauri app: src-tauri/ (its commands map to atm-lib), the window on dashboard/
+dashboard/              the Svelte UI, built two ways: one file for `atm serve`, a bundle for the app
+skills/                 the agent skills, the one copy (portable core); the binary embeds them
+docs/
+  agent/                `atm docs` topics, embedded in the binary
+packaging/              the Homebrew formula and cask, the release script, the public skills repo's export
+tests/
+  scripts/              the CLI's scenarios and tests, run against the binary
+  sandbox/              the agent sandbox
+atm-cli/                the Python atm, until the switch (§5), then removed
 ```
 
-### Exception: port now only if
-You freeze the Python CLI design as-is and treat the Rust port as a reimplementation of current behavior, with the ergonomics redesign happening natively in Rust afterward. That's valid, but it means two design phases regardless.
+- **One crate per layer.** A crate can use only what its `Cargo.toml` declares, so the layer rule
+  ([layered-architecture.md](layered-architecture.md) §2) is the compiler's: `atm-api` and `atm-cli` depend on
+  `atm-lib` and `atm-boot`, never on each other; `atm-lib` never on `atm-db`'s jsongit module (it takes the store
+  interface); only `atm-db` and `atm-vcs` run git. `build.py`'s import check retires with Python.
+- **Nothing built is committed.** `plugin/scripts/atm.py` and `plugin/templates/tasks-dashboard.html` were committed
+  because the plugin shipped them; the binary is built in CI and released. The dashboard is built before the binary,
+  which embeds it, with CompMD's runtime (`plugin/assets/compmd/` today) and the skills.
+- **`plugin/` goes** at the switch: the app and the CLI are the only way to install atm (§6). Its hooks' job (renewing
+  claims) moves into atm (§4).
+- **The skills' one copy** is `skills/<name>/SKILL.md` (`name`, `description`, Markdown, `references/`). The binary
+  embeds it, so `atm agents install` writes the skills of the version that runs; Claude Code's copy gets its
+  pre-approved commands (`allowed-tools`) added as it is written. The public skills repo (`npx skills add`) is
+  generated from `skills/` at each release, tagged with atm's version.
 
----
+## 3. Choices inside
 
-## 5. Risks
+- **CLI:** `clap` with the derive API, subcommands as enums, shell completion from `clap_complete` with atm's own value
+  completers (task IDs, sprints, releases, …).
+- **`atm serve`:** `axum` on `tokio`, in the `atm` binary (`atm serve` starts it detached, as today; no second
+  binary). The routes, Host check, CSP and headers are those of [multi-project-api.md](multi-project-api.md) and
+  [security-architecture.md](security-architecture.md) I12–I13. The rest of atm stays synchronous (the Rust guide).
+- **The task states:** an enum per kind and a transition table checked with `match`, the guards (review decisions,
+  dependencies, resolutions) as functions in atm-lib; property tests against [task-states.md](task-states.md).
+- **JSON:** `serde`, with the field order and formatting of today's files (2-space indent, keys in atm's order), so a
+  file written by Rust diffs cleanly against one written by Python and merges with the same driver.
+- **The lock:** `std::fs::File::lock` (an advisory lock on every platform) on the same lock file Python uses, so
+  both can run against one project during the switch.
+- **`atm claim hold`:** the watcher is the `atm` binary started detached (`atm _claim-watch …`), not a fork; it follows
+  the calling shell by its process ID and start time (`sysinfo`), on every platform. Invariant I24 (atm runs no
+  command it is given) and its test move with it: atm starts only git, itself (the watcher, `serve`) and the
+  browser opener.
+- **Errors:** `thiserror` enums in the library crates, `anyhow` at the binary's top; messages as Python's.
+- **New dependencies** beyond those named here are proposed first (the Rust guide).
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|------------|--------|------------|
-| Losing readable-script transparency | High | Medium | Commit Rust source; document that binary is built from it |
-| Cross-platform CI burden | High | High | Start with macOS + Linux; add Windows later |
-| Merge driver registration breaks | Medium | High | Test `atm merge-driver` in CI on all platforms |
-| `atm serve` parity | Medium | Medium | Keep Python `atm-serve` as fallback during transition |
-| Dependency drift in `cargo` | Medium | Low | Pin versions in `Cargo.lock`; vendor if needed |
+## 4. Claims without the plugin's hooks
 
----
+The plugin's hook renewed an agent's claims after every tool call. Without the plugin, and in every harness, atm
+keeps claims alive itself:
 
-## 6. Open questions
+- **Every atm command an agent runs renews that agent's claims** (as `atm claim heartbeat` does), under the lock it
+  already takes.
+- **The default lease is longer** where nothing renews it between commands: 2 hours, unless `meta` sets it. A claim
+  left by an agent that stopped is released by the next `atm loop next` after it expires, as today.
+- **`atm claim hold <id>`** stays for long commands (a test suite, a build, waiting on CI): its watcher renews while
+  the shell that ran it lives.
 
-- Should the Rust port be a full replacement, or should Python remain as a fallback for platforms without a Rust binary?
-- Which Rust web framework for `atm serve` (Axum, Actix, std HTTP)?
-- Should the binary be distributed via GitHub Releases, or built by the user?
-- How to handle the `atm.sh` launcher — thin wrapper around the binary, or replaced entirely?
-- What minimum Rust version (MSRV) to target?
+This applies before the switch too: the Python atm gets the renewal and the longer lease first, and the plugin's hook
+becomes redundant (§6).
 
----
+## 5. How the port runs
 
-## 7. Related documents
+- **Side by side, one suite.** The Rust workspace is built next to `atm-cli/`; `tests/scripts/` runs against either
+  (`ATM_IMPL=rust` picks the Rust binary), and CI runs both on macOS, Linux and Windows (Python on its current
+  matrix). A scenario that Rust doesn't pass yet is listed, by file, in one expected-failures list that only shrinks.
+- **Slices, not layers** ([layered-architecture.md](layered-architecture.md) §9): each step ports one area through
+  every crate it needs, with its scenarios. The order:
+  1. the workspace skeleton: crates, lints, cargo-deny, CI on three platforms, `atm version`, the suite's
+     `ATM_IMPL` switch;
+  2. reading: the store (`tasks.json`, the archive), `task list|details|deps`, `project status`, `--json`;
+  3. the task states: `task state`, `task review`, the guards, notes, `loop next`;
+  4. claims: the claims store, `claim list|heartbeat|hold`, the renewal of §4;
+  5. defining work: `task add|edit|note`, `sprint …`, `release …`, `component …`, `project …`;
+  6. git: `vcs commit|pr|pushed|repository`, the merge driver, `db migrate|init|archive|unarchive`, `doctor`;
+  7. `atm serve`: axum, the routes, the embedded dashboard and assets, `service`;
+  8. `atm agents` and `atm docs` (ported from their Python versions, distribution rollout steps 1–2);
+  9. completion, help text, and the review of clap's changes to the text (§1).
+- **The switch** happens when Rust passes every scenario on all three platforms and the release machinery exists
+  (signed builds, the formula, release binaries): the Python atm, `plugin/` and `build.py` are removed in one change,
+  and the Homebrew formula becomes how the CLI is installed.
 
-- [`docs/guides/rust.md`](guides/rust.md) — the Rust guide the port follows (toolchain, lints, errors, tests)
-- `docs/improving-atm-cli-ergonomics.md` — proposed `atm` command structure (the spec to port)
-- `docs/modernizing-build-approach.md` — developer stack, Click/Typer, build evolution
-- `docs/task-states.md` — current task state model and transitions
-- `docs/helper-runtime-proposal.md` — original Python-only runtime decision (B)
-- `docs/layered-architecture.md` — layer rules to preserve in the port
+## 6. What users install, and the plugin
+
+The Claude Code plugin is not kept after the switch: the app and the CLI install atm, and `atm agents install` puts
+the skills where each harness reads them ([better-way-to-distribute-atm.md](better-way-to-distribute-atm.md)). What
+the plugin did that a skill can't, and where it goes:
+
+| The plugin's part | After the switch |
+|---|---|
+| The CLI and the dashboard | The `atm` binary (formula, release binaries) and the app |
+| Hooks: claim heartbeats | atm renews claims itself (§4) |
+| Hooks: `atm service --refresh` after an update | The app and `atm serve` restart on a new version themselves |
+| The `/atm:` namespace | The skills are named `atm-…` (`/atm-push`, `/atm-do-task`, …), so they don't clash with other skills |
+| Pre-approved commands (`allowed-tools`) | Written into Claude Code's copy by `atm agents install` |
+| Updates through `/plugin` | The app's updates and `brew upgrade`; the linked skills update with them |
+
+## 7. atm-lib's public surface
+
+The Python `atm.lib` and `atm.boot` (frozen in `tests/lib/public-surface.json`, T-384) were groundwork for tools that
+would use atm's logic in-process (an MCP server, scripts); none exists. They go with `atm-cli/`. After the port, other
+tools use `atm … --json`, which is stable and versioned with atm; the `atm-lib` crate is used by the CLI and the app
+only, and is published (with a frozen API) when a real user needs it.
+
+## 8. Risks
+
+| Risk | Mitigation |
+|---|---|
+| A behaviour the suite doesn't check changes unnoticed | The suite is the spec; a bug found after the switch gets a scenario first |
+| Windows: paths, line endings, file locks, process checks | CI on Windows from the first step; the lock and the watcher on cross-platform APIs |
+| The merge driver differs from Python's | Property tests on merges; both implementations merge the same fixtures during the port |
+| Users between the plugin and the formula | The switch waits for the formula and release binaries; the last plugin release says how to move |
+| The binary can't be read like `atm.py` | The source is in the repository and each release names its commit; builds are reproducible from it |
