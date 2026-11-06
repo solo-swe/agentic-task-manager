@@ -20594,7 +20594,7 @@
       "description": "Phase 5 of [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md#:~:text=Phase%205). With every group native and tested:\n\n1. The doc's open questions (§11) are answered (see the note): the agent comes from the environment; no old command names in `task state`; `loop start` stays separate; the old flat commands are **deleted**, not deprecated. Record the answers in §11.\n2. The Typer tree becomes `atm`, bundled into `plugin/scripts/atm.py` by `build.py` with its third-party code (T-416). The old flat commands and the code only they use are removed.\n3. Update the skills, `plugin/CLAUDE.md`, [task-states.md](docs/task-states.md), the tests and the other docs to the new names.\n4. The security checklist: skills change, so the agent sandbox run or the written skill review (`docs/security-architecture.md` §3.3), and that document for any new entry point.\n5. Changelog and What's new entries, and the version bump.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-418",
         "T-419",
@@ -20612,7 +20612,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T09:38:04Z",
+      "updated_at": "2026-11-06T10:00:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20638,11 +20638,20 @@
           "kind": "note",
           "text": "Answers to §11 (user, 2026-11-06): `task state … in_progress` finds the agent from the environment, as now; `task state` takes no old command names; `loop start` stays separate; the old flat commands are deleted, not deprecated (no real users yet).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T10:00:28Z",
+          "kind": "review",
+          "text": "Typer tree is atm (Typer+Click vendored); old commands deleted; task state/review; skills, docs, 0.31.0. Review: skill allowed-tools, close-sprint skip prompt, README permission advice.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-06T08:01:12Z",
       "started_by": "claude:34798264",
-      "commit": "e3c380fe425610a93488c2d255b708d66b45c5f7"
+      "commit": "41010298a5fb1e27b9c3ad865432f53f7f3b80f2",
+      "completed_at": "2026-11-06T10:00:28Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-426",
@@ -21155,7 +21164,7 @@
       "description": "atm must not be able to run commands (the user's security decision, 2026-11-06): `atm run <id> -- <command>` (`loop run` in the new tree) goes. Today a permission prompt covers the whole line, but once `atm run *` is allowed, any command runs through it unchecked. What it gave, a claim kept alive during a long command (a test suite, a wait on CI), comes from a new `atm claim hold <id>` that runs nothing.\n\n## `claim hold <id>`\n- The agent writes `atm claim hold T-1 && npm test` in one Bash call. `claim hold` renews the claim once, starts a detached watcher and returns at once; the shell then runs the command itself. atm never sees it.\n- The watcher follows the shell that called `claim hold` (its parent process): it renews the claim at the usual interval (three times per lease) while that process lives, and exits when it is gone. It checks the process's start time as well as its ID, so a reused ID doesn't keep it going.\n- It stops after a cap (default 4 hours, `--max` to change it within bounds), and when the claim is released, finished or taken over. It renews only that claim, as that agent, and never fails loudly: an error ends the watcher, and the claim then lapses as usual.\n- `--json` prints the claim and the watcher's PID and cap.\n\n## Remove\n`loop run` and its code (the child process, the renewal loop, exit-code passing), its tests, and its mentions in the skills (`do-task`, `loop-tasks`, `push`), `plugin/CLAUDE.md` and the docs (`docs/improving-atm-cli-ergonomics.md`, `docs/v4/atm-cli.md`, `docs/security-architecture.md`).\n\n## Security\n`docs/security-architecture.md`: atm runs no command an agent or a task text passes it, as an invariant with its check (a test that the command tree has no command taking a command to run). The watcher runs nothing and only writes claims; record it as such. Skills change, so the written skill review (§3.3).\n\n## Tests\nScenarios or `claims.test.mjs`: `claim hold` renews while its parent lives and stops when it exits; it stops at the cap; it stops when the claim is released; a reused PID with another start time doesn't count. The changelog and What's new entries go with T-425's release.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-425"
       ],
@@ -21171,9 +21180,9 @@
         "tests/scripts/claims.test.mjs"
       ],
       "created_at": "2026-11-06T08:24:13Z",
-      "updated_at": "2026-11-06T08:24:13Z",
+      "updated_at": "2026-11-06T10:00:28Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "CLI ergonomics",
@@ -21188,7 +21197,9 @@
       ],
       "related": [
         "T-425"
-      ]
+      ],
+      "started_at": "2026-11-06T10:00:28Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-438",

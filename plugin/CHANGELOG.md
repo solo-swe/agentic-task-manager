@@ -11,7 +11,7 @@ The sprint *CLI ergonomics* (release 0.31.0).
 ### Changed
 - **atm's commands are a tree of groups** (T-412–T-425, `docs/improving-atm-cli-ergonomics.md`), built with Typer
   on Click (`atm-cli/atm/cli/main.py`): `task` (`list`, `details`, `deps`, `add`, `edit`, `note`, `state`,
-  `review`), `loop` (`next`, `run`), `claim` (`list`, `heartbeat`), `vcs` (`commit`, `pr`, `pushed`, `repository`),
+  `review`), `loop` (`next`), `claim` (`list`, `heartbeat`, `hold`), `vcs` (`commit`, `pr`, `pushed`, `repository`),
   `release` and `component` (`list`, `add`, `edit`, …), `project` (`status`, `config`, `workflow`, `logo`, `list`,
   `add`, `remove`, `prune`), `sprint` (`list`, `add`, `edit`, `start`, `close`, `delete`, `move`, `backlog`); `db`
   (`migrate`, `init`, `archive`, `unarchive`), `doctor` and `service` for maintenance; `help` and `version`.
@@ -33,7 +33,7 @@ The sprint *CLI ergonomics* (release 0.31.0).
 - **The merge driver is `atm db merge-driver %O %A %B`**: `atm db migrate` and `atm db init` register it again.
 - **The plugin's hooks** run `atm claim heartbeat --auto` and `atm service --refresh`.
 - **The skills, `plugin/CLAUDE.md` and the README** use the new names; each skill pre-approves its commands one by
-  one (`Bash(atm task state:*)`, …), never `atm loop run` or a review decision; `/atm:close-sprint` pre-approves no
+  one (`Bash(atm task state:*)`, …), never a review decision; `/atm:close-sprint` pre-approves no
   status change, so a skip asks for permission. An approval or a request for changes is the user's.
 - **Typer and Click ship with the plugin** (T-425), copied as they are into `plugin/scripts/vendor/` (click 8.1.8,
   typer 0.15.4, as `atm-cli/uv.lock` pins them; without Typer's rich support, so help is plain Click output on every
@@ -43,9 +43,19 @@ The sprint *CLI ergonomics* (release 0.31.0).
 - **The dashboard's development uses pnpm** (T-427): `pnpm-lock.yaml`, overrides in `pnpm-workspace.yaml`, CI and
   the hooks on pnpm 12.14.0.
 
+### Added
+- **`atm claim hold <id> [--max MINUTES] [--every SECONDS]`** (T-437): keeps a claim alive while the shell that ran it
+  lives (`atm claim hold T-1 && npm test`), and runs nothing. It renews the claim (refused when it isn't yours), leaves
+  a detached watcher and returns; the watcher renews three times per lease (at least once a minute) and stops when
+  the shell ends (checked by its pid and start time), a renewal fails (the claim was released, finished or taken
+  over), or `--max` is up (240 minutes by default, at most 720). `--json`: `{task, claim, watcher, watching,
+  until}`. The skills pre-approve it and use it before long commands.
+
 ### Removed
 - **The old flat commands** (`atm start`, `done`, `review`, `block`, `show`, `list`, `sprints`, `commit`, `serve`,
   `check`, …): "No such command". No aliases.
+- **`atm loop run <id> -- <command>`** (formerly `atm run`, T-437): atm runs no command it is given (I24,
+  `docs/security-architecture.md`); `atm claim hold` replaces it.
 - **`atm2`** and its launcher: the tree is `atm`.
 
 ### Docs

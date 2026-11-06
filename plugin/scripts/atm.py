@@ -2672,6 +2672,17 @@ def pid_alive(pid):
     return not is_zombie(pid)
 
 
+def process_started(pid):
+    """When process `pid` started, as `ps` says it (macOS and Linux), or None when there is no such process: with its
+    pid, it tells a process from a later one that got the same pid. `ps` is the one command run, with a number."""
+    try:
+        result = subprocess.run(["ps", "-o", "lstart=", "-p", str(int(pid))], capture_output=True, text=True)
+    except OSError:
+        return None
+    started = result.stdout.strip()
+    return started if result.returncode == 0 and started else None
+
+
 WHOAMI = "/__atm/whoami"
 
 
@@ -8540,8 +8551,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
 
 def renew_lease(project, task_id, expire=True):
-    """Extend the actor's lease on a task (`atm heartbeat`; `atm run` with `expire` false: it renews a live claim and
-    lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
+    """Extend the actor's lease on a task (`atm claim heartbeat`; `atm claim hold`'s watcher with `expire` false: it
+    renews a live claim and lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
     lease expired) or another agent holds it."""
     agent = project.actor
 
@@ -11037,7 +11048,13 @@ LIST_OPTIONS = ("questions", "answers")
 
 
 # ==== cli/claims.py ====
-# What the claim commands read from a hook (`atm claim heartbeat --auto`, the plugin's PostToolUse hook).
+# What the claim commands do beyond atm-lib: read a hook's input (`atm claim heartbeat --auto`, the plugin's
+# PostToolUse hook), and hold a claim while a shell runs (`atm claim hold`, T-437).
+
+# `atm claim hold`: how long a watcher may hold a claim, by default and at most
+HOLD_MAX_MINUTES = 240.0
+HOLD_LIMIT_MINUTES = 720.0
+
 
 def hook_input():
     """The JSON a Claude Code hook gets on stdin ({session_id, cwd, ...}), or {}."""
@@ -11048,6 +11065,69 @@ def hook_input():
     except ValueError:
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def hold_claim(project, task_id, max_minutes, every=None):
+    """`atm claim hold <id>`: renew the actor's claim now (refused, before anything else, when it isn't theirs), then
+    leave a watcher behind that renews it while the shell that ran atm lives (atm's parent: the launchers exec), and
+    return at once. The watcher stops when that process ends (or another one gets its pid: its start time differs),
+    when a renewal fails (the claim was released, finished or taken over), or after `max_minutes`. It runs nothing:
+    the agent runs its command itself, after this one. Returns {task, claim, watcher, watching, until}."""
+    renewed = renew_lease(project, task_id)
+    interval = every if every is not None else max(60.0, renewed["minutes"] * 60 / 3)
+    shell = os.getppid()
+    started = process_started(shell)
+    deadline = time.time() + max_minutes * 60
+    actor, cwd = project.actor, os.getcwd()
+
+    def watch():
+        while True:
+            left = deadline - time.time()
+            if left <= 0:
+                return
+            time.sleep(min(interval, left))
+            if time.time() >= deadline or not pid_alive(shell) or process_started(shell) != started:
+                return
+            try:
+                renew_lease(open_project(cwd, actor), task_id, expire=False)
+            except Exception:  # released, finished, taken over, or the project is gone: the claim lapses as usual
+                return
+
+    until = datetime.fromtimestamp(deadline, timezone.utc).replace(microsecond=0)
+    return {
+        "task": task_id,
+        "claim": renewed["claim"],
+        "watcher": detach(watch),
+        "watching": shell,
+        "until": until.isoformat().replace("+00:00", "Z"),
+    }
+
+
+def detach(body):
+    """Run `body` in a process of its own, detached from this one (a new session, stdin, stdout and stderr on
+    /dev/null, so the caller's pipes close when atm exits), and return its pid."""
+    read, write = os.pipe()
+    child = os.fork()
+    if child == 0:  # the intermediate: a new session, then the watcher, then gone (no zombie for the caller)
+        os.close(read)
+        os.setsid()
+        watcher = os.fork()
+        if watcher:
+            os.write(write, str(watcher).encode())
+            os._exit(0)
+        os.close(write)
+        null = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(null, fd)
+        try:
+            body()
+        finally:
+            os._exit(0)
+    os.close(write)
+    os.waitpid(child, 0)
+    pid = int(os.read(read, 32) or 0)
+    os.close(read)
+    return pid
 
 
 # ==== cli/edit.py ====
@@ -12095,54 +12175,6 @@ def loop_next(
         raise AtmExit(3)
 
 
-@loop_app.command("run")
-def loop_run(
-    ctx: typer.Context,
-    task_id: Annotated[str, typer.Argument(help="The task ID")],
-    cmd_and_args: Annotated[
-        Optional[list[str]], typer.Argument(help="The command and its args, after --: -- npm test --verbose")
-    ] = None,
-    every: Optional[float] = typer.Option(
-        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
-    ),
-    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
-) -> None:
-    """Run a long command while keeping your claim on a task alive; exits with the command's exit code."""
-    if not cmd_and_args:
-        raise Invalid("atm loop run needs a command after --: atm loop run <id> -- <command> [args...]")
-    if every is not None and every <= 0:
-        raise Invalid("--every must be more than 0 seconds")
-    if ctx.obj.get("dry_run", False):
-        out(f"[dry-run] would run {' '.join(cmd_and_args)} while keeping the claim on {task_id}")
-        return
-    project = open_project(os.getcwd(), agent_identity(agent))
-    renew = lambda: renew_lease(open_project(os.getcwd(), project.actor), task_id, expire=False)
-    minutes = renew()["minutes"]
-    interval = every if every is not None else max(60.0, minutes * 60 / 3)
-    try:
-        child = subprocess.Popen(cmd_and_args)
-    except OSError as e:
-        raise AtmFailure(f"can't run {cmd_and_args[0]}: {e.strerror}", 127)
-    # Renewed from this (the main) thread between waits: the lock uses signals, which only work here
-    renewing = True
-    while True:
-        try:
-            code = child.wait(timeout=interval)
-            break
-        except subprocess.TimeoutExpired:
-            pass
-        except KeyboardInterrupt:  # the command got the same interrupt; wait for it to end
-            continue
-        if renewing:
-            try:
-                renew()
-            except Exception as e:  # never stops the command; say so once and stop renewing
-                sys.stderr.write(f"atm loop run: stopped renewing the claim on {task_id}: {e}\n")
-                renewing = False
-    if code:
-        raise AtmExit(128 - code if code < 0 else code)  # a signal -N ends like a shell's 128+N
-
-
 # ---------------------------------------------------------------------------
 # claim group
 # ---------------------------------------------------------------------------
@@ -12211,6 +12243,37 @@ def claim_heartbeat(
         out(to_json(claim))
     else:
         out(f"{task_id}: lease extended to {claim['lease_expires_at']}")
+
+
+@claim_app.command("hold")
+def claim_hold(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    max_minutes: float = typer.Option(
+        HOLD_MAX_MINUTES, "--max", metavar="MINUTES", help=f"Stop after this long at most (up to {HOLD_LIMIT_MINUTES})"
+    ),
+    every: Optional[float] = typer.Option(
+        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
+) -> None:
+    """Keep your claim alive while the shell that runs this lives: `atm claim hold T-1 && npm test`. atm runs nothing:
+    a watcher renews the claim until that shell ends, the claim is released or finished, or --max is up."""
+    if not 0 < max_minutes <= HOLD_LIMIT_MINUTES:
+        raise Invalid(f"--max must be more than 0 and at most {HOLD_LIMIT_MINUTES} minutes")
+    if every is not None and every <= 0:
+        raise Invalid("--every must be more than 0 seconds")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would hold the claim on {task_id} while this shell runs")
+        return
+    held = hold_claim(open_project(os.getcwd(), agent_identity(agent)), task_id, max_minutes, every)
+    if ctx.obj.get("json_out", False):
+        out(to_json(held))
+    else:
+        out(
+            f"{task_id}: holding the claim while this shell runs (pid {held['watching']}), until {held['until']} at "
+            f"most; lease now to {held['claim']['lease_expires_at']}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -13283,7 +13346,7 @@ def leading_dir(argv):
 
 def global_first(argv):
     """argv with the tree's own options (GLOBAL_FLAGS) first, wherever they were given; what follows `--` (the command
-    `loop run` runs) is left as it is."""
+    a program's, never atm's) is left as it is."""
     split = argv.index("--") if "--" in argv else len(argv)
     head, tail = argv[:split], argv[split:]
     flags = [a for a in head if a in GLOBAL_FLAGS]

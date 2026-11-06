@@ -9,6 +9,7 @@ The short version, for people using atm. The full list of changes, for developer
 - Approving a review, or asking for changes, is always your decision: agents ask you before doing either.
 - Your shell can complete atm's commands, task IDs and sprint names as you type.
 - Nothing to install: everything atm needs comes with the plugin.
+- atm never runs commands for an agent: agents run their own, each with your permission rules.
 
 ## [0.30.0] - 2026-11-04
 

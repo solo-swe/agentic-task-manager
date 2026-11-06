@@ -141,12 +141,23 @@ describe('options that go anywhere, and errors', () => {
     });
   });
 
-  test('what follows -- is left alone, --json included', () => {
+  test('atm runs no command it is given: there is no loop run, and no command takes one (T-437)', () => {
     inProject(SETUP, (root) => {
       atm(['task', 'state', 'T-1', 'in_progress'], root);
-      const r = atm(['loop', 'run', 'T-1', '--', 'sh', '-c', 'echo "args: $*"', 'sh', '--json'], root);
-      assert.equal(r.code, 0, r.stderr);
-      assert.equal(r.stdout, 'args: --json\n');
+      const marker = path.join(root, 'ran');
+      const r = atm(['loop', 'run', 'T-1', '--', 'touch', marker], root);
+      assert.equal(r.code, 2);
+      assert.match(r.stderr, /^atm: No such command 'run'/);
+      assert.equal(fs.existsSync(marker), false);
+      const loop = atm(['loop', '--help'], root);
+      assert.deepEqual(
+        loop.stdout
+          .split('Commands:\n')[1]
+          .split('\n')
+          .map((line) => /^ {2}(\S+)/.exec(line)?.[1])
+          .filter(Boolean),
+        ['next'],
+      );
     });
   });
 });

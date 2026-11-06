@@ -214,7 +214,7 @@ The `task state` command unifies all state transitions:
 |------------|----------|-----------|---------|
 | `loop next` | `next` | `--sprint`, `--tasks`, `--all`, `--backlog`, `--type`, `--with-user`, `--claim`, `--json` | next task to work on |
 | `loop start` | `next --claim` | id | start and claim next task |
-| `loop run <id> -- cmd` | `run` | id, `--every`, command | run long command keeping claim alive |
+| ~~`loop run <id> -- cmd`~~ | `run` | id, `--every`, command | gone (T-437): `claim hold <id>` keeps a claim alive while the calling shell runs; atm runs no command |
 
 ### 4.3 `claim` — claim lifecycle (replaces `claims`, `heartbeat`)
 
@@ -397,7 +397,7 @@ Done in T-425, without the deprecation step (§11): the old flat commands were d
 | `atm claims` | `atm claim list` | |
 | `atm heartbeat` | `atm claim heartbeat` | `--auto`: the plugin's PostToolUse hook |
 | `atm next` | `atm loop next` | `--claim` → `atm loop start` or `atm task state <id> in_progress` |
-| `atm run` | `atm loop run` | |
+| `atm run` | `atm claim hold <id> && <command>` | T-437: atm runs no command |
 | `atm show` | `atm task details` | |
 | `atm list` | `atm task list` | |
 | `atm add` | `atm task add` | |
@@ -502,7 +502,7 @@ Only after all of the above pass for a phase do we proceed to the next phase.
 - A review's decisions are their own commands, `atm task review approve|request-changes <id>` (the decision first, so
   a permission rule can tell them apart, and no skill pre-approves them, I23); T-438 adds `reject`, guards the exits
   from review on the decision, and makes skip one transition from any open state.
-- `atm loop run` goes in T-437: atm runs no command it is given; `atm claim hold <id>` keeps a claim alive instead.
+- `atm loop run` is gone (T-437): atm runs no command it is given; `atm claim hold <id>` keeps a claim alive instead.
 
 ---
 

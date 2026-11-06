@@ -5,6 +5,7 @@ import contextlib
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -163,6 +164,17 @@ def pid_alive(pid):
     except PermissionError:
         return True
     return not is_zombie(pid)
+
+
+def process_started(pid):
+    """When process `pid` started, as `ps` says it (macOS and Linux), or None when there is no such process: with its
+    pid, it tells a process from a later one that got the same pid. `ps` is the one command run, with a number."""
+    try:
+        result = subprocess.run(["ps", "-o", "lstart=", "-p", str(int(pid))], capture_output=True, text=True)
+    except OSError:
+        return None
+    started = result.stdout.strip()
+    return started if result.returncode == 0 and started else None
 
 
 WHOAMI = "/__atm/whoami"

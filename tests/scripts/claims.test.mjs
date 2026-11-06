@@ -236,42 +236,103 @@ describe('claims', () => {
     }
   });
 
-  test('run keeps the claim alive while a long command runs, passing its output and exit code through (T-203)', () => {
-    const root = repo();
-    const store = path.join(root, '.git/atm/claims.json');
-    const claimOf = (id) => JSON.parse(fs.readFileSync(store, 'utf8')).claims[id];
-    try {
-      runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
-      assert.equal(claimOf('T-001').lease_expires_at, at(30));
-      // The command removes the claim's renewed_at, prints, waits and fails with 7. The time is fixed (ATM_NOW), so
-      // a renewed_at back in the store afterwards proves a renewal while the command ran.
-      const script = [
-        `const fs = require('fs'); const f = ${JSON.stringify(store)};`,
-        `const s = JSON.parse(fs.readFileSync(f, 'utf8')); delete s.claims['T-001'].renewed_at;`,
-        `fs.writeFileSync(f, JSON.stringify(s)); console.log('working');`,
-        `setTimeout(() => process.exit(7), 1500);`,
-      ].join(' ');
-      const r = runAtm(['loop', 'run', 'T-001', '--every', '0.3', '--', 'node', '-e', script], root, as('alice', 20));
-      assert.deepEqual([r.code, r.stdout, r.stderr], [7, 'working\n', '']);
-      assert.equal(claimOf('T-001').lease_expires_at, at(50));
-      assert.equal(claimOf('T-001').renewed_at, at(20));
+  describe('claim hold keeps the claim alive while its shell runs, and runs nothing (T-437)', () => {
+    const storeOf = (root) => path.join(root, '.git/atm/claims.json');
+    const claimOf = (root, id) => JSON.parse(fs.readFileSync(storeOf(root), 'utf8')).claims[id];
+    /** Remove the claim's renewed_at: the time is fixed (ATM_NOW), so one back in the store proves a renewal since. */
+    const forget = (root) => {
+      const s = JSON.parse(fs.readFileSync(storeOf(root), 'utf8'));
+      delete s.claims['T-001'].renewed_at;
+      fs.writeFileSync(storeOf(root), JSON.stringify(s));
+    };
+    const alive = (pid) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const until = (check, ms = 5000) => {
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        if (check()) return true;
+        spawnSync('sleep', ['0.1']);
+      }
+      return check();
+    };
+    /** `sh -c 'atm claim hold T-001 <options> --json > held.json; <then>'`, as an agent's Bash call runs it: the shell is
+     * the watcher's to follow. Returns {code, held} once the shell has ended. */
+    const shell = (root, options, then, minutes) => {
+      const held = path.join(root, 'held.json');
+      const line = `"$ATM" claim hold T-001 ${options} --json > '${held}' && ${then}`;
+      const r = spawnSync('sh', ['-c', line], {
+        cwd: root,
+        encoding: 'utf8',
+        env: { ...baseEnv(), ATM, ...as('alice', minutes) },
+      });
+      return {
+        code: r.status,
+        stderr: r.stderr,
+        held: fs.existsSync(held) ? JSON.parse(fs.readFileSync(held, 'utf8') || 'null') : null,
+      };
+    };
 
-      // Someone else's claim, or none: refused before the command runs
-      const marker = path.join(root, 'ran');
-      const touch = ['--', 'node', '-e', `require('fs').writeFileSync(${JSON.stringify(marker)}, '')`];
-      const bob = runAtm(['loop', 'run', 'T-001', ...touch], root, as('bob', 21));
-      assert.equal(bob.code, 4);
-      assert.match(bob.stderr, /claimed by alice/);
-      assert.equal(runAtm(['loop', 'run', 'T-002', ...touch], root, as('alice', 21)).code, 4);
-      assert.equal(fs.existsSync(marker), false);
-      // A command that succeeds: exit 0; without a command: a usage error
-      assert.equal(runAtm(['loop', 'run', 'T-001', '--', 'node', '-e', '0'], root, as('alice', 22)).code, 0);
-      const usage = runAtm(['loop', 'run', 'T-001'], root, as('alice', 22));
-      assert.equal(usage.code, 2);
-      assert.match(usage.stderr, /needs a command after --/);
-    } finally {
-      removeDir(root);
-    }
+    test('it renews while the shell lives, and its watcher ends with the shell', () => {
+      const root = repo();
+      try {
+        runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
+        // The shell forgets the renewal hold made, then waits: a renewal while it waits puts renewed_at back
+        const forgetIt = `node -e "const fs=require('fs');const f='${storeOf(root)}';const s=JSON.parse(fs.readFileSync(f,'utf8'));delete s.claims['T-001'].renewed_at;fs.writeFileSync(f,JSON.stringify(s))"`;
+        const r = shell(root, '--every 0.3', `${forgetIt} && sleep 1.5`, 20);
+        assert.equal(r.code, 0, r.stderr);
+        assert.equal(r.held.task, 'T-001');
+        assert.equal(r.held.claim.lease_expires_at, at(50));
+        assert.equal(claimOf(root, 'T-001').renewed_at, at(20));
+        // The shell is gone: so is the watcher, within one interval
+        assert.ok(
+          until(() => !alive(r.held.watcher)),
+          'the watcher should end with its shell',
+        );
+      } finally {
+        removeDir(root);
+      }
+    });
+
+    test('it stops at --max, and when the claim is released', () => {
+      const root = repo();
+      try {
+        runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
+        // --max 0.01 (0.6 s) while the shell waits 2 s: the watcher stops first
+        const capped = shell(root, '--every 0.2 --max 0.01', 'sleep 2', 1);
+        assert.equal(capped.code, 0, capped.stderr);
+        assert.ok(!alive(capped.held.watcher), 'the watcher should stop at --max');
+        // Released while the shell still waits: the next renewal fails, and the watcher ends
+        const released = shell(root, '--every 0.2', `"$ATM" task state T-001 todo && sleep 1.5`, 2);
+        assert.equal(released.code, 0, released.stderr);
+        assert.equal(claimOf(root, 'T-001'), undefined);
+        assert.ok(until(() => !alive(released.held.watcher)));
+      } finally {
+        removeDir(root);
+      }
+    });
+
+    test('someone else’s claim, or none, is refused before any watcher starts; --max is bounded', () => {
+      const root = repo();
+      try {
+        runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
+        const bob = runAtm(['claim', 'hold', 'T-001'], root, as('bob', 1));
+        assert.equal(bob.code, 4);
+        assert.match(bob.stderr, /claimed by alice/);
+        assert.equal(runAtm(['claim', 'hold', 'T-002'], root, as('alice', 1)).code, 4);
+        for (const max of ['0', '721'])
+          assert.equal(runAtm(['claim', 'hold', 'T-001', '--max', max], root, as('alice', 1)).code, 2);
+        forget(root);
+        assert.equal(claimOf(root, 'T-001').renewed_at, undefined);
+      } finally {
+        removeDir(root);
+      }
+    });
   });
 
   test('a task blocked or in review in one worktree waits in all of them, and is decided from any (T-204)', () => {

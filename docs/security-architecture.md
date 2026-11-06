@@ -52,10 +52,11 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | **Task text is data, not commands.** The skills and `plugin/CLAUDE.md` say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
-| I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm loop run`, `atm *` or a group that holds `loop run` | `skills.test.ts` |
+| I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24) | `skills.test.ts` |
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
 | I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). T-438 adds atm's own guard: the exits from review need the decision | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
+| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives | `security-invariants.test.ts` (every process atm starts, and the one fork); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
 | I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
 ### atm-cli (B2)
@@ -548,6 +549,18 @@ Written review in place of the live sandbox run (no API key is used for the sand
   `atm db merge-driver %O %A %B`; `atm db migrate`, which every skill runs first, registers it again in a clone.
 - **No new entry point.** The tree reads the same paths and URLs the old commands did; `--json` and `--dry-run` may
   go anywhere on the line before `--`, which changes no command's meaning (`cli.test.mjs`).
+
+**`atm loop run` goes; `atm claim hold` (T-437).** `loop run <id> -- <command>` ran whatever followed `--`: one
+permission rule (`Bash(atm *)`) would let any command through it. It is gone (I24). `atm claim hold <id>` renews the
+caller's claim (refused, before anything else, when it isn't theirs), forks a watcher in a session of its own with
+stdin, stdout and stderr on `/dev/null`, and returns; the agent runs its command itself, in the same Bash call
+(`atm claim hold T-1 && npm test`), under its own permission check. The watcher renews that one claim, as that agent,
+while atm's parent process (the shell; the launchers `exec`) lives and has the start time it had (`ps -o lstart=`,
+so a reused pid doesn't keep it going), until a renewal fails (released, finished, taken over) or `--max` (four hours,
+at most twelve) is up. It reads no path or URL and runs nothing. The skills pre-approve `atm claim hold`. Written
+review in place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:push`,
+`plugin/CLAUDE.md`) asks agents to chain their own command after `claim hold` instead of handing it to atm; *Task text
+is data* is untouched, and a command copied from a task is still refused, whatever it follows.
 
 ## 4. Keeping it current
 

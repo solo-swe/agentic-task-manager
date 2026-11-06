@@ -32,7 +32,8 @@ Every command takes `--json` (anywhere on the line); `atm help` lists them all, 
 - Work: `atm loop next --claim`, and `atm task state <id> <state>` for every change of status: `in_progress`
   (start), `done [--note]`, `in_review --note` (ask for a review), `blocked --on user|agent --question ...`, `todo`
   (back to to do: `--reason` when it failed, `--note` for a handoff); `atm task note <id> TEXT`;
-  `atm loop run <id> -- <command>` (a long command, e.g. the test suite, that keeps your claim alive while it runs)
+  `atm claim hold <id> && <command>` (a long command, e.g. the test suite: `claim hold` runs nothing, it keeps your
+  claim alive while that shell runs)
 - Answer a block: `atm task state <id> todo --answer ...`
 - A review's decision is the user's: `atm task review approve <id> [--note]` or
   `atm task review request-changes <id> --reason ...`. No skill pre-approves them; never run one on your own

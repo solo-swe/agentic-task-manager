@@ -656,8 +656,9 @@ Merge each branch back as usual (or open a PR per branch).
   answered from any worktree: the one where the task waits picks the answer up with its next atm command. The
   dashboard shows every worktree's tasks and claims on the project's board, before anything merges.
 - **Leases.** A claim lasts 30 minutes (`"lease_minutes"` in `tasks.json`'s `meta` changes the length) and the
-  plugin's hook renews it while the agent works. A long command (a full test suite, a build) runs as
-  `atm loop run <id> -- <command>`, which keeps the claim alive while it runs. If an agent crashes, its task goes back to
+  plugin's hook renews it while the agent works. A long command (a full test suite, a build) runs after
+  `atm claim hold <id>` in the same shell (`atm claim hold T-1 && npm test`): atm runs nothing, it keeps the claim
+  alive while that shell runs. If an agent crashes, its task goes back to
   `todo` when the lease runs out, with a failure note saying whose lease expired.
 - **Merging `tasks.json`.** A git merge driver (registered automatically) merges `tasks.json` task by task. Status
   changes from different branches combine (the further-along status wins, e.g. `done` over `in_progress`). Tasks

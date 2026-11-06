@@ -4,7 +4,7 @@ description: >
   Push the work: push the branch (direct) or open or update its pull request (pull-request), watch CI, fix
   failures until it is green, and record PRs and merges on the tasks. Use when the user says "push", "ship it",
   "open a PR", "push and watch CI", or "get CI green".
-allowed-tools: Bash(atm project workflow:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm vcs commit:*), Bash(atm vcs pr:*), Bash(atm vcs pushed:*)
+allowed-tools: Bash(atm project workflow:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm vcs commit:*), Bash(atm vcs pr:*), Bash(atm vcs pushed:*), Bash(atm claim hold:*)
 ---
 
 # Push
@@ -98,7 +98,7 @@ even in auto mode.
   instead of reporting a failure.
 - To wait for a run: `gh run watch <run-id> --exit-status`, run in the background, and continue when it finishes. If
   you hold a claim on a task while you wait (a push in the middle of a loop), wait with
-  `atm loop run <id> -- gh run watch <run-id> --exit-status`, so the claim doesn't expire during the wait.
+  `atm claim hold <id> && gh run watch <run-id> --exit-status`, so the claim doesn't expire during the wait.
 
 ## Step 6: On failure
 

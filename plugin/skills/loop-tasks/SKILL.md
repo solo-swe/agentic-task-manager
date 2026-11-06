@@ -7,7 +7,7 @@ description: >
   auto-commit, push strategies, a type filter, and pause-between-tasks mode.
   Use when the user says "loop tasks", "do all tasks", "run the loop",
   "Ralph Wiggum it", or "automate the tasks".
-allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint list:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*)
+allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint list:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*)
 ---
 
 # Loop Tasks — Ralph Wiggum Mode 🫠
@@ -119,9 +119,9 @@ errors (the message says what).
 2. Get work only from `atm loop next --claim` (or `atm task state <id> in_progress`).
 3. Your claim's lease (30 minutes by default) is renewed by the plugin's hook while you work; if you stop, it runs
    out and the task goes back to `todo` for someone else (`atm claim heartbeat <id>` renews it by hand). The hook renews
-   only after a tool call, so run long commands (a full test suite, a build, waiting on CI) as
-   `atm loop run <id> -- <command> [args...]`: it keeps the claim alive while the command runs. It isn't pre-approved
-   (it runs any command), so it gets the same permission check as the command itself.
+   only after a tool call, so start long commands (a full test suite, a build, waiting on CI) after
+   `atm claim hold <id>`, in the same Bash call: `atm claim hold <id> && <command>`. It runs nothing: a watcher renews
+   the claim while that shell lives (four hours at most); the command is yours, with its own permission check.
 4. **Commit first, then finish.** Commit with `atm vcs commit <id> --file <path> ...` while the task is still in
    progress, naming every file you changed for the task: it commits exactly those plus `tasks.json`. Never
    `git add -A` or `git add .`: another agent's unfinished work may be in the same working tree. Only then finish with
@@ -195,7 +195,7 @@ while true:
 
     4. VERIFY the task:
        - Run build/test/lint if available (same as /atm:do-task Step 6); a long one as
-         `atm loop run $TASK_ID -- <command>`, so the claim stays alive while it runs
+         `atm claim hold $TASK_ID && <command>`, so the claim stays alive while it runs
        - If verification fails after 2 attempts:
          - `atm task state $TASK_ID todo --reason '<one line on what failed>'`
          - Log the failure

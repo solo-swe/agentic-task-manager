@@ -7,7 +7,6 @@ Design: docs/improving-atm-cli-ergonomics.md.
 """
 
 import os
-import subprocess
 import sys
 from typing import Annotated, Optional
 
@@ -64,7 +63,7 @@ from ..lib.settings import (
     set_repository,
 )
 from .archive import describe_ids, describe_kept
-from .claims import hook_input
+from .claims import HOLD_LIMIT_MINUTES, HOLD_MAX_MINUTES, hold_claim, hook_input
 from .code import describe_workflow
 from .components import moved_text
 from .edit import read_entries, suggestion_line
@@ -609,54 +608,6 @@ def loop_next(
         raise AtmExit(3)
 
 
-@loop_app.command("run")
-def loop_run(
-    ctx: typer.Context,
-    task_id: Annotated[str, typer.Argument(help="The task ID")],
-    cmd_and_args: Annotated[
-        Optional[list[str]], typer.Argument(help="The command and its args, after --: -- npm test --verbose")
-    ] = None,
-    every: Optional[float] = typer.Option(
-        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
-    ),
-    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
-) -> None:
-    """Run a long command while keeping your claim on a task alive; exits with the command's exit code."""
-    if not cmd_and_args:
-        raise Invalid("atm loop run needs a command after --: atm loop run <id> -- <command> [args...]")
-    if every is not None and every <= 0:
-        raise Invalid("--every must be more than 0 seconds")
-    if ctx.obj.get("dry_run", False):
-        out(f"[dry-run] would run {' '.join(cmd_and_args)} while keeping the claim on {task_id}")
-        return
-    project = open_project(os.getcwd(), agent_identity(agent))
-    renew = lambda: renew_lease(open_project(os.getcwd(), project.actor), task_id, expire=False)
-    minutes = renew()["minutes"]
-    interval = every if every is not None else max(60.0, minutes * 60 / 3)
-    try:
-        child = subprocess.Popen(cmd_and_args)
-    except OSError as e:
-        raise AtmFailure(f"can't run {cmd_and_args[0]}: {e.strerror}", 127)
-    # Renewed from this (the main) thread between waits: the lock uses signals, which only work here
-    renewing = True
-    while True:
-        try:
-            code = child.wait(timeout=interval)
-            break
-        except subprocess.TimeoutExpired:
-            pass
-        except KeyboardInterrupt:  # the command got the same interrupt; wait for it to end
-            continue
-        if renewing:
-            try:
-                renew()
-            except Exception as e:  # never stops the command; say so once and stop renewing
-                sys.stderr.write(f"atm loop run: stopped renewing the claim on {task_id}: {e}\n")
-                renewing = False
-    if code:
-        raise AtmExit(128 - code if code < 0 else code)  # a signal -N ends like a shell's 128+N
-
-
 # ---------------------------------------------------------------------------
 # claim group
 # ---------------------------------------------------------------------------
@@ -725,6 +676,37 @@ def claim_heartbeat(
         out(to_json(claim))
     else:
         out(f"{task_id}: lease extended to {claim['lease_expires_at']}")
+
+
+@claim_app.command("hold")
+def claim_hold(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    max_minutes: float = typer.Option(
+        HOLD_MAX_MINUTES, "--max", metavar="MINUTES", help=f"Stop after this long at most (up to {HOLD_LIMIT_MINUTES})"
+    ),
+    every: Optional[float] = typer.Option(
+        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
+) -> None:
+    """Keep your claim alive while the shell that runs this lives: `atm claim hold T-1 && npm test`. atm runs nothing:
+    a watcher renews the claim until that shell ends, the claim is released or finished, or --max is up."""
+    if not 0 < max_minutes <= HOLD_LIMIT_MINUTES:
+        raise Invalid(f"--max must be more than 0 and at most {HOLD_LIMIT_MINUTES} minutes")
+    if every is not None and every <= 0:
+        raise Invalid("--every must be more than 0 seconds")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would hold the claim on {task_id} while this shell runs")
+        return
+    held = hold_claim(open_project(os.getcwd(), agent_identity(agent)), task_id, max_minutes, every)
+    if ctx.obj.get("json_out", False):
+        out(to_json(held))
+    else:
+        out(
+            f"{task_id}: holding the claim while this shell runs (pid {held['watching']}), until {held['until']} at "
+            f"most; lease now to {held['claim']['lease_expires_at']}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1797,7 +1779,7 @@ def leading_dir(argv):
 
 def global_first(argv):
     """argv with the tree's own options (GLOBAL_FLAGS) first, wherever they were given; what follows `--` (the command
-    `loop run` runs) is left as it is."""
+    a program's, never atm's) is left as it is."""
     split = argv.index("--") if "--" in argv else len(argv)
     head, tail = argv[:split], argv[split:]
     flags = [a for a in head if a in GLOBAL_FLAGS]

@@ -50,8 +50,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
 
 def renew_lease(project, task_id, expire=True):
-    """Extend the actor's lease on a task (`atm heartbeat`; `atm run` with `expire` false: it renews a live claim and
-    lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
+    """Extend the actor's lease on a task (`atm claim heartbeat`; `atm claim hold`'s watcher with `expire` false: it
+    renews a live claim and lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
     lease expired) or another agent holds it."""
     agent = project.actor
 

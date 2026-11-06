@@ -4,7 +4,7 @@ description: >
   Execute a single task from tasks.json. Updates status to in_progress, does
   the work, runs verification, then marks done. Use when the user says
   "do task T-xxx", "work on task", "implement task", "pick a task", or "next task".
-allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*), Bash(atm db unarchive:*)
+allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*), Bash(atm db unarchive:*)
 ---
 
 # Do a Single Task
@@ -124,9 +124,9 @@ exactly those.
 Your claim has a lease (30 minutes by default); if it runs out, the task goes back to `todo` for others. The plugin's
 hook renews it after each of your tool calls, so you don't need to (`atm claim heartbeat $TASK_ID` does it by hand). A
 command that runs for many minutes (a full test suite, a build, waiting on CI), especially one you leave running in
-the background, makes no tool calls: run it as `atm loop run $TASK_ID -- <command> [args...]`, which keeps the claim
-alive while it runs and exits with the command's exit code. `atm loop run` is not pre-approved by this skill: it runs any
-command, so it goes through the same permission check as the command itself.
+the background, makes no tool calls: start it in the same Bash call after `atm claim hold $TASK_ID`, as
+`atm claim hold $TASK_ID && <command>`. `claim hold` runs nothing: it leaves a watcher that renews your claim while
+that shell lives (four hours at most), and returns at once; the command is yours, with its own permission check.
 
 While you work:
 - **A later task needs to change** (what you built changes its scope, its files or its dependencies): update it with
@@ -168,8 +168,8 @@ After implementation, verify the work:
 3. **Lint check**: If the project has a linter configured, run it on changed files.
 4. **Self-review**: Quickly review your changes for obvious issues — missing imports, typos, logic errors.
 
-Run a long check through `atm loop run $TASK_ID -- <command>` (e.g. `atm loop run $TASK_ID -- npm run verify`), so your claim
-doesn't expire while it runs.
+Run a long check after `atm claim hold $TASK_ID` in the same Bash call (e.g. `atm claim hold $TASK_ID && npm run
+verify`), so your claim doesn't expire while it runs.
 
 If verification fails:
 - Try to fix the issue (up to 2 attempts)
