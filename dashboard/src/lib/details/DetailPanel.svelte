@@ -515,8 +515,7 @@
 {/snippet}
 
 {#snippet depItem(arrow: string, id: string, name: string, status: string | undefined)}
-  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-  <div class="detail-dep-item" onclick={() => dashboard.showDetail(id)} title={name}>
+  <button type="button" class="detail-dep-item" onclick={() => dashboard.showDetail(id)} title={name}>
     <span class="detail-dep-arrow">{arrow}</span>
     <strong>{id}</strong>
     <span class="detail-dep-name">{name}</span>
@@ -526,5 +525,5 @@
         >{statusLabel(dashboard.vocab, status)}</span
       >
     {/if}
-  </div>
+  </button>
 {/snippet}

@@ -42,8 +42,7 @@
 <div class="task-card status-{task.status} kind-{kind ?? 'none'}" id="task-{task.id}" data-id={task.id}>
   <div class="task-id">{task.id}</div>
   <div class="task-body">
-    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-    <div class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</div>
+    <button type="button" class="task-name" onclick={() => dashboard.showDetail(task.id)}>{task.name}</button>
     {#if excerpt}<div class="task-excerpt">{excerpt}</div>{/if}
     <div class="task-meta">
       {#if showSprint}
@@ -68,8 +67,11 @@
       {#if deps.length}
         <span class="deps-label">needs:</span>
         {#each deps as dep (dep)}
-          <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions, a11y_missing_attribute -->
-          <a class="dep-link" title={dashboard.taskMap.get(dep)?.name || dep} onclick={() => scrollToTask(dep)}>{dep}</a
+          <button
+            type="button"
+            class="dep-link"
+            title={dashboard.taskMap.get(dep)?.name || dep}
+            onclick={() => scrollToTask(dep)}>{dep}</button
           >
         {/each}
       {/if}

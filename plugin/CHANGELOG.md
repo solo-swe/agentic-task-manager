@@ -81,6 +81,10 @@ The sprint *CLI ergonomics* (release 0.31.0).
   the nearest step (105 of 571; mostly 1 to 2 px), radii of 16 px and over are pills; text sizes were replaced where
   one matched, the others kept, and `em` values and layout sizes stay as they are. `tests/unit/tokens.test.ts` keeps
   it so.
+- **What can be clicked on the dashboard is a control** (T-434): a card's task name and its dependency links, and
+  the details panel's dependency rows, are buttons (reached with Tab, pressed with Enter), looking as before.
+  `tests/unit/accessible-controls.test.ts` fails on a click handler on a `div` or `span` (but a card that is a
+  button by ARIA, and three containers, each with its reason) and on an icon-only button without `aria-label`.
 - **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
   `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
   version is the plugin's, so the same sources build the same page.

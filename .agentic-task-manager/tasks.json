@@ -21095,7 +21095,7 @@
       "description": "Gather the dashboard's design values into one tokens file of CSS custom properties (colours, spacing, radii, type), which the themes in `src/themes/*.css` set, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Components use the tokens in their scoped `<style>`; no inline colours and no literal spacing or radii where a token fits.\n\n## Tests\nExtend `tests/unit/no-hardcoded-colours.test.ts` (or a sibling) to catch literal spacing and radii outside the tokens file; `theme-contrast.test.ts` passes; the functional e2e suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-430"
       ],
@@ -21106,7 +21106,7 @@
         "dashboard/tests/unit/no-hardcoded-colours.test.ts"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:26:12Z",
+      "updated_at": "2026-11-06T18:35:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21132,6 +21132,12 @@
           "kind": "answer",
           "text": "Tokens for spacing and radii: a scale (spacing 2, 4, 6, 8, 12, 16, 24, 32 px; radii 4, 6, 8, 12 px, pill, round), the odd values snapped to it (most move 1 to 2 px; the screenshots change, regenerated in the release task), done by a script that rewrites the values? Or one token per value used today (nothing visible changes, but no real scale)? → Snap every spacing and radius value to the scale: spacing 2/4/6/8/10/12/16/24px (plus larger steps where the tail needs them), radii a few steps plus pill and round. Visible 1–2px changes are accepted; the screenshots are regenerated in the release task. `em` values and large layout sizes (component widths and heights) stay outside the tokens.; em-based values (relative to the text, e.g. `0.3em`) and the large layout widths (40 to 64 px): keep them as they are, outside the tokens? → (no answer)",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:35:53Z",
+          "kind": "review",
+          "text": "`src/tokens.css`: colours (moved), `--space-1..10`, `--radius-sm|md|lg|xl|pill|round`, `--text-*`, `--font-sans`. 571 spacing values tokenised (105 snapped, 1–2px), 141 radii, 212 text sizes (exact only). `tokens.test.ts` guards it. Review: the screenshots (regenerated in the release task).",
+          "by": "claude:34798264"
         }
       ],
       "blocks": [
@@ -21142,7 +21148,11 @@
         }
       ],
       "started_at": "2026-11-06T18:26:12Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "cce41a89a58955707ef51b72616d21b48cf9d8a1",
+      "completed_at": "2026-11-06T18:35:53Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-434",
@@ -21156,7 +21166,7 @@
       "description": "Turn the click handlers on `div` and `span` elements (4 when this task was written) into real `<button>` or `<a>` elements, and check every icon-only button has an `aria-label`, as the [Svelte guide](docs/guides/svelte.md#accessibility) asks. Keep the look with the existing tokens.\n\n## Tests\nA unit test that scans the components and fails on a click handler on `div`/`span` or an icon-only button without `aria-label`; the functional e2e suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-431"
       ],
@@ -21165,7 +21175,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:55Z",
+      "updated_at": "2026-11-06T18:35:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21178,7 +21188,9 @@
       "components": [
         "dashboard"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T18:35:57Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-435",
