@@ -20513,7 +20513,7 @@
       "description": "T-412 work item 3, [improving-atm-cli-ergonomics.md](docs/improving-atm-cli-ergonomics.md) §4.5 and §4.8. The commands people and agents use (`task`, `loop`, `claim`, `sprint`, `release`, `component`, `project`, `vcs`) stay at the top of `atm2 --help`; the ones git, hooks and the server call go out of the way:\n\n- `merge-driver` (git runs it) as `db merge-driver`, hidden; `db init` registers it, as now;\n- `heartbeat --auto` stays the hook's entry point;\n- `paths` is `project config`; `summary` (the dashboard's dev server reads it) goes under `project`, hidden;\n- `version` and `help` as top-level meta commands.\n\nUpdate the command tree and the old→new table (§8) in the doc.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-421"
       ],
@@ -20523,7 +20523,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T06:26:14Z",
+      "updated_at": "2026-11-06T06:34:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20539,7 +20539,19 @@
       "sprint": "CLI ergonomics",
       "review": "batch",
       "started_at": "2026-11-06T06:26:14Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "ddc314219483b7d9b5e714710aa1572996736818",
+      "completed_at": "2026-11-06T06:34:37Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:34:37Z",
+          "kind": "review",
+          "text": "Check `atm2 --help`: everyday groups, then Maintenance (`db`, `doctor`, `service`), then Meta (`help`, `version`, new). `db merge-driver` and `project summary` run but are hidden. The doc’s §4.5 now says why `merge-driver` can’t be absorbed into `init`, and its tree is atm2’s real one. Also check `common/core.py`: run from source, `PLUGIN_ROOT` is the checkout’s `plugin/` (it pointed at `atm-cli/atm`, which broke `version`). 576 tests pass.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-425",
@@ -20639,7 +20651,7 @@
       "description": "Move `dashboard/` from npm to pnpm, as the [Svelte guide](docs/guides/svelte.md#toolchain) asks.\n\n## Change\n- `pnpm-lock.yaml` replaces `package-lock.json` (same resolved versions where pnpm allows; `overrides` move to `pnpm.overrides`).\n- `package.json` gets `devEngines` pinning pnpm and Node.js 24 with `\"onFail\": \"download\"`, as in the guide.\n- The npm scripts, the Docker screenshot scripts (`test:e2e:visual`, `test:e2e:visual:update`), the `prepare` script, the pre-commit hook in `.githooks/` and CI's install steps use pnpm.\n- AGENTS.md: every `npm ci` / `npm run …` becomes the pnpm form; the rule \"install exactly the locked versions, never update the lockfile\" stays (`pnpm install --frozen-lockfile`).\n- Dependabot's npm ecosystem config keeps working with the pnpm lockfile.\n\n> [!NOTE]\n> The user approved the CI workflow and git hook changes this task needs, in the session of 2026-11-05. Change only the install and run steps; keep the pinning rules (actions by SHA, images by digest, read-only token).\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite and `pnpm run test:scripts` pass; CI is green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -20651,7 +20663,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:50Z",
+      "updated_at": "2026-11-06T06:38:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20665,7 +20677,22 @@
         "dashboard",
         "ci"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:34:41Z",
+      "started_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T06:38:04Z",
+          "kind": "note",
+          "text": "Redo, once unblocked: `devEngines` (pnpm 12.14.0, Node 24) in `dashboard/package.json`; `pnpm import`; the `minimatch` 11.0.1 override moves to `dashboard/pnpm-workspace.yaml` (`overrides:`; npm’s `overrides` aren’t read); `pnpm install`; remove `package-lock.json`. Under pnpm, `check`, unit tests (1022) and the build passed; only `compmd.js` changed (the integrity below). CI, the hook, the Docker scripts and AGENTS.md weren’t started.",
+          "by": "claude:34798264"
+        }
+      ],
+      "waiting_on": "user",
+      "questions": [
+        "With `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents: the pinned pnpm and Node first, then the packages. `@compmd/vite` 0.5.0 (the latest) reads the first document with `packages` (`dist/packs.js:142`), so the mermaid pack’s `integrity` becomes `null` in `compmd.js`: its pin is lost. Fix it in CompMD (read every document) and wait for that release, or migrate without `devEngines` for now, or something else?"
+      ],
+      "blocked_at": "2026-11-06T06:38:05Z"
     },
     {
       "id": "T-428",
