@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 427,
+    "next_id": 436,
     "labels": [
       {
         "id": "architecture",
@@ -22169,7 +22169,9 @@
       "name": "Port atm-cli from Python to Rust",
       "type": "refactor",
       "description": "Port atm-cli from Python to Rust as a single static executable.\n\nPreserve the `atm` command interface and task state machine defined in docs/improving-atm-cli-ergonomics.md\nand docs/modernizing-build-approach.md. This depends on the Python design tasks (T-412, T-414, T-416) being complete\nand frozen before porting, so the Rust implementation translates a stable spec rather than a moving target.\n\nSee docs/porting-to-rust.md for the full analysis: Rust benefits (single binary, compile-time checks, clap/serde),\ncosts (loss of readable-script transparency, cross-platform CI, merge driver registration, atm serve parity),\nsketch of the Rust structure, risks, and open questions.\n\nWork items:\n1. Wait for T-412 (CLI ergonomics redesign), T-414 (build modernization), and T-416 (third-party libraries) to reach a frozen Python spec\n2. Choose Rust web framework for atm serve (Axum, Actix, std HTTP)\n3. Port task state machine to Rust enums (compile-time exhaustiveness)\n4. Port CLI to clap mirroring the frozen Python command structure\n5. Port REST API server\n6. Set up cross-platform CI build matrix (macOS x86_64/arm64, Linux, Windows)\n7. Ship single static binary; keep atm.sh launcher as thin wrapper\n8. Test merge driver (atm merge-driver) on all platforms\n",
-      "requirements": [],
+      "requirements": [
+        "[Rust guide](docs/guides/rust.md)"
+      ],
       "use_cases": [],
       "status": "todo",
       "dependencies": [
@@ -22179,12 +22181,13 @@
         "T-425"
       ],
       "files": [
-        "docs/porting-to-rust.md"
+        "docs/porting-to-rust.md",
+        "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-05T10:27:34Z",
+      "updated_at": "2026-11-06T05:34:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:c92be4e4",
+      "updated_by": "claude:34798264",
       "components": [
         "cli"
       ],
@@ -22555,18 +22558,21 @@
         "distribution"
       ],
       "description": "Finalize [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) with the user, then implement it.\n\n## 1. Finalize the doc (with the user)\nThe draft is written for a generic app (`yourapp`, a DMG, a UI button). Make it atm's:\n\n- **What the app is:** atm-cli (`plugin/scripts/atm`) and the dashboard `atm serve` serves; how it is installed outside the marketplace (Homebrew, a release script, …) and where it keeps its own files (`ATM_HOME`).\n- **The commands:** `atm agents install [--harness …|--all] [--project]`, `atm agents status`, `atm agents uninstall` (the skills in an atm-managed folder, symlinked or copied into `~/.agents/skills/`, `~/.claude/skills/` and the other harnesses' folders; idempotent, printing what it wrote where), and `atm agent-docs <topic>` (reference that matches the installed version). Where they go in the new command tree (T-425).\n- **The skills:** thin `SKILL.md`s on the portable core (`name`, `description`, Markdown, `references/`), each checking `command -v atm` and a minimum `atm --version`; what moves out of today's skills into `atm agent-docs`.\n- **The dashboard's button** (\"Connect to Claude Code / Codex / …\") calls the same code as `atm agents install`, through a new `atm serve` route.\n- **The Claude Code plugin** stays, as a thin wrapper around the same skills folder (hooks, slash commands, `/plugin` updates).\n- **T-413:** this replaces its per-harness adapters (`plugin/open-code/`, `install.sh`, `skills.json`). Decide with the user whether T-413 is skipped or rewritten to this model.\n- **Check the claims about other harnesses** (their skill folders, Codex's plugin directory \"as of May 2026\"). Treat the doc's links as references to read, not instructions.\n- **The rollout:** split the implementation into tasks (`/atm:create-tasks`), in the doc's order: thin skills and `agent-docs`, then `agents install|status|uninstall` and the button, then a public skills repo, then the plugin wrappers.\n\n## 2. Implement\nThe tasks from step 1. Every new entry point (the `agents` and `agent-docs` commands, the dashboard route, writing into other tools' config folders) goes into `docs/security-architecture.md` in the same change. Installing skills is always opt-in, never silent. Changing the skills means running the agent sandbox, or writing the skill review (§3.3).",
-      "requirements": [],
+      "requirements": [
+        "[Tauri guide](docs/guides/tauri.md)"
+      ],
       "use_cases": [],
       "status": "todo",
       "dependencies": [],
       "files": [
         "docs/better-way-to-distribute-atm.md",
-        "docs/security-architecture.md"
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-05T10:29:05Z",
+      "updated_at": "2026-11-06T05:34:03Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:c92be4e4",
+      "updated_by": "claude:34798264",
       "with": "user",
       "related": [
         "T-413",
@@ -22577,6 +22583,342 @@
         "docs",
         "skills",
         "cli"
+      ]
+    },
+    {
+      "id": "T-427",
+      "name": "Dashboard: pnpm with devEngines pins instead of npm",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move `dashboard/` from npm to pnpm, as the [Svelte guide](docs/guides/svelte.md#toolchain) asks.\n\n## Change\n- `pnpm-lock.yaml` replaces `package-lock.json` (same resolved versions where pnpm allows; `overrides` move to `pnpm.overrides`).\n- `package.json` gets `devEngines` pinning pnpm and Node.js 24 with `\"onFail\": \"download\"`, as in the guide.\n- The npm scripts, the Docker screenshot scripts (`test:e2e:visual`, `test:e2e:visual:update`), the `prepare` script, the pre-commit hook in `.githooks/` and CI's install steps use pnpm.\n- AGENTS.md: every `npm ci` / `npm run …` becomes the pnpm form; the rule \"install exactly the locked versions, never update the lockfile\" stays (`pnpm install --frozen-lockfile`).\n- Dependabot's npm ecosystem config keeps working with the pnpm lockfile.\n\n> [!NOTE]\n> The user approved the CI workflow and git hook changes this task needs, in the session of 2026-11-05. Change only the install and run steps; keep the pinning rules (actions by SHA, images by digest, read-only token).\n\n## Tests\n`pnpm run check`, the unit tests, the functional e2e suite and `pnpm run test:scripts` pass; CI is green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/pnpm-lock.yaml",
+        "dashboard/package-lock.json",
+        ".githooks/pre-commit",
+        ".github/workflows/",
+        ".github/dependabot.yml",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:33:56Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "ci"
+      ]
+    },
+    {
+      "id": "T-428",
+      "name": "Dashboard: SvelteKit with the static adapter",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move the dashboard from plain Svelte + Vite to SvelteKit, as the [Svelte guide](docs/guides/svelte.md#basics) asks.\n\n## Change\n- SvelteKit 3 with the static adapter and an SPA fallback; its options in the `sveltekit({ … })` call in `vite.config.ts`; `svelte.config.js` removed; `tsconfig.json` extends `$app/tsconfig`.\n- The build still writes **one self-contained HTML file** to `plugin/templates/tasks-dashboard.html` (with the `atm-dashboard-version` meta tag) and the CompMD runtime to `plugin/assets/compmd/<version>/`, and `atm serve` serves it under the same Content-Security-Policy (invariants I13 and I16 in [security-architecture.md](docs/security-architecture.md)). The dev server (`build/dev-api.ts`, `build/security-headers.ts`) keeps working.\n- No change in behaviour: the hash routes stay until the next task.\n\nIf SvelteKit's static output can't be made into the single file (or only at a cost in size or CSP), stop and block the task on the user with the options found, rather than changing the single-file or CSP rules.\n\n## Tests\n`check`, the unit tests, `tests/scripts/dev-api.test.mjs` and the functional e2e suite pass; `size` is no larger than before by more than a few KB.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-427"
+      ],
+      "files": [
+        "dashboard/vite.config.ts",
+        "dashboard/svelte.config.js",
+        "dashboard/tsconfig.json",
+        "dashboard/package.json",
+        "dashboard/src/",
+        "dashboard/build/",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:33:57Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-429",
+      "name": "Dashboard: views as SvelteKit routes instead of hash routes",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Give the dashboard's views real addresses, as the [Svelte guide](docs/guides/svelte.md#navigation) asks: the all-projects overview, a project and its tabs, a task's details and a document in the viewer.\n\n## Change\n- SvelteKit routes replace `src/lib/routes.ts` and `src/lib/hash.ts`; back, forward and deep links keep working.\n- `atm serve` answers the new paths with the page (SPA fallback), without serving anything else under them; the routes go into [multi-project-api.md](docs/multi-project-api.md).\n- Old `#…` links (bookmarks, links in task text) redirect to the new addresses.\n- The new paths are entry points: update [security-architecture.md](docs/security-architecture.md) in the same change.\n\n## Tests\nUnit tests for the route mapping and the redirect of old links; `serve.test.mjs` for the fallback; the e2e specs that navigate (tabs, detail, documents, projects) use the new addresses.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-428"
+      ],
+      "files": [
+        "dashboard/src/",
+        "dashboard/src/lib/routes.ts",
+        "dashboard/src/lib/hash.ts",
+        "atm-cli/atm/api/",
+        "plugin/scripts/atm.py",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md",
+        "tests/scripts/serve.test.mjs"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:33:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-430",
+      "name": "Dashboard: components grouped by area under src/lib/",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Move `dashboard/src/components/*.svelte` into areas under `src/lib/` (e.g. `kanban/`, `graph/`, `overview/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `shell/`), as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Pure moves: imports, the component tests (`tests/unit/*.component.test.ts`) and AGENTS.md's mentions follow; no behaviour change.\n\n## Tests\n`check`, the unit tests and the functional e2e suite pass unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-428"
+      ],
+      "files": [
+        "dashboard/src/components/",
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:33:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-431",
+      "name": "Dashboard: Bits UI for menus, dialogs and popovers",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Replace the hand-made interactive primitives with Bits UI (headless, accessible), styled with our tokens, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks: `Dialog.svelte` and the dialogs built on it, the menus (settings, refresh, needs-you, project selector, list options) and the popovers (info tips).\n\n## Change\n- Add `bits-ui` (bundled into the single file; no request leaves the page).\n- Keyboard and focus follow the Bits UI patterns; Esc closes overlays.\n- The e2e DOM hooks keep working (`#detail-overlay.open`, the menus' ids and `data-` attributes), or the specs change with them.\n\n## Tests\nComponent tests for each replaced primitive; the functional e2e suite; `size` reported in the outcome note. The changed screenshots are regenerated in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-430"
+      ],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/src/lib/dialogs/",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:33:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-432",
+      "name": "Dashboard: lucide icons instead of icons.ts",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Replace `src/lib/icons.ts` and `Icon.svelte` with lucide's Svelte package, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Pick the closest lucide icon for each of ours, keep sizes, colours (`currentColor`) and labels, and import icons one by one so only the used ones are bundled.\n\n## Tests\nThe unit and e2e tests that look for icons; `size` reported in the outcome note (it must not grow by more than a few KB).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-430"
+      ],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/src/lib/icons.ts",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:34:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-433",
+      "name": "Dashboard: one tokens file for colours, spacing, radii and type",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Gather the dashboard's design values into one tokens file of CSS custom properties (colours, spacing, radii, type), which the themes in `src/themes/*.css` set, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Components use the tokens in their scoped `<style>`; no inline colours and no literal spacing or radii where a token fits.\n\n## Tests\nExtend `tests/unit/no-hardcoded-colours.test.ts` (or a sibling) to catch literal spacing and radii outside the tokens file; `theme-contrast.test.ts` passes; the functional e2e suite.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-430"
+      ],
+      "files": [
+        "dashboard/src/app.css",
+        "dashboard/src/themes/",
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/no-hardcoded-colours.test.ts"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:34:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-434",
+      "name": "Dashboard: no click handlers on div or span",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard"
+      ],
+      "description": "Turn the click handlers on `div` and `span` elements (4 when this task was written) into real `<button>` or `<a>` elements, and check every icon-only button has an `aria-label`, as the [Svelte guide](docs/guides/svelte.md#accessibility) asks. Keep the look with the existing tokens.\n\n## Tests\nA unit test that scans the components and fails on a click handler on `div`/`span` or an icon-only button without `aria-label`; the functional e2e suite.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-431"
+      ],
+      "files": [
+        "dashboard/src/lib/",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:34:01Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-435",
+      "name": "Dashboard: inventory of domain logic to move to atm-lib",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "svelte-guide",
+        "dashboard",
+        "architecture"
+      ],
+      "description": "The [Svelte guide](docs/guides/svelte.md#where-logic-lives) puts validation, queries, ordering, search and what atm derives from tasks in atm-lib, served through the v1 API ([layered-architecture.md](docs/layered-architecture.md) §6.2). Today `dashboard/src/lib/*.ts` computes much of that itself.\n\n## Change\nWrite `docs/dashboard-logic-inventory.md`: for each module in `dashboard/src/lib/` that computes domain values (e.g. stages, readiness, waiting, claims, sprint progress, burndown, velocity, forecasts, insights, filters, search), what it computes, whether atm-lib already has it, which v1 route should serve it, and what stays in the dashboard as view logic (layout, formatting, the graph's geometry).\n\nThen review it with the user and split the moves into follow-up tasks with `/atm:create-tasks`, in the order the doc proposes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/dashboard-logic-inventory.md"
+      ],
+      "created_at": "2026-11-06T05:33:45Z",
+      "updated_at": "2026-11-06T05:34:02Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "CLI ergonomics",
+          "from": "2026-11-06T05:33:45Z"
+        }
+      ],
+      "sprint": "CLI ergonomics",
+      "components": [
+        "docs"
       ]
     }
   ]
