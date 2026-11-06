@@ -1772,6 +1772,23 @@ GLOBAL_FLAGS = ("--json", "-j", "--dry-run", "-n")
 # Commands that don't check for an outdated dashboard server first: service does it itself, git runs the merge
 # driver in the middle of a merge (the server process isn't a CLI command: atm.py --server, plugin/scripts/atm-serve)
 NO_REFRESH = (("service",), ("db", "merge-driver"), ("help",), ("version",), ("_lock-test",))
+# Commands that leave the caller's claims alone: those that work on no project, and the heartbeat, which renews its own
+NO_RENEW = NO_REFRESH + (("claim", "heartbeat"),)
+
+
+def renew_own_claims(argv, path):
+    """Every atm command an agent runs renews that agent's live claims, so they last while it works, in any harness,
+    with no hook (T-439, docs/porting-to-rust.md §4). As `claim heartbeat --auto`: only claims whose last renewal is
+    ten minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the
+    way of the command itself."""
+    if not path or any(path[: len(skip)] == skip for skip in NO_RENEW):
+        return
+    if any(a == "--agent" or a.startswith("--agent=") for a in argv[: argv.index("--") if "--" in argv else len(argv)]):
+        return
+    try:
+        renew_due_claims(open_project(os.getcwd(), agent_identity()))
+    except Exception:  # noqa: BLE001
+        pass  # no project here, or one atm can't read: the command says so itself
 
 
 def report(error, as_json):
@@ -1824,6 +1841,7 @@ def main(argv):
                 refresh_server()  # after a plugin update, the first atm command brings the dashboard server along
             except Exception:
                 pass  # never in the way of the command itself
+        renew_own_claims(argv, path)
         code = command().main(args=argv, prog_name="atm", standalone_mode=False)
         return code if isinstance(code, int) else 0
     except click.UsageError as e:

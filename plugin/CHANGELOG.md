@@ -4,6 +4,17 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.32.0] - 2026-11-06
+
+The sprint *Rust and distribution*: the groundwork for atm as an app that installs its own skills
+(`docs/better-way-to-distribute-atm.md`) and for the Rust port (`docs/porting-to-rust.md`).
+
+### Changed
+- **Claims last without the plugin's hooks** (T-439): every atm command an agent runs renews its live claims once
+  their last renewal is ten minutes old (as `claim heartbeat --auto` does; a command with `--agent` renews nobody's),
+  and the default lease is two hours instead of 30 minutes (`meta.lease_minutes` still sets a project's own). A task
+  back from review stays its agent's for that long too.
+
 ## [0.31.0] - 2026-11-06
 
 The sprint *CLI ergonomics* (release 0.31.0).

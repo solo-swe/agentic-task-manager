@@ -35,7 +35,7 @@
     "expect": {
       "exit": 4,
       "stderrIncludes": [
-        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Your commit is kept. Run `atm task state T-1 in_progress`, then `atm task state T-1 done` again."
+        "T-1: your lease expired at 10:30 UTC (no heartbeat for 120 min), so it went back to todo. Your commit is kept. Run `atm task state T-1 in_progress`, then `atm task state T-1 done` again."
       ],
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -80,7 +80,7 @@
     "expect": {
       "exit": 4,
       "stderrIncludes": [
-        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Run `atm task state T-1 in_progress`, then `atm task state T-1 todo` again."
+        "T-1: your lease expired at 10:30 UTC (no heartbeat for 120 min), so it went back to todo. Run `atm task state T-1 in_progress`, then `atm task state T-1 todo` again."
       ]
     }
   },

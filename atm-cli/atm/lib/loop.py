@@ -20,7 +20,10 @@ from ..common.model import (
 )
 from .state import change_status
 
-DEFAULT_LEASE_MINUTES = 30
+# How long a claim lasts without a renewal (meta.lease_minutes sets a project's own). Two hours (T-439): every atm
+# command an agent runs renews its claims, but a harness without atm's hooks runs none while the agent edits and
+# thinks; a claim an agent left behind is freed after it, by the next `atm loop next`
+DEFAULT_LEASE_MINUTES = 120
 
 
 def archived_in(work):

@@ -54,7 +54,8 @@ Every command takes `--json` (anywhere on the line); `atm help` lists them all, 
   user asks), `atm task add` (`--json-file` for many), `atm task edit <id>`, `atm doctor`, `atm project workflow set`
 - Archive: `atm db archive` (when atm suggests it), `atm db unarchive <id>...`
 - atm locks the file, writes timestamps and actors, and records claims (which agent works on which task, with a
-  30-minute lease that the plugin's hook renews), shared by all git worktrees of a clone. `atm vcs commit` commits only
+  two-hour lease that every atm command the agent runs renews, as the plugin's hook does), shared by all git worktrees
+  of a clone. `atm vcs commit` commits only
   the files a task changed plus tasks.json; never `git add -A`
 
 ## Task Schema

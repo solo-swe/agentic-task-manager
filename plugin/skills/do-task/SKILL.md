@@ -121,8 +121,9 @@ Use the `files` array as hints for which files to create or modify, but also cre
 any additional files that are needed. Keep a list of every file you create, change or delete: Step 7 commits
 exactly those.
 
-Your claim has a lease (30 minutes by default); if it runs out, the task goes back to `todo` for others. The plugin's
-hook renews it after each of your tool calls, so you don't need to (`atm claim heartbeat $TASK_ID` does it by hand). A
+Your claim has a lease (two hours by default); if it runs out, the task goes back to `todo` for others. Every atm
+command you run renews it, and the plugin's hook does after each of your tool calls, so you don't need to
+(`atm claim heartbeat $TASK_ID` does it by hand). A
 command that runs for many minutes (a full test suite, a build, waiting on CI), especially one you leave running in
 the background, makes no tool calls: start it in the same Bash call after `atm claim hold $TASK_ID`, as
 `atm claim hold $TASK_ID && <command>`. `claim hold` runs nothing: it leaves a watcher that renews your claim while

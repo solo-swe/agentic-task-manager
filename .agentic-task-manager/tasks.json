@@ -21659,7 +21659,7 @@
       "description": "So nothing depends on the Claude Code plugin's hooks ([porting-to-rust.md](docs/porting-to-rust.md) §4), in the Python atm:\n\n## Change\n- Every atm command an agent runs renews that agent's live claims (as `atm claim heartbeat` does), under the lock it already takes. Reads renew too; a command run with `--agent` for someone else renews nothing.\n- The default lease becomes 2 hours where nothing renews between commands, configurable in `meta` (a project that sets one keeps it). The plugin's hook keeps renewing as before; it becomes redundant, not wrong.\n- `atm claim hold` is unchanged.\n- `docs/v4/atm-cli.md`, the skills' and `plugin/CLAUDE.md`'s lines about leases, the changelog.\n\n## Tests\nScenarios: a command renews the caller's claims and not another agent's; the default lease; `meta` overrides it. `pnpm run test:scripts` green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/lib/",
@@ -21669,16 +21669,18 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:54:08Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "Rust and distribution",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:54:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-440",

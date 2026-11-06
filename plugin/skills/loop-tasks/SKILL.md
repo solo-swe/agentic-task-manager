@@ -117,7 +117,8 @@ errors (the message says what).
    `atm task edit <id> ...` (a later task's
    definition), and the status commands. Every command takes `--json`.
 2. Get work only from `atm loop next --claim` (or `atm task state <id> in_progress`).
-3. Your claim's lease (30 minutes by default) is renewed by the plugin's hook while you work; if you stop, it runs
+3. Your claim's lease (two hours by default) is renewed by every atm command you run and by the plugin's hook while
+   you work; if you stop, it runs
    out and the task goes back to `todo` for someone else (`atm claim heartbeat <id>` renews it by hand). The hook renews
    only after a tool call, so start long commands (a full test suite, a build, waiting on CI) after
    `atm claim hold <id>`, in the same Bash call: `atm claim hold <id> && <command>`. It runs nothing: a watcher renews

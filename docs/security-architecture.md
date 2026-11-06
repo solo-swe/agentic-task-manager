@@ -595,6 +595,14 @@ address. No skill, CLI output or agent-facing text changed, so no sandbox run is
 Dependabot's grouped PRs): it makes no request (the page's CSP would refuse one, I13), renders the dashboard's own
 elements through snippets, and no `{@html}` is added (I15). No new entry point, input or output agents act on.
 
+**Claims renewed by every command, a two-hour lease (T-439).** Each atm command renews its caller's own live claims
+(the same change `claim heartbeat --auto` makes, under the same lock); a command run as someone else (`--agent`)
+renews none, so a person can't keep an agent's claim alive by acting as it, beyond what `claim heartbeat --agent`
+already allowed. No new entry point, input or output agents act on. A longer lease means an abandoned task waits up
+to two hours before another agent can take it (I22's loop behaviour is otherwise unchanged). Skill review in place of
+the sandbox run: `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` only restate the lease's length and who
+renews it; nothing new to run, fetch or install.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

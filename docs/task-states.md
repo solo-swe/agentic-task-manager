@@ -221,7 +221,9 @@ Claims live in `store["claims"]`, shared by all worktrees of a clone (`atm/lib/c
 }
 ```
 
-- Default lease: **30 minutes** (`meta.lease_minutes` overrides).
+- Default lease: **two hours** (`meta.lease_minutes` overrides; 30 minutes before T-439). Every atm command an agent
+  runs renews its claims once their last renewal is ten minutes old, as the plugin's hook does after each tool call;
+  a command run as someone else (`--agent`) renews nobody's.
 - `start` creates the claim; every other command drops it (a task in review, blocked or finished has none).
 - Only the claiming agent may run status commands on the task; another agent's live claim → exit code **4** ("claimed by … until …").
 - Expired claims are dropped and the task returns to `todo` with a `failure` note ("lease expired"), keeping the commit (`keep_commit=True`).
