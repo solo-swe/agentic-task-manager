@@ -1,12 +1,13 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
+  "extends": "$app/tsconfig",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "node", "@compmd/vite/client"],
+    "types": ["$app/types", "vite/client", "node", "@compmd/vite/client"],
     "strict": true,
+    "checkJs": false,
     "noEmit": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,

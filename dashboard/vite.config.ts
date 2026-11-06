@@ -1,16 +1,14 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { viteSingleFile } from 'vite-plugin-singlefile';
-import { stampBuildId } from './build/build-id.ts';
+import adapter from '@sveltejs/adapter-static';
+import { sveltekit } from '@sveltejs/kit/vite';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { changelogModule } from './build/changelog.ts';
 import { compmdModule } from './build/compmd.ts';
 import { devApi } from './build/dev-api.ts';
-import { favicon } from './build/favicon.ts';
+import { PAGES } from './build/finish-page.ts';
 import { helpModule } from './build/help.ts';
-import { injectVersion } from './build/inject-version.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
-import { renameHtmlOutput } from './build/rename-output.ts';
 import { securityHeaders } from './build/security-headers.ts';
 import { sizeReport } from './build/size-report.ts';
 
@@ -20,13 +18,22 @@ const changelog = fileURLToPath(new URL('../plugin/CHANGELOG.md', import.meta.ur
 const whatsNew = fileURLToPath(new URL('../plugin/WHATS-NEW.md', import.meta.url));
 const help = fileURLToPath(new URL('../docs/help.md', import.meta.url));
 const ownTasks = fileURLToPath(new URL('../.agentic-task-manager', import.meta.url));
-const logo = fileURLToPath(new URL('./src/assets/atm-logo.svg', import.meta.url));
 
 export default defineConfig({
   plugins: [
-    // Dev server: reload the whole page on component changes. In-place component swaps can miss changes to the
-    // shared dashboard state; a reload restores everything from storage anyway.
-    svelte({ compilerOptions: { hmr: false } }),
+    // SvelteKit (T-428), its options here (SvelteKit 3 has no svelte.config.js): a single-page app from the static
+    // adapter's fallback page, with every script and style inlined, so the build is one self-contained file
+    sveltekit({
+      preprocess: vitePreprocess(),
+      // Dev server: reload the whole page on component changes. In-place component swaps can miss changes to the
+      // shared dashboard state; a reload restores everything from storage anyway.
+      compilerOptions: { hmr: false },
+      // Its fallback page becomes plugin/templates/tasks-dashboard.html (build/finish-page.ts, after the build)
+      adapter: adapter({ pages: PAGES, assets: PAGES, fallback: 'index.html', strict: false }),
+      output: { bundleStrategy: 'inline' },
+      // The dashboard keeps its own state in location.hash (T-429 moves the views to routes)
+      router: { type: 'pathname' },
+    }),
     changelogModule(whatsNew),
     compmdModule(),
     helpModule(help),
@@ -34,17 +41,5 @@ export default defineConfig({
     devApi(ownTasks),
     securityHeaders(),
     sizeReport(),
-    viteSingleFile(),
-    injectVersion(pluginJson),
-    favicon(logo),
-    // After the page is complete, before it is renamed: plugins run their writeBundle hooks in this order
-    stampBuildId(),
-    renameHtmlOutput('tasks-dashboard.html'),
   ],
-  build: {
-    // The build output is what the plugin ships: plugin/templates/tasks-dashboard.html (committed; CI checks it is fresh).
-    // emptyOutDir must stay false: templates/ also holds the tasks.json example.
-    outDir: '../plugin/templates',
-    emptyOutDir: false,
-  },
 });

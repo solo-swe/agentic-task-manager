@@ -8,7 +8,7 @@ if git diff --cached --name-only | grep -qE '^atm-cli/'; then
   python3 atm-cli/build.py || { echo "pre-commit: atm-cli build failed"; exit 1; }
   git add plugin/scripts/atm.py
 fi
-if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|index\.html|vite\.config\.ts|svelte\.config\.js|package\.json|pnpm-(lock|workspace)\.yaml)|plugin/\.claude-plugin/plugin\.json|plugin/CHANGELOG\.md)'; then
+if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|vite\.config\.ts|tsconfig\.json|package\.json|pnpm-(lock|workspace)\.yaml)|plugin/\.claude-plugin/plugin\.json|plugin/CHANGELOG\.md|plugin/WHATS-NEW\.md)'; then
   echo "pre-commit: rebuilding plugin/templates/tasks-dashboard.html"
   (cd dashboard && pnpm run --silent build >/dev/null) || { echo "pre-commit: dashboard build failed"; exit 1; }
   git add plugin/templates/tasks-dashboard.html

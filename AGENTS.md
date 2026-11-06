@@ -32,7 +32,11 @@ agents or the dashboard act on, a skill instruction that runs commands or reads 
 updates that document in the same PR.
 
 ## Dashboard (`dashboard/`)
-Coding rules: the [Svelte guide](docs/guides/svelte.md). Builds to a **single self-contained HTML file** (vite-plugin-singlefile). The `atm-dashboard-version` meta tag is
+Coding rules: the [Svelte guide](docs/guides/svelte.md). SvelteKit (T-428), its options in `vite.config.ts`'s `sveltekit({ … })` call: a single-page app, rendered in the
+browser only, from the static adapter's fallback page with every script and style inlined
+(`output.bundleStrategy: 'inline'`), so it builds to a **single self-contained HTML file**; `build/finish-page.ts`
+stamps it and writes it where the plugin ships it. Until T-429 gives the views routes, one catch-all route
+(`src/routes/[...path]/`) shows the app at any path; its views live in the hash. The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
 
 `pnpm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.

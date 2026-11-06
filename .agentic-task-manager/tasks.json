@@ -20777,7 +20777,7 @@
       "description": "Move the dashboard from plain Svelte + Vite to SvelteKit, as the [Svelte guide](docs/guides/svelte.md#basics) asks.\n\n## Change\n- SvelteKit 3 with the static adapter and an SPA fallback; its options in the `sveltekit({ … })` call in `vite.config.ts`; `svelte.config.js` removed; `tsconfig.json` extends `$app/tsconfig`.\n- The build still writes **one self-contained HTML file** to `plugin/templates/tasks-dashboard.html` (with the `atm-dashboard-version` meta tag) and the CompMD runtime to `plugin/assets/compmd/<version>/`, and `atm serve` serves it under the same Content-Security-Policy (invariants I13 and I16 in [security-architecture.md](docs/security-architecture.md)). The dev server (`build/dev-api.ts`, `build/security-headers.ts`) keeps working.\n- No change in behaviour: the hash routes stay until the next task.\n\nIf SvelteKit's static output can't be made into the single file (or only at a cost in size or CSP), stop and block the task on the user with the options found, rather than changing the single-file or CSP rules.\n\n## Tests\n`check`, the unit tests, `tests/scripts/dev-api.test.mjs` and the functional e2e suite pass; `size` is no larger than before by more than a few KB.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-427"
       ],
@@ -20791,7 +20791,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T08:00:51Z",
+      "updated_at": "2026-11-06T15:28:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20825,7 +20825,9 @@
           "to": "2026-11-06T08:00:51Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-06T15:28:13Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-429",
@@ -21224,7 +21226,7 @@
       "description": "Agreed with the user (2026-11-06). A review decision changes no state; the exits from review need the right decision. T-425 already moved approve and request-changes out of `task state` into `atm task review approve|request-changes <id>`; this finishes the model.\n\n## Review decisions: `atm task review <decision> <id>`\nThe decision comes before the ID, so a permission prefix tells them apart.\n- `approve <id> [--note]`, `review_state: approved`\n- `request-changes <id> --reason`, `review_state: changes_requested`\n- `reject <id> --reason`, `review_state: rejected` (new)\n\nAll three only on a task in review, and the task stays in review. **No skill pre-approves any of them:** they are the user's, and an agent asking for one gets a permission prompt the user answers.\n\n## The exits from review, guarded in atm (`atm-cli/atm/lib/state.py`)\n| Decision | Exit (`task state <id> …`) |\n|---|---|\n| `approved` | `done` |\n| `changes_requested` | `in_progress` (its agent first, as now) |\n| `rejected` | `todo` (back to the pool, the work dropped) or `skipped` |\n\nWithout the matching decision, atm refuses the exit, for an agent and a person alike: nobody passes, reworks or drops a review without the decision. The old `reject` transition (review to todo in one step) goes; `task state <id> todo` from review is the rejected exit.\n\n## One skip\n`skipped` from any open state (todo, blocked, in progress, in review; from review only once rejected), with `--resolution wont_do|obsolete|duplicate` and `--duplicate-of`; it releases the claim. `done` loses `--resolution`: done means the work is done.\n\n## Update\n- the skills (`do-task`, `loop-tasks`, `close-sprint`: an approval or a rejection is something the user runs, e.g. `! atm task review approve T-1`; no skill pre-approves `task review`), `plugin/CLAUDE.md`, `docs/task-states.md` (the diagram), `docs/improving-atm-cli-ergonomics.md`\n- `docs/security-architecture.md`: I23 rests on atm's guards (the exits need the decision) and on no skill pre-approving `task review`; its check becomes the scenarios plus `skills.test.ts`\n- the dashboard where it shows `review_state` (a `rejected` label)\n- the skill review (§3.3), and the changelog with T-425's release\n\n## Tests\nScenarios: each decision, refused outside review; each exit refused without its decision and allowed with it (an agent and a person); skip from each open state, from review only when rejected; done without `--resolution`. `skills.test.ts`: no skill pre-approves `task review`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-425"
       ],
@@ -21243,7 +21245,7 @@
         "tests/scripts/scenarios/review-states.json"
       ],
       "created_at": "2026-11-06T09:30:13Z",
-      "updated_at": "2026-11-06T10:14:42Z",
+      "updated_at": "2026-11-06T10:41:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21264,7 +21266,18 @@
         "T-437"
       ],
       "started_at": "2026-11-06T10:14:42Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "73993c4e974b05b68ade43d69bfc96db0a97c626",
+      "completed_at": "2026-11-06T10:41:28Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T10:41:28Z",
+          "kind": "outcome",
+          "text": "task review approve|request-changes|reject; exits guarded in atm for everyone (done=approved, todo/skip=rejected, start=rework); skip from any open state; done has no --resolution. Review: state.py guards, cross-worktree record.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }

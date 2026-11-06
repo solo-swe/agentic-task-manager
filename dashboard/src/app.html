@@ -20,8 +20,9 @@
         document.documentElement.dataset.mode = mode;
       })();
     </script>
+    %sveltekit.head%
   </head>
-  <body>
-    <script type="module" src="/src/main.ts"></script>
+  <body data-sveltekit-preload-data="off">
+    <div style="display: contents">%sveltekit.body%</div>
   </body>
 </html>

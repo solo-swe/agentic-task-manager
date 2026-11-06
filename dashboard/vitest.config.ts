@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { svelteTesting } from '@testing-library/svelte/vite';
 import { changelogModule } from './build/changelog.ts';
 import { compmd } from '@compmd/vite';
@@ -15,7 +15,8 @@ const pluginJson = fileURLToPath(new URL('../plugin/.claude-plugin/plugin.json',
 
 export default defineConfig({
   plugins: [
-    svelte(),
+    // The components without SvelteKit (its options are vite.config.ts's, T-428): the same preprocessing
+    svelte({ configFile: false, preprocess: vitePreprocess() }),
     svelteTesting(),
     changelogModule(whatsNew),
     compmdModule(),

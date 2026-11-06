@@ -50,6 +50,15 @@ The sprint *CLI ergonomics* (release 0.31.0).
   machine); `atm.py` puts the folder first on its import path. Nothing is installed; CI's pip step is gone.
 - **The task state machine** is `transitions` (T-417, T-418), vendored and built into `atm.py`, with the same
   refusals, notes and exit codes as before.
+- **The dashboard is a SvelteKit app** (T-428, the Svelte guide): SvelteKit 3.1.1 with the static adapter, its
+  options in `vite.config.ts`'s `sveltekit({ … })` call (no `svelte.config.js`); rendered in the browser only, from
+  the adapter's fallback page with every script and style inlined (`output.bundleStrategy: 'inline'`), so it is still
+  one self-contained file, which `build/finish-page.ts` stamps (version, favicon, build ID) and writes to
+  `plugin/templates/tasks-dashboard.html` (`pnpm run build:page`). One catch-all route shows the app at any path; the
+  views stay in the hash until T-429. About 60 kB more (SvelteKit's runtime; 23 kB gzipped): the size guardrail is
+  650 KiB. The dev page's Content-Security-Policy is now worked out from each page as sent (SvelteKit renders it per
+  request, with its own inline start-up script): its inline scripts by hash, as `atm serve` allows the built page's
+  (`dev-api.test.mjs` checks it). `vite-plugin-singlefile` is gone.
 - **The dashboard's development uses pnpm** (T-427): `pnpm-lock.yaml`, overrides in `pnpm-workspace.yaml`, CI and
   the hooks on pnpm 12.14.0.
 
