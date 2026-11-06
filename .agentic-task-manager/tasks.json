@@ -22274,13 +22274,13 @@
       "description": "23 scenarios in `npm run test:scripts` fail on `dev/0.31.0`, all on refusal paths of the status commands: `done` on a todo task, `reopen` on an open one, `review` on a task that isn't in progress, `skip` on one in progress, `start` with unfinished dependencies, and so on (`block.json`, `lease.json`, `notes.json`, `reopen.json`, `review*.json`, `skip.json`, `status.json`, `vocab.json`).\n\nThey failed before T-412's atm2 work (the rebuilt `plugin/scripts/atm.py` was byte-identical), so they most likely come from replacing the hand-rolled transitions with `TaskMachine` in [lib/state.py](atm-cli/atm/lib/state.py) (T-417): its refusals don't give the messages or exit codes the scenarios expect.\n\n## Change\nMake `TaskMachine.transition` refuse exactly as `change_status` did: the same message and exit code for each refusal. Don't change the scenarios to match new messages unless the old message was wrong.\n\n## Tests\n`npm run test:scripts` is green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "atm-cli/atm/lib/state.py"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:45Z",
+      "updated_at": "2026-11-06T05:36:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -22293,7 +22293,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T05:36:07Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-419",
