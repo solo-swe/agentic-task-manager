@@ -20118,23 +20118,24 @@
     },
     {
       "id": "T-413",
-      "name": "Implement multi-harness support for the ATM plugin",
+      "name": "Support the harnesses beyond Claude Code through atm agents install",
       "type": "feature",
       "priority": "P1",
       "labels": [
         "atm-cli",
-        "dashboard"
+        "distribution"
       ],
-      "description": "Implement multi-harness support for the ATM plugin, so it works under Open Code (and other hosts) in addition to Claude Code.\n\n## Overview\n\nThe ATM plugin's core is already harness-agnostic: `atm-cli/` is pure Python stdlib, `plugin/scripts/atm` is a shell launcher, and `dashboard/` is a single-file HTML served over HTTP by `atm serve`. Only the top layer — the `.claude-plugin/` manifest, `plugin/CLAUDE.md`, and Claude Code skill frontmatter — is host-specific.\n\nThe goal is to split the plugin into three layers so any harness can register the same skill bodies:\n\n- **Layer 1 — core (harness-agnostic):** `plugin/scripts/`, `atm-cli/`, `dashboard/`\n- **Layer 2 — skill bodies (harness-neutral):** `plugin/skills/*/SKILL.md`\n- **Layer 3 — adapters (per harness):** `.claude-plugin/` (Claude Code), `plugin/open-code/` (Open Code), `plugin/<harness>/` (future)\n\n## Diagram: three-layer split\n\n```mermaid\ngraph TD\n    subgraph L3[\"Layer 3 — harness adapters (thin)\"]\n        CC[Claude Code<br/>.claude-plugin/<br/>plugin/CLAUDE.md]\n        OC[Open Code<br/>plugin/open-code/]\n        CU[Cursor / Zed / …<br/>plugin/<harness>/]\n    end\n\n    subgraph L2[\"Layer 2 — skill bodies (harness-neutral)\"]\n        SD[do-task / plan-sprint /<br/>close-sprint / loop-tasks /<br/>push / serve / create-tasks<br/>plugin/skills/*/SKILL.md]\n    end\n\n    subgraph L1[\"Layer 1 — core (harness-agnostic)\"]\n        CLI[atm CLI<br/>atm-cli/ + plugin/scripts/<br/>pure Python stdlib 3.9+]\n        DS[Dashboard server<br/>atm serve → localhost:8765<br/>single-file HTML]\n        TD[Task data<br/>.agentic-task-manager/tasks.json<br/>plain JSON]\n    end\n\n    CC --> SD\n    OC --> SD\n    CU --> SD\n    SD --> CLI\n    SD --> DS\n    SD --> TD\n```\n\n## Diagram: data flow\n\n```mermaid\nsequenceDiagram\n    participant H as Harness (Open Code / Claude Code)\n    participant S as Skill body\n    participant A as atm CLI\n    participant T as tasks.json\n    participant D as Dashboard server\n    participant B as Browser\n\n    H->>S: invoke /atm:do-task\n    S->>A: atm next --claim\n    A->>T: read & lock task\n    T-->>A: task JSON\n    A-->>S: task under \"task\"\n    S->>S: implement the work\n    S->>A: atm commit <id> --file <paths>\n    A->>T: write tasks.json + commit\n    S->>A: atm done <id> --note '...'\n    A->>T: mark done, drop claim\n    D->>T: poll tasks.json (every 5s)\n    D->>B: serve dashboard HTML\n```\n\n## What to build\n\n1. `plugin/skills.json` — harness-neutral skill manifest (single source of truth: ids, names, triggers, `atm` commands, bodies)\n2. `plugin/open-code/manifest.json` — Open Code skill registration\n3. `plugin/open-code/install.sh` — copies skills to `~/.opencode/skills/`, puts `plugin/scripts/` on PATH\n4. `plugin/open-code/skills/*.opencode.md` — thin wrappers that `include` the shared `SKILL.md` bodies and declare tool permissions\n5. Split `plugin/skills/*/SKILL.md` frontmatter out of the harness-neutral body (keep Claude Code `allowed-tools` in the Claude Code adapter)\n6. `docs/multi-harness-support.md` — written; keep it in sync as the adapter evolves\n7. Verify `npm run verify` (dashboard) and `npm run test:scripts` (atm-cli) stay green\n\n## Reference\n\n- `docs/multi-harness-support.md` — full design, file layout, `skills.json` example, Open Code adapter, standalone usage, conventions, quick-start checklist\n\n## Files\n\n- `docs/multi-harness-support.md` (reference)\n- `plugin/skills.json` (new)\n- `plugin/open-code/manifest.json` (new)\n- `plugin/open-code/install.sh` (new)\n- `plugin/open-code/skills/*.opencode.md` (new)\n- `plugin/skills/*/SKILL.md` (split frontmatter from body)",
+      "description": "Make atm work in the harnesses beyond Claude Code through the model agreed in [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) (T-426): one set of portable skills, placed by `atm agents install`. No per-harness adapters: the earlier design ([multi-harness-support.md](docs/multi-harness-support.md): `plugin/open-code/`, `install.sh`, `skills.json`) is not built.\n\nThe harnesses: Codex CLI, Cursor, Gemini CLI, GitHub Copilot (VS Code and CLI), OpenCode, Windsurf (Devin) and Goose. What their documentation said on 2026-11-06 is in the distribution doc's §5 and sources; check it again before relying on it.\n\n## For each harness\n- **Install:** `atm agents install --harness <h>` puts the skills where it reads them (`~/.agents/skills/` for all of these); the skills show up and can be invoked by name (`atm-do-task`, …).\n- **Links or copies:** whether it follows the symlinks atm writes. Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have known bugs: confirm that atm copies for them, and whether any other harness needs copies.\n- **Duplicates:** whether it lists atm's skills twice, from `~/.agents/skills/` and `~/.claude/skills/` (expected in Cursor, OpenCode, Goose and VS Code Copilot), and that `atm agents status` says so.\n- **A task end to end:** `/atm-do-task` on a sample project: the skill checks `atm --version`, claims a task, keeps the claim alive through atm's own renewal ([porting-to-rust.md](docs/porting-to-rust.md) §4) and `atm claim hold` for a long command, commits and finishes it.\n- **Permissions:** how the harness asks before running `atm` commands, and whether the skills' instructions need anything for it (Claude Code's pre-approvals are `allowed-tools`, which only Claude Code reads).\n\n## Outcome\n- A support table in the distribution doc (§5): per harness, verified or not, links or copies, duplicates, known issues, with the version tried.\n- Fixes to `atm agents` where a harness needs one (its folder, copying, detection), each with a test.\n- A plugin for a harness only if users need something a skill can't do there (the distribution doc §6); proposed to Hakan first, never built here.\n- `docs/multi-harness-support.md` replaced by a pointer to the distribution doc, or removed.\n\n## Depends on\nThe tasks that build the thin skills, `atm docs` and `atm agents install|status|uninstall` (the distribution rollout's steps 1 to 3), once they exist.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [],
       "files": [
-        "docs/multi-harness-support.md"
+        "docs/multi-harness-support.md",
+        "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-06T20:02:02Z",
+      "updated_at": "2026-11-06T20:47:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20147,7 +20148,10 @@
           "from": "2026-11-06T20:02:02Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "related": [
+        "T-415"
+      ]
     },
     {
       "id": "T-414",
@@ -20213,7 +20217,7 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T20:31:56Z",
+      "updated_at": "2026-11-06T20:42:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20228,7 +20232,8 @@
       ],
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T20:31:56Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "3b839f72e1e7831c3f2d5ddbc67aeb942056154b"
     },
     {
       "id": "T-416",
