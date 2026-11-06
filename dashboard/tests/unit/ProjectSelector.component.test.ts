@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import ProjectSelector from '../../src/components/ProjectSelector.svelte';
+import ProjectSelector from '../../src/lib/shell/ProjectSelector.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
 import { summary as fullSummary } from './summary.helpers';

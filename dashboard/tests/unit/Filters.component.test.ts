@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import Filters from '../../src/components/Filters.svelte';
+import Filters from '../../src/lib/tasks/Filters.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';

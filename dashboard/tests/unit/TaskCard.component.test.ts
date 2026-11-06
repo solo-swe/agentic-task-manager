@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import TaskCard from '../../src/components/TaskCard.svelte';
+import TaskCard from '../../src/lib/tasks/TaskCard.svelte';
 import { scrollToTask } from '../../src/lib/scroll';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { Task } from '../../src/lib/types';

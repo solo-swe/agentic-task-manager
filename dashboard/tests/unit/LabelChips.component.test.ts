@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import LabelChips from '../../src/components/LabelChips.svelte';
+import LabelChips from '../../src/lib/ui/LabelChips.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { Task } from '../../src/lib/types';
 import standard from '../fixtures/standard.json';

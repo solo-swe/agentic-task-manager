@@ -8,6 +8,7 @@ import { compmdModule } from './build/compmd.ts';
 import { devApi } from './build/dev-api.ts';
 import { PAGES } from './build/finish-page.ts';
 import { helpModule } from './build/help.ts';
+import { readPluginVersion } from './build/inject-version.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
 import { securityHeaders } from './build/security-headers.ts';
 import { sizeReport } from './build/size-report.ts';
@@ -33,6 +34,9 @@ export default defineConfig({
       output: { bundleStrategy: 'inline' },
       // The dashboard keeps its own state in location.hash (T-429 moves the views to routes)
       router: { type: 'pathname' },
+      // The app's version is the plugin's, not the build time (SvelteKit's default): the same sources build the same
+      // page, which CI checks against the committed one
+      version: { name: readPluginVersion(pluginJson) },
     }),
     changelogModule(whatsNew),
     compmdModule(),

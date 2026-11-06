@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import HelpDialog from '../../src/components/HelpDialog.svelte';
+import HelpDialog from '../../src/lib/dialogs/HelpDialog.svelte';
 import { slug } from '../../src/lib/compmd';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';

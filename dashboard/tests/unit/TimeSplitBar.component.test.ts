@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import TimeSplitBar from '../../src/components/TimeSplitBar.svelte';
+import TimeSplitBar from '../../src/lib/progress/TimeSplitBar.svelte';
 import type { TimeUse } from '../../src/lib/timeuse';
 
 const H = 3_600_000;

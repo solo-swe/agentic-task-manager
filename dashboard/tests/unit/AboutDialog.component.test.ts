@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { version as compmdVersion } from 'virtual:atm-compmd';
-import AboutDialog from '../../src/components/AboutDialog.svelte';
+import AboutDialog from '../../src/lib/dialogs/AboutDialog.svelte';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';

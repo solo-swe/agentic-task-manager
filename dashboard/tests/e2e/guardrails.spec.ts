@@ -37,4 +37,9 @@ test.describe('shipped dashboard file', () => {
     const { version } = JSON.parse(readFileSync(PLUGIN_JSON, 'utf8'));
     expect(html()).toContain(`<meta name="atm-dashboard-version" content="${version}"`);
   });
+
+  test("SvelteKit's app version is the plugin's, not the build time: the same sources build the same page (T-428)", () => {
+    const { version } = JSON.parse(readFileSync(PLUGIN_JSON, 'utf8'));
+    expect(html()).toMatch(new RegExp(`version: "${version.replace(/\./g, '\\.')}"`));
+  });
 });

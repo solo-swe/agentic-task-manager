@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
-import NeedsYouMenu from '../../src/components/NeedsYouMenu.svelte';
+import NeedsYouMenu from '../../src/lib/shell/NeedsYouMenu.svelte';
 import type { NeedsYouItem } from '../../src/lib/waiting';
 
 const ITEMS: NeedsYouItem[] = [

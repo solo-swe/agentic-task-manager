@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import ScopeBar from '../../src/components/ScopeBar.svelte';
+import ScopeBar from '../../src/lib/shell/ScopeBar.svelte';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { Task, TasksFile } from '../../src/lib/types';

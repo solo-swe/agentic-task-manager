@@ -32,6 +32,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/lib/**'],
+      // The 90% is for the logic; the components (in src/lib/<area>/ since T-430) are covered by their component
+      // tests and the e2e suite
+      exclude: ['src/lib/**/*.svelte'],
       thresholds: { lines: 90 },
     },
   },

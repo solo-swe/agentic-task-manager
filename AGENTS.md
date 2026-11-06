@@ -36,7 +36,9 @@ Coding rules: the [Svelte guide](docs/guides/svelte.md). SvelteKit (T-428), its 
 browser only, from the static adapter's fallback page with every script and style inlined
 (`output.bundleStrategy: 'inline'`), so it builds to a **single self-contained HTML file**; `build/finish-page.ts`
 stamps it and writes it where the plugin ships it. Until T-429 gives the views routes, one catch-all route
-(`src/routes/[...path]/`) shows the app at any path; its views live in the hash. The `atm-dashboard-version` meta tag is
+(`src/routes/[...path]/`) shows the app at any path; its views live in the hash. Components live by area in
+`src/lib/<area>/` (`shell/`, `ui/`, `kanban/`, `tasks/`, `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`,
+`agents/`, `overview/`; T-430), beside the logic modules in `src/lib/`. The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
 
 `pnpm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.

@@ -1,7 +1,7 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import DetailPanel from '../../src/components/DetailPanel.svelte';
+import DetailPanel from '../../src/lib/details/DetailPanel.svelte';
 import { compmdSettled } from './compmd.helpers';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';

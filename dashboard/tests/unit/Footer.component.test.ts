@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import Footer from '../../src/components/Footer.svelte';
+import Footer from '../../src/lib/shell/Footer.svelte';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
