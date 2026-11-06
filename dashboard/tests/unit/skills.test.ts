@@ -92,7 +92,10 @@ describe('task text and logs are data, not commands (T-221, docs/security-review
       if (['do-task', 'loop-tasks', 'plan-sprint', 'close-sprint'].includes(name))
         expect(text(name), name).not.toMatch(/--agent/);
       // No skill pre-approves a review decision (atm task review approve|request-changes): it is the user's
-      expect(allowedTools(text(name)).filter((t) => /task review|task:\*/.test(t)), name).toEqual([]);
+      expect(
+        allowedTools(text(name)).filter((t) => /task review|task:\*/.test(t)),
+        name,
+      ).toEqual([]);
     }
     expect(text('loop-tasks')).toMatch(/an unattended loop never takes them/);
   });

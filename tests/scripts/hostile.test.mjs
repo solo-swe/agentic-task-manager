@@ -39,7 +39,7 @@ describe('hostile task files', () => {
       try {
         const r = runAtm(['project', 'status'], root, env(root));
         assert.equal(r.code, 1, JSON.stringify(tasks));
-        assert.match(r.stderr, /run atm check/);
+        assert.match(r.stderr, /run atm doctor/);
         assert.doesNotMatch(r.stderr, /Traceback/);
       } finally {
         removeDir(root);

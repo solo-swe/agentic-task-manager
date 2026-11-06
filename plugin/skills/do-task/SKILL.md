@@ -22,7 +22,7 @@ every read and every change goes through `atm`, which knows the archive, the pro
 | see what a task waits for, and what waits for it | `atm task deps <id>` |
 | find tasks | `atm task list [--status S] [--sprint S] [--backlog] [--ready] [--blocked] [--label L]` |
 | change a later task's definition | `atm task edit <id> ...` |
-| change a status | `atm task state <id> in_progress`, `done`, `review`, `block`, `fail`, `release` (below) |
+| change a status | `atm task state <id> <state>`: `in_progress`, `in_review`, `done`, `todo`, `blocked`, `skipped` (below) |
 
 Every command takes `--json`.
 
@@ -216,12 +216,13 @@ project's (`meta.review`), else `none`. Run `atm task state $TASK_ID done --note
 - `none`: it is done.
 - `batch`: it is done, and waits for the end-of-sprint review (`sprint_review: pending`): write the note as what
   the reviewer should check.
-- `blocker` or `async`: atm refuses (`… is reviewed (blocker): ask for it with atm review …`). Then ask for the
+- `blocker` or `async`: atm refuses (`… is reviewed (blocker): ask for it with atm task state … in_review …`). Then ask for the
   review: `atm task state $TASK_ID in_review --note '<what the reviewer should check>'` (with `--status <id>` when the project has
   several review statuses and one fits, e.g. `awaiting_user`). The task moves to in review, your claim is released,
   and the tasks that depend on it keep waiting until the review passes. Report it as **waiting for review**.
   - **`blocker`**: the review happens now, before anything else: if the user is in the session, ask them to review it
-    (they `atm task review approve <id>`, `request-changes` or `done` it); in an unattended loop, stop the loop and say what waits.
+    (they decide with `atm task review approve <id>` or `atm task review request-changes <id> --reason '…'`); in an
+    unattended loop, stop the loop and say what waits.
   - **`async`**: go on with other work; the reviewer decides later, and `atm loop next` hands it back if they ask for
     changes or approve something left to do.
 
@@ -230,11 +231,13 @@ A person running atm (not an agent) may always `atm task state <id> done` a task
   **A review you hold with the user** (the task says to review a draft or proposal with them, e.g. in a review tool
   or the preview): commit the draft, run `atm task state <id> in_review` *before* you show it, so the dashboard shows it waiting on
   them, then open the review. Address their comments while it stays in review (`atm vcs commit` works in any status).
-  When they approve, **don't mark it done yet**: check what the task still asks for after the review (implementing
-  what was approved, follow-up tasks to add, documents to update). If anything is left, record the approval and take
-  it back to in progress, `atm task review approve $TASK_ID --note '<what is left>'` then `atm task state $TASK_ID in_progress`, and carry on
-  from Step 5. Only when nothing is left, `atm task state $TASK_ID done --note '…'` from review. When the user asks for changes
-  instead, `atm task review request-changes $TASK_ID --reason '<what to change>'`, then `atm task state $TASK_ID in_progress` and address them.
+  The decision is theirs, and they record it: `atm task review approve $TASK_ID [--note '<what is left>']` or
+  `atm task review request-changes $TASK_ID --reason '<what to change>'` (no skill pre-approves either; if they ask
+  you to run one, it asks them for permission). Once it is approved, **don't mark it done yet**: check what the task
+  still asks for after the review (implementing what was approved, follow-up tasks to add, documents to update). If
+  anything is left, take it back to in progress, `atm task state $TASK_ID in_progress`, and carry on from Step 5. Only
+  when nothing is left, `atm task state $TASK_ID done --note '…'` from review. When they asked for changes, take it
+  back the same way and address them.
 
   **A task back from review** (`atm loop next` gives it to you first: `review_state` `approved` or `changes_requested`):
   read its latest `rejection` note (the changes asked for) or its approval note, and carry on from Step 5.
@@ -246,10 +249,11 @@ This status change is written to `tasks.json` after the commit, so it goes in wi
 SHA. If either command says your lease expired (exit code 4), the task went back to todo with your commit kept: run
 `atm task state $TASK_ID in_progress`, then the same command again. If another agent has claimed it in the meantime, tell the user.
 
-**Reviewing a task** (when the user or another agent asks you to review one that is in review): read its `review`
-note and the commit, then pass it with `atm task state <id> done`, approve it with something left to do
-(`atm task review approve <id> --note '…'`), or ask for changes (`atm task review request-changes <id> --reason '<what needs to change>'`):
-the agent that worked on it gets it back first. `atm task state <id> todo --reason '…'` sends it back to to do for anyone.
+**Reviewing a task** (when the user asks you to review one that is in review): read its `review` note and the commit,
+and tell the user what you found and what you would decide. The decision is theirs: they approve it
+(`atm task review approve <id> [--note '…']`) or ask for changes (`atm task review request-changes <id> --reason
+'<what needs to change>'`; the agent that worked on it gets it back first). Don't run either yourself unless they ask
+you to, and then it asks them for permission.
 
 **A task marked done by mistake** (its work isn't finished or committed): `atm task state <id> todo --reason '<why>'` takes it
 back to to do. Never change its status by editing `tasks.json`.

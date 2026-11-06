@@ -58,7 +58,10 @@
     "args": ["--dir", ".", "--help"],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]...", "atm --dir PATH <command> runs as if started in PATH."]
+      "stdoutIncludes": [
+        "Usage: atm [OPTIONS] COMMAND [ARGS]...",
+        "atm --dir PATH <command> runs as if started in PATH."
+      ]
     }
   }
 ]

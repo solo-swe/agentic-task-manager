@@ -131,7 +131,10 @@ describe('options that go anywhere, and errors', () => {
     inProject(SETUP, (root) => {
       const text = atm(['task', 'state'], root);
       assert.equal(text.code, 2);
-      assert.equal(text.stderr, "atm: Missing argument 'TASK_ID'.\nUsage: atm task state [OPTIONS] TASK_ID NEXT_STATE\n");
+      assert.equal(
+        text.stderr,
+        "atm: Missing argument 'TASK_ID'.\nUsage: atm task state [OPTIONS] TASK_ID NEXT_STATE\n",
+      );
       const json = atm(['task', 'state', '--json'], root);
       assert.equal(json.code, 2);
       assert.deepEqual(JSON.parse(json.stderr), { error: "Missing argument 'TASK_ID'.", code: 2 });
@@ -184,7 +187,12 @@ describe('shell completion', () => {
       assert.deepEqual(complete('atm task deps T-2', root), ['T-2\tSecond']);
       assert.deepEqual(complete('atm task list --sprint ', root), ['First\tThe basics']);
       assert.deepEqual(complete('atm task list --status a', root), ['awaiting_user\tAwaiting you']);
-      assert.deepEqual(complete('atm task list --priority P', root), ['P0\tCritical', 'P1\tHigh', 'P2\tMedium', 'P3\tLow']);
+      assert.deepEqual(complete('atm task list --priority P', root), [
+        'P0\tCritical',
+        'P1\tHigh',
+        'P2\tMedium',
+        'P3\tLow',
+      ]);
       assert.deepEqual(complete('atm task state T-1 in_', root), ['in_progress\tstart', 'in_review\treview']);
       assert.deepEqual(complete('atm sprint start ', root), ['First\tThe basics']);
     });

@@ -4,6 +4,54 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.31.0] - 2026-11-06
+
+The sprint *CLI ergonomics* (release 0.31.0).
+
+### Changed
+- **atm's commands are a tree of groups** (T-412–T-425, `docs/improving-atm-cli-ergonomics.md`), built with Typer
+  on Click (`atm-cli/atm/cli/main.py`): `task` (`list`, `details`, `deps`, `add`, `edit`, `note`, `state`,
+  `review`), `loop` (`next`, `run`), `claim` (`list`, `heartbeat`), `vcs` (`commit`, `pr`, `pushed`, `repository`),
+  `release` and `component` (`list`, `add`, `edit`, …), `project` (`status`, `config`, `workflow`, `logo`, `list`,
+  `add`, `remove`, `prune`), `sprint` (`list`, `add`, `edit`, `start`, `close`, `delete`, `move`, `backlog`); `db`
+  (`migrate`, `init`, `archive`, `unarchive`), `doctor` and `service` for maintenance; `help` and `version`.
+  `db merge-driver`, `project summary` and `_lock-test` work but aren't listed.
+- **`atm task state <id> <state>`** (`in_progress`, `in_review`, `done`, `todo`, `blocked`, `skipped`) is every
+  status change: `todo` runs the one for where the task is (in progress: a failure with `--reason`, else a release
+  with an optional `--note`; in review: a rejection; blocked: the answers, `--answer`; done or skipped: a reopen,
+  `--reason`), here or, for a task claimed, blocked or in review in another worktree, there (`todo_command` in
+  `lib/status.py`). It refuses options that aren't for the change (`--commit: not for in_progress (start)`) and asks
+  for the ones it needs. The agent comes from `--agent`, `ATM_AGENT` or the session, as before.
+- **A review's decisions are `atm task review approve <id> [--note]` and `atm task review request-changes <id>
+  --reason`**: the decision first, so a permission rule tells them apart. No skill pre-approves them (I23).
+- **`--json` (`-j`) and `--dry-run` (`-n`) go anywhere on the line** (before a `--`); `atm --dir PATH <command>`
+  as before. Errors are `atm: <message>`, or `{"error", "code"}` with `--json`; a usage error (Click's: a missing
+  argument, an unknown option or command) has the command's usage line and exit code 2. Shell completion for zsh,
+  bash and fish (`atm --install-completion`), with task IDs, sprints, releases, components and the vocabularies.
+- **Messages and hints name the new commands** (`atm db archive` would move …, `atm sprint move <id> --to backlog`,
+  `Run atm task state T-1 in_progress, then atm task state T-1 done again.`, `run atm doctor`, …).
+- **The merge driver is `atm db merge-driver %O %A %B`**: `atm db migrate` and `atm db init` register it again.
+- **The plugin's hooks** run `atm claim heartbeat --auto` and `atm service --refresh`.
+- **The skills, `plugin/CLAUDE.md` and the README** use the new names; each skill pre-approves its commands one by
+  one (`Bash(atm task state:*)`, …), never `atm loop run` or a review decision; `/atm:close-sprint` pre-approves no
+  status change, so a skip asks for permission. An approval or a request for changes is the user's.
+- **Typer and Click ship with the plugin** (T-425), copied as they are into `plugin/scripts/vendor/` (click 8.1.8,
+  typer 0.15.4, as `atm-cli/uv.lock` pins them; without Typer's rich support, so help is plain Click output on every
+  machine); `atm.py` puts the folder first on its import path. Nothing is installed; CI's pip step is gone.
+- **The task state machine** is `transitions` (T-417, T-418), vendored and built into `atm.py`, with the same
+  refusals, notes and exit codes as before.
+- **The dashboard's development uses pnpm** (T-427): `pnpm-lock.yaml`, overrides in `pnpm-workspace.yaml`, CI and
+  the hooks on pnpm 12.14.0.
+
+### Removed
+- **The old flat commands** (`atm start`, `done`, `review`, `block`, `show`, `list`, `sprints`, `commit`, `serve`,
+  `check`, …): "No such command". No aliases.
+- **`atm2`** and its launcher: the tree is `atm`.
+
+### Docs
+- **ADR-001**: filtering and search stay in the dashboard (T-435). The coding guides (`docs/guides/`) are linked from
+  `AGENTS.md`.
+
 ## [0.30.0] - 2026-11-04
 
 The sprint *Viewer fixes* (release 0.30.0).

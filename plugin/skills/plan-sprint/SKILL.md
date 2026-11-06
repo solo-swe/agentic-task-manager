@@ -68,7 +68,7 @@ Ask which sprint to plan: a planned one, or a new one. For a new one, agree on i
 goal, release and optional due date, then:
 
 ```bash
-atm sprint add '<name>' --goal '<goal>' [--release '<release>' ] [--due YYYY-MM-DD] [--after '<sprint>' ]
+atm sprint add '<name>' --goal '<goal>' [--release '<release>'] [--due YYYY-MM-DD] [--after '<sprint>']
 ```
 
 For a planned one, change only what the user agreed to change: `atm sprint edit '<name>' --goal '…'` (an empty value

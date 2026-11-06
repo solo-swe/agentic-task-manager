@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.31.0] - 2026-11-06
+
+- atm's commands are grouped by what they act on: tasks, the work loop, sprints, releases and the project.
+- One command moves a task to any state, so there are fewer commands to remember.
+- Approving a review, or asking for changes, is always your decision: agents ask you before doing either.
+- Your shell can complete atm's commands, task IDs and sprint names as you type.
+- Nothing to install: everything atm needs comes with the plugin.
+
 ## [0.30.0] - 2026-11-04
 
 - Markdown documents show a number for every line, beside its text, as code does; a link to a line marks just that line.

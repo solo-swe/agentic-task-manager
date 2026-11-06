@@ -44,7 +44,7 @@ from ..lib.claims import expire_claims, next_task_for, renew_due_claims, renew_l
 from ..lib.components import add_component, edit_component, list_components
 from ..lib.edit import add_new_tasks, check_project, edit_existing_task
 from ..lib.query import Filters, project_summary, status_report, summary, task_dependencies, task_views
-from ..lib.status import STATUS_FUNCTIONS, add_task_note
+from ..lib.status import STATUS_FUNCTIONS, add_task_note, todo_command
 from ..lib.tasks import show_tasks
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
 from ..lib.sprints import (
@@ -465,24 +465,8 @@ def task_state(
 
     project = open_project(os.getcwd(), agent_identity(agent))
     if next_state == "todo":
-        # Back to todo is a different command for each kind the task is in now
-        view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
-        if view is None:
-            show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
-            current = "done"
-        else:
-            current = view["derived"].get("kind")
-        todo_commands = {
-            # A failure says why (--reason); otherwise it is handed back, with a handoff note or none
-            "active": "fail" if reason is not None else "release",
-            "review": "reject",
-            "blocked": "unblock",
-            "done": "reopen",
-            "skipped": "reopen",
-        }
-        if current not in todo_commands:
-            raise Invalid(f"{task_id} is already {current}")
-        cmd = todo_commands[current]
+        # Back to todo is a different status function for each kind the task is in (a failure says why: --reason)
+        cmd = todo_command(project, task_id, failing=reason is not None)
 
     given = {
         "note": note,
@@ -1631,7 +1615,7 @@ def doctor(
 @app.command("service", rich_help_panel=MAINTENANCE)
 def service(
     ctx: typer.Context,
-    action: str = typer.Argument("start", help="start|stop|status"),
+    action: str = typer.Argument("start", click_type=click.Choice(["start", "stop", "status"])),
     open_: bool = typer.Option(False, "--open", help="Also open the dashboard in the browser"),
     all_projects: bool = typer.Option(False, "--all", help="Show all projects overview"),
     port: int = typer.Option(DEFAULT_PORT, "--port", help="The port to try first"),

@@ -128,8 +128,9 @@ errors (the message says what).
    `atm task state <id> done --note '<one-line outcome>'`, or `atm task state <id> in_review --note '...'` when its review mode asks for one, or
    `atm task state <id> blocked --on user|agent --question '...'` when you can't go on without a decision (steps 5 and 6 below).
    A task is never done with its work uncommitted.
-5. Give up with `atm task state <id> todo --reason '...'`; stop early with `atm task state <id> todo --note '<handoff>'`. A task marked
-   done by mistake goes back with `atm task state <id> todo --reason '...'`; never change a status by editing `tasks.json`.
+5. Back to to do is `atm task state <id> todo`, from wherever the task is: give up with `--reason '...'` (a failure
+   note), stop early with `--note '<handoff>'`; a task marked done by mistake goes back with `--reason '...'` too.
+   Never change a status by editing `tasks.json`.
    Notes, questions, answers and reasons show on the dashboard as Markdown: paths, commands and identifiers in
    `` `code` ``, short, without headings. Quote them in **single quotes**, never double: in double quotes the shell
    runs backticks and `$(…)` (write an apostrophe as `’`). A later task's description (`atm task edit <id> --description-file <file>`) is
@@ -218,18 +219,20 @@ while true:
     6. FINISH the task, once its commit is in:
        - By its review mode (/atm:do-task Step 7b): `atm task state $TASK_ID done --note '...'`. For a `none` or `batch`
          task it is done (`batch`: the note says what the end-of-sprint review should check); completed_count += 1.
-         For a `blocker` or `async` task atm refuses: ask for the review, `atm review $TASK_ID --note '<what the
-         reviewer should check>'` (with `--status` when one of several review statuses fits). The claim is
+         For a `blocker` or `async` task atm refuses: ask for the review, `atm task state $TASK_ID in_review --note
+         '<what the reviewer should check>'` (with `--status` when one of several review statuses fits). The claim is
          released and the tasks that depend on it keep waiting. Count it as waiting for review, not completed.
          `async`: the loop goes on with other ready tasks. `blocker`: the review comes first: with the user
          watching, ask them to review it now; unattended, stop the loop and say what waits for the review.
          A review held with the user (a draft or proposal the task says to review with them): `atm task state <id> in_review` as soon
          as the draft is committed, *before* opening the review, so the dashboard shows it waiting on them; address
-         their comments while it stays in review. Once they approve, check what the task still asks for; if
-         anything is left, record the approval and take it back to in progress (`atm task review approve <id>` with a note on
-         what is left, then `atm task state <id> in_progress`) and carry on; only when nothing is left, `atm task state <id> done` it (/atm:do-task
-         Step 7b). `atm loop next` hands tasks back from review (approved, or with changes asked for) before new
-         ones: read the latest `rejection` or approval note first.
+         their comments while it stays in review. A review's decision is the user's: they record it with
+         `atm task review approve <id>` or `atm task review request-changes <id> --reason '…'` (no skill pre-approves
+         either; if they ask you to run one, it asks them for permission). Once it is approved, check what the task
+         still asks for; if anything is left, take it back to in progress (`atm task state <id> in_progress`) and carry
+         on; only when nothing is left, `atm task state <id> done` it (/atm:do-task Step 7b). `atm loop next` hands
+         tasks back from review (approved, or with changes asked for) before new ones: read the latest `rejection` or
+         approval note first.
        - If it needs a decision: `atm task state $TASK_ID blocked --on user --question '<question>' [--question ...]`
          (`--on agent` when the project or the user hands such decisions to a reviewer agent). The claim is
          released and its dependents wait; the loop goes on with other ready tasks. Count it as blocked. Whoever
@@ -273,7 +276,7 @@ review, blocked or waiting, and what's next) and output a final summary:
 > **Failed:** N tasks that failed verification (if any)
 > **Archived:** N finished tasks (if the loop archived; or the archive hint, if it was only relayed)
 >
-> To pass a review: `atm task state <id> done`; to send it back: `atm task state <id> todo --reason '...'`. To answer a block:
+> To pass a review: `atm task review approve <id>`; to ask for changes: `atm task review request-changes <id> --reason '...'`. To answer a block:
 > `atm task state <id> todo --answer '...'` (one per question).
 >
 > **Next steps:** (list tasks that are now available to work on, if any)
@@ -292,7 +295,7 @@ summary. With `--push`, this is the last task's push, watched.
 ## Error Handling
 
 - If `atm` can't read tasks.json (exit code 1 with a message) → stop the loop, report the error
-- If a task fails verification → `atm task state <id> todo` it (back to todo), skip it, continue
+- If a task fails verification → `atm task state <id> todo --reason '…'` (back to todo, a failure), skip it, continue
 - If `atm` exits with code 4 (claimed by another agent) → leave that task alone and continue
 - If `atm` says your lease expired (exit code 4, "your lease expired at …") → the task went back to todo, with your
   commit kept. Run `atm task state <id> in_progress` and, if that works, the command again as it says; if another agent has claimed

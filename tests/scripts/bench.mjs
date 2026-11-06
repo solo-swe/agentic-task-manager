@@ -136,7 +136,7 @@ function taskViews(data) {
     const file = json(data);
     fs.writeFileSync(path.join(root, '.agentic-task-manager', 'tasks.json'), file);
     // --tolerant: read as atm serve's v1 route reads it, and answered in its shape (meta, tasks, problems)
-    const r = spawnSync(ATM, ['list', '--derived', '--tolerant'], {
+    const r = spawnSync(ATM, ['task', 'list', '--derived', '--tolerant'], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 1 << 30, // 10k tasks are tens of megabytes of views

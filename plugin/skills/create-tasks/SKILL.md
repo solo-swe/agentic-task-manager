@@ -184,7 +184,7 @@ Add the new sprints the user confirmed, one at a time (they start planned; none 
 
 ```bash
 atm sprint add 'Foundations' --goal 'The schema and sign-in'
-atm sprint add --goal 'Core features' # a name is generated without one
+atm sprint add --goal 'Core features'      # a name is generated without one
 ```
 
 Then save the confirmed workflow (unless one was already set): `atm project workflow set <direct|pull-request>`, with
@@ -195,7 +195,7 @@ Then save the confirmed workflow (unless one was already set): `atm project work
 Write the new tasks as a JSON list to another scratch file and add them all at once:
 
 ```bash
-atm task add --json-file <that file> --json [--agent '<the user’s name>' ]
+atm task add --json-file <that file> --json [--agent '<the user’s name>']
 ```
 
 ```json

@@ -36,13 +36,21 @@
     "args": ["task", "state", "--help"],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["Usage: atm task state [OPTIONS] TASK_ID NEXT_STATE", "--agent", "--question", "Move a task to another state"]
+      "stdoutIncludes": [
+        "Usage: atm task state [OPTIONS] TASK_ID NEXT_STATE",
+        "--agent",
+        "--question",
+        "Move a task to another state"
+      ]
     }
   },
   {
     "name": "a group's help lists its commands",
     "args": ["vcs", "--help"],
-    "expect": { "exit": 0, "stdoutIncludes": ["Usage: atm vcs [OPTIONS] COMMAND [ARGS]...", "commit", "pr", "repository"] }
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["Usage: atm vcs [OPTIONS] COMMAND [ARGS]...", "commit", "pr", "repository"]
+    }
   },
   {
     "name": "help says every command takes --json, anywhere on the line, and how --dir works",

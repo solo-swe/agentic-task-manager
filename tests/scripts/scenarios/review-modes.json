@@ -12,7 +12,9 @@
     "env": { "ATM_AGENT": "claude:abcd1234" },
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review --note '<what to check>'"]
+      "stderrIncludes": [
+        "T-1 is reviewed (blocker): ask for it with atm task state T-1 in_review --note '<what to check>'"
+      ]
     }
   },
   {
@@ -30,7 +32,9 @@
     "env": { "ATM_AGENT": "Hakan" },
     "expect": {
       "stdoutIncludes": ["T-1: in_progress -> done"],
-      "files": { "err.txt": "atm: T-1 is reviewed (async): ask for it with atm task state T-1 in_review --note '<what to check>'\n" }
+      "files": {
+        "err.txt": "atm: T-1 is reviewed (async): ask for it with atm task state T-1 in_review --note '<what to check>'\n"
+      }
     }
   },
   {

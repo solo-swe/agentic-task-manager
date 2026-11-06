@@ -349,9 +349,11 @@ The user-suggested strategy: introduce the new command structure as a **wrapper*
 
 ### Phase 5 — Remove old flat commands
 
-1. Once every new subcommand is tested and delegates correctly, remove the old flat commands one at a time (or all at once after a deprecation release).
-2. Keep deprecated aliases that print: `atm: '<old>' is deprecated, use 'atm <new>'` and exit with the same code as the new command.
-3. Update `atm/cli/main.py` `USAGE` string, `NO_REFRESH`, `build_parser`.
+Done in T-425, without the deprecation step (§11): the old flat commands were deleted.
+
+1. Once every new subcommand is tested and delegates correctly, remove the old flat commands.
+2. ~~Keep deprecated aliases~~: none (§11).
+3. The Typer tree becomes `atm/cli/main.py`, with `main()`, `NO_REFRESH` and the options that go anywhere.
 4. Update `plugin/CLAUDE.md` and skills that reference `atm` commands.
 5. Update `task-states.md` and any other docs referencing old command names.
 6. Run full test suite + `atm check` (`doctor`).
@@ -488,13 +490,21 @@ Only after all of the above pass for a phase do we proceed to the next phase.
 
 ---
 
-## 11. Open questions
+## 11. Decisions (formerly open questions; answered with the user, 2026-11-06, T-425)
 
-- Should `atm task state <id> in_progress` require `--agent`, or infer from `ATM_AGENT`/session like today?
-- Should `task state` accept the old command names as aliases (e.g. `atm task state <id> start`) during transition?
-- Does `loop start` merge with `task state <id> in_progress`, or stay separate?
-- Should deprecated old commands print a warning to stderr, or silently delegate for one release then remove?
+- `atm task state <id> in_progress` finds the agent as every command does: `--agent`, else `ATM_AGENT`, else the
+  session. It doesn't require `--agent`.
+- `task state` takes states only, never the old command names (`atm task state <id> start` is refused).
+- `loop start` stays separate from `task state <id> in_progress`; it isn't built yet.
+- The old flat commands are **deleted**, not deprecated: atm has no real users yet. `atm start …` is "No such command".
+- Typer and Click ship with the plugin, copied as they are into `plugin/scripts/vendor/` (rich is left out, so help
+  is plain Click output on every machine); a stopgap until the Rust port (T-415).
+- A review's decisions are their own commands, `atm task review approve|request-changes <id>` (the decision first, so
+  a permission rule can tell them apart, and no skill pre-approves them, I23); T-438 adds `reject`, guards the exits
+  from review on the decision, and makes skip one transition from any open state.
+- `atm loop run` goes in T-437: atm runs no command it is given; `atm claim hold <id>` keeps a claim alive instead.
 
 ---
 
-*Next step: pick Phase 0 scope, scaffold the wrapper, and run `npm run test:scripts` to confirm the baseline is green before adding any new command.*
+*Done: the tree is `atm` since T-425 (`atm-cli/atm/cli/main.py`); `tests/scripts/cli.test.mjs` tests the command line
+itself.*

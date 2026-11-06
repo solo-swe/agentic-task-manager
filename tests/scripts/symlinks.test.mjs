@@ -24,7 +24,11 @@ describe('symlinks in the task folder', () => {
         const link = path.join(root, '.agentic-task-manager', name);
         fs.rmSync(link, { force: true });
         fs.symlinkSync(target, link);
-        for (const args of [['migrate'], ['init'], ['status']]) {
+        for (const args of [
+          ['db', 'migrate'],
+          ['db', 'init'],
+          ['project', 'status'],
+        ]) {
           const r = runAtm(args, root, { ATM_HOME: path.join(root, '.atm-home') });
           assert.equal(r.code, 1, `${args}: ${r.stdout}${r.stderr}`);
           assert.match(r.stderr, /is a symlink/);

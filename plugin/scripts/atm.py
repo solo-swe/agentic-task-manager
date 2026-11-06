@@ -8218,6 +8218,36 @@ COMMAND_STATES = {"done": "done", "release": "todo", "fail": "todo", "review": "
 REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
 
 
+def todo_command(project, task_id, failing=False):
+    """The status function `atm task state <id> todo` runs, by the kind the task is in: in progress, a failure
+    (`failing`, it says why) or a release; in review, reject; blocked, unblock; done or skipped, reopen. A task that is
+    to do here but claimed (in progress in another worktree, T-202), or blocked or in review in another worktree
+    (T-204), is decided as it is there. Raises Invalid when it is to do already."""
+    view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
+    if view is None:
+        show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
+        kind = "done"
+    else:
+        kind = view["derived"].get("kind")
+    if kind == "todo":
+        store = project.store.read_claims()
+        record = store["waiting"].get(task_id)
+        if task_id in store["claims"]:
+            kind = "active"  # the claim's holder check says whose it is
+        elif isinstance(record, dict) and record.get("worktree") != project.store.working_copy():
+            kind = kind_of(vocabulary({"meta": project.store.get_settings()}), record.get("status"))
+    commands = {
+        "active": "fail" if failing else "release",
+        "review": "reject",
+        "blocked": "unblock",
+        "done": "reopen",
+        "skipped": "reopen",
+    }
+    if kind not in commands:
+        raise Invalid(f"{task_id} is already {kind}")
+    return commands[kind]
+
+
 def claim_record(work, data, task_id, agent):
     """A new claim on the task, from this working copy (its worktree and branch, T-202)."""
     here = work.here()
@@ -11921,24 +11951,8 @@ def task_state(
 
     project = open_project(os.getcwd(), agent_identity(agent))
     if next_state == "todo":
-        # Back to todo is a different command for each kind the task is in now
-        view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
-        if view is None:
-            show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
-            current = "done"
-        else:
-            current = view["derived"].get("kind")
-        todo_commands = {
-            # A failure says why (--reason); otherwise it is handed back, with a handoff note or none
-            "active": "fail" if reason is not None else "release",
-            "review": "reject",
-            "blocked": "unblock",
-            "done": "reopen",
-            "skipped": "reopen",
-        }
-        if current not in todo_commands:
-            raise Invalid(f"{task_id} is already {current}")
-        cmd = todo_commands[current]
+        # Back to todo is a different status function for each kind the task is in (a failure says why: --reason)
+        cmd = todo_command(project, task_id, failing=reason is not None)
 
     given = {
         "note": note,
@@ -13087,7 +13101,7 @@ def doctor(
 @app.command("service", rich_help_panel=MAINTENANCE)
 def service(
     ctx: typer.Context,
-    action: str = typer.Argument("start", help="start|stop|status"),
+    action: str = typer.Argument("start", click_type=click.Choice(["start", "stop", "status"])),
     open_: bool = typer.Option(False, "--open", help="Also open the dashboard in the browser"),
     all_projects: bool = typer.Option(False, "--all", help="Show all projects overview"),
     port: int = typer.Option(DEFAULT_PORT, "--port", help="The port to try first"),

@@ -19,9 +19,9 @@ from ..common.model import (
     vocabulary,
 )
 from .loop import apply_resolutions, archived_in, check_holder, drop_expired_claims, lease_until, own_lease_expired
-from .query import ready_tasks
+from .query import Filters, ready_tasks, task_views
 from .state import change_status
-from .tasks import view_task
+from .tasks import show_tasks, view_task
 
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
 OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
@@ -33,6 +33,36 @@ COMMAND_STATES = {"done": "done", "release": "todo", "fail": "todo", "review": "
 # Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
 # waiting task must have there
 REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
+
+
+def todo_command(project, task_id, failing=False):
+    """The status function `atm task state <id> todo` runs, by the kind the task is in: in progress, a failure
+    (`failing`, it says why) or a release; in review, reject; blocked, unblock; done or skipped, reopen. A task that is
+    to do here but claimed (in progress in another worktree, T-202), or blocked or in review in another worktree
+    (T-204), is decided as it is there. Raises Invalid when it is to do already."""
+    view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
+    if view is None:
+        show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
+        kind = "done"
+    else:
+        kind = view["derived"].get("kind")
+    if kind == "todo":
+        store = project.store.read_claims()
+        record = store["waiting"].get(task_id)
+        if task_id in store["claims"]:
+            kind = "active"  # the claim's holder check says whose it is
+        elif isinstance(record, dict) and record.get("worktree") != project.store.working_copy():
+            kind = kind_of(vocabulary({"meta": project.store.get_settings()}), record.get("status"))
+    commands = {
+        "active": "fail" if failing else "release",
+        "review": "reject",
+        "blocked": "unblock",
+        "done": "reopen",
+        "skipped": "reopen",
+    }
+    if kind not in commands:
+        raise Invalid(f"{task_id} is already {kind}")
+    return commands[kind]
 
 
 def claim_record(work, data, task_id, agent):

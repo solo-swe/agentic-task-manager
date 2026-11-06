@@ -62,8 +62,13 @@ describe('claims', () => {
     const root = repo();
     try {
       runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
-      for (const cmd of ['done', 'release', 'fail', 'heartbeat']) {
-        const r = runAtm([cmd, 'T-001'], root, as('bob', 1));
+      for (const [cmd, args] of [
+        ['done', ['task', 'state', 'T-001', 'done']],
+        ['release', ['task', 'state', 'T-001', 'todo']],
+        ['fail', ['task', 'state', 'T-001', 'todo', '--reason', 'broken']],
+        ['heartbeat', ['claim', 'heartbeat', 'T-001']],
+      ]) {
+        const r = runAtm(args, root, as('bob', 1));
         assert.equal(r.code, 4, `${cmd}: ${r.stderr}`);
         assert.match(r.stderr, new RegExp(`can't ${cmd} T-001: it is claimed by alice until ${at(30)}`));
       }
@@ -122,7 +127,7 @@ describe('claims', () => {
     try {
       runAtm(['task', 'state', 'T-001', 'in_progress'], root, { CLAUDE_CODE_SESSION_ID: 'abcdef1234', ATM_NOW: T0 });
       const hook = (input, cwd = elsewhere) =>
-        spawnSync(ATM, ['heartbeat', '--auto'], {
+        spawnSync(ATM, ['claim', 'heartbeat', '--auto'], {
           cwd,
           input,
           encoding: 'utf8',
@@ -196,7 +201,7 @@ describe('claims', () => {
     const wt = path.join(tempDir(), 'wt2');
     const session = (minutes) => ({ CLAUDE_CODE_SESSION_ID: 'abcdef1234567890', ATM_NOW: at(minutes) });
     const hook = (cwd, minutes) =>
-      spawnSync(ATM, ['heartbeat', '--auto'], {
+      spawnSync(ATM, ['claim', 'heartbeat', '--auto'], {
         cwd,
         input: JSON.stringify({ session_id: 'abcdef1234567890', cwd, hook_event_name: 'PostToolUse' }),
         encoding: 'utf8',
@@ -278,7 +283,7 @@ describe('claims', () => {
       git(['worktree', 'add', '-q', '-b', 'agent-2', wt], root);
       // alice blocks T-001 in the main worktree; her claim is released, but the task isn't handed out elsewhere
       runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
-      const block = ['block', 'T-001', '--on', 'user', '--question', 'Which provider?'];
+      const block = ['task', 'state', 'T-001', 'blocked', '--on', 'user', '--question', 'Which provider?'];
       assert.equal(runAtm(block, root, as('alice', 1)).code, 0);
       assert.deepEqual(
         [store().waiting['T-001'].status, store().waiting['T-001'].questions, store().waiting['T-001'].branch],

@@ -267,7 +267,9 @@
   },
   {
     "name": "an answer goes only to a blocked task",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_progress" }] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "in_progress" }] } }
+    },
     "args": ["task", "state", "T-1", "todo", "--answer", "Yes"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "exit": 2, "stderrIncludes": ["atm: --answer: not for todo (release) from where T-1 is"] }

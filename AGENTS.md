@@ -5,7 +5,7 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
 
 ## Layout
 - `plugin/skills/*/SKILL.md` — the `/atm:*` skills
-- `plugin/templates/tasks-dashboard.html` — the dashboard, served by `atm serve` (one server per user, for all
+- `plugin/templates/tasks-dashboard.html` — the dashboard, served by `atm service` (one server per user, for all
   projects; routes in `docs/multi-project-api.md`)
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)
 - `atm-cli/` — atm-cli's source modules and the build that writes `plugin/scripts/atm.py` (dev only, not shipped)
@@ -48,7 +48,7 @@ The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4
 
 Commands (run in `dashboard/`):
 - `pnpm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
-  temporary `ATM_HOME`, so your own `atm serve` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
+  temporary `ATM_HOME`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
   to it) for this repo's `.agentic-task-manager/`, or for other folders with
   `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] pnpm run dev` (a folder without a task file is listed as
   missing). `pnpm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
@@ -68,9 +68,13 @@ Commands (run in `dashboard/`):
 
 ## atm-cli (`atm-cli/`, built into `plugin/scripts/`)
 atm-cli is the `atm` command the skills run (earlier docs call it "the helper"). `plugin/scripts/atm` is a POSIX sh
-launcher that runs `atm.py` with Python 3.9+ (or explains that Python is needed). atm-cli uses the **standard library
-only** and must stay compatible with Python 3.9, the version macOS's Command Line Tools ship. Python is the plugin's
-one runtime requirement; why there is a single implementation is in `docs/helper-runtime-proposal.md`.
+launcher that runs `atm.py` with Python 3.9+ (or explains that Python is needed). atm-cli uses the standard library
+and three vendored libraries, nothing installed: `transitions` (the task state machine; `atm-cli/vendored/`, bundled
+into `atm.py`) and Typer with Click (the command tree, `atm-cli/atm/cli/main.py`; copied as they are into
+`plugin/scripts/vendor/`, which `atm.py` puts first on its import path; versions as `atm-cli/uv.lock` pins them,
+`tests/scripts/vendor.test.mjs`). It must stay compatible with Python 3.9, the version macOS's Command Line Tools
+ship. Python is the plugin's one runtime requirement; why there is a single implementation is in
+`docs/helper-runtime-proposal.md`.
 
 **Edit the modules in `atm-cli/atm/`, never `plugin/scripts/atm.py`.** That file is a **committed build artifact**:
 `atm-cli/build.py` concatenates the modules in dependency order (its `MODULES` list; a module imports only from
@@ -146,7 +150,7 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 ## Versions
 `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions must match. Bump both when the
 dashboard or skills change, so `/plugin marketplace update` delivers them and running dashboard servers restart on the
-new dashboard (`atm serve --refresh`).
+new dashboard (`atm service --refresh`).
 
 Every release gets **two** entries (`pnpm run check` fails without either):
 - `plugin/CHANGELOG.md` — the detailed record, for developers: every change, with command names and flags.

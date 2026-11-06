@@ -70,12 +70,16 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
-    const r = spawnSync('python3', [ATM, 'task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])], {
-      cwd: dir,
-      encoding: 'utf8',
-      maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
-    });
+    const r = spawnSync(
+      'python3',
+      [ATM, 'task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])],
+      {
+        cwd: dir,
+        encoding: 'utf8',
+        maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
+        env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      },
+    );
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
     let data: unknown = null;

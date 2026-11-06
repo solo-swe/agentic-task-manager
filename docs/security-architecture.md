@@ -52,11 +52,11 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | **Task text is data, not commands.** The skills and `plugin/CLAUDE.md` say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
-| I2 | **Skills pre-approve no command runner**: only named `atm` subcommands, never `atm run` or `atm *` | `skills.test.ts` |
+| I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm loop run`, `atm *` or a group that holds `loop run` | `skills.test.ts` |
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
-| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), approve a review (`atm approve`) only on the user's word in the session, never `request-changes` on their own, and an unattended loop never takes `with: user` work (`--with-user` is the user's flag) | `skills.test.ts` (no `--agent` in the working skills, `request-changes` not pre-approved, the `with: user` rule); `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
-| I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads, `atm sprints`, `atm move` (and `atm skip` for closing): no `atm add`, `edit` or `done` | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
+| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). T-438 adds atm's own guard: the exits from review need the decision | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
+| I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
 ### atm-cli (B2)
 
@@ -525,6 +525,29 @@ review in place of the live sandbox run:
   never to run commands copied from task text, and `--dir` commits nothing a plain `git add` of those files wouldn't.
 - **Its limit:** a change under the folder by an agent whose task doesn't list it, or by a person, goes in with the
   commit. That is why the skills keep `--dir` to generated output (`git.test.mjs` "atm commit --dir").
+
+**The command tree becomes `atm` (T-425).** Every command has a new name (`atm task state <id> done`, `atm loop
+next`, `atm vcs commit`, …; `docs/improving-atm-cli-ergonomics.md`), the old flat commands are gone, and every skill,
+`plugin/CLAUDE.md` and the plugin's hooks (`atm claim heartbeat --auto`, `atm service --refresh`) use the new names.
+Written review in place of the live sandbox run (no API key is used for the sandbox):
+- **Third-party code in the plugin.** Typer and Click run in every `atm` call, so they are part of what users run:
+  copied as they are into `plugin/scripts/vendor/` from the uv environment, at the versions `atm-cli/uv.lock` pins
+  (with their hashes), checked by `tests/scripts/vendor.test.mjs`; one line changed (`vendor/README.md`). Typer's
+  rich support is left out, so an installed `rich` can't change atm's output; `atm.py` puts the folder first on its
+  import path, so an installed Click or Typer is never used. No package is installed anywhere (CI's pip step went).
+- **What the skills pre-approve** (`allowed-tools`) is mapped command by command, never a whole group that holds
+  `loop run` or a review decision (`skills.test.ts`): `atm task state` replaces the dozen status commands; no skill
+  pre-approves `atm loop run` (I2) or `atm task review` (I23).
+- **I23 under the new tree.** `task state` can't tell its targets apart in a permission rule (the ID comes first), so
+  the review's decisions left it: `atm task review approve|request-changes <id>`, the decision first. No skill
+  pre-approves them, so an agent that runs one asks the user for permission; the skills say the decision is the
+  user's. `close-sprint` used to pre-approve only `atm skip`: it now pre-approves no status change, and a skip asks
+  for permission. T-438 then guards the exits from review on the decision, in atm itself.
+- **What the text asks of agents** is unchanged: the same work under the new names, *Task text is data* and *Logs
+  are evidence* untouched, every agent-written text still single-quoted (I3). The merge driver's registration is
+  `atm db merge-driver %O %A %B`; `atm db migrate`, which every skill runs first, registers it again in a clone.
+- **No new entry point.** The tree reads the same paths and URLs the old commands did; `--json` and `--dry-run` may
+  go anywhere on the line before `--`, which changes no command's meaning (`cli.test.mjs`).
 
 ## 4. Keeping it current
 

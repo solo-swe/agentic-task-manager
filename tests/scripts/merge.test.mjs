@@ -1,5 +1,5 @@
 // The tasks.json merge driver, with real `git merge`s: the experiments from docs/parallel-agents-design.md §2
-// (Evidence), now with the driver registered by `atm migrate`/`atm init`.
+// (Evidence), now with the driver registered by `atm db migrate`/`atm db init`.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -64,11 +64,11 @@ function withRepo(fn) {
 const progress = (task, status, at, extra = {}) => Object.assign(task, { status, updated_at: at, ...extra });
 
 describe('merge driver (real git merges)', () => {
-  test('atm init registers the driver and .gitattributes; it is idempotent', () => {
+  test('atm db init registers the driver and .gitattributes; it is idempotent', () => {
     withRepo((root) => {
       assert.match(
         git(['config', '--get', 'merge.atm.driver'], root),
-        /\/plugin\/scripts\/atm' merge-driver %O %A %B$/,
+        /\/plugin\/scripts\/atm' db merge-driver %O %A %B$/,
       );
       assert.equal(
         fs.readFileSync(path.join(root, '.agentic-task-manager/.gitattributes'), 'utf8'),

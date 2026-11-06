@@ -115,7 +115,7 @@ Or loop through everything:
 
 - [Claude Code](https://claude.com/code) (CLI or VS Code extension)
 - **Python 3.9 or newer** (`python3`). The skills run a small helper script (`plugin/scripts/atm.py`) that moves task
-  files and serves the dashboard. It uses only Python's standard library, so there is nothing to install. On macOS,
+  files and serves the dashboard. The libraries it uses come with the plugin, so there is nothing to install. On macOS,
   `python3` comes with the Command Line Tools (the same install that provides `git`). macOS and Linux are supported.
 
 ### Method 1: Via marketplace (recommended)
@@ -214,14 +214,14 @@ Type `/atm:` in Claude Code - you should see seven skills in autocomplete:
 
 **What it does:**
 
-1. Starts and claims the task with `atm start` (or `atm next --claim` to auto-pick), which checks its dependencies
-2. Reads the task and its notes (a reviewer's rejection, a previous agent's handoff) with `atm show`
-3. Implements the task according to its description, updating later tasks with `atm edit` if it has to
+1. Starts and claims the task with `atm task state <id> in_progress` (or `atm loop next --claim` to auto-pick), which checks its dependencies
+2. Reads the task and its notes (a reviewer's rejection, a previous agent's handoff) with `atm task details`
+3. Implements the task according to its description, updating later tasks with `atm task edit` if it has to
 4. Runs build/test/lint verification
-5. Commits exactly the files it changed with `atm commit`, while the task is still in progress
-6. Only then ends it: `atm done --note "<outcome>"`, or `atm review` when a review is asked for, or `atm block --on
-user --question "..."` when it can't go on without your decision. A task is never marked done with its work
-   uncommitted; one marked done by mistake goes back with `atm reopen <id> --reason "..."`
+5. Commits exactly the files it changed with `atm vcs commit`, while the task is still in progress
+6. Only then ends it: `atm task state <id> done --note "<outcome>"`, or `atm task state <id> in_review` when a review is asked for, or
+   `atm task state <id> blocked --on user --question "..."` when it can't go on without your decision. A task is never marked done with its work
+   uncommitted; one marked done by mistake goes back with `atm task state <id> todo --reason "..."`
 7. Reports what was done and what's now unblocked, and suggests `/atm:push` when there are unpushed commits
 
 **Task selection** (when auto-picking): a task of the active sprint (any task, in a project without sprints): to-do,
@@ -273,7 +273,7 @@ one watches CI and fixes failures.
 **Commit message format:** `feat(T-001): Short task name`
 
 **The loop re-reads tasks.json every iteration**, so you can change tasks while the agent runs: ask another agent
-session, or run `atm` yourself (`atm edit T-005 --priority P0`, `atm skip T-007 --reason '…'`), and the loop picks
+session, or run `atm` yourself (`atm task edit T-005 --priority P0`, `atm task state T-007 skipped --reason '…'`), and the loop picks
 it up with its next task.
 
 ### `/atm:plan-sprint`
@@ -316,18 +316,18 @@ It proposes and you decide: nothing is moved, started or dated without your yes,
 
 It follows the project's **workflow**: `direct` (push straight to the base branch) or `pull-request` (push a feature
 branch and open or update its PR). Your project's `CLAUDE.md` comes first if it says how to push; otherwise the
-workflow saved in `tasks.json` (`atm workflow` shows it, `atm workflow set direct|pull-request` changes it); if there
+workflow saved in `tasks.json` (`atm project workflow` shows it, `atm project workflow set direct|pull-request` changes it); if there
 is none yet, `/atm:push` asks once and saves your answer.
 
 **What it does:**
 
 1. Checks the branch fits the workflow and nothing uncommitted belongs to someone else, and runs your verify
 2. Pushes, and in `pull-request` opens the PR (body: the task commits, grouped by phase) and records it on the tasks
-   (`atm pr`): the dashboard shows them as **In PR**
+   (`atm vcs pr`): the dashboard shows them as **In PR**
 3. Watches CI with plain `gh` calls and fixes failures by kind: test, lint and build failures are fixed and pushed
    again; budget overruns are measured and fixed, never just retried; flaky jobs are re-run once; infrastructure
    problems stop it
-4. Records merged PRs on their tasks (`atm merged`): the dashboard shows them as **Merged**
+4. Records merged PRs on their tasks (`atm vcs pushed`): the dashboard shows them as **Merged**
 5. Reports in three lines when CI is green, in detail when it stopped
 
 **Never, without asking you:** skip or weaken a test, raise a budget, edit the CI workflow to pass, force-push or
@@ -358,8 +358,8 @@ the dashboard's project selector, next to the title, switches between them. **Al
 card per project: its progress, current phase, agents at work, what needs you, and recent activity. With two or more
 projects the dashboard opens on it.
 
-- **The list:** `~/.agentic-task-manager/projects.json` (set `ATM_HOME` to keep it elsewhere). `atm projects` lists the
-  projects, `atm projects add [path]` adds one, `atm projects remove <id|path>` removes one, and `atm projects prune`
+- **The list:** `~/.agentic-task-manager/projects.json` (set `ATM_HOME` to keep it elsewhere). `atm project list` lists the
+  projects, `atm project add [path]` adds one, `atm project remove <id|path>` removes one, and `atm project prune`
   drops those whose folder is gone.
 - **Opting out:** a project with `"dashboard": { "listed": false }` in its `tasks.json` meta isn't listed.
 - **What the server exposes:** it listens on `127.0.0.1` only and answers only requests addressed to `localhost`. For
@@ -472,10 +472,10 @@ against the project's vocabularies and keeps the timestamps and actors right.
 | `priority`                                               | string                   | ❌       | `P0` (critical) … `P3` (low), or the project's own; none counts as the default, `P2`                                     |
 | `labels`                                                 | string[]                 | ❌       | Tags that group tasks across phases and types, e.g. `spike-2`, `ux` (lowercase, digits, `-`, `_`)                        |
 | `created_by`, `updated_by`, `started_by`, `completed_by` | string                   | ❌       | Who did it: an agent (`claude:e5ea9db0`) or a person (the git user name). `started_by` replaces the older `agent`        |
-| `review_requested_at`                                    | string                   | ❌       | When the task asked for a review (`atm review`); its work ended there                                                    |
+| `review_requested_at`                                    | string                   | ❌       | When the task asked for a review (`atm task state <id> in_review`); its work ended there                                                    |
 | `waiting_on`, `questions`, `blocked_at`                  | string, string[], string | ❌       | A blocked task: who decides (`user` or `agent`), the open questions, since when                                          |
 | `notes`                                                  | object[]                 | ❌       | `{at, by, kind, text}`: handoffs, outcomes, review requests, rejections, failures, answers (at most 500 characters each) |
-| `commit`                                                 | string                   | ❌       | The SHA of the task's commit (`atm commit`)                                                                              |
+| `commit`                                                 | string                   | ❌       | The SHA of the task's commit (`atm vcs commit`)                                                                              |
 | `pr`, `merged_at`                                        | object, string           | ❌       | The pull request that contains the task (`{number, url}`) and when it was merged                                         |
 
 atm maintains the timestamps and actors: `started_at`/`started_by` when a task starts, `completed_at`/`completed_by`
@@ -506,8 +506,8 @@ statuses, say. **About** in the dashboard shows the vocabularies a project uses.
 | ------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `todo`        | `todo`    | Not started                                                                                                                                   |
 | `in_progress` | `active`  | Currently being worked on                                                                                                                     |
-| `in_review`   | `review`  | Finished, waiting for approval by you or another agent (`atm review`; `atm done` passes it, `atm reject --reason` sends it back)              |
-| `blocked`     | `blocked` | Waiting on a decision: the agent asked (`atm block --on user\|agent --question ...`), whoever decides answers with `atm unblock --answer ...` |
+| `in_review`   | `review`  | Finished, waiting for approval by you or another agent (`atm task state <id> in_review`; you decide it with `atm task review approve` or `request-changes`)              |
+| `blocked`     | `blocked` | Waiting on a decision: the agent asked (`atm task state <id> blocked --on user\|agent --question ...`), whoever decides answers with `atm task state <id> todo --answer ...` |
 | `done`        | `done`    | Completed and verified; only done tasks let their dependents start                                                                            |
 | `skipped`     | `skipped` | Intentionally skipped                                                                                                                         |
 
@@ -520,8 +520,8 @@ Finished tasks pile up: at 10,000 tasks, `tasks.json` is several megabytes and s
 archive` moves done and skipped tasks older than two weeks (and not in an open PR) to `tasks-archive.json` next to
 it. atm suggests it when `tasks.json` passes 1 MB or 500 archivable tasks (`meta.archive` changes the thresholds,
 `"auto": false` stops agents from doing it on their own), and the agents archive at a break between tasks, in a
-commit of its own. Archived tasks still count as done for dependencies, `atm show` and `atm list --archived` read
-them, and `atm unarchive <id>` brings one back. The dashboard loads the archive only when a view needs history.
+commit of its own. Archived tasks still count as done for dependencies, `atm task details` and `atm task list --archived` read
+them, and `atm db unarchive <id>` brings one back. The dashboard loads the archive only when a view needs history.
 
 ---
 
@@ -617,10 +617,10 @@ You can change tasks while the loop runs: ask an agent in another session, or ru
 file so your change and an agent's can't overwrite each other. Changes are picked up on the next iteration. Use this
 to:
 
-- Skip a task that's no longer needed (`atm skip <id> --reason '…'`)
-- Block a task so the agent doesn't pick it up (`atm block <id> --on user --question '…'`)
+- Skip a task that's no longer needed (`atm task state <id> skipped --reason '…'`)
+- Block a task so the agent doesn't pick it up (`atm task state <id> blocked --on user --question '…'`)
 - Add new tasks mid-loop (`/atm:create-tasks`)
-- Change a task's description or dependencies (`atm edit <id> --description … --add-dep …`)
+- Change a task's description or dependencies (`atm task edit <id> --description … --add-dep …`)
 
 ### Multiple agents
 
@@ -648,7 +648,7 @@ Merge each branch back as usual (or open a PR per branch).
 - **One writer at a time.** Every status change goes through the plugin's helper (`atm`), which takes a lock,
   re-reads `tasks.json`, changes one task and writes the file atomically. The dashboard and other agents never see a
   half-written file, and two changes never overwrite each other.
-- **Claims.** `atm next --claim` picks the next task and claims it in one step. Claims record the agent (each Claude
+- **Claims.** `atm loop next --claim` picks the next task and claims it in one step. Claims record the agent (each Claude
   Code session has its own identity, and so does each worktree a session's subagents work in, e.g.
   `claude:e5ea9db0@agent-2`), branch and worktree. They are stored in the clone's `.git` directory, so agents
   in different worktrees of the clone see each other's claims straight away. A task finished, blocked or sent for
@@ -657,7 +657,7 @@ Merge each branch back as usual (or open a PR per branch).
   dashboard shows every worktree's tasks and claims on the project's board, before anything merges.
 - **Leases.** A claim lasts 30 minutes (`"lease_minutes"` in `tasks.json`'s `meta` changes the length) and the
   plugin's hook renews it while the agent works. A long command (a full test suite, a build) runs as
-  `atm run <id> -- <command>`, which keeps the claim alive while it runs. If an agent crashes, its task goes back to
+  `atm loop run <id> -- <command>`, which keeps the claim alive while it runs. If an agent crashes, its task goes back to
   `todo` when the lease runs out, with a failure note saying whose lease expired.
 - **Merging `tasks.json`.** A git merge driver (registered automatically) merges `tasks.json` task by task. Status
   changes from different branches combine (the further-along status wins, e.g. `done` over `in_progress`). Tasks
@@ -682,38 +682,46 @@ plugin's `bin/atm` on its Bash tool's PATH; in your own terminal, use the full p
 
 | Command                                                                                                   | What it does                                                                                                                                                                              |
 | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `atm status`                                                                                              | The overview: counts, what is in progress, in review or blocked, what's next                                                                                                              |
-| `atm show <id>...`, `atm deps <id>`                                                                       | Tasks in full (with notes); what a task waits for and what waits for it                                                                                                                   |
-| `atm list [--status S] [--sprint S] [--backlog] [--label L] [--ready] [--blocked] [--in-pr] [--archived]` | One line per task                                                                                                                                                                         |
-| `atm next [--sprint S \| --tasks T-1,T-5 \| --all \| --backlog] [--claim]`                                | The task the loop would take next (and claim it); the active sprint by default                                                                                                            |
-| `atm sprints [add \| edit \| start \| close]`, `atm move <id>... --to <S>`, `atm backlog`                 | Sprints, moving tasks between them and the backlog                                                                                                                                        |
-| `atm start\|done\|fail\|release <id>`                                                                     | Change a task's status (`--note` for an outcome or handoff, `--reason` for `fail`)                                                                                                        |
-| `atm review <id> --note T`, `atm reject <id> --reason T`                                                  | Ask for a review; send a reviewed task back                                                                                                                                               |
-| `atm block <id> --on user\|agent --question Q`, `atm unblock <id> --answer A`                             | Ask for a decision; answer it                                                                                                                                                             |
-| `atm note <id> TEXT`                                                                                      | Add a note to a task                                                                                                                                                                      |
-| `atm add`, `atm edit <id>`, `atm check`                                                                   | Add tasks (one, or many with `--json-file`), change a task's definition, check the file                                                                                                   |
-| `atm commit <id> --file F...`                                                                             | Commit exactly those files plus `tasks.json`, with the project's commit message                                                                                                           |
-| `atm workflow [set direct\|pull-request]`                                                                 | Show or set the project's workflow                                                                                                                                                        |
-| `atm archive`, `atm unarchive <id>...`                                                                    | Move finished tasks to `tasks-archive.json`, or bring them back                                                                                                                           |
-| `atm claims`, `atm heartbeat <id>`                                                                        | Who works on what, with time left on each lease; extend your claim's lease                                                                                                                |
-| `atm init`                                                                                                | Register the `tasks.json` merge driver (the skills do this automatically)                                                                                                                 |
-| `atm serve [start\|stop\|status] [--open] [--all]`                                                        | The dashboard server, one for all your projects                                                                                                                                           |
-| `atm projects [add [PATH] \| remove <id\|PATH> \| prune]`                                                 | The projects the dashboard lists                                                                                                                                                          |
-| `atm repository [set URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
+| `atm project status`                                                                                              | The overview: counts, what is in progress, in review or blocked, what's next                                                                                                              |
+| `atm task details <id>...`, `atm task deps <id>`                                                                       | Tasks in full (with notes); what a task waits for and what waits for it                                                                                                                   |
+| `atm task list [--status S] [--sprint S] [--backlog] [--label L] [--ready] [--blocked] [--in-pr] [--archived]` | One line per task                                                                                                                                                                         |
+| `atm loop next [--sprint S \| --tasks T-1,T-5 \| --all \| --backlog] [--claim]`                                | The task the loop would take next (and claim it); the active sprint by default                                                                                                            |
+| `atm sprint list \| add \| edit \| start \| close`, `atm sprint move <id>... --to <S>`, `atm sprint backlog`                 | Sprints, moving tasks between them and the backlog                                                                                                                                        |
+| `atm task state <id> in_progress \| done \| todo \| skipped`                                                                     | Change a task's status (`--note` for an outcome or handoff; back to `todo` with `--reason` when it failed, or to reopen it)                                                                                                        |
+| `atm task state <id> in_review --note T`, `atm task review approve \| request-changes <id>`                                                  | Ask for a review; decide it (yours: no skill does it on its own)                                                                                                                                               |
+| `atm task state <id> blocked --on user\|agent --question Q`, `atm task state <id> todo --answer A`                             | Ask for a decision; answer it                                                                                                                                                             |
+| `atm task note <id> TEXT`                                                                                      | Add a note to a task                                                                                                                                                                      |
+| `atm task add`, `atm task edit <id>`, `atm doctor`                                                                   | Add tasks (one, or many with `--json-file`), change a task's definition, check the file                                                                                                   |
+| `atm vcs commit <id> --file F...`                                                                             | Commit exactly those files plus `tasks.json`, with the project's commit message                                                                                                           |
+| `atm project workflow [set direct\|pull-request]`                                                                 | Show or set the project's workflow                                                                                                                                                        |
+| `atm db archive`, `atm db unarchive <id>...`                                                                    | Move finished tasks to `tasks-archive.json`, or bring them back                                                                                                                           |
+| `atm claim list`, `atm claim heartbeat <id>`                                                                        | Who works on what, with time left on each lease; extend your claim's lease                                                                                                                |
+| `atm db init`                                                                                                | Register the `tasks.json` merge driver (the skills do this automatically)                                                                                                                 |
+| `atm service [start\|stop\|status] [--open] [--all]`                                                        | The dashboard server, one for all your projects                                                                                                                                           |
+| `atm project list \| add [PATH] \| remove <id\|PATH> \| prune`                                                 | The projects the dashboard lists                                                                                                                                                          |
+| `atm vcs repository [URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm db init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
 
 The design is in [docs/v4/atm-cli.md](docs/v4/atm-cli.md).
 
 The full analysis (scenarios, failure modes, the alternatives considered) is in
 [docs/parallel-agents-design.md](docs/parallel-agents-design.md).
 
-**Fewer permission prompts.** The skills run plain `atm …` and pre-approve it while they run (`allowed-tools:
-Bash(atm *)`), so you don't need to do anything for them. That approval ends with your next message, though: if you
-also want `atm` approved when you ask Claude for something outside a skill ("what's the status?"), add one rule to
-your project's `.claude/settings.json` (or `~/.claude/settings.json`); it keeps working across plugin upgrades:
+**Fewer permission prompts.** The skills run plain `atm …` and pre-approve the commands they use while they run
+(their `allowed-tools`, one command at a time), so you don't need to do anything for them. That approval ends with
+your next message, though: if you also want atm's reads approved when you ask Claude for something outside a skill
+("what's the status?"), add rules for them to your project's `.claude/settings.json` (or `~/.claude/settings.json`);
+they keep working across plugin upgrades:
 
 ```json
-{ "permissions": { "allow": ["Bash(atm *)"] } }
+{
+  "permissions": {
+    "allow": ["Bash(atm project status:*)", "Bash(atm task list:*)", "Bash(atm task details:*)", "Bash(atm task deps:*)"]
+  }
+}
 ```
+
+Don't allow `Bash(atm *)` or a whole group: `atm task review` (approving a review or asking for changes) is yours to
+decide, and an agent should have to ask before it runs one.
 
 ---
 
@@ -734,7 +742,8 @@ agentic-task-manager/
 │   │   └── serve/SKILL.md             # /atm:serve
 │   ├── scripts/
 │   │   ├── atm                  # Helper launcher: checks for Python 3.9+, runs atm.py
-│   │   └── atm.py               # The helper (standard library only)
+│   │   ├── atm.py               # The helper (built from atm-cli/)
+│   │   └── vendor/              # Typer and Click, which its command line uses
 │   ├── templates/
 │   │   ├── tasks.json           # Example tasks.json schema
 │   │   └── tasks-dashboard.html # Dashboard (build output of dashboard/, served by atm serve)
