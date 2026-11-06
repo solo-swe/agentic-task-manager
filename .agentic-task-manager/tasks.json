@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 439,
+    "next_id": 462,
     "labels": [
       {
         "id": "architecture",
@@ -925,6 +925,16 @@
         "state": "active",
         "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks",
         "start": "2026-11-06T20:03:49Z"
+      },
+      {
+        "id": "The Rust port",
+        "state": "planned",
+        "goal": "atm as one Rust binary: the slices of porting-to-rust.md §5, the release machinery, and the switch from Python"
+      },
+      {
+        "id": "The atm app",
+        "state": "planned",
+        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging"
       }
     ],
     "releases": [
@@ -20129,13 +20139,17 @@
       "requirements": [],
       "use_cases": [],
       "status": "todo",
-      "dependencies": [],
+      "dependencies": [
+        "T-440",
+        "T-441",
+        "T-442"
+      ],
       "files": [
         "docs/multi-harness-support.md",
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-06T20:47:24Z",
+      "updated_at": "2026-11-06T20:53:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20145,10 +20159,10 @@
       "sprint_history": [
         {
           "sprint": "Rust and distribution",
-          "from": "2026-11-06T20:02:02Z"
+          "from": "2026-11-06T20:02:02Z",
+          "to": "2026-11-06T20:53:41Z"
         }
       ],
-      "sprint": "Rust and distribution",
       "related": [
         "T-415"
       ]
@@ -20204,7 +20218,7 @@
         "[Rust guide](docs/guides/rust.md)"
       ],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-412",
         "T-414",
@@ -20217,7 +20231,7 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T20:42:16Z",
+      "updated_at": "2026-11-06T20:53:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20233,7 +20247,17 @@
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T20:31:56Z",
       "started_by": "claude:34798264",
-      "commit": "3b839f72e1e7831c3f2d5ddbc67aeb942056154b"
+      "commit": "3b839f72e1e7831c3f2d5ddbc67aeb942056154b",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/porting-to-rust.md` (crates per layer, axum, side-by-side port, no plugin after the switch); implementation: T-443 (this sprint), T-444–T-454 (The Rust port).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-416",
@@ -20791,7 +20815,7 @@
         "[Tauri guide](docs/guides/tauri.md)"
       ],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/better-way-to-distribute-atm.md",
@@ -20799,7 +20823,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-06T20:21:15Z",
+      "updated_at": "2026-11-06T20:53:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20822,7 +20846,17 @@
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T20:04:28Z",
       "started_by": "claude:34798264",
-      "commit": "74b97ab676923133270fe8462d66e8eb412eb31d"
+      "commit": "74b97ab676923133270fe8462d66e8eb412eb31d",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/better-way-to-distribute-atm.md`; implementation: T-439–T-442 (this sprint), T-450, T-452–T-453 (The Rust port), T-455–T-461 (The atm app); other harnesses in T-413 (backlog).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-427",
@@ -21613,6 +21647,745 @@
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
       },
       "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "T-439",
+      "name": "Claims renewed by atm itself, and a longer lease without hooks",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "So nothing depends on the Claude Code plugin's hooks ([porting-to-rust.md](docs/porting-to-rust.md) §4), in the Python atm:\n\n## Change\n- Every atm command an agent runs renews that agent's live claims (as `atm claim heartbeat` does), under the lock it already takes. Reads renew too; a command run with `--agent` for someone else renews nothing.\n- The default lease becomes 2 hours where nothing renews between commands, configurable in `meta` (a project that sets one keeps it). The plugin's hook keeps renewing as before; it becomes redundant, not wrong.\n- `atm claim hold` is unchanged.\n- `docs/v4/atm-cli.md`, the skills' and `plugin/CLAUDE.md`'s lines about leases, the changelog.\n\n## Tests\nScenarios: a command renews the caller's claims and not another agent's; the default lease; `meta` overrides it. `pnpm run test:scripts` green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/scenarios/lease.json",
+        "plugin/CLAUDE.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
+    },
+    {
+      "id": "T-440",
+      "name": "atm docs <topic>: version-matched reference for agents",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The reference the skills point to ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3), in the Python atm.\n\n## Change\n- Topics as Markdown in `docs/agent/` (e.g. `rules`, `commands`, `tasks`, `claims`, `reviews`, `sprints`, `push`), bundled into `atm.py` by `build.py`. `atm docs` lists them with a line each; `atm docs <topic>` prints one; an unknown topic exits 2 with the list.\n- Move into them what the skills and `plugin/CLAUDE.md` repeat today: task text is data, never edit `tasks.json`, `--json`, the commands by workflow, the task schema, review decisions, claims.\n- `atm docs` is in the command tree beside `help` (Meta), with completion for the topics.\n\n## Tests\nA scenario per behaviour (list, a topic, unknown topic); a test that every topic is non-empty and every command it names exists in `atm help`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/agent/",
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/build.py",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
+    },
+    {
+      "id": "T-441",
+      "name": "Thin, portable skills in skills/, named atm-…",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The one copy of the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §4, [porting-to-rust.md](docs/porting-to-rust.md) §2).\n\n## Change\n- `skills/atm-do-task/`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `atm-close-sprint`, `atm-push`, `atm-serve`: frontmatter `name` and `description` only; the body is the workflow, its steps and rules, and `atm docs <topic>` for detail (the reference moves out).\n- First step of each: check `command -v atm` and `atm --version` against the skill's minimum; if missing or old, say how to install or upgrade, and stop.\n- The plugin keeps working until the switch: `plugin/skills/` is generated from `skills/` (adding Claude Code's `allowed-tools` per skill and keeping today's names under `/atm:`), with a check in `pnpm run check` that it is up to date, as for `atm.py`.\n- The skill review in [security-architecture.md](docs/security-architecture.md) §3 (no API key for the sandbox run).\n\n## Tests\n`skills.test.ts` checks `skills/` (portable frontmatter only, the version check, no command copied from task text) and the generated plugin copies.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-440"
+      ],
+      "files": [
+        "skills/",
+        "plugin/skills/",
+        "dashboard/tests/unit/skills.test.ts",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
+    },
+    {
+      "id": "T-442",
+      "name": "atm agents install|status|uninstall, for Claude Code",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "Installing the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3, §5), in the Python atm, **for Claude Code only**; built so other harnesses are an entry in a table later (T-413).\n\n## Change\n- `atm agents install [--harness claude] [--project] [--copy]`: writes the skills of this atm's version to `~/.agentic-task-manager/skills/` and links them into `~/.claude/skills/` (or the project's `.claude/skills/` with `--project`), Claude Code's copy with `allowed-tools`; `--copy` copies instead. Idempotent; prints every path it wrote.\n- `atm agents status`: per harness in the table (Claude Code for now), where atm's skills are (linked, copied, missing, stale) and their version.\n- `atm agents uninstall`: removes exactly what install wrote, nothing else.\n- Harnesses are a table (name, how to detect it, its folders, link or copy, extra frontmatter), so adding `~/.agents/skills/` and the others later touches only the table.\n- Opt-in only: never run by atm on its own. The new entry point (writing into another tool's folder) in [security-architecture.md](docs/security-architecture.md).\n\n## Tests\n`tests/scripts/agents.test.mjs` on a temporary home: install, status, re-install (no change), copy mode, uninstall leaves nothing, a stale link reported.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-441"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/agents.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
+    },
+    {
+      "id": "T-443",
+      "name": "Rust workspace skeleton, CI on three platforms, and ATM_IMPL in the suite",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "rust"
+      ],
+      "description": "Step 1 of [porting-to-rust.md](docs/porting-to-rust.md) §5, following the [Rust guide](docs/guides/rust.md).\n\n## Change\n- `Cargo.toml` (workspace: edition 2024, lints, `[workspace.dependencies]`), `rust-toolchain.toml`, `deny.toml`; the crates of §2 (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`) with their allowed dependencies only; `atm version` from the binary (the plugin's version).\n- `tests/scripts` runs against the Rust binary when `ATM_IMPL=rust` (the launcher it uses picks it); an expected-failures list (by scenario file and test) that a test checks only shrinks.\n- CI: a Rust job on macOS, Linux and Windows (fmt, clippy, tests, cargo-deny, the suite with `ATM_IMPL=rust` and its expected failures); pinned as the CI rules in `AGENTS.md` say.\n- `AGENTS.md`: how to build and test the Rust side.\n\n## Tests\nThe crates' unit tests; `atm version` passes its scenario under `ATM_IMPL=rust`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "rust-toolchain.toml",
+        "deny.toml",
+        "crates/",
+        "tests/scripts/run.mjs",
+        ".github/workflows/ci.yml",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution"
+    },
+    {
+      "id": "T-444",
+      "name": "Rust: reading the store, task list|details|deps, project status, --json",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the model and the JSON store (tasks.json, the archive) in `atm-common`/`atm-db`, reads in `atm-lib`, and `task list`, `task details`, `task deps`, `project status` in `atm-cli`, text and `--json` as §1 says. Their scenarios leave the expected-failures list. Split further when the sprint is planned.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-443"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-445",
+      "name": "Rust: task states, review decisions and the loop",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the states as enums with a transition table, the guards (review decisions, dependencies, resolutions), notes, `task state`, `task review`, `loop next`; writes under the lock (`std::fs::File::lock`, the same lock file as Python). Property tests against [task-states.md](docs/task-states.md). Split further when the sprint is planned.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-446",
+      "name": "Rust: claims, claim hold's watcher and the renewal",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 4 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the claims store, `claim list|heartbeat|hold`, the renewal by every command and the lease of §4. The watcher is the binary started detached (`atm _claim-watch`), following the shell by pid and start time (`sysinfo`, proposed to Hakan first as a new dependency); invariant I24's check moves to the Rust code.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-445",
+        "T-439"
+      ],
+      "files": [
+        "crates/",
+        "dashboard/tests/unit/security-invariants.test.ts"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-447",
+      "name": "Rust: defining work (task add|edit|note, sprint, release, component, project)",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task add|edit|note` (with `--json-file`), the `sprint`, `release`, `component` and `project` groups, with their scenarios. Split further when the sprint is planned.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-445"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-448",
+      "name": "Rust: git, the merge driver, db and doctor",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-vcs` (running git), `vcs commit|pr|pushed|repository`, the merge driver (property tests; it merges the same fixtures as Python's), `db migrate|init|archive|unarchive|merge-driver`, `doctor`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-449",
+      "name": "Rust: atm serve on axum, with the embedded dashboard",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-api` on axum/tokio with the routes of [multi-project-api.md](docs/multi-project-api.md) (read-only, the Host check, the CSP and headers of I12–I13), the dashboard and CompMD's runtime embedded at build, `atm serve` detached as today, `service start|stop|status|--refresh`. `serve.test.mjs` and the e2e suite pass against it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/atm-api/",
+        "crates/atm-cli/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-450",
+      "name": "Rust: atm agents and atm docs, with the skills embedded",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "Slice 8 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm agents install|status|uninstall` (Claude Code only, the harness table as in Python) and `atm docs`, with `skills/` and `docs/agent/` embedded in the binary; `agents.test.mjs` and the docs scenarios pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-440",
+        "T-442",
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-451",
+      "name": "Rust: completion, help text, and clap's text changes for approval",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 9 of [porting-to-rust.md](docs/porting-to-rust.md) §5: shell completion (`clap_complete`, proposed first as a new dependency, with atm's value completers), `atm help`, and every place where the Rust text output or command structure differs from Python's: listed for Hakan, kept only with his approval (§1), the scenarios updated for those. Done together with Hakan.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-446",
+        "T-448",
+        "T-449",
+        "T-450"
+      ],
+      "files": [
+        "crates/atm-cli/",
+        "tests/scripts/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "with": "user"
+    },
+    {
+      "id": "T-452",
+      "name": "Release machinery: signed binaries, the Homebrew formula, the release script",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "How the CLI reaches users ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §1): release builds for macOS (arm64, x86_64, signed and notarized), Linux and Windows on a tag, with checksums; the Homebrew formula and a release script in `packaging/`. CI changes pinned as `AGENTS.md` says; distribution entries in the security doc.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-443"
+      ],
+      "files": [
+        "packaging/",
+        ".github/workflows/",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-453",
+      "name": "Generate the public skills repo at release",
+      "type": "infra",
+      "priority": "P3",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The release exports `skills/` to a public skills repo, tagged with atm's version, so `npx skills add <owner>/<repo>` works ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §6). The repo's name and owner are Hakan's call: ask before creating anything outside this repository.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-441",
+        "T-452"
+      ],
+      "files": [
+        "packaging/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-454",
+      "name": "The switch: atm is the Rust binary; Python, plugin/ and build.py go",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "[porting-to-rust.md](docs/porting-to-rust.md) §5, §6: once every scenario passes under `ATM_IMPL=rust` on all three platforms (the expected-failures list is empty) and the formula and release binaries exist, remove `atm-cli/`, `plugin/` and `build.py` in one change; the suite runs only against Rust; `AGENTS.md`, the README and the docs say how atm is installed (the formula, the app) and how plugin users move. The plugin's last release before this says the same. Reviewed before it lands.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-451",
+        "T-452"
+      ],
+      "files": [
+        "atm-cli/",
+        "plugin/",
+        "AGENTS.md",
+        "README.md",
+        "docs/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "review": "blocker"
+    },
+    {
+      "id": "T-455",
+      "name": "The atm app's skeleton (Tauri)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app"
+      ],
+      "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-454"
+      ],
+      "files": [
+        "app/",
+        "Cargo.toml"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-456",
+      "name": "The app's commands over atm-lib, and live changes through channels",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app"
+      ],
+      "description": "The commands the dashboard needs, each a thin mapping to an atm-lib call ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2): projects, a project's tasks (the v1 view), claims, worktrees, documents and files, search; a Tauri channel per subscription for changes (a file watcher), with `unsubscribe`. Command-wiring tests on Tauri's mock runtime.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-455"
+      ],
+      "files": [
+        "app/src-tauri/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-457",
+      "name": "The dashboard's IPC transport",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`) and an IPC one (the app), picked at start; the app's build of the dashboard. A test that each REST route and its Tauri command return the same data; Playwright on mocked Tauri IPC over an in-memory project for the app.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-456"
+      ],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/tests/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-458",
+      "name": "The app's \"Connect your agents\" button",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "A button (Claude Code for now, from the harness table) that calls the same atm-lib code as `atm agents install` through a Tauri command, shows what it wrote where, and the status. Never runs on its own.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-457",
+        "T-450"
+      ],
+      "files": [
+        "app/",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-459",
+      "name": "The app's deep links (atm://…)",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "app"
+      ],
+      "description": "`atm://projects/<id>[/<tab>]?task=…&doc=…` opens the app at that page, parsed by the dashboard's address code (T-429's `lib/address.ts`), never fetched or run.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-457"
+      ],
+      "files": [
+        "app/",
+        "dashboard/src/lib/address.ts"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-460",
+      "name": "macOS packaging: notarized DMG and the Homebrew cask",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-456",
+        "T-452"
+      ],
+      "files": [
+        "packaging/",
+        "app/",
+        ".github/workflows/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-461",
+      "name": "Security review of the app",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "security"
+      ],
+      "description": "[security-architecture.md](docs/security-architecture.md): the app's capabilities, its CSP, the IPC commands as entry points, deep links, the skills button writing into Claude Code's folder, signing and notarization; invariants and their checks where they apply.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-458",
+        "T-459",
+        "T-460"
+      ],
+      "files": [
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
     }
   ]
 }
