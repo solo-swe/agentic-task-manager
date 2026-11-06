@@ -20281,13 +20281,13 @@
       "description": "The atm-lib unit tests (`tests/lib`, run by [lib.test.mjs](tests/scripts/lib.test.mjs)) fail to import: `lib/state.py` imports `transitions` (T-417), and the tests run the modules with plain `python3`, which doesn't have it. The bundled `plugin/scripts/atm.py` works because it carries its third-party code.\n\n## Change\nGive the unit tests the same third-party code the bundle has, so they pass with Python 3.9 and no packages installed (as CI runs them): e.g. put `atm-cli/vendored/` on the path in `lib.test.mjs`, or run them through `uv`. Coordinate with T-416 (third-party libraries in atm-cli), which decides how they are vendored.\n\n## Tests\n`npm run test:scripts` runs `tests/lib` green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "tests/scripts/lib.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:45Z",
+      "updated_at": "2026-11-06T05:52:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "related": [
@@ -20303,7 +20303,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T05:52:45Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-420",

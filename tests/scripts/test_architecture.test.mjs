@@ -8,10 +8,13 @@
 //   - A module only imports from earlier modules in MODULES order (build concatenation order)
 //   - No two modules define the same top-level name
 
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { test } from 'node:test';
+import { REPO } from './helpers.mjs';
 
-const ROOT = path.join(process.cwd(), 'atm-cli', 'atm');
+const ROOT = path.join(REPO, 'atm-cli', 'atm');
 const MODULES_ORDER = [
   'common.errors',
   'common.vocabularies',
@@ -160,146 +163,143 @@ function findModules(dir) {
   return result;
 }
 
-const modules = findModules(ROOT);
-const moduleMap = new Map(modules.map((m) => [m.module, m]));
-const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
+test('atm-cli modules keep the layer rules, the build order and unique top-level names', () => {
+  const modules = findModules(ROOT);
+  const moduleMap = new Map(modules.map((m) => [m.module, m]));
+  const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
 
-// Modules that are NOT part of the atm.py build concatenation.
-// atm2 is a separate CLI entry point (Typer-based) that delegates to `atm` via subprocess.
-// It is not bundled into plugin/scripts/atm.py by build.py.
-const EXCLUDED_MODULES = new Set(['cli._delegate', 'cli.atm2', 'cli.atm2_main']);
+  // Modules that are NOT part of the atm.py build concatenation.
+  // atm2 is a separate CLI entry point (Typer-based) that delegates to `atm` via subprocess.
+  // It is not bundled into plugin/scripts/atm.py by build.py.
+  const EXCLUDED_MODULES = new Set(['cli._delegate', 'cli.atm2', 'cli.atm2_main']);
 
-const errors = [];
+  const errors = [];
 
-// 1. Every module is in MODULES_ORDER (unless excluded)
-for (const { module } of modules) {
-  if (EXCLUDED_MODULES.has(module)) continue;
-  if (!MODULES_ORDER.includes(module)) {
-    errors.push(`${module}: not in MODULES_ORDER (build concatenation list)`);
-  }
-}
-
-// 2. Every module in MODULES_ORDER exists on disk
-for (const module of MODULES_ORDER) {
-  if (!moduleMap.has(module)) {
-    errors.push(`${module}: listed in MODULES_ORDER but no file on disk`);
-  }
-}
-
-// Parse each module's imports
-const importsByModule = new Map();
-for (const { module, path: filePath } of modules) {
-  if (EXCLUDED_MODULES.has(module)) continue;
-  const source = fs.readFileSync(filePath, 'utf8');
-  const names = new Set();
-
-  // crude line-by-line import parsing
-  const lines = source.split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // import a.b.c
-    const m1 = trimmed.match(/^import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/);
-    if (m1) {
-      names.add(m1[1]);
-      continue;
-    }
-
-    // from X import Y  (absolute)
-    const m2 = trimmed.match(/^from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\b/);
-    if (m2) {
-      names.add(m2[1]);
-      continue;
-    }
-
-    // from .X import Y  (relative)
-    const m3 = trimmed.match(/^from\s+(\.*)([A-Za-z_]\w*)\s+import\b/);
-    if (m3) {
-      const dots = m3[1].length;
-      const mod = m3[2];
-      const resolved = resolve(module, { level: dots, module: mod });
-      names.add(resolved);
-      continue;
+  // 1. Every module is in MODULES_ORDER (unless excluded)
+  for (const { module } of modules) {
+    if (EXCLUDED_MODULES.has(module)) continue;
+    if (!MODULES_ORDER.includes(module)) {
+      errors.push(`${module}: not in MODULES_ORDER (build concatenation list)`);
     }
   }
 
-  importsByModule.set(module, names);
-}
-
-// 3. Layer rules: each module's imports must be in ALLOWED[its layer]
-for (const { module } of modules) {
-  if (EXCLUDED_MODULES.has(module)) continue;
-  const layer = layerOf(module);
-  const allowed = new Set(ALLOWED[layer]);
-  const imported = importsByModule.get(module) || new Set();
-  for (const target of imported) {
-    if (!MODULES_ORDER.includes(target)) continue; // external import (click, etc.)
-    const targetLayer = layerOf(target);
-    if (!allowed.has(targetLayer)) {
-      errors.push(`${module} (${layer}) imports from ${target} (${targetLayer}), which the ${layer} layer may not use`);
+  // 2. Every module in MODULES_ORDER exists on disk
+  for (const module of MODULES_ORDER) {
+    if (!moduleMap.has(module)) {
+      errors.push(`${module}: listed in MODULES_ORDER but no file on disk`);
     }
   }
-}
 
-// 4. Import order: a module only imports from earlier modules in MODULES_ORDER
-for (const { module } of modules) {
-  const idx = orderIndex.get(module);
-  if (idx === undefined) continue;
-  const imported = importsByModule.get(module) || new Set();
-  for (const target of imported) {
-    if (!MODULES_ORDER.includes(target)) continue; // external import
-    const tidx = orderIndex.get(target);
-    if (tidx === undefined || tidx >= idx) {
-      errors.push(`${module} imports from ${target}, which is not an earlier module in build order`);
+  // Parse each module's imports
+  const importsByModule = new Map();
+  for (const { module, path: filePath } of modules) {
+    if (EXCLUDED_MODULES.has(module)) continue;
+    const source = fs.readFileSync(filePath, 'utf8');
+    const names = new Set();
+
+    // crude line-by-line import parsing
+    const lines = source.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // import a.b.c
+      const m1 = trimmed.match(/^import\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/);
+      if (m1) {
+        names.add(m1[1]);
+        continue;
+      }
+
+      // from X import Y  (absolute)
+      const m2 = trimmed.match(/^from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\b/);
+      if (m2) {
+        names.add(m2[1]);
+        continue;
+      }
+
+      // from .X import Y  (relative)
+      const m3 = trimmed.match(/^from\s+(\.*)([A-Za-z_]\w*)\s+import\b/);
+      if (m3) {
+        const dots = m3[1].length;
+        const mod = m3[2];
+        const resolved = resolve(module, { level: dots, module: mod });
+        names.add(resolved);
+        continue;
+      }
+    }
+
+    importsByModule.set(module, names);
+  }
+
+  // 3. Layer rules: each module's imports must be in ALLOWED[its layer]
+  for (const { module } of modules) {
+    if (EXCLUDED_MODULES.has(module)) continue;
+    const layer = layerOf(module);
+    const allowed = new Set(ALLOWED[layer]);
+    const imported = importsByModule.get(module) || new Set();
+    for (const target of imported) {
+      if (!MODULES_ORDER.includes(target)) continue; // external import (click, etc.)
+      const targetLayer = layerOf(target);
+      if (!allowed.has(targetLayer)) {
+        errors.push(
+          `${module} (${layer}) imports from ${target} (${targetLayer}), which the ${layer} layer may not use`,
+        );
+      }
     }
   }
-}
 
-// 5. cli/api modules never touch .store directly (§11.3)
-for (const { module, path: filePath } of modules) {
-  if (EXCLUDED_MODULES.has(module)) continue;
-  const layer = layerOf(module);
-  if (layer !== 'cli' && layer !== 'api') continue;
-  const source = fs.readFileSync(filePath, 'utf8');
-  const lines = source.split('\n');
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const trimmed = line.trim();
-    // Skip import statements — importing cli/store module is fine
-    if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) continue;
-    // Check for attribute access to .store or ._store (project's store, not cli/store module)
-    if (/\.(store|_store)\b/.test(line)) {
-      errors.push(
-        `${module}:${i + 1} reaches a project's store (.store/_store): the ${layer} layer reads and changes data only through atm-lib`,
-      );
+  // 4. Import order: a module only imports from earlier modules in MODULES_ORDER
+  for (const { module } of modules) {
+    const idx = orderIndex.get(module);
+    if (idx === undefined) continue;
+    const imported = importsByModule.get(module) || new Set();
+    for (const target of imported) {
+      if (!MODULES_ORDER.includes(target)) continue; // external import
+      const tidx = orderIndex.get(target);
+      if (tidx === undefined || tidx >= idx) {
+        errors.push(`${module} imports from ${target}, which is not an earlier module in build order`);
+      }
     }
   }
-}
 
-// 6. No duplicate top-level names across modules
-const defined = new Map();
-for (const { module, path: filePath } of modules) {
-  if (EXCLUDED_MODULES.has(module)) continue;
-  const source = fs.readFileSync(filePath, 'utf8');
-  const names = topLevelNames(source);
-  for (const name of names) {
-    if (defined.has(name)) {
-      errors.push(`${name} is defined in both ${module_file(defined.get(name))} and ${module_file(module)}`);
+  // 5. cli/api modules never touch .store directly (§11.3)
+  for (const { module, path: filePath } of modules) {
+    if (EXCLUDED_MODULES.has(module)) continue;
+    const layer = layerOf(module);
+    if (layer !== 'cli' && layer !== 'api') continue;
+    const source = fs.readFileSync(filePath, 'utf8');
+    const lines = source.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      // Skip import statements — importing cli/store module is fine
+      if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) continue;
+      // Check for attribute access to .store or ._store (project's store, not cli/store module)
+      if (/\.(store|_store)\b/.test(line)) {
+        errors.push(
+          `${module}:${i + 1} reaches a project's store (.store/_store): the ${layer} layer reads and changes data only through atm-lib`,
+        );
+      }
     }
-    defined.set(name, module);
   }
-}
+
+  // 6. No duplicate top-level names across modules
+  const defined = new Map();
+  for (const { module, path: filePath } of modules) {
+    if (EXCLUDED_MODULES.has(module)) continue;
+    const source = fs.readFileSync(filePath, 'utf8');
+    const names = topLevelNames(source);
+    for (const name of names) {
+      if (defined.has(name)) {
+        errors.push(`${name} is defined in both ${module_file(defined.get(name))} and ${module_file(module)}`);
+      }
+      defined.set(name, module);
+    }
+  }
+
+  assert.ok(modules.length > 0, `no modules found under ${ROOT}`);
+  assert.deepEqual(errors, [], `Architecture rule violations:\n  - ${errors.join('\n  - ')}`);
+});
 
 function module_file(name) {
   return name.replace(/\./g, '/') + '.py';
 }
-
-if (errors.length > 0) {
-  console.error('Architecture rule violations:');
-  for (const e of errors) {
-    console.error(`  - ${e}`);
-  }
-  process.exit(1);
-}
-
-console.log(`Architecture OK: ${modules.length} modules, 0 violations`);
