@@ -20377,7 +20377,7 @@
       "description": "Port the last groups of [atm2.py](atm-cli/atm/cli/atm2.py) that run `atm` to atm-lib, copying what atm does:\n\n- `project config` (`cmd_paths`), `project status` (`cmd_status`), `project workflow [set …]` (`cmd_workflow`), `project logo [set|unset]` (`cmd_logo`), and `project list|add|remove|prune` (`cmd_projects`);\n- `sprint list|add|edit|start|close|delete` (`cmd_sprints`), `sprint move <id>… --to` (`cmd_move`) and `sprint backlog` (`cmd_backlog`); only `list` and `add` exist in atm2 now.\n\nThen nothing uses `run_atm`: delete [_delegate.py](atm-cli/atm/cli/_delegate.py), its entry in `EXCLUDED_MODULES` in [test_architecture.test.mjs](tests/scripts/test_architecture.test.mjs), and the \"delegates to atm\" wording in atm2's help and docstrings.\n\n## Tests\nParity steps for each command in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-420"
       ],
@@ -20388,7 +20388,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T06:12:19Z",
+      "updated_at": "2026-11-06T06:23:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20403,7 +20403,19 @@
       "sprint": "CLI ergonomics",
       "review": "batch",
       "started_at": "2026-11-06T06:12:19Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "53e3ae4fda8a84318cd072ee86392335801b9949",
+      "completed_at": "2026-11-06T06:23:02Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:23:02Z",
+          "kind": "review",
+          "text": "Check `atm-cli/atm/cli/atm2.py`: `project config|status|workflow|logo|list|add|remove|prune` and `sprint list|add|edit|start|close|delete|move|backlog` call atm-lib; nothing runs `atm` any more, and `_delegate.py` is gone. Four atm commands render through new shared helpers (`show_status`, `show_paths`, `logo_action`, `projects_action`), so both CLIs print the same text. `parity()` gives each side its own `ATM_HOME`. 569 tests pass.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-422",
@@ -20452,7 +20464,7 @@
       "description": "T-412 work item 4. Typer installs completion scripts (`--install-completion`, `--show-completion`) for zsh, bash and fish; make it complete atm's own values too, read through atm-lib: task IDs (with their names) for every `<id>` argument, sprint names for `--sprint`, releases for `--release`, components for `--component`, the project's statuses for `--status` and the targets of `task state`, types and priorities for `--type` and `--priority`. Completion never fails loudly: outside a project it completes nothing.\n\n## Tests\nCompletion run in-process (Typer's `_TYPER_COMPLETE` environment) for a task ID, a sprint and a status, in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-421"
       ],
@@ -20461,7 +20473,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:48Z",
+      "updated_at": "2026-11-06T06:23:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20474,7 +20486,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:23:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-424",

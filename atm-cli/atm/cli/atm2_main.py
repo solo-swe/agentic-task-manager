@@ -12,7 +12,7 @@ import sys
 # when run as a script directly (./atm-cli/atm2).
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from atm.cli.atm2 import app
+from atm.cli.atm2 import command
 from atm.common.core import AtmError, AtmExit, to_json
 from atm.common.errors import AtmFailure
 
@@ -28,7 +28,7 @@ def report(error: AtmFailure, as_json: bool) -> None:
 def main() -> None:
     as_json = "--json" in sys.argv or "-j" in sys.argv
     try:
-        app(prog_name="atm2")
+        command()(prog_name="atm2")
     except AtmFailure as e:
         report(e, as_json)
         sys.exit(e.code)

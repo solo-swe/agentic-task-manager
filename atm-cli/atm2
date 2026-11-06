@@ -1,5 +1,5 @@
 #!/bin/sh
-# atm2: the Typer-based ATM CLI entry point (experimental). Delegates to `atm`.
+# atm2: the Typer-based command tree for atm (experimental), over the same atm-lib calls as `atm`.
 dir=$(cd "$(dirname "$0")" && pwd)
 
 if command -v uv >/dev/null 2>&1; then

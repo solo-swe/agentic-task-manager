@@ -476,6 +476,74 @@ describe('atm2 sprint group', { skip: !available && 'atm2 needs Typer (uv sync -
   });
 });
 
+/** What the shell would offer after `line` (fish's format: one `value<TAB>help` per line). */
+function complete(line, cwd) {
+  const env = {
+    ...ENV,
+    _ATM2_COMPLETE: 'complete_fish',
+    _TYPER_COMPLETE_FISH_ACTION: 'get-args',
+    _TYPER_COMPLETE_ARGS: line,
+  };
+  const result = runAtm2([], cwd, env);
+  assert.equal(result.code, 0, result.stderr);
+  return result.stdout.split('\n').filter(Boolean);
+}
+
+describe('atm2 shell completion', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+  const SPRINTS = {
+    ...SETUP,
+    files: {
+      '.agentic-task-manager/tasks.json': {
+        meta: {
+          sprints: [
+            { id: 'First', state: 'active', goal: 'The basics' },
+            { id: 'Old', state: 'closed' },
+          ],
+          statuses: [
+            { id: 'todo', label: 'To Do', kind: 'todo' },
+            { id: 'doing', label: 'Doing', kind: 'active' },
+            { id: 'awaiting_user', label: 'Awaiting you', kind: 'review' },
+            { id: 'shipped', label: 'Shipped', kind: 'done' },
+          ],
+        },
+        tasks: SETUP.files['.agentic-task-manager/tasks.json'].tasks,
+      },
+    },
+  };
+
+  test('task IDs with their names, sprints, statuses and the targets of task state', () => {
+    const root = makeProject(SPRINTS);
+    try {
+      assert.deepEqual(complete('atm2 task details T-', root), ['T-1\tFirst', 'T-2\tSecond', 'T-3\tThird']);
+      assert.deepEqual(complete('atm2 task deps T-2', root), ['T-2\tSecond']);
+      assert.deepEqual(complete('atm2 task list --sprint ', root), ['First\tThe basics']);
+      assert.deepEqual(complete('atm2 task list --status a', root), ['awaiting_user\tAwaiting you']);
+      assert.deepEqual(complete('atm2 task list --priority P', root), [
+        'P0\tCritical',
+        'P1\tHigh',
+        'P2\tMedium',
+        'P3\tLow',
+      ]);
+      assert.deepEqual(complete('atm2 task state T-1 in_', root), ['in_progress\tstart', 'in_review\treview']);
+      assert.deepEqual(complete('atm2 sprint start ', root), ['First\tThe basics']);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('outside a project, or with a task file atm can’t read, it completes nothing', () => {
+    const empty = makeProject({});
+    const broken = makeProject({ files: { '.agentic-task-manager/tasks.json': '{ not json' } });
+    try {
+      assert.deepEqual(complete('atm2 task details T-', empty), []);
+      assert.deepEqual(complete('atm2 task list --sprint ', broken), []);
+    } finally {
+      removeDir(empty);
+      removeDir(broken);
+    }
+  });
+});
+
 describe('atm2 task state, its own checks', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
   test('refuses options that are not for the transition, and asks for the ones it needs', () => {
     const root = makeProject(SETUP);

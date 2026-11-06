@@ -1866,5 +1866,103 @@ def service(
         serve_status(home, ctx.obj.get("json_out", False), port)
 
 
+# ---------------------------------------------------------------------------
+# shell completion (T-423)
+# ---------------------------------------------------------------------------
+# Typer installs the scripts (--install-completion, --show-completion; zsh, bash, fish); these complete atm's own
+# values, read through atm-lib in the folder the shell is in. Completion never fails loudly: outside a project, or
+# with a task file atm can't read, it completes nothing.
+
+# The targets of `atm2 task state` (task_state's cmd_map), with what each runs
+STATE_TARGETS = [
+    ("in_progress", "start"),
+    ("in_review", "review"),
+    ("done", "done"),
+    ("todo", "back to to do: fail, release, reject, unblock or reopen"),
+    ("blocked", "block"),
+    ("skipped", "skip"),
+    ("approved", "approve"),
+    ("changes_requested", "request-changes"),
+]
+
+
+def _vocabulary():
+    return backlog_tasks(open_project(os.getcwd()))["vocab"]
+
+
+def _task_ids():
+    return [(v["task"]["id"], v["task"].get("name") or "") for v in task_views(open_project(os.getcwd()), Filters())]
+
+
+def _sprints():
+    return [(s["id"], s.get("goal") or s.get("state") or "") for s in _vocabulary()["sprints"] if s.get("state") != "closed"]
+
+
+def _releases():
+    return [(r["id"], r.get("name") or r.get("state") or "") for r in _vocabulary()["releases"]]
+
+
+def _components():
+    return [(c["id"], c.get("label") or "") for c in _vocabulary()["components"]]
+
+
+def _terms(key):
+    return lambda: [(t["id"], t.get("label") or "") for t in _vocabulary()[key]]
+
+
+def _completer(values):
+    """A Click completer for `values()` ((value, help) pairs), matching what has been typed; nothing on any error."""
+
+    def complete(ctx, param, incomplete):
+        from click.shell_completion import CompletionItem
+
+        try:
+            pairs = values()
+        except Exception:  # completion must never break the shell, whatever the project holds
+            return []
+        return [CompletionItem(value, help=help or None) for value, help in pairs if value.startswith(incomplete)]
+
+    return complete
+
+
+# (command path, parameter name) -> completer; a None path is any command with that parameter
+COMPLETIONS = {
+    (None, "task_id"): _task_ids,
+    (None, "task_ids"): _task_ids,
+    (None, "ids"): _task_ids,
+    (None, "sprint"): _sprints,
+    (None, "release"): _releases,
+    (None, "component"): _components,
+    (None, "status"): _terms("statuses"),
+    (None, "type_"): _terms("types"),
+    (None, "priority"): _terms("priorities"),
+    ("task state", "next_state"): lambda: STATE_TARGETS,
+    ("db unarchive", "ids"): None,  # archived tasks, which the task list doesn't hold
+    **{(f"sprint {c}", "name"): _sprints for c in ("edit", "start", "close", "delete")},
+    ("sprint close", "carry_to"): _sprints,
+    ("sprint delete", "move_to"): _sprints,
+    ("sprint move", "to"): _sprints,
+    **{(f"release {c}", "release_id"): _releases for c in ("edit", "archive", "notes")},
+    ("component edit", "component_id"): _components,
+}
+
+
+def _attach(cmd, path):
+    for param in getattr(cmd, "params", []):
+        key = (path, param.name) if (path, param.name) in COMPLETIONS else (None, param.name)
+        values = COMPLETIONS.get(key)
+        if values is not None:
+            param._custom_shell_complete = _completer(values)
+    for name, sub in getattr(cmd, "commands", {}).items():
+        _attach(sub, f"{path} {name}".strip())
+
+
+def command():
+    """atm2's Click command, with atm's values to complete (what atm2_main runs)."""
+    cmd = typer.main.get_command(app)
+    _attach(cmd, "")
+    return cmd
+
+
 if __name__ == "__main__":
-    app()
+    command()(prog_name="atm2")
