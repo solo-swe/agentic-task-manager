@@ -245,12 +245,20 @@ describe('claims', () => {
       delete s.claims['T-001'].renewed_at;
       fs.writeFileSync(storeOf(root), JSON.stringify(s));
     };
+    /** Whether process `pid` still runs. An ended watcher no one reaps is a zombie, which signals still reach: in a
+     * container whose first process doesn't reap orphans (CI's), the detached watcher stays one after it ends, so on
+     * Linux its state in /proc says whether it runs */
     const alive = (pid) => {
       try {
         process.kill(pid, 0);
-        return true;
       } catch {
         return false;
+      }
+      try {
+        const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+        return stat.slice(stat.lastIndexOf(')') + 2)[0] !== 'Z';
+      } catch {
+        return true; // no /proc (macOS): a process signals reach runs
       }
     };
     const until = (check, ms = 5000) => {

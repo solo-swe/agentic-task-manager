@@ -22,7 +22,7 @@
     "format": "prettier --config .prettierrc --write . ../tests/scripts",
     "check": "node scripts/check-versions.mjs && node scripts/check-compmd-assets.mjs && svelte-check --fail-on-warnings && eslint . && prettier --config .prettierrc --check . ../tests/scripts",
     "verify": "pnpm run build:cli && pnpm run check && pnpm run test:coverage && pnpm run build && pnpm run test:scripts && pnpm run test:e2e && pnpm run test:e2e:visual",
-    "prepare": "git -C .. config core.hooksPath .githooks 2>/dev/null || echo \"prepare: git hooks not enabled (not a usable git checkout, e.g. CI)\"",
+    "prepare": "svelte-kit sync && (git -C .. config core.hooksPath .githooks 2>/dev/null || echo \"prepare: git hooks not enabled (not a usable git checkout, e.g. CI)\")",
     "test:e2e:visual": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual\"",
     "test:e2e:visual:update": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual --update-snapshots=changed\""
   },
