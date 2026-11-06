@@ -21166,7 +21166,7 @@
       "description": "Turn the click handlers on `div` and `span` elements (4 when this task was written) into real `<button>` or `<a>` elements, and check every icon-only button has an `aria-label`, as the [Svelte guide](docs/guides/svelte.md#accessibility) asks. Keep the look with the existing tokens.\n\n## Tests\nA unit test that scans the components and fails on a click handler on `div`/`span` or an icon-only button without `aria-label`; the functional e2e suite.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-431"
       ],
@@ -21175,7 +21175,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:35:57Z",
+      "updated_at": "2026-11-06T18:40:20Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21190,7 +21190,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-06T18:35:57Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "a7b1629e6df725c3f8c283a7602b323acaa110d4",
+      "completed_at": "2026-11-06T18:40:20Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T18:40:20Z",
+          "kind": "review",
+          "text": "Card name, dependency links and the details’ dependency rows are buttons (same look). `accessible-controls.test.ts`: no click on div/span except ARIA-button cards (Kanban, Omniboard) and 3 listed containers; icon-only buttons all named. Review: the allowed list.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-435",
