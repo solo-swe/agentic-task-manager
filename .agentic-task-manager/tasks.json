@@ -922,8 +922,9 @@
       },
       {
         "id": "Rust and distribution",
-        "state": "planned",
-        "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks"
+        "state": "active",
+        "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks",
+        "start": "2026-11-06T20:03:49Z"
       }
     ],
     "releases": [
