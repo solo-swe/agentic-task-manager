@@ -20851,7 +20851,7 @@
       "description": "Give the dashboard's views real addresses, as the [Svelte guide](docs/guides/svelte.md#navigation) asks: the all-projects overview, a project and its tabs, a task's details and a document in the viewer.\n\n## Change\n- SvelteKit routes replace `src/lib/routes.ts` and `src/lib/hash.ts`; back, forward and deep links keep working.\n- `atm serve` answers the new paths with the page (SPA fallback), without serving anything else under them; the routes go into [multi-project-api.md](docs/multi-project-api.md).\n- Old `#…` links (bookmarks, links in task text) redirect to the new addresses.\n- The new paths are entry points: update [security-architecture.md](docs/security-architecture.md) in the same change.\n\n## Tests\nUnit tests for the route mapping and the redirect of old links; `serve.test.mjs` for the fallback; the e2e specs that navigate (tabs, detail, documents, projects) use the new addresses.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-428"
       ],
@@ -20866,7 +20866,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T17:18:55Z",
+      "updated_at": "2026-11-06T18:06:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20896,10 +20896,20 @@
           "kind": "answer",
           "text": "Address scheme (each path becomes an atm serve entry point): `/` the overview, `/board` `/progress` `/agents` its tabs; `/projects/<id>` a project, `/projects/<id>/<tab>` its tabs; details and documents as `?task=T-1` and `?doc=docs/x.md#L40` over any view; sprint and dialogs as query parameters. Old `#…` links redirect. OK? → The proposed scheme, as is: `/` overview (`/board`, `/progress`, `/agents`), `/projects/<id>[/<tab>]`, `?task=` and `?doc=` in the query; old `#…` links redirect.; Or task and document as path segments instead (`/projects/<id>/tasks/T-1`, `/projects/<id>/docs/<path>`)? → (no answer)",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T18:06:43Z",
+          "kind": "review",
+          "text": "Views at `/projects/<id>/<tab>`, `/projects`, `/board|progress|agents`; `?task=` (new, Back closes), `?doc=`, `?sprint=`, `?about|help`; old `#…` links redirect; `atm serve` answers `PAGE_PATH`. Review: the landing page with one project takes the project’s address; API and logo URLs are root-absolute.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-06T17:18:55Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "4763f3d9dd78af158f1c64dadbd0b42249b47778",
+      "completed_at": "2026-11-06T18:06:43Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-430",
@@ -20964,7 +20974,7 @@
       "description": "Replace the hand-made interactive primitives with Bits UI (headless, accessible), styled with our tokens, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks: `Dialog.svelte` and the dialogs built on it, the menus (settings, refresh, needs-you, project selector, list options) and the popovers (info tips).\n\n## Change\n- Add `bits-ui` (bundled into the single file; no request leaves the page).\n- Keyboard and focus follow the Bits UI patterns; Esc closes overlays.\n- The e2e DOM hooks keep working (`#detail-overlay.open`, the menus' ids and `data-` attributes), or the specs change with them.\n\n## Tests\nComponent tests for each replaced primitive; the functional e2e suite; `size` reported in the outcome note. The changed screenshots are regenerated in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-430"
       ],
@@ -20974,7 +20984,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T17:16:09Z",
+      "updated_at": "2026-11-06T18:06:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21008,7 +21018,9 @@
           "to": "2026-11-06T17:16:09Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-06T18:06:48Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-432",

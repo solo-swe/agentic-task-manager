@@ -2,3 +2,8 @@
 overrides:
   # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)
   minimatch: 11.0.1
+peerDependencyRules:
+  allowedVersions:
+    # runed (Bits UI's helpers, T-431) names SvelteKit 2 as an optional peer; the dashboard is on SvelteKit 3, and the
+    # parts Bits UI uses don't touch SvelteKit
+    runed>@sveltejs/kit: '3'

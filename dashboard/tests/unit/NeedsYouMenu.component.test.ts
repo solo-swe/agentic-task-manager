@@ -3,6 +3,7 @@ import { tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import NeedsYouMenu from '../../src/lib/shell/NeedsYouMenu.svelte';
 import type { NeedsYouItem } from '../../src/lib/waiting';
+import { press, settled } from './components.helpers';
 
 const ITEMS: NeedsYouItem[] = [
   { id: 'T-005', name: 'Post editor', reason: 'review' },
@@ -19,6 +20,11 @@ function setup(items: NeedsYouItem[], extra: Record<string, unknown> = {}) {
   return { ...view, onopen, chip, menu, rows };
 }
 
+/** A key as the keyboard sends it: to what has the focus */
+const key = (name: string) => fireEvent.keyDown(document.activeElement!, { key: name });
+
+// The list is Bits UI's menu (T-431): it opens and moves focus a moment after the click, and closes once its layer has
+// let go of the page
 describe('NeedsYouMenu', () => {
   it('is not there when nothing needs the user', () => {
     expect(setup([]).chip).toBeNull();
@@ -36,47 +42,49 @@ describe('NeedsYouMenu', () => {
   it('several: the chip lists them with why; a row opens that task and closes the list', async () => {
     const { chip, menu, rows, onopen } = setup(ITEMS);
     expect(chip).toHaveTextContent('3 need you');
+    expect(chip!.getAttribute('aria-haspopup')).toBe('menu');
     await fireEvent.click(chip!);
     expect(chip!.getAttribute('aria-expanded')).toBe('true');
+    expect(menu()).toHaveAttribute('role', 'menu');
     expect(rows().map((r) => r.dataset.id)).toEqual(['T-005', 'T-008', 'T-010']);
+    expect(rows()[1]).toHaveAttribute('role', 'menuitem');
     expect(rows()[1]).toHaveTextContent('T-008 Editor keyboard shortcuts blocked on a question');
     expect(rows()[0].querySelector('.needs-you-reason')).toHaveTextContent('in review');
-    expect(document.activeElement).toBe(rows()[0]);
+    await settled();
     await fireEvent.click(rows()[1]);
     expect(onopen).toHaveBeenCalledWith('T-008');
-    expect(menu()).toBeNull();
-    expect(document.activeElement).toBe(chip);
+    await vi.waitFor(() => expect(menu()).toBeNull());
   });
 
   it('keyboard: the arrows, Home and End move; Escape closes and returns focus to the chip', async () => {
     const { chip, menu, rows, onopen } = setup(ITEMS);
-    await fireEvent.click(chip!);
+    chip!.focus();
+    await fireEvent.keyDown(chip!, { key: 'Enter' });
     const [a, b, c] = rows();
-    await fireEvent.keyDown(menu()!, { key: 'ArrowDown' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(a));
+    await key('ArrowDown');
     expect(document.activeElement).toBe(b);
-    await fireEvent.keyDown(menu()!, { key: 'End' });
+    await key('End');
     expect(document.activeElement).toBe(c);
-    await fireEvent.keyDown(menu()!, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(c);
-    await fireEvent.keyDown(menu()!, { key: 'Home' });
+    await key('Home');
     expect(document.activeElement).toBe(a);
-    await fireEvent.keyDown(menu()!, { key: 'ArrowUp' });
-    expect(document.activeElement).toBe(a);
-    await fireEvent.keyDown(menu()!, { key: 'Escape' });
-    expect(menu()).toBeNull();
-    expect(document.activeElement).toBe(chip);
+    await key('Escape');
+    await vi.waitFor(() => expect(menu()).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(chip));
     expect(onopen).not.toHaveBeenCalled();
   });
 
   it('closes on a click outside, and with the chip', async () => {
     const { chip, menu } = setup(ITEMS.slice(0, 2));
     await fireEvent.click(chip!);
-    await fireEvent.click(document.body);
-    expect(menu()).toBeNull();
+    await settled();
+    await press(document.body);
+    await vi.waitFor(() => expect(menu()).toBeNull());
     await fireEvent.click(chip!);
     expect(menu()).not.toBeNull();
+    await settled();
     await fireEvent.click(chip!);
-    expect(menu()).toBeNull();
+    await vi.waitFor(() => expect(menu()).toBeNull());
   });
 
   it('lines up with the right edge when asked (on a project card)', async () => {

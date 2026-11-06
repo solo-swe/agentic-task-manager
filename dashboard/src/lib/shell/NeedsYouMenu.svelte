@@ -1,9 +1,10 @@
 <script lang="ts">
   // A "N need(s) you" chip (D-3.3) that takes you to the task: one task opens it; several open a list of them under
-  // the chip (a menu: the arrows, Home and End move, Enter opens, Escape or a click outside closes, and focus goes
-  // back to the chip). Used in the title bar and on the overview's project cards. It can sit in a <p>, so it is built
-  // from phrasing elements only.
+  // the chip, Bits UI's menu (T-431: the arrows, Home and End move, Enter opens, Escape or a click outside closes, and
+  // focus goes back to the chip). Used in the title bar and on the overview's project cards. It can sit in a <p>, so
+  // it is built from phrasing elements only.
   import { tick } from 'svelte';
+  import { DropdownMenu } from 'bits-ui';
   import type { NeedsYouItem } from '../waiting';
 
   let {
@@ -25,15 +26,14 @@
   } = $props();
 
   let open = $state(false);
-  let root = $state<HTMLElement>();
-  let chip = $state<HTMLButtonElement>();
-  let list = $state<HTMLElement>();
+  let list = $state<HTMLElement | null>(null);
   /** How far the list is moved so it stays inside the window (T-332): lined up with the chip, it can run off an edge */
   let shift = $state(0);
   const EDGE = 8;
 
-  function keepInView() {
+  async function keepInView() {
     shift = 0;
+    await tick();
     const box = list?.getBoundingClientRect();
     if (!box) return;
     const width = document.documentElement.clientWidth;
@@ -42,54 +42,7 @@
   }
 
   const REASONS = { review: 'in review', blocked: 'blocked on a question', together: 'to do with you' } as const;
-  const rows = () => [...(list?.querySelectorAll<HTMLButtonElement>('.needs-you-row') ?? [])];
-
-  async function onChip() {
-    if (items.length === 1) {
-      onopen(items[0].id);
-      return;
-    }
-    if (open) {
-      close();
-      return;
-    }
-    open = true;
-    await tick();
-    keepInView();
-    rows()[0]?.focus();
-  }
-
-  function close(refocus = true) {
-    open = false;
-    if (refocus) chip?.focus();
-  }
-
-  function choose(id: string) {
-    close();
-    onopen(id);
-  }
-
-  function onKey(e: KeyboardEvent) {
-    const all = rows();
-    const i = all.indexOf(document.activeElement as HTMLButtonElement);
-    const move = (to: number) => {
-      e.preventDefault();
-      all[Math.max(0, Math.min(all.length - 1, to))]?.focus();
-    };
-    if (e.key === 'ArrowDown') move(i + 1);
-    else if (e.key === 'ArrowUp') move(i - 1);
-    else if (e.key === 'Home') move(0);
-    else if (e.key === 'End') move(all.length - 1);
-    else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-    }
-  }
-
-  function onWindowClick(e: MouseEvent) {
-    if (open && root && !root.contains(e.target as Node)) close(false);
-  }
+  const label = $derived(`${items.length} need${items.length === 1 ? 's' : ''} you`);
 
   // The list closes when it has nothing left to list (the tasks were answered meanwhile)
   $effect(() => {
@@ -97,39 +50,49 @@
   });
 </script>
 
-<svelte:window onclick={onWindowClick} />
-
-{#if items.length}
-  <span class="menu-anchor needs-you" bind:this={root}>
+{#if items.length === 1}
+  <span class="menu-anchor needs-you">
     <button
       class="attention-chip {chipClass}"
       id={chipId}
-      bind:this={chip}
-      aria-haspopup={items.length > 1 ? 'menu' : undefined}
-      aria-expanded={items.length > 1 ? open : undefined}
-      title={items.length === 1 ? `Open ${items[0].id} ${items[0].name}` : 'Show the tasks that need you'}
-      onclick={onChip}>{items.length} need{items.length === 1 ? 's' : ''} you</button
+      title="Open {items[0].id} {items[0].name}"
+      onclick={() => onopen(items[0].id)}>{label}</button
     >
-    {#if open}
-      <span
-        class="menu needs-you-menu"
-        class:align-right={align === 'right'}
-        id={menuId}
-        role="menu"
-        aria-label="Tasks that need you"
-        tabindex="-1"
-        style:translate={shift ? `${shift}px 0` : undefined}
-        bind:this={list}
-        onkeydown={onKey}
-      >
-        {#each items as task (task.id)}
-          <button class="needs-you-row" role="menuitem" data-id={task.id} onclick={() => choose(task.id)}>
-            <span class="needs-you-id">{task.id}</span>
-            <span class="needs-you-name">{task.name}</span>
-            <span class="needs-you-reason">{REASONS[task.reason]}</span>
-          </button>
-        {/each}
-      </span>
-    {/if}
+  </span>
+{:else if items.length}
+  <span class="menu-anchor needs-you">
+    <DropdownMenu.Root bind:open onOpenChange={(next) => next && keepInView()}>
+      <DropdownMenu.Trigger>
+        {#snippet child({ props })}
+          <button {...props} class="attention-chip {chipClass}" id={chipId} title="Show the tasks that need you"
+            >{label}</button
+          >
+        {/snippet}
+      </DropdownMenu.Trigger>
+      <!-- Not modal: the page stays as it is (scrolling, a click on it closes the list), as the dashboard's popups -->
+      <DropdownMenu.ContentStatic bind:ref={list} preventScroll={false} aria-label="Tasks that need you">
+        {#snippet child({ props })}
+          <span
+            {...props}
+            class="menu needs-you-menu"
+            class:align-right={align === 'right'}
+            id={menuId}
+            style:translate={shift ? `${shift}px 0` : undefined}
+          >
+            {#each items as task (task.id)}
+              <DropdownMenu.Item onSelect={() => onopen(task.id)}>
+                {#snippet child({ props })}
+                  <button {...props} class="needs-you-row" data-id={task.id}>
+                    <span class="needs-you-id">{task.id}</span>
+                    <span class="needs-you-name">{task.name}</span>
+                    <span class="needs-you-reason">{REASONS[task.reason]}</span>
+                  </button>
+                {/snippet}
+              </DropdownMenu.Item>
+            {/each}
+          </span>
+        {/snippet}
+      </DropdownMenu.ContentStatic>
+    </DropdownMenu.Root>
   </span>
 {/if}

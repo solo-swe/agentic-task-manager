@@ -590,6 +590,11 @@ address (now any of its pages on this server, I14 `dashboardAddress`) moves the 
 links are unchanged. An old `#…` link still opens: its parameters are read as before and the page moves to the new
 address. No skill, CLI output or agent-facing text changed, so no sandbox run is needed.
 
+**Bits UI for the dashboard's dialogs, menus and popovers (T-431).** A new dependency bundled into the page
+(`bits-ui` 2.20.6 with `runed`, `svelte-toolbelt` and Floating UI, pinned by `pnpm-lock.yaml`, updated by
+Dependabot's grouped PRs): it makes no request (the page's CSP would refuse one, I13), renders the dashboard's own
+elements through snippets, and no `{@html}` is added (I15). No new entry point, input or output agents act on.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

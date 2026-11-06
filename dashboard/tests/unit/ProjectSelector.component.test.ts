@@ -1,5 +1,5 @@
 import { fireEvent, render } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ProjectSelector from '../../src/lib/shell/ProjectSelector.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
@@ -59,7 +59,8 @@ describe('ProjectSelector', () => {
     expect([...container.querySelectorAll('[role=option]')].map((o) => o.getAttribute('data-id'))).toEqual(['b']);
     await fireEvent.keyDown(filter, { key: 'Enter' });
     expect(location.pathname).toBe('/projects/b');
-    expect(container.querySelector('#project-menu')).toBeNull();
+    // Bits UI's popover (T-431) closes once its layer has let go of the page
+    await vi.waitFor(() => expect(container.querySelector('#project-menu')).toBeNull());
   });
 
   it('Projects Overview goes to the overview; typing its name finds it (T-274)', async () => {

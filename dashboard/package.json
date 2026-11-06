@@ -43,6 +43,7 @@
     "@tsconfig/svelte": "^5.0.8",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.0.5",
+    "bits-ui": "2.20.6",
     "eslint": "^10.14.0",
     "eslint-plugin-svelte": "^3.23.1",
     "globals": "^17.13.0",

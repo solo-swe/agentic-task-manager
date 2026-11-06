@@ -67,6 +67,13 @@ The sprint *CLI ergonomics* (release 0.31.0).
   open and move to the new address. A link in task text to a dashboard page opens in place. The page's API requests
   are from the server's root (`/api/…`, `/p/<id>/…`), and so is a project's logo. `lib/routes.ts` and `lib/address.ts`
   (instead of `lib/hash.ts`), `lib/navigation.ts` (SvelteKit's `goto`), `lib/sprint-param.ts` (was `sprint-hash.ts`).
+- **The dashboard's dialogs, menus and popovers are Bits UI's** (`bits-ui` 2.20.6, T-431): `Dialog.svelte` (About,
+  Help, What's new) on its dialog (focus trapped while open, the page under it doesn't scroll); the "need you" list
+  and the scope bar's sprint menu on its dropdown menu (roving focus, typeahead; the sprints as radio items); the
+  settings, the Filters popup, the project selector and the ⓘ tips on its popover. Each is placed where it was (its
+  static content, no floating positioning), with the same ids and classes; the menus aren't modal. About 150 kB more:
+  the size guardrail is 850 KiB, only to catch a runaway build (no size target until the Rust/Tauri move sets new
+  ones). `runed`'s SvelteKit 2 peer is allowed for 3 (`pnpm-workspace.yaml`).
 - **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
   `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
   version is the plugin's, so the same sources build the same page.

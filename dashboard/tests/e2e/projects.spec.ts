@@ -150,18 +150,22 @@ test.describe('projects', () => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('.project-card[data-id="second"] .project-card-open').click();
     await page.locator('#project-selector').click();
+    // Focus moves to the field once the popover has opened (Bits UI, T-431)
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.type('thi');
     await expect(page.locator('#project-options [role=option]')).toHaveText(['Third Project']);
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/projects\/third(\?sprint=[^&]+)?$/);
 
     await page.locator('#project-selector').click();
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.press('Home');
     await expect(page.locator('#project-filter')).toHaveAttribute('aria-activedescendant', 'project-option-overview');
     await page.keyboard.press('Escape');
     await expect(page.locator('#project-menu')).toHaveCount(0);
     await expect(page.locator('#project-selector')).toBeFocused();
     await page.keyboard.press('Enter');
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.press('Home');
     await page.keyboard.press('Enter');
     await expect(page.locator('#landing')).toHaveAttribute('data-page', 'overview');

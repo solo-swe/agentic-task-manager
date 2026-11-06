@@ -6,7 +6,7 @@ import AboutDialog from '../../src/lib/dialogs/AboutDialog.svelte';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
-import { loadIntoDashboard } from './components.helpers';
+import { loadIntoDashboard, press, settled } from './components.helpers';
 
 const overlay = () => document.querySelector('#about-overlay')!;
 
@@ -114,10 +114,11 @@ describe('AboutDialog', () => {
     for (const close of [
       () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
       () => fireEvent.keyDown(document, { key: 'Escape' }),
-      () => fireEvent.click(overlay()),
+      () => press(overlay()),
     ]) {
       dashboard.openDialog('about');
       flushSync();
+      await settled();
       await close();
       expect(dashboard.dialog).toBeNull();
       expect(location.search).not.toContain('about');

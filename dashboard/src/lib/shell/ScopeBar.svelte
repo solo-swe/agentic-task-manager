@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { DropdownMenu } from 'bits-ui';
   import { ACTIVE, BACKLOG, FILTER_GROUPS, FILTER_LABELS, filterOptions } from '../filters';
   import { formatWhen } from '../format';
   import { readReleases } from '../releases';
@@ -89,58 +89,31 @@
           : 'All tasks',
   );
 
+  // The menu is Bits UI's (T-431): the arrows, Home, End and typing move, Enter chooses, Escape or a click outside
+  // closes, and focus goes back to the button. Each choice is a radio item, keyed as its data-scope
   let menuOpen = $state(false);
-  let root = $state<HTMLElement>();
-  let trigger = $state<HTMLButtonElement>();
-  let menu = $state<HTMLElement>();
-  const items = () => [...(menu?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])];
-
-  async function toggleMenu() {
-    menuOpen = !menuOpen;
-    if (!menuOpen) return;
-    await tick();
-    (items().find((i) => i.getAttribute('aria-checked') === 'true') ?? items()[0])?.focus();
-  }
-  function close(refocus = true) {
-    menuOpen = false;
-    if (refocus) trigger?.focus();
-  }
-  function choose(values: string[]) {
-    dashboard.setSprintScope(values);
-    close();
-  }
-  function onKey(e: KeyboardEvent) {
-    const all = items();
-    const i = all.indexOf(document.activeElement as HTMLButtonElement);
-    const move = (to: number) => {
-      e.preventDefault();
-      all[Math.max(0, Math.min(all.length - 1, to))]?.focus();
-    };
-    if (e.key === 'ArrowDown') move(i + 1);
-    else if (e.key === 'ArrowUp') move(i - 1);
-    else if (e.key === 'Home') move(0);
-    else if (e.key === 'End') move(all.length - 1);
-    else if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-    }
+  const keyOf = (values: string[]) => values.join(',') || 'all';
+  /** The choices by key, as the menu lists them, for the radio group's value */
+  const chosen = $derived(
+    [...(active ? [[ACTIVE]] : []), ...planned.map((s) => [s.id]), [BACKLOG], [], ...closed.map((s) => [s.id])].find(
+      (values) => isChoice(values),
+    ),
+  );
+  function choose(key: string) {
+    dashboard.setSprintScope(key === 'all' ? [] : key.split(','));
   }
 </script>
 
-<svelte:window onclick={(e) => menuOpen && root && !root.contains(e.target as Node) && close(false)} />
-
 {#snippet choice(values: string[], text: string, state?: Sprint['state'], note?: string)}
-  <button
-    class="scope-choice"
-    role="menuitemradio"
-    aria-checked={isChoice(values)}
-    data-scope={values.join(',') || 'all'}
-    onclick={() => choose(values)}
-    ><SprintMarker {state} /><span class="scope-choice-name">{text}</span>{#if note}<span class="scope-choice-note"
-        >{note}</span
-      >{/if}</button
-  >
+  <DropdownMenu.RadioItem value={keyOf(values)}>
+    {#snippet child({ props })}
+      <button {...props} class="scope-choice" data-scope={keyOf(values)}
+        ><SprintMarker {state} /><span class="scope-choice-name">{text}</span>{#if note}<span class="scope-choice-note"
+            >{note}</span
+          >{/if}</button
+      >
+    {/snippet}
+  </DropdownMenu.RadioItem>
 {/snippet}
 
 {#snippet progress()}
@@ -181,49 +154,45 @@
     aria-label="Sprint"
   >
     <div class="scope-head">
-      <span class="menu-anchor" bind:this={root}>
-        <button
-          class="scope-trigger"
-          id="scope-trigger"
-          bind:this={trigger}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          title="Choose the sprint to show"
-          onclick={toggleMenu}
-          >{#if scope.kind === 'sprint'}<SprintMarker state={scope.sprint.state} />{/if}<strong class="sprint-name"
-            >{label}</strong
-          ><Icon name="chevron-down" size={14} /></button
-        >
-        {#if menuOpen}
-          <div
-            class="menu scope-menu"
-            id="scope-menu"
-            role="menu"
-            aria-label="Sprints"
-            tabindex="-1"
-            bind:this={menu}
-            onkeydown={onKey}
-          >
-            {#if active}{@render choice([ACTIVE], active.id, 'active', tasks(sizeOf(active)))}{/if}
-            {#if planned.length}
-              <div class="menu-label">Planned</div>
-              {#each planned as s (s.id)}{@render choice([s.id], s.id, 'planned', tasks(sizeOf(s)))}{/each}
-            {/if}
-            <div class="menu-label">Everything</div>
-            {#if backlog(model, dashboard.tasks).length}{@render choice(
-                [BACKLOG],
-                'Backlog',
-                undefined,
-                tasks(backlog(model, dashboard.tasks).length),
-              )}{/if}
-            {@render choice([], 'All tasks')}
-            {#if closed.length}
-              <div class="menu-label">Closed</div>
-              {#each closed as s (s.id)}{@render choice([s.id], s.id, 'closed', dateOf(s.end))}{/each}
-            {/if}
-            <div class="menu-note">Several at once: the Sprint filter</div>
-          </div>
-        {/if}
+      <span class="menu-anchor">
+        <DropdownMenu.Root bind:open={menuOpen}>
+          <DropdownMenu.Trigger>
+            {#snippet child({ props })}
+              <button {...props} class="scope-trigger" id="scope-trigger" title="Choose the sprint to show"
+                >{#if scope.kind === 'sprint'}<SprintMarker state={scope.sprint.state} />{/if}<strong
+                  class="sprint-name">{label}</strong
+                ><Icon name="chevron-down" size={14} /></button
+              >
+            {/snippet}
+          </DropdownMenu.Trigger>
+          <!-- Not modal, as NeedsYouMenu's -->
+          <DropdownMenu.ContentStatic preventScroll={false} aria-label="Sprints">
+            {#snippet child({ props })}
+              <div {...props} class="menu scope-menu" id="scope-menu">
+                <DropdownMenu.RadioGroup value={chosen ? keyOf(chosen) : ''} onValueChange={choose}>
+                  {#if active}{@render choice([ACTIVE], active.id, 'active', tasks(sizeOf(active)))}{/if}
+                  {#if planned.length}
+                    <div class="menu-label">Planned</div>
+                    {#each planned as s (s.id)}{@render choice([s.id], s.id, 'planned', tasks(sizeOf(s)))}{/each}
+                  {/if}
+                  <div class="menu-label">Everything</div>
+                  {#if backlog(model, dashboard.tasks).length}{@render choice(
+                      [BACKLOG],
+                      'Backlog',
+                      undefined,
+                      tasks(backlog(model, dashboard.tasks).length),
+                    )}{/if}
+                  {@render choice([], 'All tasks')}
+                  {#if closed.length}
+                    <div class="menu-label">Closed</div>
+                    {#each closed as s (s.id)}{@render choice([s.id], s.id, 'closed', dateOf(s.end))}{/each}
+                  {/if}
+                </DropdownMenu.RadioGroup>
+                <div class="menu-note">Several at once: the Sprint filter</div>
+              </div>
+            {/snippet}
+          </DropdownMenu.ContentStatic>
+        </DropdownMenu.Root>
       </span>
       {#if scope.kind === 'sprint'}
         {#if scope.sprint.state !== 'active'}<span class="sprint-state">{scope.sprint.state}</span>{/if}

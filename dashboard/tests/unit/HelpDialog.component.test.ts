@@ -6,7 +6,7 @@ import { slug } from '../../src/lib/compmd';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { compmdSettled } from './compmd.helpers';
-import { loadIntoDashboard } from './components.helpers';
+import { loadIntoDashboard, press, settled } from './components.helpers';
 
 // Help renders docs/help.md with the real CompMD, as the served module has it
 const loadCompmd = vi.hoisted(() => vi.fn());
@@ -55,12 +55,13 @@ describe('HelpDialog', () => {
     for (const close of [
       () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
       () => fireEvent.keyDown(document, { key: 'Escape' }),
-      () => fireEvent.click(overlay()),
+      () => press(overlay()),
     ]) {
       opener.focus();
       dashboard.openDialog('help');
       flushSync();
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+      await settled();
       await close();
       flushSync();
       expect(dashboard.dialog).toBeNull();
