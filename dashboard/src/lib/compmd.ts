@@ -6,6 +6,7 @@
 import type { Request } from '@compmd/processor';
 import { version as compmdVersion } from 'virtual:atm-compmd';
 import type { Task } from './types';
+import { addressOf, isPagePath } from './address';
 
 /** Links that are safe to follow: web and mail addresses, and anchors in the page. */
 export function safeHref(href: string): boolean {
@@ -277,7 +278,7 @@ const RAW_IMAGE = /<\s*img\b/i;
  * anywhere else would be a request outside the dashboard (the page's CSP refuses it too, noisily); a link atm
  * wouldn't follow becomes its text. secureLinks checks the rendered links again. For a project's text (task text, a
  * document in the viewer; docs/compmd-viewer-design.md): `localImage` gives a relative image's address on this server
- * (the files route), so it loads from there (V5); `docLink` gives a relative link's `#doc=…` link, which opens the
+ * (the files route), so it loads from there (V5); `docLink` gives a relative link's viewer link (`#doc=…`), which opens the
  * document viewer (V1a–V1c), so the browser never follows a relative URL itself. Null from either: as without it.
  */
 export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {}): T {
@@ -318,9 +319,10 @@ export function safeTree<T>(tree: T, { localImage, docLink }: ProjectLinks = {})
   return { ...root, children: (root.children ?? []).flatMap(visit) } as T;
 }
 
-/** The hash of a web link to this dashboard itself (the page's own address, with a `#…`: a task or a document
- * linked by its URL), which the dashboard follows in place; null for any other link */
-export function dashboardHash(href: string, page: string = location.href): string | null {
+/** The address of a web link to this dashboard itself (one of its pages on this server, T-429, or an old `#…` link to
+ * it: a project, a task or a document linked by its URL), which the dashboard follows in place; null for any other
+ * link */
+export function dashboardAddress(href: string, page: string = location.href): string | null {
   let url: URL;
   let here: URL;
   try {
@@ -329,8 +331,8 @@ export function dashboardHash(href: string, page: string = location.href): strin
   } catch {
     return null;
   }
-  if (!/^https?:$/.test(url.protocol) || url.origin !== here.origin || url.pathname !== here.pathname) return null;
-  return url.hash.length > 1 ? url.hash : null;
+  if (!/^https?:$/.test(url.protocol) || url.origin !== here.origin) return null;
+  return isPagePath(url.pathname) ? addressOf(url) : null;
 }
 
 /**
@@ -345,7 +347,7 @@ export function secureLinks(root: ParentNode) {
       a.replaceWith(...a.childNodes);
       continue;
     }
-    if (href.trim().startsWith('#') || dashboardHash(href) !== null) continue;
+    if (href.trim().startsWith('#') || dashboardAddress(href) !== null) continue;
     a.setAttribute('target', '_blank');
     a.setAttribute('rel', 'noopener noreferrer');
   }

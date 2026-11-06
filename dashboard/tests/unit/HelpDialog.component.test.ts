@@ -1,12 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import HelpDialog from '../../src/components/HelpDialog.svelte';
+import HelpDialog from '../../src/lib/dialogs/HelpDialog.svelte';
 import { slug } from '../../src/lib/compmd';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { compmdSettled } from './compmd.helpers';
-import { loadIntoDashboard } from './components.helpers';
+import { loadIntoDashboard, press, settled } from './components.helpers';
 
 // Help renders docs/help.md with the real CompMD, as the served module has it
 const loadCompmd = vi.hoisted(() => vi.fn());
@@ -43,7 +43,7 @@ describe('HelpDialog', () => {
     expect(dialog.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
     expect(heading(dialog, 'Statuses and kinds')?.tagName).toBe('H2');
     expect(dialog).toHaveTextContent('/atm:loop-tasks');
-    expect(location.hash).toBe('#help');
+    expect(location.search).toBe('?help');
     // Headings have no IDs: an element with the ID "help" would make the browser jump to it on "#help"
     expect(document.getElementById('help')).toBeNull();
   });
@@ -55,12 +55,13 @@ describe('HelpDialog', () => {
     for (const close of [
       () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
       () => fireEvent.keyDown(document, { key: 'Escape' }),
-      () => fireEvent.click(overlay()),
+      () => press(overlay()),
     ]) {
       opener.focus();
       dashboard.openDialog('help');
       flushSync();
       expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }));
+      await settled();
       await close();
       flushSync();
       expect(dashboard.dialog).toBeNull();
@@ -69,7 +70,7 @@ describe('HelpDialog', () => {
     opener.remove();
   });
 
-  it('links within the page scroll to the heading and leave the URL hash alone', async () => {
+  it('links within the page scroll to the heading and leave the address alone', async () => {
     render(HelpDialog);
     const dialog = await openHelp();
     const target = heading(dialog, 'Priorities and labels')!;
@@ -77,7 +78,7 @@ describe('HelpDialog', () => {
     target.scrollIntoView = () => (scrolled = true);
     await fireEvent.click(screen.getByRole('link', { name: 'priorities and labels' }));
     expect(scrolled).toBe(true);
-    expect(location.hash).toBe('#help');
+    expect(location.search).toBe('?help');
   });
 });
 

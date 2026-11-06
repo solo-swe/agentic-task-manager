@@ -1,0 +1,29 @@
+<script lang="ts">
+  // A project's logo (p/<id>/logo, which api/projects lists), or its monogram: the initials on a colour picked from
+  // its id. The box has its size from the start, so nothing moves while the image loads; an image that fails to load
+  // gives way to the monogram. Decorative: the project's name is always next to it.
+  import { idHash, monogram } from '../projects';
+  import { PHASE_PALETTE } from '../theme';
+
+  let { project, size = 16 }: { project: { id: string; name: string; logo?: string | null }; size?: number } = $props();
+
+  let failed = $state<string | null>(null);
+  const src = $derived(project.logo && failed !== project.logo ? project.logo : null);
+  const color = $derived(PHASE_PALETTE[idHash(project.id) % PHASE_PALETTE.length]);
+</script>
+
+<span
+  class="project-logo"
+  class:monogram={!src}
+  style:width="{size}px"
+  style:height="{size}px"
+  style:--monogram-color={color}
+  style:font-size="{Math.round(size * 0.45)}px"
+  data-initials={src ? null : monogram(project.name)}
+  aria-hidden="true"
+>
+  <!-- The initials are drawn by CSS (::before), so they stay out of the text of the option or card they sit in -->
+  {#if src}
+    <img {src} alt="" width={size} height={size} onerror={() => (failed = src)} />
+  {/if}
+</span>

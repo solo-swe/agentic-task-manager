@@ -61,7 +61,9 @@ test.describe('"need you" chip', () => {
     await page.locator('#dashboard-title').click();
     await expect(page.locator('#needs-you-menu')).toHaveCount(0);
 
+    // The first row has the focus once the menu has opened (Bits UI's menu, T-431)
     await chip.click();
+    await expect(rows.first()).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await expect(rows.nth(1)).toBeFocused();
     await page.keyboard.press('Enter');

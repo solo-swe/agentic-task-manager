@@ -1,25 +1,9 @@
-"""`atm sprints`, `atm move` and `atm backlog`, through atm-lib (docs/layered-architecture.md §9, step 11)."""
+"""How the `atm sprint` commands print sprints (docs/layered-architecture.md §9, step 11)."""
 
-import os
-
-from ..boot.open import open_project
-from ..boot.identity import agent_identity
-from ..common.errors import Invalid
 from ..common.core import out, to_json
-from ..lib.query import summary
-from ..lib.sprints import (
-    add_sprint,
-    backlog_tasks,
-    close_sprint,
-    delete_sprint,
-    edit_sprint,
-    list_sprints,
-    move_tasks,
-    start_sprint,
-)
-from .render import list_lines
+from ..lib.sprints import list_sprints
 
-NONE_ACTIVE = "No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint."
+NONE_ACTIVE = "No sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint."
 
 
 def describe_sprint(s):
@@ -39,10 +23,10 @@ def show_sprints(project, include_closed, as_json):
         out(to_json({"sprints": sprints, "backlog": backlog}))
         return
     if not sprints:
-        out("No open sprints (--all lists the closed ones)." if listed["has_sprints"] else "No sprints yet: atm sprints add creates one.")
+        out("No open sprints (--all lists the closed ones)." if listed["has_sprints"] else "No sprints yet: atm sprint add creates one.")
     for s in sprints:
         out(describe_sprint(s))
-    out(f"backlog: {backlog} task{'' if backlog == 1 else 's'} (atm backlog)")
+    out(f"backlog: {backlog} task{'' if backlog == 1 else 's'} (atm sprint backlog)")
 
 
 def show_close(result, as_json):
@@ -74,57 +58,3 @@ def show_delete(result, as_json):
     out(line + ".")
     if state == "active":
         out(NONE_ACTIVE)
-
-
-def cmd_sprints(args):
-    project = open_project(os.getcwd(), agent_identity(getattr(args, "agent", None)))
-    if args.action in (None, "list"):
-        if args.name is not None:
-            raise Invalid(f"unexpected argument '{args.name}'")
-        show_sprints(project, args.all, args.json)
-        return
-    if args.action == "add":
-        sprint = add_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due, after=args.after)
-        out(to_json(sprint) if args.json else f"Added the sprint “{sprint['id']}” (planned).")
-        return
-    if not args.name:
-        raise Invalid(f"atm sprints {args.action} needs a sprint name")
-    if args.action == "edit":
-        result = edit_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due)
-        sprint, changed = result["sprint"], result["changed"]
-        if args.json:
-            out(to_json(sprint))
-        else:
-            out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
-    elif args.action == "start":
-        sprint = start_sprint(project, args.name)
-        out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
-    elif args.action == "close":
-        closed = close_sprint(
-            project, args.name, carry_to=args.carry_to, new_name=args.new_name, reviewed=args.reviewed
-        )
-        show_close(closed, args.json)
-    else:
-        show_delete(delete_sprint(project, args.name, move_to=args.move_to, force=args.force), args.json)
-
-
-def cmd_move(args):
-    moved = move_tasks(open_project(os.getcwd(), agent_identity(args.agent)), args.ids, args.to)
-    if args.json:
-        out(to_json(moved))
-        return
-    for m in moved:
-        before, after = m["from"] or "backlog", m["to"] or "backlog"
-        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
-
-
-def cmd_backlog(args):
-    found = backlog_tasks(open_project(os.getcwd()), finished=args.all)
-    rows = [summary(found["vocab"], t) for t in found["tasks"]]
-    if args.json:
-        out(to_json(rows))
-    elif not rows:
-        out("The backlog is empty.")
-    else:
-        for line in list_lines(rows):
-            out(line)

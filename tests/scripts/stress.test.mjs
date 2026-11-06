@@ -29,12 +29,12 @@ function atm(args, cwd, agent) {
 
 async function worker(name, cwd, log) {
   for (;;) {
-    const next = await atm(['next', '--claim', '--json'], cwd, name);
+    const next = await atm(['loop', 'next', '--claim', '--json'], cwd, name);
     if (next.code === 3) return;
     assert.equal(next.code, 0, `${name}: ${next.stderr}`);
     const id = JSON.parse(next.stdout).task.id;
     log.push([name, id]);
-    const done = await atm(['done', id], cwd, name);
+    const done = await atm(['task', 'state', id, 'done'], cwd, name);
     assert.equal(done.code, 0, `${name} done ${id}: ${done.stderr}`);
   }
 }

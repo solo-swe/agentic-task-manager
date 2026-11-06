@@ -13,7 +13,7 @@ test('bin/atm on PATH runs atm-cli as plain `atm`, from any directory', () => {
     const version = spawnSync('atm', ['version'], { cwd: root, encoding: 'utf8', env });
     assert.equal(version.status, 0, version.stderr);
     assert.equal(version.stdout, `${PLUGIN_VERSION}\n`);
-    const paths = spawnSync('atm', ['paths', '--json'], { cwd: root, encoding: 'utf8', env });
+    const paths = spawnSync('atm', ['project', 'config', '--json'], { cwd: root, encoding: 'utf8', env });
     assert.equal(JSON.parse(paths.stdout).root, root);
   } finally {
     removeDir(root);

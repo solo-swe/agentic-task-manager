@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { Page } from '@playwright/test';
-import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test } from './helpers';
+import { board, boardCard, expect, loadFixture, openDashboard, sprintNumbers, summary, test, follow } from './helpers';
 
 /**
  * Screenshot of the view shown, its panel only: not the tabs or the title bar above it, so a change there (spacing,
@@ -32,11 +32,11 @@ async function sectionScreenshot(page: Page, name: string) {
 // number input at a slightly different sub-pixel position from run to run. refresh.spec covers its value.
 // Baselines are Linux only (T-345): made and checked in the pinned Playwright container, the same as CI's, so there
 // is one set and no round trip through CI. With Docker running:
-//   npm run test:e2e:visual           compare
-//   npm run test:e2e:visual:update    regenerate after an intended UI change (once a sprint, in the release task)
+//   pnpm run test:e2e:visual           compare
+//   pnpm run test:e2e:visual:update    regenerate after an intended UI change (once a sprint, in the release task)
 // Elsewhere (macOS) the tests skip. Screenshots are of parts (a panel, a menu, a card) rather than whole pages, so one
 // change touches few baselines; the standard fixture's page, dark and light, is the only whole page.
-test.skip(process.platform !== 'linux', 'Linux baselines: npm run test:e2e:visual (Docker)');
+test.skip(process.platform !== 'linux', 'Linux baselines: pnpm run test:e2e:visual (Docker)');
 
 for (const fixture of ['standard', 'large-90', 'empty', 'edge-cases']) {
   test.describe(`visual: ${fixture}`, () => {
@@ -315,7 +315,7 @@ for (const mode of ['dark', 'light'] as const) {
       .addProject('second', 'minimal', 'Second Project', summary({ percent: 75 }))
       .addProject('third', 'minimal', 'Third Project', third);
     await openDashboard(page, tasksServer, 'standard');
-    await page.evaluate(() => (location.hash = '#project=second'));
+    await follow(page, '/projects/second');
     await expect(page.locator('#subtitle')).toContainText('loaded from tasks.json');
     await page.locator('#project-selector').click();
     await expect(page.locator('#project-menu')).toHaveScreenshot(`project-selector-${mode}.png`);
@@ -406,7 +406,7 @@ test('visual: projects overview agents', async ({ page, tasksServer }) => {
   await page.clock.setFixedTime(new Date('2026-04-02T12:00:00Z'));
   tasksServer.use('agents');
   tasksServer.addProject('second', 'agents', 'Second Project');
-  await page.goto('tasks-dashboard.html#overview&view=agents');
+  await page.goto('/agents');
   await expect(page.locator('#overview-agents .agent-info').first()).toBeVisible();
   await expect(page.locator('#overview-agents')).toHaveScreenshot('overview-agents.png');
 });

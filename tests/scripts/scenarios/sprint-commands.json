@@ -21,9 +21,9 @@
         }
       }
     },
-    "args": ["sprints"],
+    "args": ["sprint", "list"],
     "expect": {
-      "stdout": "Themes · active · release 0.23.0 · due 2026-11-02: 2 tasks (todo 1, done 1)\n  goal: Two themes\nNext · planned: 0 tasks\nbacklog: 1 task (atm backlog)\n"
+      "stdout": "Themes · active · release 0.23.0 · due 2026-11-02: 2 tasks (todo 1, done 1)\n  goal: Two themes\nNext · planned: 0 tasks\nbacklog: 1 task (atm sprint backlog)\n"
     }
   },
   {
@@ -36,8 +36,8 @@
         }
       }
     },
-    "args": ["sprints", "--all"],
-    "expect": { "stdout": "Old · closed: 1 task (done 1)\nbacklog: 0 tasks (atm backlog)\n" }
+    "args": ["sprint", "list", "--all"],
+    "expect": { "stdout": "Old · closed: 1 task (done 1)\nbacklog: 0 tasks (atm sprint backlog)\n" }
   },
   {
     "name": "atm sprints add, with a goal, release and due date, after a given sprint",
@@ -49,7 +49,7 @@
         }
       }
     },
-    "args": ["sprints", "add", "B", "--goal", "The middle", "--release", "1.0", "--due", "2026-06-01", "--after", "A"],
+    "args": ["sprint", "add", "B", "--goal", "The middle", "--release", "1.0", "--due", "2026-06-01", "--after", "A"],
     "expect": {
       "stdout": "Added the sprint “B” (planned).\n",
       "files": {
@@ -72,13 +72,13 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "Themes" }] }, "tasks": [] } }
     },
-    "args": ["sprints", "add", "THEMES"],
+    "args": ["sprint", "add", "THEMES"],
     "expect": { "exit": 2, "stderrIncludes": ["there is already a sprint 'Themes'"] }
   },
   {
     "name": "a due date that isn't YYYY-MM-DD is refused",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["sprints", "add", "A", "--due", "Friday"],
+    "args": ["sprint", "add", "A", "--due", "Friday"],
     "expect": { "exit": 2, "stderrIncludes": ["--due 'Friday': use a date, YYYY-MM-DD"] }
   },
   {
@@ -86,7 +86,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprint_names": "time" }, "tasks": [] } }
     },
-    "args": ["sprints", "add", "--json"],
+    "args": ["sprint", "add", "--json"],
     "env": { "ATM_NOW": "2026-05-12T22:38:00Z", "TZ": "UTC" },
     "expect": { "json": { "id": "May 12-10:38pm", "state": "planned" } }
   },
@@ -100,7 +100,7 @@
         }
       }
     },
-    "args": ["sprints", "add", "--json"],
+    "args": ["sprint", "add", "--json"],
     "env": { "ATM_NOW": "2026-05-12T22:38:30Z", "TZ": "UTC" },
     "expect": { "json": { "id": "May 12-10:38pm-2", "state": "planned" } }
   },
@@ -109,7 +109,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprint_names": "time" }, "tasks": [] } }
     },
-    "args": ["sprints", "add", "--json"],
+    "args": ["sprint", "add", "--json"],
     "env": { "ATM_NOW": "2026-01-03T00:05:00Z", "TZ": "UTC" },
     "expect": { "json": { "id": "Jan 3-12:05am", "state": "planned" } }
   },
@@ -123,7 +123,7 @@
         }
       }
     },
-    "args": ["sprints", "edit", "a", "--goal", "Ship it", "--due", ""],
+    "args": ["sprint", "edit", "a", "--goal", "Ship it", "--due", ""],
     "expect": { "stdout": "A: changed goal, due\n" }
   },
   {
@@ -141,7 +141,7 @@
         }
       }
     },
-    "args": ["sprints", "start", "Next", "--json"],
+    "args": ["sprint", "start", "Next", "--json"],
     "env": { "ATM_NOW": "2026-05-12T09:00:00Z" },
     "expect": { "json": { "id": "Next", "state": "active", "start": "2026-05-12T09:00:00Z" } }
   },
@@ -155,7 +155,7 @@
         }
       }
     },
-    "args": ["sprints", "start", "Next"],
+    "args": ["sprint", "start", "Next"],
     "expect": { "exit": 2, "stderrIncludes": ["the sprint 'Now' is active; close it first"] }
   },
   {
@@ -165,7 +165,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "Old", "state": "closed" }] }, "tasks": [] }
       }
     },
-    "args": ["sprints", "start", "Old"],
+    "args": ["sprint", "start", "Old"],
     "expect": { "exit": 2, "stderrIncludes": ["the sprint 'Old' is closed"] }
   },
   {
@@ -186,7 +186,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "T-2", "--to", "B"],
+    "args": ["sprint", "move", "T-1", "T-2", "--to", "B"],
     "env": { "ATM_NOW": "2026-05-02T09:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdout": "T-1: A -> B\nT-2: backlog -> B\n",
@@ -228,7 +228,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "--to", "next"],
+    "args": ["sprint", "move", "T-1", "--to", "next"],
     "expect": { "stdout": "T-1: A -> C\n" }
   },
   {
@@ -241,8 +241,8 @@
         }
       }
     },
-    "args": ["move", "T-1", "--to", "next"],
-    "expect": { "exit": 2, "stderrIncludes": ["T-1: no planned sprint after A; add one with atm sprints add"] }
+    "args": ["sprint", "move", "T-1", "--to", "next"],
+    "expect": { "exit": 2, "stderrIncludes": ["T-1: no planned sprint after A; add one with atm sprint add"] }
   },
   {
     "name": "atm move --to active",
@@ -257,7 +257,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "--to", "active"],
+    "args": ["sprint", "move", "T-1", "--to", "active"],
     "expect": { "stdout": "T-1: backlog -> A\n" }
   },
   {
@@ -273,7 +273,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "T-2", "--to", "backlog"],
+    "args": ["sprint", "move", "T-1", "T-2", "--to", "backlog"],
     "expect": { "stdout": "T-1: A -> backlog\nT-2: already in backlog\n" }
   },
   {
@@ -286,7 +286,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "--to", "active"],
+    "args": ["sprint", "move", "T-1", "--to", "active"],
     "expect": { "exit": 2, "stderrIncludes": ["no sprint is active"] }
   },
   {
@@ -302,7 +302,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "T-2", "--to", "B"],
+    "args": ["sprint", "move", "T-1", "T-2", "--to", "B"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["T-2 is in progress (claimed)"],
@@ -327,7 +327,7 @@
         }
       }
     },
-    "args": ["move", "T-1", "--to", "backlog"],
+    "args": ["sprint", "move", "T-1", "--to", "backlog"],
     "expect": { "exit": 2, "stderrIncludes": ["T-1 is done: finished work stays in the sprint it was done in"] }
   },
   {
@@ -344,7 +344,7 @@
         }
       }
     },
-    "args": ["backlog"],
+    "args": ["sprint", "backlog"],
     "expect": { "stdout": "T-2  todo  P2  Unplanned\n" }
   },
   {
@@ -359,13 +359,13 @@
         }
       }
     },
-    "args": ["backlog", "--all"],
+    "args": ["sprint", "backlog", "--all"],
     "expect": { "stdout": "T-2  todo  P2  Unplanned\nT-3  done  P2  Old work\n" }
   },
   {
     "name": "an empty backlog says so",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["backlog"],
+    "args": ["sprint", "backlog"],
     "expect": { "stdout": "The backlog is empty.\n" }
   }
 ]

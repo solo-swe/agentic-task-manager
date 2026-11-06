@@ -62,7 +62,7 @@ function asTaskViews(body: string, archive: string | null = null, archived = fal
   return views;
 }
 
-/** atm's tolerant read of the files (`atm list --derived --tolerant`: meta, tasks, problems; with `archived`, the
+/** atm's tolerant read of the files (`atm task list --derived --tolerant`: meta, tasks, problems; with `archived`, the
  * archive's tasks, T-372), or null when even that refuses them (not a task file) */
 function atmViews(body: string, archive: string | null, archived = false): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
@@ -70,12 +70,16 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
-    const r = spawnSync('python3', [ATM, 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])], {
-      cwd: dir,
-      encoding: 'utf8',
-      maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
-    });
+    const r = spawnSync(
+      'python3',
+      [ATM, 'task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])],
+      {
+        cwd: dir,
+        encoding: 'utf8',
+        maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
+        env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      },
+    );
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
     let data: unknown = null;
@@ -85,7 +89,7 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
       return null;
     }
     if (!data || typeof data !== 'object' || !Array.isArray((data as TasksData).tasks)) return null;
-    throw new Error(`atm list --derived failed: ${r.error?.message ?? r.stderr}`);
+    throw new Error(`atm task list --derived failed: ${r.error?.message ?? r.stderr}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -97,18 +101,18 @@ export const FIXTURE_PROJECT = 'fixture';
 const ATM = path.resolve(import.meta.dirname, '../../../plugin/scripts/atm.py');
 
 /** What atm serve would list as the summary of a project holding `body` as its tasks.json: atm-cli's own
- * (`atm summary`), so the dashboard's Next up is tested against atm's rule, not a copy of it (T-321) */
+ * (`atm project summary`), so the dashboard's Next up is tested against atm's rule, not a copy of it (T-321) */
 function atmSummary(body: string): Record<string, unknown> {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-summary-'));
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
-    const r = spawnSync('python3', [ATM, 'summary'], {
+    const r = spawnSync('python3', [ATM, 'project', 'summary'], {
       cwd: dir,
       encoding: 'utf8',
       env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
-    if (r.status !== 0) throw new Error(`atm summary failed: ${r.stderr}`);
+    if (r.status !== 0) throw new Error(`atm project summary failed: ${r.stderr}`);
     return JSON.parse(r.stdout) as Record<string, unknown>;
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -558,7 +562,25 @@ export async function openDashboard(
       }
     }, `atm-dashboard:view:id:${tasksServer.projectId}`);
   }
-  await page.goto('tasks-dashboard.html' + (tab ? `#view=${tab}` : ''));
+  await page.goto(tab ? `/projects/${encodeURIComponent(tasksServer.projectId)}/${tab}` : '/');
+}
+
+/** Follow a link to `address` in the page (`/projects/fixture/list?doc=docs/x.md`), as a link in task text or another
+ * page does: the dashboard moves there without loading again (T-429) */
+export async function follow(page: Page, address: string) {
+  await page.evaluate((href) => {
+    const link = document.createElement('a');
+    link.href = href;
+    document.body.append(link);
+    link.click();
+    link.remove();
+  }, address);
+}
+
+/** The page's address as the dashboard writes it: its path and query (`/projects/fixture/list?about`) */
+export function addressOf(page: Page): string {
+  const url = new URL(page.url());
+  return url.pathname + url.search;
 }
 
 /** Open the filter panel (Phase, Type and Status buttons) under the search line, if it isn't open yet. */

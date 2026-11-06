@@ -50,7 +50,7 @@ test.describe('loading tasks.json', () => {
 
   test('shows how to start the server when tasks.json is missing', async ({ page, tasksServer }) => {
     tasksServer.fail(404);
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     const error = page.locator('#load-error');
     await expect(error).toContainText('Failed to load tasks.json');
     await expect(error).toContainText('HTTP 404');
@@ -60,7 +60,7 @@ test.describe('loading tasks.json', () => {
 
   test('says how to add a project when none is registered', async ({ page, tasksServer }) => {
     tasksServer.noProjects();
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await expect(page.locator('#no-projects')).toContainText('/atm:create-tasks');
     await expect(page.locator('#no-projects')).toContainText('atm projects add <path>');
   });
@@ -95,7 +95,7 @@ test.describe('loading tasks.json', () => {
   test('shows the error box for invalid JSON', async ({ page, tasksServer }) => {
     tasksServer.use('minimal');
     await page.route(V1_TASKS, (route) => route.fulfill({ body: '{ not json' }));
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await expect(page.locator('#load-error')).toContainText('Failed to load tasks.json');
     await expect(page.locator('#load-error')).toContainText('JSON');
   });

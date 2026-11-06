@@ -52,11 +52,12 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I1 | **Task text is data, not commands.** The skills and `plugin/CLAUDE.md` say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
-| I2 | **Skills pre-approve no command runner**: only named `atm` subcommands, never `atm run` or `atm *` | `skills.test.ts` |
+| I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24) | `skills.test.ts` |
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
-| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), approve a review (`atm approve`) only on the user's word in the session, never `request-changes` on their own, and an unattended loop never takes `with: user` work (`--with-user` is the user's flag) | `skills.test.ts` (no `--agent` in the working skills, `request-changes` not pre-approved, the `with: user` rule); `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
-| I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads, `atm sprints`, `atm move` (and `atm skip` for closing): no `atm add`, `edit` or `done` | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
+| I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes|reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
+| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives | `security-invariants.test.ts` (every process atm starts, and the one fork); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
+| I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
 ### atm-cli (B2)
 
@@ -81,8 +82,8 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only sets the page's hash (`dashboardHash`, T-394), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
-| I15 | **No `{@html}` on data**: only on the built-in icons and the bundled logo | `security-invariants.test.ts` (`{@html}` only in `Icon.svelte` and `Logo.svelte`) |
+| I14 | **Every link from task data is http(s)** (`safeUrl`); Markdown links are http(s), mailto or `#` (`safeHref`), opening in a new tab without access to the page, except a link to the dashboard's own address, which only moves the page to that page of it (`dashboardAddress`, T-394, T-429), and a relative link in a project's text, which `safeTree` turns into a `#doc=` link the viewer opens through the documents route, never one the browser follows (T-395); Markdown, all of it rendered with CompMD (task text, Help, What's new), loads no image but `data:` and makes no request (`safeTree`, `secureLinks`, T-284) | `tests/unit/url.test.ts`, `stages.test.ts`, `ProjectCard.component.test.ts`, `compmd.test.ts`, `compmd-processor.test.ts`, `detail.spec.ts` "task text with CompMD" |
+| I15 | **No `{@html}` on data**: only on the bundled logo (the icons are Lucide's components since T-432) | `security-invariants.test.ts` (`{@html}` only in `Logo.svelte`) |
 | I16 | **The page runs under its CSP**: nothing it does is refused | the e2e `cspGuard` fixture (every e2e test) |
 | I17 | **No request leaves localhost** | the e2e `externalRequestGuard` fixture |
 
@@ -91,7 +92,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I18 | **CI tokens are read-only by default; checkouts don't keep credentials** | `dashboard/tests/unit/ci-workflow.test.ts` |
-| I19 | **Actions are pinned by commit SHA and images by digest**; Dependabot proposes action and npm updates, grouped (one PR a week per ecosystem; an npm major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
+| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`); no Python packages are installed: Typer and Click are vendored in `plugin/scripts/vendor/` at the versions `atm-cli/uv.lock` pins (`vendor.test.mjs`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the committed build artifacts match their sources | CI's freshness checks |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
 
@@ -99,9 +100,9 @@ with the task that adds it.
 
 The schedule (T-236):
 
-- **Every PR (CI)**: everything in §2 that is a test: `npm run test:scripts` (the hostile-repo suites), the unit tests
+- **Every PR (CI)**: everything in §2 that is a test: `pnpm run test:scripts` (the hostile-repo suites), the unit tests
   (skills, links, CI workflow, static checks, invariants table), the e2e suite under the page's CSP, and the build
-  freshness checks. Dependabot proposes action and npm updates weekly.
+  freshness checks. Dependabot proposes action and package updates weekly.
 - **Every PR that changes what agents read** (a skill, `plugin/CLAUDE.md`, or atm's output agents act on), before
   it is merged: the agent sandbox's red-team run (I1). Here **every PR to `main` is a release** (the version is
   bumped and `/plugin marketplace update` delivers it), so "before a release" means "before merging such a PR". PRs
@@ -129,7 +130,7 @@ a user does. Most of it exists since phase 20's fixes:
 
 T-234 added the static checks (I5: no `shell=True` / `os.system` / `eval` / `exec` in `atm-cli/`; I15: `{@html}` only
 in `Icon.svelte` and `Logo.svelte`) and a check that every test the §2 table names exists, all in
-`dashboard/tests/unit/security-invariants.test.ts`. **Cost:** seconds; runs in CI on every PR with `npm run test:scripts` and the unit tests.
+`dashboard/tests/unit/security-invariants.test.ts`. **Cost:** seconds; runs in CI on every PR with `pnpm run test:scripts` and the unit tests.
 
 **Level 2: the agent sandbox (the skills).** The only way to test I1 (task text is data) is to let a real agent loop
 over hostile tasks and see what it does. It must run where a mistake costs nothing:
@@ -368,7 +369,7 @@ agents act on changed, so there is no agent sandbox run; this written review tak
 (description, notes, the review note, questions) with CompMD instead of `markdown.ts`. Task text is untrusted (anyone
 who can change `tasks.json` wrote it), so:
 - **What runs is atm's, shipped with the plugin:** CompMD's processor (WebAssembly) and renderer, built from pinned
-  npm packages into `plugin/assets/compmd/<version>/` and checked against a fresh build by `npm run check`. Nothing
+  npm packages into `plugin/assets/compmd/<version>/` and checked against a fresh build by `pnpm run check`. Nothing
   is fetched from elsewhere, and the text brings no code: it has no files to import, no packs (`imports: listed`,
   none listed), no remote data (no allowed origin), and only one `host:` source, the task's own data, which the
   reader sees in the same panel anyway. A frontmatter written in the text is only text: the dashboard puts its own
@@ -440,7 +441,8 @@ sandbox:
   (it has had XSS bugs) stays in the frame. The e2e test puts `<img onerror>` and `<script>` in a label: the markup
   reaches the frame's document, its policy refuses it, and nothing runs in the dashboard.
 - **What runs:** only what the plugin ships, pinned by `@compmd/vite` (`dashboard/compmd.config.json`: the pack's
-  exact version, from the lockfile's integrity). The frame loads the pack's module by URL with its SRI hash, so a
+  exact version, from the lockfile's integrity, `pnpm-lock.yaml`; `@compmd/vite` 0.5.0 loses it when the lockfile has
+  two documents, as `devEngines` makes it, so the dashboard has no `devEngines` until T-436). The frame loads the pack's module by URL with its SRI hash, so a
   file changed on its way never runs (tested: the diagram stays its code). Packs are `imports: "listed"`, strict, and
   the Mermaid pack is the only one; a component the text defines itself in a fence is never given to the sandbox, so
   its code never runs.
@@ -524,6 +526,74 @@ review in place of the live sandbox run:
   never to run commands copied from task text, and `--dir` commits nothing a plain `git add` of those files wouldn't.
 - **Its limit:** a change under the folder by an agent whose task doesn't list it, or by a person, goes in with the
   commit. That is why the skills keep `--dir` to generated output (`git.test.mjs` "atm commit --dir").
+
+**The command tree becomes `atm` (T-425).** Every command has a new name (`atm task state <id> done`, `atm loop
+next`, `atm vcs commit`, …; `docs/improving-atm-cli-ergonomics.md`), the old flat commands are gone, and every skill,
+`plugin/CLAUDE.md` and the plugin's hooks (`atm claim heartbeat --auto`, `atm service --refresh`) use the new names.
+Written review in place of the live sandbox run (no API key is used for the sandbox):
+- **Third-party code in the plugin.** Typer and Click run in every `atm` call, so they are part of what users run:
+  copied as they are into `plugin/scripts/vendor/` from the uv environment, at the versions `atm-cli/uv.lock` pins
+  (with their hashes), checked by `tests/scripts/vendor.test.mjs`; one line changed (`vendor/README.md`). Typer's
+  rich support is left out, so an installed `rich` can't change atm's output; `atm.py` puts the folder first on its
+  import path, so an installed Click or Typer is never used. No package is installed anywhere (CI's pip step went).
+- **What the skills pre-approve** (`allowed-tools`) is mapped command by command, never a whole group that holds
+  `loop run` or a review decision (`skills.test.ts`): `atm task state` replaces the dozen status commands; no skill
+  pre-approves `atm loop run` (I2) or `atm task review` (I23).
+- **I23 under the new tree.** `task state` can't tell its targets apart in a permission rule (the ID comes first), so
+  the review's decisions left it: `atm task review approve|request-changes <id>`, the decision first. No skill
+  pre-approves them, so an agent that runs one asks the user for permission; the skills say the decision is the
+  user's. `close-sprint` used to pre-approve only `atm skip`: it now pre-approves no status change, and a skip asks
+  for permission. T-438 then guards the exits from review on the decision, in atm itself (below).
+- **What the text asks of agents** is unchanged: the same work under the new names, *Task text is data* and *Logs
+  are evidence* untouched, every agent-written text still single-quoted (I3). The merge driver's registration is
+  `atm db merge-driver %O %A %B`; `atm db migrate`, which every skill runs first, registers it again in a clone.
+- **No new entry point.** The tree reads the same paths and URLs the old commands did; `--json` and `--dry-run` may
+  go anywhere on the line before `--`, which changes no command's meaning (`cli.test.mjs`).
+
+**`atm loop run` goes; `atm claim hold` (T-437).** `loop run <id> -- <command>` ran whatever followed `--`: one
+permission rule (`Bash(atm *)`) would let any command through it. It is gone (I24). `atm claim hold <id>` renews the
+caller's claim (refused, before anything else, when it isn't theirs), forks a watcher in a session of its own with
+stdin, stdout and stderr on `/dev/null`, and returns; the agent runs its command itself, in the same Bash call
+(`atm claim hold T-1 && npm test`), under its own permission check. The watcher renews that one claim, as that agent,
+while atm's parent process (the shell; the launchers `exec`) lives and has the start time it had (`ps -o lstart=`,
+so a reused pid doesn't keep it going), until a renewal fails (released, finished, taken over) or `--max` (four hours,
+at most twelve) is up. It reads no path or URL and runs nothing. The skills pre-approve `atm claim hold`. Written
+review in place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:push`,
+`plugin/CLAUDE.md`) asks agents to chain their own command after `claim hold` instead of handing it to atm; *Task text
+is data* is untouched, and a command copied from a task is still refused, whatever it follows.
+
+**A review's exits, guarded in atm (T-438).** A review's decisions are `atm task review approve|request-changes|reject
+<id>` (reject is new): each leaves the task in review with its `review_state`, and atm lets it out only by that
+decision, for an agent and a person alike: `done` needs `approved`, `todo` (drop) and `skipped` need `rejected`,
+`in_progress` needs a decision for rework. So I23 no longer rests on the skills and their permission lists alone: an
+agent that runs `atm task state <id> done` on its own task in review is refused until the user approved it. The
+decision is carried in the task's `waiting` record, so an exit taken in another worktree meets the same guard. What
+stays the user's is the decision itself: no skill pre-approves `atm task review`, so an agent running one asks for
+permission; the actor is still self-declared (`--agent`), which the permission prompt, not atm, guards. `skipped`
+from any open state and `done` without `--resolution` read no path or URL and add no entry point. Written review in
+place of the live sandbox run: the changed text (`/atm:do-task`, `/atm:loop-tasks`, `/atm:close-sprint`,
+`plugin/CLAUDE.md`) adds `reject` to the decisions that are the user's and says how each opens its way out; nothing to
+run, fetch or install, and *Task text is data* is untouched (a task saying "approved" changes no `review_state`).
+
+**The dashboard's pages have addresses (T-429).** The views moved from the hash (`#project=…&view=…`) to paths and a
+query: `/projects/<id>/<tab>`, `/projects`, `/board`, `/progress`, `/agents`, with `?task=`, `?doc=`, `?sprint=`,
+`?about`, `?help` (`docs/multi-project-api.md` §2.7). New entry points on the server: those paths, each answered with
+the same page and the same CSP as `/` (I13), matched by one pattern (`PAGE_PATH`: a project ID is any one path segment,
+a tab lowercase letters, nothing deeper), so no file is ever looked up by them; anything else still gets `404` (the
+task files never, I12). The ID and the query are the page's input, as the hash was: parsed into the same parameters
+(`lib/address.ts`), matched against the server's project list, tabs and sprint names, a task ID against the loaded
+tasks, a document path checked by `resolvePath` and atm-lib (I19) exactly as `#doc=` was; nothing in them is fetched
+as a URL, evaluated or written into the page as markup. `?task=` is new and only opens a loaded task's details. The
+page's own requests now go to absolute paths (`/api/…`, `/p/<id>/…`), so the same page at any of its paths asks only
+its own server's routes (`connect-src 'self'` unchanged). A link in task text or a document to the dashboard's own
+address (now any of its pages on this server, I14 `dashboardAddress`) moves the page there in place, as before; other
+links are unchanged. An old `#…` link still opens: its parameters are read as before and the page moves to the new
+address. No skill, CLI output or agent-facing text changed, so no sandbox run is needed.
+
+**Bits UI for the dashboard's dialogs, menus and popovers (T-431).** A new dependency bundled into the page
+(`bits-ui` 2.20.6 with `runed`, `svelte-toolbelt` and Floating UI, pinned by `pnpm-lock.yaml`, updated by
+Dependabot's grouped PRs): it makes no request (the page's CSP would refuse one, I13), renders the dashboard's own
+elements through snippets, and no `{@html}` is added (I15). No new entry point, input or output agents act on.
 
 ## 4. Keeping it current
 

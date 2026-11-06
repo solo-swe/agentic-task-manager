@@ -1,12 +1,12 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { tick } from 'svelte';
-import { beforeEach, describe, expect, it } from 'vitest';
-import ScopeBar from '../../src/components/ScopeBar.svelte';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import ScopeBar from '../../src/lib/shell/ScopeBar.svelte';
 import { ACTIVE, BACKLOG } from '../../src/lib/filters';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { Task, TasksFile } from '../../src/lib/types';
 import sprintsFile from '../fixtures/sprints.json';
-import { loadIntoDashboard } from './components.helpers';
+import { loadIntoDashboard, settled } from './components.helpers';
 
 // fixtures/sprints.json: "Ada Lovelace" is active (due 2026-04-12, T-002–T-004), "Foundations" closed (T-001),
 // "Alan Turing" planned (no tasks); T-005 is in the backlog
@@ -196,10 +196,14 @@ describe('ScopeBar (T-323)', () => {
     await fireEvent.click(container.querySelector('#scope-trigger')!);
     const choices = [...container.querySelectorAll('.scope-choice')].map((c) => c.getAttribute('data-scope'));
     expect(choices).toEqual([ACTIVE, 'Alan Turing', BACKLOG, 'all', 'Foundations']);
+    // Bits UI's menu (T-431): radio items, the current choice checked
+    expect(container.querySelector('#scope-menu')).toHaveAttribute('role', 'menu');
     expect(container.querySelector(`.scope-choice[aria-checked="true"]`)?.getAttribute('data-scope')).toBe(ACTIVE);
+    expect(container.querySelector(`.scope-choice[data-scope="${BACKLOG}"]`)).toHaveAttribute('role', 'menuitemradio');
+    await settled();
     await fireEvent.click(container.querySelector(`.scope-choice[data-scope="${BACKLOG}"]`)!);
     expect([...dashboard.filters.sprint]).toEqual([BACKLOG]);
-    expect(container.querySelector('#scope-menu')).toBeNull();
+    await vi.waitFor(() => expect(container.querySelector('#scope-menu')).toBeNull());
   });
 
   it('the Kanban options show on the Kanban only; Group by sprint only with more than one sprint', async () => {

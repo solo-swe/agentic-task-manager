@@ -24,7 +24,7 @@ test('generated people names: each new sprint gets a name not used yet, in eithe
     const names = [];
     // The same seed every time: only the names already taken change what is picked
     for (let i = 0; i < 5; i++) {
-      const r = runAtm(['sprints', 'add', '--json'], root, { ATM_SEED: '7' });
+      const r = runAtm(['sprint', 'add', '--json'], root, { ATM_SEED: '7' });
       assert.equal(r.code, 0, r.stderr);
       names.push(JSON.parse(r.stdout).id);
     }

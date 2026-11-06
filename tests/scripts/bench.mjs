@@ -7,7 +7,7 @@
 // regressions on slow CI runners, not to measure precisely.
 //
 // Usage: node tests/scripts/bench.mjs [--cli] [--dashboard] [--check] [--sizes 1000,10000]
-//        (no --cli or --dashboard: both). `npm run bench` in dashboard/ runs both.
+//        (no --cli or --dashboard: both). `pnpm run bench` in dashboard/ runs both.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -101,7 +101,10 @@ function benchCli(n) {
     const writes = [];
     for (const t of todo) {
       // Each round's task depends on the previous one, which the round before finished
-      writes.push(timeAtm(['start', t.id], root), timeAtm(['done', t.id], root));
+      writes.push(
+        timeAtm(['task', 'state', t.id, 'in_progress'], root),
+        timeAtm(['task', 'state', t.id, 'done'], root),
+      );
     }
     // The merge driver parses three versions: each side finished a different task
     const ours = structuredClone(data);
@@ -114,7 +117,7 @@ function benchCli(n) {
       ['theirs.json', theirs],
     ])
       fs.writeFileSync(path.join(root, name), json(value));
-    const merge = timeAtm(['merge-driver', 'base.json', 'ours.json', 'theirs.json'], root);
+    const merge = timeAtm(['db', 'merge-driver', 'base.json', 'ours.json', 'theirs.json'], root);
     return { size, write: median(writes), merge };
   } finally {
     removeDir(root);
@@ -133,7 +136,7 @@ function taskViews(data) {
     const file = json(data);
     fs.writeFileSync(path.join(root, '.agentic-task-manager', 'tasks.json'), file);
     // --tolerant: read as atm serve's v1 route reads it, and answered in its shape (meta, tasks, problems)
-    const r = spawnSync(ATM, ['list', '--derived', '--tolerant'], {
+    const r = spawnSync(ATM, ['task', 'list', '--derived', '--tolerant'], {
       cwd: root,
       encoding: 'utf8',
       maxBuffer: 1 << 30, // 10k tasks are tens of megabytes of views

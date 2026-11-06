@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import TaskGrid from '../../src/components/TaskGrid.svelte';
+import TaskGrid from '../../src/lib/tasks/TaskGrid.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';
 import archive from '../fixtures/archive.json';

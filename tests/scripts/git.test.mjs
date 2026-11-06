@@ -30,7 +30,7 @@ describe('atm commit', () => {
       tasks.tasks[0].notes = [{ text: 'changed by atm' }];
       write(root, TASKS, JSON.stringify(tasks, null, 2) + '\n');
 
-      const result = runAtm(['commit', 'T-001', '--file', 'src/a.txt', '--file', 'src/new.txt'], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt', '--file', 'src/new.txt'], root, ENV);
       assert.equal(result.code, 0, result.stderr);
       const sha = git(['rev-parse', 'HEAD'], root);
       assert.match(result.stdout, new RegExp(`^T-001: committed ${sha.slice(0, 7)} feat\\(T-001\\): Add login\\n`));
@@ -52,7 +52,7 @@ describe('atm commit', () => {
     const root = project();
     try {
       fs.rmSync(path.join(root, 'src/b.txt'));
-      const result = runAtm(['commit', 'T-001', '--file', 'b.txt'], path.join(root, 'src'), ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--file', 'b.txt'], path.join(root, 'src'), ENV);
       assert.equal(result.code, 0, result.stderr);
       assert.deepEqual(committedFiles(root), ['src/b.txt']);
       assert.equal(git(['ls-files', 'src/b.txt'], root), '');
@@ -66,7 +66,7 @@ describe('atm commit', () => {
     try {
       git(['rm', '-q', 'src/b.txt'], root);
       write(root, 'src/a.txt', 'a2\n');
-      const result = runAtm(['commit', 'T-001', '--file', 'src/a.txt', '--file', 'src/b.txt'], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt', '--file', 'src/b.txt'], root, ENV);
       assert.equal(result.code, 0, result.stderr);
       assert.deepEqual(committedFiles(root), ['src/a.txt', 'src/b.txt']);
       // Only the recorded SHA is left over (git() trims the status line's leading space)
@@ -86,14 +86,14 @@ describe('atm commit', () => {
         ['src', /is a directory/],
         ['../elsewhere.txt', /outside the repository/],
       ]) {
-        const result = runAtm(['commit', 'T-001', `--file=${file}`], root, ENV);
+        const result = runAtm(['vcs', 'commit', 'T-001', `--file=${file}`], root, ENV);
         assert.equal(result.code, 2, `${file}: ${result.stderr}`);
         assert.match(result.stderr, message);
       }
-      const missing = runAtm(['commit', 'T-001'], root, ENV);
+      const missing = runAtm(['vcs', 'commit', 'T-001'], root, ENV);
       assert.equal(missing.code, 2);
       assert.match(missing.stderr, /--file/);
-      const gone = runAtm(['commit', 'T-001', '--file', 'nope.txt'], root, ENV);
+      const gone = runAtm(['vcs', 'commit', 'T-001', '--file', 'nope.txt'], root, ENV);
       assert.equal(gone.code, 1);
       assert.match(gone.stderr, /no such file/);
       assert.equal(git(['rev-list', '--count', 'HEAD'], root), '1');
@@ -115,7 +115,7 @@ describe('atm commit', () => {
     try {
       write(root, 'a.env', 'TRACKED=2\n');
       write(root, 'secret.env', 'TOKEN=hunter2\n');
-      const pattern = runAtm(['commit', 'T-001', '--file', '*.env'], root, ENV);
+      const pattern = runAtm(['vcs', 'commit', 'T-001', '--file', '*.env'], root, ENV);
       assert.equal(pattern.code, 1, pattern.stderr);
       assert.match(pattern.stderr, /no such file/);
       assert.equal(git(['rev-list', '--count', 'HEAD'], root), '1');
@@ -123,7 +123,7 @@ describe('atm commit', () => {
 
       write(root, 'src/[id]/page.ts', 'export const page = 1;\n');
       write(root, 'src/i', 'changed, and not named\n');
-      const literal = runAtm(['commit', 'T-001', '--file', 'src/[id]/page.ts'], root, ENV);
+      const literal = runAtm(['vcs', 'commit', 'T-001', '--file', 'src/[id]/page.ts'], root, ENV);
       assert.equal(literal.code, 0, literal.stderr);
       assert.deepEqual(committedFiles(root), ['src/[id]/page.ts']); // not src/i; tasks.json had no change
     } finally {
@@ -141,14 +141,14 @@ describe('atm commit', () => {
     try {
       write(forbid, 'src/a.txt', 'a2\n');
       const msg = 'fix: {name}\n\nCo-Authored-By: Claude <noreply@anthropic.com>';
-      assert.equal(runAtm(['commit', 'T-001', '--file', 'src/a.txt', '--message', msg], forbid, ENV).code, 0);
+      assert.equal(runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt', '--message', msg], forbid, ENV).code, 0);
       assert.equal(git(['log', '-1', '--format=%B'], forbid), 'fix: Add login');
       write(forbid, 'src/a.txt', 'a3\n');
-      assert.equal(runAtm(['commit', 'T-001', '--file', 'src/a.txt'], forbid, ENV).code, 0);
+      assert.equal(runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt'], forbid, ENV).code, 0);
       assert.equal(git(['log', '-1', '--format=%B'], forbid), 'feature: Add login (T-001)');
 
       write(require, 'src/a.txt', 'a2\n');
-      const result = runAtm(['commit', 'T-001', '--file', 'src/a.txt', '--json'], require, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt', '--json'], require, ENV);
       assert.equal(result.code, 0, result.stderr);
       const expected = 'feat(T-001): Add login\n\nSigned-off-by: Alice <a@example.com>';
       assert.equal(git(['log', '-1', '--format=%B'], require), expected);
@@ -168,7 +168,7 @@ describe('atm commit', () => {
   test('nothing to commit is an error from git, and nothing is recorded', () => {
     const root = project();
     try {
-      const result = runAtm(['commit', 'T-001', '--file', 'src/a.txt'], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--file', 'src/a.txt'], root, ENV);
       assert.equal(result.code, 1);
       assert.match(result.stderr, /git commit failed/);
       assert.equal(read(root).tasks[0].commit, undefined);
@@ -205,14 +205,18 @@ describe('atm commit --dir (T-405)', () => {
       fs.mkdirSync(path.join(root, 'gen/chunks'));
       write(root, 'gen/chunks/new.js', 'new\n');
       write(root, 'src/a.txt', 'a2\n');
-      const result = runAtm(['commit', 'T-001', '--dir', 'gen'], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--dir', 'gen'], root, ENV);
       assert.equal(result.code, 0, result.stderr);
       assert.deepEqual(committedFiles(root), ['gen/chunks/new.js', 'gen/keep.js', 'gen/old.js']);
       assert.match(git(['status', '--porcelain'], root), /^ ?M src\/a\.txt$/m);
       // With --file beside it, and from a subfolder
       write(root, 'gen/keep.js', 'keep3\n');
       write(root, 'src/a.txt', 'a3\n');
-      const both = runAtm(['commit', 'T-001', '--dir', '../gen', '--file', 'a.txt'], path.join(root, 'src'), ENV);
+      const both = runAtm(
+        ['vcs', 'commit', 'T-001', '--dir', '../gen', '--file', 'a.txt'],
+        path.join(root, 'src'),
+        ENV,
+      );
       assert.equal(both.code, 0, both.stderr);
       assert.deepEqual(committedFiles(root), [TASKS, 'gen/keep.js', 'src/a.txt']);
     } finally {
@@ -231,7 +235,7 @@ describe('atm commit --dir (T-405)', () => {
         ['src/a.txt', 2, /is a file/],
         ['src', 1, /nothing changed under it/],
       ]) {
-        const result = runAtm(['commit', 'T-001', '--dir', dir], root, ENV);
+        const result = runAtm(['vcs', 'commit', 'T-001', '--dir', dir], root, ENV);
         assert.equal(result.code, code, `${dir}: ${result.stderr}`);
         assert.match(result.stderr, message, dir);
       }
@@ -247,16 +251,16 @@ describe('atm commit --dir (T-405)', () => {
       { id: 'T-002', name: 'Hand-edit', phase: 1, type: 'feature', status: 'todo', files: ['gen/keep.js'] },
     ]);
     try {
-      assert.equal(runAtm(['start', 'T-001'], root, ENV).code, 0);
-      assert.equal(runAtm(['start', 'T-002'], root, { ...ENV, ATM_AGENT: 'bob' }).code, 0);
+      assert.equal(runAtm(['task', 'state', 'T-001', 'in_progress'], root, ENV).code, 0);
+      assert.equal(runAtm(['task', 'state', 'T-002', 'in_progress'], root, { ...ENV, ATM_AGENT: 'bob' }).code, 0);
       write(root, 'gen/keep.js', 'bob was here\n');
       write(root, 'gen/new.js', 'new\n');
-      const result = runAtm(['commit', 'T-001', '--dir', 'gen'], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--dir', 'gen'], root, ENV);
       assert.equal(result.code, 1, result.stderr);
       assert.match(result.stderr, /gen\/keep\.js.*T-002.*bob/);
       assert.equal(git(['rev-list', '--count', 'HEAD'], root), '1');
       // Naming its own files still works
-      assert.equal(runAtm(['commit', 'T-001', '--file', 'gen/new.js'], root, ENV).code, 0);
+      assert.equal(runAtm(['vcs', 'commit', 'T-001', '--file', 'gen/new.js'], root, ENV).code, 0);
     } finally {
       removeDir(root);
     }
@@ -276,14 +280,14 @@ describe('atm commit --record', () => {
     const [root, sha] = withTaskCommit();
     try {
       const count = git(['rev-list', '--count', 'HEAD'], root);
-      const short = runAtm(['commit', 'T-001', '--record', sha.slice(0, 8)], root, ENV);
+      const short = runAtm(['vcs', 'commit', 'T-001', '--record', sha.slice(0, 8)], root, ENV);
       assert.equal(short.code, 0, short.stderr);
       assert.equal(short.stdout, `T-001: recorded ${sha.slice(0, 7)} feat(T-001): Add login\n`);
       assert.equal(read(root).tasks[0].commit, sha);
       assert.equal(read(root).tasks[0].updated_by, 'alice');
       assert.equal(git(['rev-list', '--count', 'HEAD'], root), count);
 
-      const json = runAtm(['commit', 'T-001', '--record', 'HEAD', '--json'], root, ENV);
+      const json = runAtm(['vcs', 'commit', 'T-001', '--record', 'HEAD', '--json'], root, ENV);
       assert.equal(json.code, 0, json.stderr);
       assert.deepEqual(JSON.parse(json.stdout), { task: 'T-001', commit: sha, recorded: true });
     } finally {
@@ -294,11 +298,11 @@ describe('atm commit --record', () => {
   test('a commit whose message does not name the task is recorded, with a hint', () => {
     const [root, sha] = withTaskCommit('Tidy up');
     try {
-      const result = runAtm(['commit', 'T-001', '--record', sha], root, ENV);
+      const result = runAtm(['vcs', 'commit', 'T-001', '--record', sha], root, ENV);
       assert.equal(result.code, 0, result.stderr);
       assert.match(result.stdout, /its message doesn.t mention T-001/);
       assert.equal(read(root).tasks[0].commit, sha);
-      const json = JSON.parse(runAtm(['commit', 'T-001', '--record', sha, '--json'], root, ENV).stdout);
+      const json = JSON.parse(runAtm(['vcs', 'commit', 'T-001', '--record', sha, '--json'], root, ENV).stdout);
       assert.match(json.hint, /doesn.t mention T-001/);
     } finally {
       removeDir(root);
@@ -327,7 +331,7 @@ describe('atm commit --record', () => {
         ],
         [['--record', 'HEAD', '--dir', 'src'], 2, /--record records an existing commit/],
       ]) {
-        const result = runAtm(['commit', 'T-001', ...args], root, ENV);
+        const result = runAtm(['vcs', 'commit', 'T-001', ...args], root, ENV);
         assert.equal(result.code, code, `${args.join(' ')}: ${result.stderr}`);
         assert.match(result.stderr, message);
       }

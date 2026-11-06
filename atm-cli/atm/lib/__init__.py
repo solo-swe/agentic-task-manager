@@ -52,7 +52,7 @@ from .releases import add_release, archive_release, edit_release, list_releases,
 from .settings import get_logo, get_repository, init_meta, set_logo, set_repository, unset_logo
 from .sprints import add_sprint, backlog_tasks, close_sprint, delete_sprint, edit_sprint, list_sprints, move_tasks
 from .sprints import start_sprint
-from .status import add_task_note, approve_task, block_task, done_task, fail_task, reject_task, release_task
+from .status import add_task_note, approve_task, block_task, done_task, drop_task, fail_task, reject_task, release_task
 from .status import reopen_task, request_changes, review_task, skip_task, start_task, unblock_task
 from .tasks import show_tasks
 from .worktrees import worktree_copies
@@ -79,6 +79,7 @@ __all__ = [
     "review_task",
     "done_task",
     "reject_task",
+    "drop_task",
     "approve_task",
     "request_changes",
     "block_task",

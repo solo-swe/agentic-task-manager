@@ -1,4 +1,4 @@
-import { expect, openDashboard, test } from './helpers';
+import { expect, openDashboard, test, addressOf } from './helpers';
 
 // D-1.3, D-1.5: Help shows docs/help.md, inlined at build time and rendered with CompMD; it opens from the footer or
 // #help.
@@ -11,7 +11,7 @@ test.describe('Help', () => {
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#help-panel .compmd')).toHaveAttribute('data-compmd', 'ready');
     await expect(page.locator('#help-panel h2', { hasText: 'Statuses and kinds' })).toBeVisible();
-    await expect(page).toHaveURL(/#.*help/);
+    await expect(page).toHaveURL(/\?(.*&)?help(&|$)/);
     await page.keyboard.press('Escape');
     await expect(page.locator(overlay)).toBeHidden();
     await expect(page.locator('#footer-help')).toBeFocused();
@@ -67,16 +67,16 @@ test.describe('Help', () => {
     await expect(svg).toContainText('In progress');
   });
 
-  test('#help in the URL opens it; its links within the page keep it open', async ({ page, tasksServer }) => {
+  test('?help in the address opens it; its links within the page keep it open', async ({ page, tasksServer }) => {
     tasksServer.use('standard');
-    await page.goto('tasks-dashboard.html#view=list&help');
+    await page.goto('/projects/fixture/list?help');
     await expect(page.locator(overlay)).toBeVisible();
     await expect(page.locator('#tab-list')).toHaveAttribute('aria-selected', 'true');
     await page.locator('#help-panel').getByRole('link', { name: 'priorities and labels' }).click();
     await expect(page.locator('#help-panel h2', { hasText: 'Priorities and labels' })).toBeInViewport();
     await expect(page.locator(overlay)).toBeVisible();
-    // The Sprint filter follows in the hash (#sprint=, T-323)
-    expect(new URL(page.url()).hash).toMatch(/^#view=list&help(&sprint=[^&]+)?$/);
+    // The Sprint filter follows in the address (?sprint=, T-323)
+    expect(addressOf(page)).toMatch(/^\/projects\/fixture\/list\?(sprint=[^&]+&)?help(&sprint=[^&]+)?$/);
   });
 
   test('links off the page go to the repository, CompMD and Mermaid, in a new tab, and are never fetched', async ({

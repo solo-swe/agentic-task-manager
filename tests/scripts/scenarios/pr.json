@@ -12,7 +12,7 @@
       }
     },
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["pr", "T-001", "T-002", "--number", "7", "--url", "https://github.com/o/r/pull/7"],
+    "args": ["vcs", "pr", "T-001", "T-002", "--number", "7", "--url", "https://github.com/o/r/pull/7"],
     "expect": {
       "stdout": "T-001, T-002: in PR #7 (https://github.com/o/r/pull/7)\n",
       "files": {
@@ -40,7 +40,7 @@
   {
     "name": "pr with an unknown task changes nothing",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["pr", "T-001", "T-009", "--number", "7", "--url", "https://example.com/pr/7"],
+    "args": ["vcs", "pr", "T-001", "T-009", "--number", "7", "--url", "https://example.com/pr/7"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["T-009"],
@@ -50,7 +50,7 @@
   {
     "name": "pr needs --number and --url",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["pr", "T-001", "--number", "7"],
+    "args": ["vcs", "pr", "T-001", "--number", "7"],
     "expect": { "exit": 2, "stderrIncludes": ["--url"] }
   },
   {
@@ -66,7 +66,7 @@
       }
     },
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["merged", "--pr", "7", "--at", "2026-04-30T09:00:00Z", "--json"],
+    "args": ["vcs", "pushed", "--pr", "7", "--at", "2026-04-30T09:00:00Z", "--json"],
     "expect": {
       "json": { "pr": 7, "tasks": ["T-001"], "already": [], "released": [], "pending": {} },
       "files": {
@@ -97,13 +97,13 @@
         }
       }
     },
-    "args": ["merged", "--pr", "7"],
+    "args": ["vcs", "pushed", "--pr", "7"],
     "expect": { "stdout": "PR #7: already recorded as merged\n" }
   },
   {
     "name": "merged for a PR no task records",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["merged", "--pr", "7"],
+    "args": ["vcs", "pushed", "--pr", "7"],
     "expect": { "exit": 1, "stderrIncludes": ["no task records PR #7"] }
   },
   {
@@ -125,7 +125,7 @@
         }
       }
     },
-    "args": ["list", "--in-pr", "--json"],
+    "args": ["task", "list", "--in-pr", "--json"],
     "expect": {
       "json": [
         {
@@ -145,7 +145,7 @@
   {
     "name": "merged --at needs an ISO time",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["merged", "--pr", "7", "--at", "yesterday"],
+    "args": ["vcs", "pushed", "--pr", "7", "--at", "yesterday"],
     "expect": { "exit": 2, "stderrIncludes": ["--at needs a time like"] }
   },
   {
@@ -175,7 +175,7 @@
         }
       }
     },
-    "args": ["merged", "--pr", "7", "--at", "2026-05-10T09:00:00Z"],
+    "args": ["vcs", "pushed", "--pr", "7", "--at", "2026-05-10T09:00:00Z"],
     "env": { "ATM_NOW": "2026-05-10T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdout": "PR #7 merged: T-1, T-2\nReleased 1.0: all its tasks are merged in PR #7.\n",
@@ -231,7 +231,7 @@
         }
       }
     },
-    "args": ["merged", "--pr", "7", "--json"],
+    "args": ["vcs", "pushed", "--pr", "7", "--json"],
     "env": { "ATM_NOW": "2026-05-10T10:00:00Z" },
     "expect": {
       "json": { "pr": 7, "tasks": ["T-1", "T-3"], "already": [], "released": [], "pending": { "1.0": ["T-2"] } }

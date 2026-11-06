@@ -25,7 +25,7 @@ test(`${AGENTS} agents adding ${EACH} tasks each at once: every task gets its ow
     await Promise.all(
       Array.from({ length: AGENTS }, async (_, a) => {
         for (let i = 0; i < EACH; i++) {
-          const r = await atm(['add', '--name', `a${a}-${i}`, '--type', 'docs'], root, `agent-${a}`);
+          const r = await atm(['task', 'add', '--name', `a${a}-${i}`, '--type', 'docs'], root, `agent-${a}`);
           assert.equal(r.code, 0, r.stderr);
         }
       }),

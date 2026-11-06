@@ -11,7 +11,6 @@ from ..common.model import (
     REWORK_STATES,
     add_note,
     back_to_todo,
-    change_status,
     find_sprint,
     kind_of,
     natural_key,
@@ -19,6 +18,7 @@ from ..common.model import (
     unfinished_dependencies,
     vocabulary,
 )
+from .state import change_status
 
 DEFAULT_LEASE_MINUTES = 30
 
@@ -109,7 +109,7 @@ def check_holder(claims, task_id, agent, command):
 
 def own_lease_expired(expired, data, task_id, agent, then):
     """When `agent`'s own claim on `task_id` is among the claims that just expired and the task went back to todo: an
-    error that says so and how to go on (`then`, the command to run after `atm start`). Exit code 4, like a claim
+    error that says so and how to go on (`then`, the command to run after starting it again). Exit code 4, like a claim
     conflict. Another agent's expired claim, or none: None."""
     claim = next((c for c in expired if c.get("task") == task_id and c.get("agent") == agent), None)
     task = next((t for t in data["tasks"] if t.get("id") == task_id), None)
@@ -120,7 +120,7 @@ def own_lease_expired(expired, data, task_id, agent, then):
     minutes = lease_minutes(data)
     idle = f"{minutes:g} min"
     kept = " Your commit is kept." if task.get("commit") else ""
-    next_steps = f"Run `atm start {task_id}`" + (f", then `{then}` again." if then else " to claim it again.")
+    next_steps = f"Run `atm task state {task_id} in_progress`" +(f", then `{then}` again." if then else " to claim it again.")
     return AtmError(
         f"{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next_steps}",
         4,

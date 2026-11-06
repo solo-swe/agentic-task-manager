@@ -26,7 +26,7 @@ function tokens(file: string, selector: (sel: string) => boolean): Tokens {
 
 function palette(theme: string, mode: 'light' | 'dark'): Tokens {
   if (theme === 'default') {
-    const dark = tokens('app.css', (s) => s === ':root');
+    const dark = tokens('tokens.css', (s) => s === ':root');
     return mode === 'dark'
       ? dark
       : { ...dark, ...tokens('themes/default.css', (s) => s.includes("[data-mode='light']")) };

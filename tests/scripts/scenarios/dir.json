@@ -8,7 +8,7 @@
       }
     },
     "cwd": "elsewhere",
-    "args": ["--dir", "../shop", "paths", "--json"],
+    "args": ["--dir", "../shop", "project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}/shop",
@@ -30,7 +30,7 @@
       }
     },
     "cwd": "elsewhere",
-    "args": ["--dir=../shop", "add", "--json-file", "new.json"],
+    "args": ["--dir=../shop", "task", "add", "--json-file", "new.json"],
     "expect": {
       "exit": 0,
       "stdoutIncludes": ["Checkout"],
@@ -39,7 +39,7 @@
   },
   {
     "name": "--dir with a folder that isn't there: an error naming it, nothing run",
-    "args": ["--dir", "nowhere", "status"],
+    "args": ["--dir", "nowhere", "project", "status"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["--dir: no folder 'nowhere'"]
@@ -58,7 +58,10 @@
     "args": ["--dir", ".", "--help"],
     "expect": {
       "exit": 0,
-      "stdoutIncludes": ["usage: atm [--dir PATH] <command> [options]", "--dir PATH     run as if started in PATH"]
+      "stdoutIncludes": [
+        "Usage: atm [OPTIONS] COMMAND [ARGS]...",
+        "atm --dir PATH <command> runs as if started in PATH."
+      ]
     }
   }
 ]

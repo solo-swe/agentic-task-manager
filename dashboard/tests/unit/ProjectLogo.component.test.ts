@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import ProjectLogo from '../../src/components/ProjectLogo.svelte';
+import ProjectLogo from '../../src/lib/ui/ProjectLogo.svelte';
 
 describe('ProjectLogo', () => {
   it('shows the logo in a box of the given size', () => {

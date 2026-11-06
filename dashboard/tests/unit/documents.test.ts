@@ -7,7 +7,7 @@ import {
   documentTitle,
   isGeometry,
   loadDocument,
-  parseDocHash,
+  docOf,
   parseLines,
   findTextFragment,
   parseTextFragment,
@@ -16,7 +16,7 @@ import {
   repositoryFile,
   resolvePath,
   VIEWER_MIN,
-  withDocHash,
+  withDoc,
   type ProjectDocument,
 } from '../../src/lib/documents';
 import type { Fetch } from '../../src/lib/api/http';
@@ -71,9 +71,9 @@ describe('referenceTo: the document a relative link names, with its lines or hea
       expect(referenceTo(href), href).toBeNull();
     }
   });
-  it('a heading survives the URL hash, and Copy path keeps it', () => {
-    const hash = withDocHash('#view=list', { path: 'docs/x.md', heading: '3-routes' });
-    expect(parseDocHash(hash)).toEqual({ path: 'docs/x.md', heading: '3-routes' });
+  it('a heading survives the address, and Copy path keeps it', () => {
+    const hash = withDoc('/projects/p1/list', { path: 'docs/x.md', heading: '3-routes' });
+    expect(docOf(hash)).toEqual({ path: 'docs/x.md', heading: '3-routes' });
     expect(pathToCopy({ path: 'docs/x.md', heading: '3-routes' })).toBe('docs/x.md#3-routes');
   });
 });
@@ -89,12 +89,12 @@ describe('text fragments: #:~:text=…', () => {
     expect(parseTextFragment(':~:text=%E0%A4%A')).toEqual([]); // malformed encoding: left out
   });
 
-  it('a reference keeps it, encoded, through the URL hash and Copy path', () => {
+  it('a reference keeps it, encoded, through the address and Copy path', () => {
     const ref = referenceTo('docs/x.md#:~:text=SR%2D2.1');
     expect(ref).toEqual({ path: 'docs/x.md', text: ':~:text=SR%2D2.1' });
     // After a heading, the text fragment wins
     expect(referenceTo('docs/x.md#routes:~:text=One')).toEqual({ path: 'docs/x.md', text: ':~:text=One' });
-    expect(parseDocHash(withDocHash('#view=list', ref))).toEqual(ref);
+    expect(docOf(withDoc('/projects/p1/list', ref))).toEqual(ref);
     expect(pathToCopy(ref!)).toBe('docs/x.md#:~:text=SR%2D2.1');
   });
 
@@ -121,23 +121,23 @@ describe('text fragments: #:~:text=…', () => {
   });
 });
 
-describe('the URL hash: #doc=<path>:L<n>', () => {
+describe('the address: ?doc=<path>:L<n> (T-429)', () => {
   it('reads a path and its lines', () => {
-    expect(parseDocHash('#view=list&doc=docs/x.md')).toEqual({ path: 'docs/x.md' });
-    expect(parseDocHash('#doc=src/app.ts:L40')).toEqual({ path: 'src/app.ts', lines: [40, 40] });
-    expect(parseDocHash('#doc=src/app.ts:L45-L40')).toEqual({ path: 'src/app.ts', lines: [40, 45] });
-    expect(parseDocHash('#doc=../etc/passwd')).toBeNull();
-    expect(parseDocHash('#view=list')).toBeNull();
+    expect(docOf('/projects/p1/list?doc=docs/x.md')).toEqual({ path: 'docs/x.md' });
+    expect(docOf('/?doc=src/app.ts:L40')).toEqual({ path: 'src/app.ts', lines: [40, 40] });
+    expect(docOf('/?doc=src/app.ts:L45-L40')).toEqual({ path: 'src/app.ts', lines: [40, 45] });
+    expect(docOf('/?doc=../etc/passwd')).toBeNull();
+    expect(docOf('/projects/p1/list')).toBeNull();
     // A name that starts like a scheme (`notes:`) reads as one, as a browser reads it in a link
-    expect(parseDocHash('#doc=notes:draft.md')).toBeNull();
-    expect(parseDocHash('#doc=docs/notes:draft.md')).toEqual({ path: 'docs/notes:draft.md' });
+    expect(docOf('/?doc=notes:draft.md')).toBeNull();
+    expect(docOf('/?doc=docs/notes:draft.md')).toEqual({ path: 'docs/notes:draft.md' });
   });
 
   it('writes it readably, keeping the other parameters, and removes it', () => {
-    const hash = withDocHash('#view=list&project=p1', { path: 'docs/x.md', lines: [3, 7] });
-    expect(hash).toBe('#view=list&project=p1&doc=docs/x.md:L3-L7');
-    expect(parseDocHash(hash)).toEqual({ path: 'docs/x.md', lines: [3, 7] });
-    expect(withDocHash(hash, null)).toBe('#view=list&project=p1');
+    const hash = withDoc('/projects/p1/list', { path: 'docs/x.md', lines: [3, 7] });
+    expect(hash).toBe('/projects/p1/list?doc=docs/x.md:L3-L7');
+    expect(docOf(hash)).toEqual({ path: 'docs/x.md', lines: [3, 7] });
+    expect(withDoc(hash, null)).toBe('/projects/p1/list');
   });
 
   it('lines', () => {
@@ -186,7 +186,7 @@ describe('loading a file', () => {
   it('asks the documents route, conditionally once it has an ETag', async () => {
     const fetchFn = answer(200, doc, { ETag: '"e1"' });
     const result = await loadDocument('p 1', 'docs/x.md', fetchFn);
-    expect(fetchFn.mock.calls[0][0]).toBe('api/v1/projects/p%201/documents?path=docs%2Fx.md');
+    expect(fetchFn.mock.calls[0][0]).toBe('/api/v1/projects/p%201/documents?path=docs%2Fx.md');
     expect(result).toEqual({ unchanged: false, document: doc, validators: { etag: '"e1"' } });
     const again = answer(304, null);
     expect(await loadDocument('p 1', 'docs/x.md', again, { etag: '"e1"' })).toEqual({ unchanged: true });
@@ -242,10 +242,10 @@ describe('the window', () => {
 
 describe('opening and Back (the dashboard state)', () => {
   it('a document opened in the dashboard is a history entry of the viewer’s: Back goes back to the one before', () => {
-    history.replaceState(null, '', '#view=list');
+    history.replaceState(null, '', '/projects/p1/list');
     dashboard.openDocument({ path: 'docs/x.md', lines: [3, 3] });
     expect(dashboard.docRef).toEqual({ path: 'docs/x.md', lines: [3, 3] });
-    expect(location.hash).toBe('#view=list&doc=docs/x.md:L3');
+    expect(location.pathname + location.search).toBe('/projects/p1/list?doc=docs/x.md:L3');
     expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 1 });
     const back = vi.spyOn(history, 'back').mockImplementation(() => {});
     dashboard.documentBack();
@@ -254,7 +254,7 @@ describe('opening and Back (the dashboard state)', () => {
   });
 
   it('Close goes back past every document opened in the viewer, so Back doesn’t bring one back', () => {
-    history.replaceState(null, '', '#view=list');
+    history.replaceState(null, '', '/projects/p1/list');
     dashboard.openDocument({ path: 'docs/a.md' });
     dashboard.openDocument({ path: 'docs/b.md' });
     expect(history.state).toEqual({ atmDocument: true, atmDocumentDepth: 2 });
@@ -265,13 +265,13 @@ describe('opening and Back (the dashboard state)', () => {
   });
 
   it('one opened from a link or a reload closes, without a new history entry', () => {
-    history.replaceState(null, '', '#view=list&doc=docs/x.md');
-    dashboard.onHashChange();
+    history.replaceState(null, '', '/projects/p1/list?doc=docs/x.md');
+    dashboard.onNavigate();
     expect(dashboard.docRef).toEqual({ path: 'docs/x.md' });
     const length = history.length;
     dashboard.documentBack();
     expect(dashboard.docRef).toBeNull();
-    expect(location.hash).toBe('#view=list');
+    expect(location.pathname + location.search).toBe('/projects/p1/list');
     expect(history.length).toBe(length);
   });
 });

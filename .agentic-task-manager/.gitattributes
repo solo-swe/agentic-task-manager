@@ -1,3 +1,4 @@
 # 'atm' is defined in each clone's git config (merge.atm.driver), registered by the atm plugin on every run.
 # Without it, git merges tasks.json line by line as usual.
 tasks.json merge=atm
+tasks-archive.json merge=atm

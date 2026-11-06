@@ -1,12 +1,12 @@
 {
-  "description": "Renew the agent's atm claims while it works (atm heartbeat --auto: reads the claims store, writes only when a claim's last renewal is ten minutes old), and restart the dashboard server when it runs an older dashboard than the plugin (atm serve --refresh: one small file read when it is current)",
+  "description": "Renew the agent's atm claims while it works (atm claim heartbeat --auto: reads the claims store, writes only when a claim's last renewal is ten minutes old), and restart the dashboard server when it runs an older dashboard than the plugin (atm service --refresh: one small file read when it is current)",
   "hooks": {
     "PostToolUse": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/atm\" heartbeat --auto",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/atm\" claim heartbeat --auto",
             "timeout": 10
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/atm\" serve --refresh >/dev/null 2>&1 || true",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/bin/atm\" service --refresh >/dev/null 2>&1 || true",
             "timeout": 15
           }
         ]

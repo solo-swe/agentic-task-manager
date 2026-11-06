@@ -72,11 +72,11 @@ describe('Next up: atm says which task it is (T-321)', () => {
     expect(marked(undefined)).toEqual([]);
   });
 
-  it('is the rule /atm:loop-tasks uses: the skill takes its tasks from `atm next`', () => {
-    // The rule lives in atm-cli only (claims.py loop_order): atm next hands out the first task, atm serve's summary
-    // lists them as next, and the board marks that one. If this fails, the skill stopped using atm next.
+  it('is the rule /atm:loop-tasks uses: the skill takes its tasks from `atm loop next`', () => {
+    // The rule lives in atm-cli only (claims.py loop_order): atm loop next hands out the first task, atm serve's
+    // summary lists them as next, and the board marks that one. If this fails, the skill stopped using atm loop next.
     const skill = readFileSync(new URL('../../../plugin/skills/loop-tasks/SKILL.md', import.meta.url), 'utf8');
-    expect(skill).toContain('`atm next --claim --json [selection] [--type T]`');
+    expect(skill).toContain('`atm loop next --claim --json [selection] [--type T]`');
     expect(skill).toContain('to do, all dependencies done, not claimed');
     expect(skill).toContain('then the most urgent priority, then lowest task ID');
   });

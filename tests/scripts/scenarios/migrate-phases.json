@@ -69,7 +69,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "env": { "ATM_NOW": "2026-02-01T00:00:00Z" },
     "expect": {
       "stdout": "Phases are now sprints: turned 4 phases into sprints (staged, not committed).\nClosed (all their tasks finished): Foundations.\nPlanned: Phase 1, Foundations (phase 2), Later.\nNone is active yet: plan one with /atm:plan-sprint.\n",
@@ -179,7 +179,7 @@
         }
       }
     },
-    "args": ["migrate", "--json"],
+    "args": ["db", "migrate", "--json"],
     "expect": {
       "json": {
         "moved": null,
@@ -210,9 +210,9 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" migrate"]]
+      "commands": [["sh", "-c", "\"$ATM\" db migrate"]]
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n",
       "files": {
@@ -256,7 +256,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Moved the tasks' phases to their sprints (staged, not committed).\n",
       "files": {
@@ -293,7 +293,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n",
       "files": {

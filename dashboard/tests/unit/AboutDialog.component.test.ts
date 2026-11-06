@@ -2,11 +2,11 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { version as compmdVersion } from 'virtual:atm-compmd';
-import AboutDialog from '../../src/components/AboutDialog.svelte';
+import AboutDialog from '../../src/lib/dialogs/AboutDialog.svelte';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
-import { loadIntoDashboard } from './components.helpers';
+import { loadIntoDashboard, press, settled } from './components.helpers';
 
 const overlay = () => document.querySelector('#about-overlay')!;
 
@@ -29,7 +29,7 @@ describe('AboutDialog', () => {
     expect(dialog).toHaveTextContent('Author Hakan Serce');
     expect(dialog).toHaveTextContent('Licence MIT');
     expect(screen.getByRole('link', { name: pluginInfo.repository })).toHaveAttribute('target', '_blank');
-    expect(location.hash).toBe('#about');
+    expect(location.search).toBe('?about');
   });
 
   it('names what renders Markdown: CompMD, with its version, licence and site', () => {
@@ -85,7 +85,7 @@ describe('AboutDialog', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Project details' }));
     expect(dashboard.dialog).toBeNull();
     expect(dashboard.tab).toBe('project');
-    expect(location.hash).toContain('view=project');
+    expect(location.search).toContain('view=project');
     dashboard.selectTab('kanban');
   });
 
@@ -109,18 +109,19 @@ describe('AboutDialog', () => {
     Object.assign(dashboard, { projects: [], route: { page: 'project', id: '' } });
   });
 
-  it('closes with the close button, Escape and the backdrop, and drops the hash flag', async () => {
+  it('closes with the close button, Escape and the backdrop, and drops the address flag', async () => {
     render(AboutDialog);
     for (const close of [
       () => fireEvent.click(screen.getByRole('button', { name: 'Close' })),
       () => fireEvent.keyDown(document, { key: 'Escape' }),
-      () => fireEvent.click(overlay()),
+      () => press(overlay()),
     ]) {
       dashboard.openDialog('about');
       flushSync();
+      await settled();
       await close();
       expect(dashboard.dialog).toBeNull();
-      expect(location.hash).not.toContain('about');
+      expect(location.search).not.toContain('about');
     }
   });
 

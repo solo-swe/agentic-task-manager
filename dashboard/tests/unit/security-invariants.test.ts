@@ -27,9 +27,32 @@ describe('security invariants (docs/security-architecture.md)', () => {
     expect(offending).toEqual([]);
   });
 
-  it('I15: {@html} only in the built-in icons and the bundled logo, never on data', () => {
+  it('I24: atm-cli runs no command it is given: only git, ps, its own server and the browser opener (T-437)', () => {
+    // Every place that starts a process, and the program it starts (the first element of its argument list)
+    const starts = filesIn('atm-cli/atm', '.py').flatMap((file) =>
+      [...read(file).matchAll(/subprocess\.(run|Popen|call|check_call|check_output)\(\s*([^\s,)]+)/g)].map(
+        (call) => `${file.replace(/^atm-cli\/atm\//, '')}: ${call[2]}`,
+      ),
+    );
+    // os.fork starts no program: atm's own watcher (`atm claim hold`), which only renews a claim
+    expect(filesIn('atm-cli/atm', '.py').filter((file) => /os\.fork\(/.test(read(file)))).toEqual([
+      'atm-cli/atm/cli/claims.py',
+    ]);
+    expect(starts.sort()).toEqual(
+      [
+        'common/core.py: ["ps"',
+        'host/git.py: ["git"]',
+        'host/git.py: ["git"]',
+        'host/git.py: ["git"]',
+        'cli/serve.py: [opener',
+        'cli/serve.py: server_command(home',
+      ].sort(),
+    );
+  });
+
+  it('I15: {@html} only in the bundled logo, never on data (the icons are components since T-432)', () => {
     const using = filesIn('dashboard/src', '.svelte').filter((file) => read(file).includes('{@html'));
-    expect(using.sort()).toEqual(['dashboard/src/components/Icon.svelte', 'dashboard/src/components/Logo.svelte']);
+    expect(using.sort()).toEqual(['dashboard/src/lib/ui/Logo.svelte']);
   });
 
   it('every test file the invariants table names exists', () => {

@@ -11,7 +11,7 @@ const file = (path: string) => new URL(path, import.meta.url);
 const read = (path: string) => readFileSync(file('../../../' + path), 'utf8');
 
 describe('the branding files', () => {
-  it('are up to date with the logo source (run `npm run branding` after changing it)', () => {
+  it('are up to date with the logo source (run `pnpm run branding` after changing it)', () => {
     const logo = read('branding/atm-logo.svg');
     expect(logo).toBe(brandLogo(read('dashboard/src/assets/atm-logo.svg')));
     expect(logo).toContain(`stroke="${FAVICON_COLOR}"`);

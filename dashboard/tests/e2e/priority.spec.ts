@@ -67,7 +67,7 @@ test.describe('priority', () => {
     await openFilters(page);
     await filterButton(page, 'priority', 'P3').click();
 
-    await page.goto('tasks-dashboard.html#view=list');
+    await page.goto('/?view=list');
     await expect(page.locator('#list-sort')).toHaveValue('priority');
     await expect(page.locator('.filter-chip')).toHaveText(['Priority: P3 Low']);
     expect(await visibleCardIds(page)).toEqual(['T-011']);

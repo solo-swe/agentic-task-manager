@@ -14,30 +14,13 @@ from .core import AtmError, now, now_iso, parse_iso
 # The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
-# command: (kinds a task may be in, kind it moves to)
-STATUS_CHANGES = {
-    # From review only once the review asked for rework or approved it (SR-3.9)
-    "start": (("todo", "review"), "active"),
-    "review": (("active",), "review"),
-    "done": (("active", "review"), "done"),
-    "fail": (("active",), "todo"),
-    "release": (("active",), "todo"),
-    "reject": (("review",), "todo"),
-    # The review's outcome; the task stays in review until an agent takes it back (SR-6.1)
-    "approve": (("review",), "review"),
-    "request-changes": (("review",), "review"),
-    "block": (("todo", "active"), "blocked"),
-    "unblock": (("blocked",), "todo"),
-    # Undo a done (or skipped) by mistake, or work that turns out unfinished; the reason is kept as a note
-    "reopen": (("done", "skipped"), "todo"),
-    # A task that turns out not to be needed; reopen undoes it
-    "skip": (("todo", "blocked"), "skipped"),
-}
 WAITING_ON = ("user", "agent")
 # Review states that make a task in review work for an agent again (SR-3.9)
 REWORK_STATES = ("changes_requested", "approved")
+# A review's decisions (T-438): each leaves the task in review, with its review_state, and opens one way out of it
+REVIEW_DECISIONS = {"approve": "approved", "request-changes": "changes_requested", "reject": "rejected"}
 # How a finished task ended (SR-2.8): stored only when it isn't the default, `done` for a done task and `wont_do` for
-# a skipped one
+# a skipped one. A done task is done; a task that ends without its work done is skipped (T-438), with a reason
 RESOLUTIONS = ("done", "wont_do", "duplicate", "obsolete")
 SKIP_RESOLUTIONS = ("wont_do", "obsolete", "duplicate")
 
@@ -230,7 +213,7 @@ def find_release(vocab, release_id):
 def known_release(vocab, release_id):
     """`release_id`, when meta.releases has it; else an AtmError naming the releases."""
     if find_release(vocab, release_id) is None:
-        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm release add <R>"
         raise AtmError(f"no release {release_id!r}; the releases: {known}", 2)
     return release_id
 
@@ -370,7 +353,7 @@ def open_in_closed_sprints(vocab, tasks):
 def move_out_hint(task_id, sprint):
     """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
     nothing on its own."""
-    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm sprint move {task_id} --to backlog (or --to active)"
 
 
 def priority_rank(vocab, priority):
@@ -470,7 +453,7 @@ def archive_hint_for(data, size):
         "finished": finished,
         "archivable": movable,
         "auto": settings["auto"],  # false: the skills only relay the hint (S-3.5)
-        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm archive` would move "
+        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm db archive` would move "
         f"{movable} of them to tasks-archive.json.",
     }
 
@@ -504,7 +487,7 @@ def find_task(data, task_id, archived=None):
     for task in data["tasks"]:
         if task.get("id") == task_id:
             return task
-    hint = " (it is archived: atm unarchive brings it back)" if archived and archived(task_id) else ""
+    hint = " (it is archived: atm db unarchive brings it back)" if archived and archived(task_id) else ""
     raise AtmError(f"no task {task_id}{hint}")
 
 
@@ -604,156 +587,6 @@ def answer_note(questions, answers):
     return "; ".join(pairs)
 
 
-def change_status(
-    task,
-    data,
-    command,
-    reason=None,
-    agent=None,
-    status=None,
-    note=None,
-    commit=None,
-    waiting_on=None,
-    questions=(),
-    answers=(),
-    resolution=None,
-    duplicate_of=None,
-    *,
-    archived,
-):
-    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
-    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
-    picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
-    `done` as completed_by (both kept when it is done, so the dashboard can show who did what); `note` and `reason`
-    become notes, `commit` the task's commit. `block` records who it waits on and the open questions; `unblock`
-    turns them, with the answers, into an answer note. `done` and `skip` record a `resolution` (SR-2.8), `skip` also
-    `duplicate_of` (the caller checks that task exists, in either file)."""
-    vocab = vocabulary(data)
-    if command in ("done", "skip"):
-        resolution = resolution or ("done" if command == "done" else "wont_do")
-        allowed_resolutions = RESOLUTIONS if command == "done" else SKIP_RESOLUTIONS
-        if resolution not in allowed_resolutions:
-            raise AtmError(f"--resolution must be one of {', '.join(allowed_resolutions)}", 2)
-        if duplicate_of is not None and resolution != "duplicate":
-            raise AtmError("--duplicate-of goes with --resolution duplicate", 2)
-        if duplicate_of == task["id"]:
-            raise AtmError(f"{task['id']} can't be a duplicate of itself", 2)
-    allowed, new_kind = STATUS_CHANGES[command]
-    current = task.get("status")
-    if kind_of(vocab, current) not in allowed:
-        expected = [s for kind in allowed for s in statuses_of(vocab, kind)]
-        raise AtmError(f"can't {command} {task['id']}: it is {current}, not {' or '.join(expected)}")
-    if command == "done":
-        check_review_mode(task, data, agent)
-    if command == "start" and kind_of(vocab, current) == "review" and task.get("review_state") not in REWORK_STATES:
-        raise AtmError(f"can't start {task['id']}: it waits for its review (atm approve or request-changes decides it)")
-    new = status_for(vocab, new_kind, status)
-    if command in ("approve", "request-changes") and status is None:
-        new = current  # it stays in its review status (a project may have several)
-    if command == "start":
-        blocking = unfinished_dependencies(data, task, archived)
-        if blocking:
-            raise AtmError(f"can't start {task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking))
-    if note is not None:
-        check_note(note)
-    if reason is not None:
-        check_note(reason)
-    for question in questions:
-        check_note(question)
-    if command == "block":
-        if waiting_on not in WAITING_ON:
-            raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
-        if not questions and not reason:
-            raise AtmError("say what it waits for: --question (repeatable) or --reason", 2)
-    for answer in answers:
-        check_note(answer)
-    asked = list(task.get("questions") or [])
-    # Each question was checked when the task was blocked, each answer just now: together they may be longer than one
-    # note, and must still be recordable, or the task could never be unblocked
-    answered = answer_note(asked, list(answers)) if command == "unblock" and (asked or answers) else None
-    stamp = now_iso()
-    # A block's or a review's start goes when the task moves on: keep each interval, so waiting time can be measured
-    old_kind = kind_of(vocab, current)
-    if old_kind == "blocked" and task.get("blocked_at"):
-        add_interval(task, "blocks", task["blocked_at"], stamp, on=task.get("waiting_on"))
-    elif old_kind == "review" and new_kind != "review" and task.get("review_requested_at"):
-        # The round ends when the reviewer decided, with its outcome (SR-3.9)
-        outcome = task.get("review_state") if task.get("review_state") in REWORK_STATES else None
-        add_interval(task, "reviews", task["review_requested_at"], task.get("reviewed_at") or stamp, outcome=outcome)
-    if new_kind != "review":
-        task.pop("review_state", None)
-        task.pop("reviewed_at", None)
-    if new_kind == "todo":
-        # Reopening, rejecting or failing a task undoes its work; releasing or unblocking it doesn't
-        back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "reject", "fail"))
-        if answered:
-            add_note(task, "answer", answered, agent, stamp, checked=False)
-        if command == "fail":
-            add_note(task, "failure", reason or "verification failed", agent, stamp)
-        elif command == "reject":
-            add_note(task, "rejection", reason, agent, stamp)
-        elif command == "reopen":
-            add_note(task, "note", f"Reopened: {reason}", agent, stamp)
-        elif note:
-            add_note(task, "handoff", note, agent, stamp)
-        return current
-    task["status"] = new
-    touch(task, agent, stamp)
-    if command == "block":
-        # Who started it stays visible while it waits; unblock returns it to to-do and clears the attempt
-        task["waiting_on"] = waiting_on
-        task["questions"] = list(questions)
-        task["blocked_at"] = stamp
-        if reason:
-            add_note(task, "note", reason, agent, stamp)
-    elif command == "review":
-        # The work ends here: the review isn't agent work (DM-4.1); done keeps this timestamp
-        task["review_requested_at"] = stamp
-        task["review_state"] = "waiting"
-        if note:
-            add_note(task, "review", note, agent, stamp)
-    elif command in ("approve", "request-changes"):
-        # The task stays in review until an agent takes it back (`atm next` offers it first, SR-3.9)
-        task["review_state"] = "approved" if command == "approve" else "changes_requested"
-        task["reviewed_at"] = stamp
-        if command == "request-changes":
-            add_note(task, "rejection", reason, agent, stamp)
-        else:
-            add_note(task, "note", f"Approved: {note}" if note else "Approved", agent, stamp)
-    elif command == "skip":
-        for field in ("waiting_on", "questions", "blocked_at"):
-            task.pop(field, None)
-        task["skipped_at"] = stamp
-        if resolution != "wont_do":
-            task["resolution"] = resolution  # none means the default, won't do
-        if duplicate_of:
-            task["duplicate_of"] = duplicate_of
-        add_note(task, "note", f"Skipped: {reason}", agent, stamp)
-    elif command == "start":
-        task["started_at"] = stamp
-        task.pop("review_requested_at", None)  # taken back from review: a new round of work
-        task.pop("completed_at", None)
-        task.pop("completed_by", None)
-        task.pop("agent", None)  # the old name of started_by
-        if agent:
-            task["started_by"] = agent
-    elif command == "done":
-        task["completed_at"] = stamp
-        if resolution != "done":
-            task["resolution"] = resolution  # none means the default, done
-        if agent:
-            task["completed_by"] = agent
-        if commit:
-            task["commit"] = commit
-        # A batch task an agent finishes waits for the end-of-sprint review (SR-4.4): its note is what to check
-        batch = old_kind == "active" and is_agent(agent) and effective_review(vocab, task) == "batch"
-        if batch:
-            task["sprint_review"] = "pending"
-        if note:
-            add_note(task, "review" if batch else "outcome", note, agent, stamp)
-    return current
-
-
 def is_agent(actor):
     """Whether an actor is an agent (a Claude Code session, "claude:…"); anyone else is a person."""
     return isinstance(actor, str) and actor.startswith("claude:")
@@ -766,5 +599,5 @@ def check_review_mode(task, data, agent):
     mode = effective_review(vocab, task)
     if mode in ("blocker", "async") and is_agent(agent) and kind_of(vocab, task.get("status")) == "active":
         raise AtmError(
-            f"{task['id']} is reviewed ({mode}): ask for it with atm review {task['id']} --note '<what to check>'", 2
+            f"{task['id']} is reviewed ({mode}): ask for it with atm task state {task['id']} in_review --note '<what to check>'", 2
         )

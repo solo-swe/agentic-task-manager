@@ -1,5 +1,5 @@
 // Makes the files in branding/ from the logo's source, dashboard/src/assets/atm-logo.svg (see README.md here).
-// Run `npm run branding` in dashboard/, where Playwright is installed.
+// Run `pnpm run branding` in dashboard/, where Playwright is installed.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,7 @@ export function brandLogo(svg, color = ACCENT) {
     .replace(
       /<!--[\s\S]*?-->/,
       '<!-- The ATM logo in the accent blue, for the README and GitHub. Made by branding/generate.mjs from\n' +
-        "       dashboard/src/assets/atm-logo.svg: don't edit it, change the source and run `npm run branding` -->",
+        "       dashboard/src/assets/atm-logo.svg: don't edit it, change the source and run `pnpm run branding` -->",
     )
     .replace(/currentColor/g, color);
 }

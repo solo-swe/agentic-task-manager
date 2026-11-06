@@ -1,8 +1,9 @@
-// `npm run dev`'s REST API (dashboard/build/dev-api.ts, T-386, docs/layered-architecture.md §11.9): `vite dev` runs
+// `pnpm run dev`'s REST API (dashboard/build/dev-api.ts, T-386, docs/layered-architecture.md §11.9): `vite dev` runs
 // this checkout's atm-cli on a private ATM_HOME and forwards the API's paths to it. Started here on a temporary
 // project and a folder without a task file; a rebuild restarts it; stopping Vite leaves no server and no home behind.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
@@ -45,7 +46,7 @@ const alive = (pid) => {
 };
 
 const NAME = 'vite dev serves the real API for ATM_DEV_DATA, restarts it on a rebuild, and leaves nothing running';
-const skip = !fs.existsSync(VITE) && 'needs `npm ci` in dashboard/';
+const skip = !fs.existsSync(VITE) && 'needs `pnpm install` in dashboard/';
 
 test(NAME, { skip }, async () => {
   const project = makeProject({
@@ -95,6 +96,21 @@ test(NAME, { skip }, async () => {
     const runtime = await fetch(`${base}/assets/compmd/${version}/compmd.js`);
     assert.equal(runtime.status, 200);
     assert.equal(runtime.headers.get('content-type'), 'text/javascript; charset=utf-8');
+
+    // The page SvelteKit renders (T-428) runs under the policy of the page as sent: each of its inline scripts by
+    // hash, as `atm serve` allows the built page's, and no 'unsafe-inline' for scripts
+    const page = await fetch(`${base}/`);
+    assert.equal(page.status, 200);
+    const html = await page.text();
+    const csp = page.headers.get('content-security-policy') ?? '';
+    const scriptSrc = csp.split(';').find((d) => d.trim().startsWith('script-src')) ?? '';
+    const inline = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)].filter(
+      ([, attrs]) => !attrs.includes('src='),
+    );
+    assert.ok(inline.length >= 2, 'the theme script and SvelteKit’s start-up script');
+    for (const [, , body] of inline)
+      assert.ok(scriptSrc.includes(`'sha256-${createHash('sha256').update(body).digest('base64')}'`), scriptSrc);
+    assert.doesNotMatch(scriptSrc, /unsafe-inline/);
 
     // A rebuild (atm.py written again): the API server restarts on it, and answers again
     const record = path.join(home, 'server.json');

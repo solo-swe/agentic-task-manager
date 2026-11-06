@@ -1,12 +1,12 @@
 # Generated from atm-cli/atm/ by atm-cli/build.py. Don't edit this file: edit the modules and run
-# `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+# `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 """atm: the Agentic Task Manager helper that the skills run.
 
 Run through the `atm` launcher, which checks for Python 3.9+. Standard library only: the plugin is used as cloned,
 with nothing to install.
 """
 
-import argparse
+from __future__ import absolute_import, annotations
 import base64
 import contextlib
 import copy
@@ -25,8 +25,2355 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
-from typing import Any, Callable, Dict, List, Literal, Optional, Protocol, Tuple, TypedDict
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Protocol, Tuple, TypedDict
 from urllib.parse import parse_qs, urlsplit
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "vendor"))
+import click
+import typer
+
+
+# ==== vendored six ====
+# Utilities for writing code that runs on Python 2 and 3
+
+# Copyright (c) 2010-2024 Benjamin Peterson
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+
+
+import functools
+import itertools
+import operator
+import sys
+import types
+
+__author__ = "Benjamin Peterson <benjamin@python.org>"
+__version__ = "1.17.0"
+
+
+# Useful for very coarse version differentiation.
+PY2 = sys.version_info[0] == 2
+PY3 = sys.version_info[0] == 3
+PY34 = sys.version_info[0:2] >= (3, 4)
+
+if PY3:
+    string_types = str,
+    integer_types = int,
+    class_types = type,
+    text_type = str
+    binary_type = bytes
+
+    MAXSIZE = sys.maxsize
+else:
+    string_types = basestring,
+    integer_types = (int, long)
+    class_types = (type, types.ClassType)
+    text_type = unicode
+    binary_type = str
+
+    if sys.platform.startswith("java"):
+        # Jython always uses 32 bits.
+        MAXSIZE = int((1 << 31) - 1)
+    else:
+        # It's possible to have sizeof(long) != sizeof(Py_ssize_t).
+        class X(object):
+
+            def __len__(self):
+                return 1 << 31
+        try:
+            len(X())
+        except OverflowError:
+            # 32-bit
+            MAXSIZE = int((1 << 31) - 1)
+        else:
+            # 64-bit
+            MAXSIZE = int((1 << 63) - 1)
+        del X
+
+if PY34:
+    from importlib.util import spec_from_loader
+else:
+    spec_from_loader = None
+
+
+def _add_doc(func, doc):
+    """Add documentation to a function."""
+    func.__doc__ = doc
+
+
+def _import_module(name):
+    """Import module, returning the module after the last dot."""
+    __import__(name)
+    return sys.modules[name]
+
+
+class _LazyDescr(object):
+
+    def __init__(self, name):
+        self.name = name
+
+    def __get__(self, obj, tp):
+        result = self._resolve()
+        setattr(obj, self.name, result)  # Invokes __set__.
+        try:
+            # This is a bit ugly, but it avoids running this again by
+            # removing this descriptor.
+            delattr(obj.__class__, self.name)
+        except AttributeError:
+            pass
+        return result
+
+
+class MovedModule(_LazyDescr):
+
+    def __init__(self, name, old, new=None):
+        super(MovedModule, self).__init__(name)
+        if PY3:
+            if new is None:
+                new = name
+            self.mod = new
+        else:
+            self.mod = old
+
+    def _resolve(self):
+        return _import_module(self.mod)
+
+    def __getattr__(self, attr):
+        _module = self._resolve()
+        value = getattr(_module, attr)
+        setattr(self, attr, value)
+        return value
+
+
+class _LazyModule(types.ModuleType):
+
+    def __init__(self, name):
+        super(_LazyModule, self).__init__(name)
+        self.__doc__ = self.__class__.__doc__
+
+    def __dir__(self):
+        attrs = ["__doc__", "__name__"]
+        attrs += [attr.name for attr in self._moved_attributes]
+        return attrs
+
+    # Subclasses should override this
+    _moved_attributes = []
+
+
+class MovedAttribute(_LazyDescr):
+
+    def __init__(self, name, old_mod, new_mod, old_attr=None, new_attr=None):
+        super(MovedAttribute, self).__init__(name)
+        if PY3:
+            if new_mod is None:
+                new_mod = name
+            self.mod = new_mod
+            if new_attr is None:
+                if old_attr is None:
+                    new_attr = name
+                else:
+                    new_attr = old_attr
+            self.attr = new_attr
+        else:
+            self.mod = old_mod
+            if old_attr is None:
+                old_attr = name
+            self.attr = old_attr
+
+    def _resolve(self):
+        module = _import_module(self.mod)
+        return getattr(module, self.attr)
+
+
+class _SixMetaPathImporter(object):
+
+    """
+    A meta path importer to import six.moves and its submodules.
+
+    This class implements a PEP302 finder and loader. It should be compatible
+    with Python 2.5 and all existing versions of Python3
+    """
+
+    def __init__(self, six_module_name):
+        self.name = six_module_name
+        self.known_modules = {}
+
+    def _add_module(self, mod, *fullnames):
+        for fullname in fullnames:
+            self.known_modules[self.name + "." + fullname] = mod
+
+    def _get_module(self, fullname):
+        return self.known_modules[self.name + "." + fullname]
+
+    def find_module(self, fullname, path=None):
+        if fullname in self.known_modules:
+            return self
+        return None
+
+    def find_spec(self, fullname, path, target=None):
+        if fullname in self.known_modules:
+            return spec_from_loader(fullname, self)
+        return None
+
+    def __get_module(self, fullname):
+        try:
+            return self.known_modules[fullname]
+        except KeyError:
+            raise ImportError("This loader does not know module " + fullname)
+
+    def load_module(self, fullname):
+        try:
+            # in case of a reload
+            return sys.modules[fullname]
+        except KeyError:
+            pass
+        mod = self.__get_module(fullname)
+        if isinstance(mod, MovedModule):
+            mod = mod._resolve()
+        else:
+            mod.__loader__ = self
+        sys.modules[fullname] = mod
+        return mod
+
+    def is_package(self, fullname):
+        """
+        Return true, if the named module is a package.
+
+        We need this method to get correct spec objects with
+        Python 3.4 (see PEP451)
+        """
+        return hasattr(self.__get_module(fullname), "__path__")
+
+    def get_code(self, fullname):
+        """Return None
+
+        Required, if is_package is implemented"""
+        self.__get_module(fullname)  # eventually raises ImportError
+        return None
+    get_source = get_code  # same as get_code
+
+    def create_module(self, spec):
+        return self.load_module(spec.name)
+
+    def exec_module(self, module):
+        pass
+
+_importer = _SixMetaPathImporter(__name__)
+
+
+class _MovedItems(_LazyModule):
+
+    """Lazy loading of moved objects"""
+    __path__ = []  # mark as package
+
+
+_moved_attributes = [
+    MovedAttribute("cStringIO", "cStringIO", "io", "StringIO"),
+    MovedAttribute("filter", "itertools", "builtins", "ifilter", "filter"),
+    MovedAttribute("filterfalse", "itertools", "itertools", "ifilterfalse", "filterfalse"),
+    MovedAttribute("input", "__builtin__", "builtins", "raw_input", "input"),
+    MovedAttribute("intern", "__builtin__", "sys"),
+    MovedAttribute("map", "itertools", "builtins", "imap", "map"),
+    MovedAttribute("getcwd", "os", "os", "getcwdu", "getcwd"),
+    MovedAttribute("getcwdb", "os", "os", "getcwd", "getcwdb"),
+    MovedAttribute("getoutput", "commands", "subprocess"),
+    MovedAttribute("range", "__builtin__", "builtins", "xrange", "range"),
+    MovedAttribute("reload_module", "__builtin__", "importlib" if PY34 else "imp", "reload"),
+    MovedAttribute("reduce", "__builtin__", "functools"),
+    MovedAttribute("shlex_quote", "pipes", "shlex", "quote"),
+    MovedAttribute("StringIO", "StringIO", "io"),
+    MovedAttribute("UserDict", "UserDict", "collections", "IterableUserDict", "UserDict"),
+    MovedAttribute("UserList", "UserList", "collections"),
+    MovedAttribute("UserString", "UserString", "collections"),
+    MovedAttribute("xrange", "__builtin__", "builtins", "xrange", "range"),
+    MovedAttribute("zip", "itertools", "builtins", "izip", "zip"),
+    MovedAttribute("zip_longest", "itertools", "itertools", "izip_longest", "zip_longest"),
+    MovedModule("builtins", "__builtin__"),
+    MovedModule("configparser", "ConfigParser"),
+    MovedModule("collections_abc", "collections", "collections.abc" if sys.version_info >= (3, 3) else "collections"),
+    MovedModule("copyreg", "copy_reg"),
+    MovedModule("dbm_gnu", "gdbm", "dbm.gnu"),
+    MovedModule("dbm_ndbm", "dbm", "dbm.ndbm"),
+    MovedModule("_dummy_thread", "dummy_thread", "_dummy_thread" if sys.version_info < (3, 9) else "_thread"),
+    MovedModule("http_cookiejar", "cookielib", "http.cookiejar"),
+    MovedModule("http_cookies", "Cookie", "http.cookies"),
+    MovedModule("html_entities", "htmlentitydefs", "html.entities"),
+    MovedModule("html_parser", "HTMLParser", "html.parser"),
+    MovedModule("http_client", "httplib", "http.client"),
+    MovedModule("email_mime_base", "email.MIMEBase", "email.mime.base"),
+    MovedModule("email_mime_image", "email.MIMEImage", "email.mime.image"),
+    MovedModule("email_mime_multipart", "email.MIMEMultipart", "email.mime.multipart"),
+    MovedModule("email_mime_nonmultipart", "email.MIMENonMultipart", "email.mime.nonmultipart"),
+    MovedModule("email_mime_text", "email.MIMEText", "email.mime.text"),
+    MovedModule("BaseHTTPServer", "BaseHTTPServer", "http.server"),
+    MovedModule("CGIHTTPServer", "CGIHTTPServer", "http.server"),
+    MovedModule("SimpleHTTPServer", "SimpleHTTPServer", "http.server"),
+    MovedModule("cPickle", "cPickle", "pickle"),
+    MovedModule("queue", "Queue"),
+    MovedModule("reprlib", "repr"),
+    MovedModule("socketserver", "SocketServer"),
+    MovedModule("_thread", "thread", "_thread"),
+    MovedModule("tkinter", "Tkinter"),
+    MovedModule("tkinter_dialog", "Dialog", "tkinter.dialog"),
+    MovedModule("tkinter_filedialog", "FileDialog", "tkinter.filedialog"),
+    MovedModule("tkinter_scrolledtext", "ScrolledText", "tkinter.scrolledtext"),
+    MovedModule("tkinter_simpledialog", "SimpleDialog", "tkinter.simpledialog"),
+    MovedModule("tkinter_tix", "Tix", "tkinter.tix"),
+    MovedModule("tkinter_ttk", "ttk", "tkinter.ttk"),
+    MovedModule("tkinter_constants", "Tkconstants", "tkinter.constants"),
+    MovedModule("tkinter_dnd", "Tkdnd", "tkinter.dnd"),
+    MovedModule("tkinter_colorchooser", "tkColorChooser",
+                "tkinter.colorchooser"),
+    MovedModule("tkinter_commondialog", "tkCommonDialog",
+                "tkinter.commondialog"),
+    MovedModule("tkinter_tkfiledialog", "tkFileDialog", "tkinter.filedialog"),
+    MovedModule("tkinter_font", "tkFont", "tkinter.font"),
+    MovedModule("tkinter_messagebox", "tkMessageBox", "tkinter.messagebox"),
+    MovedModule("tkinter_tksimpledialog", "tkSimpleDialog",
+                "tkinter.simpledialog"),
+    MovedModule("urllib_parse", __name__ + ".moves.urllib_parse", "urllib.parse"),
+    MovedModule("urllib_error", __name__ + ".moves.urllib_error", "urllib.error"),
+    MovedModule("urllib", __name__ + ".moves.urllib", __name__ + ".moves.urllib"),
+    MovedModule("urllib_robotparser", "robotparser", "urllib.robotparser"),
+    MovedModule("xmlrpc_client", "xmlrpclib", "xmlrpc.client"),
+    MovedModule("xmlrpc_server", "SimpleXMLRPCServer", "xmlrpc.server"),
+]
+# Add windows specific modules.
+if sys.platform == "win32":
+    _moved_attributes += [
+        MovedModule("winreg", "_winreg"),
+    ]
+
+for attr in _moved_attributes:
+    setattr(_MovedItems, attr.name, attr)
+    if isinstance(attr, MovedModule):
+        _importer._add_module(attr, "moves." + attr.name)
+del attr
+
+_MovedItems._moved_attributes = _moved_attributes
+
+moves = _MovedItems(__name__ + ".moves")
+_importer._add_module(moves, "moves")
+
+
+class Module_six_moves_urllib_parse(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_parse"""
+
+
+_urllib_parse_moved_attributes = [
+    MovedAttribute("ParseResult", "urlparse", "urllib.parse"),
+    MovedAttribute("SplitResult", "urlparse", "urllib.parse"),
+    MovedAttribute("parse_qs", "urlparse", "urllib.parse"),
+    MovedAttribute("parse_qsl", "urlparse", "urllib.parse"),
+    MovedAttribute("urldefrag", "urlparse", "urllib.parse"),
+    MovedAttribute("urljoin", "urlparse", "urllib.parse"),
+    MovedAttribute("urlparse", "urlparse", "urllib.parse"),
+    MovedAttribute("urlsplit", "urlparse", "urllib.parse"),
+    MovedAttribute("urlunparse", "urlparse", "urllib.parse"),
+    MovedAttribute("urlunsplit", "urlparse", "urllib.parse"),
+    MovedAttribute("quote", "urllib", "urllib.parse"),
+    MovedAttribute("quote_plus", "urllib", "urllib.parse"),
+    MovedAttribute("unquote", "urllib", "urllib.parse"),
+    MovedAttribute("unquote_plus", "urllib", "urllib.parse"),
+    MovedAttribute("unquote_to_bytes", "urllib", "urllib.parse", "unquote", "unquote_to_bytes"),
+    MovedAttribute("urlencode", "urllib", "urllib.parse"),
+    MovedAttribute("splitquery", "urllib", "urllib.parse"),
+    MovedAttribute("splittag", "urllib", "urllib.parse"),
+    MovedAttribute("splituser", "urllib", "urllib.parse"),
+    MovedAttribute("splitvalue", "urllib", "urllib.parse"),
+    MovedAttribute("uses_fragment", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_netloc", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_params", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_query", "urlparse", "urllib.parse"),
+    MovedAttribute("uses_relative", "urlparse", "urllib.parse"),
+]
+for attr in _urllib_parse_moved_attributes:
+    setattr(Module_six_moves_urllib_parse, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_parse._moved_attributes = _urllib_parse_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_parse(__name__ + ".moves.urllib_parse"),
+                      "moves.urllib_parse", "moves.urllib.parse")
+
+
+class Module_six_moves_urllib_error(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_error"""
+
+
+_urllib_error_moved_attributes = [
+    MovedAttribute("URLError", "urllib2", "urllib.error"),
+    MovedAttribute("HTTPError", "urllib2", "urllib.error"),
+    MovedAttribute("ContentTooShortError", "urllib", "urllib.error"),
+]
+for attr in _urllib_error_moved_attributes:
+    setattr(Module_six_moves_urllib_error, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_error._moved_attributes = _urllib_error_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_error(__name__ + ".moves.urllib.error"),
+                      "moves.urllib_error", "moves.urllib.error")
+
+
+class Module_six_moves_urllib_request(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_request"""
+
+
+_urllib_request_moved_attributes = [
+    MovedAttribute("urlopen", "urllib2", "urllib.request"),
+    MovedAttribute("install_opener", "urllib2", "urllib.request"),
+    MovedAttribute("build_opener", "urllib2", "urllib.request"),
+    MovedAttribute("pathname2url", "urllib", "urllib.request"),
+    MovedAttribute("url2pathname", "urllib", "urllib.request"),
+    MovedAttribute("getproxies", "urllib", "urllib.request"),
+    MovedAttribute("Request", "urllib2", "urllib.request"),
+    MovedAttribute("OpenerDirector", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPDefaultErrorHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPRedirectHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPCookieProcessor", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyHandler", "urllib2", "urllib.request"),
+    MovedAttribute("BaseHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPPasswordMgr", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPPasswordMgrWithDefaultRealm", "urllib2", "urllib.request"),
+    MovedAttribute("AbstractBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyBasicAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("AbstractDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("ProxyDigestAuthHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPSHandler", "urllib2", "urllib.request"),
+    MovedAttribute("FileHandler", "urllib2", "urllib.request"),
+    MovedAttribute("FTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("CacheFTPHandler", "urllib2", "urllib.request"),
+    MovedAttribute("UnknownHandler", "urllib2", "urllib.request"),
+    MovedAttribute("HTTPErrorProcessor", "urllib2", "urllib.request"),
+    MovedAttribute("urlretrieve", "urllib", "urllib.request"),
+    MovedAttribute("urlcleanup", "urllib", "urllib.request"),
+    MovedAttribute("proxy_bypass", "urllib", "urllib.request"),
+    MovedAttribute("parse_http_list", "urllib2", "urllib.request"),
+    MovedAttribute("parse_keqv_list", "urllib2", "urllib.request"),
+]
+if sys.version_info[:2] < (3, 14):
+    _urllib_request_moved_attributes.extend(
+        [
+            MovedAttribute("URLopener", "urllib", "urllib.request"),
+            MovedAttribute("FancyURLopener", "urllib", "urllib.request"),
+        ]
+    )
+for attr in _urllib_request_moved_attributes:
+    setattr(Module_six_moves_urllib_request, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_request._moved_attributes = _urllib_request_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_request(__name__ + ".moves.urllib.request"),
+                      "moves.urllib_request", "moves.urllib.request")
+
+
+class Module_six_moves_urllib_response(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_response"""
+
+
+_urllib_response_moved_attributes = [
+    MovedAttribute("addbase", "urllib", "urllib.response"),
+    MovedAttribute("addclosehook", "urllib", "urllib.response"),
+    MovedAttribute("addinfo", "urllib", "urllib.response"),
+    MovedAttribute("addinfourl", "urllib", "urllib.response"),
+]
+for attr in _urllib_response_moved_attributes:
+    setattr(Module_six_moves_urllib_response, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_response._moved_attributes = _urllib_response_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_response(__name__ + ".moves.urllib.response"),
+                      "moves.urllib_response", "moves.urllib.response")
+
+
+class Module_six_moves_urllib_robotparser(_LazyModule):
+
+    """Lazy loading of moved objects in six.moves.urllib_robotparser"""
+
+
+_urllib_robotparser_moved_attributes = [
+    MovedAttribute("RobotFileParser", "robotparser", "urllib.robotparser"),
+]
+for attr in _urllib_robotparser_moved_attributes:
+    setattr(Module_six_moves_urllib_robotparser, attr.name, attr)
+del attr
+
+Module_six_moves_urllib_robotparser._moved_attributes = _urllib_robotparser_moved_attributes
+
+_importer._add_module(Module_six_moves_urllib_robotparser(__name__ + ".moves.urllib.robotparser"),
+                      "moves.urllib_robotparser", "moves.urllib.robotparser")
+
+
+class Module_six_moves_urllib(types.ModuleType):
+
+    """Create a six.moves.urllib namespace that resembles the Python 3 namespace"""
+    __path__ = []  # mark as package
+    parse = _importer._get_module("moves.urllib_parse")
+    error = _importer._get_module("moves.urllib_error")
+    request = _importer._get_module("moves.urllib_request")
+    response = _importer._get_module("moves.urllib_response")
+    robotparser = _importer._get_module("moves.urllib_robotparser")
+
+    def __dir__(self):
+        return ['parse', 'error', 'request', 'response', 'robotparser']
+
+_importer._add_module(Module_six_moves_urllib(__name__ + ".moves.urllib"),
+                      "moves.urllib")
+
+
+def add_move(move):
+    """Add an item to six.moves."""
+    setattr(_MovedItems, move.name, move)
+
+
+def remove_move(name):
+    """Remove item from six.moves."""
+    try:
+        delattr(_MovedItems, name)
+    except AttributeError:
+        try:
+            del moves.__dict__[name]
+        except KeyError:
+            raise AttributeError("no such move, %r" % (name,))
+
+
+if PY3:
+    _meth_func = "__func__"
+    _meth_self = "__self__"
+
+    _func_closure = "__closure__"
+    _func_code = "__code__"
+    _func_defaults = "__defaults__"
+    _func_globals = "__globals__"
+else:
+    _meth_func = "im_func"
+    _meth_self = "im_self"
+
+    _func_closure = "func_closure"
+    _func_code = "func_code"
+    _func_defaults = "func_defaults"
+    _func_globals = "func_globals"
+
+
+try:
+    advance_iterator = next
+except NameError:
+    def advance_iterator(it):
+        return it.next()
+next = advance_iterator
+
+
+try:
+    callable = callable
+except NameError:
+    def callable(obj):
+        return any("__call__" in klass.__dict__ for klass in type(obj).__mro__)
+
+
+if PY3:
+    def get_unbound_function(unbound):
+        return unbound
+
+    create_bound_method = types.MethodType
+
+    def create_unbound_method(func, cls):
+        return func
+
+    Iterator = object
+else:
+    def get_unbound_function(unbound):
+        return unbound.im_func
+
+    def create_bound_method(func, obj):
+        return types.MethodType(func, obj, obj.__class__)
+
+    def create_unbound_method(func, cls):
+        return types.MethodType(func, None, cls)
+
+    class Iterator(object):
+
+        def next(self):
+            return type(self).__next__(self)
+
+    callable = callable
+_add_doc(get_unbound_function,
+         """Get the function out of a possibly unbound function""")
+
+
+get_method_function = operator.attrgetter(_meth_func)
+get_method_self = operator.attrgetter(_meth_self)
+get_function_closure = operator.attrgetter(_func_closure)
+get_function_code = operator.attrgetter(_func_code)
+get_function_defaults = operator.attrgetter(_func_defaults)
+get_function_globals = operator.attrgetter(_func_globals)
+
+
+if PY3:
+    def iterkeys(d, **kw):
+        return iter(d.keys(**kw))
+
+    def itervalues(d, **kw):
+        return iter(d.values(**kw))
+
+    def iteritems(d, **kw):
+        return iter(d.items(**kw))
+
+    def iterlists(d, **kw):
+        return iter(d.lists(**kw))
+
+    viewkeys = operator.methodcaller("keys")
+
+    viewvalues = operator.methodcaller("values")
+
+    viewitems = operator.methodcaller("items")
+else:
+    def iterkeys(d, **kw):
+        return d.iterkeys(**kw)
+
+    def itervalues(d, **kw):
+        return d.itervalues(**kw)
+
+    def iteritems(d, **kw):
+        return d.iteritems(**kw)
+
+    def iterlists(d, **kw):
+        return d.iterlists(**kw)
+
+    viewkeys = operator.methodcaller("viewkeys")
+
+    viewvalues = operator.methodcaller("viewvalues")
+
+    viewitems = operator.methodcaller("viewitems")
+
+_add_doc(iterkeys, "Return an iterator over the keys of a dictionary.")
+_add_doc(itervalues, "Return an iterator over the values of a dictionary.")
+_add_doc(iteritems,
+         "Return an iterator over the (key, value) pairs of a dictionary.")
+_add_doc(iterlists,
+         "Return an iterator over the (key, [values]) pairs of a dictionary.")
+
+
+if PY3:
+    def b(s):
+        return s.encode("latin-1")
+
+    def u(s):
+        return s
+    unichr = chr
+    import struct
+    int2byte = struct.Struct(">B").pack
+    del struct
+    byte2int = operator.itemgetter(0)
+    indexbytes = operator.getitem
+    iterbytes = iter
+    import io
+    StringIO = io.StringIO
+    BytesIO = io.BytesIO
+    del io
+    _assertCountEqual = "assertCountEqual"
+    if sys.version_info[1] <= 1:
+        _assertRaisesRegex = "assertRaisesRegexp"
+        _assertRegex = "assertRegexpMatches"
+        _assertNotRegex = "assertNotRegexpMatches"
+    else:
+        _assertRaisesRegex = "assertRaisesRegex"
+        _assertRegex = "assertRegex"
+        _assertNotRegex = "assertNotRegex"
+else:
+    def b(s):
+        return s
+    # Workaround for standalone backslash
+
+    def u(s):
+        return unicode(s.replace(r'\\', r'\\\\'), "unicode_escape")
+    unichr = unichr
+    int2byte = chr
+
+    def byte2int(bs):
+        return ord(bs[0])
+
+    def indexbytes(buf, i):
+        return ord(buf[i])
+    iterbytes = functools.partial(itertools.imap, ord)
+    import StringIO
+    StringIO = BytesIO = StringIO.StringIO
+    _assertCountEqual = "assertItemsEqual"
+    _assertRaisesRegex = "assertRaisesRegexp"
+    _assertRegex = "assertRegexpMatches"
+    _assertNotRegex = "assertNotRegexpMatches"
+_add_doc(b, """Byte literal""")
+_add_doc(u, """Text literal""")
+
+
+def assertCountEqual(self, *args, **kwargs):
+    return getattr(self, _assertCountEqual)(*args, **kwargs)
+
+
+def assertRaisesRegex(self, *args, **kwargs):
+    return getattr(self, _assertRaisesRegex)(*args, **kwargs)
+
+
+def assertRegex(self, *args, **kwargs):
+    return getattr(self, _assertRegex)(*args, **kwargs)
+
+
+def assertNotRegex(self, *args, **kwargs):
+    return getattr(self, _assertNotRegex)(*args, **kwargs)
+
+
+if PY3:
+    exec_ = getattr(moves.builtins, "exec")
+
+    def reraise(tp, value, tb=None):
+        try:
+            if value is None:
+                value = tp()
+            if value.__traceback__ is not tb:
+                raise value.with_traceback(tb)
+            raise value
+        finally:
+            value = None
+            tb = None
+
+else:
+    def exec_(_code_, _globs_=None, _locs_=None):
+        """Execute code in a namespace."""
+        if _globs_ is None:
+            frame = sys._getframe(1)
+            _globs_ = frame.f_globals
+            if _locs_ is None:
+                _locs_ = frame.f_locals
+            del frame
+        elif _locs_ is None:
+            _locs_ = _globs_
+        exec("""exec _code_ in _globs_, _locs_""")
+
+    exec_("""def reraise(tp, value, tb=None):
+    try:
+        raise tp, value, tb
+    finally:
+        tb = None
+""")
+
+
+if sys.version_info[:2] > (3,):
+    exec_("""def raise_from(value, from_value):
+    try:
+        raise value from from_value
+    finally:
+        value = None
+""")
+else:
+    def raise_from(value, from_value):
+        raise value
+
+
+print_ = getattr(moves.builtins, "print", None)
+if print_ is None:
+    def print_(*args, **kwargs):
+        """The new-style print function for Python 2.4 and 2.5."""
+        fp = kwargs.pop("file", sys.stdout)
+        if fp is None:
+            return
+
+        def write(data):
+            if not isinstance(data, basestring):
+                data = str(data)
+            # If the file has an encoding, encode unicode with it.
+            if (isinstance(fp, file) and
+                    isinstance(data, unicode) and
+                    fp.encoding is not None):
+                errors = getattr(fp, "errors", None)
+                if errors is None:
+                    errors = "strict"
+                data = data.encode(fp.encoding, errors)
+            fp.write(data)
+        want_unicode = False
+        sep = kwargs.pop("sep", None)
+        if sep is not None:
+            if isinstance(sep, unicode):
+                want_unicode = True
+            elif not isinstance(sep, str):
+                raise TypeError("sep must be None or a string")
+        end = kwargs.pop("end", None)
+        if end is not None:
+            if isinstance(end, unicode):
+                want_unicode = True
+            elif not isinstance(end, str):
+                raise TypeError("end must be None or a string")
+        if kwargs:
+            raise TypeError("invalid keyword arguments to print()")
+        if not want_unicode:
+            for arg in args:
+                if isinstance(arg, unicode):
+                    want_unicode = True
+                    break
+        if want_unicode:
+            newline = unicode("\n")
+            space = unicode(" ")
+        else:
+            newline = "\n"
+            space = " "
+        if sep is None:
+            sep = space
+        if end is None:
+            end = newline
+        for i, arg in enumerate(args):
+            if i:
+                write(sep)
+            write(arg)
+        write(end)
+if sys.version_info[:2] < (3, 3):
+    _print = print_
+
+    def print_(*args, **kwargs):
+        fp = kwargs.get("file", sys.stdout)
+        flush = kwargs.pop("flush", False)
+        _print(*args, **kwargs)
+        if flush and fp is not None:
+            fp.flush()
+
+_add_doc(reraise, """Reraise an exception.""")
+
+if sys.version_info[0:2] < (3, 4):
+    # This does exactly the same what the :func:`py3:functools.update_wrapper`
+    # function does on Python versions after 3.2. It sets the ``__wrapped__``
+    # attribute on ``wrapper`` object and it doesn't raise an error if any of
+    # the attributes mentioned in ``assigned`` and ``updated`` are missing on
+    # ``wrapped`` object.
+    def _update_wrapper(wrapper, wrapped,
+                        assigned=functools.WRAPPER_ASSIGNMENTS,
+                        updated=functools.WRAPPER_UPDATES):
+        for attr in assigned:
+            try:
+                value = getattr(wrapped, attr)
+            except AttributeError:
+                continue
+            else:
+                setattr(wrapper, attr, value)
+        for attr in updated:
+            getattr(wrapper, attr).update(getattr(wrapped, attr, {}))
+        wrapper.__wrapped__ = wrapped
+        return wrapper
+    _update_wrapper.__doc__ = functools.update_wrapper.__doc__
+
+    def wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS,
+              updated=functools.WRAPPER_UPDATES):
+        return functools.partial(_update_wrapper, wrapped=wrapped,
+                                 assigned=assigned, updated=updated)
+    wraps.__doc__ = functools.wraps.__doc__
+
+else:
+    wraps = functools.wraps
+
+
+def with_metaclass(meta, *bases):
+    """Create a base class with a metaclass."""
+    # This requires a bit of explanation: the basic idea is to make a dummy
+    # metaclass for one level of class instantiation that replaces itself with
+    # the actual metaclass.
+    class metaclass(type):
+
+        def __new__(cls, name, this_bases, d):
+            if sys.version_info[:2] >= (3, 7):
+                # This version introduced PEP 560 that requires a bit
+                # of extra care (we mimic what is done by __build_class__).
+                resolved_bases = types.resolve_bases(bases)
+                if resolved_bases is not bases:
+                    d['__orig_bases__'] = bases
+            else:
+                resolved_bases = bases
+            return meta(name, resolved_bases, d)
+
+        @classmethod
+        def __prepare__(cls, name, this_bases):
+            return meta.__prepare__(name, bases)
+    return type.__new__(metaclass, 'temporary_class', (), {})
+
+
+def add_metaclass(metaclass):
+    """Class decorator for creating a class with a metaclass."""
+    def wrapper(cls):
+        orig_vars = cls.__dict__.copy()
+        slots = orig_vars.get('__slots__')
+        if slots is not None:
+            if isinstance(slots, str):
+                slots = [slots]
+            for slots_var in slots:
+                orig_vars.pop(slots_var)
+        orig_vars.pop('__dict__', None)
+        orig_vars.pop('__weakref__', None)
+        if hasattr(cls, '__qualname__'):
+            orig_vars['__qualname__'] = cls.__qualname__
+        return metaclass(cls.__name__, cls.__bases__, orig_vars)
+    return wrapper
+
+
+def ensure_binary(s, encoding='utf-8', errors='strict'):
+    """Coerce **s** to six.binary_type.
+
+    For Python 2:
+      - `unicode` -> encoded to `str`
+      - `str` -> `str`
+
+    For Python 3:
+      - `str` -> encoded to `bytes`
+      - `bytes` -> `bytes`
+    """
+    if isinstance(s, binary_type):
+        return s
+    if isinstance(s, text_type):
+        return s.encode(encoding, errors)
+    raise TypeError("not expecting type '%s'" % type(s))
+
+
+def ensure_str(s, encoding='utf-8', errors='strict'):
+    """Coerce *s* to `str`.
+
+    For Python 2:
+      - `unicode` -> encoded to `str`
+      - `str` -> `str`
+
+    For Python 3:
+      - `str` -> `str`
+      - `bytes` -> decoded to `str`
+    """
+    # Optimization: Fast return for the common case.
+    if type(s) is str:
+        return s
+    if PY2 and isinstance(s, text_type):
+        return s.encode(encoding, errors)
+    elif PY3 and isinstance(s, binary_type):
+        return s.decode(encoding, errors)
+    elif not isinstance(s, (text_type, binary_type)):
+        raise TypeError("not expecting type '%s'" % type(s))
+    return s
+
+
+def ensure_text(s, encoding='utf-8', errors='strict'):
+    """Coerce *s* to six.text_type.
+
+    For Python 2:
+      - `unicode` -> `unicode`
+      - `str` -> `unicode`
+
+    For Python 3:
+      - `str` -> `str`
+      - `bytes` -> decoded to `str`
+    """
+    if isinstance(s, binary_type):
+        return s.decode(encoding, errors)
+    elif isinstance(s, text_type):
+        return s
+    else:
+        raise TypeError("not expecting type '%s'" % type(s))
+
+
+def python_2_unicode_compatible(klass):
+    """
+    A class decorator that defines __unicode__ and __str__ methods under Python 2.
+    Under Python 3 it does nothing.
+
+    To support Python 2 and 3 with a single code base, define a __str__ method
+    returning text and apply this decorator to the class.
+    """
+    if PY2:
+        if '__str__' not in klass.__dict__:
+            raise ValueError("@python_2_unicode_compatible cannot be applied "
+                             "to %s because it doesn't define __str__()." %
+                             klass.__name__)
+        klass.__unicode__ = klass.__str__
+        klass.__str__ = lambda self: self.__unicode__().encode('utf-8')
+    return klass
+
+
+# Complete the moves implementation.
+# This code is at the end of this module to speed up module loading.
+# Turn this module into a package.
+__path__ = []  # required for PEP 302 and PEP 451
+__package__ = __name__  # see PEP 366 @ReservedAssignment
+if globals().get("__spec__") is not None:
+    __spec__.submodule_search_locations = []  # PEP 451 @UndefinedVariable
+# Remove other six meta path importers, since they cause problems. This can
+# happen if six is removed from sys.modules and then reloaded. (Setuptools does
+# this for some reason.)
+if sys.meta_path:
+    for i, importer in enumerate(sys.meta_path):
+        # Here's some real nastiness: Another "instance" of the six module might
+        # be floating around. Therefore, we can't use isinstance() to check for
+        # the six meta path importer, since the other six instance will have
+        # inserted an importer with different class.
+        if (type(importer).__name__ == "_SixMetaPathImporter" and
+                importer.name == __name__):
+            del sys.meta_path[i]
+            break
+    del i, importer
+# Finally, add the importer to the meta path import hook.
+sys.meta_path.append(_importer)
+
+
+# ==== vendored transitions.__init__ ====
+# transitions
+# -----------
+#
+# A lightweight, object-oriented state machine implementation in Python. Compatible with Python 2.7+ and 3.0+.
+
+# (vendored) from .version imported inline
+# (vendored) from .core imported inline
+
+__copyright__ = "Copyright (c) 2024 Tal Yarkoni, Alexander Neumann"
+__license__ = "MIT"
+__summary__ = "A lightweight, object-oriented finite state machine implementation in Python with many extensions"
+__uri__ = "https://github.com/pytransitions/transitions"
+
+
+# ==== vendored transitions.core ====
+# transitions.core
+#     ----------------
+#
+#     This module contains the central parts of transitions which are the state machine logic, state
+#     and transition concepts.
+
+try:
+    from builtins import object
+except ImportError:  # pragma: no cover
+    # python2
+    pass
+
+try:
+    # Enums are supported for Python 3.4+ and Python 2.7 with enum34 package installed
+    from enum import Enum, EnumMeta
+except ImportError:  # pragma: no cover
+    # If enum is not available, create dummy classes for type checks
+    class Enum:  # type:ignore
+        """This is just an Enum stub for Python 2 and Python 3.3 and before without Enum support."""
+
+    class EnumMeta:  # type:ignore
+        """This is just an EnumMeta stub for Python 2 and Python 3.3 and before without Enum support."""
+
+import inspect
+import itertools
+import logging
+import warnings
+
+from collections import OrderedDict, defaultdict, deque
+from functools import partial
+
+_LOGGER = logging.getLogger(__name__)
+_LOGGER.addHandler(logging.NullHandler())
+
+warnings.filterwarnings(action='default', message=r".*transitions version.*", category=DeprecationWarning)
+
+
+def listify(obj):
+    """Wraps a passed object into a list in case it has not been a list, tuple before.
+    Returns an empty list in case ``obj`` is None.
+    Args:
+        obj: instance to be converted into a list.
+    Returns:
+        list: May also return a tuple in case ``obj`` has been a tuple before.
+    """
+    if obj is None:
+        return []
+
+    try:
+        return obj if isinstance(obj, (list, tuple, EnumMeta)) else [obj]
+    except ReferenceError:
+        # obj is an empty weakref
+        return [obj]
+
+
+def _prep_ordered_arg(desired_length, arguments=None):
+    """Ensure list of arguments passed to add_ordered_transitions has the proper length.
+    Expands the given arguments and apply same condition, callback
+    to all transitions if only one has been given.
+
+    Args:
+        desired_length (int): The size of the resulting list
+        arguments (optional[str, reference or list]): Parameters to be expanded.
+    Returns:
+        list: Parameter sets with the desired length.
+    """
+    arguments = listify(arguments) if arguments is not None else [None]
+    if len(arguments) != desired_length and len(arguments) != 1:
+        raise ValueError("Argument length must be either 1 or the same length as "
+                         "the number of transitions.")
+    if len(arguments) == 1:
+        return arguments * desired_length
+    return arguments
+
+
+class State(object):
+    """A persistent representation of a state managed by a ``Machine``.
+
+    Attributes:
+        name (str): State name which is also assigned to the model(s).
+        on_enter (list): Callbacks executed when a state is entered.
+        on_exit (list): Callbacks executed when a state is exited.
+        ignore_invalid_triggers (bool): Indicates if unhandled/invalid triggers should raise an exception.
+    """
+
+    # A list of dynamic methods which can be resolved by a ``Machine`` instance for convenience functions.
+    # Dynamic methods for states must always start with `on_`!
+    dynamic_methods = ['on_enter', 'on_exit']
+
+    def __init__(self, name, on_enter=None, on_exit=None,
+                 ignore_invalid_triggers=None, final=False):
+        """
+        Args:
+            name (str or Enum): The name of the state
+            on_enter (str or list): Optional callable(s) to trigger when a
+                state is entered. Can be either a string providing the name of
+                a callable, or a list of strings.
+            on_exit (str or list): Optional callable(s) to trigger when a
+                state is exited. Can be either a string providing the name of a
+                callable, or a list of strings.
+            ignore_invalid_triggers (Boolean): Optional flag to indicate if
+                unhandled/invalid triggers should raise an exception
+
+        """
+        self._name = name
+        self.final = final
+        self.ignore_invalid_triggers = ignore_invalid_triggers
+        self.on_enter = listify(on_enter) if on_enter else []
+        self.on_exit = listify(on_exit) if on_exit else []
+
+    @property
+    def name(self):
+        """The name of the state."""
+        if isinstance(self._name, Enum):
+            return self._name.name
+        return self._name
+
+    @property
+    def value(self):
+        """The state's value. For string states this will be equivalent to the name attribute."""
+        return self._name
+
+    def enter(self, event_data):
+        """Triggered when a state is entered."""
+        _LOGGER.debug("%sEntering state %s. Processing callbacks...", event_data.machine.name, self.name)
+        event_data.machine.callbacks(self.on_enter, event_data)
+        _LOGGER.info("%sFinished processing state %s enter callbacks.", event_data.machine.name, self.name)
+
+    def exit(self, event_data):
+        """Triggered when a state is exited."""
+        _LOGGER.debug("%sExiting state %s. Processing callbacks...", event_data.machine.name, self.name)
+        event_data.machine.callbacks(self.on_exit, event_data)
+        _LOGGER.info("%sFinished processing state %s exit callbacks.", event_data.machine.name, self.name)
+
+    def add_callback(self, trigger, func):
+        """Add a new enter or exit callback.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'enter' or 'exit'.
+            func (str): The name of the callback function.
+        """
+        callback_list = getattr(self, 'on_' + trigger)
+        callback_list.append(func)
+
+    def __repr__(self):
+        return "<%s('%s')@%s>" % (type(self).__name__, self.name, id(self))
+
+
+class Condition(object):
+    """A helper class to call condition checks in the intended way.
+
+    Attributes:
+        func (str or callable): The function to call for the condition check
+        target (bool): Indicates the target state--i.e., when True,
+                the condition-checking callback should return True to pass,
+                and when False, the callback should return False to pass.
+    """
+
+    def __init__(self, func, target=True):
+        """
+        Args:
+            func (str or callable): Name of the condition-checking callable
+            target (bool): Indicates the target state--i.e., when True,
+                the condition-checking callback should return True to pass,
+                and when False, the callback should return False to pass.
+        Notes:
+            This class should not be initialized or called from outside a
+            Transition instance, and exists at module level (rather than
+            nesting under the transition class) only because of a bug in
+            dill that prevents serialization under Python 2.7.
+        """
+        self.func = func
+        self.target = target
+
+    def check(self, event_data):
+        """Check whether the condition passes.
+        Args:
+            event_data (EventData): An EventData instance to pass to the
+                condition (if event sending is enabled) or to extract arguments
+                from (if event sending is disabled). Also contains the data
+                model attached to the current machine which is used to invoke
+                the condition.
+        """
+        predicate = event_data.machine.resolve_callable(self.func, event_data)
+        if event_data.machine.send_event:
+            return predicate(event_data) == self.target
+        return predicate(*event_data.args, **event_data.kwargs) == self.target
+
+    def __repr__(self):
+        return "<%s(%s)@%s>" % (type(self).__name__, self.func, id(self))
+
+
+class Transition(object):
+    """Representation of a transition managed by a ``Machine`` instance.
+
+    Attributes:
+        source (str): Source state of the transition.
+        dest (str): Destination state of the transition.
+        prepare (list): Callbacks executed before conditions checks.
+        conditions (list): Callbacks evaluated to determine if
+            the transition should be executed.
+        before (list): Callbacks executed before the transition is executed
+            but only if condition checks have been successful.
+        after (list): Callbacks executed after the transition is executed
+            but only if condition checks have been successful.
+    """
+
+    dynamic_methods = ['before', 'after', 'prepare']
+    """ A list of dynamic methods which can be resolved by a ``Machine`` instance for convenience functions. """
+    condition_cls = Condition
+    """ The class used to wrap condition checks. Can be replaced to alter condition resolution behaviour
+        (e.g. OR instead of AND for 'conditions' or AND instead of OR for 'unless') """
+
+    def __init__(self, source, dest, conditions=None, unless=None, before=None,
+                 after=None, prepare=None):
+        """
+        Args:
+            source (str): The name of the source State.
+            dest (str): The name of the destination State.
+            conditions (optional[str, callable or list]): Condition(s) that must pass in order for
+                the transition to take place. Either a string providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (optional[str, callable or list]): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (optional[str, callable or list]): callbacks to trigger before the
+                transition.
+            after (optional[str, callable or list]): callbacks to trigger after the transition.
+            prepare (optional[str, callable or list]): callbacks to trigger before conditions are checked
+        """
+        self.source = source
+        self.dest = dest
+        self.prepare = [] if prepare is None else listify(prepare)
+        self.before = [] if before is None else listify(before)
+        self.after = [] if after is None else listify(after)
+
+        self.conditions = []
+        if conditions is not None:
+            for cond in listify(conditions):
+                self.conditions.append(self.condition_cls(cond))
+        if unless is not None:
+            for cond in listify(unless):
+                self.conditions.append(self.condition_cls(cond, target=False))
+
+    def _eval_conditions(self, event_data):
+        for cond in self.conditions:
+            if not cond.check(event_data):
+                _LOGGER.debug("%sTransition condition failed: %s() does not return %s. Transition halted.",
+                              event_data.machine.name, cond.func, cond.target)
+                return False
+        return True
+
+    def execute(self, event_data):
+        """Execute the transition.
+        Args:
+            event_data: An instance of class EventData.
+        Returns: boolean indicating whether the transition was
+            successfully executed (True if successful, False if not).
+        """
+        _LOGGER.debug("%sInitiating transition from state %s to state %s...",
+                      event_data.machine.name, self.source, self.dest)
+
+        event_data.machine.callbacks(self.prepare, event_data)
+        _LOGGER.debug("%sExecuted callbacks before conditions.", event_data.machine.name)
+
+        if not self._eval_conditions(event_data):
+            return False
+
+        event_data.machine.callbacks(itertools.chain(event_data.machine.before_state_change, self.before), event_data)
+        _LOGGER.debug("%sExecuted callback before transition.", event_data.machine.name)
+
+        if self.dest:  # if self.dest is None this is an internal transition with no actual state change
+            self._change_state(event_data)
+
+        event_data.machine.callbacks(itertools.chain(self.after, event_data.machine.after_state_change), event_data)
+        _LOGGER.debug("%sExecuted callback after transition.", event_data.machine.name)
+        return True
+
+    def _change_state(self, event_data):
+        event_data.machine.get_state(self.source).exit(event_data)
+        event_data.machine.set_state(self.dest, event_data.model)
+        event_data.update(getattr(event_data.model, event_data.machine.model_attribute))
+        dest = event_data.machine.get_state(self.dest)
+        dest.enter(event_data)
+        if dest.final:
+            event_data.machine.callbacks(event_data.machine.on_final, event_data)
+
+    def add_callback(self, trigger, func):
+        """Add a new before, after, or prepare callback.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'before', 'after' or 'prepare'.
+            func (str or callable): The name of the callback function or a callable.
+        """
+        callback_list = getattr(self, trigger)
+        callback_list.append(func)
+
+    def __repr__(self):
+        return "<%s('%s', '%s')@%s>" % (type(self).__name__,
+                                        self.source, self.dest, id(self))
+
+
+class EventData(object):
+    """Collection of relevant data related to the ongoing transition attempt.
+
+    Attributes:
+        state (State): The State from which the Event was triggered.
+        event (Event): The triggering Event.
+        machine (Machine): The current Machine instance.
+        model (object): The model/object the machine is bound to.
+        args (list): Optional positional arguments from trigger method
+            to store internally for possible later use.
+        kwargs (dict): Optional keyword arguments from trigger method
+            to store internally for possible later use.
+        transition (Transition): Currently active transition. Will be assigned during triggering.
+        error (Exception): In case a triggered event causes an Error, it is assigned here and passed on.
+        result (bool): True in case a transition has been successful, False otherwise.
+    """
+
+    def __init__(self, state, event, machine, model, args, kwargs):
+        """
+        Args:
+            state (State): The State from which the Event was triggered.
+            event (Event): The triggering Event.
+            machine (Machine): The current Machine instance.
+            model (object): The model/object the machine is bound to.
+            args (tuple): Optional positional arguments from trigger method
+                to store internally for possible later use.
+            kwargs (dict): Optional keyword arguments from trigger method
+                to store internally for possible later use.
+        """
+        self.state = state
+        self.event = event
+        self.machine = machine
+        self.model = model
+        self.args = args
+        self.kwargs = kwargs
+        self.transition = None
+        self.error = None
+        self.result = False
+
+    def update(self, state):
+        """Updates the EventData object with the passed state.
+
+        Attributes:
+            state (State, str or Enum): The state object, enum member or string to assign to EventData.
+        """
+
+        if not isinstance(state, State):
+            self.state = self.machine.get_state(state)
+
+    def __repr__(self):
+        return "<%s(%s, %s, %s)@%s>" % (type(self).__name__, self.event, self.state,
+                                        getattr(self, 'transition'), id(self))
+
+
+class Event(object):
+    """A collection of transitions assigned to the same trigger
+
+    """
+
+    def __init__(self, name, machine):
+        """
+        Args:
+            name (str): The name of the event, which is also the name of the
+                triggering callable (e.g., 'advance' implies an advance()
+                method).
+            machine (Machine): The current Machine instance.
+        """
+        self.name = name
+        self.machine = machine
+        self.transitions = defaultdict(list)
+
+    def add_transition(self, transition):
+        """Add a transition to the list of potential transitions.
+        Args:
+            transition (Transition): The Transition instance to add to the
+                list.
+        """
+        self.transitions[transition.source].append(transition)
+
+    def trigger(self, model, *args, **kwargs):
+        """Executes all transitions that match the current state,
+        halting as soon as one successfully completes. More precisely, it prepares a partial
+        of the internal ``_trigger`` function, passes this to ``Machine._process``.
+        It is up to the machine's configuration of the Event whether processing happens queued (sequentially) or
+        whether further Events are processed as they occur.
+        Args:
+            model (object): The currently processed model
+            args and kwargs: Optional positional or named arguments that will
+                be passed onto the EventData object, enabling arbitrary state
+                information to be passed on to downstream triggered functions.
+        Returns: boolean indicating whether a transition was
+            successfully executed (True if successful, False if not).
+        """
+        func = partial(self._trigger, EventData(None, self, self.machine, model, args=args, kwargs=kwargs))
+        # pylint: disable=protected-access
+        # noinspection PyProtectedMember
+        # Machine._process should not be called somewhere else. That's why it should not be exposed
+        # to Machine users.
+        return self.machine._process(func)
+
+    def _trigger(self, event_data):
+        """Internal trigger function called by the ``Machine`` instance. This should not
+        be called directly but via the public method ``Machine.process``.
+        Args:
+            event_data (EventData): The currently processed event. State, result and (potentially) error might be
+            overridden.
+        Returns: boolean indicating whether a transition was
+            successfully executed (True if successful, False if not).
+        """
+        event_data.state = self.machine.get_model_state(event_data.model)
+        try:
+            if self._is_valid_source(event_data.state):
+                self._process(event_data)
+        except BaseException as err:  # pylint: disable=broad-except; Exception will be handled elsewhere
+            event_data.error = err
+            if self.machine.on_exception:
+                self.machine.callbacks(self.machine.on_exception, event_data)
+            else:
+                raise
+        finally:
+            try:
+                self.machine.callbacks(self.machine.finalize_event, event_data)
+                _LOGGER.debug("%sExecuted machine finalize callbacks", self.machine.name)
+            except BaseException as err:  # pylint: disable=broad-except; Exception will be handled elsewhere
+                _LOGGER.error("%sWhile executing finalize callbacks a %s occurred: %s.",
+                              self.machine.name,
+                              type(err).__name__,
+                              str(err))
+        return event_data.result
+
+    def _process(self, event_data):
+        self.machine.callbacks(self.machine.prepare_event, event_data)
+        _LOGGER.debug("%sExecuted machine preparation callbacks before conditions.", self.machine.name)
+        for trans in self.transitions[event_data.state.name]:
+            event_data.transition = trans
+            if trans.execute(event_data):
+                event_data.result = True
+                break
+
+    def _is_valid_source(self, state):
+        if state.name not in self.transitions:
+            msg = "%sCan't trigger event %s from state %s!" % (self.machine.name, self.name,
+                                                               state.name)
+            ignore = state.ignore_invalid_triggers if state.ignore_invalid_triggers is not None \
+                else self.machine.ignore_invalid_triggers
+            if ignore:
+                _LOGGER.warning(msg)
+                return False
+            raise MachineError(msg)
+        return True
+
+    def __repr__(self):
+        return "<%s('%s')@%s>" % (type(self).__name__, self.name, id(self))
+
+    def add_callback(self, trigger, func):
+        """Add a new before or after callback to all available transitions.
+        Args:
+            trigger (str): The type of triggering event. Must be one of
+                'before', 'after' or 'prepare'.
+            func (str): The name of the callback function.
+        """
+        for trans in itertools.chain(*self.transitions.values()):
+            trans.add_callback(trigger, func)
+
+
+class Machine(object):
+    """Machine manages states, transitions and models. In case it is initialized without a specific model
+    (or specifically no model), it will also act as a model itself. Machine takes also care of decorating
+    models with conveniences functions related to added transitions and states during runtime.
+
+    Attributes:
+        states (OrderedDict): Collection of all registered states.
+        events (dict): Collection of transitions ordered by trigger/event.
+        models (list): List of models attached to the machine.
+        initial (str): Name of the initial state for new models.
+        prepare_event (list): Callbacks executed when an event is triggered.
+        before_state_change (list): Callbacks executed after condition checks but before transition is conducted.
+            Callbacks will be executed BEFORE the custom callbacks assigned to the transition.
+        after_state_change (list): Callbacks executed after the transition has been conducted.
+            Callbacks will be executed AFTER the custom callbacks assigned to the transition.
+        finalize_event (list): Callbacks will be executed after all transitions callbacks have been executed.
+            Callbacks mentioned here will also be called if a transition or condition check raised an error.
+        queued (bool): Whether transitions in callbacks should be executed immediately (False) or sequentially.
+        send_event (bool): When True, any arguments passed to trigger methods will be wrapped in an EventData
+            object, allowing indirect and encapsulated access to data. When False, all positional and keyword
+            arguments will be passed directly to all callback methods.
+        auto_transitions (bool):  When True (default), every state will automatically have an associated
+            to_{state}() convenience trigger in the base model.
+        ignore_invalid_triggers (bool): When True, any calls to trigger methods that are not valid for the
+            present state (e.g., calling an a_to_b() trigger when the current state is c) will be silently
+            ignored rather than raising an invalid transition exception.
+        name (str): Name of the ``Machine`` instance mainly used for easier log message distinction.
+    """
+
+    separator = '_'  # separates callback type from state/transition name
+    wildcard_all = '*'  # will be expanded to ALL states
+    wildcard_same = '='  # will be expanded to source state
+    state_cls = State
+    transition_cls = Transition
+    event_cls = Event
+    self_literal = 'self'
+
+    def __init__(self, model=self_literal, states=None, initial='initial', transitions=None,
+                 send_event=False, auto_transitions=True,
+                 ordered_transitions=False, ignore_invalid_triggers=None,
+                 before_state_change=None, after_state_change=None, name=None,
+                 queued=False, prepare_event=None, finalize_event=None, model_attribute='state', model_override=False,
+                 on_exception=None, on_final=None, **kwargs):
+        """
+        Args:
+            model (object or list): The object(s) whose states we want to manage. If set to `Machine.self_literal`
+                (default value), the current Machine instance will be used as the model (i.e., all
+                triggering events will be attached to the Machine itself). Note that an empty list
+                is treated like no model.
+            states (list or Enum): A list or enumeration of valid states. Each list element can be either a
+                string, an enum member or a State instance. If string or enum member, a new generic State
+                instance will be created that is named according to the string or enum member's name.
+            initial (str, Enum or State): The initial state of the passed model[s].
+            transitions (list): An optional list of transitions. Each element
+                is a dictionary of named arguments to be passed onto the
+                Transition initializer.
+            send_event (boolean): When True, any arguments passed to trigger
+                methods will be wrapped in an EventData object, allowing
+                indirect and encapsulated access to data. When False, all
+                positional and keyword arguments will be passed directly to all
+                callback methods.
+            auto_transitions (boolean): When True (default), every state will
+                automatically have an associated to_{state}() convenience
+                trigger in the base model.
+            ordered_transitions (boolean): Convenience argument that calls
+                add_ordered_transitions() at the end of initialization if set
+                to True.
+            ignore_invalid_triggers: when True, any calls to trigger methods
+                that are not valid for the present state (e.g., calling an
+                a_to_b() trigger when the current state is c) will be silently
+                ignored rather than raising an invalid transition exception.
+            before_state_change: A callable called on every change state before
+                the transition happened. It receives the very same args as normal
+                callbacks.
+            after_state_change: A callable called on every change state after
+                the transition happened. It receives the very same args as normal
+                callbacks.
+            name: If a name is set, it will be used as a prefix for logger output
+            queued (boolean): When True, processes transitions sequentially. A trigger
+                executed in a state callback function will be queued and executed later.
+                Due to the nature of the queued processing, all transitions will
+                _always_ return True since conditional checks cannot be conducted at queueing time.
+            prepare_event: A callable called on for before possible transitions will be processed.
+                It receives the very same args as normal callbacks.
+            finalize_event: A callable called on for each triggered event after transitions have been processed.
+                This is also called when a transition raises an exception.
+            on_exception: A callable called when an event raises an exception. If not set,
+                the exception will be raised instead.
+
+            **kwargs additional arguments passed to next class in MRO. This can be ignored in most cases.
+        """
+
+        # calling super in case `Machine` is used as a mix in
+        # all keyword arguments should be consumed by now if this is not the case
+        try:
+            super(Machine, self).__init__(**kwargs)
+        except TypeError as err:
+            raise ValueError('Passing arguments {0} caused an inheritance error: {1}'.format(kwargs.keys(), err))
+
+        # initialize protected attributes first
+        self._queued = queued
+        self._transition_queue = deque()
+        self._before_state_change = []
+        self._after_state_change = []
+        self._prepare_event = []
+        self._finalize_event = []
+        self._on_exception = []
+        self._on_final = []
+        self._initial = None
+
+        self.states = OrderedDict()
+        self.events = OrderedDict()
+        self.send_event = send_event
+        self.auto_transitions = auto_transitions
+        self.ignore_invalid_triggers = ignore_invalid_triggers
+        self.prepare_event = prepare_event
+        self.before_state_change = before_state_change
+        self.after_state_change = after_state_change
+        self.finalize_event = finalize_event
+        self.on_exception = on_exception
+        self.on_final = on_final
+        self.name = name + ": " if name is not None else ""
+        self.model_attribute = model_attribute
+        self.model_override = model_override
+
+        self.models = []
+
+        if states is not None:
+            self.add_states(states)
+
+        if initial is not None:
+            self.initial = initial
+
+        if transitions is not None:
+            self.add_transitions(transitions)
+
+        if ordered_transitions:
+            self.add_ordered_transitions()
+
+        if model:
+            self.add_model(model)
+
+    def add_model(self, model, initial=None):
+        """Register a model with the state machine, initializing triggers and callbacks."""
+        models = listify(model)
+
+        if initial is None:
+            if self.initial is None:
+                raise ValueError("No initial state configured for machine, must specify when adding model.")
+            initial = self.initial
+
+        for mod in models:
+            mod = self if mod is self.self_literal else mod
+            if mod not in self.models:
+                self._checked_assignment(mod, 'trigger', partial(self._get_trigger, mod))
+                self._checked_assignment(mod, 'may_trigger', partial(self._can_trigger, mod))
+
+                for trigger in self.events:
+                    self._add_trigger_to_model(trigger, mod)
+
+                for state in self.states.values():
+                    self._add_model_to_state(state, mod)
+
+                self.set_state(initial, model=mod)
+                self.models.append(mod)
+
+    def remove_model(self, model):
+        """Remove a model from the state machine. The model will still contain all previously added triggers
+        and callbacks, but will not receive updates when states or transitions are added to the Machine.
+        If an event queue is used, all queued events of that model will be removed."""
+        models = listify(model)
+
+        for mod in models:
+            self.models.remove(mod)
+        if len(self._transition_queue) > 0:
+            # the first element of the list is currently executed. Keeping it for further Machine._process(ing)
+            self._transition_queue = deque(
+                [self._transition_queue[0]] + [e for e in self._transition_queue if e.args[0].model not in models])
+
+    @classmethod
+    def _create_transition(cls, *args, **kwargs):
+        return cls.transition_cls(*args, **kwargs)
+
+    @classmethod
+    def _create_event(cls, *args, **kwargs):
+        return cls.event_cls(*args, **kwargs)
+
+    @classmethod
+    def _create_state(cls, *args, **kwargs):
+        return cls.state_cls(*args, **kwargs)
+
+    @property
+    def initial(self):
+        """Return the initial state."""
+        return self._initial
+
+    @initial.setter
+    def initial(self, value):
+        if isinstance(value, State):
+            if value.name not in self.states:
+                self.add_states(value)
+            else:
+                _ = self._has_state(value, raise_error=True)
+            self._initial = value.name
+        else:
+            state_name = value.name if isinstance(value, Enum) else value
+            if state_name not in self.states:
+                self.add_states(state_name)
+            self._initial = state_name
+
+    @property
+    def has_queue(self):
+        """Return boolean indicating if machine has queue or not"""
+        return self._queued
+
+    @property
+    def model(self):
+        """List of models attached to the machine. For backwards compatibility, the property will
+        return the model instance itself instead of the underlying list  if there is only one attached
+        to the machine.
+        """
+        if len(self.models) == 1:
+            return self.models[0]
+        return self.models
+
+    @property
+    def before_state_change(self):
+        """Callbacks executed after condition checks but before transition is conducted.
+        Callbacks will be executed BEFORE the custom callbacks assigned to the transition."""
+        return self._before_state_change
+
+    # this should make sure that _before_state_change is always a list
+    @before_state_change.setter
+    def before_state_change(self, value):
+        self._before_state_change = listify(value)
+
+    @property
+    def after_state_change(self):
+        """Callbacks executed after the transition has been conducted.
+        Callbacks will be executed AFTER the custom callbacks assigned to the transition."""
+        return self._after_state_change
+
+    # this should make sure that _after_state_change is always a list
+    @after_state_change.setter
+    def after_state_change(self, value):
+        self._after_state_change = listify(value)
+
+    @property
+    def prepare_event(self):
+        """Callbacks executed when an event is triggered."""
+        return self._prepare_event
+
+    # this should make sure that prepare_event is always a list
+    @prepare_event.setter
+    def prepare_event(self, value):
+        self._prepare_event = listify(value)
+
+    @property
+    def finalize_event(self):
+        """Callbacks will be executed after all transitions callbacks have been executed.
+        Callbacks mentioned here will also be called if a transition or condition check raised an error."""
+        return self._finalize_event
+
+    # this should make sure that finalize_event is always a list
+    @finalize_event.setter
+    def finalize_event(self, value):
+        self._finalize_event = listify(value)
+
+    @property
+    def on_exception(self):
+        """Callbacks will be executed when an Event raises an Exception."""
+        return self._on_exception
+
+    # this should make sure that finalize_event is always a list
+    @on_exception.setter
+    def on_exception(self, value):
+        self._on_exception = listify(value)
+
+    @property
+    def on_final(self):
+        """Callbacks will be executed when the reached state is tagged with 'final'"""
+        return self._on_final
+
+    # this should make sure that finalize_event is always a list
+    @on_final.setter
+    def on_final(self, value):
+        self._on_final = listify(value)
+
+    def get_state(self, state):
+        """Return the State instance with the passed name."""
+        if isinstance(state, Enum):
+            state = state.name
+        if state not in self.states:
+            raise ValueError("State '%s' is not a registered state." % state)
+        return self.states[state]
+
+    # In theory this function could be static. This however causes some issues related to inheritance and
+    # pickling down the chain.
+    def is_state(self, state, model):
+        """Check whether the current state matches the named state. This function is not called directly
+            but assigned as partials to model instances (e.g. is_A -> partial(_is_state, 'A', model)).
+        Args:
+            state (str or Enum): name of the checked state or Enum
+            model: model to be checked
+        Returns:
+            bool: Whether the model's current state is state.
+        """
+        return getattr(model, self.model_attribute) == state
+
+    def get_model_state(self, model):
+        """
+            Get the state of a model
+        Args:
+            model (object): the stateful model
+        Returns:
+            State: The State object related to the model's state
+        """
+        return self.get_state(getattr(model, self.model_attribute))
+
+    def set_state(self, state, model=None):
+        """
+            Set the current state.
+        Args:
+            state (str or Enum or State): value of state to be set
+            model (optional[object]): targeted model; if not set, all models will be set to 'state'
+        """
+        if not isinstance(state, State):
+            state = self.get_state(state)
+        models = self.models if model is None else listify(model)
+
+        for mod in models:
+            setattr(mod, self.model_attribute, state.value)
+
+    def add_state(self, states, on_enter=None, on_exit=None, ignore_invalid_triggers=None, **kwargs):
+        """Alias for add_states."""
+        self.add_states(states=states, on_enter=on_enter, on_exit=on_exit,
+                        ignore_invalid_triggers=ignore_invalid_triggers, **kwargs)
+
+    def add_states(self, states, on_enter=None, on_exit=None,
+                   ignore_invalid_triggers=None, **kwargs):
+        """Add new state(s).
+        Args:
+            states (list, str, dict, Enum or State): a list, a State instance, the
+                name of a new state, an enumeration (member) or a dict with keywords to pass on to the
+                State initializer. If a list, each element can be a string, State or enumeration member.
+            on_enter (str or list): callbacks to trigger when the state is
+                entered. Only valid if first argument is string.
+            on_exit (str or list): callbacks to trigger when the state is
+                exited. Only valid if first argument is string.
+            ignore_invalid_triggers: when True, any calls to trigger methods
+                that are not valid for the present state (e.g., calling an
+                a_to_b() trigger when the current state is c) will be silently
+                ignored rather than raising an invalid transition exception.
+                Note that this argument takes precedence over the same
+                argument defined at the Machine level, and is in turn
+                overridden by any ignore_invalid_triggers explicitly
+                passed in an individual state's initialization arguments.
+
+            **kwargs additional keyword arguments used by state mixins.
+        """
+
+        ignore = ignore_invalid_triggers
+        if ignore is None:
+            ignore = self.ignore_invalid_triggers
+
+        states = listify(states)
+
+        for state in states:
+            if isinstance(state, (string_types, Enum)):
+                state = self._create_state(
+                    state, on_enter=on_enter, on_exit=on_exit,
+                    ignore_invalid_triggers=ignore, **kwargs)
+            elif isinstance(state, dict):
+                if 'ignore_invalid_triggers' not in state:
+                    state['ignore_invalid_triggers'] = ignore
+                state = self._create_state(**state)
+            self.states[state.name] = state
+            for model in self.models:
+                self._add_model_to_state(state, model)
+            if self.auto_transitions:
+                for a_state in self.states.keys():
+                    # add all states as sources to auto transitions 'to_<state>' with dest <state>
+                    if a_state == state.name:
+                        if self.model_attribute == 'state':
+                            method_name = 'to_%s' % a_state
+                        else:
+                            method_name = 'to_%s_%s' % (self.model_attribute, a_state)
+                        self.add_transition(method_name, self.wildcard_all, a_state)
+
+                    # add auto transition with source <state> to <a_state>
+                    else:
+                        if self.model_attribute == 'state':
+                            method_name = 'to_%s' % a_state
+                        else:
+                            method_name = 'to_%s_%s' % (self.model_attribute, a_state)
+                        self.add_transition(method_name, state.name, a_state)
+
+    def _add_model_to_state(self, state, model):
+        # Add convenience function 'is_<state_name>' (e.g. 'is_A') to the model.
+        # When model_attribute has been customized, add 'is_<model_attribute>_<state_name>' instead
+        # to potentially support multiple states on one model (e.g. 'is_custom_state_A' and 'is_my_state_B').
+
+        func = partial(self.is_state, state.value, model)
+        if self.model_attribute == 'state':
+            method_name = 'is_%s' % state.name
+        else:
+            method_name = 'is_%s_%s' % (self.model_attribute, state.name)
+        self._checked_assignment(model, method_name, func)
+
+        # Add dynamic method callbacks (enter/exit) if there are existing bound methods in the model
+        # except if they are already mentioned in 'on_enter/exit' of the defined state
+        for callback in self.state_cls.dynamic_methods:
+            method = "{0}_{1}".format(callback, state.name)
+            if hasattr(model, method) and inspect.ismethod(getattr(model, method)) and \
+                    method not in getattr(state, callback):
+                state.add_callback(callback[3:], method)
+
+    def _checked_assignment(self, model, name, func):
+        bound_func = getattr(model, name, None)
+        if (bound_func is None) ^ self.model_override:
+            setattr(model, name, func)
+        else:
+            _LOGGER.warning("%sSkip binding of '%s' to model due to model override policy.", self.name, name)
+
+    def _can_trigger(self, model, trigger, *args, **kwargs):
+        state = self.get_model_state(model)
+        event_data = EventData(state, Event(name=trigger, machine=self), self, model, args, kwargs)
+
+        for trigger_name in self.get_triggers(state):
+            if trigger_name != trigger:
+                continue
+            for transition in self.events[trigger_name].transitions[state.name]:
+                try:
+                    _ = self.get_state(transition.dest) if transition.dest is not None else transition.source
+                except ValueError:
+                    continue
+
+                event_data.transition = transition
+                try:
+                    self.callbacks(self.prepare_event, event_data)
+                    self.callbacks(transition.prepare, event_data)
+                    if all(c.check(event_data) for c in transition.conditions):
+                        return True
+                except BaseException as err:
+                    event_data.error = err
+                    if self.on_exception:
+                        self.callbacks(self.on_exception, event_data)
+                    else:
+                        raise
+        return False
+
+    def _add_may_transition_func_for_trigger(self, trigger, model):
+        self._checked_assignment(model, "may_%s" % trigger, partial(self._can_trigger, model, trigger))
+
+    def _add_trigger_to_model(self, trigger, model):
+        self._checked_assignment(model, trigger, partial(self.events[trigger].trigger, model))
+        self._add_may_transition_func_for_trigger(trigger, model)
+
+    def _get_trigger(self, model, trigger_name, *args, **kwargs):
+        """Convenience function added to the model to trigger events by name.
+        Args:
+            model (object): Model with assigned event trigger.
+            trigger_name (str): Name of the trigger to be called.
+            *args: Variable length argument list which is passed to the triggered event.
+            **kwargs: Arbitrary keyword arguments which is passed to the triggered event.
+        Returns:
+            bool: True if a transitions has been conducted or the trigger event has been queued.
+        """
+        try:
+            event = self.events[trigger_name]
+        except KeyError:
+            state = self.get_model_state(model)
+            ignore = state.ignore_invalid_triggers if state.ignore_invalid_triggers is not None \
+                else self.ignore_invalid_triggers
+            if not ignore:
+                raise AttributeError("Do not know event named '%s'." % trigger_name)
+            return False
+        return event.trigger(model, *args, **kwargs)
+
+    def get_triggers(self, *args):
+        """Collects all triggers FROM certain states.
+        Args:
+            *args: Tuple of source states.
+
+        Returns:
+            list of transition/trigger names.
+        """
+        names = {state.name if hasattr(state, 'name') else state for state in args}
+        return [t for (t, ev) in self.events.items() if any(name in ev.transitions for name in names)]
+
+    def add_transition(self, trigger, source, dest, conditions=None,
+                       unless=None, before=None, after=None, prepare=None, **kwargs):
+        """Create a new Transition instance and add it to the internal list.
+        Args:
+            trigger (str): The name of the method that will trigger the
+                transition. This will be attached to the currently specified
+                model (e.g., passing trigger='advance' will create a new
+                advance() method in the model that triggers the transition.)
+            source(str, Enum or list): The name of the source state--i.e., the state we
+                are transitioning away from. This can be a single state, a
+                list of states or an asterisk for all states.
+            dest (str or Enum): The name of the destination State--i.e., the state
+                we are transitioning into. This can be a single state or an
+                equal sign to specify that the transition should be reflexive
+                so that the destination will be the same as the source for
+                every given source. If dest is None, this transition will be
+                an internal transition (exit/enter callbacks won't be processed).
+            conditions (str or list): Condition(s) that must pass in order
+                for the transition to take place. Either a list providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (str or list): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (str or list): Callables to call before the transition.
+            after (str or list): Callables to call after the transition.
+            prepare (str or list): Callables to call when the trigger is activated
+            **kwargs: Additional arguments which can be passed to the created transition.
+                This is useful if you plan to extend Machine.Transition and require more parameters.
+        """
+        if trigger == self.model_attribute:
+            raise ValueError("Trigger name cannot be same as model attribute name.")
+        if trigger not in self.events:
+            self.events[trigger] = self._create_event(trigger, self)
+            for model in self.models:
+                self._add_trigger_to_model(trigger, model)
+
+        if source == self.wildcard_all:
+            source = list(self.states.keys())
+        else:
+            # states are checked lazily which means we will only raise exceptions when the passed state
+            # is a State object because of potential confusion (see issue #155 for more details)
+            source = [s.name if isinstance(s, State) and self._has_state(s, raise_error=True) or hasattr(s, 'name') else
+                      s for s in listify(source)]
+
+        for state in source:
+            if dest == self.wildcard_same:
+                _dest = state
+            elif dest is not None:
+                if isinstance(dest, State):
+                    _ = self._has_state(dest, raise_error=True)
+                _dest = dest.name if hasattr(dest, 'name') else dest
+            else:
+                _dest = None
+            _trans = self._create_transition(state, _dest, conditions, unless, before,
+                                             after, prepare, **kwargs)
+            self.events[trigger].add_transition(_trans)
+
+    def add_transitions(self, transitions):
+        """Add several transitions.
+
+        Args:
+            transitions (list): A list of transitions.
+
+        """
+        for trans in listify(transitions):
+            if isinstance(trans, list):
+                self.add_transition(*trans)
+            else:
+                self.add_transition(**trans)
+
+    def add_ordered_transitions(self, states=None, trigger='next_state',
+                                loop=True, loop_includes_initial=True,
+                                conditions=None, unless=None, before=None,
+                                after=None, prepare=None, **kwargs):
+        """Add a set of transitions that move linearly from state to state.
+        Args:
+            states (list): A list of state names defining the order of the
+                transitions. E.g., ['A', 'B', 'C'] will generate transitions
+                for A --> B, B --> C, and C --> A (if loop is True). If states
+                is None, all states in the current instance will be used.
+            trigger (str): The name of the trigger method that advances to
+                the next state in the sequence.
+            loop (boolean): Whether to add a transition from the last
+                state to the first state.
+            loop_includes_initial (boolean): If no initial state was defined in
+                the machine, setting this to True will cause the _initial state
+                placeholder to be included in the added transitions. This argument
+                has no effect if the states argument is passed without the
+                initial state included.
+            conditions (str or list): Condition(s) that must pass in order
+                for the transition to take place. Either a list providing the
+                name of a callable, or a list of callables. For the transition
+                to occur, ALL callables must return True.
+            unless (str or list): Condition(s) that must return False in order
+                for the transition to occur. Behaves just like conditions arg
+                otherwise.
+            before (str or list): Callables to call before the transition.
+            after (str or list): Callables to call after the transition.
+            prepare (str or list): Callables to call when the trigger is activated
+            **kwargs: Additional arguments which can be passed to the created transition.
+                This is useful if you plan to extend Machine.Transition and require more parameters.
+        """
+        if states is None:
+            states = list(self.states.keys())  # need to listify for Python3
+        len_transitions = len(states)
+        if len_transitions < 2:
+            raise ValueError("Can't create ordered transitions on a Machine "
+                             "with fewer than 2 states.")
+        if not loop:
+            len_transitions -= 1
+        # ensure all args are the proper length
+        conditions = _prep_ordered_arg(len_transitions, conditions)
+        unless = _prep_ordered_arg(len_transitions, unless)
+        before = _prep_ordered_arg(len_transitions, before)
+        after = _prep_ordered_arg(len_transitions, after)
+        prepare = _prep_ordered_arg(len_transitions, prepare)
+        # reorder list so that the initial state is actually the first one
+        try:
+            idx = states.index(self._initial)
+            states = states[idx:] + states[:idx]
+            first_in_loop = states[0 if loop_includes_initial else 1]
+        except ValueError:
+            # since initial is not part of states it shouldn't be part of the loop either
+            first_in_loop = states[0]
+
+        for i in range(0, len(states) - 1):
+            self.add_transition(trigger, states[i], states[i + 1],
+                                conditions=conditions[i],
+                                unless=unless[i],
+                                before=before[i],
+                                after=after[i],
+                                prepare=prepare[i],
+                                **kwargs)
+        if loop:
+            self.add_transition(trigger, states[-1],
+                                # omit initial if not loop_includes_initial
+                                first_in_loop,
+                                conditions=conditions[-1],
+                                unless=unless[-1],
+                                before=before[-1],
+                                after=after[-1],
+                                prepare=prepare[-1],
+                                **kwargs)
+
+    def get_transitions(self, trigger="", source="*", dest="*"):
+        """Return the transitions from the Machine.
+        Args:
+            trigger (str): Trigger name of the transition.
+            source (str, Enum or State): Limits list to transitions from a certain state.
+            dest (str, Enum or State): Limits list to transitions to a certain state.
+        """
+        if trigger:
+            try:
+                events = (self.events[trigger], )
+            except KeyError:
+                return []
+        else:
+            events = self.events.values()
+        transitions = []
+        for event in events:
+            transitions.extend(
+                itertools.chain.from_iterable(event.transitions.values()))
+        target_source = source.name if hasattr(source, 'name') else source if source != "*" else ""
+        target_dest = dest.name if hasattr(dest, 'name') else dest if dest != "*" else ""
+        return [transition
+                for transition in transitions
+                if (transition.source, transition.dest) == (target_source or transition.source,
+                                                            target_dest or transition.dest)]
+
+    def remove_transition(self, trigger, source="*", dest="*"):
+        """Removes a transition from the Machine and all models.
+        Args:
+            trigger (str): Trigger name of the transition.
+            source (str, Enum or State): Limits removal to transitions from a certain state.
+            dest (str, Enum or State): Limits removal to transitions to a certain state.
+        """
+        source = listify(source) if source != "*" else source
+        dest = listify(dest) if dest != "*" else dest
+        # outer comprehension, keeps events if inner comprehension returns lists with length > 0
+        tmp = {key: value for key, value in
+               {k: [t for t in v
+                    # keep entries if source should not be filtered; same for dest.
+                    if (source != "*" and t.source not in source) or (dest != "*" and t.dest not in dest)]
+                   # }.items() takes the result of the inner comprehension and uses it
+                   # for the outer comprehension (see first line of comment)
+                for k, v in self.events[trigger].transitions.items()}.items()
+               if len(value) > 0}
+        # convert dict back to defaultdict in case tmp is not empty
+        if tmp:
+            self.events[trigger].transitions = defaultdict(list, **tmp)
+        # if no transition is left remove the trigger from the machine and all models
+        else:
+            for model in self.models:
+                delattr(model, trigger)
+            del self.events[trigger]
+
+    def dispatch(self, trigger, *args, **kwargs):
+        """Trigger an event on all models assigned to the machine.
+        Args:
+            trigger (str): Event name
+            *args (list): List of arguments passed to the event trigger
+            **kwargs (dict): Dictionary of keyword arguments passed to the event trigger
+        Returns:
+            bool The truth value of all triggers combined with AND
+        """
+        res = [getattr(model, trigger)(*args, **kwargs) for model in self.models]
+        return all(res)
+
+    def callbacks(self, funcs, event_data):
+        """Triggers a list of callbacks"""
+        for func in funcs:
+            self.callback(func, event_data)
+            _LOGGER.info("%sExecuted callback '%s'", self.name, func)
+
+    def callback(self, func, event_data):
+        """Trigger a callback function with passed event_data parameters. In case func is a string,
+            the callable will be resolved from the passed model in event_data. This function is not intended to
+            be called directly but through state and transition callback definitions.
+        Args:
+            func (str or callable): The callback function.
+                1. First, if the func is callable, just call it
+                2. Second, we try to import string assuming it is a path to a func
+                3. Fallback to a model attribute
+            event_data (EventData): An EventData instance to pass to the
+                callback (if event sending is enabled) or to extract arguments
+                from (if event sending is disabled).
+        """
+
+        func = self.resolve_callable(func, event_data)
+        if self.send_event:
+            func(event_data)
+        else:
+            func(*event_data.args, **event_data.kwargs)
+
+    @staticmethod
+    def resolve_callable(func, event_data):
+        """Converts a model's property name, method name or a path to a callable into a callable.
+            If func is not a string it will be returned unaltered.
+        Args:
+            func (str or callable): Property name, method name or a path to a callable
+            event_data (EventData): Currently processed event
+        Returns:
+            callable function resolved from string or func
+        """
+        if isinstance(func, string_types):
+            try:
+                func = getattr(event_data.model, func)
+                if not callable(func):  # if a property or some other not callable attribute was passed
+                    def func_wrapper(*_, **__):  # properties cannot process parameters
+                        return func
+                    return func_wrapper
+            except AttributeError:
+                try:
+                    module_name, func_name = func.rsplit('.', 1)
+                    module = __import__(module_name)
+                    for submodule_name in module_name.split('.')[1:]:
+                        module = getattr(module, submodule_name)
+                    func = getattr(module, func_name)
+                except (ImportError, AttributeError, ValueError):
+                    raise AttributeError("Callable with name '%s' could neither be retrieved from the passed "
+                                         "model nor imported from a module." % func)
+        return func
+
+    def _has_state(self, state, raise_error=False):
+        found = state in self.states.values()
+        if not found and raise_error:
+            msg = 'State %s has not been added to the machine' % (state.name if hasattr(state, 'name') else state)
+            raise ValueError(msg)
+        return found
+
+    def _process(self, trigger):
+
+        # default processing
+        if not self.has_queue:
+            if not self._transition_queue:
+                # if trigger raises an Error, it has to be handled by the Machine.process caller
+                return trigger()
+            raise MachineError("Attempt to process events synchronously while transition queue is not empty!")
+
+        # process queued events
+        self._transition_queue.append(trigger)
+        # another entry in the queue implies a running transition; skip immediate execution
+        if len(self._transition_queue) > 1:
+            return True
+
+        # execute as long as transition queue is not empty
+        while self._transition_queue:
+            try:
+                self._transition_queue[0]()
+                self._transition_queue.popleft()
+            except BaseException:
+                # if a transition raises an exception, clear queue and delegate exception handling
+                self._transition_queue.clear()
+                raise
+        return True
+
+    def _identify_callback(self, name):
+        # Does the prefix match a known callback?
+        for callback in itertools.chain(self.state_cls.dynamic_methods, self.transition_cls.dynamic_methods):
+            if name.startswith(callback):
+                callback_type = callback
+                break
+        else:
+            return None, None
+
+        # Extract the target by cutting the string after the type and separator
+        target = name[len(callback_type) + len(self.separator):]
+
+        # Make sure there is actually a target to avoid index error and enforce _ as a separator
+        if target == '' or name[len(callback_type)] != self.separator:
+            return None, None
+
+        return callback_type, target
+
+    def __getattr__(self, name):
+        # Machine.__dict__ does not contain double underscore variables.
+        # Class variables will be mangled.
+        if name.startswith('__'):
+            raise AttributeError("'{}' does not exist on <Machine@{}>"
+                                 .format(name, id(self)))
+
+        # Could be a callback
+        callback_type, target = self._identify_callback(name)
+
+        if callback_type is not None:
+            if callback_type in self.transition_cls.dynamic_methods:
+                if target not in self.events:
+                    raise AttributeError("event '{}' is not registered on <Machine@{}>"
+                                         .format(target, id(self)))
+                return partial(self.events[target].add_callback, callback_type)
+
+            if callback_type in self.state_cls.dynamic_methods:
+                state = self.get_state(target)
+                return partial(state.add_callback, callback_type[3:])
+
+        try:
+            return self.__getattribute__(name)
+        except AttributeError:
+            # Nothing matched
+            raise AttributeError("'{}' does not exist on <Machine@{}>".format(name, id(self)))
+
+
+class MachineError(Exception):
+    """MachineError is used for issues related to state transitions and current states.
+    For instance, it is raised for invalid transitions or machine configuration issues.
+    """
+
+    def __init__(self, value):
+        super(MachineError, self).__init__(value)
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+
+
+# ==== vendored transitions.version ====
+# Contains the current version of transition which is used in setup.py and can also be used
+#     to determine transitions' version during runtime.
+
+__version__ = '0.9.3'
 
 
 # ==== common/errors.py ====
@@ -80,7 +2427,7 @@ class Claimed(AtmFailure):
 
 # ==== common/vocabularies.py ====
 # The status kinds and the default vocabularies, generated from common/schema/vocabularies.json by
-# atm-cli/build.py: don't edit it, change that file and run `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+# atm-cli/build.py: don't edit it, change that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 
 KINDS = ('todo', 'active', 'review', 'blocked', 'done', 'skipped')
 DEFAULT_STATUSES = [
@@ -172,7 +2519,14 @@ DEFAULT_PRIORITY = "P2"
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
+# Built, this is plugin/scripts/atm.py and the plugin is its parent folder. Run from source (atm2, atm-lib's unit
+# tests), this is atm-cli/atm/common/core.py, and the plugin is plugin/ in the same checkout.
+_SOURCE = os.path.basename(SCRIPT_DIR) == "common" and os.path.basename(os.path.dirname(SCRIPT_DIR)) == "atm"
+PLUGIN_ROOT = (
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))), "plugin")
+    if _SOURCE
+    else os.path.dirname(SCRIPT_DIR)
+)
 TASK_DIR = ".agentic-task-manager"
 TASKS_FILE = "tasks.json"
 DASHBOARD_FILE = "tasks-dashboard.html"
@@ -318,6 +2672,17 @@ def pid_alive(pid):
     return not is_zombie(pid)
 
 
+def process_started(pid):
+    """When process `pid` started, as `ps` says it (macOS and Linux), or None when there is no such process: with its
+    pid, it tells a process from a later one that got the same pid. `ps` is the one command run, with a number."""
+    try:
+        result = subprocess.run(["ps", "-o", "lstart=", "-p", str(int(pid))], capture_output=True, text=True)
+    except OSError:
+        return None
+    started = result.stdout.strip()
+    return started if result.returncode == 0 and started else None
+
+
 WHOAMI = "/__atm/whoami"
 
 
@@ -393,30 +2758,13 @@ def server_command(home, port):
 # The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
-# command: (kinds a task may be in, kind it moves to)
-STATUS_CHANGES = {
-    # From review only once the review asked for rework or approved it (SR-3.9)
-    "start": (("todo", "review"), "active"),
-    "review": (("active",), "review"),
-    "done": (("active", "review"), "done"),
-    "fail": (("active",), "todo"),
-    "release": (("active",), "todo"),
-    "reject": (("review",), "todo"),
-    # The review's outcome; the task stays in review until an agent takes it back (SR-6.1)
-    "approve": (("review",), "review"),
-    "request-changes": (("review",), "review"),
-    "block": (("todo", "active"), "blocked"),
-    "unblock": (("blocked",), "todo"),
-    # Undo a done (or skipped) by mistake, or work that turns out unfinished; the reason is kept as a note
-    "reopen": (("done", "skipped"), "todo"),
-    # A task that turns out not to be needed; reopen undoes it
-    "skip": (("todo", "blocked"), "skipped"),
-}
 WAITING_ON = ("user", "agent")
 # Review states that make a task in review work for an agent again (SR-3.9)
 REWORK_STATES = ("changes_requested", "approved")
+# A review's decisions (T-438): each leaves the task in review, with its review_state, and opens one way out of it
+REVIEW_DECISIONS = {"approve": "approved", "request-changes": "changes_requested", "reject": "rejected"}
 # How a finished task ended (SR-2.8): stored only when it isn't the default, `done` for a done task and `wont_do` for
-# a skipped one
+# a skipped one. A done task is done; a task that ends without its work done is skipped (T-438), with a reason
 RESOLUTIONS = ("done", "wont_do", "duplicate", "obsolete")
 SKIP_RESOLUTIONS = ("wont_do", "obsolete", "duplicate")
 
@@ -609,7 +2957,7 @@ def find_release(vocab, release_id):
 def known_release(vocab, release_id):
     """`release_id`, when meta.releases has it; else an AtmError naming the releases."""
     if find_release(vocab, release_id) is None:
-        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+        known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm release add <R>"
         raise AtmError(f"no release {release_id!r}; the releases: {known}", 2)
     return release_id
 
@@ -749,7 +3097,7 @@ def open_in_closed_sprints(vocab, tasks):
 def move_out_hint(task_id, sprint):
     """The end of a sentence on a task open in a closed sprint (T-330), with what to do: a suggestion, atm moves
     nothing on its own."""
-    return f"the closed sprint {sprint!r}, where the loop won't take it: atm move {task_id} --to backlog (or --to active)"
+    return f"the closed sprint {sprint!r}, where the loop won't take it: atm sprint move {task_id} --to backlog (or --to active)"
 
 
 def priority_rank(vocab, priority):
@@ -849,7 +3197,7 @@ def archive_hint_for(data, size):
         "finished": finished,
         "archivable": movable,
         "auto": settings["auto"],  # false: the skills only relay the hint (S-3.5)
-        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm archive` would move "
+        "text": f"tasks.json is {format_size(size)} with {finished} finished tasks; `atm db archive` would move "
         f"{movable} of them to tasks-archive.json.",
     }
 
@@ -883,7 +3231,7 @@ def find_task(data, task_id, archived=None):
     for task in data["tasks"]:
         if task.get("id") == task_id:
             return task
-    hint = " (it is archived: atm unarchive brings it back)" if archived and archived(task_id) else ""
+    hint = " (it is archived: atm db unarchive brings it back)" if archived and archived(task_id) else ""
     raise AtmError(f"no task {task_id}{hint}")
 
 
@@ -983,156 +3331,6 @@ def answer_note(questions, answers):
     return "; ".join(pairs)
 
 
-def change_status(
-    task,
-    data,
-    command,
-    reason=None,
-    agent=None,
-    status=None,
-    note=None,
-    commit=None,
-    waiting_on=None,
-    questions=(),
-    answers=(),
-    resolution=None,
-    duplicate_of=None,
-    *,
-    archived,
-):
-    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
-    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
-    picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
-    `done` as completed_by (both kept when it is done, so the dashboard can show who did what); `note` and `reason`
-    become notes, `commit` the task's commit. `block` records who it waits on and the open questions; `unblock`
-    turns them, with the answers, into an answer note. `done` and `skip` record a `resolution` (SR-2.8), `skip` also
-    `duplicate_of` (the caller checks that task exists, in either file)."""
-    vocab = vocabulary(data)
-    if command in ("done", "skip"):
-        resolution = resolution or ("done" if command == "done" else "wont_do")
-        allowed_resolutions = RESOLUTIONS if command == "done" else SKIP_RESOLUTIONS
-        if resolution not in allowed_resolutions:
-            raise AtmError(f"--resolution must be one of {', '.join(allowed_resolutions)}", 2)
-        if duplicate_of is not None and resolution != "duplicate":
-            raise AtmError("--duplicate-of goes with --resolution duplicate", 2)
-        if duplicate_of == task["id"]:
-            raise AtmError(f"{task['id']} can't be a duplicate of itself", 2)
-    allowed, new_kind = STATUS_CHANGES[command]
-    current = task.get("status")
-    if kind_of(vocab, current) not in allowed:
-        expected = [s for kind in allowed for s in statuses_of(vocab, kind)]
-        raise AtmError(f"can't {command} {task['id']}: it is {current}, not {' or '.join(expected)}")
-    if command == "done":
-        check_review_mode(task, data, agent)
-    if command == "start" and kind_of(vocab, current) == "review" and task.get("review_state") not in REWORK_STATES:
-        raise AtmError(f"can't start {task['id']}: it waits for its review (atm approve or request-changes decides it)")
-    new = status_for(vocab, new_kind, status)
-    if command in ("approve", "request-changes") and status is None:
-        new = current  # it stays in its review status (a project may have several)
-    if command == "start":
-        blocking = unfinished_dependencies(data, task, archived)
-        if blocking:
-            raise AtmError(f"can't start {task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking))
-    if note is not None:
-        check_note(note)
-    if reason is not None:
-        check_note(reason)
-    for question in questions:
-        check_note(question)
-    if command == "block":
-        if waiting_on not in WAITING_ON:
-            raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
-        if not questions and not reason:
-            raise AtmError("say what it waits for: --question (repeatable) or --reason", 2)
-    for answer in answers:
-        check_note(answer)
-    asked = list(task.get("questions") or [])
-    # Each question was checked when the task was blocked, each answer just now: together they may be longer than one
-    # note, and must still be recordable, or the task could never be unblocked
-    answered = answer_note(asked, list(answers)) if command == "unblock" and (asked or answers) else None
-    stamp = now_iso()
-    # A block's or a review's start goes when the task moves on: keep each interval, so waiting time can be measured
-    old_kind = kind_of(vocab, current)
-    if old_kind == "blocked" and task.get("blocked_at"):
-        add_interval(task, "blocks", task["blocked_at"], stamp, on=task.get("waiting_on"))
-    elif old_kind == "review" and new_kind != "review" and task.get("review_requested_at"):
-        # The round ends when the reviewer decided, with its outcome (SR-3.9)
-        outcome = task.get("review_state") if task.get("review_state") in REWORK_STATES else None
-        add_interval(task, "reviews", task["review_requested_at"], task.get("reviewed_at") or stamp, outcome=outcome)
-    if new_kind != "review":
-        task.pop("review_state", None)
-        task.pop("reviewed_at", None)
-    if new_kind == "todo":
-        # Reopening, rejecting or failing a task undoes its work; releasing or unblocking it doesn't
-        back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "reject", "fail"))
-        if answered:
-            add_note(task, "answer", answered, agent, stamp, checked=False)
-        if command == "fail":
-            add_note(task, "failure", reason or "verification failed", agent, stamp)
-        elif command == "reject":
-            add_note(task, "rejection", reason, agent, stamp)
-        elif command == "reopen":
-            add_note(task, "note", f"Reopened: {reason}", agent, stamp)
-        elif note:
-            add_note(task, "handoff", note, agent, stamp)
-        return current
-    task["status"] = new
-    touch(task, agent, stamp)
-    if command == "block":
-        # Who started it stays visible while it waits; unblock returns it to to-do and clears the attempt
-        task["waiting_on"] = waiting_on
-        task["questions"] = list(questions)
-        task["blocked_at"] = stamp
-        if reason:
-            add_note(task, "note", reason, agent, stamp)
-    elif command == "review":
-        # The work ends here: the review isn't agent work (DM-4.1); done keeps this timestamp
-        task["review_requested_at"] = stamp
-        task["review_state"] = "waiting"
-        if note:
-            add_note(task, "review", note, agent, stamp)
-    elif command in ("approve", "request-changes"):
-        # The task stays in review until an agent takes it back (`atm next` offers it first, SR-3.9)
-        task["review_state"] = "approved" if command == "approve" else "changes_requested"
-        task["reviewed_at"] = stamp
-        if command == "request-changes":
-            add_note(task, "rejection", reason, agent, stamp)
-        else:
-            add_note(task, "note", f"Approved: {note}" if note else "Approved", agent, stamp)
-    elif command == "skip":
-        for field in ("waiting_on", "questions", "blocked_at"):
-            task.pop(field, None)
-        task["skipped_at"] = stamp
-        if resolution != "wont_do":
-            task["resolution"] = resolution  # none means the default, won't do
-        if duplicate_of:
-            task["duplicate_of"] = duplicate_of
-        add_note(task, "note", f"Skipped: {reason}", agent, stamp)
-    elif command == "start":
-        task["started_at"] = stamp
-        task.pop("review_requested_at", None)  # taken back from review: a new round of work
-        task.pop("completed_at", None)
-        task.pop("completed_by", None)
-        task.pop("agent", None)  # the old name of started_by
-        if agent:
-            task["started_by"] = agent
-    elif command == "done":
-        task["completed_at"] = stamp
-        if resolution != "done":
-            task["resolution"] = resolution  # none means the default, done
-        if agent:
-            task["completed_by"] = agent
-        if commit:
-            task["commit"] = commit
-        # A batch task an agent finishes waits for the end-of-sprint review (SR-4.4): its note is what to check
-        batch = old_kind == "active" and is_agent(agent) and effective_review(vocab, task) == "batch"
-        if batch:
-            task["sprint_review"] = "pending"
-        if note:
-            add_note(task, "review" if batch else "outcome", note, agent, stamp)
-    return current
-
-
 def is_agent(actor):
     """Whether an actor is an agent (a Claude Code session, "claude:…"); anyone else is a person."""
     return isinstance(actor, str) and actor.startswith("claude:")
@@ -1145,7 +3343,7 @@ def check_review_mode(task, data, agent):
     mode = effective_review(vocab, task)
     if mode in ("blocker", "async") and is_agent(agent) and kind_of(vocab, task.get("status")) == "active":
         raise AtmError(
-            f"{task['id']} is reviewed ({mode}): ask for it with atm review {task['id']} --note '<what to check>'", 2
+            f"{task['id']} is reviewed ({mode}): ask for it with atm task state {task['id']} in_review --note '<what to check>'", 2
         )
 
 
@@ -1165,7 +3363,7 @@ def started_by(task):
 
 # ==== common/types.py ====
 # Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
-# `npm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
+# `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 # no typing.Required).
 
 StatusEntry = TypedDict(
@@ -1498,7 +3696,7 @@ Task = TypedDict(
         "components": List[str],
         # How it is reviewed: blocker, async, batch or none
         "review": str,
-        # In the review kind: waiting, changes_requested or approved (SR-6.1)
+        # In the review kind: waiting, changes_requested, approved or rejected (SR-6.1, T-438)
         "review_state": str,
         # ISO 8601 UTC; when the review was decided
         "reviewed_at": str,
@@ -2640,15 +4838,15 @@ def load_tasks(paths):
         # Every command looks tasks up by ID and follows dependencies: a malformed task stops them all with a clear
         # message instead of a traceback halfway through (docs/security-review.md F12). atm check lists them all.
         if not isinstance(task, dict) or not isinstance(task.get("id"), str):
-            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm check")
+            raise AtmError(f"{paths['tasks']}: task #{i + 1} isn't a task (an object with an \"id\"); run atm doctor")
         if not valid_task_id(task["id"]):
             raise AtmError(
                 f"{paths['tasks']}: the task ID {task['id']!r} has characters atm doesn't allow (letters, digits, '.', "
-                "'_' and '-' only): fix it in the file, then run atm check"
+                "'_' and '-' only): fix it in the file, then run atm doctor"
             )
         deps = task.get("dependencies", [])
         if not isinstance(deps, list) or not all(isinstance(d, str) for d in deps):
-            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm check")
+            raise AtmError(f"{paths['tasks']}: {task['id']}'s dependencies aren't a list of IDs; run atm doctor")
     return data
 
 
@@ -3314,7 +5512,7 @@ def merge_files(base_path, ours_path, theirs_path):
 
 def launcher_command():
     launcher = os.path.join(SCRIPT_DIR, "atm").replace("'", "'\\''")
-    return f"'{launcher}' merge-driver %O %A %B"
+    return f"'{launcher}' db merge-driver %O %A %B"
 
 
 def ensure_merge_driver(paths):
@@ -3968,7 +6166,7 @@ class FileRegistry:
     def remove_project(self, target):
         """Unregister the project with the ID or path `target`. {removed: its entry, damaged}."""
         if not target:
-            raise AtmError("remove needs a project ID or path (see `atm projects`)", 2)
+            raise AtmError("remove needs a project ID or path (see `atm project list`)", 2)
         candidates = {target, os.path.abspath(os.path.expanduser(target))}
         if os.path.isdir(target):
             candidates.add(main_worktree(find_paths(os.path.abspath(target))["root"]))
@@ -3980,7 +6178,7 @@ class FileRegistry:
             if entry or damaged:
                 write_registry(self.home, registry)
         if entry is None:
-            raise AtmError(f"no registered project {target} (see `atm projects`)")
+            raise AtmError(f"no registered project {target} (see `atm project list`)")
         return {"removed": entry, "damaged": damaged}
 
     def prune(self):
@@ -4470,7 +6668,7 @@ class GitVcs:
         picked = []
         for name in files:
             if name in WHOLE_TREE or name.startswith(":"):
-                raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
+                raise Invalid(f"atm vcs commit stages only the files you name; {name!r} would stage the whole tree")
             full = os.path.realpath(os.path.join(cwd or self.root, name))
             relative = os.path.relpath(full, self.root)
             if relative == "." or relative.startswith(".." + os.sep) or relative == "..":
@@ -4652,6 +6850,338 @@ class Project:
         self.actor = actor
 
 
+# ==== lib/state.py ====
+# Task state machine using the transitions library.
+#
+# Declares the task status transitions as data, with their guards (conditions).
+# Replaces the hand-rolled change_status() that was in common/model.py, and
+# refuses and records exactly as it did: the same messages, exit codes, notes
+# and key order in tasks.json (the scenarios in tests/scripts/ check them).
+#
+# The machine state is always a *kind* (todo, active, review, blocked, done,
+# skipped), never a specific status name. The task's `status` field holds the
+# project-specific status name (e.g. `in_progress` for kind `active`), mapped
+# from the kind with status_for().
+#
+# Order of checks (as before): the resolution, then whether the command applies
+# to the task's kind, then the guards, then the notes and the block's arguments.
+# Only then does anything change, in one place (_apply).
+
+class _TaskStateModel:
+    """The machine's model: its `state` is the task's kind, starting from the task's status."""
+
+    def __init__(self, kind):
+        self.state = kind
+
+
+class TaskMachine:
+    """The status commands as transitions between the six kinds, with their guards.
+
+    A guard raises AtmError with the message the CLI prints; transitions passes it through unchanged.
+    """
+
+    states = ["todo", "active", "review", "blocked", "done", "skipped"]
+
+    def __init__(self, task, data, agent, archived, stamp):
+        self.task = task
+        self.data = data
+        self.agent = agent
+        self.archived = archived
+        self.stamp = stamp
+        self.vocab = vocabulary(data)
+        self.current_status = task.get("status")
+        self.current_kind = kind_of(self.vocab, self.current_status) or "todo"
+        self._model = _TaskStateModel(self.current_kind)
+
+        # Every transition checks the command's arguments last, after its own guards, as change_status did
+        args = [self.arguments_valid]
+        transitions = [
+            # From review only once the review asked for rework or approved it (SR-3.9)
+            {
+                "trigger": "start",
+                "source": ["todo", "review"],
+                "dest": "active",
+                "conditions": [self.review_decided, self.dependencies_done, *args],
+            },
+            {"trigger": "review", "source": "active", "dest": "review", "conditions": args},
+            # From review only once it is approved (T-438): nobody, agent or person, passes a review undecided
+            {
+                "trigger": "done",
+                "source": ["active", "review"],
+                "dest": "done",
+                "conditions": [self.review_mode_allows_done, self.review_approved, *args],
+            },
+            {"trigger": "fail", "source": "active", "dest": "todo", "conditions": args},
+            {"trigger": "release", "source": "active", "dest": "todo", "conditions": args},
+            # A review's decisions (SR-6.1, T-438): the task stays in review, and each opens one way out of it
+            {"trigger": "approve", "source": "review", "dest": "review", "conditions": args},
+            {"trigger": "request_changes", "source": "review", "dest": "review", "conditions": args},
+            {"trigger": "reject", "source": "review", "dest": "review", "conditions": args},
+            # A rejected review's way out: back to to do, the work dropped (T-438)
+            {"trigger": "drop", "source": "review", "dest": "todo", "conditions": [self.review_rejected, *args]},
+            {"trigger": "block", "source": ["todo", "active"], "dest": "blocked", "conditions": args},
+            {"trigger": "unblock", "source": "blocked", "dest": "todo", "conditions": args},
+            # Undo a done (or skipped) by mistake, or work that turns out unfinished
+            {"trigger": "reopen", "source": ["done", "skipped"], "dest": "todo", "conditions": args},
+            # A task that turns out not to be needed, from any open state (T-438); from review once it is rejected
+            {
+                "trigger": "skip",
+                "source": ["todo", "blocked", "active", "review"],
+                "dest": "skipped",
+                "conditions": [self.review_rejected, *args],
+            },
+        ]
+
+        self.machine = Machine(
+            model=self._model,
+            states=TaskMachine.states,
+            transitions=transitions,
+            initial=self.current_kind,
+            send_event=True,
+            auto_transitions=False,
+        )
+
+    # ------------------------------------------------------------------
+    # Guards
+    # ------------------------------------------------------------------
+
+    def review_decided(self, event):
+        """start from review: only once the review asked for changes or approved it."""
+        if self.current_kind == "review" and self.task.get("review_state") not in REWORK_STATES:
+            raise AtmError(
+                f"can't start {self.task['id']}: it waits for its review (atm task review approve or request-changes {self.task['id']} decides it)"
+            )
+        return True
+
+    def review_approved(self, event):
+        """done from review: only once the review approved it (T-438)."""
+        if self.current_kind == "review" and self.task.get("review_state") != "approved":
+            raise AtmError(
+                f"can't finish {self.task['id']}: its review isn't approved (atm task review approve {self.task['id']} "
+                "decides it)"
+            )
+        return True
+
+    def review_rejected(self, event):
+        """drop, and skip from review: only once the review rejected it (T-438)."""
+        if self.current_kind == "review" and self.task.get("review_state") != "rejected":
+            way = "send back to to do" if event.event.name == "drop" else "skip"
+            raise AtmError(
+                f"can't {way} {self.task['id']}: its review isn't rejected (atm task review reject {self.task['id']} "
+                "--reason … decides it)"
+            )
+        return True
+
+    def dependencies_done(self, event):
+        """start: every dependency is done (one only in the archive is)."""
+        blocking = unfinished_dependencies(self.data, self.task, self.archived)
+        if blocking:
+            raise AtmError(
+                f"can't start {self.task['id']}: waiting on " + ", ".join(f"{d} ({s})" for d, s in blocking)
+            )
+        return True
+
+    def review_mode_allows_done(self, event):
+        """done: an agent finishing a `blocker` or `async` task asks for the review instead (SR-3.8)."""
+        check_review_mode(self.task, self.data, self.agent)
+        return True
+
+    def arguments_valid(self, event):
+        """Every command: notes, reasons, questions and answers fit in a note; block says what it waits for."""
+        kwargs = event.kwargs
+        note, reason = kwargs.get("note"), kwargs.get("reason")
+        if note is not None:
+            check_note(note)
+        if reason is not None:
+            check_note(reason)
+        for question in kwargs.get("questions") or ():
+            check_note(question)
+        if event.event.name in ("reject", "request_changes") and not reason:
+            raise AtmError("a review that isn't approved says why: --reason", 2)
+        if event.event.name == "block":
+            if kwargs.get("waiting_on") not in WAITING_ON:
+                raise AtmError(f"--on must be {' or '.join(WAITING_ON)}", 2)
+            if not kwargs.get("questions") and not reason:
+                raise AtmError("say what it waits for: --question (repeatable) or --reason", 2)
+        for answer in kwargs.get("answers") or ():
+            check_note(answer)
+        return True
+
+    # ------------------------------------------------------------------
+    # Public entry point
+    # ------------------------------------------------------------------
+
+    def transition(self, command, **kwargs):
+        """Run `command` on the task. Returns its status before the command; raises AtmError if it isn't allowed."""
+        trigger = command.replace("-", "_")
+        if command == "skip":
+            kwargs["resolution"] = self._check_resolution(command, kwargs)
+        if not self.machine.get_transitions(trigger, source=self.current_kind):
+            allowed = sorted(
+                {t.source for t in self.machine.get_transitions(trigger)}, key=TaskMachine.states.index
+            )
+            expected = [s for kind in allowed for s in statuses_of(self.vocab, kind)]
+            raise AtmError(
+                f"can't {command} {self.task['id']}: it is {self.current_status}, not {' or '.join(expected)}"
+            )
+        # The guards raise with their message; one that returns False would leave the task unchanged
+        if not getattr(self._model, trigger)(**kwargs):
+            raise AtmError(f"can't {command} {self.task['id']}")
+        self._apply(command, self._model.state, kwargs)
+        return self.current_status
+
+    def _check_resolution(self, command, kwargs):
+        """skip records a resolution (SR-2.8; a done task is done, T-438), and may name the task it duplicates."""
+        resolution = kwargs.get("resolution") or "wont_do"
+        allowed = SKIP_RESOLUTIONS
+        if resolution not in allowed:
+            raise AtmError(f"--resolution must be one of {', '.join(allowed)}", 2)
+        duplicate_of = kwargs.get("duplicate_of")
+        if duplicate_of is not None and resolution != "duplicate":
+            raise AtmError("--duplicate-of goes with --resolution duplicate", 2)
+        if duplicate_of == self.task["id"]:
+            raise AtmError(f"{self.task['id']} can't be a duplicate of itself", 2)
+        return resolution
+
+    # ------------------------------------------------------------------
+    # Effects, once the transition is allowed
+    # ------------------------------------------------------------------
+
+    def _apply(self, command, new_kind, kwargs):
+        """Record the command on the task, in the order change_status did (it shapes the key order in tasks.json)."""
+        task, vocab, agent, stamp = self.task, self.vocab, self.agent, self.stamp
+        note, reason = kwargs.get("note"), kwargs.get("reason")
+        old_kind = self.current_kind
+
+        # A block's or a review's start goes when the task moves on: keep each interval, so waiting time can be measured
+        if old_kind == "blocked" and task.get("blocked_at"):
+            add_interval(task, "blocks", task["blocked_at"], stamp, on=task.get("waiting_on"))
+        elif old_kind == "review" and new_kind != "review" and task.get("review_requested_at"):
+            # The round ends when the reviewer decided, with its outcome (SR-3.9)
+            decided = task.get("review_state")
+            outcome = decided if decided in REVIEW_DECISIONS.values() else None
+            add_interval(task, "reviews", task["review_requested_at"], task.get("reviewed_at") or stamp, outcome=outcome)
+        if new_kind != "review":
+            task.pop("review_state", None)
+            task.pop("reviewed_at", None)
+
+        if new_kind == "todo":
+            # Reopening, dropping a rejected task or failing one undoes its work; releasing or unblocking it doesn't
+            back_to_todo(task, vocab, agent, stamp, keep_commit=command not in ("reopen", "drop", "fail"))
+            if kwargs.get("answered"):
+                add_note(task, "answer", kwargs["answered"], agent, stamp, checked=False)
+            if command == "fail":
+                add_note(task, "failure", reason or "verification failed", agent, stamp)
+            elif command == "reopen":
+                add_note(task, "note", f"Reopened: {reason}", agent, stamp)
+            elif note:
+                add_note(task, "handoff", note, agent, stamp)
+            return
+
+        if command in REVIEW_DECISIONS and kwargs.get("status") is None:
+            task["status"] = self.current_status  # it stays in its review status (a project may have several)
+        else:
+            task["status"] = status_for(vocab, new_kind, kwargs.get("status"))
+        touch(task, agent, stamp)
+
+        if command == "block":
+            # Who started it stays visible while it waits; unblock returns it to to-do and clears the attempt
+            task["waiting_on"] = kwargs.get("waiting_on")
+            task["questions"] = list(kwargs.get("questions") or ())
+            task["blocked_at"] = stamp
+            if reason:
+                add_note(task, "note", reason, agent, stamp)
+        elif command == "review":
+            # The work ends here: the review isn't agent work (DM-4.1); done keeps this timestamp
+            task["review_requested_at"] = stamp
+            task["review_state"] = "waiting"
+            if note:
+                add_note(task, "review", note, agent, stamp)
+        elif command in REVIEW_DECISIONS:
+            # The task stays in review: approved or with changes asked for, an agent takes it back (`atm loop next`
+            # offers it first, SR-3.9); rejected, it goes back to to do or is skipped (T-438)
+            task["review_state"] = REVIEW_DECISIONS[command]
+            task["reviewed_at"] = stamp
+            if command == "approve":
+                add_note(task, "note", f"Approved: {note}" if note else "Approved", agent, stamp)
+            else:
+                add_note(task, "rejection", reason, agent, stamp)
+        elif command == "skip":
+            for field in ("waiting_on", "questions", "blocked_at"):
+                task.pop(field, None)
+            task["skipped_at"] = stamp
+            if kwargs["resolution"] != "wont_do":
+                task["resolution"] = kwargs["resolution"]  # none means the default, won't do
+            if kwargs.get("duplicate_of"):
+                task["duplicate_of"] = kwargs["duplicate_of"]
+            add_note(task, "note", f"Skipped: {reason}", agent, stamp)
+        elif command == "start":
+            task["started_at"] = stamp
+            task.pop("review_requested_at", None)  # taken back from review: a new round of work
+            task.pop("completed_at", None)
+            task.pop("completed_by", None)
+            task.pop("agent", None)  # the old name of started_by
+            if agent:
+                task["started_by"] = agent
+        elif command == "done":
+            task["completed_at"] = stamp
+            if agent:
+                task["completed_by"] = agent
+            if kwargs.get("commit"):
+                task["commit"] = kwargs["commit"]
+            # A batch task an agent finishes waits for the end-of-sprint review (SR-4.4): its note is what to check
+            batch = old_kind == "active" and is_agent(agent) and effective_review(vocab, task) == "batch"
+            if batch:
+                task["sprint_review"] = "pending"
+            if note:
+                add_note(task, "review" if batch else "outcome", note, agent, stamp)
+
+
+def change_status(
+    task,
+    data,
+    command,
+    reason=None,
+    agent=None,
+    status=None,
+    note=None,
+    commit=None,
+    waiting_on=None,
+    questions=(),
+    answers=(),
+    resolution=None,
+    duplicate_of=None,
+    *,
+    archived,
+):
+    """Apply one status command to `task` (in `data`); raises AtmError if the transition isn't allowed. `archived` is
+    the project's lookup of archived tasks (`start` needs every dependency done; one only in the archive is). `status`
+    picks the new status when its kind has several; `agent` is who runs it. `start` records them as started_by,
+    `done` as completed_by; `note` and `reason` become notes, `commit` the task's commit. `block` records who it
+    waits on and the open questions; `unblock` turns them, with the answers, into an answer note. `approve`,
+    `request-changes` and `reject` decide a review (it stays in review); `done`, `start` and `drop` (back to to do) or
+    `skip` leave it by its decision (T-438). `skip` records a `resolution` (SR-2.8) and `duplicate_of` (the caller
+    checks that task exists)."""
+    # Each question was checked when the task was blocked, each answer when it is given: together they may be longer
+    # than one note, and must still be recordable, or the task could never be unblocked
+    asked = list(task.get("questions") or [])
+    answered = answer_note(asked, list(answers)) if command == "unblock" and (asked or answers) else None
+    machine = TaskMachine(task, data, agent, archived, now_iso())
+    return machine.transition(
+        command,
+        reason=reason,
+        status=status,
+        note=note,
+        commit=commit,
+        waiting_on=waiting_on,
+        questions=questions,
+        answers=answers,
+        resolution=resolution,
+        duplicate_of=duplicate_of,
+        answered=answered,
+    )
+
+
 # ==== lib/loop.py ====
 # atm-lib: the loop's rules (docs/parallel-agents-design.md; docs/sprints-and-releases-design.md §3): leases, who
 # holds a claim, what was decided in another worktree, and which task the loop takes next (`next_task`, the same order
@@ -4748,7 +7278,7 @@ def check_holder(claims, task_id, agent, command):
 
 def own_lease_expired(expired, data, task_id, agent, then):
     """When `agent`'s own claim on `task_id` is among the claims that just expired and the task went back to todo: an
-    error that says so and how to go on (`then`, the command to run after `atm start`). Exit code 4, like a claim
+    error that says so and how to go on (`then`, the command to run after starting it again). Exit code 4, like a claim
     conflict. Another agent's expired claim, or none: None."""
     claim = next((c for c in expired if c.get("task") == task_id and c.get("agent") == agent), None)
     task = next((t for t in data["tasks"] if t.get("id") == task_id), None)
@@ -4759,7 +7289,7 @@ def own_lease_expired(expired, data, task_id, agent, then):
     minutes = lease_minutes(data)
     idle = f"{minutes:g} min"
     kept = " Your commit is kept." if task.get("commit") else ""
-    next_steps = f"Run `atm start {task_id}`" + (f", then `{then}` again." if then else " to claim it again.")
+    next_steps = f"Run `atm task state {task_id} in_progress`" +(f", then `{then}` again." if then else " to claim it again.")
     return AtmError(
         f"{task_id}: your lease expired at {at} (no heartbeat for {idle}), so it went back to todo.{kept} {next_steps}",
         4,
@@ -5702,9 +8232,48 @@ def status_report(project, scope):
 # The commands an agent runs on its own claimed task: if that claim just expired, they explain it instead of refusing
 OWN_LEASE_COMMANDS = ("done", "release", "fail", "review", "block")
 
+# The state `atm task state <id> <state>` names for the commands an agent runs on its own claim, for the hint that
+# says what to run again
+COMMAND_STATES = {"done": "done", "release": "todo", "fail": "todo", "review": "in_review", "block": "blocked"}
+
 # Decisions that may be made in any worktree about a task waiting in another (T-204): the command, and the kinds the
 # waiting task must have there
-REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked",), "done": ("review",), "reject": ("review",)}
+REMOTE_DECISIONS = {"unblock": ("blocked",), "skip": ("blocked", "review"), "done": ("review",), "drop": ("review",)}
+
+# The commands that leave a task waiting (blocked or in review) and record it for every worktree: asking, and a
+# review's decisions, which the record carries (`review_state`), so an exit from review taken in another worktree
+# meets the same guard (T-438)
+WAITING_COMMANDS = ("block", "review", "approve", "request-changes", "reject")
+
+
+def todo_command(project, task_id, failing=False):
+    """The status function `atm task state <id> todo` runs, by the kind the task is in: in progress, a failure
+    (`failing`, it says why) or a release; in review, drop (once rejected); blocked, unblock; done or skipped, reopen. A task that is
+    to do here but claimed (in progress in another worktree, T-202), or blocked or in review in another worktree
+    (T-204), is decided as it is there. Raises Invalid when it is to do already."""
+    view = next((v for v in task_views(project, Filters()) if v["task"].get("id") == task_id), None)
+    if view is None:
+        show_tasks(project, [task_id])  # NotFound when it doesn't exist; otherwise it is archived (finished)
+        kind = "done"
+    else:
+        kind = view["derived"].get("kind")
+    if kind == "todo":
+        store = project.store.read_claims()
+        record = store["waiting"].get(task_id)
+        if task_id in store["claims"]:
+            kind = "active"  # the claim's holder check says whose it is
+        elif isinstance(record, dict) and record.get("worktree") != project.store.working_copy():
+            kind = kind_of(vocabulary({"meta": project.store.get_settings()}), record.get("status"))
+    commands = {
+        "active": "fail" if failing else "release",
+        "review": "drop",
+        "blocked": "unblock",
+        "done": "reopen",
+        "skipped": "reopen",
+    }
+    if kind not in commands:
+        raise Invalid(f"{task_id} is already {kind}")
+    return commands[kind]
 
 
 def claim_record(work, data, task_id, agent):
@@ -5734,6 +8303,7 @@ def waiting_entry(work, task):
         "status": task.get("status"),
         "waiting_on": task.get("waiting_on"),
         "questions": list(task.get("questions") or []),
+        "review_state": task.get("review_state"),
         "worktree": here["worktree"],
         "branch": here["branch"],
         "at": now_iso(),
@@ -5757,6 +8327,8 @@ def adopt_waiting(task, data, store, here, command):
         task["waiting_on"] = record["waiting_on"]
     if record.get("questions"):
         task["questions"] = list(record["questions"])
+    if record.get("review_state"):
+        task["review_state"] = record["review_state"]
     return record.get("worktree")
 
 
@@ -5783,9 +8355,9 @@ def change_task_status(project, command, task_id, **options):
         apply_resolutions(here, data, store, archived)
         task = find_task(data, task_id, archived)
         if command in OWN_LEASE_COMMANDS:
-            own = own_lease_expired(expired, data, task_id, agent, f"atm {command} {task_id}")
+            own = own_lease_expired(expired, data, task_id, agent, f"atm task state {task_id} {COMMAND_STATES[command]}")
             if own:
-                work.defer(own)  # the expiry is written first, so `atm show` agrees with the error
+                work.defer(own)  # the expiry is written first, so `atm task details` agrees with the error
                 return {"task": task, "expired": expired}
         check_holder(claims, task_id, agent, command)
         duplicate_of = options.get("duplicate_of")
@@ -5818,8 +8390,9 @@ def change_task_status(project, command, task_id, **options):
             claims.pop(task_id, None)
         if command == "done":
             store["completed"][task_id] = completion_record(work, task_id, agent)
-        # Blocked or in review: recorded for every worktree (T-204); any other change ends the wait
-        if command in ("block", "review"):
+        # Blocked or in review, with its review's decision: recorded for every worktree (T-204); any other change
+        # ends the wait
+        if command in WAITING_COMMANDS:
             store["waiting"][task_id] = waiting_entry(work, task)
         else:
             store["waiting"].pop(task_id, None)
@@ -5882,24 +8455,31 @@ def review_task(project, task_id, note=None, status=None):
     return change_task_status(project, "review", task_id, note=note, status=status)
 
 
-def done_task(project, task_id, note=None, commit=None, resolution=None, status=None):
-    """Done (or waiting for the sprint review, by its review mode); the claim dropped."""
-    return change_task_status(project, "done", task_id, note=note, commit=commit, resolution=resolution, status=status)
-
-
-def reject_task(project, task_id, reason, status=None):
-    """A task in review back to to do, for anyone."""
-    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+def done_task(project, task_id, note=None, commit=None, status=None):
+    """Done (or waiting for the sprint review, by its review mode); the claim dropped. From review only once it is
+    approved (T-438)."""
+    return change_task_status(project, "done", task_id, note=note, commit=commit, status=status)
 
 
 def approve_task(project, task_id, note=None, status=None):
-    """Approves a review; it stays in review until its agent takes it back."""
+    """A review's decision: approved. It stays in review until its agent takes it back, or finishes it."""
     return change_task_status(project, "approve", task_id, note=note, status=status)
 
 
 def request_changes(project, task_id, reason, status=None):
-    """Asks for changes; its agent gets it back first."""
+    """A review's decision: changes asked for (`reason`). It stays in review; its agent gets it back first."""
     return change_task_status(project, "request-changes", task_id, reason=reason, status=status)
+
+
+def reject_task(project, task_id, reason, status=None):
+    """A review's decision: rejected (`reason`, T-438). It stays in review until it goes back to to do (drop_task) or
+    is skipped."""
+    return change_task_status(project, "reject", task_id, reason=reason, status=status)
+
+
+def drop_task(project, task_id, status=None):
+    """A rejected task in review back to to do, its work dropped, for anyone (T-438)."""
+    return change_task_status(project, "drop", task_id, status=status)
 
 
 def block_task(project, task_id, on, questions, reason=None, status=None):
@@ -5918,7 +8498,8 @@ def reopen_task(project, task_id, reason, status=None):
 
 
 def skip_task(project, task_id, reason, resolution=None, duplicate_of=None, status=None):
-    """Not needed: skipped (a to-do or blocked task)."""
+    """Not needed: skipped, from any open state (T-438: to do, blocked, in progress, or in review once rejected); the
+    claim dropped."""
     return change_task_status(
         project, "skip", task_id, reason=reason, resolution=resolution, duplicate_of=duplicate_of, status=status
     )
@@ -5940,6 +8521,7 @@ STATUS_FUNCTIONS = {
     "review": review_task,
     "done": done_task,
     "reject": reject_task,
+    "drop": drop_task,
     "approve": approve_task,
     "request-changes": request_changes,
     "block": block_task,
@@ -5999,8 +8581,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
 
 def renew_lease(project, task_id, expire=True):
-    """Extend the actor's lease on a task (`atm heartbeat`; `atm run` with `expire` false: it renews a live claim and
-    lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
+    """Extend the actor's lease on a task (`atm claim heartbeat`; `atm claim hold`'s watcher with `expire` false: it
+    renews a live claim and lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
     lease expired) or another agent holds it."""
     agent = project.actor
 
@@ -6136,7 +8718,7 @@ def open_sprint(vocab, name):
     """The ID of the sprint called `name`, which a task can be put in: it must exist and not be closed (SR-2.5)."""
     sprint = find_sprint(vocab, name)
     if sprint is None:
-        known = ", ".join(s["id"] for s in vocab["sprints"] if s["state"] != "closed") or "none yet: atm sprints add"
+        known = ", ".join(s["id"] for s in vocab["sprints"] if s["state"] != "closed") or "none yet: atm sprint add"
         raise AtmError(f"no sprint {name!r}; the open sprints: {known}", 2)
     if sprint["state"] == "closed":
         raise AtmError(f"the sprint {sprint['id']!r} is closed; a task can only go into a planned or active sprint", 2)
@@ -6486,7 +9068,7 @@ def check_data(data, root, files=False, archived=()):
     for task_id in sorted({i for i in ids if ids.count(i) > 1}, key=str):
         errors.append(f"{task_id}: the ID is used by {ids.count(task_id)} tasks")
     for task_id in sorted(set(ids) & archived_ids, key=str):
-        errors.append(f"{task_id}: in both tasks.json and the archive (atm archive keeps the tasks.json copy)")
+        errors.append(f"{task_id}: in both tasks.json and the archive (atm db archive keeps the tasks.json copy)")
     known_ids = set(ids) | archived_ids
     statuses = {s["id"] for s in vocab["statuses"]}
     types = {t["id"] for t in vocab["types"]}
@@ -6647,7 +9229,7 @@ def add_component(project, component_id, label=None, paths=(), review=None, from
     def change(work):
         data = work.document
         if any(c["id"] == component_id for c in vocabulary(data)["components"]):
-            raise Invalid(f"there is already a component {component_id!r} (atm components edit changes it)")
+            raise Invalid(f"there is already a component {component_id!r} (atm component edit changes it)")
         meta = data.setdefault("meta", {})
         component = {"id": component_id}
         # The name shown: the label given, else the label's own text (meta.labels), else none
@@ -6825,7 +9407,7 @@ def stored_sprint(data, name):
     vocab = vocabulary(data)
     found = find_sprint(vocab, name)
     if found is None:
-        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprints add"
+        known = ", ".join(s["id"] for s in vocab["sprints"]) or "none yet: atm sprint add"
         raise NotFound(f"no sprint {name!r}; the sprints: {known}", 2)
     return next(s for s in data["meta"]["sprints"] if s.get("id") == found["id"])
 
@@ -7045,13 +9627,13 @@ def delete_sprint(project, name, move_to=None, force=False):
 
 
 def move_target(vocab, task, to):
-    """The sprint ID (or None, the backlog) `atm move --to` means for `task`."""
+    """The sprint ID (or None, the backlog) `atm sprint move --to` means for `task`."""
     if to == "backlog":
         return None
     if to == "active":
         active = [s["id"] for s in vocab["sprints"] if s["state"] == "active"]
         if not active:
-            raise Invalid("no sprint is active (atm sprints start <name>)")
+            raise Invalid("no sprint is active (atm sprint start <name>)")
         return active[0]
     if to == "next":
         # The first planned sprint after the task's own (for a task in the backlog or a closed sprint: the first
@@ -7063,7 +9645,7 @@ def move_target(vocab, task, to):
         if not following:
             raise Invalid(
                 f"{task['id']}: no planned sprint after {current['id'] if current else 'the active one'}; "
-                'add one with atm sprints add ["<name>"]'
+                'add one with atm sprint add ["<name>"]'
             )
         return following[0]
     return open_sprint(vocab, to)
@@ -7180,7 +9762,7 @@ def release_fields(release, name, target):
 
 
 def unknown_release(vocab, release_id):
-    known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+    known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm release add <R>"
     return NotFound(f"no release {release_id!r}; the releases: {known}", 2)
 
 
@@ -7484,7 +10066,7 @@ def set_workflow(project, workflow_type, base=None, verify=None, max_rounds=None
     """Set the workflow: its type, and what is given of the rest; `trailers` forbid, require (with `trailer` lines) or
     none (removes the rule). Returns the workflow with its defaults."""
     if workflow_type not in WORKFLOW_TYPES:
-        raise Invalid(f"atm workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}")
+        raise Invalid(f"atm project workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}")
     changes = {"type": workflow_type}
     if base is not None:
         changes["base"] = base
@@ -7543,7 +10125,7 @@ def repository_paths(project, files, cwd):
     commit checks them: no directory, no pattern, nothing outside the repository."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     return vcs.paths(files, cwd)
 
 
@@ -7554,7 +10136,7 @@ def folder_changes(project, task_id, folders, cwd):
     agent's unfinished work in the same tree."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     changed = vcs.changes_under(list(folders), cwd)
     claims = project.store.read_claims()["claims"]
     for claim in claims.values():
@@ -7578,9 +10160,9 @@ def commit_task(project, task_id, files, message=None):
     the commit on the task. Returns {task, commit, message, files}."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     if not files:
-        raise Invalid("atm commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
+        raise Invalid("atm vcs commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
     store = project.store
     # The one task, or the error find_task gives (saying when it is archived)
     task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)
@@ -7604,7 +10186,7 @@ def record_commit(project, task_id, rev):
     hint}: `hint` when the commit's message doesn't mention the task."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     if rev.startswith("-"):
         raise Invalid(f"--record takes a revision, not an option: {rev!r}")
     sha = vcs.resolve(rev)
@@ -7691,7 +10273,7 @@ def record_merge(project, pr, at=None):
             t for t in data["tasks"] if isinstance(t, dict) and isinstance(t.get("pr"), dict) and t["pr"].get("number") == pr
         ]
         if not tasks:
-            raise NotFound(f"no task records PR #{pr} (atm pr records it)")
+            raise NotFound(f"no task records PR #{pr} (atm vcs pr records it)")
         stamp = now_iso()
         changed = [t for t in tasks if not t.get("merged_at")]
         for task in changed:
@@ -8418,79 +11000,14 @@ def render_task(view):
 
 
 # ==== cli/query.py ====
-# The read commands, through atm-lib (docs/layered-architecture.md §9, step 3): list, deps, status, summary.
+# How `atm project status` prints atm-lib's status report (docs/layered-architecture.md §9, step 3).
 #
 # Text output is short and stable, for agents to read; --json is for anything that parses it (CLI-3.3).
 
-FILTER_OPTIONS = (
-    "sprint",
-    "backlog",
-    "release",
-    "component",
-    "status",
-    "type",
-    "priority",
-    "label",
-    "agent",
-    "ready",
-    "blocked",
-    "in_pr",
-    "with_user",
-    "archived",
-)
-
-
-def filters_of(args):
-    """atm list's options as atm-lib's Filters (atm-lib never takes the parsed arguments themselves, §5)."""
-    return Filters(**{name: getattr(args, name, None) for name in FILTER_OPTIONS})
-
-
-def cmd_list(args):
-    filters = filters_of(args)
-    if args.derived:
-        # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
-        if args.tolerant:
-            # As atm serve's v1 route reads it (the dev server and the e2e fixture take it from here)
-            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), filters)
-            snapshot.pop("bytes")
-            out(to_json(snapshot))
-        else:
-            out(to_json(task_views(open_project(os.getcwd()), filters)))
-        return
-    rows = [view_row(v) for v in task_views(open_project(os.getcwd()), filters)]
-    if args.json:
-        out(to_json(rows))
-        return
-    if not rows:
-        out("No tasks match.")
-        return
-    for line in list_lines(rows):
-        out(line)
-
-
-def cmd_deps(args):
-    deps = task_dependencies(open_project(os.getcwd()), args.id)
-    if args.json:
-        out(to_json(deps))
-        return
-    line = lambda items: ", ".join(f"{i['id']} ({i['status']})" for i in items) or "nothing"
-    out(f"{args.id} waits for: {line(deps['waits_for'])}")
-    out(f"{args.id} is waited on by: {line(deps['waited_on_by'])}")
-
-
-def cmd_summary(args):
-    """The project's summary as atm serve lists it in api/projects (3.2); the dashboard's dev server plays atm serve
-    with it, so its numbers and Next up come from atm-cli too. JSON either way: it is for tools."""
-    out(to_json(project_summary(open_project(os.getcwd()))))
-
-
-def cmd_status(args):
-    status = status_report(
-        open_project(os.getcwd()),
-        Filters(sprint=args.sprint, backlog=args.backlog, release=args.release, component=args.component),
-    )
+def show_status(status, as_json):
+    """Print atm-lib's status report (`atm project status`)."""
     result = status["report"]
-    if args.json:
+    if as_json:
         out(to_json(result))
         return
     sprint, stranded = result["sprint"], result.get("open_in_closed_sprints")
@@ -8512,7 +11029,7 @@ def cmd_status(args):
         out(
             f"warning: {n} open task{'' if n == 1 else 's'} in closed sprints, which the loop won't take: "
             + ", ".join(f"{t['id']} ({t['sprint']})" for t in stranded)
-            + " (atm move <id> --to backlog or --to active)"
+            + " (atm sprint move <id> --to backlog or --to active)"
         )
     out(f"{result['tasks']} tasks: {pairs(result['by_status'])}")
     if status["has_sprints"]:
@@ -8540,14 +11057,15 @@ def cmd_status(args):
 
 
 # ==== cli/status.py ====
-# The status commands and `atm note`, through atm-lib (docs/layered-architecture.md §9, step 8).
+# What `atm task state` passes to atm-lib's status functions (docs/layered-architecture.md §9, step 8).
 
-# Each command's options, as its atm-lib function names them (§5.1): (parameter, the parsed argument)
+# Each status function's options, as atm-lib names them (§5.1): (parameter, the command's option)
 COMMAND_OPTIONS = {
     "start": (),
     "review": (("note", "note"),),
-    "done": (("note", "note"), ("commit", "commit"), ("resolution", "resolution")),
+    "done": (("note", "note"), ("commit", "commit")),
     "reject": (("reason", "reason"),),
+    "drop": (),
     "approve": (("note", "note"),),
     "request-changes": (("reason", "reason"),),
     "block": (("on", "on"), ("questions", "question"), ("reason", "reason")),
@@ -8560,72 +11078,13 @@ COMMAND_OPTIONS = {
 LIST_OPTIONS = ("questions", "answers")
 
 
-def cmd_status_change(command):
-    def run(args):
-        project = open_project(os.getcwd(), agent_identity(args.agent))
-        options = {
-            parameter: getattr(args, name, None) or ([] if parameter in LIST_OPTIONS else None)
-            for parameter, name in COMMAND_OPTIONS[command]
-        }
-        result = STATUS_FUNCTIONS[command](project, args.id, status=args.status, **options)
-        report_expired(result["expired"])
-        task, hint, stranded = result["task"], result["hint"], result["stranded"]
-        if args.json:
-            extra = {"unblocked": result["unblocked"]} if command == "done" else {}
-            if hint:
-                extra["suggest"] = {"archive": hint}
-            if stranded:
-                extra["hint"] = stranded
-            out(to_json({**task, "claim": result["claim"], **extra}))
-            return
-        # New lines only after the existing one (CLI-3.2)
-        out(f"{task['id']}: {result['previous']} -> {task['status']}")
-        if stranded:
-            out(f"  {stranded}")
-        if command == "start":
-            out(render_task(result["view"]))
-        if result["unblocked"]:
-            out("Now ready: " + ", ".join(result["unblocked"]))
-        if hint:
-            out(hint["text"])
-
-    return run
-
-
-def cmd_note(args):
-    """Add a note to a task, whatever its status (DM-4)."""
-    task = add_task_note(open_project(os.getcwd(), agent_identity(args.agent)), args.id, args.text)
-    if args.json:
-        out(to_json(task["notes"][-1]))
-    else:
-        out(f"{task['id']}: note added ({len(task['notes'])} in all)")
-
-
 # ==== cli/claims.py ====
-# `atm next`, `heartbeat`, `run` and `claims`, through atm-lib (docs/layered-architecture.md §9, step 9).
+# What the claim commands do beyond atm-lib: read a hook's input (`atm claim heartbeat --auto`, the plugin's
+# PostToolUse hook), and hold a claim while a shell runs (`atm claim hold`, T-437).
 
-def cmd_next(args):
-    sel = selection(
-        sprints=args.sprint,
-        tasks=[i.strip() for i in (args.tasks or "").split(",") if i.strip()],
-        all_tasks=args.all,
-        backlog=args.backlog,
-        task_type=args.type,
-    )
-    project = open_project(os.getcwd(), agent_identity(args.agent))
-    result = next_task_for(project, sel, with_user=args.with_user, claim=args.claim, status=args.status)
-    report_expired(result["expired"])
-    task, claim, reason = result["task"], result["claim"], result["reason"]
-    if args.json:
-        out(to_json({"task": task, "claim": claim, "reason": reason}))
-    elif task:
-        verb = "Claimed" if claim else "Next"
-        where = task.get("sprint") or "backlog"
-        out(f"{verb}: {task['id']} {task.get('name', '')} ({where}, {task.get('type')})")
-    else:
-        out(f"No task available: {reason}.")
-    if not task:
-        raise AtmExit(3)
+# `atm claim hold`: how long a watcher may hold a claim, by default and at most
+HOLD_MAX_MINUTES = 240.0
+HOLD_LIMIT_MINUTES = 720.0
 
 
 def hook_input():
@@ -8639,108 +11098,85 @@ def hook_input():
     return value if isinstance(value, dict) else {}
 
 
-def auto_heartbeat(args):
-    """`heartbeat --auto`, run by the plugin's PostToolUse hook after every tool call (CLI-6.2): renew this agent's
-    live claims once their last renewal is ten minutes old. It never prints and never fails, so a tool call is never
-    disturbed."""
-    try:
-        payload = hook_input()
-        cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) and os.path.isdir(payload["cwd"]) else os.getcwd()
-        if payload.get("session_id") and not (args.agent or os.environ.get("ATM_AGENT")):
-            # The same identity atm commands get in that folder: a subagent in a linked worktree renews its own claims
-            agent = session_identity(payload["session_id"], cwd)
-        else:
-            agent = agent_identity(args.agent)
-        project = hook_project(cwd, agent)  # also lists the project on the dashboard
-        if project is not None:
-            renew_due_claims(project)
-    except Exception:  # a hook must never break the tool call it follows
-        return
+def hold_claim(project, task_id, max_minutes, every=None):
+    """`atm claim hold <id>`: renew the actor's claim now (refused, before anything else, when it isn't theirs), then
+    leave a watcher behind that renews it while the shell that ran atm lives (atm's parent: the launchers exec), and
+    return at once. The watcher stops when that process ends (or another one gets its pid: its start time differs),
+    when a renewal fails (the claim was released, finished or taken over), or after `max_minutes`. It runs nothing:
+    the agent runs its command itself, after this one. Returns {task, claim, watcher, watching, until}."""
+    renewed = renew_lease(project, task_id)
+    interval = every if every is not None else max(60.0, renewed["minutes"] * 60 / 3)
+    shell = os.getppid()
+    started = process_started(shell)
+    deadline = time.time() + max_minutes * 60
+    actor, cwd = project.actor, os.getcwd()
 
-
-def cmd_heartbeat(args):
-    if args.auto:
-        auto_heartbeat(args)
-        return
-    if not args.id:
-        raise Invalid("atm heartbeat needs a task ID (or --auto)")
-    result = renew_lease(open_project(os.getcwd(), agent_identity(args.agent)), args.id)
-    claim = result["claim"]
-    if args.json:
-        out(to_json(claim))
-    else:
-        out(f"{args.id}: lease extended to {claim['lease_expires_at']}")
-
-
-def cmd_run(args):
-    """`atm run <id> -- <command>`: run a long command (a full test suite, a build, a wait on CI) while keeping the
-    claim on <id> alive. The plugin's hook renews claims only when the agent makes a tool call, and an agent waiting
-    for a command makes none, so a wait longer than the lease would hand the task to someone else (T-203). The claim
-    is renewed at the start (so a wrong ID or someone else's claim fails before anything runs) and then three times per
-    lease; the command's output passes through unchanged, and atm exits with its exit code."""
-    if not args.child:
-        raise Invalid("atm run needs a command after --: atm run <id> -- <command> [args...]")
-    if args.every is not None and args.every <= 0:
-        raise Invalid("--every must be more than 0 seconds")
-    project = open_project(os.getcwd(), agent_identity(args.agent))
-    renew = lambda: renew_lease(open_project(os.getcwd(), project.actor), args.id, expire=False)
-    minutes = renew()["minutes"]
-    every = args.every if args.every is not None else max(60.0, minutes * 60 / 3)
-    try:
-        child = subprocess.Popen(args.child)
-    except OSError as e:
-        raise AtmFailure(f"can't run {args.child[0]}: {e.strerror}", 127)
-    # Renewed from this (the main) thread between waits: the lock uses signals, which only work here
-    renewing = True
-    while True:
-        try:
-            code = child.wait(timeout=every)
-            break
-        except subprocess.TimeoutExpired:
-            pass
-        except KeyboardInterrupt:  # the command got the same interrupt; wait for it to end
-            continue
-        if renewing:
+    def watch():
+        while True:
+            left = deadline - time.time()
+            if left <= 0:
+                return
+            time.sleep(min(interval, left))
+            if time.time() >= deadline or not pid_alive(shell) or process_started(shell) != started:
+                return
             try:
-                renew()
-            except Exception as e:  # never stops the command; say so once and stop renewing
-                sys.stderr.write(f"atm run: stopped renewing the claim on {args.id}: {e}\n")
-                renewing = False
-    if code:
-        raise AtmExit(128 - code if code < 0 else code)  # a signal -N ends like a shell's 128+N
+                renew_lease(open_project(cwd, actor), task_id, expire=False)
+            except Exception:  # released, finished, taken over, or the project is gone: the claim lapses as usual
+                return
+
+    until = datetime.fromtimestamp(deadline, timezone.utc).replace(microsecond=0)
+    return {
+        "task": task_id,
+        "claim": renewed["claim"],
+        "watcher": detach(watch),
+        "watching": shell,
+        "until": until.isoformat().replace("+00:00", "Z"),
+    }
 
 
-def cmd_claims(args):
-    result = expire_claims(open_project(os.getcwd()))
-    live = result["claims"]
-    if args.json:
-        out(to_json(live))
-        return
-    if not live:
-        out("No live claims.")
-        return
-    current = now()
-    for c in live:
-        left = format_duration((parse_iso(c["lease_expires_at"]) - current).total_seconds())
-        out(f"{c['task']}  {c.get('agent')}  {c.get('branch') or '-'}  {left} left  ({c.get('worktree')})")
+def detach(body):
+    """Run `body` in a process of its own, detached from this one (a new session, stdin, stdout and stderr on
+    /dev/null, so the caller's pipes close when atm exits), and return its pid."""
+    read, write = os.pipe()
+    child = os.fork()
+    if child == 0:  # the intermediate: a new session, then the watcher, then gone (no zombie for the caller)
+        os.close(read)
+        os.setsid()
+        watcher = os.fork()
+        if watcher:
+            os.write(write, str(watcher).encode())
+            os._exit(0)
+        os.close(write)
+        null = os.open(os.devnull, os.O_RDWR)
+        for fd in (0, 1, 2):
+            os.dup2(null, fd)
+        try:
+            body()
+        finally:
+            os._exit(0)
+    os.close(write)
+    os.waitpid(child, 0)
+    pid = int(os.read(read, 32) or 0)
+    os.close(read)
+    return pid
 
 
 # ==== cli/edit.py ====
-# `atm add`, `atm edit` and `atm check`, through atm-lib (docs/layered-architecture.md §9, step 10). The files these
-# options name (--json-file, --description-file) are read here: atm-lib takes their content.
+# What `atm task add` and `task edit` read and print beyond atm-lib (docs/layered-architecture.md §9, step 10): the
+# file --json-file names (atm-lib takes its content), and the components a task's files suggest.
 
 def suggestion_line(vocab, task):
-    """`atm add` / `edit --add-file` (SR-2.7): the components the task's files suggest that it doesn't have yet, as a
-    line with the command that sets them; None when there are none (or the project has no components)."""
+    """`atm task add` / `task edit --add-file` (SR-2.7): the components the task's files suggest that it doesn't have
+    yet, as a line with the command that sets them; None when there are none (or the project has no components)."""
     missing = [c for c in suggest_components(vocab, task.get("files") or []) if c not in (task.get("components") or [])]
     if not missing:
         return None
     adds = " ".join(f"--add-component {c}" for c in missing)
-    return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm edit {task['id']} {adds})"
+    return f"  {task['id']}: its files suggest the component{'s' if len(missing) > 1 else ''} {', '.join(missing)} (atm task edit {task['id']} {adds})"
 
 
 def read_entries(path):
-    """The tasks of an `atm add --json-file`: a list of task objects, or {"tasks": [...]}."""
+    """The tasks of an `atm task add --json-file`: a list of task objects, or {"tasks": [...]}."""
     value = read_json(path)
     if isinstance(value, dict):
         value = value.get("tasks")
@@ -8749,106 +11185,8 @@ def read_entries(path):
     return value
 
 
-def description_of(args):
-    """--description, or the content of --description-file."""
-    if getattr(args, "description_file", None):
-        with open(args.description_file, encoding="utf-8") as f:
-            return f.read()
-    return args.description
-
-
-def cmd_add(args):
-    if args.json_file:
-        entries = read_entries(args.json_file)
-    else:
-        entries = [
-            {
-                "name": args.name,
-                "type": args.type,
-                "priority": args.priority,
-                "labels": args.label,
-                "description": description_of(args),
-                "dependencies": args.dep,
-                "files": args.file,
-                "requirements": args.requirement,
-                "sprint": args.sprint,
-                "release": args.release,
-                "components": "auto" if args.components == "auto" else args.component,
-                "review": args.review,
-                "with": args.with_,
-                "related": args.related,
-            }
-        ]
-    result = add_new_tasks(open_project(os.getcwd(), agent_identity(args.agent)), entries)
-    if args.json:
-        out(to_json(result["tasks"]))
-        return
-    for task in result["tasks"]:
-        out(f"Added {task['id']} {task['name']}")
-        line = suggestion_line(result["vocab"], task)
-        if line:
-            out(line)
-
-
-def cmd_edit(args):
-    result = edit_existing_task(
-        open_project(os.getcwd(), agent_identity(args.agent)),
-        args.id,
-        name=args.name,
-        description=description_of(args),
-        sprint=args.sprint,
-        backlog=args.backlog,
-        task_type=args.type,
-        priority=args.priority,
-        release=args.release,
-        review=args.review,
-        with_=args.with_,
-        components=args.components,
-        add_files=args.add_file or [],
-        remove_files=args.remove_file or [],
-        add_dependencies=args.add_dep or [],
-        remove_dependencies=args.remove_dep or [],
-        add_labels=args.add_label or [],
-        remove_labels=args.remove_label or [],
-        add_components=args.add_component or [],
-        remove_components=args.remove_component or [],
-        add_related=args.add_related or [],
-        remove_related=args.remove_related or [],
-        add_requirements=args.add_requirement or [],
-        remove_requirements=args.remove_requirement or [],
-        add_use_cases=args.add_use_case or [],
-        remove_use_cases=args.remove_use_case or [],
-    )
-    task, changed = result["task"], result["changed"]
-    if args.json:
-        out(to_json(task))
-        return
-    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
-    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
-    line = suggestion_line(result["vocab"], task) if args.add_file else None
-    if line:
-        out(line)
-
-
-def cmd_check(args):
-    result = check_project(open_project(os.getcwd()), files=args.files)
-    errors, warnings = result["errors"], result["warnings"]
-    if args.json:
-        out(to_json({"errors": errors, "warnings": warnings}))
-    else:
-        for e in errors:
-            out(f"error: {e}")
-        for w in warnings:
-            out(f"warning: {w}")
-        if not errors:
-            count = result["count"]
-            out(f"tasks.json is fine ({count} tasks" + (f", {len(warnings)} warnings)" if warnings else ")"))
-    if errors:
-        raise AtmExit(1)
-
-
 # ==== cli/components.py ====
-# `atm components`, through atm-lib (docs/layered-architecture.md §9, step 10).
+# How `atm component add` and `component edit` describe what they moved (docs/layered-architecture.md §9, step 10).
 
 def moved_text(label, from_label, assign, by_files):
     """What --from-label and --assign did, e.g. "6 tasks from the label atm-cli, 2 more by their files"."""
@@ -8860,60 +11198,10 @@ def moved_text(label, from_label, assign, by_files):
     return ", ".join(parts)
 
 
-def show_list(project, as_json):
-    listed = list_components(project)
-    if as_json:
-        out(to_json(listed))
-        return
-    if not listed:
-        out("No components yet: atm components add <id> --path GLOB.")
-    for c in listed:
-        details = [f"“{c['label']}”"] if c.get("label") else []
-        details.append(", ".join(c["paths"]) if c["paths"] else "no paths")
-        if c.get("review"):
-            details.append(f"review {c['review']}")
-        out(f"{c['id']} · {' · '.join(details)}: {c['tasks']} task{'' if c['tasks'] == 1 else 's'}")
-
-
-def cmd_components(args):
-    project = open_project(os.getcwd())
-    if args.action in (None, "list"):
-        if args.id is not None:
-            raise Invalid(f"unexpected argument '{args.id}'")
-        for option in ("label", "path", "add_path", "review", "from_label"):
-            if getattr(args, option) is not None:
-                raise Invalid(f"--{option.replace('_', '-')} is for atm components add or edit")
-        if args.assign:
-            raise Invalid("--assign is for atm components add or edit")
-        show_list(project, args.json)
-        return
-    if not args.id:
-        raise Invalid(f"atm components {args.action} needs the component's ID")
-    if args.action == "add":
-        if args.add_path is not None:
-            raise Invalid("--add-path is for atm components edit (add takes --path)")
-        result = add_component(project, args.id, args.label, args.path, args.review, args.from_label, args.assign)
-        if args.json:
-            out(to_json(result))
-            return
-        text = moved_text(args.from_label, result["from_label"], args.assign, result["by_files"])
-        out(f"Added the component {args.id}" + (f": {text}." if text else "."))
-        return
-    if args.path is not None:
-        raise Invalid("--path is for atm components add (edit takes --add-path)")
-    result = edit_component(project, args.id, args.label, args.add_path, args.review, args.from_label, args.assign)
-    if args.json:
-        out(to_json(result))
-        return
-    moved = moved_text(args.from_label, result["from_label"], args.assign, result["by_files"])
-    text = ", ".join(([f"changed {', '.join(result['changed'])}"] if result["changed"] else []) + [t for t in [moved] if t])
-    out(f"{args.id}: {text or 'nothing changed'}")
-
-
 # ==== cli/sprints.py ====
-# `atm sprints`, `atm move` and `atm backlog`, through atm-lib (docs/layered-architecture.md §9, step 11).
+# How the `atm sprint` commands print sprints (docs/layered-architecture.md §9, step 11).
 
-NONE_ACTIVE = "No sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint."
+NONE_ACTIVE = "No sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint."
 
 
 def describe_sprint(s):
@@ -8933,10 +11221,10 @@ def show_sprints(project, include_closed, as_json):
         out(to_json({"sprints": sprints, "backlog": backlog}))
         return
     if not sprints:
-        out("No open sprints (--all lists the closed ones)." if listed["has_sprints"] else "No sprints yet: atm sprints add creates one.")
+        out("No open sprints (--all lists the closed ones)." if listed["has_sprints"] else "No sprints yet: atm sprint add creates one.")
     for s in sprints:
         out(describe_sprint(s))
-    out(f"backlog: {backlog} task{'' if backlog == 1 else 's'} (atm backlog)")
+    out(f"backlog: {backlog} task{'' if backlog == 1 else 's'} (atm sprint backlog)")
 
 
 def show_close(result, as_json):
@@ -8970,62 +11258,8 @@ def show_delete(result, as_json):
         out(NONE_ACTIVE)
 
 
-def cmd_sprints(args):
-    project = open_project(os.getcwd(), agent_identity(getattr(args, "agent", None)))
-    if args.action in (None, "list"):
-        if args.name is not None:
-            raise Invalid(f"unexpected argument '{args.name}'")
-        show_sprints(project, args.all, args.json)
-        return
-    if args.action == "add":
-        sprint = add_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due, after=args.after)
-        out(to_json(sprint) if args.json else f"Added the sprint “{sprint['id']}” (planned).")
-        return
-    if not args.name:
-        raise Invalid(f"atm sprints {args.action} needs a sprint name")
-    if args.action == "edit":
-        result = edit_sprint(project, args.name, goal=args.goal, release=args.release, due=args.due)
-        sprint, changed = result["sprint"], result["changed"]
-        if args.json:
-            out(to_json(sprint))
-        else:
-            out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
-    elif args.action == "start":
-        sprint = start_sprint(project, args.name)
-        out(to_json(sprint) if args.json else f"The sprint “{sprint['id']}” is now active.")
-    elif args.action == "close":
-        closed = close_sprint(
-            project, args.name, carry_to=args.carry_to, new_name=args.new_name, reviewed=args.reviewed
-        )
-        show_close(closed, args.json)
-    else:
-        show_delete(delete_sprint(project, args.name, move_to=args.move_to, force=args.force), args.json)
-
-
-def cmd_move(args):
-    moved = move_tasks(open_project(os.getcwd(), agent_identity(args.agent)), args.ids, args.to)
-    if args.json:
-        out(to_json(moved))
-        return
-    for m in moved:
-        before, after = m["from"] or "backlog", m["to"] or "backlog"
-        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
-
-
-def cmd_backlog(args):
-    found = backlog_tasks(open_project(os.getcwd()), finished=args.all)
-    rows = [summary(found["vocab"], t) for t in found["tasks"]]
-    if args.json:
-        out(to_json(rows))
-    elif not rows:
-        out("The backlog is empty.")
-    else:
-        for line in list_lines(rows):
-            out(line)
-
-
 # ==== cli/releases.py ====
-# `atm releases`, through atm-lib (docs/layered-architecture.md §9, step 11).
+# How `atm release list` and `release notes` print releases (docs/layered-architecture.md §9, step 11).
 
 def describe_release(r):
     details = [r["state"]] + ([f"target {r['target']}"] if r.get("target") else [])
@@ -9056,64 +11290,8 @@ def describe_notes(notes):
     return lines
 
 
-def cmd_releases(args):
-    project = open_project(os.getcwd())
-    if args.action in (None, "list"):
-        if args.id is not None:
-            raise Invalid(f"unexpected argument '{args.id}'")
-        listed = list_releases(project, args.all)
-        if args.json:
-            out(to_json(listed["releases"]))
-            return
-        if not listed["releases"]:
-            out(
-                "No open releases (--all lists the archived ones)."
-                if listed["has_releases"]
-                else "No releases yet: atm releases add <R>."
-            )
-        for r in listed["releases"]:
-            out(describe_release(r))
-        return
-    if not args.id:
-        raise Invalid(f"atm releases {args.action} needs a release ID")
-    if args.pr is not None and args.action != "add":
-        raise Invalid("--pr is for atm releases add")
-    if args.released_at is not None and args.action != "add":
-        raise Invalid("--released-at is for atm releases add")
-    if args.action == "add":
-        result = add_release(
-            project, args.id, name=args.title, target=args.target, prs=args.pr or [], released_at=args.released_at
-        )
-        if args.json:
-            out(to_json(result))
-            return
-        release, given, prs = result["release"], result["tasks"], args.pr or []
-        line = f"Added the release “{args.id}” ({release['state']})"
-        if given:
-            numbers = ", ".join(f"#{n}" for n in prs)
-            line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
-        out(line + ".")
-    elif args.action == "edit":
-        result = edit_release(project, args.id, name=args.title, target=args.target)
-        release, changed = result["release"], result["changed"]
-        if args.json:
-            out(to_json(release))
-        else:
-            out(f"{release['id']}: changed {', '.join(changed)}" if changed else f"{release['id']}: nothing changed")
-    elif args.action == "archive":
-        release = archive_release(project, args.id)
-        out(to_json(release) if args.json else f"Archived the release “{release['id']}”.")
-    else:
-        notes = release_notes(project, args.id)
-        if args.json:
-            out(to_json(notes))
-            return
-        for line in describe_notes(notes):
-            out(line)
-
-
 # ==== cli/archive.py ====
-# `atm archive` and `atm unarchive`, through atm-lib (docs/layered-architecture.md §9, step 12).
+# How `atm db archive` and `db unarchive` describe the tasks they moved (docs/layered-architecture.md §9, step 12).
 
 def describe_ids(ids, limit=12):
     return ", ".join(ids[:limit]) + (f" and {len(ids) - limit} more" if len(ids) > limit else "")
@@ -9127,68 +11305,12 @@ def describe_kept(kept):
     return "; ".join(f"{describe_ids(ids)} ({reason})" for reason, ids in groups.items())
 
 
-def cmd_archive(args):
-    result = archive_finished(open_project(os.getcwd()), args.sprint, args.before, args.keep_days, args.dry_run)
-    ids, dropped, kept, sizes = result["moved"], result["duplicates_dropped"], result["kept"], result["sizes"]
-    shown = {
-        "moved": ids,
-        "dry_run": bool(args.dry_run),
-        "tasks_kb": sizes["tasks"] // 1024,
-        "archive_kb": sizes["archive"] // 1024,
-        "duplicates_dropped": dropped,
-        "kept": kept,
-    }
-    if args.json:
-        out(to_json(shown))
-        return
-    if dropped and not args.dry_run:
-        out(f"Kept {describe_ids(dropped)} in tasks.json and dropped the archive's copy (an interrupted move).")
-    if not ids:
-        out("Nothing to archive.")
-    elif args.dry_run:
-        out(f"Would archive {len(ids)} task(s): {describe_ids(ids)}.")
-    else:
-        out(
-            f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
-            f"tasks.json is now {shown['tasks_kb']} KB, tasks-archive.json {shown['archive_kb']} KB."
-        )
-    # What stays, and why (T-352)
-    if kept:
-        out(f"{'Would keep' if args.dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}.")
-
-
-def cmd_unarchive(args):
-    result = unarchive_tasks(open_project(os.getcwd()), args.ids)
-    again = result["moves_back"]
-    if args.json:
-        out(to_json(result))
-        return
-    out(f"Brought back {', '.join(args.ids)} from the archive.")
-    if again:
-        out(
-            f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm archive` moves "
-            f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm reopen <id> --reason …`)."
-        )
-
-
-# ==== cli/show.py ====
-# `atm show`: tasks in full, through atm-lib (docs/layered-architecture.md §9, step 1).
-
-def cmd_show(args):
-    views = show_tasks(open_project(os.getcwd()), args.ids)
-    if args.json:
-        # An archived task says so (T-353)
-        out(to_json([{**v["task"], "archived": True} if v["archived"] else v["task"] for v in views]))
-    else:
-        out("\n\n".join(render_task(v) for v in views))
-
-
 # ==== cli/code.py ====
-# `atm workflow`, `atm commit`, `atm pr` and `atm merged`, through atm-lib (docs/layered-architecture.md §9, step 13).
+# How `atm project workflow` describes the project's workflow (docs/layered-architecture.md §9, step 13).
 
 def describe_workflow(workflow, base_default):
     if workflow is None:
-        return "No workflow set: /atm:push asks for one, or run `atm workflow set direct|pull-request`."
+        return "No workflow set: /atm:push asks for one, or run `atm project workflow set direct|pull-request`."
     trailers = workflow.get("trailers")
     lines = [
         f"workflow: {workflow['type']}",
@@ -9206,80 +11328,8 @@ def describe_workflow(workflow, base_default):
     return "\n".join(lines)
 
 
-def cmd_workflow(args):
-    project = open_project(os.getcwd())
-    if args.action is None:
-        workflow = get_workflow(project)
-    else:
-        workflow = set_workflow(
-            project,
-            args.type,
-            base=args.base,
-            verify=None if args.verify is None else args.verify == "true",
-            max_rounds=args.max_rounds,
-            commit_template=args.commit_template,
-            trailers=args.trailers,
-            trailer=args.trailer,
-        )
-    if args.json:
-        out(to_json(workflow or {"type": None}))
-    else:
-        out(describe_workflow(workflow, project.vcs.default_base))
-
-
-def cmd_commit(args):
-    """Commit exactly the files the agent names plus tasks.json, then record the commit on the task."""
-    project = open_project(os.getcwd(), agent_identity(args.agent))
-    if args.record is not None:
-        if args.file or args.dir or args.message is not None:
-            raise Invalid("--record records an existing commit: no --file, --dir or --message")
-        result = record_commit(project, args.id, args.record)
-        if args.json:
-            shown = {k: result[k] for k in ("task", "commit", "recorded")}
-            out(to_json({**shown, **({"hint": result["hint"]} if result["hint"] else {})}))
-            return
-        out(f"{result['task']}: recorded {result['commit'][:7]} {result['summary']}".rstrip())
-        if result["hint"]:
-            out(f"  {result['hint']}")
-        return
-    # The files are named from the current folder; atm-lib takes them relative to the repository
-    files = repository_paths(project, args.file or [], os.getcwd())
-    # A folder's changes, all of them (T-405): a generated folder the task rebuilt
-    if args.dir:
-        files += [f for f in folder_changes(project, args.id, args.dir, os.getcwd()) if f not in files]
-    result = commit_task(project, args.id, files, args.message)
-    if args.json:
-        out(to_json(result))
-    else:
-        out(f"{result['task']}: committed {result['commit'][:7]} {result['message'].splitlines()[0]}")
-        out("  " + ", ".join(result["files"]))
-
-
-def cmd_pr(args):
-    """Record the PR that contains the tasks (DM-4.3: the tasks are then In PR)."""
-    ids = record_pr(open_project(os.getcwd(), agent_identity(args.agent)), args.ids, args.number, args.url)
-    if args.json:
-        out(to_json({"tasks": ids, "pr": {"number": args.number, "url": args.url}}))
-    else:
-        out(f"{', '.join(ids)}: in PR #{args.number} ({args.url})")
-
-
-def cmd_merged(args):
-    """Record that a PR was merged, on every task that records it (DM-4.3: the tasks are then Merged)."""
-    result = record_merge(open_project(os.getcwd(), agent_identity(args.agent)), args.pr, args.at)
-    if args.json:
-        out(to_json(result))
-        return
-    ids = result["tasks"]
-    out(f"PR #{args.pr} merged: {', '.join(ids)}" if ids else f"PR #{args.pr}: already recorded as merged")
-    for release_id in result["released"]:
-        out(f"Released {release_id}: all its tasks are merged in PR #{args.pr}.")
-    for release_id, waiting in result["pending"].items():
-        out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{args.pr}.")
-
-
 # ==== cli/projects.py ====
-# `atm projects`: list, add, remove or prune the projects the dashboard shows, through atm-lib.
+# `atm project list|add|remove|prune`: the projects the dashboard shows, through atm-lib.
 
 def describe_entry(entry):
     return f"{entry['id']}  {entry['name']}  {entry['path']}"
@@ -9289,25 +11339,25 @@ def damaged_notice(damaged):
     return f"projects.json was unreadable: moved it to {damaged} and started an empty registry." if damaged else None
 
 
-def cmd_projects(args):
-    registry = open_registry()
-    if args.action == "add":
-        result = add_project(registry, args.target)
-        if args.json:
+def projects_action(registry, action, target, as_json):
+    """List, add, remove or prune the dashboard's projects (`atm project list|add|remove|prune`)."""
+    if action == "add":
+        result = add_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
             out(damaged_notice(result["damaged"]))
         out(f"{'Added' if result['result'] == 'added' else 'Already registered'}: {describe_entry(result['project'])}")
-    elif args.action == "remove":
-        result = remove_project(registry, args.target)
-        if args.json:
+    elif action == "remove":
+        result = remove_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         out(f"Removed: {describe_entry(result['removed'])}")
-    elif args.action == "prune":
+    elif action == "prune":
         result = prune_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
@@ -9317,156 +11367,66 @@ def cmd_projects(args):
         for e in result["removed"]:
             out(f"Removed: {describe_entry(e)}")
     else:
-        if args.target:
-            raise Invalid(f"unexpected argument '{args.target}'")
+        if target:
+            raise Invalid(f"unexpected argument '{target}'")
         result = list_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
             out(damaged_notice(result["damaged"]))
         if not result["projects"]:
-            out("No projects registered. `atm projects add [PATH]` adds one; atm adds a project when it runs there.")
+            out("No projects registered. `atm project add [PATH]` adds one; atm adds a project when it runs there.")
         for e in result["projects"]:
             out(describe_entry(e) + ("  (not found)" if e["missing"] else ""))
 
 
 # ==== cli/settings.py ====
-# `atm init`, `atm repository` and `atm logo`: the project's settings, through atm-lib. Setting the store itself up
-# (the merge driver, the dashboard's list) is boot's, the one place that knows the store.
+# `atm project logo`: the project's logo, through atm-lib. Setting the store itself up (`atm db init`: the merge
+# driver, the dashboard's list) is boot's, the one place that knows the store.
 
-def cmd_init(args):
-    project = open_project(os.getcwd())
-    if args.meta_file:
-        new = read_json(args.meta_file)
-        if not isinstance(new, dict):
-            raise Invalid(f"{args.meta_file} must hold a JSON object: the meta keys to set")
-        created, keys = init_meta(project, new)
-        project = open_project(os.getcwd())  # the task data as it is now
-        if not args.json:
-            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
-    project_id = ensure_project_id(project)
-    repository = ensure_repository(project)
-    register_project(project)  # the dashboard lists every project atm runs in
-    setup = set_up_store(project)
-    if args.json:
-        out(
-            to_json(
-                {
-                    "project_id": project_id,
-                    "repository": repository,
-                    "git": setup["git"],
-                    "gitattributes_added": setup["gitattributes_added"],
-                }
-            )
-        )
-        return
-    if project_id:
-        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
-    if repository:
-        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
-    if not setup["git"]:
-        out("Not in a git repository: there is no merge driver to set up.")
-        return
-    out(
-        "Registered the tasks.json merge driver (git config merge.atm)"
-        + (
-            " and added .agentic-task-manager/.gitattributes (staged)."
-            if setup["gitattributes_added"]
-            else "; .gitattributes already set."
-        )
-    )
-
-
-def cmd_repository(args):
-    project = open_project(os.getcwd())
-    if args.action is None:
-        if args.url is not None or args.old is not None:
-            raise Invalid(f"unexpected argument '{args.url or args.old}' (atm repository set URL)")
-        current = get_repository(project)
-        if args.json:
-            out(to_json({"repository": current}))
-        elif current:
-            out(current)
-        else:
-            out("No repository address yet. Set it with `atm repository set <url>` (a git remote works too).")
-        return
-    result = set_repository(project, args.url, args.old)
-    moved = result["moved_links"]
-    if args.json:
-        out(to_json({"repository": result["repository"], "moved_links": moved}))
-    else:
-        links = f" ({moved} PR link{'' if moved == 1 else 's'} moved from {result['previous']})" if moved else ""
-        out(f"Repository address set: {result['repository']}{links}")
-
-
-def cmd_logo(args):
-    project = open_project(os.getcwd())
-    if args.action is None:
-        if args.path is not None:
-            raise Invalid(f"unexpected argument '{args.path}' (atm logo set PATH)")
+def logo_action(project, action, path, as_json):
+    """Print, set or unset the logo (`atm project logo`)."""
+    if action is None:
+        if path is not None:
+            raise Invalid(f"unexpected argument '{path}' (atm project logo set PATH)")
         info = get_logo(project)
         logo, chosen = info["found"], info["set"]
-        if args.json:
+        if as_json:
             found = {"logo": logo["path"], "source": logo["source"]} if logo else {"logo": None, "source": None}
             out(to_json({**found, "set": chosen}))
         elif logo:
-            out(logo["path"] + (" (found; set one with `atm logo set <path>`)" if logo["source"] == "found" else ""))
+            out(logo["path"] + (" (found; set one with `atm project logo set <path>`)" if logo["source"] == "found" else ""))
         elif chosen:
             out(f"meta.logo is {chosen}, which isn't a usable logo (missing, too large, or outside the project).")
         else:
-            out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
+            out("No logo. Set one with `atm project logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
         return
-    if args.action == "unset":
+    if action == "unset":
         removed = unset_logo(project)
-        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
+        out(to_json({"logo": None}) if as_json else "Logo unset." if removed else "No logo was set.")
         return
-    if args.path is None:
-        raise Invalid("atm logo set needs a path")
+    if path is None:
+        raise Invalid("atm project logo set needs a path")
     # The path is relative to where atm runs, like every path atm takes; atm-lib keeps it relative to the project
-    relative = set_logo(project, args.path)
-    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
+    relative = set_logo(project, path)
+    out(to_json({"logo": relative}) if as_json else f"Logo set: {relative}")
 
 
 # ==== cli/store.py ====
-# The commands about the JSON-in-git store itself (docs/layered-architecture.md §3.2, §11.2): `atm paths`,
-# `migrate`, `merge-driver` and the lock test. They exist for this store (its files, its git merge driver, its lock), and
-# reach it only through `boot/jsongit.py`: a store that isn't files in git has none of them.
+# How `atm project config` prints where the task files are. The commands about the JSON-in-git store itself (`atm db
+# migrate`, `db merge-driver`, the lock test; docs/layered-architecture.md §3.2, §11.2) reach it only through
+# `boot/jsongit.py`: a store that isn't files in git has none of them.
 
-def cmd_migrate(args):
-    migration = migrate_folder(os.getcwd())
-    if args.json:
-        out(to_json(migration["result"]))
-        return
-    for line in migration["lines"]:
-        out(line)
-
-
-def cmd_merge_driver(args):
-    conflicts = merge_versions(args.base, args.ours, args.theirs)
-    if args.json:
-        out(to_json({"conflicts": conflicts}))
-    if conflicts:
-        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
-        for conflict in conflicts:
-            sys.stderr.write(f"  {conflict}\n")
-        raise AtmExit(1)
-
-
-def cmd_paths(args):
-    paths = task_paths(os.getcwd())
-    if args.json:
+def show_paths(paths, as_json):
+    """Print where the task files are (`atm project config`)."""
+    if as_json:
         out(to_json(paths))
         return
     for key in ["root", "dir", "tasks", "dashboard"]:
         out(f"{key}: {paths[key]}")
     if paths["legacy"]:
         out(f"legacy: {paths['legacy']['tasks']}")
-
-
-def cmd_lock_test(args):
-    """Test hook: hold the task folder's lock for `seconds`, so tests can check exclusion."""
-    hold_lock_for_test(os.getcwd(), args.seconds)
 
 
 # ==== cli/serve.py ====
@@ -9704,598 +11664,1716 @@ def serve_status(home, as_json, port):
     for info in strays:
         out(
             f"Also running, without a record: pid {info['pid']} on port {info['port']} "
-            f"(dashboard {info.get('version')}); `atm serve stop` stops it."
+            f"(dashboard {info.get('version')}); `atm service stop` stops it."
         )
-
-
-def cmd_serve(args):
-    # --dir acts on another project without a cd (which permission rules can't check)
-    cwd = os.path.abspath(args.dir) if args.dir else os.getcwd()
-    if not os.path.isdir(cwd):
-        raise AtmFailure(f"--dir {args.dir}: not a directory", 2)
-    home = atm_home()
-    if args.refresh:
-        serve_refresh(home)
-    elif args.action == "start":
-        refresh_server(home)  # an outdated server is replaced before its URL is shown
-        url = serve_start(cwd, args.port, args.all)
-        if args.open:
-            open_browser(url)
-    elif args.action == "stop":
-        serve_stop(home, args.port)
-    else:
-        serve_status(home, args.json, args.port)
 
 
 # ==== cli/main.py ====
-# The command line: one argparse parser, a subparser per command, and main().
+# The command line: atm's command tree, in groups (task, loop, claim, vcs, release, component, project, sprint; db,
+# doctor and service for maintenance), built with Typer on Click (vendored in plugin/scripts/vendor/), and main().
+# Design: docs/improving-atm-cli-ergonomics.md.
 #
-# Every command takes --json. Usage errors keep atm's format ("atm: <message>", exit code 2) followed by the command's
-# usage line; with --json, every error is {"error": "...", "code": N} on stderr, with the same exit code.
+# `--json` and `--dry-run` (`-n`) go anywhere on the line; `--dir PATH` first runs as if started in PATH. Errors are
+# `atm: <message>` on stderr, or {"error": "...", "code": N} with --json; a usage error has exit code 2.
 
-USAGE = """usage: atm [--dir PATH] <command> [options]
-
-  --dir PATH     run as if started in PATH: on the project there (relative paths in the command count from it)
-
-commands:
-  version        print the plugin version
-  paths [--json] print where this project's task files are
-  migrate [--json]
-                 move tasks.json from docs/ or the root into .agentic-task-manager/,
-                 and set up the folder (.gitignore, current dashboard)
-  serve [start|stop|status] [--open] [--all] [--port N] [--dir PATH] [--refresh]
-                 run the dashboard server in the background: one per user, for all registered projects
-                 (start registers this project, or the one at PATH, and prints its URL; --all the overview's;
-                 --refresh only restarts a running server whose dashboard is older than this plugin's)
-  status [--sprint S]... [--backlog] [--release R] [--component C]
-                 the overview: counts, what is in progress, in review or blocked, the next task
-  summary        the project's numbers as atm serve gives them to the dashboard (JSON)
-  show <id>...   tasks in full (description, dependencies, files, notes)
-  list [--status S] [--sprint S | --backlog] [--release R] [--component C] [--type T] [--priority P]
-       [--label L] [--agent A] [--ready] [--blocked] [--in-pr] [--with-user] [--archived] [--derived]
-                 one line per task: ID, status, priority, labels, name (--derived: each task in full with what atm
-                 derives for it, as JSON)
-  deps <id>      what a task waits for, and what waits for it
-  start <id>     mark a task in_progress and claim it (its dependencies must be done); prints the task
-  review <id> [--note TEXT]
-                 ask for a review of a finished task: in_review, and its claim is released
-  done <id> [--note TEXT] [--commit SHA] [--resolution R]
-                 mark an in_progress or in_review task done and drop its claim; the note is a one-line
-                 outcome (for a task in review, done means the review passed); prints the tasks now ready
-  reject <id> --reason TEXT
-                 send a task in review back to todo, with what needs to change
-  approve <id> [--note TEXT] | request-changes <id> --reason TEXT
-                 decide a review: the task stays in review, approved or with changes asked for, until an agent takes
-                 it back (atm next offers it first, to the agent that worked on it for one lease length)
-  block <id> --on user|agent (--question TEXT)... [--reason TEXT]
-                 a task that can't go on until someone decides: blocked, its claim released
-  unblock <id> [--answer TEXT]...
-                 back to todo, with the questions and answers kept as a note
-  reopen <id> --reason TEXT
-                 a done or skipped task back to todo (done by mistake, or not finished after all)
-  skip <id> --reason TEXT [--resolution wont_do|obsolete|duplicate] [--duplicate-of ID]
-                 a todo or blocked task that isn't needed: skipped, with the reason as a note
-  fail <id> [--reason TEXT]
-                 put an in_progress task back to todo, recording why (a failure note)
-  release <id> [--note TEXT]
-                 put an in_progress task back to todo; the note is a handoff for the next agent
-  note <id> TEXT add a note to a task (at most 500 characters)
-  add --name N --type T [--sprint S] [--release R] [--priority P] [--label L]...
-      [--description D | --description-file F] [--dep ID]... [--file F]... [--requirement R]...
-      [--component C]... [--components auto] [--review MODE] [--related ID]... [--with user]
-                 add a task with the next ID (in the backlog without --sprint); add --json-file F adds many
-  edit <id> [--name] [--description | --description-file F] [--sprint S | --backlog] [--type] [--priority]
-            [--release R] [--review MODE] [--with user] [--components auto]
-            [--add-dep/--remove-dep ID] [--add-file/--remove-file F] [--add-label/--remove-label L]
-            [--add-component/--remove-component C] [--add-related/--remove-related ID]
-            [--add-requirement/--remove-requirement R] [--add-use-case/--remove-use-case U]
-                 change a task's definition (its status changes only through the status commands); a
-                 requirement or use case is an ID, or a link to where it is defined
-  check [--files]
-                 check tasks.json: schema, vocabularies, dependencies (exit code 1 on errors); --files also
-                 warns about missing files that finished tasks list
-  archive [--sprint S]... [--before DATE] [--keep-days N] [--dry-run]
-                 move finished tasks to tasks-archive.json, to keep tasks.json small
-  unarchive <id>...
-                 bring archived tasks back into tasks.json
-  workflow [set direct|pull-request] [--base B] [--verify true|false] [--max-rounds N] ...
-                 print the project's workflow (meta.workflow), or set it
-  commit <id> --file F [--file F]... [--dir FOLDER]... [--message TEXT]
-                 commit exactly those files (and every change under a --dir folder, e.g. a generated one the
-                 task rebuilt) plus tasks.json (message from meta.workflow.commit_template),
-                 and record the commit on the task; commit <id> --record REV records an existing commit
-                 instead (after a rebase or a cherry-pick)
-  pr <id>... --number N --url URL
-                 record the PR that contains the tasks
-  merged --pr N [--at TIME]
-                 record that PR N was merged, on its tasks
-  next [--sprint S | --tasks T-1,T-5 | --all | --backlog] [--type T] [--with-user] [--claim] [--json]
-                 the task /atm:loop-tasks works on next: of the active sprint by default (every task without
-                 sprints), tasks back from review first, then the most urgent priority, then lowest ID; --claim
-                 also starts and claims it, atomically (exit code 3 if there is none)
-  heartbeat <id> extend your claim's lease (heartbeat --auto: the plugin's hook renews your claims for you)
-  run <id> [--every SECONDS] -- <command> [args...]
-                 run a long command (tests, a build, a wait on CI) while keeping your claim on <id> alive; the
-                 hook renews claims only between tool calls. Exits with the command's exit code
-  init [--meta-file F]
-                 give tasks.json a meta.id if it has none, and register the tasks.json merge driver in this
-                 clone (migrate registers the driver too); --meta-file sets meta (project, vocabularies)
-                 from a JSON object, creating tasks.json if there is none
-  merge-driver <base> <ours> <theirs>
-                 git merge driver for tasks.json (see .agentic-task-manager/.gitattributes)
-  claims [--json]
-                 list live claims, shared by all worktrees of this clone
-  repository [set URL [--from OLD]]
-                 print or set the repository's web address (meta.repository), for commit and PR links; a git
-                 remote is turned into one; atm init fills it from origin. Setting a new one moves the tasks'
-                 recorded PR links from the old address (--from, else the one it replaces)
-  logo [set PATH | unset]
-                 print, set or unset the project's logo for the dashboard (meta.logo: an SVG, PNG, WebP or ICO
-                 file inside the project, at most 512 KB); without one, a logo.svg, .github/logo.png, ... is used
-  sprints [--all] | sprints add ["<name>"] [--goal T] [--release R] [--due DATE] [--after S]
-          | sprints edit <S> [--goal] [--release] [--due] | sprints start <S>
-          | sprints close <S> [--carry-to <S2>|new [--name N]|backlog] [--reviewed]
-          | sprints delete <S> [--move-to <S2>|backlog] [--force]
-                 the sprints in order with their task counts (closed ones with --all); add one (a name is
-                 generated without one), change one, make one active (one at a time), or close one: its
-                 unfinished tasks go to --carry-to (needed when there are any), keeping their status, and it
-                 keeps a report of what was done, carried and added mid-sprint (--reviewed: its batch tasks were
-                 reviewed with the user); delete one created by mistake
-  releases [--all] | releases add <R> [--name N] [--target DATE] [--pr N]... [--released-at TIME]
-          | releases edit <R> [--name] [--target] | releases archive <R> | releases notes <R>
-                 the releases in order with their tasks by kind and stage (archived ones with --all); add one
-                 (--pr gives it every task of those pull requests, --released-at records one that already shipped),
-                 change one, archive it, or print a Markdown
-                 draft of its changes (done tasks by type, with their outcome notes; what isn't done yet). A
-                 sprint's or a task's release must be one of them
-  components | components add <id> [--label T] [--path GLOB]... [--review MODE] [--from-label L] [--assign]
-             | components edit <id> [--label T] [--add-path GLOB]... [--review MODE] [--from-label L] [--assign]
-                 the components (meta.components) with their globs and task counts; add one, or change one:
-                 --from-label moves a label onto it on every task (archived ones too) and drops the label,
-                 --assign gives it to every task whose files its globs match
-  move <id>... --to <sprint>|next|active|backlog
-                 move to-do, blocked or in-review tasks into a sprint, the next planned one, the active one, or
-                 the backlog (claimed and finished tasks stay where they are)
-  backlog [--all]
-                 the tasks with no sprint (with --all, finished ones too)
-  projects [add [PATH] | remove <id|PATH> | prune]
-                 the projects the dashboard shows (~/.agentic-task-manager/projects.json, or $ATM_HOME):
-                 list them, add one, remove one, or drop the ones whose folder or tasks.json is gone
-                 (status commands and heartbeat take --agent NAME and --json; status commands and next --claim
-                 take --status ID to pick a status when the project has several of that kind)
-  help           show this help
-
-Every command takes --json, and `atm <command> --help` describes it.
-"""
+# `atm --help` lists the commands people and agents use first (task, loop, claim, vcs, release, component, project,
+# sprint), then the maintenance ones, then help and version; what git, hooks and the server call is hidden
+# (db merge-driver, project summary). The panels are rich's, which isn't vendored (plugin/scripts/vendor/README.md):
+# plain Click help shows the order only.
+MAINTENANCE = "Maintenance"
+META = "Meta"
+HELP_ORDER = ["task", "loop", "claim", "vcs", "release", "component", "project", "sprint", "db", "doctor", "service",
+              "help", "version"]
 
 
-# Commands that don't check for an outdated dashboard server first: serve does it itself, and git runs the merge
-# driver in the middle of a merge (the server process isn't a CLI command: atm.py --server, plugin/scripts/atm-serve)
-NO_REFRESH = ("serve", "merge-driver", "_lock-test", "help", "version")
+class OrderedGroup(typer.core.TyperGroup):
+    """The top-level commands in HELP_ORDER (Typer lists commands before groups)."""
+
+    def list_commands(self, ctx):
+        names = super().list_commands(ctx)
+        return sorted(names, key=lambda n: HELP_ORDER.index(n) if n in HELP_ORDER else len(HELP_ORDER))
 
 
-class Parser(argparse.ArgumentParser):
-    """Usage errors as AtmError (exit code 2), so they are reported like every other error."""
+app = typer.Typer(
+    name="atm",
+    help=(
+        "atm, the Agentic Task Manager's command line: its commands, by group. "
+        "`atm <command> --help` describes one.\n\n"
+        "\b\n"
+        "Every command takes --json (-j) and --dry-run (-n), anywhere on the line.\n"
+        "atm --dir PATH <command> runs as if started in PATH."
+    ),
+    no_args_is_help=True,
+    cls=OrderedGroup,
+)
 
-    def error(self, message):
-        raise AtmError(f"{message}\n{self.format_usage().strip()}", 2)
+
+@app.callback()
+def _global(
+    ctx: typer.Context,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", "-n", help="Don't execute, just show what would be done"
+    ),
+    json_out: bool = typer.Option(False, "--json", "-j", help="Print result as JSON"),
+) -> None:
+    """Global options for every command (they may go anywhere on the line)."""
+    ctx.obj = {"dry_run": dry_run, "json_out": json_out}
 
 
-def cmd_version(args):
-    out(to_json({"version": plugin_version()}) if args.json else plugin_version())
+# ---------------------------------------------------------------------------
+# task group
+# ---------------------------------------------------------------------------
+
+task_app = typer.Typer(help="Task lifecycle commands")
+app.add_typer(task_app, name="task")
 
 
-def cmd_help(args):
-    if args.json:
-        out(to_json({"usage": USAGE}))
+@task_app.command("list")
+def task_list(
+    ctx: typer.Context,
+    status: Optional[list[str]] = typer.Option(
+        None, "--status", help="Only these statuses (repeatable)"
+    ),
+    sprint: Optional[list[str]] = typer.Option(
+        None, "--sprint", help="Only this sprint's tasks (repeatable)"
+    ),
+    backlog: bool = typer.Option(False, "--backlog", help="Only tasks with no sprint"),
+    release: Optional[str] = typer.Option(None, "--release", help="Only tasks in this release"),
+    component: Optional[str] = typer.Option(
+        None, "--component", help="Only tasks in this component"
+    ),
+    type_: Optional[str] = typer.Option(None, "--type", help="Only this task type"),
+    priority: Optional[str] = typer.Option(None, "--priority", help="Only this priority"),
+    label: Optional[list[str]] = typer.Option(
+        None, "--label", help="Only tasks with this label (repeatable)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Only tasks started by this agent"),
+    ready: bool = typer.Option(
+        False, "--ready", help="Only to-do tasks whose dependencies are done"
+    ),
+    blocked: bool = typer.Option(
+        False, "--blocked", help="Only blocked tasks and to-do tasks still waiting"
+    ),
+    in_pr: bool = typer.Option(
+        False, "--in-pr", help="Only tasks in a PR that isn't recorded as merged"
+    ),
+    with_user: bool = typer.Option(
+        False, "--with-user", help="Only tasks done together with the user"
+    ),
+    archived: bool = typer.Option(False, "--archived", help="List the archive instead"),
+    derived: bool = typer.Option(False, "--derived", help="Each task in full as JSON"),
+    tolerant: bool = typer.Option(
+        False, "--tolerant", help="With --derived: read a malformed tasks.json as far as it can be read"
+    ),
+) -> None:
+    """List tasks: one line per task: ID, status, priority, labels, name."""
+    filters = Filters(
+        sprint=sprint or None,
+        backlog=backlog,
+        release=release,
+        component=component,
+        status=status or None,
+        type=type_,
+        priority=priority,
+        label=label or None,
+        agent=agent,
+        ready=ready,
+        blocked=blocked,
+        in_pr=in_pr,
+        with_user=with_user,
+        archived=archived,
+    )
+    if derived:
+        # JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
+        if tolerant:
+            snapshot = task_snapshot(open_project(os.getcwd(), tolerant=True), filters)
+            snapshot.pop("bytes")
+            out(to_json(snapshot))
+        else:
+            out(to_json(task_views(open_project(os.getcwd()), filters)))
+        return
+    rows = [view_row(v) for v in task_views(open_project(os.getcwd()), filters)]
+    if ctx.obj.get("json_out", False):
+        out(to_json(rows))
+        return
+    if not rows:
+        out("No tasks match.")
+        return
+    for line in list_lines(rows):
+        out(line)
+
+
+@task_app.command("add")
+def task_add(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Option(None, "--name", help="A short name (about 60 characters)"),
+    type_: Optional[str] = typer.Option(None, "--type", help="The task type"),
+    sprint: Optional[str] = typer.Option(None, "--sprint", help="The sprint it goes into"),
+    release: Optional[str] = typer.Option(None, "--release", help="The release it ships in"),
+    priority: Optional[str] = typer.Option(None, "--priority", help="The priority"),
+    label: Optional[list[str]] = typer.Option(None, "--label", help="A label (repeatable)"),
+    description: Optional[str] = typer.Option(None, "--description", help="What exactly to do"),
+    description_file: Optional[str] = typer.Option(
+        None, "--description-file", help="Read the description from a file"
+    ),
+    dep: Optional[list[str]] = typer.Option(
+        None, "--dep", help="A task it depends on (repeatable)"
+    ),
+    file: Optional[list[str]] = typer.Option(
+        None, "--file", help="A file it creates or changes (repeatable)"
+    ),
+    requirement: Optional[list[str]] = typer.Option(
+        None, "--requirement", help="A requirement (repeatable)"
+    ),
+    component: Optional[list[str]] = typer.Option(
+        None, "--component", help="A component (repeatable)"
+    ),
+    components_auto: Optional[str] = typer.Option(
+        None,
+        "--components",
+        click_type=click.Choice(["auto"]),
+        help="auto: the components its files are in (otherwise only suggested)",
+    ),
+    review: Optional[str] = typer.Option(None, "--review", help="How it is reviewed"),
+    related: Optional[list[str]] = typer.Option(
+        None, "--related", help="A related task (repeatable)"
+    ),
+    with_user: Optional[str] = typer.Option(
+        None, "--with", help="user: done together with the user"
+    ),
+    json_file: Optional[str] = typer.Option(None, "--json-file", help="Add many from a JSON file"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Add a task with the next ID, or many from a JSON file."""
+    if description and description_file:
+        raise Invalid("--description and --description-file can't both be given")
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would add tasks from {json_file}" if json_file else f"[dry-run] would add task {name}")
+        return
+    if json_file:
+        entries = read_entries(json_file)
     else:
-        sys.stdout.write(USAGE)
+        if description_file:
+            with open(description_file, encoding="utf-8") as f:
+                description = f.read()
+        entries = [
+            {
+                "name": name,
+                "type": type_,
+                "priority": priority,
+                "labels": label or [],
+                "description": description or "",
+                "dependencies": dep or [],
+                "files": file or [],
+                "requirements": requirement or [],
+                "sprint": sprint,
+                "release": release,
+                "components": "auto" if components_auto else (component or []),
+                "review": review,
+                "with": with_user,
+                "related": related or [],
+            }
+        ]
+    result = add_new_tasks(open_project(os.getcwd(), agent_identity(agent)), entries)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result["tasks"]))
+        return
+    for task in result["tasks"]:
+        out(f"Added {task['id']} {task['name']}")
+        line = suggestion_line(result["vocab"], task)
+        if line:
+            out(line)
 
 
-def build_parser():
-    parser = Parser(prog="atm", add_help=False)
-    commands = parser.add_subparsers(dest="command", parser_class=Parser)
+@task_app.command("edit")
+def task_edit(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    name: Optional[str] = typer.Option(None, "--name"),
+    description: Optional[str] = typer.Option(None, "--description"),
+    description_file: Optional[str] = typer.Option(None, "--description-file"),
+    sprint: Optional[str] = typer.Option(None, "--sprint"),
+    backlog: bool = typer.Option(False, "--backlog"),
+    type_: Optional[str] = typer.Option(None, "--type"),
+    priority: Optional[str] = typer.Option(None, "--priority"),
+    release: Optional[str] = typer.Option(None, "--release"),
+    review: Optional[str] = typer.Option(None, "--review"),
+    add_file: Optional[list[str]] = typer.Option(None, "--add-file"),
+    remove_file: Optional[list[str]] = typer.Option(None, "--remove-file"),
+    add_dep: Optional[list[str]] = typer.Option(None, "--add-dep"),
+    remove_dep: Optional[list[str]] = typer.Option(None, "--remove-dep"),
+    add_label: Optional[list[str]] = typer.Option(None, "--add-label"),
+    remove_label: Optional[list[str]] = typer.Option(None, "--remove-label"),
+    add_component: Optional[list[str]] = typer.Option(None, "--add-component"),
+    remove_component: Optional[list[str]] = typer.Option(None, "--remove-component"),
+    add_related: Optional[list[str]] = typer.Option(None, "--add-related"),
+    remove_related: Optional[list[str]] = typer.Option(None, "--remove-related"),
+    add_requirement: Optional[list[str]] = typer.Option(None, "--add-requirement"),
+    remove_requirement: Optional[list[str]] = typer.Option(None, "--remove-requirement"),
+    add_use_case: Optional[list[str]] = typer.Option(None, "--add-use-case"),
+    remove_use_case: Optional[list[str]] = typer.Option(None, "--remove-use-case"),
+    components_auto: Optional[str] = typer.Option(
+        None,
+        "--components",
+        click_type=click.Choice(["auto"]),
+        help="auto: add the components its files are in (otherwise only suggested)",
+    ),
+    with_user: Optional[str] = typer.Option(None, "--with"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Change a task's definition (not its status: use `atm task state`)."""
+    if description is not None and description_file:
+        raise Invalid("--description and --description-file can't both be given")
+    if sprint is not None and backlog:
+        raise Invalid("--sprint and --backlog can't both be given")
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would edit task {task_id}")
+        return
+    if description_file:
+        with open(description_file, encoding="utf-8") as f:
+            description = f.read()
+    result = edit_existing_task(
+        open_project(os.getcwd(), agent_identity(agent)),
+        task_id,
+        name=name,
+        description=description,
+        sprint=sprint,
+        backlog=backlog,
+        task_type=type_,
+        priority=priority,
+        release=release,
+        review=review,
+        with_=with_user,
+        components="auto" if components_auto else None,
+        add_files=add_file or [],
+        remove_files=remove_file or [],
+        add_dependencies=add_dep or [],
+        remove_dependencies=remove_dep or [],
+        add_labels=add_label or [],
+        remove_labels=remove_label or [],
+        add_components=add_component or [],
+        remove_components=remove_component or [],
+        add_related=add_related or [],
+        remove_related=remove_related or [],
+        add_requirements=add_requirement or [],
+        remove_requirements=remove_requirement or [],
+        add_use_cases=add_use_case or [],
+        remove_use_cases=remove_use_case or [],
+    )
+    task, changed = result["task"], result["changed"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(task))
+        return
+    out(f"{task['id']}: changed {', '.join(changed)}" if changed else f"{task['id']}: nothing changed")
+    # New files may put the task in components it isn't in yet (SR-2.7): suggested, not set
+    line = suggestion_line(result["vocab"], task) if add_file else None
+    if line:
+        out(line)
 
-    def command(name, run, description, hidden=False):
-        sub = commands.add_parser(name, description=description, help=argparse.SUPPRESS if hidden else description)
-        sub.add_argument("--json", action="store_true", help="print the result as JSON")
-        sub.set_defaults(run=run)
-        return sub
 
-    def agent_option(sub):
-        sub.add_argument("--agent", metavar="NAME", help="who you are (default: ATM_AGENT, else this session)")
+@task_app.command("details")
+def task_details(
+    ctx: typer.Context,
+    task_ids: Annotated[list[str], typer.Argument(help="Task IDs")],
+) -> None:
+    """Tasks in full (description, dependencies, files, notes)."""
+    views = show_tasks(open_project(os.getcwd()), task_ids)
+    if ctx.obj.get("json_out", False):
+        # An archived task says so (T-353)
+        out(to_json([{**v["task"], "archived": True} if v["archived"] else v["task"] for v in views]))
+    else:
+        out("\n\n".join(render_task(v) for v in views))
 
-    def status_option(sub):
-        sub.add_argument(
-            "--status",
-            metavar="ID",
-            help="the status to move to when the project has several of that kind (default: the first listed)",
+
+@task_app.command("note")
+def task_note(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    text: Annotated[str, typer.Argument(help="The note text")],
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Add a note to a task (at most 500 characters)."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would add a note to {task_id}")
+        return
+    task = add_task_note(open_project(os.getcwd(), agent_identity(agent)), task_id, text)
+    if ctx.obj.get("json_out", False):
+        out(to_json(task["notes"][-1]))
+    else:
+        out(f"{task['id']}: note added ({len(task['notes'])} in all)")
+
+
+@task_app.command("deps")
+def task_deps(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+) -> None:
+    """What a task waits for, and what waits for it."""
+    deps = task_dependencies(open_project(os.getcwd()), task_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(deps))
+        return
+    line = lambda items: ", ".join(f"{i['id']} ({i['status']})" for i in items) or "nothing"
+    out(f"{task_id} waits for: {line(deps['waits_for'])}")
+    out(f"{task_id} is waited on by: {line(deps['waited_on_by'])}")
+
+
+@task_app.command("state")
+def task_state(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    next_state: Annotated[
+        str, typer.Argument(help="Next state: todo, in_progress, in_review, done, blocked, skipped")
+    ],
+    note: Optional[str] = typer.Option(None, "--note", help="A note"),
+    reason: Optional[str] = typer.Option(None, "--reason", help="A reason"),
+    commit: Optional[str] = typer.Option(None, "--commit", help="The task's commit SHA"),
+    resolution: Optional[str] = typer.Option(
+        None, "--resolution", help="skipped: why it isn't needed (wont_do, obsolete or duplicate; default wont_do)"
+    ),
+    duplicate_of: Optional[str] = typer.Option(
+        None, "--duplicate-of", help="The task it duplicates"
+    ),
+    on: Optional[str] = typer.Option(
+        None, "--on", click_type=click.Choice(["user", "agent"]), help="blocked: who has to decide"
+    ),
+    question: Optional[list[str]] = typer.Option(
+        None, "--question", help="An open question (repeatable)"
+    ),
+    answer: Optional[list[str]] = typer.Option(None, "--answer", help="An answer (repeatable)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who runs it"),
+) -> None:
+    """Move a task to another state: in_progress, in_review, done, todo, blocked or skipped. A review's decision is
+    `atm task review`."""
+    # The state -> atm-lib's status function
+    cmd_map = {
+        "in_progress": "start",
+        "in_review": "review",
+        "done": "done",
+        "todo": "fail",  # chosen below by the kind the task is in now
+        "blocked": "block",
+        "skipped": "skip",
+    }
+    cmd = cmd_map.get(next_state)
+    if cmd is None:
+        raise Invalid(f"unknown state '{next_state}'. Use: {', '.join(sorted(cmd_map))}")
+
+    project = open_project(os.getcwd(), agent_identity(agent))
+    if next_state == "todo":
+        # Back to todo is a different status function for each kind the task is in (a failure says why: --reason)
+        cmd = todo_command(project, task_id, failing=reason is not None)
+
+    given = {
+        "note": note,
+        "reason": reason,
+        "commit": commit,
+        "resolution": resolution,
+        "duplicate_of": duplicate_of,
+        "on": on,
+        "question": question,
+        "answer": answer,
+    }
+    takes = {name for _, name in COMMAND_OPTIONS[cmd]}
+    extra = [name for name, value in given.items() if value and name not in takes]
+    if extra:
+        flags = ", ".join("--" + name.replace("_", "-") for name in extra)
+        raise Invalid(f"{flags}: not for {next_state} ({cmd}) from where {task_id} is")
+    required = {"reopen": "reason", "skip": "reason", "block": "on"}
+    if cmd in required and not given[required[cmd]]:
+        raise Invalid(f"{next_state} ({cmd}) needs --{required[cmd]}")
+    run_status(ctx, project, cmd, task_id, status, given)
+
+
+def run_status(ctx, project, cmd, task_id, status, given):
+    """Run atm-lib's status function `cmd` with the options `given`, and print the result (task state, task review)."""
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would {cmd} {task_id}")
+        return
+    options = {
+        parameter: given.get(name) or ([] if parameter in LIST_OPTIONS else None)
+        for parameter, name in COMMAND_OPTIONS[cmd]
+    }
+    result = STATUS_FUNCTIONS[cmd](project, task_id, status=status, **options)
+    report_expired(result["expired"])
+    task, hint, stranded = result["task"], result["hint"], result["stranded"]
+    if ctx.obj.get("json_out", False):
+        extra_fields = {"unblocked": result["unblocked"]} if cmd == "done" else {}
+        if hint:
+            extra_fields["suggest"] = {"archive": hint}
+        if stranded:
+            extra_fields["hint"] = stranded
+        out(to_json({**task, "claim": result["claim"], **extra_fields}))
+        return
+    out(f"{task['id']}: {result['previous']} -> {task['status']}")
+    if stranded:
+        out(f"  {stranded}")
+    if cmd == "start":
+        out(render_task(result["view"]))
+    if result["unblocked"]:
+        out("Now ready: " + ", ".join(result["unblocked"]))
+    if hint:
+        out(hint["text"])
+
+
+# A review's decisions (T-438): the task stays in review, and each opens one way out of it, which `task state` takes:
+# approved, `done` (or `in_progress` for what is left); changes requested, `in_progress`; rejected, `todo` or
+# `skipped`. The decision comes first, so a permission rule can tell them apart; no skill pre-approves them (I23)
+review_app = typer.Typer(help="Decide a task's review: approve it, ask for changes, or reject it; it stays in review")
+task_app.add_typer(review_app, name="review")
+
+
+@review_app.command("approve")
+def review_approve(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    note: Optional[str] = typer.Option(None, "--note", help="What is left to do, or a word for the agent"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who decides"),
+) -> None:
+    """Approve a task in review: then it can be done, or taken back for what is left."""
+    run_status(ctx, open_project(os.getcwd(), agent_identity(agent)), "approve", task_id, status, {"note": note})
+
+
+@review_app.command("request-changes")
+def review_request_changes(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    reason: str = typer.Option(..., "--reason", help="What needs to change (a rejection note)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who decides"),
+) -> None:
+    """Ask for changes to a task in review: its agent takes it back first."""
+    run_status(
+        ctx, open_project(os.getcwd(), agent_identity(agent)), "request-changes", task_id, status, {"reason": reason}
+    )
+
+
+@review_app.command("reject")
+def review_reject(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    reason: str = typer.Option(..., "--reason", help="Why (a rejection note)"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who decides"),
+) -> None:
+    """Reject a task in review: then it goes back to to do (its work dropped) or is skipped."""
+    run_status(ctx, open_project(os.getcwd(), agent_identity(agent)), "reject", task_id, status, {"reason": reason})
+
+
+# ---------------------------------------------------------------------------
+# loop group
+# ---------------------------------------------------------------------------
+
+loop_app = typer.Typer(help="The work loop")
+app.add_typer(loop_app, name="loop")
+
+
+@loop_app.command("next")
+def loop_next(
+    ctx: typer.Context,
+    sprint: Optional[list[str]] = typer.Option(
+        None, "--sprint", help="This sprint's tasks (repeatable; default: the active one)"
+    ),
+    tasks: Optional[str] = typer.Option(None, "--tasks", metavar="ID,ID", help="These tasks, in this order"),
+    all_tasks: bool = typer.Option(
+        False, "--all", help="Every task: the active sprint, the planned ones, the backlog"
+    ),
+    backlog: bool = typer.Option(False, "--backlog", help="The tasks with no sprint"),
+    type_: Optional[str] = typer.Option(None, "--type", help="Only this task type"),
+    with_user: bool = typer.Option(
+        False, "--with-user", help="Also tasks done together with the user (the user is watching)"
+    ),
+    claim: bool = typer.Option(False, "--claim", help="Also start and claim it, atomically"),
+    status: Optional[str] = typer.Option(None, "--status", help="Pick among same-kind statuses"),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
+) -> None:
+    """The task /atm:loop-tasks works on next (exit code 3 if there is none)."""
+    given = [flag for flag, value in (("--sprint", sprint), ("--tasks", tasks), ("--all", all_tasks), ("--backlog", backlog)) if value]
+    if len(given) > 1:
+        raise Invalid(f"{' and '.join(given)} can't both be given: they choose the tasks in different ways")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would {'claim' if claim else 'show'} the next task")
+        return
+    sel = selection(
+        sprints=sprint or None,
+        tasks=[i.strip() for i in (tasks or "").split(",") if i.strip()],
+        all_tasks=all_tasks,
+        backlog=backlog,
+        task_type=type_,
+    )
+    project = open_project(os.getcwd(), agent_identity(agent))
+    result = next_task_for(project, sel, with_user=with_user, claim=claim, status=status)
+    report_expired(result["expired"])
+    task, claimed, reason = result["task"], result["claim"], result["reason"]
+    if ctx.obj.get("json_out", False):
+        out(to_json({"task": task, "claim": claimed, "reason": reason}))
+    elif task:
+        verb = "Claimed" if claimed else "Next"
+        where = task.get("sprint") or "backlog"
+        out(f"{verb}: {task['id']} {task.get('name', '')} ({where}, {task.get('type')})")
+    else:
+        out(f"No task available: {reason}.")
+    if not task:
+        raise AtmExit(3)
+
+
+# ---------------------------------------------------------------------------
+# claim group
+# ---------------------------------------------------------------------------
+
+claim_app = typer.Typer(help="Claim lifecycle")
+app.add_typer(claim_app, name="claim")
+
+
+@claim_app.command("list")
+def claim_list(
+    ctx: typer.Context,
+) -> None:
+    """List live claims, shared by all worktrees of this clone."""
+    live =expire_claims(open_project(os.getcwd()))["claims"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(live))
+        return
+    if not live:
+        out("No live claims.")
+        return
+    current = now()
+    for c in live:
+        left = format_duration((parse_iso(c["lease_expires_at"]) - current).total_seconds())
+        out(f"{c['task']}  {c.get('agent')}  {c.get('branch') or '-'}  {left} left  ({c.get('worktree')})")
+
+
+def _auto_heartbeat(agent):
+    """`heartbeat --auto`, run by the plugin's PostToolUse hook after every tool call (CLI-6.2): renew this agent's
+    live claims once their last renewal is ten minutes old. It never prints and never fails, so a tool call is never
+    disturbed."""
+    try:
+        payload = hook_input()
+        cwd = payload.get("cwd") if isinstance(payload.get("cwd"), str) and os.path.isdir(payload["cwd"]) else os.getcwd()
+        if payload.get("session_id") and not (agent or os.environ.get("ATM_AGENT")):
+            # The same identity atm commands get in that folder: a subagent in a linked worktree renews its own claims
+            actor = session_identity(payload["session_id"], cwd)
+        else:
+            actor = agent_identity(agent)
+        project = hook_project(cwd, actor)  # also lists the project on the dashboard
+        if project is not None:
+            renew_due_claims(project)
+    except Exception:  # a hook must never break the tool call it follows
+        return
+
+
+@claim_app.command("heartbeat")
+def claim_heartbeat(
+    ctx: typer.Context,
+    task_id: Optional[str] = typer.Argument(None, help="The task ID"),
+    auto: bool = typer.Option(
+        False, "--auto", help="Renew your claims if their last renewal is ten minutes old; silent (the plugin's hook)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
+) -> None:
+    """Extend your claim's lease."""
+    if ctx.obj.get("dry_run", False):
+        out("[dry-run] would renew claims due for it" if auto else f"[dry-run] would extend the lease on {task_id}")
+        return
+    if auto:
+        _auto_heartbeat(agent)
+        return
+    if not task_id:
+        raise Invalid("atm claim heartbeat needs a task ID (or --auto)")
+    claim = renew_lease(open_project(os.getcwd(), agent_identity(agent)), task_id)["claim"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(claim))
+    else:
+        out(f"{task_id}: lease extended to {claim['lease_expires_at']}")
+
+
+@claim_app.command("hold")
+def claim_hold(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    max_minutes: float = typer.Option(
+        HOLD_MAX_MINUTES, "--max", metavar="MINUTES", help=f"Stop after this long at most (up to {HOLD_LIMIT_MINUTES})"
+    ),
+    every: Optional[float] = typer.Option(
+        None, "--every", metavar="SECONDS", help="Renew this often (default: three times per lease, at least once a minute)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help="Who you are"),
+) -> None:
+    """Keep your claim alive while the shell that runs this lives: `atm claim hold T-1 && npm test`. atm runs nothing:
+    a watcher renews the claim until that shell ends, the claim is released or finished, or --max is up."""
+    if not 0 < max_minutes <= HOLD_LIMIT_MINUTES:
+        raise Invalid(f"--max must be more than 0 and at most {HOLD_LIMIT_MINUTES} minutes")
+    if every is not None and every <= 0:
+        raise Invalid("--every must be more than 0 seconds")
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would hold the claim on {task_id} while this shell runs")
+        return
+    held = hold_claim(open_project(os.getcwd(), agent_identity(agent)), task_id, max_minutes, every)
+    if ctx.obj.get("json_out", False):
+        out(to_json(held))
+    else:
+        out(
+            f"{task_id}: holding the claim while this shell runs (pid {held['watching']}), until {held['until']} at "
+            f"most; lease now to {held['claim']['lease_expires_at']}"
         )
 
-    command("version", cmd_version, "print the plugin version")
-    command("help", cmd_help, "show the list of commands")
-    command("paths", cmd_paths, "print where this project's task files are")
-    command("migrate", cmd_migrate, "move an old tasks.json into .agentic-task-manager/ and set the folder up")
 
-    serve = command("serve", cmd_serve, "run the dashboard server, one for all your projects, in the background")
-    serve.add_argument("action", nargs="?", default="start", choices=["start", "stop", "status"])
-    serve.add_argument("--open", action="store_true", help="also open the dashboard in the browser")
-    serve.add_argument("--all", action="store_true", help="show the overview of all projects, not this project")
-    serve.add_argument(
-        "--refresh",
-        action="store_true",
-        help="only restart a running server that has an older dashboard than this plugin (the SessionStart hook)",
+# ---------------------------------------------------------------------------
+# vcs group
+# ---------------------------------------------------------------------------
+
+vcs_app = typer.Typer(help="Version control integration")
+app.add_typer(vcs_app, name="vcs")
+
+
+@vcs_app.command("commit")
+def vcs_commit(
+    ctx: typer.Context,
+    task_id: Annotated[str, typer.Argument(help="The task ID")],
+    file: Optional[list[str]] = typer.Option(
+        None, "--file", help="A file the task changed (repeatable)"
+    ),
+    dir_: Optional[list[str]] = typer.Option(
+        None, "--dir", help="Every change under a folder (repeatable)"
+    ),
+    message: Optional[str] = typer.Option(None, "--message", help="The commit message"),
+    record: Optional[str] = typer.Option(
+        None, "--record", help="Record this existing commit instead"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Commit exactly the named files plus tasks.json, and record the commit."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm vcs commit {task_id}"]
+        if file:
+            for f in file:
+                parts.append(f"--file {f}")
+        if dir_:
+            for d in dir_:
+                parts.append(f"--dir {d}")
+        if message:
+            parts.append(f"--message {message}")
+        if record:
+            parts.append(f"--record {record}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    if record is not None:
+        if file or dir_ or message is not None:
+            raise Invalid("--record records an existing commit: no --file, --dir or --message")
+        result = record_commit(project, task_id, record)
+        if ctx.obj.get("json_out", False):
+            shown = {k: result[k] for k in ("task", "commit", "recorded")}
+            out(to_json({**shown, **({"hint": result["hint"]} if result["hint"] else {})}))
+            return
+        out(f"{result['task']}: recorded {result['commit'][:7]} {result['summary']}".rstrip())
+        if result["hint"]:
+            out(f"  {result['hint']}")
+        return
+    files = repository_paths(project, file or [], os.getcwd())
+    if dir_:
+        files += [f for f in folder_changes(project, task_id, dir_, os.getcwd()) if f not in files]
+    result = commit_task(project, task_id, files, message)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    out(f"{result['task']}: committed {result['commit'][:7]} {result['message'].splitlines()[0]}")
+    out("  " + ", ".join(result["files"]))
+
+
+@vcs_app.command("pr")
+def vcs_pr(
+    ctx: typer.Context,
+    ids: Annotated[list[str], typer.Argument(help="Task IDs")],
+    number: int = typer.Option(..., "--number", help="The PR number"),
+    url: str = typer.Option(..., "--url", help="The PR's URL"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Record the PR that contains the tasks."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm vcs pr {' '.join(ids)} --number {number} --url {url}"]
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    task_ids = record_pr(project, ids, number, url)
+    if ctx.obj.get("json_out", False):
+        out(to_json({"tasks": task_ids, "pr": {"number": number, "url": url}}))
+    else:
+        out(f"{', '.join(task_ids)}: in PR #{number} ({url})")
+
+
+@vcs_app.command("pushed")
+def vcs_pushed(
+    ctx: typer.Context,
+    pr: int = typer.Option(..., "--pr", help="The PR number"),
+    at: Optional[str] = typer.Option(None, "--at", help="When it was merged (ISO 8601 UTC)"),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Record that a PR was merged, on the tasks it contains."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [f"atm vcs pushed --pr {pr}"]
+        if at:
+            parts.append(f"--at {at}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    result = record_merge(project, pr, at)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    task_ids = result["tasks"]
+    out(f"PR #{pr} merged: {', '.join(task_ids)}" if task_ids else f"PR #{pr}: already recorded as merged")
+    for release_id in result["released"]:
+        out(f"Released {release_id}: all its tasks are merged in PR #{pr}.")
+    for release_id, waiting in result["pending"].items():
+        out(f"{release_id} stays planned: {', '.join(waiting)} {'is' if len(waiting) == 1 else 'are'} not merged in PR #{pr}.")
+
+
+@vcs_app.command("repository")
+def vcs_repository(
+    ctx: typer.Context,
+    url: Optional[str] = typer.Argument(None, help="An http(s) URL or git remote"),
+    old: Optional[str] = typer.Option(
+        None, "--from", help="Move recorded PR links from this address"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent"),
+) -> None:
+    """Print or set the repository's web address."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = ["atm vcs repository"]
+        if url:
+            parts.append(url)
+        if old:
+            parts.append(f"--from {old}")
+        if agent:
+            parts.append(f"--agent {agent}")
+        out("[dry-run] would run: " + " ".join(parts))
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    if url is None:
+        if old is not None:
+            raise Invalid(f"unexpected argument '{old}' (atm vcs repository URL)")
+        current = get_repository(project)
+        if ctx.obj.get("json_out", False):
+            out(to_json({"repository": current}))
+        elif current:
+            out(current)
+        else:
+            out("No repository address yet. Set it with `atm vcs repository <url>` (a git remote works too).")
+        return
+    result = set_repository(project, url, old)
+    moved = result["moved_links"]
+    if ctx.obj.get("json_out", False):
+        out(to_json({"repository": result["repository"], "moved_links": moved}))
+    else:
+        links = f" ({moved} PR link{'' if moved == 1 else 's'} moved from {result['previous']})" if moved else ""
+        out(f"Repository address set: {result['repository']}{links}")
+
+
+# ---------------------------------------------------------------------------
+# db group
+# ---------------------------------------------------------------------------
+
+db_app = typer.Typer(help="Database / file maintenance")
+app.add_typer(db_app, name="db", rich_help_panel=MAINTENANCE)
+
+
+@db_app.command("migrate")
+def db_migrate(
+    ctx: typer.Context,
+) -> None:
+    """Move tasks.json into .agentic-task-manager/ and set up the folder."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out("[dry-run] would move tasks.json into .agentic-task-manager/ and set up the folder")
+        return
+    migration = migrate_folder(os.getcwd())
+    if ctx.obj.get("json_out", False):
+        out(to_json(migration["result"]))
+    else:
+        for line in migration["lines"]:
+            out(line)
+
+
+@db_app.command("merge-driver", hidden=True)
+def db_merge_driver(
+    ctx: typer.Context,
+    base: Annotated[str, typer.Argument(help="The common ancestor's tasks.json")],
+    ours: Annotated[str, typer.Argument(help="This branch's tasks.json (written with the result)")],
+    theirs: Annotated[str, typer.Argument(help="The other branch's tasks.json")],
+) -> None:
+    """git's merge driver for tasks.json (git runs it; `db init` registers it)."""
+    conflicts = merge_versions(base, ours, theirs)
+    if ctx.obj.get("json_out", False):
+        out(to_json({"conflicts": conflicts}))
+    if conflicts:
+        sys.stderr.write("atm: tasks.json has conflicting edits (this branch's version was kept):\n")
+        for conflict in conflicts:
+            sys.stderr.write(f"  {conflict}\n")
+        raise AtmExit(1)
+
+
+@db_app.command("archive")
+def db_archive(
+    ctx: typer.Context,
+    sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
+    before: Optional[str] = typer.Option(None, "--before"),
+    keep_days: Optional[float] = typer.Option(None, "--keep-days"),
+) -> None:
+    """Move finished tasks to tasks-archive.json (with --dry-run: say which, and move nothing)."""
+    # atm-lib's own dry run says which tasks would move
+    dry_run = ctx.obj.get("dry_run", False)
+    result = archive_finished(
+        open_project(os.getcwd()), sprint, before, keep_days, dry_run
     )
-    serve.add_argument("--port", type=int, default=DEFAULT_PORT, help="the port to try first")
-    serve.add_argument("--dir", metavar="PATH", help="the project to show (default: the current directory's)")
+    ids, dropped, kept, sizes = (
+        result["moved"],
+        result["duplicates_dropped"],
+        result["kept"],
+        result["sizes"],
+    )
+    shown = {
+        "moved": ids,
+        "dry_run": bool(dry_run),
+        "tasks_kb": sizes["tasks"] // 1024,
+        "archive_kb": sizes["archive"] // 1024,
+        "duplicates_dropped": dropped,
+        "kept": kept,
+    }
+    if ctx.obj.get("json_out", False):
+        out(to_json(shown))
+        return
+    if dropped and not dry_run:
+        out(
+            f"Kept {describe_ids(dropped)} in tasks.json and dropped the archive's copy (an interrupted move)."
+        )
+    if not ids:
+        out("Nothing to archive.")
+    elif dry_run:
+        out(f"Would archive {len(ids)} task(s): {describe_ids(ids)}.")
+    else:
+        out(
+            f"Archived {len(ids)} task(s): {describe_ids(ids)}. "
+            f"tasks.json is now {shown['tasks_kb']} KB, tasks-archive.json {shown['archive_kb']} KB."
+        )
+    if kept:
+        out(
+            f"{'Would keep' if dry_run else 'Kept'} {len(kept)} finished: {describe_kept(kept)}."
+        )
 
-    for name, description in (
-        ("start", "mark a task in_progress and claim it (its dependencies must be done)"),
-        ("review", "ask for a review of a finished task: in_review, its claim released"),
-        ("done", "mark an in_progress or in_review task done and drop its claim"),
-        ("fail", "put an in_progress task back to todo, recording why"),
-        ("release", "put an in_progress task back to todo"),
-        ("reject", "send a task in review back to todo, recording why"),
-        ("approve", "approve a task in review: it stays in review until an agent takes it back to finish"),
-        ("request-changes", "ask for changes to a task in review: its agent takes it back first (a rejection note)"),
-        ("block", "a task that can't go on until someone decides: blocked, with the questions; claim released"),
-        ("unblock", "a blocked task goes back to todo, with the answers as a note"),
-        ("reopen", "a done or skipped task goes back to todo, with the reason as a note"),
-        ("skip", "a todo or blocked task that isn't needed: skipped, with the reason as a note"),
-    ):
-        sub = command(name, cmd_status_change(name), description)
-        sub.add_argument("id", help="the task ID")
-        agent_option(sub)
-        status_option(sub)
-        if name == "fail":
-            sub.add_argument("--reason", metavar="TEXT", help="why it failed (kept as a failure note)")
-        if name == "release":
-            sub.add_argument("--note", metavar="TEXT", help="a handoff for whoever picks it up next")
-        if name == "review":
-            sub.add_argument("--note", metavar="TEXT", help="what the reviewer should look at")
-        if name in ("reject", "request-changes"):
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="what needs to change (a rejection note)")
-        if name == "approve":
-            sub.add_argument("--note", metavar="TEXT", help="what is left to do, or a word for the agent")
-        if name == "reopen":
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="why it isn't done after all (a note)")
-        if name == "skip":
-            sub.add_argument("--reason", metavar="TEXT", required=True, help="why it isn't needed (a note)")
-            sub.add_argument(
-                "--resolution", choices=["wont_do", "obsolete", "duplicate"], help="why it ended (default: wont_do)"
+
+@db_app.command("unarchive")
+def db_unarchive(
+    ctx: typer.Context,
+    ids: Annotated[list[str], typer.Argument(help="Task IDs")],
+) -> None:
+    """Bring archived tasks back into tasks.json."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would unarchive {', '.join(ids)}")
+        return
+    result = unarchive_tasks(open_project(os.getcwd()), ids)
+    again = result["moves_back"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    out(f"Brought back {', '.join(ids)} from the archive.")
+    if again:
+        out(
+            f"{describe_ids(again)} {'is' if len(again) == 1 else 'are'} finished: the next `atm db archive` moves "
+            f"{'it' if len(again) == 1 else 'them'} back, unless reopened (`atm task state <id> todo --reason …`)."
+        )
+
+
+@db_app.command("init")
+def db_init(
+    ctx: typer.Context,
+    meta_file: Optional[str] = typer.Option(
+        None, "--meta-file", help="Set tasks.json meta from a JSON object"
+    ),
+) -> None:
+    """Give tasks.json a meta.id and register the merge driver."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out("[dry-run] would give tasks.json a meta.id and register the merge driver")
+        return
+    project = open_project(os.getcwd())
+    if meta_file:
+        new = read_json(meta_file)
+        if not isinstance(new, dict):
+            raise Invalid(f"{meta_file} must hold a JSON object: the meta keys to set")
+        created, keys = init_meta(project, new)
+        project = open_project(os.getcwd())  # the task data as it is now
+        if not ctx.obj.get("json_out", False):
+            out(("Created tasks.json; meta: " if created else "Updated tasks.json meta: ") + (", ".join(keys) or "-"))
+    project_id = ensure_project_id(project)
+    repository = ensure_repository(project)
+    register_project(project)  # the dashboard lists every project atm runs in
+    setup = set_up_store(project)
+    if ctx.obj.get("json_out", False):
+        out(
+            to_json(
+                {
+                    "project_id": project_id,
+                    "repository": repository,
+                    "git": setup["git"],
+                    "gitattributes_added": setup["gitattributes_added"],
+                }
             )
-            sub.add_argument("--duplicate-of", metavar="ID", help="the task it duplicates (with --resolution duplicate)")
-        if name == "block":
-            sub.add_argument("--on", required=True, choices=["user", "agent"], help="who has to decide")
-            sub.add_argument("--question", action="append", default=[], metavar="TEXT", help="an open question")
-            sub.add_argument("--reason", metavar="TEXT", help="what it waits for, when it isn't a question")
-        if name == "unblock":
-            sub.add_argument("--answer", action="append", default=[], metavar="TEXT", help="an answer, in order")
-        if name == "done":
-            sub.add_argument("--note", metavar="TEXT", help="a one-line outcome")
-            sub.add_argument("--commit", metavar="SHA", help="the task's commit")
-            sub.add_argument(
-                "--resolution", choices=["done", "wont_do", "duplicate", "obsolete"], help="how it ended (default: done)"
-            )
-
-    next_ = command("next", cmd_next, "the task /atm:loop-tasks works on next (exit code 3 if there is none)")
-    next_.add_argument("--type", help="only this task type")
-    next_.add_argument(
-        "--with-user", action="store_true", help="also tasks done together with the user (the user is watching)"
-    )
-    pick = next_.add_mutually_exclusive_group()
-    pick.add_argument(
-        "--sprint", action="append", metavar="NAME", help="this sprint's tasks (repeatable; default: the active one)"
-    )
-    pick.add_argument("--tasks", metavar="ID,ID", help="these tasks, in this order")
-    pick.add_argument("--all", action="store_true", help="every task: the active sprint, the planned ones, the backlog")
-    pick.add_argument("--backlog", action="store_true", help="the tasks with no sprint")
-    next_.add_argument("--claim", action="store_true", help="also start and claim it, atomically")
-    agent_option(next_)
-    status_option(next_)
-
-    show = command("show", cmd_show, "tasks in full: what an agent needs to work on them")
-    show.add_argument("ids", nargs="+", metavar="id", help="task IDs")
-    list_ = command("list", cmd_list, "one line per task: ID, status, priority, labels, name")
-    list_.add_argument("--status", action="append", metavar="ID", help="only these statuses (repeatable)")
-    list_.add_argument("--type", help="only this task type")
-    list_.add_argument("--priority", help="only this priority (a missing one counts as the default)")
-    list_.add_argument("--label", action="append", help="only tasks with this label (repeatable: all of them)")
-    list_.add_argument("--agent", metavar="NAME", help="only tasks started by this agent")
-    list_.add_argument("--ready", action="store_true", help="only to-do tasks whose dependencies are done")
-    list_.add_argument("--blocked", action="store_true", help="only blocked tasks and to-do tasks still waiting")
-    list_.add_argument("--in-pr", action="store_true", help="only tasks in a PR that isn't recorded as merged")
-    list_.add_argument("--with-user", action="store_true", help="only tasks done together with the user (with: user)")
-    list_.add_argument("--archived", action="store_true", help="list the archive (tasks-archive.json) instead")
-    list_.add_argument(
-        "--derived",
-        action="store_true",
-        help="each task in full with what atm derives for it (kind, ready, waiting for, effective review and release, "
-        "stage), as JSON: what atm serve's api/v1/projects/<id>/tasks gives the dashboard",
-    )
-    list_.add_argument(
-        "--tolerant",
-        action="store_true",
-        help="with --derived: read a malformed tasks.json as far as it can be read, as atm serve does for the "
-        "dashboard, and print {meta, tasks, problems}",
-    )
-    status = command(
-        "status",
-        cmd_status,
-        "the overview: counts, what is in progress, in review or blocked, the next task, the file's size",
+        )
+        return
+    if project_id:
+        out(f"Gave this project an id ({project_id}) in tasks.json meta, for the dashboard's saved view.")
+    if repository:
+        out(f"Recorded the repository address ({repository}), for commit and PR links on the dashboard.")
+    if not setup["git"]:
+        out("Not in a git repository: there is no merge driver to set up.")
+        return
+    out(
+        "Registered the tasks.json merge driver (git config merge.atm)"
+        + (
+            " and added .agentic-task-manager/.gitattributes (staged)."
+            if setup["gitattributes_added"]
+            else "; .gitattributes already set."
+        )
     )
 
-    command("summary", cmd_summary, "the project's numbers as atm serve gives them to the dashboard (JSON)")
 
-    def scope_options(sub):
-        sub.add_argument("--sprint", action="append", metavar="NAME", help="only this sprint's tasks (repeatable)")
-        sub.add_argument("--backlog", action="store_true", help="only the tasks with no sprint")
-        sub.add_argument("--release", metavar="R", help="only the tasks in this release (their own, or their sprint's)")
-        sub.add_argument("--component", metavar="C", help="only the tasks in this component")
+# ---------------------------------------------------------------------------
+# release group
+# ---------------------------------------------------------------------------
 
-    scope_options(list_)
-    scope_options(status)
-    deps = command("deps", cmd_deps, "what a task waits for, and what waits for it")
-    deps.add_argument("id", help="the task ID")
+release_app = typer.Typer(help="Release management")
+app.add_typer(release_app, name="release")
 
-    add = command("add", cmd_add, "add a task with the next ID, or many from a JSON file")
-    add.add_argument("--name", help="a short name (about 60 characters)")
-    add.add_argument("--type", help="the task type (one of the project's types)")
-    add.add_argument("--priority", help="the priority (default: none, which counts as the project's default)")
-    add.add_argument("--label", action="append", default=[], help="a label (repeatable)")
-    describe = add.add_mutually_exclusive_group()
-    describe.add_argument("--description", default="", help="what exactly to do")
-    describe.add_argument("--description-file", metavar="FILE", help="read the description from a file")
-    add.add_argument("--dep", action="append", default=[], metavar="ID", help="a task it depends on (repeatable)")
-    add.add_argument("--file", action="append", default=[], help="a file it will create or change (repeatable)")
-    add.add_argument(
-        "--requirement",
-        action="append",
-        default=[],
-        help="a requirement: its ID, or a link to where it is defined (repeatable)",
-    )
-    add.add_argument("--sprint", metavar="NAME", help="the sprint it goes into (default: none, the backlog)")
-    add.add_argument("--release", metavar="R", help="the release it ships in (default: its sprint's)")
-    add.add_argument("--component", action="append", default=[], metavar="C", help="a component (repeatable)")
-    add.add_argument(
-        "--components", choices=["auto"], help="auto: the components its files are in (otherwise only suggested)"
-    )
-    add.add_argument(
-        "--review", choices=list(REVIEW_MODES), help="how it is reviewed (default: its component's, else the project's)"
-    )
-    add.add_argument("--related", action="append", default=[], metavar="ID", help="a related task (repeatable)")
-    add.add_argument(
-        "--with", dest="with_", choices=["user"], help="user: done together with the user (unattended loops skip it)"
-    )
-    add.add_argument(
-        "--json-file",
-        metavar="FILE",
-        help='add many: a JSON list of tasks; an "id" there is a placeholder (e.g. "new-1") other tasks\' '
-        '"dependencies" can use, replaced by the real ID',
-    )
-    agent_option(add)
 
-    edit = command("edit", cmd_edit, "change a task's definition (not its status: use the status commands)")
-    edit.add_argument("id", help="the task ID")
-    edit.add_argument("--name")
-    edit_description = edit.add_mutually_exclusive_group()
-    edit_description.add_argument("--description")
-    edit_description.add_argument("--description-file", metavar="FILE")
-    edit_sprint = edit.add_mutually_exclusive_group()
-    edit_sprint.add_argument("--sprint", metavar="NAME", help="put it in this sprint (planned or active)")
-    edit_sprint.add_argument("--backlog", action="store_true", help="take it out of its sprint, into the backlog")
-    edit.add_argument("--type")
-    edit.add_argument("--priority")
-    edit.add_argument("--release", metavar="R", help="the release it ships in (empty: its sprint's)")
-    edit.add_argument(
-        "--review", choices=list(REVIEW_MODES) + [""], help="how it is reviewed (empty: its component's, else the project's)"
-    )
-    for option, help_text in (
-        ("file", "a file it creates or changes"),
-        ("dep", "a task it depends on"),
-        ("label", "a label"),
-        ("component", "a component"),
-        ("related", "a related task"),
-        ("requirement", "a requirement: its ID, or a link to where it is defined"),
-        ("use-case", "a use case: its ID, or a link to where it is defined"),
-    ):
-        edit.add_argument(f"--add-{option}", action="append", default=[], metavar="VALUE", help=f"add {help_text}")
-        edit.add_argument(f"--remove-{option}", action="append", default=[], metavar="VALUE", help=f"remove {help_text}")
-    edit.add_argument(
-        "--components", choices=["auto"], help="auto: add the components its files are in (otherwise only suggested)"
-    )
-    edit.add_argument(
-        "--with", dest="with_", choices=["user", ""], help="user: done together with the user (empty: not any more)"
-    )
-    agent_option(edit)
+@release_app.command("list")
+def release_list(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="List archived releases too"),
+) -> None:
+    """List releases with their tasks by kind and stage."""
+    project = open_project(os.getcwd())
+    listed = list_releases(project, all_)
+    if ctx.obj.get("json_out", False):
+        out(to_json(listed["releases"]))
+        return
+    if not listed["releases"]:
+        out(
+            "No open releases (--all lists the archived ones)."
+            if listed["has_releases"]
+            else "No releases yet: atm release add <R>."
+        )
+        return
+    for r in listed["releases"]:
+        out(describe_release(r))
 
-    check = command("check", cmd_check, "check tasks.json: the schema, the vocabularies, dependencies; exit 1 on errors")
-    check.add_argument("--files", action="store_true", help="also warn about missing files listed by finished tasks")
 
-    archive = command("archive", cmd_archive, "move finished tasks to tasks-archive.json, to keep tasks.json small")
-    archive.add_argument("--sprint", action="append", metavar="NAME", help="only this sprint's tasks (repeatable)")
-    archive.add_argument("--before", metavar="DATE", help="only tasks finished before this date (2026-05-01)")
-    archive.add_argument(
-        "--keep-days", type=float, help="keep tasks finished in the last N days (default: meta.archive.keep_days, 14)"
+@release_app.command("add")
+def release_add(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+    name: Optional[str] = typer.Option(None, "--name", help="Add, edit: a name besides its ID (empty: remove it)"),
+    target: Optional[str] = typer.Option(None, "--target", metavar="DATE", help="Add, edit: the planned date, YYYY-MM-DD"),
+    pr: Optional[list[int]] = typer.Option(None, "--pr", metavar="N", help="Add: give it the tasks of pull request N (repeatable)"),
+    released_at: Optional[str] = typer.Option(None, "--released-at", metavar="TIME", help="Add: it shipped already, at this time (e.g. its PR's merge)"),
+) -> None:
+    """Add a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [release_id]
+        if name:
+            parts.append(f"--name {name}")
+        if target:
+            parts.append(f"--target {target}")
+        if pr:
+            for n in pr:
+                parts.append(f"--pr {n}")
+        if released_at:
+            parts.append(f"--released-at {released_at}")
+        out(f"[dry-run] would add release {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = add_release(
+        project, release_id, name=name, target=target, prs=pr or [], released_at=released_at
     )
-    archive.add_argument("--dry-run", action="store_true", help="only say what would move")
-    unarchive = command("unarchive", cmd_unarchive, "bring archived tasks back into tasks.json")
-    unarchive.add_argument("ids", nargs="+", metavar="id", help="task IDs")
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    release, given, prs = result["release"], result["tasks"], pr or []
+    line = f'Added the release “{release_id}” ({release["state"]})'
+    if given:
+        numbers = ", ".join(f"#{n}" for n in prs)
+        line += f", with the {len(given)} task{'' if len(given) == 1 else 's'} of PR{'s' if len(prs) > 1 else ''} {numbers}"
+    out(line + ".")
 
-    workflow = command("workflow", cmd_workflow, "print the project's workflow, or set it (atm workflow set TYPE)")
-    workflow.add_argument("action", nargs="?", choices=["set"], help="set: change the workflow")
-    workflow.add_argument("type", nargs="?", help="direct or pull-request")
-    workflow.add_argument("--base", help="the branch PRs target, or that direct pushes to")
-    workflow.add_argument("--verify", choices=["true", "false"], help="run the project's verify before pushing")
-    workflow.add_argument("--max-rounds", type=int, help="CI fix rounds before /atm:push stops")
-    workflow.add_argument("--commit-template", metavar="TEXT", help='commit messages, e.g. "feat({id}): {name}"')
-    workflow.add_argument(
-        "--trailers",
-        choices=["forbid", "require", "none"],
-        help="forbid Co-Authored-By lines, require the --trailer lines, or leave it to the agent",
-    )
-    workflow.add_argument("--trailer", action="append", default=[], metavar="LINE", help="a required trailer line")
 
-    commit = command("commit", cmd_commit, "commit exactly the named files plus tasks.json, and record the commit")
-    commit.add_argument("id", help="the task ID")
-    commit.add_argument(
-        "--file", action="append", default=[], metavar="F", help="a file the task changed (repeat for each)"
-    )
-    commit.add_argument(
-        "--dir",
-        action="append",
-        default=[],
-        metavar="FOLDER",
-        help="every change under a folder the task rebuilt, e.g. a generated one (repeatable; refused for the "
-        "repository's root, the task folder, and a folder holding files another agent's claimed task lists)",
-    )
-    commit.add_argument("--message", metavar="TEXT", help="the message (default: meta.workflow.commit_template)")
-    commit.add_argument(
-        "--record",
-        metavar="REV",
-        help="record this existing commit on the current branch instead of committing (e.g. after a rebase)",
-    )
-    agent_option(commit)
+@release_app.command("edit")
+def release_edit(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+    name: Optional[str] = typer.Option(None, "--name", help="Add, edit: a name besides its ID (empty: remove it)"),
+    target: Optional[str] = typer.Option(None, "--target", metavar="DATE", help="Add, edit: the planned date, YYYY-MM-DD"),
+) -> None:
+    """Edit a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [release_id]
+        if name is not None:
+            parts.append(f"--name {name}")
+        if target is not None:
+            parts.append(f"--target {target}")
+        out(f"[dry-run] would edit release {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = edit_release(project, release_id, name=name, target=target)
+    release, changed = result["release"], result["changed"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(release))
+    else:
+        out(f"{release['id']}: changed {', '.join(changed)}" if changed else f"{release['id']}: nothing changed")
 
-    pr = command("pr", cmd_pr, "record the PR that contains the tasks")
-    pr.add_argument("ids", nargs="+", metavar="id", help="task IDs")
-    pr.add_argument("--number", type=int, required=True, help="the PR number")
-    pr.add_argument("--url", required=True, help="the PR's URL")
-    agent_option(pr)
 
-    merged = command("merged", cmd_merged, "record that a PR was merged, on the tasks it contains")
-    merged.add_argument("--pr", type=int, required=True, metavar="N", help="the PR number")
-    merged.add_argument("--at", metavar="TIME", help="when it was merged (ISO 8601 UTC; default: now)")
-    agent_option(merged)
+@release_app.command("archive")
+def release_archive(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+) -> None:
+    """Archive a release."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        out(f"[dry-run] would archive release {release_id}")
+        return
+    project = open_project(os.getcwd())
+    release = archive_release(project, release_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(release))
+    else:
+        out(f"Archived the release “{release['id']}”.")
 
-    note = command("note", cmd_note, "add a note to a task (at most 500 characters)")
-    note.add_argument("id", help="the task ID")
-    note.add_argument("text", help="the note")
-    agent_option(note)
 
-    heartbeat = command("heartbeat", cmd_heartbeat, "extend your claim's lease")
-    heartbeat.add_argument("id", nargs="?", help="the task ID")
-    heartbeat.add_argument(
-        "--auto",
-        action="store_true",
-        help="renew your claims if their last renewal is ten minutes old; silent (the plugin's PostToolUse hook)",
-    )
-    agent_option(heartbeat)
+@release_app.command("notes")
+def release_notes_cmd(
+    ctx: typer.Context,
+    release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
+) -> None:
+    """Print a Markdown draft of a release's changes."""
+    project = open_project(os.getcwd())
+    notes = release_notes(project, release_id)
+    if ctx.obj.get("json_out", False):
+        out(to_json(notes))
+        return
+    for line in describe_notes(notes):
+        out(line)
 
-    run = command("run", cmd_run, "run a long command while keeping your claim on a task alive")
-    run.add_argument("id", help="the task ID")
-    run.add_argument(
-        "--every",
-        type=float,
-        metavar="SECONDS",
-        help="renew this often (default: three times per lease, at least once a minute)",
-    )
-    agent_option(run)
 
-    init = command("init", cmd_init, "give tasks.json a meta.id, and register the tasks.json merge driver")
-    init.add_argument(
-        "--meta-file",
-        metavar="F",
-        help="set tasks.json meta from a JSON object (project, vocabularies); creates tasks.json if needed",
-    )
-    merge = command("merge-driver", cmd_merge_driver, "git merge driver for tasks.json")
-    for side in ("base", "ours", "theirs"):
-        merge.add_argument(side)
-    command("claims", cmd_claims, "list live claims, shared by all worktrees of this clone")
-    repository = command("repository", cmd_repository, "print or set the repository's web address (meta.repository)")
-    repository.add_argument("action", nargs="?", choices=["set"], help="set: change it")
-    repository.add_argument("url", nargs="?", help="an http(s) URL or a git remote (git@host:owner/repo.git)")
-    repository.add_argument(
-        "--from",
-        dest="old",
-        metavar="OLD",
-        help="with set: move recorded PR links from this address (default: the address being replaced)",
-    )
-    logo = command("logo", cmd_logo, "print, set or unset the project's logo for the dashboard (meta.logo)")
-    logo.add_argument("action", nargs="?", choices=["set", "unset"], help="set or unset it")
-    logo.add_argument("path", nargs="?", help="set: the image (SVG, PNG, WebP or ICO), relative to here")
-    sprints = command("sprints", cmd_sprints, "the sprints with their task counts; add, edit, start or delete one")
-    sprints.add_argument(
-        "action", nargs="?", choices=["list", "add", "edit", "start", "close", "delete"], help="what to do"
-    )
-    sprints.add_argument("name", nargs="?", help="the sprint's name (add: generated when left out)")
-    sprints.add_argument(
-        "--carry-to", metavar="WHERE", help="close: where unfinished tasks go: a sprint's name, new, or backlog"
-    )
-    sprints.add_argument(
-        "--name", dest="new_name", metavar="NAME", help="close --carry-to new: the new sprint's name (default: generated)"
-    )
-    sprints.add_argument(
-        "--reviewed", action="store_true", help="close: its batch tasks were reviewed with the user (the sprint review)"
-    )
-    agent_option(sprints)
-    sprints.add_argument("--all", action="store_true", help="list: the closed sprints too")
-    sprints.add_argument("--goal", help="add, edit: what the sprint is for (empty: remove it)")
-    sprints.add_argument("--release", help="add, edit: the release it delivers to (empty: remove it)")
-    sprints.add_argument("--due", metavar="DATE", help="add, edit: the planned end, YYYY-MM-DD (empty: remove it)")
-    sprints.add_argument("--after", metavar="NAME", help="add: put it after this sprint (default: last)")
-    sprints.add_argument(
-        "--move-to", metavar="WHERE", help="delete: where its tasks go: a sprint's name or backlog (default)"
-    )
-    sprints.add_argument(
-        "--force", action="store_true", help="delete: also a sprint tasks finished in or moved on from"
-    )
-    move = command("move", cmd_move, "move tasks into a sprint, the next sprint, the active one, or the backlog")
-    move.add_argument("ids", nargs="+", metavar="id", help="task IDs")
-    move.add_argument(
-        "--to", required=True, metavar="WHERE", help="a sprint's name, next, active, or backlog"
-    )
-    agent_option(move)
-    backlog = command("backlog", cmd_backlog, "the tasks with no sprint (not finished ones, unless --all)")
-    backlog.add_argument("--all", action="store_true", help="also the finished tasks with no sprint")
-    releases = command("releases", cmd_releases, "the releases with their tasks; add, edit or archive one")
-    releases.add_argument(
-        "action", nargs="?", choices=["list", "add", "edit", "archive", "notes"], help="what to do"
-    )
-    releases.add_argument("id", nargs="?", help="the release's ID (letters, digits, '.', '-', '_')")
-    releases.add_argument("--all", action="store_true", help="list: the archived releases too")
-    releases.add_argument("--name", dest="title", help="add, edit: a name besides its ID (empty: remove it)")
-    releases.add_argument("--target", metavar="DATE", help="add, edit: the planned date, YYYY-MM-DD (empty: remove it)")
-    releases.add_argument(
-        "--pr", type=int, action="append", metavar="N", help="add: give it the tasks of pull request N (repeatable)"
-    )
-    releases.add_argument(
-        "--released-at", metavar="TIME", help="add: it shipped already, at this time (e.g. its PR's merge)"
-    )
-    components = command(
-        "components", cmd_components, "the project's components; define or change one, from a label or by files"
-    )
-    components.add_argument("action", nargs="?", choices=["list", "add", "edit"], help="what to do")
-    components.add_argument("id", nargs="?", help="the component's ID (letters, digits, '.', '-', '_')")
-    components.add_argument(
-        "--label", help="add, edit: the name shown (add: default the label's own text, with --from-label; edit: empty "
-        "removes it)"
-    )
-    components.add_argument(
-        "--path", action="append", metavar="GLOB", help="add: a glob over its files, e.g. 'dashboard/**' (repeatable)"
-    )
-    components.add_argument(
-        "--add-path", action="append", metavar="GLOB", help="edit: add a glob over its files (repeatable)"
-    )
-    components.add_argument(
-        "--review", help="add, edit: how its tasks are reviewed (blocker, async, batch, none; edit: empty removes it)"
-    )
-    components.add_argument(
-        "--from-label", metavar="LABEL", help="add, edit: every task with this label gets the component instead"
-    )
-    components.add_argument(
-        "--assign", action="store_true", help="add, edit: also give it to every task whose files its globs match"
-    )
-    projects = command("projects", cmd_projects, "the projects the dashboard shows: list, add, remove or prune them")
-    projects.add_argument("action", nargs="?", default="list", choices=["list", "add", "remove", "prune"])
-    projects.add_argument("target", nargs="?", help="add: the project's folder (default: here); remove: its ID or path")
+# ---------------------------------------------------------------------------
+# component group
+# ---------------------------------------------------------------------------
 
-    lock_test = command("_lock-test", cmd_lock_test, "test hook: hold the lock", hidden=True)
-    lock_test.add_argument("seconds", type=float, nargs="?", default=0.0)
-    return parser, commands.choices
+component_app = typer.Typer(help="Component management")
+app.add_typer(component_app, name="component")
+
+
+@component_app.command("list")
+def component_list(
+    ctx: typer.Context,
+) -> None:
+    """List components with their task counts."""
+    project = open_project(os.getcwd())
+    listed = list_components(project)
+    if ctx.obj.get("json_out", False):
+        out(to_json(listed))
+        return
+    if not listed:
+        out("No components yet: atm component add <id> --path GLOB.")
+        return
+    for c in listed:
+        details = [f"“{c['label']}”"] if c.get("label") else []
+        details.append(", ".join(c["paths"]) if c["paths"] else "no paths")
+        if c.get("review"):
+            details.append(f"review {c['review']}")
+        out(f"{c['id']} · {' · '.join(details)}: {c['tasks']} task{'' if c['tasks'] == 1 else 's'}")
+
+
+@component_app.command("add")
+def component_add(
+    ctx: typer.Context,
+    component_id: Annotated[str, typer.Argument(help="The component's ID (letters, digits, '.', '-', '_')")],
+    label: Optional[str] = typer.Option(None, "--label", help="Add, edit: the name shown"),
+    path: Optional[list[str]] = typer.Option(None, "--path", metavar="GLOB", help="Add: a glob over its files, e.g. 'dashboard/**' (repeatable)"),
+    review: Optional[str] = typer.Option(None, "--review", help="Add, edit: how its tasks are reviewed"),
+    from_label: Optional[str] = typer.Option(None, "--from-label", metavar="LABEL", help="Add, edit: every task with this label gets the component instead"),
+    assign: bool = typer.Option(False, "--assign", help="Add, edit: also give it to every task whose files its globs match"),
+) -> None:
+    """Add a component."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [component_id]
+        if label:
+            parts.append(f"--label {label}")
+        if path:
+            for p in path:
+                parts.append(f"--path {p}")
+        if review:
+            parts.append(f"--review {review}")
+        if from_label:
+            parts.append(f"--from-label {from_label}")
+        if assign:
+            parts.append("--assign")
+        out(f"[dry-run] would add component {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = add_component(project, component_id, label, path, review, from_label, assign)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    text = moved_text(from_label, result["from_label"], assign, result["by_files"])
+    out(f"Added the component {component_id}" + (f": {text}." if text else "."))
+
+
+@component_app.command("edit")
+def component_edit(
+    ctx: typer.Context,
+    component_id: Annotated[str, typer.Argument(help="The component's ID (letters, digits, '.', '-', '_')")],
+    label: Optional[str] = typer.Option(None, "--label", help="Add, edit: the name shown (add: default the label's own text, with --from-label; edit: empty removes it)"),
+    add_path: Optional[list[str]] = typer.Option(None, "--add-path", metavar="GLOB", help="Edit: add a glob over its files (repeatable)"),
+    review: Optional[str] = typer.Option(None, "--review", help="Add, edit: how its tasks are reviewed (blocker, async, batch, none; edit: empty removes it)"),
+    from_label: Optional[str] = typer.Option(None, "--from-label", metavar="LABEL", help="Add, edit: every task with this label gets the component instead"),
+    assign: bool = typer.Option(False, "--assign", help="Add, edit: also give it to every task whose files its globs match"),
+) -> None:
+    """Edit a component."""
+    dry_run = ctx.obj.get("dry_run", False)
+    if dry_run:
+        parts = [component_id]
+        if label is not None:
+            parts.append(f"--label {label}")
+        if add_path:
+            for p in add_path:
+                parts.append(f"--add-path {p}")
+        if review is not None:
+            parts.append(f"--review {review}")
+        if from_label:
+            parts.append(f"--from-label {from_label}")
+        if assign:
+            parts.append("--assign")
+        out(f"[dry-run] would edit component {' '.join(parts)}")
+        return
+    project = open_project(os.getcwd())
+    result = edit_component(project, component_id, label, add_path, review, from_label, assign)
+    if ctx.obj.get("json_out", False):
+        out(to_json(result))
+        return
+    moved = moved_text(from_label, result["from_label"], assign, result["by_files"])
+    text = ", ".join(([f"changed {', '.join(result['changed'])}"] if result["changed"] else []) + [t for t in [moved] if t])
+    out(f"{component_id}: {text or 'nothing changed'}")
+
+
+# ---------------------------------------------------------------------------
+# doctor / service
+# ---------------------------------------------------------------------------
+
+project_app = typer.Typer(help="Project-level config")
+app.add_typer(project_app, name="project")
+
+
+def _choice(name, value, choices):
+    """A value that must be one of `choices` (or not given), refused as atm's argparse refuses it (exit code 2)."""
+    if value is not None and value not in choices:
+        raise Invalid(f"{name}: invalid choice '{value}' (choose from {', '.join(choices)})")
+    return value
+
+
+def _dry(ctx, what):
+    """With --dry-run, say what would be done and stop; otherwise go on."""
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would {what}")
+        return True
+    return False
+
+
+@project_app.command("config")
+def project_config(
+    ctx: typer.Context,
+) -> None:
+    """Print where this project's task files are."""
+    show_paths(task_paths(os.getcwd()), ctx.obj.get("json_out", False))
+
+
+@project_app.command("summary", hidden=True)
+def project_summary_cmd(ctx: typer.Context) -> None:
+    """The project's numbers as atm serve gives them to the dashboard (JSON; the dashboard's dev server reads it)."""
+    out(to_json(project_summary(open_project(os.getcwd()))))
+
+
+@project_app.command("status")
+def project_status(
+    ctx: typer.Context,
+    sprint: Optional[list[str]] = typer.Option(None, "--sprint", help="Only this sprint's tasks (repeatable)"),
+    backlog: bool = typer.Option(False, "--backlog", help="Only the tasks with no sprint"),
+    release: Optional[str] = typer.Option(None, "--release", help="Only the tasks in this release"),
+    component: Optional[str] = typer.Option(None, "--component", help="Only the tasks in this component"),
+) -> None:
+    """The overview: counts, what is in progress, in review or blocked, the next task, the file's size."""
+    status = status_report(
+        open_project(os.getcwd()),
+        Filters(sprint=sprint or None, backlog=backlog, release=release, component=component),
+    )
+    show_status(status, ctx.obj.get("json_out", False))
+
+
+@project_app.command("workflow")
+def project_workflow(
+    ctx: typer.Context,
+    action: Optional[str] = typer.Argument(None, help="set: change the workflow"),
+    wf_type: Optional[str] = typer.Argument(None, help="direct or pull-request"),
+    base: Optional[str] = typer.Option(None, "--base", help="The branch PRs target, or that direct pushes to"),
+    verify: Optional[str] = typer.Option(None, "--verify", help="Run the project's verify before pushing (true|false)"),
+    max_rounds: Optional[int] = typer.Option(None, "--max-rounds", help="CI fix rounds before /atm:push stops"),
+    commit_template: Optional[str] = typer.Option(
+        None, "--commit-template", metavar="TEXT", help='Commit messages, e.g. "feat({id}): {name}"'
+    ),
+    trailers: Optional[str] = typer.Option(
+        None, "--trailers", help="forbid Co-Authored-By lines, require the --trailer lines, or none (the agent's)"
+    ),
+    trailer: Optional[list[str]] = typer.Option(None, "--trailer", metavar="LINE", help="A required trailer line"),
+) -> None:
+    """Print the project's workflow, or set it (atm project workflow set TYPE)."""
+    _choice("action", action, ["set"])
+    _choice("--verify", verify, ["true", "false"])
+    _choice("--trailers", trailers, ["forbid", "require", "none"])
+    project = open_project(os.getcwd())
+    if action is None:
+        workflow = get_workflow(project)
+    else:
+        if _dry(ctx, f"set the workflow to {wf_type}"):
+            return
+        workflow = set_workflow(
+            project,
+            wf_type,
+            base=base,
+            verify=None if verify is None else verify == "true",
+            max_rounds=max_rounds,
+            commit_template=commit_template,
+            trailers=trailers,
+            trailer=trailer or [],
+        )
+    if ctx.obj.get("json_out", False):
+        out(to_json(workflow or {"type": None}))
+    else:
+        out(describe_workflow(workflow, project.vcs.default_base))
+
+
+@project_app.command("logo")
+def project_logo_cmd(
+    ctx: typer.Context,
+    action: Optional[str] = typer.Argument(None, help="set or unset it"),
+    path: Optional[str] = typer.Argument(None, help="set: the image (SVG, PNG, WebP or ICO), relative to here"),
+) -> None:
+    """Print, set or unset the project's logo for the dashboard (meta.logo)."""
+    _choice("action", action, ["set", "unset"])
+    if action is not None and _dry(ctx, f"{action} the logo"):
+        return
+    logo_action(open_project(os.getcwd()), action, path, ctx.obj.get("json_out", False))
+
+
+@project_app.command("list")
+def project_list(ctx: typer.Context) -> None:
+    """List the projects the dashboard shows."""
+    projects_action(open_registry(), "list", None, ctx.obj.get("json_out", False))
+
+
+@project_app.command("add")
+def project_add(
+    ctx: typer.Context,
+    target: Optional[str] = typer.Argument(None, help="The project's folder (default: here)"),
+) -> None:
+    """Add a project to the dashboard's list."""
+    if _dry(ctx, f"add {target or 'this folder'} to the dashboard's projects"):
+        return
+    projects_action(open_registry(), "add", target, ctx.obj.get("json_out", False))
+
+
+@project_app.command("remove")
+def project_remove(
+    ctx: typer.Context,
+    target: Annotated[str, typer.Argument(help="The project's ID or path")],
+) -> None:
+    """Remove a project from the dashboard's list."""
+    if _dry(ctx, f"remove {target} from the dashboard's projects"):
+        return
+    projects_action(open_registry(), "remove", target, ctx.obj.get("json_out", False))
+
+
+@project_app.command("prune")
+def project_prune(ctx: typer.Context) -> None:
+    """Drop the projects whose folder is gone from the dashboard's list."""
+    if _dry(ctx, "drop the projects whose folder is gone"):
+        return
+    projects_action(open_registry(), "prune", None, ctx.obj.get("json_out", False))
+
+
+# ---------------------------------------------------------------------------
+# sprint group
+# ---------------------------------------------------------------------------
+
+sprint_app = typer.Typer(help="Sprint management")
+app.add_typer(sprint_app, name="sprint")
+
+
+@sprint_app.command("list")
+def sprint_list(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="List closed sprints too"),
+) -> None:
+    """List the sprints with their task counts, and the backlog's size."""
+    show_sprints(open_project(os.getcwd()), all_, ctx.obj.get("json_out", False))
+
+
+AGENT_HELP = "Who you are (default: ATM_AGENT, else this session)"
+
+
+@sprint_app.command("add")
+def sprint_add(
+    ctx: typer.Context,
+    name: Optional[str] = typer.Argument(None, help="The sprint's name (generated when left out)"),
+    goal: Optional[str] = typer.Option(None, "--goal", help="What the sprint is for"),
+    release: Optional[str] = typer.Option(None, "--release", help="The release it delivers to"),
+    due: Optional[str] = typer.Option(None, "--due", metavar="DATE", help="The planned end, YYYY-MM-DD"),
+    after: Optional[str] = typer.Option(None, "--after", metavar="NAME", help="Put it after this sprint (default: last)"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Add a sprint (planned)."""
+    if _dry(ctx, f"add the sprint {name or '(a generated name)'}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    sprint = add_sprint(project, name, goal=goal, release=release, due=due, after=after)
+    out(to_json(sprint) if ctx.obj.get("json_out", False) else f"Added the sprint “{sprint['id']}” (planned).")
+
+
+@sprint_app.command("edit")
+def sprint_edit(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    goal: Optional[str] = typer.Option(None, "--goal", help="What the sprint is for (empty: remove it)"),
+    release: Optional[str] = typer.Option(None, "--release", help="The release it delivers to (empty: remove it)"),
+    due: Optional[str] = typer.Option(None, "--due", metavar="DATE", help="The planned end, YYYY-MM-DD (empty: remove it)"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Change a sprint's goal, release or due date."""
+    if _dry(ctx, f"edit the sprint {name}"):
+        return
+    result = edit_sprint(open_project(os.getcwd(), agent_identity(agent)), name, goal=goal, release=release, due=due)
+    sprint, changed = result["sprint"], result["changed"]
+    if ctx.obj.get("json_out", False):
+        out(to_json(sprint))
+    else:
+        out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
+
+
+@sprint_app.command("start")
+def sprint_start(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Make a planned sprint the active one."""
+    if _dry(ctx, f"start the sprint {name}"):
+        return
+    sprint = start_sprint(open_project(os.getcwd(), agent_identity(agent)), name)
+    out(to_json(sprint) if ctx.obj.get("json_out", False) else f"The sprint “{sprint['id']}” is now active.")
+
+
+@sprint_app.command("close")
+def sprint_close(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    carry_to: Optional[str] = typer.Option(
+        None, "--carry-to", metavar="WHERE", help="Where unfinished tasks go: a sprint's name, new, or backlog"
+    ),
+    new_name: Optional[str] = typer.Option(
+        None, "--name", metavar="NAME", help="With --carry-to new: the new sprint's name (default: generated)"
+    ),
+    reviewed: bool = typer.Option(
+        False, "--reviewed", help="Its batch tasks were reviewed with the user (the sprint review)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Close a sprint: record its report and move its unfinished tasks on."""
+    if _dry(ctx, f"close the sprint {name}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    closed = close_sprint(project, name, carry_to=carry_to, new_name=new_name, reviewed=reviewed)
+    show_close(closed, ctx.obj.get("json_out", False))
+
+
+@sprint_app.command("delete")
+def sprint_delete(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    move_to: Optional[str] = typer.Option(
+        None, "--move-to", metavar="WHERE", help="Where its tasks go: a sprint's name or backlog (default)"
+    ),
+    force: bool = typer.Option(False, "--force", help="Also a sprint tasks finished in or moved on from"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Delete a sprint created by mistake."""
+    if _dry(ctx, f"delete the sprint {name}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    show_delete(delete_sprint(project, name, move_to=move_to, force=force), ctx.obj.get("json_out", False))
+
+
+@sprint_app.command("move")
+def sprint_move(
+    ctx: typer.Context,
+    ids: Annotated[list[str], typer.Argument(help="Task IDs")],
+    to: str = typer.Option(..., "--to", metavar="WHERE", help="A sprint's name, next, active, or backlog"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Move tasks into a sprint, the next sprint, the active one, or the backlog."""
+    if _dry(ctx, f"move {', '.join(ids)} to {to}"):
+        return
+    moved = move_tasks(open_project(os.getcwd(), agent_identity(agent)), ids, to)
+    if ctx.obj.get("json_out", False):
+        out(to_json(moved))
+        return
+    for m in moved:
+        before, after = m["from"] or "backlog", m["to"] or "backlog"
+        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
+
+
+@sprint_app.command("backlog")
+def sprint_backlog(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="Also the finished tasks with no sprint"),
+) -> None:
+    """The tasks with no sprint (not finished ones, unless --all)."""
+    found = backlog_tasks(open_project(os.getcwd()), finished=all_)
+    rows = [summary(found["vocab"], t) for t in found["tasks"]]
+    if ctx.obj.get("json_out", False):
+        out(to_json(rows))
+    elif not rows:
+        out("The backlog is empty.")
+    else:
+        for line in list_lines(rows):
+            out(line)
+
+
+# ---------------------------------------------------------------------------
+# release group
+# ---------------------------------------------------------------------------
+# doctor / service
+# ---------------------------------------------------------------------------
+
+
+@app.command("doctor", rich_help_panel=MAINTENANCE)
+def doctor(
+    ctx: typer.Context,
+    files: bool = typer.Option(False, "--files", help="Also warn about missing files"),
+) -> None:
+    """Validate tasks.json: schema, vocabularies, dependencies."""
+    result = check_project(open_project(os.getcwd()), files=files)
+    errors, warnings = result["errors"], result["warnings"]
+    if ctx.obj.get("json_out", False):
+        out(to_json({"errors": errors, "warnings": warnings}))
+    else:
+        for e in errors:
+            out(f"error: {e}")
+        for w in warnings:
+            out(f"warning: {w}")
+        if not errors:
+            count = result["count"]
+            msg = f"tasks.json is fine ({count} tasks"
+            if warnings:
+                msg += f", {len(warnings)} warnings"
+            msg += ")"
+            out(msg)
+    if errors:
+        raise AtmExit(1)
+
+
+@app.command("service", rich_help_panel=MAINTENANCE)
+def service(
+    ctx: typer.Context,
+    action: str = typer.Argument("start", click_type=click.Choice(["start", "stop", "status"])),
+    open_: bool = typer.Option(False, "--open", help="Also open the dashboard in the browser"),
+    all_projects: bool = typer.Option(False, "--all", help="Show all projects overview"),
+    port: int = typer.Option(DEFAULT_PORT, "--port", help="The port to try first"),
+    dir_: Optional[str] = typer.Option(None, "--dir", help="The project to show"),
+    refresh: bool = typer.Option(False, "--refresh", help="Only restart if dashboard is older"),
+) -> None:
+    """Run the dashboard server in the background."""
+    cwd = os.path.abspath(dir_) if dir_ else os.getcwd()
+    if not os.path.isdir(cwd):
+        raise AtmFailure(f"--dir {dir_}: not a directory", 2)
+    home = atm_home()
+    dry_run = ctx.obj.get("dry_run", False)
+    if refresh:
+        if dry_run:
+            out("[dry-run] would refresh the dashboard server if outdated")
+        else:
+            serve_refresh(home)
+    elif action == "start":
+        if dry_run:
+            out("[dry-run] would start the dashboard server")
+        else:
+            refresh_server(home)
+            url = serve_start(cwd, port, all_projects)
+            if open_:
+                open_browser(url)
+    elif action == "stop":
+        if dry_run:
+            out("[dry-run] would stop the dashboard server")
+        else:
+            serve_stop(home, port)
+    else:
+        serve_status(home, ctx.obj.get("json_out", False), port)
+
+
+@app.command("version", rich_help_panel=META)
+def version(ctx: typer.Context) -> None:
+    """Print the plugin version."""
+    out(to_json({"version": plugin_version()}) if ctx.obj.get("json_out", False) else plugin_version())
+
+
+@app.command("help", rich_help_panel=META)
+def help_(ctx: typer.Context) -> None:
+    """Show the list of commands."""
+    usage = ctx.parent.get_help()
+    out(to_json({"usage": usage}) if ctx.obj.get("json_out", False) else usage)
+
+
+# ---------------------------------------------------------------------------
+# shell completion (T-423)
+# ---------------------------------------------------------------------------
+# Typer installs the scripts (--install-completion, --show-completion; zsh, bash, fish); these complete atm's own
+# values, read through atm-lib in the folder the shell is in. Completion never fails loudly: outside a project, or
+# with a task file atm can't read, it completes nothing.
+
+# The targets of `atm task state` (task_state's cmd_map), with what each runs
+STATE_TARGETS = [
+    ("in_progress", "start"),
+    ("in_review", "review"),
+    ("done", "done"),
+    ("todo", "back to to do: fail, release, drop (rejected), unblock or reopen"),
+    ("blocked", "block"),
+    ("skipped", "skip"),
+]
+
+
+def _vocabulary():
+    return backlog_tasks(open_project(os.getcwd()))["vocab"]
+
+
+def _task_ids():
+    return [(v["task"]["id"], v["task"].get("name") or "") for v in task_views(open_project(os.getcwd()), Filters())]
+
+
+def _sprints():
+    return [(s["id"], s.get("goal") or s.get("state") or "") for s in _vocabulary()["sprints"] if s.get("state") != "closed"]
+
+
+def _releases():
+    return [(r["id"], r.get("name") or r.get("state") or "") for r in _vocabulary()["releases"]]
+
+
+def _components():
+    return [(c["id"], c.get("label") or "") for c in _vocabulary()["components"]]
+
+
+def _completion_terms(key):
+    return lambda: [(t["id"], t.get("label") or "") for t in _vocabulary()[key]]
+
+
+def _completer(values):
+    """A Click completer for `values()` ((value, help) pairs), matching what has been typed; nothing on any error."""
+
+    def complete(ctx, param, incomplete):
+        from click.shell_completion import CompletionItem
+
+        try:
+            pairs = values()
+        except Exception:  # completion must never break the shell, whatever the project holds
+            return []
+        return [CompletionItem(value, help=help or None) for value, help in pairs if value.startswith(incomplete)]
+
+    return complete
+
+
+# (command path, parameter name) -> completer; a None path is any command with that parameter
+COMPLETIONS = {
+    (None, "task_id"): _task_ids,
+    (None, "task_ids"): _task_ids,
+    (None, "ids"): _task_ids,
+    (None, "sprint"): _sprints,
+    (None, "release"): _releases,
+    (None, "component"): _components,
+    (None, "status"): _completion_terms("statuses"),
+    (None, "type_"): _completion_terms("types"),
+    (None, "priority"): _completion_terms("priorities"),
+    ("task state", "next_state"): lambda: STATE_TARGETS,
+    ("db unarchive", "ids"): None,  # archived tasks, which the task list doesn't hold
+    **{(f"sprint {c}", "name"): _sprints for c in ("edit", "start", "close", "delete")},
+    ("sprint close", "carry_to"): _sprints,
+    ("sprint delete", "move_to"): _sprints,
+    ("sprint move", "to"): _sprints,
+    **{(f"release {c}", "release_id"): _releases for c in ("edit", "archive", "notes")},
+    ("component edit", "component_id"): _components,
+}
+
+
+def _attach(cmd, path):
+    for param in getattr(cmd, "params", []):
+        key = (path, param.name) if (path, param.name) in COMPLETIONS else (None, param.name)
+        values = COMPLETIONS.get(key)
+        if values is not None:
+            param._custom_shell_complete = _completer(values)
+    for name, sub in getattr(cmd, "commands", {}).items():
+        _attach(sub, f"{path} {name}".strip())
+
+
+@app.command("_lock-test", hidden=True)
+def lock_test(seconds: float = typer.Argument(0.0)) -> None:
+    """Test hook: hold the task folder's lock for `seconds`, so tests can check exclusion."""
+    hold_lock_for_test(os.getcwd(), seconds)
+
+
+def command():
+    """atm's Click command, with atm's values to complete."""
+    cmd = typer.main.get_command(app)
+    _attach(cmd, "")
+    return cmd
+
+
+# ---------------------------------------------------------------------------
+# main
+# ---------------------------------------------------------------------------
+
+# The options of the whole tree, which may go anywhere on the line: moved before the command, where Click reads them
+GLOBAL_FLAGS = ("--json", "-j", "--dry-run", "-n")
+
+# Commands that don't check for an outdated dashboard server first: service does it itself, git runs the merge
+# driver in the middle of a merge (the server process isn't a CLI command: atm.py --server, plugin/scripts/atm-serve)
+NO_REFRESH = (("service",), ("db", "merge-driver"), ("help",), ("version",), ("_lock-test",))
 
 
 def report(error, as_json):
+    """An error as atm reports it: `atm: <message>` on stderr, or {"error", "code"} with --json."""
     if as_json:
         sys.stderr.write(to_json({"error": str(error), "code": error.code}) + "\n")
     else:
@@ -10304,7 +13382,7 @@ def report(error, as_json):
 
 def leading_dir(argv):
     """`atm --dir PATH <command> ...` (or `--dir=PATH`, T-351): the folder to run in, and the rest. Only before the
-    command: `atm serve --dir PATH` keeps its own meaning."""
+    command: `atm service --dir PATH` keeps its own meaning."""
     if argv and argv[0] == "--dir":
         return (argv[1] if len(argv) > 1 else ""), argv[2:]
     if argv and argv[0].startswith("--dir="):
@@ -10312,42 +13390,48 @@ def leading_dir(argv):
     return None, argv
 
 
+def global_first(argv):
+    """argv with the tree's own options (GLOBAL_FLAGS) first, wherever they were given; what follows `--` (the command
+    a program's, never atm's) is left as it is."""
+    split = argv.index("--") if "--" in argv else len(argv)
+    head, tail = argv[:split], argv[split:]
+    flags = [a for a in head if a in GLOBAL_FLAGS]
+    return flags + [a for a in head if a not in GLOBAL_FLAGS] + tail
+
+
+def command_path(argv):
+    """The command's names (`("task", "state")`), up to its first option or argument."""
+    names = [a for a in argv if not a.startswith("-")]
+    return tuple(names[:2])
+
+
 def main(argv):
     target, argv = leading_dir(argv)
+    as_json = any(a in ("--json", "-j") for a in argv[: argv.index("--") if "--" in argv else len(argv)])
     if target is not None:
         # As if started in that folder: the project is found from there, and relative paths count from there
         if not target or not os.path.isdir(target):
-            report(AtmError(f"--dir: no folder '{target}'", 2), "--json" in argv)
+            report(AtmError(f"--dir: no folder '{target}'", 2), as_json)
             return 2
         os.chdir(target)
-    if not argv or argv[0] in ("-h", "--help"):
-        sys.stdout.write(USAGE)
-        return 0
-    parser, commands = build_parser()
-    # `atm run <id> -- <command>`: what follows -- is the command to run, never atm's own options
-    child = None
-    if argv[0] == "run" and "--" in argv:
-        split = argv.index("--")
-        argv, child = argv[:split], argv[split + 1 :]
-    as_json = "--json" in argv
-    if argv[0] not in commands:
-        if as_json:
-            report(AtmError(f"unknown command '{argv[0]}'", 2), True)
-        else:
-            sys.stderr.write(f"atm: unknown command '{argv[0]}'\n" + USAGE)
-        return 2
+    argv = global_first(argv)
+    path = command_path(argv)
     try:
-        args, extra = parser.parse_known_args(argv)
-        args.child = child
-        if extra:
-            # Reported by the command's own parser, so the usage line is the command's
-            commands[argv[0]].error(f"unrecognized arguments: {' '.join(extra)}")
-        if argv[0] not in NO_REFRESH:
+        if path and not any(path[: len(skip)] == skip for skip in NO_REFRESH):
             try:
                 refresh_server()  # after a plugin update, the first atm command brings the dashboard server along
             except Exception:
                 pass  # never in the way of the command itself
-        args.run(args)
+        code = command().main(args=argv, prog_name="atm", standalone_mode=False)
+        return code if isinstance(code, int) else 0
+    except click.UsageError as e:
+        usage = e.ctx.get_usage() if e.ctx else ""
+        report(AtmError(e.format_message() + (f"\n{usage}" if usage and not as_json else ""), 2), as_json)
+        return 2
+    except click.exceptions.Exit as e:
+        return e.exit_code
+    except click.Abort:
+        return 1
     except AtmFailure as e:
         # atm-lib's errors and those of the modules from before the layers (AtmError is one of them)
         report(e, as_json)
@@ -10357,9 +13441,11 @@ def main(argv):
     except Exception as e:  # noqa: BLE001
         # A file atm didn't expect (a hostile or damaged one) is an error message, not a traceback: the skills and
         # the merge driver read stderr (docs/security-review.md F12)
-        report(AtmError(f"unexpected error ({type(e).__name__}: {e}); run atm check, and report it if that is clean"), as_json)
+        report(
+            AtmError(f"unexpected error ({type(e).__name__}: {e}); run atm doctor, and report it if that is clean"),
+            as_json,
+        )
         return 1
-    return 0
 
 
 # ==== api/server.py ====
@@ -10388,6 +13474,9 @@ LOGO_HEADERS = {
 # published files), and a frame document is sandboxed even when opened alone, as @compmd/vite serves them
 ASSETS = "/assets/"
 COMPMD_ASSETS = ASSETS + "compmd/"
+# The dashboard's pages (T-429; dashboard/src/lib/address.ts PAGE_PATH): the same page at each, which shows the one
+# its path names. Nothing else is served under them: a project's ID or tab is only text the page reads.
+PAGE_PATH = re.compile(r"/(?:projects(?:/[^/]+(?:/[a-z]+)?)?|board|progress|agents)?/?")
 ASSET_TYPES = {
     ".js": "text/javascript; charset=utf-8",
     ".wasm": "application/wasm",
@@ -10757,7 +13846,7 @@ def serve(home, port):
                 self.send_error_json(403, "unexpected Host header")
                 return
             path = urlsplit(self.path).path
-            if path == "/":
+            if PAGE_PATH.fullmatch(path):
                 host = self.headers.get("Host")
                 if host not in page_policies:
                     page_policies[host] = page_csp(page, "http://" + host)

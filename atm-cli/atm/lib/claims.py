@@ -6,7 +6,6 @@ from datetime import timedelta
 
 from ..common.errors import Claimed
 from ..common.core import now, now_iso, parse_iso
-from ..common.model import change_status
 from .loop import (
     Selection,
     apply_resolutions,
@@ -18,6 +17,7 @@ from .loop import (
     next_task,
     own_lease_expired,
 )
+from .state import change_status
 from .status import claim_record
 
 # heartbeat --auto renews a claim once its last renewal is this old (CLI-6.2)
@@ -50,8 +50,8 @@ def next_task_for(project, sel, with_user=False, claim=False, status=None):
 
 
 def renew_lease(project, task_id, expire=True):
-    """Extend the actor's lease on a task (`atm heartbeat`; `atm run` with `expire` false: it renews a live claim and
-    lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
+    """Extend the actor's lease on a task (`atm claim heartbeat`; `atm claim hold`'s watcher with `expire` false: it
+    renews a live claim and lets nothing else expire). Returns {claim, minutes, expired}; raises Claimed when the task has no live claim (its
     lease expired) or another agent holds it."""
     agent = project.actor
 

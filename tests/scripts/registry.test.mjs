@@ -29,14 +29,14 @@ describe('project registry', () => {
     const linked = path.join(tempDir('atm-wt-'), 'second');
     try {
       git(['worktree', 'add', '-q', '-b', 'second', linked], root);
-      const r = runAtm(['projects', 'add', '--json'], linked, { ATM_HOME: home });
+      const r = runAtm(['project', 'add', '--json'], linked, { ATM_HOME: home });
       assert.equal(r.code, 0, r.stderr);
       assert.deepEqual(
         registry(home).projects.map((p) => [p.id, p.path]),
         [['abcd1234', root]],
       );
       // Adding the main worktree too doesn't make a second entry
-      const again = runAtm(['projects', 'add'], root, { ATM_HOME: home });
+      const again = runAtm(['project', 'add'], root, { ATM_HOME: home });
       assert.match(again.stdout, /^Already registered: abcd1234/);
       assert.equal(registry(home).projects.length, 1);
     } finally {
@@ -51,7 +51,7 @@ describe('project registry', () => {
     const root = makeProject({ files: { '.agentic-task-manager/tasks.json': tasks('abcd1234', 'Demo') } });
     const home = tempDir('atm-home-');
     const file = path.join(home, 'projects.json');
-    const hook = (now) => runAtm(['heartbeat', '--auto'], root, { ATM_HOME: home, ATM_NOW: now });
+    const hook = (now) => runAtm(['claim', 'heartbeat', '--auto'], root, { ATM_HOME: home, ATM_NOW: now });
     try {
       assert.equal(hook('2026-01-01T00:00:00Z').code, 0);
       assert.deepEqual(registry(home).projects, [
@@ -85,7 +85,7 @@ describe('project registry', () => {
         JSON.stringify({ host: os.hostname(), pid: process.pid, acquired_at: new Date().toISOString() }),
       );
       const started = Date.now();
-      const r = runAtm(['heartbeat', '--auto'], root, { ATM_HOME: home });
+      const r = runAtm(['claim', 'heartbeat', '--auto'], root, { ATM_HOME: home });
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.stdout + r.stderr, '');
       assert.ok(Date.now() - started < 3000, 'did not wait for the lock');
@@ -102,7 +102,7 @@ describe('project registry', () => {
       makeProject({ files: { '.agentic-task-manager/tasks.json': tasks(`0000000${i}`, `P${i}`) } }),
     );
     try {
-      const results = await Promise.all(roots.map((root) => startAtm(['projects', 'add'], root, { ATM_HOME: home })));
+      const results = await Promise.all(roots.map((root) => startAtm(['project', 'add'], root, { ATM_HOME: home })));
       for (const r of results) assert.equal(r.code, 0, r.stderr);
       const ids = registry(home)
         .projects.map((p) => p.id)

@@ -1,7 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import type { Plugin } from 'vite';
 
 const META_RE = /(<meta name="atm-dashboard-build" content=")[^"]*(")/;
 
@@ -14,20 +11,10 @@ export function buildId(html: string): string {
   return createHash('sha256').update(html.replace(META_RE, '$1$2')).digest('hex').slice(0, 12);
 }
 
+/**
+ * Stamps <meta name="atm-dashboard-build"> into the finished page (after everything is inlined; build/finish-page.ts),
+ * so a running server restarts on a new build even when the version number didn't change (docs/v4/dashboard.md D-5.5).
+ */
 export function setBuildId(html: string): string {
   return html.replace(META_RE, `$1${buildId(html)}$2`);
-}
-
-// Stamps <meta name="atm-dashboard-build"> into the finished page (after everything is inlined), so `atm migrate`
-// installs a new build even when the version number didn't change (docs/v4/dashboard.md D-5.5).
-export function stampBuildId(): Plugin {
-  return {
-    name: 'atm-build-id',
-    apply: 'build',
-    writeBundle(options, bundle) {
-      if (!bundle['index.html'] || !options.dir) return;
-      const file = join(options.dir, 'index.html');
-      writeFileSync(file, setBuildId(readFileSync(file, 'utf8')));
-    },
-  };
 }

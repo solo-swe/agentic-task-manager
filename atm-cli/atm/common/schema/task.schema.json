@@ -76,7 +76,7 @@
     "release": { "type": "string", "description": "The release it ships in; when absent, its sprint's (SR-2.6)" },
     "components": { "type": "array", "items": { "type": "string" }, "description": "Component IDs (meta.components)" },
     "review": { "type": "string", "description": "How it is reviewed: blocker, async, batch or none" },
-    "review_state": { "type": "string", "description": "In the review kind: waiting, changes_requested or approved (SR-6.1)" },
+    "review_state": { "type": "string", "description": "In the review kind: waiting, changes_requested, approved or rejected (SR-6.1, T-438)" },
     "reviewed_at": { "type": "string", "description": "ISO 8601 UTC; when the review was decided" },
     "sprint_review": {
       "type": "string",

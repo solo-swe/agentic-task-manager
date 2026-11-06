@@ -1,7 +1,7 @@
 import { render } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import KanbanBoard from '../../src/components/KanbanBoard.svelte';
+import KanbanBoard from '../../src/lib/kanban/KanbanBoard.svelte';
 import { ACTIVE } from '../../src/lib/filters';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';

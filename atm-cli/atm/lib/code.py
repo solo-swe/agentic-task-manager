@@ -25,7 +25,7 @@ def set_workflow(project, workflow_type, base=None, verify=None, max_rounds=None
     """Set the workflow: its type, and what is given of the rest; `trailers` forbid, require (with `trailer` lines) or
     none (removes the rule). Returns the workflow with its defaults."""
     if workflow_type not in WORKFLOW_TYPES:
-        raise Invalid(f"atm workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}")
+        raise Invalid(f"atm project workflow set needs a type: {' or '.join(WORKFLOW_TYPES)}")
     changes = {"type": workflow_type}
     if base is not None:
         changes["base"] = base
@@ -84,7 +84,7 @@ def repository_paths(project, files, cwd):
     commit checks them: no directory, no pattern, nothing outside the repository."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     return vcs.paths(files, cwd)
 
 
@@ -95,7 +95,7 @@ def folder_changes(project, task_id, folders, cwd):
     agent's unfinished work in the same tree."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     changed = vcs.changes_under(list(folders), cwd)
     claims = project.store.read_claims()["claims"]
     for claim in claims.values():
@@ -119,9 +119,9 @@ def commit_task(project, task_id, files, message=None):
     the commit on the task. Returns {task, commit, message, files}."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     if not files:
-        raise Invalid("atm commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
+        raise Invalid("atm vcs commit needs --file (once per file the task changed), --dir FOLDER, or --record REV")
     store = project.store
     # The one task, or the error find_task gives (saying when it is archived)
     task = store.get_task(task_id) or find_task({"tasks": []}, task_id, store.get_archived_task)
@@ -145,7 +145,7 @@ def record_commit(project, task_id, rev):
     hint}: `hint` when the commit's message doesn't mention the task."""
     vcs = project.vcs
     if vcs is None or not vcs.in_repository():
-        raise AtmFailure("atm commit needs a git repository")
+        raise AtmFailure("atm vcs commit needs a git repository")
     if rev.startswith("-"):
         raise Invalid(f"--record takes a revision, not an option: {rev!r}")
     sha = vcs.resolve(rev)
@@ -232,7 +232,7 @@ def record_merge(project, pr, at=None):
             t for t in data["tasks"] if isinstance(t, dict) and isinstance(t.get("pr"), dict) and t["pr"].get("number") == pr
         ]
         if not tasks:
-            raise NotFound(f"no task records PR #{pr} (atm pr records it)")
+            raise NotFound(f"no task records PR #{pr} (atm vcs pr records it)")
         stamp = now_iso()
         changed = [t for t in tasks if not t.get("merged_at")]
         for task in changed:

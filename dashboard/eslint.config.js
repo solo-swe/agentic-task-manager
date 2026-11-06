@@ -2,10 +2,13 @@ import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import ts from 'typescript-eslint';
-import svelteConfig from './svelte.config.js';
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
+
+// The Svelte options eslint needs (SvelteKit 3 keeps them in vite.config.ts, T-428): the preprocessing
+const svelteConfig = { preprocess: vitePreprocess() };
 
 export default ts.config(
-  { ignores: ['dist/', 'coverage/', 'playwright-report/', 'test-results/', 'tests/legacy/'] },
+  { ignores: ['dist/', 'coverage/', 'playwright-report/', 'test-results/', 'tests/legacy/', '.svelte-kit/'] },
   js.configs.recommended,
   ...ts.configs.recommended,
   ...svelte.configs.recommended,
@@ -31,6 +34,12 @@ export default ts.config(
         { name: 'EventSource', message: 'Requests go through the client layer, src/lib/api/http.ts.' },
       ],
     },
+  },
+  {
+    // The dashboard's links are external (a repository, a PR) or hash links (its views live in the hash until T-429
+    // gives them routes): none goes to a SvelteKit route, so none needs resolve() yet
+    files: ['**/*.svelte'],
+    rules: { 'svelte/no-navigation-without-resolve': ['error', { ignoreLinks: true }] },
   },
   {
     files: ['**/*.svelte', '**/*.svelte.ts'],

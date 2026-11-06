@@ -1,6 +1,6 @@
 import { render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import KanbanColumns from '../../src/components/KanbanColumns.svelte';
+import KanbanColumns from '../../src/lib/kanban/KanbanColumns.svelte';
 import { buildBoard } from '../../src/lib/kanban';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { Task } from '../../src/lib/types';

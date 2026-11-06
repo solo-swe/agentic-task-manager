@@ -1,0 +1,79 @@
+/* The dashboard's design tokens (T-433, docs/guides/svelte.md "Components and styling"): every colour, space, radius
+   and text size in its styles comes from these. The colours are the Default theme's dark mode, the fallback before a
+   theme or mode is set; the themes (src/themes/) set them again, and only them. The spacing, radii and type are the
+   same in every theme. Checked by tests/unit/no-hardcoded-colours.test.ts and tests/unit/tokens.test.ts: outside
+   this file and the themes, no colour literal, and no literal spacing or radius but 0 and layout sizes. */
+
+/* Colours. Tints are color-mix() of a token with transparent, so a theme only defines the base colours. */
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --purple: #bc8cff;
+  --pink: #f778ba;
+  --orange: #d18616;
+  --cyan: #39d2c0;
+  color-scheme: dark;
+  /* Text and marks on an accent-coloured background (active filter buttons) */
+  --on-accent: #000;
+  /* Behind the detail and What's new panels */
+  --overlay: rgba(0, 0, 0, 0.6);
+  /* Dependency graph node fills, by task type: dark versions of the type colours */
+  --node-feature: #1a3324;
+  --node-bugfix: #3d1518;
+  --node-test: #2d1f4e;
+  --node-infra: #3d2a0f;
+  --node-docs: #1a3333;
+  --node-refactor: #33300a;
+  --node-polish: #3d1a2e;
+  /* Burndown chart series, validated for the dark surface (dataviz validator: blue/orange slots); themes set them
+     per mode */
+  --series-remaining: #3987e5;
+  --series-scope: #d95926;
+}
+
+/* Spacing: padding, margins and gaps, one scale. A value off it was moved to the nearest step (T-433). Larger
+   distances (a layout's widths and heights, a 64px indent) are the component's own, not spacing. */
+:root {
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 16px;
+  --space-8: 20px;
+  --space-9: 24px;
+  --space-10: 32px;
+}
+
+/* Corner radii: small parts (chips, badges), controls, cards and panels, large surfaces; a pill's ends and a circle */
+:root {
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
+}
+
+/* Type: the text sizes, smallest first, and the page's font. Sizes relative to the text (`em`) stay as they are */
+:root {
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 28px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}

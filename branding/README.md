@@ -11,11 +11,11 @@ the demo project or the pages in `generate.mjs`, then regenerate.
 | `atm-logo.png` | 512×512, the blue logo on the dark background (`#0d1117`) | The GitHub org's avatar (avatars take only PNG, JPG or GIF) |
 | `social-preview-dark.png`, `social-preview-light.png` | 1280×640: the logo, name and tagline, how to install, and the dashboard (T-279), on dark and on light | GitHub's social preview, shown when the repository is linked: one of them |
 | `demo-tasks.json` | The demo project the social preview's dashboard shows: a small shop's sprint, two agents at work, a review, a question | `generate.mjs` |
-| `generate.mjs` | The script that makes them, with the HTML it renders the PNGs from | `npm run branding` |
+| `generate.mjs` | The script that makes them, with the HTML it renders the PNGs from | `pnpm run branding` |
 
 ## The social preview's inputs
 
-- **The dashboard:** the built one, `plugin/templates/tasks-dashboard.html` (run `npm run build` first), served the
+- **The dashboard:** the built one, `plugin/templates/tasks-dashboard.html` (run `pnpm run build` first), served the
   demo project from a page route the way the e2e tests serve their fixtures, on the Kanban board, at a fixed time
   (`DEMO_NOW`), with the demo's two agents as live claims; in the dark theme for the dark card and in light for the
   light one. So the card shows the real product, and follows its changes when regenerated.
@@ -25,11 +25,11 @@ the demo project or the pages in `generate.mjs`, then regenerate.
 
 ## Regenerate
 
-In `dashboard/` (where Playwright is installed), after `npm run build`:
+In `dashboard/` (where Playwright is installed), after `pnpm run build`:
 
 ```bash
-npm run branding
-npm run branding -- --variants /tmp/previews   # every layout, to choose from
+pnpm run branding
+pnpm run branding --variants /tmp/previews   # every layout, to choose from
 ```
 
 It rewrites the files above. Then upload what changed by hand, GitHub doesn't read them from the repository:

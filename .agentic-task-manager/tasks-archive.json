@@ -1,0 +1,2047 @@
+{
+  "meta": {
+    "archived_at": "2026-11-06T05:52:31Z"
+  },
+  "tasks": [
+    {
+      "id": "T-001",
+      "name": "Stash zoom/pan WIP and create migration branch",
+      "type": "infra",
+      "description": "Stash the uncommitted zoom/pan/minimap work as `zoom-pan-minimap wip` (`git stash`), so the regression baseline is the **committed v0.4.0 dashboard**. Create branch `dev/svelte-dashboard`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:00Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:19:41Z",
+      "sprint": "Phase 0",
+      "sprint_history": [
+        {
+          "sprint": "Phase 0",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-002",
+      "name": "Add migration plan and dogfood task list to docs/",
+      "type": "docs",
+      "description": "Add these, so the migration can be run with `/atm:do-task` and `/atm:loop-tasks` and watched via `cd docs && python3 -m http.server 8000`:\n- `docs/svelte-migration-plan.md` (the approved plan)\n- `docs/tasks.json` (this file)\n- `docs/tasks-dashboard.html` (a copy of the v0.4.0 dashboard)\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-001"
+      ],
+      "files": [
+        "docs/svelte-migration-plan.md",
+        "docs/tasks.json",
+        "docs/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:00Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:19:41Z",
+      "sprint": "Phase 0",
+      "sprint_history": [
+        {
+          "sprint": "Phase 0",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-003",
+      "name": "Scaffold dashboard/ with Vite, Svelte 5 and TypeScript",
+      "type": "infra",
+      "description": "Create `dashboard/` (**not shipped**; the plugin source is `./plugin`) with:\n- `package.json`, `vite.config.ts`, `svelte.config.js`, `tsconfig.json`\n- `index.html` (keeping `<meta name=\"atm-dashboard-version\">`)\n- `src/main.ts` and a placeholder `App.svelte`\n\nUse **Svelte 5 runes**. Add `dashboard/node_modules`, `dist`, `test-results` and `playwright-report` to `.gitignore`. `npm run dev` should serve the placeholder.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-002"
+      ],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/vite.config.ts",
+        "dashboard/svelte.config.js",
+        "dashboard/tsconfig.json",
+        "dashboard/index.html",
+        "dashboard/src/main.ts",
+        "dashboard/src/App.svelte",
+        ".gitignore"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:01Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:28:27Z",
+      "sprint": "Phase 1",
+      "sprint_history": [
+        {
+          "sprint": "Phase 1",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-004",
+      "name": "Single-file build to dashboard/dist with version injection",
+      "type": "infra",
+      "description": "- Add `vite-plugin-singlefile`, so `npm run build` emits **one self-contained** `dashboard/dist/tasks-dashboard.html` (no external JS/CSS).\n- Add a small Vite plugin (`transformIndexHtml`) that reads the version from `plugin/.claude-plugin/plugin.json` and writes it into the `atm-dashboard-version` meta tag.\n\n> Do **not** write to `plugin/templates` yet; that happens at cutover (T-023).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-003"
+      ],
+      "files": [
+        "dashboard/vite.config.ts",
+        "dashboard/build/inject-version.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:01Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:28:59Z",
+      "sprint": "Phase 1",
+      "sprint_history": [
+        {
+          "sprint": "Phase 1",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-005",
+      "name": "Configure Vitest with coverage and testing-library",
+      "type": "test",
+      "description": "Set up Vitest (jsdom) with `@testing-library/svelte` and `@vitest/coverage-v8`.\n- Coverage threshold: **90% lines on `src/lib/**`**.\n- Tests live in `dashboard/tests/unit/`.\n- Add `npm test` and `npm run test:coverage`.\n- Include one trivial passing test to prove the setup.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-003"
+      ],
+      "files": [
+        "dashboard/vite.config.ts",
+        "dashboard/tests/unit/setup.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:01Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:29:55Z",
+      "sprint": "Phase 1",
+      "sprint_history": [
+        {
+          "sprint": "Phase 1",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-006",
+      "name": "Playwright harness with legacy and svelte projects",
+      "type": "test",
+      "description": "### Freeze the baseline\nFreeze the current shipped dashboard as `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html`.\n\n### `playwright.config.ts`\n- Chromium only, fixed viewport, a `webServer` serving a static dir.\n- **Two projects running the same specs**, selected via a per-project `baseURL`/path: `legacy` (the frozen file) and `svelte` (`dashboard/dist/tasks-dashboard.html`).\n- `snapshotPathTemplate` must **omit the project name**, so `svelte` compares against legacy screenshots.\n\n### Helpers\n`tests/e2e/helpers.ts` with:\n- `useFixture(page, name)`, which serves `tests/fixtures/<name>.json` for `**/tasks.json` via `page.route` (and can swap the response or return 404);\n- an auto fixture that **fails the test on any non-localhost request**.\n\nAdd `npm run test:e2e`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-003"
+      ],
+      "files": [
+        "dashboard/playwright.config.ts",
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/tests/legacy/tasks-dashboard.v0.4.0.html"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:01Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T19:30:36Z",
+      "sprint": "Phase 1",
+      "sprint_history": [
+        {
+          "sprint": "Phase 1",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-007",
+      "name": "Lint, format, svelte-check, npm scripts and root CLAUDE.md",
+      "type": "infra",
+      "description": "### Tools\nAdd ESLint (flat config, `eslint-plugin-svelte`, `typescript-eslint`), Prettier (+ `prettier-plugin-svelte`) and `svelte-check`.\n\n### Scripts\n- `dev`, `build`, `test`, `test:coverage`, `test:e2e`\n- `check`: `svelte-check` + `eslint` + `prettier --check`\n- `verify`: `check` + `test` + `build` + `test:e2e`\n\n### `CLAUDE.md`\nAdd a repo-root `CLAUDE.md` describing the dev workflow, the plugin vs dashboard split, and that `plugin/templates/tasks-dashboard.html` is a **build artifact** (after cutover).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-003"
+      ],
+      "files": [
+        "dashboard/eslint.config.js",
+        "dashboard/.prettierrc",
+        "dashboard/package.json",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:01Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:22:04Z",
+      "sprint": "Phase 1",
+      "sprint_history": [
+        {
+          "sprint": "Phase 1",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-008",
+      "name": "Create tasks.json test fixtures",
+      "type": "test",
+      "description": "In `dashboard/tests/fixtures/`:\n- `empty.json`\n- `minimal.json`: 1 task\n- `standard.json`: all 7 types × 5 statuses, 3 phases, deps, `use_cases` / `requirements` / `files`, `created_at` / `updated_at` timestamps\n- `cycle.json`: a dependency cycle\n- `edge-cases.json`: unknown type and status, a dependency on a missing ID, tasks without timestamps, very long names, unicode, HTML like `<b>bold</b>` in name and description\n- `no-meta.json`: no `meta` block\n\nAdd `tests/fixtures/generate-large.mjs`, which **deterministically** writes `large-90.json` (90 tasks, wide graph, ~40 done, 1 `in_progress`), and commit its output.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-006"
+      ],
+      "files": [
+        "dashboard/tests/fixtures/"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:02Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:45:09Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-009",
+      "name": "Regression specs: load, stats, timeline",
+      "type": "test",
+      "description": "`tests/e2e/load.spec.ts` and `stats.spec.ts`, **green on the legacy project**.\n\n### Load\n- The page title and `#dashboard-title` use `meta.project`.\n- The subtitle counts tasks and phases.\n- `no-meta` falls back to *Task Dashboard*.\n- A 404 for `tasks.json` shows the *Failed to load tasks.json* box with `python3 -m http.server` instructions.\n\n### Stats\n- *Total* / *Done* / *In Progress* / *Todo* numbers.\n- The *Blocked* card only when blocked > 0.\n- Per-type count cards; progress %.\n\n### Timeline\n- Shown only when tasks have timestamps.\n- Bucket count clamped to 4–16.\n- Start/end date labels.\n- A tooltip appears on bar hover.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-008"
+      ],
+      "files": [
+        "dashboard/tests/e2e/load.spec.ts",
+        "dashboard/tests/e2e/stats.spec.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:02Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:46:00Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-010",
+      "name": "Regression specs: filters and task cards",
+      "type": "test",
+      "description": "`tests/e2e/filters.spec.ts` and `cards.spec.ts`, **green on legacy**.\n\n### Filters\n- Generated phase/type/status buttons (`.filter-btn[data-filter][data-value]`).\n- Status order `todo, in_progress, done, blocked, skipped`; capitalized labels.\n- Multi-select is **OR within a group and AND across groups**.\n- *All* clears the group; active classes stay in sync.\n- *N of M shown* text.\n- The empty-result message in both the card grid and the graph.\n\n### Cards\n- `.task-card[data-id]` with phase/type/status badges.\n- *needs:* dependency links scroll to and highlight the target card.\n- UC and requirement tags.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-008"
+      ],
+      "files": [
+        "dashboard/tests/e2e/filters.spec.ts",
+        "dashboard/tests/e2e/cards.spec.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:02Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:47:53Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-011",
+      "name": "Regression specs: detail panel and dependency graph",
+      "type": "test",
+      "description": "`tests/e2e/detail.spec.ts` and `graph.spec.ts`, **green on legacy**.\n\n### Detail\n- Opens from a card name and from a graph node (`#detail-overlay.open`).\n- Shows description, UCs, requirements, timestamps, files.\n- *Depends On* and *Required By* entries navigate to the other task.\n- Closes via the × button, an overlay click and `Escape`.\n\n### Graph\n- One node per filtered task; the edge count matches visible dependencies.\n- `#graph-badge` says *N tasks*.\n- `cycle.json` still renders every node.\n- A header click collapses and expands the graph.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-008"
+      ],
+      "files": [
+        "dashboard/tests/e2e/detail.spec.ts",
+        "dashboard/tests/e2e/graph.spec.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:02Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:48:46Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-012",
+      "name": "Regression specs: reload, auto-refresh, edge cases",
+      "type": "test",
+      "description": "`tests/e2e/refresh.spec.ts` and `edge-cases.spec.ts`, **green on legacy**.\n\n### Refresh\n- `#reload-btn` re-fetches and re-renders after the fixture response is swapped.\n- `#auto-refresh-check` plus `#auto-refresh-interval` polls on the configured interval (use `page.clock`).\n- Active filters survive a reload.\n\n### Edge cases\n- Unknown type/status render with fallback styles.\n- A dependency on a missing ID does not crash.\n- Long names are truncated to 22 chars in graph nodes.\n\n### XSS divergence\nA test asserting task text is rendered as **literal text (not HTML)** is marked `test.fail()` for the legacy project only, with a comment explaining the svelte port fixes it.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-008"
+      ],
+      "files": [
+        "dashboard/tests/e2e/refresh.spec.ts",
+        "dashboard/tests/e2e/edge-cases.spec.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:02Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:49:55Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-013",
+      "name": "Visual baseline screenshots from legacy",
+      "type": "test",
+      "description": "`tests/e2e/visual.spec.ts`: `toHaveScreenshot` for the full page, the graph section and the open detail panel, on the `standard`, `large-90`, `empty` and `edge-cases` fixtures.\n\n- Generate baselines **from the legacy project only** (`--project=legacy --update-snapshots`) and commit them.\n- Use a small `maxDiffPixelRatio`.\n- Afterwards the whole suite must be green on legacy. **Commit this before any app code** (phase 3+).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-009",
+        "T-010",
+        "T-011",
+        "T-012"
+      ],
+      "files": [
+        "dashboard/tests/e2e/visual.spec.ts",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:03Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T20:53:51Z",
+      "sprint": "Phase 2",
+      "sprint_history": [
+        {
+          "sprint": "Phase 2",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-014",
+      "name": "Port types, theme and loader to src/lib",
+      "type": "refactor",
+      "description": "Lift from the legacy inline script:\n- **`src/lib/types.ts`**: `Task`, `TasksFile`, `Status`, `TaskType`.\n- **`src/lib/theme.ts`**: `TYPE_COLORS`, `STATUS_COLORS`, `PHASE_PALETTE`, `FALLBACK_TYPE`, type/status emoji maps, `phaseColor` / `typeStyle` / `statusStyle`.\n- **`src/lib/load.ts`**: fetch `./tasks.json?<timestamp>`; return `tasks`, `taskMap` and `projectName`, or a typed error.\n\nUnit tests for the style fallbacks and the loader (mock `fetch`, including HTTP error and no-meta).\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-005",
+        "T-013"
+      ],
+      "files": [
+        "dashboard/src/lib/types.ts",
+        "dashboard/src/lib/theme.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/tests/unit/"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:03Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:07:35Z",
+      "sprint": "Phase 3",
+      "sprint_history": [
+        {
+          "sprint": "Phase 3",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-015",
+      "name": "Port filter and stats logic with unit tests",
+      "type": "refactor",
+      "description": "### `src/lib/filters.ts`\n- Filter option derivation: sorted phases, sorted types, statuses in the legacy order with unknowns last, label capitalization.\n- `filterTasks`: **OR within a group, AND across groups**, an empty set = all.\n\nMatching legacy `buildFilters` / `filterTasks`.\n\n### `src/lib/stats.ts`\nTotals, per-status and per-type counts, and progress % as legacy `renderStats` computes it.\n\nCharacterization unit tests for both.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-014"
+      ],
+      "files": [
+        "dashboard/src/lib/filters.ts",
+        "dashboard/src/lib/stats.ts",
+        "dashboard/tests/unit/filters.test.ts",
+        "dashboard/tests/unit/stats.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:03Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:08:35Z",
+      "sprint": "Phase 3",
+      "sprint_history": [
+        {
+          "sprint": "Phase 3",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-016",
+      "name": "Port timeline bucketing with unit tests",
+      "type": "refactor",
+      "description": "`src/lib/timeline.ts`, matching the legacy timeline code in `renderStats`:\n- completion events from done tasks' timestamps;\n- bucket count **clamped to 4–16**, and bucket assignment;\n- min/max range and date formatting.\n\nUnit tests, including no timestamps, a single completion and identical timestamps.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-014"
+      ],
+      "files": [
+        "dashboard/src/lib/timeline.ts",
+        "dashboard/tests/unit/timeline.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:03Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:09:12Z",
+      "sprint": "Phase 3",
+      "sprint_history": [
+        {
+          "sprint": "Phase 3",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-017",
+      "name": "Port dependency graph layout with unit tests",
+      "type": "refactor",
+      "description": "`src/lib/graph/layout.ts`, matching legacy `renderDepGraph`:\n- **topological layering** of the filtered tasks (only visible deps count; a cycle dumps the remaining tasks into one layer);\n- node positions: `nodeW 160`, `nodeH 52`, `padX 60`, `padY 24`, layers vertically centered;\n- an edge list with bezier path data;\n- total width/height, and `truncate(name, 22)`.\n\nUnit tests: chain, diamond, cycle, hidden deps, empty input.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-014"
+      ],
+      "files": [
+        "dashboard/src/lib/graph/layout.ts",
+        "dashboard/tests/unit/layout.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:03Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:09:58Z",
+      "sprint": "Phase 3",
+      "sprint_history": [
+        {
+          "sprint": "Phase 3",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-018",
+      "name": "App shell, global styles, state, Header, Stats, Timeline",
+      "type": "feature",
+      "description": "- **Move the legacy CSS over verbatim** (global stylesheet first; scope into components later only if screenshots stay green).\n- `src/lib/state.svelte.ts` holds `tasks`, `taskMap`, `filters` and `autoRefresh` with runes.\n- Components `Header`, `Stats` and `Timeline` keep the **legacy DOM contract** (the ids/classes the e2e specs use).\n- Build to `dashboard/dist` and run the load/stats specs on the svelte project.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-015",
+        "T-016"
+      ],
+      "files": [
+        "dashboard/src/App.svelte",
+        "dashboard/src/app.css",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:04Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:13:40Z",
+      "sprint": "Phase 4",
+      "sprint_history": [
+        {
+          "sprint": "Phase 4",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-019",
+      "name": "Filters, refresh controls, task grid and cards",
+      "type": "feature",
+      "description": "Components `Filters`, `RefreshControls` (reload button, auto toggle, interval), `TaskGrid` and `TaskCard`, preserving the DOM contract:\n- `.filter-btn[data-filter][data-value]`\n- `.task-card[data-id]`\n- `#reload-btn`, `#auto-refresh-check`, `#auto-refresh-interval`\n\nTask text is **rendered escaped** (the Svelte default). The filters/cards/refresh specs pass on the svelte project.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-018"
+      ],
+      "files": [
+        "dashboard/src/components/Filters.svelte",
+        "dashboard/src/components/RefreshControls.svelte",
+        "dashboard/src/components/TaskGrid.svelte",
+        "dashboard/src/components/TaskCard.svelte"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:04Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:16:50Z",
+      "sprint": "Phase 4",
+      "sprint_history": [
+        {
+          "sprint": "Phase 4",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-020",
+      "name": "Detail panel component",
+      "type": "feature",
+      "description": "`DetailPanel` component with `#detail-overlay` / `#detail-panel`, *Depends On* / *Required By* navigation, and close via ×, an overlay click and `Escape`. The detail spec passes on the svelte project.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-019"
+      ],
+      "files": [
+        "dashboard/src/components/DetailPanel.svelte"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:04Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:18:05Z",
+      "sprint": "Phase 4",
+      "sprint_history": [
+        {
+          "sprint": "Phase 4",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-021",
+      "name": "Dependency graph component",
+      "type": "feature",
+      "description": "`DepGraph` component rendering the `src/lib/graph/layout.ts` output as SVG with the legacy look (`viewBox` scaling as in v0.4.0; zoom/pan comes in phase 6). A node click opens details; collapsible header with `#graph-badge`. The graph spec passes on the svelte project.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-017",
+        "T-019"
+      ],
+      "files": [
+        "dashboard/src/components/DepGraph.svelte"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:04Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:18:52Z",
+      "sprint": "Phase 4",
+      "sprint_history": [
+        {
+          "sprint": "Phase 4",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-022",
+      "name": "Full parity with legacy plus component tests",
+      "type": "test",
+      "description": "### Parity\nThe **entire e2e suite**, including visual screenshots, passes on both the legacy and svelte projects (the XSS test passes on svelte).\n\nFix any differences **in the port, not by loosening tests**; any intentional difference must be documented in the spec.\n\n### Component tests\nAdd `@testing-library/svelte` component tests for `TaskCard` and `Filters`.\n\n### Then\nSwitch the `test:e2e` script from `--project=legacy` to both projects. Until parity it runs legacy only, so `npm run verify` stays green; `test:e2e:svelte` and `test:e2e:all` exist for porting work.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-020",
+        "T-021"
+      ],
+      "files": [
+        "dashboard/tests/unit/TaskCard.test.ts",
+        "dashboard/tests/unit/Filters.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:05Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:20:38Z",
+      "sprint": "Phase 4",
+      "sprint_history": [
+        {
+          "sprint": "Phase 4",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-023",
+      "name": "Cut over: build into plugin/templates, guardrails, pre-commit hook",
+      "type": "infra",
+      "description": "- Switch `build.outDir` to `../plugin/templates` (`emptyOutDir: false`, so `templates/tasks.json` survives) and point the svelte Playwright project there.\n- Add guardrail tests: the built file references **no external URLs** and stays **under 150 KB**.\n- Add a pre-commit hook (`simple-git-hooks` + `lint-staged`, scoped to `dashboard/**`) that rebuilds and stages `plugin/templates/tasks-dashboard.html`.\n- Commit the built file.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-022"
+      ],
+      "files": [
+        "dashboard/vite.config.ts",
+        "dashboard/playwright.config.ts",
+        "dashboard/tests/e2e/guardrails.spec.ts",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:05Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:32:44Z",
+      "sprint": "Phase 5",
+      "sprint_history": [
+        {
+          "sprint": "Phase 5",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-024",
+      "name": "GitHub Actions CI",
+      "type": "infra",
+      "description": "`.github/workflows/ci.yml`, on push and PR:\n1. `npm ci` in `dashboard/`\n2. `npm run check`\n3. unit tests with the coverage threshold\n4. build, then `git diff --exit-code plugin/templates/tasks-dashboard.html` (check-dist pattern; **CI never commits**)\n5. Playwright e2e (install browsers, upload the report on failure)\n6. a version-consistency script asserting that the `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions match\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-023"
+      ],
+      "files": [
+        ".github/workflows/ci.yml",
+        "dashboard/scripts/check-versions.mjs"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:05Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:33:54Z",
+      "sprint": "Phase 5",
+      "sprint_history": [
+        {
+          "sprint": "Phase 5",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "ci"
+      ]
+    },
+    {
+      "id": "T-025",
+      "name": "Bump to 0.5.0 and document development workflow",
+      "type": "docs",
+      "description": "- Bump `plugin.json` and `marketplace.json` to **0.5.0** and rebuild (the dashboard version comes from `plugin.json`).\n- README: add a *Development* section (the `dashboard/` layout, npm scripts, fixtures, legacy vs svelte Playwright projects, the built file is committed and checked by CI) and update *Project Structure*.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-023"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "README.md"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:05Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T21:34:32Z",
+      "sprint": "Phase 5",
+      "sprint_history": [
+        {
+          "sprint": "Phase 5",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-026",
+      "name": "Re-baseline screenshots from svelte and retire legacy project",
+      "type": "test",
+      "description": "Once CI is green with both projects, **regenerate the screenshot baselines from the svelte project**, and remove the legacy Playwright project and the legacy-only `test.fail` annotation. Keep `tests/legacy/tasks-dashboard.v0.4.0.html` for reference.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-024",
+        "T-025"
+      ],
+      "files": [
+        "dashboard/playwright.config.ts",
+        "dashboard/tests/e2e/"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:05Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T22:12:00Z",
+      "sprint": "Phase 5",
+      "sprint_history": [
+        {
+          "sprint": "Phase 5",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-027",
+      "name": "Write failing zoom/pan/minimap tests",
+      "type": "test",
+      "description": "**Test-first.** These must fail before T-028.\n\n### `tests/e2e/graph-zoom.spec.ts`\n- `large-90` opens at ≥60%, centered on the in-progress task.\n- A small graph opens at 100%, centered.\n- Dragging pans **without** opening details; a plain node click opens details.\n- `Ctrl`/`Cmd`+wheel zooms around the cursor.\n- The −, +, fit and 1:1 buttons and the `+` `-` `0` `F` and arrow keys work.\n- The minimap appears only when the graph overflows, and click/drag moves the view.\n- The view persists across reload and resets when filters change.\n\n### `tests/unit/view.test.ts`\nFit, clamp and zoom-at-point.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-026"
+      ],
+      "files": [
+        "dashboard/tests/e2e/graph-zoom.spec.ts",
+        "dashboard/tests/unit/view.test.ts"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:06Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T22:14:09Z",
+      "sprint": "Phase 6",
+      "sprint_history": [
+        {
+          "sprint": "Phase 6",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-028",
+      "name": "Implement zoom, pan and minimap",
+      "type": "feature",
+      "description": "Implement `src/lib/graph/view.ts` plus the `GraphControls` and `Minimap` components, and update `DepGraph` to a fixed-height pan/zoom viewport.\n\nPort the logic from `git stash show -p stash^{/zoom-pan-minimap}`: `applyGraphView`, `fitGraph`, `autoFitGraph`, `zoomGraphAt`, the minimap, and pointer handling with **click suppression after a drag**.\n\nMake T-027 pass; update the screenshot baselines for the graph intentionally.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-027"
+      ],
+      "files": [
+        "dashboard/src/lib/graph/view.ts",
+        "dashboard/src/components/DepGraph.svelte",
+        "dashboard/src/components/GraphControls.svelte",
+        "dashboard/src/components/Minimap.svelte"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:06Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T22:16:51Z",
+      "sprint": "Phase 6",
+      "sprint_history": [
+        {
+          "sprint": "Phase 6",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-029",
+      "name": "Release zoom/pan as 0.6.0 and drop the stash",
+      "type": "docs",
+      "description": "Bump to **0.6.0**, rebuild, add the dependency graph controls to the README's dashboard features list, and drop the `zoom-pan-minimap wip` stash once everything is merged.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-028"
+      ],
+      "files": [
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "README.md"
+      ],
+      "created_at": "2026-10-22T19:19:41Z",
+      "updated_at": "2026-10-25T21:40:06Z",
+      "updated_by": "claude:e5ea9db0",
+      "completed_at": "2026-10-22T22:17:16Z",
+      "sprint": "Phase 6",
+      "sprint_history": [
+        {
+          "sprint": "Phase 6",
+          "from": "2026-10-22T19:19:41Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-030",
+      "name": "Safe localStorage preferences module",
+      "type": "feature",
+      "description": "Add `src/lib/prefs.ts`: typed get/set helpers for per-browser dashboard preferences, stored in `localStorage` under **one namespaced key** (e.g. `\"atm-dashboard\"`).\n\nEvery read/write is wrapped in `try`/`catch`: when storage is unavailable or the stored value is corrupt, reads return the given default and writes are no-ops (**no exceptions, no console errors**).\n\nUnit tests (jsdom):\n- round trip;\n- defaults when empty;\n- corrupt JSON;\n- a `localStorage` whose methods throw.\n\nSee `docs/dashboard-v2-requirements.md` FR-6.2.\n",
+      "requirements": [
+        "FR-6.2",
+        "FR-1.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/tests/unit/prefs.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:06Z",
+      "started_at": "2026-10-22T23:43:11Z",
+      "completed_at": "2026-10-22T23:43:25Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-031",
+      "name": "Auto-refresh on by default and remembered",
+      "type": "bugfix",
+      "description": "Make auto-refresh **default to ON (5 s)** and persist the on/off choice and interval via `src/lib/prefs.ts` (FR-6.1, FR-6.2).\n\n### Test isolation first\n`openDashboard()` in `tests/e2e/helpers.ts` must store auto-refresh **OFF** via `page.addInitScript` before navigation, unless called with `{ autoRefresh: true }`, so existing specs (request counts, screenshots) are unaffected by background reloads.\n\n### Specs\nReplace the refresh.spec test *is off by default* with:\n- on by default (fresh browser, no init script);\n- polls every 5 s (`page.clock`);\n- switching off survives a page reload;\n- a changed interval survives a reload.\n\nUpdate the state unit tests. **Screenshots must not change** (the visual spec runs with auto-refresh off).\n",
+      "requirements": [
+        "FR-6.1",
+        "FR-6.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-030"
+      ],
+      "files": [
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/components/RefreshControls.svelte",
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/tests/e2e/refresh.spec.ts",
+        "dashboard/tests/unit/state.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:06Z",
+      "started_at": "2026-10-22T23:43:46Z",
+      "completed_at": "2026-10-22T23:44:34Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-032",
+      "name": "View math: detect visible nodes and pan to content",
+      "type": "feature",
+      "description": "Extend `src/lib/graph/view.ts` with pure functions for FR-6.3/6.4:\n- **`anyNodeVisible(view, nodes, nodeSize, viewport)`**: true if at least one node rectangle intersects the viewport.\n- **`panToContent(view, content, viewport, focus?)`**: same zoom `k`; pan so the focus node is centered (clamped like `autoFitView`), or, without focus, the content's top-left sits at the padding.\n\nUnit tests for both, including partially visible nodes and the **`k`-is-unchanged** guarantee.\n",
+      "requirements": [
+        "FR-6.3",
+        "FR-6.4"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/graph/view.ts",
+        "dashboard/tests/unit/view.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:07Z",
+      "started_at": "2026-10-22T23:44:55Z",
+      "completed_at": "2026-10-22T23:45:09Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-033",
+      "name": "Graph keeps zoom when visible tasks change",
+      "type": "bugfix",
+      "description": "### Behaviour\nChange `DepGraph` so **only the first successful layout auto-fits**. Afterwards, when the visible task set changes (filters or a reload):\n- **always keep `k`** (whether or not the user zoomed);\n- keep the pan if `anyNodeVisible()`, otherwise `panToContent()` with the in-progress/next-todo focus (FR-6.3, FR-6.4).\n\nThe minimap and zoom label follow (FR-6.5). Window resize/expand behaviour stays as today.\n\n### Specs\nReplace the graph-zoom spec *changing the visible tasks re-fits* with:\n- zoom in, filter by a phase → the zoom label is unchanged;\n- a filter whose nodes would all be off-screen → the view pans (same `k`) and at least one node is in the viewport;\n- clearing the filter keeps `k`;\n- the fit button still fits.\n",
+      "requirements": [
+        "FR-6.3",
+        "FR-6.4",
+        "FR-6.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-032"
+      ],
+      "files": [
+        "dashboard/src/components/DepGraph.svelte",
+        "dashboard/tests/e2e/graph-zoom.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:07Z",
+      "started_at": "2026-10-22T23:45:35Z",
+      "completed_at": "2026-10-22T23:46:32Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-034",
+      "name": "Document started_at/completed_at task fields",
+      "type": "docs",
+      "description": "Add optional, ISO 8601 UTC:\n- **`started_at`**: set when a task moves to `in_progress`;\n- **`completed_at`**: set when it moves to `done`.\n\nBoth are cleared when a task goes back to `todo`.\n\nUpdate the schema table and example in `README.md`, the schema line in `plugin/CLAUDE.md`, the example in `plugin/templates/tasks.json`, and the `Task` type in `dashboard/src/lib/types.ts`. **No behaviour changes.**\n",
+      "requirements": [
+        "FR-5.1",
+        "FR-5.4"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "README.md",
+        "plugin/CLAUDE.md",
+        "plugin/templates/tasks.json",
+        "dashboard/src/lib/types.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:07Z",
+      "started_at": "2026-10-22T23:46:38Z",
+      "completed_at": "2026-10-22T23:47:08Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "skills",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-035",
+      "name": "Skills write started_at and completed_at",
+      "type": "feature",
+      "description": "Update `/atm:do-task` and `/atm:loop-tasks`:\n- when setting `in_progress`, also set `started_at`;\n- when setting `done`, also set `completed_at`;\n- when a task fails and goes back to `todo`, remove `started_at` / `completed_at`;\n- always keep updating `updated_at`.\n\nUse the same `date -u` command the skills already use, and keep the wording consistent between the two skills.\n\nVerify by **reading both files end to end** (no automated test covers skill text); `npm run verify` must still pass.\n",
+      "requirements": [
+        "FR-5.1"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-034"
+      ],
+      "files": [
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:07Z",
+      "started_at": "2026-10-22T23:47:13Z",
+      "completed_at": "2026-10-22T23:47:38Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "skills"
+      ]
+    },
+    {
+      "id": "T-036",
+      "name": "Timeline uses completed_at with updated_at fallback",
+      "type": "feature",
+      "description": "In `src/lib/timeline.ts` `completions()`: use `completed_at` when present, else `updated_at` (FR-5.2).\n\nUnit tests: `completed_at` wins over a later `updated_at`; the fallback for old files.\n\nOptionally add `completed_at` to some done tasks in a fixture, **only if no screenshot/e2e expectation changes**; otherwise leave fixtures alone.\n",
+      "requirements": [
+        "FR-5.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-034"
+      ],
+      "files": [
+        "dashboard/src/lib/timeline.ts",
+        "dashboard/tests/unit/timeline.test.ts",
+        "dashboard/tests/fixtures/standard.json"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:07Z",
+      "started_at": "2026-10-22T23:47:49Z",
+      "completed_at": "2026-10-22T23:48:03Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-037",
+      "name": "Create plugin/CHANGELOG.md with backfilled history",
+      "type": "docs",
+      "description": "Create `plugin/CHANGELOG.md` in *Keep a Changelog* style (`## [x.y.z] - YYYY-MM-DD`, `### Added/Changed/Fixed` bullet lists, newest first), with an `## [Unreleased]` section for the 0.7.0 work.\n\n### Backfill from git history\n- **0.1.0** (2026-04-04): initial plugin, skills + dashboard.\n- **0.2.0** (2026-04-04): restructure, rename to atm.\n- **0.3.0** (2026-04-04): plugin in its own subdirectory.\n- **0.4.0** (2026-04-05): task timestamps, activity timeline, `/atm:update-dashboard`; the loop auto-commits by default.\n- **0.5.0** (2026-10-22): dashboard rebuilt in Svelte 5 with tests; task text escaped (XSS fix); filters/tab title refresh on reload.\n- **0.6.0** (2026-10-22): graph zoom/pan/minimap.\n\nWrite **for plugin users, not developers**; check the details against `git log`.\n",
+      "requirements": [
+        "FR-1.1",
+        "FR-1.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:08Z",
+      "started_at": "2026-10-22T23:48:10Z",
+      "completed_at": "2026-10-22T23:48:39Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ]
+    },
+    {
+      "id": "T-038",
+      "name": "Changelog parser and version range selection",
+      "type": "feature",
+      "description": "Add `src/lib/changelog.ts`:\n- **`parseChangelog(markdown)`** → `[{ version, date, sections: [{ title, items[] }] }]` (newest first; supports `[Unreleased]`);\n- **`compareVersions(a, b)`** for `x.y.z`;\n- **`entriesBetween(entries, fromExclusive, toInclusive)`**, treating a missing version as `0.0.0`.\n\nPure TS, **no Markdown library**; inline Markdown in items is kept as plain text.\n\nUnit tests against the real `plugin/CHANGELOG.md`, plus edge cases (empty file, missing date, unknown section names).\n",
+      "requirements": [
+        "FR-1.3",
+        "FR-1.4"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-037"
+      ],
+      "files": [
+        "dashboard/src/lib/changelog.ts",
+        "dashboard/tests/unit/changelog.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:08Z",
+      "started_at": "2026-10-22T23:49:08Z",
+      "completed_at": "2026-10-22T23:49:22Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-039",
+      "name": "CI/check fails without a changelog entry for the version",
+      "type": "infra",
+      "description": "Extend `scripts/check-versions.mjs` (run by `npm run check` and CI) to also **fail with a clear message** when `plugin/CHANGELOG.md` has no `## [<plugin.json version>]` entry.\n\nWhile the version is still 0.6.0, this passes via the backfilled entry. Test the failure path manually (temporary edit, restore), as done for the version mismatch.\n",
+      "requirements": [
+        "FR-1.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-038"
+      ],
+      "files": [
+        "dashboard/scripts/check-versions.mjs"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:08Z",
+      "started_at": "2026-10-22T23:49:33Z",
+      "completed_at": "2026-10-22T23:49:47Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-040",
+      "name": "Embed the parsed changelog in the build",
+      "type": "infra",
+      "description": "Make the changelog available to the app at build time, with **no runtime fetch**:\n- a small Vite plugin exposing a virtual module (e.g. `\"virtual:atm-changelog\"`) that reads `plugin/CHANGELOG.md` and returns the `parseChangelog()` output as JSON;\n- `src/lib/release-notes.ts`, which imports it with a typed wrapper (and a `.d.ts` for the virtual module).\n\nVitest must be able to resolve it too. The guardrail tests (single file, size budget) must still pass.\n",
+      "requirements": [
+        "FR-1.4",
+        "NFR-1"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-038"
+      ],
+      "files": [
+        "dashboard/build/changelog.ts",
+        "dashboard/vite.config.ts",
+        "dashboard/src/lib/release-notes.ts",
+        "dashboard/tests/unit/release-notes.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:08Z",
+      "started_at": "2026-10-22T23:50:08Z",
+      "completed_at": "2026-10-22T23:50:41Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-041",
+      "name": "Version chip and What's new panel",
+      "type": "feature",
+      "description": "The header shows a **version chip** `v<version>` (the version from the `atm-dashboard-version` meta tag). Clicking it opens a **What's new** panel listing the changelog versions newest first, with their *Added* / *Changed* / *Fixed* items. It closes via ×, the backdrop and `Escape`, like the detail panel (reuse its styles and patterns).\n\n### Tests\n- e2e spec: the chip text, the panel opens and lists versions in order, and it closes three ways.\n- The header change alters page screenshots: regenerate the `-darwin` baselines intentionally, delete the matching `-linux` ones (CI regenerates them), and check the new images.\n",
+      "requirements": [
+        "FR-1.4"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-040"
+      ],
+      "files": [
+        "dashboard/src/components/Header.svelte",
+        "dashboard/src/components/WhatsNew.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/whats-new.spec.ts",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:18Z",
+      "started_at": "2026-10-22T23:51:00Z",
+      "completed_at": "2026-10-22T23:52:37Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-042",
+      "name": "\"New\" marker on the version chip after upgrades",
+      "type": "feature",
+      "description": "Store the **last-seen dashboard version** via `prefs.ts`.\n\n### Behaviour\n- When the current version is newer than the last-seen one (or none was ever seen), the chip shows a **new** marker until the What's new panel is opened once.\n- Opening it records the current version.\n- **Without storage**, never show the marker and never error.\n\n### Tests\n- e2e: the marker is present on the first visit, gone after opening, stays gone after a reload, and reappears when a lower last-seen version is stored.\n- Visual specs must stay stable (decide and document whether they run with the marker seen).\n",
+      "requirements": [
+        "FR-1.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-041",
+        "T-030"
+      ],
+      "files": [
+        "dashboard/src/components/Header.svelte",
+        "dashboard/tests/e2e/whats-new.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:18Z",
+      "started_at": "2026-10-22T23:53:11Z",
+      "completed_at": "2026-10-22T23:54:32Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-043",
+      "name": "update-dashboard reports real changelog entries",
+      "type": "feature",
+      "description": "Rewrite the report step of `/atm:update-dashboard`:\n- Read `<plugin root>/CHANGELOG.md`.\n- Take every entry with a version **newer than the project's old version** (no version tag = `0.0.0`) and **not newer than the new version**.\n- Print them under *What's new* (version headers + bullets, newest first).\n- Remove the instruction to describe changes from the version difference.\n- If `CHANGELOG.md` is missing, **say so instead of guessing**.\n",
+      "requirements": [
+        "FR-1.3"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-037"
+      ],
+      "files": [
+        "plugin/skills/update-dashboard/SKILL.md"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:18Z",
+      "started_at": "2026-10-22T23:54:42Z",
+      "completed_at": "2026-10-22T23:55:11Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "skills"
+      ]
+    },
+    {
+      "id": "T-044",
+      "name": "Outdated-dashboard hints name the headline change (P2)",
+      "type": "polish",
+      "description": "Where create-tasks, do-task and loop-tasks say the dashboard is outdated, also name the first *Added* item of the newest `CHANGELOG.md` entry (e.g. *\"0.8.0 adds a Kanban board\"*). **Keep the hint to one line.**\n",
+      "requirements": [
+        "FR-1.7"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-043"
+      ],
+      "files": [
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:18Z",
+      "started_at": "2026-10-22T23:55:15Z",
+      "completed_at": "2026-10-22T23:55:48Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "skills"
+      ]
+    },
+    {
+      "id": "T-045",
+      "name": "Release 0.7.0",
+      "type": "docs",
+      "description": "### Changelog\nTurn `[Unreleased]` into `[0.7.0] - <date>`:\n- auto-refresh on by default;\n- the graph keeps its zoom on filter changes;\n- the What's new panel;\n- `/atm:update-dashboard` shows real release notes;\n- `started_at` / `completed_at`.\n\n### Release\n- Bump `plugin.json` and `marketplace.json` to **0.7.0**, and rebuild.\n- Update the README (dashboard features; the *Auto refresh* tip in Quick Start is no longer needed).\n- Copy the build to `docs/tasks-dashboard.html`.\n- `npm run verify` green.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-031",
+        "T-033",
+        "T-035",
+        "T-036",
+        "T-039",
+        "T-042",
+        "T-044"
+      ],
+      "files": [
+        "plugin/CHANGELOG.md",
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "README.md",
+        "docs/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:19Z",
+      "started_at": "2026-10-22T23:55:56Z",
+      "completed_at": "2026-10-22T23:56:19Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 7",
+      "sprint_history": [
+        {
+          "sprint": "Phase 7",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-046",
+      "name": "View-tab state: hash parsing and persistence",
+      "type": "feature",
+      "description": "Add `src/lib/tabs.ts`: the view ids (`graph`, `kanban`, `progress`), parse `#view=<id>` from `location.hash` (unknown or missing → `graph`), and serialize it back **without disturbing other hash content**. Unit tests.\n",
+      "requirements": [
+        "FR-2.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-045"
+      ],
+      "files": [
+        "dashboard/src/lib/tabs.ts",
+        "dashboard/tests/unit/tabs.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:19Z",
+      "started_at": "2026-10-23T00:09:18Z",
+      "completed_at": "2026-10-23T00:09:33Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-047",
+      "name": "Tabbed panel: Dependency Graph | Kanban | Progress",
+      "type": "feature",
+      "description": "Replace the graph section header with a **WAI-ARIA tablist** (`role=tablist` / `tab` / `tabpanel`, Left/Right arrows, roving `tabindex`).\n\n### Tabs\n- *Dependency Graph* (default), *Kanban*, *Progress*.\n- Kanban and Progress show *\"Coming soon\"* placeholders until their tasks land.\n- The selected tab syncs with `#view=...` (back/forward work).\n- **Keep panels mounted** and hide inactive ones, so the graph keeps its pan/zoom (FR-2.4).\n- Keep `#graph-section`, `#graph-container`, `#dep-graph` and `#graph-badge` working, and collapse/expand for the whole panel.\n\n### Tests\n- e2e `tabs.spec`: the default tab, click and keyboard switching, the hash deep link and reload, graph zoom survives a tab round trip, filters and the badge apply.\n- Regenerate the affected screenshots intentionally (darwin; delete linux).\n",
+      "requirements": [
+        "FR-2.1",
+        "FR-2.2",
+        "FR-2.3",
+        "FR-2.4",
+        "FR-2.5",
+        "FR-2.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-046"
+      ],
+      "files": [
+        "dashboard/src/components/ViewTabs.svelte",
+        "dashboard/src/components/DepGraph.svelte",
+        "dashboard/src/App.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/tabs.spec.ts",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:19Z",
+      "started_at": "2026-10-23T00:09:53Z",
+      "completed_at": "2026-10-23T00:11:19Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-048",
+      "name": "Kanban model: columns, ordering, readiness, next up",
+      "type": "feature",
+      "description": "Add `src/lib/kanban.ts`.\n\n### `buildBoard(tasks, allTasks, { showSkipped, statusFilter })`\nReturns the columns *Todo*, *In Progress*, *Blocked*, *Done* (+ *Skipped* when shown, + *Other* for unknown statuses when present), each with a count and ordered cards:\n- **Todo:** ready first, then by phase/id;\n- **In Progress:** by `started_at` (fallback `updated_at`), newest first;\n- **Done:** by `completed_at` (fallback `updated_at`), newest first;\n- **Blocked:** by phase/id.\n\nWith a status filter, only matching columns are returned.\n\n### Readiness and next up\n- `readiness(task, taskMap)` → ready, or the list of unfinished dependency ids (deps outside the file count as unfinished).\n- `nextUp(allTasks)` implements **exactly the loop-tasks selection rule**: status `todo`, all deps done, lowest phase, then lowest id.\n\n### Tests\nUnit tests, including a test that `nextUp` matches the rule described in `plugin/skills/loop-tasks/SKILL.md`.\n",
+      "requirements": [
+        "FR-3.1",
+        "FR-3.3",
+        "FR-3.4",
+        "FR-3.5",
+        "FR-3.8"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-045"
+      ],
+      "files": [
+        "dashboard/src/lib/kanban.ts",
+        "dashboard/tests/unit/kanban.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:19Z",
+      "started_at": "2026-10-23T00:11:33Z",
+      "completed_at": "2026-10-23T00:12:22Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-049",
+      "name": "Kanban test fixture",
+      "type": "test",
+      "description": "Add `tests/fixtures/kanban.json` with:\n- every status, including an unknown one;\n- todo tasks that are ready and waiting (including waiting on a missing id);\n- several `in_progress` tasks with `started_at`;\n- more than 20 done tasks with distinct `completed_at`;\n- skipped tasks;\n- 3 phases.\n\nThe fixtures smoke spec must load it **without errors**.\n",
+      "requirements": [
+        "FR-3.3",
+        "FR-3.5",
+        "FR-3.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-045"
+      ],
+      "files": [
+        "dashboard/tests/fixtures/kanban.json"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:19Z",
+      "started_at": "2026-10-23T00:12:40Z",
+      "completed_at": "2026-10-23T00:13:09Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-050",
+      "name": "Kanban board component",
+      "type": "feature",
+      "description": "Render `buildBoard()` in the Kanban tab.\n\n### The board\n- Columns with a header and a count.\n- Compact cards: id, name, phase and type badges (using theme colours), *Ready* / *Waiting on ...* for todo tasks, and a *Next up* marker.\n- A click opens the existing detail panel.\n- A *Show skipped* toggle.\n- *Done* limited to 20, with *Show all (N)*.\n- Columns scroll independently; horizontal scroll on narrow screens.\n- **Respect filters.**\n\n### Hooks for tests\nStable selectors: `.kanban-column[data-status]`, `.kanban-card[data-id]`.\n",
+      "requirements": [
+        "FR-3.1",
+        "FR-3.2",
+        "FR-3.3",
+        "FR-3.4",
+        "FR-3.6",
+        "NFR-3"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-047",
+        "T-048",
+        "T-049"
+      ],
+      "files": [
+        "dashboard/src/components/KanbanBoard.svelte",
+        "dashboard/src/components/KanbanCard.svelte",
+        "dashboard/src/app.css"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:20Z",
+      "started_at": "2026-10-23T00:13:44Z",
+      "completed_at": "2026-10-23T00:32:28Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-051",
+      "name": "Kanban e2e specs and screenshots",
+      "type": "test",
+      "description": "### e2e `kanban.spec`\nOn `kanban.json` and `standard`:\n- columns and counts;\n- card order per column;\n- readiness text;\n- *Next up* on the right card (and it moves after a reload where that task is done);\n- the detail panel opens on click;\n- the skipped toggle and *Show all*;\n- a status filter limits the columns;\n- live update via Reload.\n\n### Screenshots\nAdd Kanban screenshots to `visual.spec` (`standard`, `kanban`): darwin baselines; CI generates linux.\n",
+      "requirements": [
+        "FR-3.1",
+        "FR-3.2",
+        "FR-3.3",
+        "FR-3.4",
+        "FR-3.5",
+        "FR-3.6",
+        "FR-3.8"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-050"
+      ],
+      "files": [
+        "dashboard/tests/e2e/kanban.spec.ts",
+        "dashboard/tests/e2e/visual.spec.ts",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:20Z",
+      "started_at": "2026-10-23T00:32:56Z",
+      "completed_at": "2026-10-23T00:33:28Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-052",
+      "name": "Kanban: group by phase (P2)",
+      "type": "feature",
+      "description": "A *Group by phase* toggle splits the board into **one swimlane per phase** (a phase header with done/total), with the same columns in each lane; remembered via `prefs.ts`. Unit and e2e coverage.\n",
+      "requirements": [
+        "FR-3.7"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-051"
+      ],
+      "files": [
+        "dashboard/src/components/KanbanBoard.svelte",
+        "dashboard/src/lib/kanban.ts",
+        "dashboard/tests/e2e/kanban.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:20Z",
+      "started_at": "2026-10-23T00:34:03Z",
+      "completed_at": "2026-10-23T00:34:55Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-053",
+      "name": "Release 0.8.0",
+      "type": "docs",
+      "description": "- Changelog entry `[0.8.0]`: tabs, and the Kanban board with readiness and *Next up*.\n- Bump to **0.8.0** and rebuild.\n- README: dashboard features.\n- Copy the build to `docs/`.\n- `npm run verify` green.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-051",
+        "T-052"
+      ],
+      "files": [
+        "plugin/CHANGELOG.md",
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "README.md",
+        "docs/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:20Z",
+      "started_at": "2026-10-23T00:35:06Z",
+      "completed_at": "2026-10-23T00:35:22Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 8",
+      "sprint_history": [
+        {
+          "sprint": "Phase 8",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-054",
+      "name": "Progress test fixture",
+      "type": "test",
+      "description": "Add `tests/fixtures/progress.json` with:\n- 3 phases across several days;\n- done tasks with `started_at` / `completed_at` (and some with only `updated_at`);\n- an idle gap of hours between sessions;\n- tasks added midway (later `created_at`);\n- one blocked and one skipped task;\n- phase 0 fully done.\n\n**Document the intended expected numbers** (pace, ranges, ETAs at a fixed *now*) in a comment block in the generator or a sibling README, so tests can cite them.\n",
+      "requirements": [
+        "FR-4.1",
+        "FR-4.3",
+        "FR-4.4"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-053"
+      ],
+      "files": [
+        "dashboard/tests/fixtures/progress.json"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:20Z",
+      "started_at": "2026-10-23T00:35:57Z",
+      "completed_at": "2026-10-23T00:36:14Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-055",
+      "name": "Forecast model",
+      "type": "feature",
+      "description": "Implement `docs/dashboard-v2-requirements.md` section 3 in `src/lib/forecast.ts`:\n- **Per-task durations:** `completed_at - started_at`, else the gap since the previous completion, capped at 30 min.\n- **Pace:** the median of the last 10, with a P25/P75 range.\n- **Phase estimates** accumulated in loop order (unfinished tasks in phases ≤ N; blocked/skipped excluded; blocked counted for a warning).\n- A working-time result, plus calendar time from an injected *now*.\n- Done phases report their last completion date.\n- Fewer than 3 timed completions → *\"not enough history\"*.\n\nUnit tests with fake timers.\n",
+      "requirements": [
+        "FR-4.3",
+        "FR-4.4",
+        "FR-5.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-054"
+      ],
+      "files": [
+        "dashboard/src/lib/forecast.ts",
+        "dashboard/tests/unit/forecast.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:21Z",
+      "started_at": "2026-10-23T00:36:59Z",
+      "completed_at": "2026-10-23T00:37:31Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-056",
+      "name": "Burndown series",
+      "type": "feature",
+      "description": "`src/lib/burndown.ts`:\n- step series of **remaining tasks** and of **total scope** over time (by `created_at`; the done time from `completed_at` / `updated_at`);\n- a **forecast segment** from now to the projected finish (from `forecast.ts`);\n- an optional phase filter for FR-4.6;\n- handles a missing `created_at` (falls back to the earliest known timestamp).\n\nUnit tests.\n",
+      "requirements": [
+        "FR-4.1"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-055"
+      ],
+      "files": [
+        "dashboard/src/lib/burndown.ts",
+        "dashboard/tests/unit/burndown.test.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:21Z",
+      "started_at": "2026-10-23T00:38:02Z",
+      "completed_at": "2026-10-23T00:38:21Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-057",
+      "name": "Progress tab: phase table",
+      "type": "feature",
+      "description": "The **phase table** in the Progress tab.\n\n### Columns and content\n- the phase (in its phase colour), done/total, a progress bar, remaining;\n- the state: *Done* / *In progress* / *Not started*;\n- the estimate: *\"≈ 1 h 10 m of agent work (50 m - 1 h 40 m)\"*, with the calendar time secondary (*\"if the loop keeps running: ...\"*);\n- the done date for finished phases;\n- a blocked warning;\n- *\"based on the last N tasks: ~X min each\"*;\n- *\"Not enough history to estimate\"* when applicable.\n\n### Tests\ne2e with `page.clock` at a fixed time, on `progress.json` and on a fixture with too little history.\n",
+      "requirements": [
+        "FR-4.2",
+        "FR-4.3",
+        "FR-4.4",
+        "FR-4.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-055",
+        "T-047"
+      ],
+      "files": [
+        "dashboard/src/components/ProgressTab.svelte",
+        "dashboard/src/components/PhaseTable.svelte",
+        "dashboard/tests/e2e/progress.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:21Z",
+      "started_at": "2026-10-23T00:39:06Z",
+      "completed_at": "2026-10-23T00:40:09Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-058",
+      "name": "Progress tab: burndown chart",
+      "type": "feature",
+      "description": "A **hand-written SVG burndown** above the phase table.\n\n### The chart\n- *remaining* (step line), *scope* (step line), a dashed forecast segment;\n- a time axis with dates;\n- hover tooltips on data points;\n- responsive width.\n\nFollow the dataviz skill for colours and marks, and keep both themes' tokens consistent with `app.css`.\n\n### Tests\n- e2e for the tooltip content and that the lines are present.\n- Screenshot baselines (darwin; CI linux).\n- The size budget is still met.\n",
+      "requirements": [
+        "FR-4.1",
+        "FR-4.5",
+        "NFR-1",
+        "NFR-3"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-056",
+        "T-057"
+      ],
+      "files": [
+        "dashboard/src/components/BurndownChart.svelte",
+        "dashboard/tests/e2e/progress.spec.ts",
+        "dashboard/tests/e2e/visual.spec.ts",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:21Z",
+      "started_at": "2026-10-23T00:41:05Z",
+      "completed_at": "2026-10-23T00:43:24Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-059",
+      "name": "Progress: click a phase to focus the burndown (P2)",
+      "type": "feature",
+      "description": "Clicking a phase row **limits the burndown to that phase** (click again, or *All phases*, to reset); the selected row is highlighted. e2e.\n",
+      "requirements": [
+        "FR-4.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-058"
+      ],
+      "files": [
+        "dashboard/src/components/ProgressTab.svelte",
+        "dashboard/tests/e2e/progress.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:21Z",
+      "started_at": "2026-10-23T00:43:32Z",
+      "completed_at": "2026-10-23T00:44:20Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-060",
+      "name": "Performance and backward-compatibility checks",
+      "type": "test",
+      "description": "### Performance\nGenerate a **500-task fixture** (extend `generate-large.mjs`) and an e2e check that switching between all tabs and a Reload each render **within 200 ms** (measured via performance marks; a generous CI margin, documented).\n\n### Backward compatibility\n`compat.spec`: a 0.6.0-era `tasks.json` (no `started_at` / `completed_at`, no estimates) renders every tab without page errors and with sensible fallbacks.\n",
+      "requirements": [
+        "NFR-2",
+        "NFR-5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-058"
+      ],
+      "files": [
+        "dashboard/tests/fixtures/generate-large.mjs",
+        "dashboard/tests/e2e/performance.spec.ts",
+        "dashboard/tests/e2e/compat.spec.ts"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:22Z",
+      "started_at": "2026-10-23T00:44:34Z",
+      "completed_at": "2026-10-23T00:45:45Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-061",
+      "name": "Release 0.9.0",
+      "type": "docs",
+      "description": "- Changelog `[0.9.0]`: the Progress tab, with the burndown and per-phase estimates.\n- Bump to **0.9.0** and rebuild.\n- README: dashboard features, plus a note that estimates need `started_at` / `completed_at` (written by the skills since 0.7.0).\n- Copy the build to `docs/`.\n- `npm run verify` green.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-059",
+        "T-060"
+      ],
+      "files": [
+        "plugin/CHANGELOG.md",
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "README.md",
+        "docs/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-22T23:33:50Z",
+      "updated_at": "2026-10-25T21:40:22Z",
+      "started_at": "2026-10-23T00:46:30Z",
+      "completed_at": "2026-10-23T00:46:49Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 9",
+      "sprint_history": [
+        {
+          "sprint": "Phase 9",
+          "from": "2026-10-22T23:33:50Z"
+        }
+      ],
+      "components": [
+        "docs"
+      ]
+    }
+  ]
+}

@@ -2,17 +2,17 @@
   import { onMount } from 'svelte';
   import { applyAppearance } from './lib/appearance';
   import { dashboard } from './lib/state.svelte';
-  import Header from './components/Header.svelte';
-  import ViewPanel from './components/ViewPanel.svelte';
-  import LoadError from './components/LoadError.svelte';
-  import DetailPanel from './components/DetailPanel.svelte';
-  import DocumentViewer from './components/DocumentViewer.svelte';
-  import WhatsNew from './components/WhatsNew.svelte';
-  import Footer from './components/Footer.svelte';
-  import AboutDialog from './components/AboutDialog.svelte';
-  import HelpDialog from './components/HelpDialog.svelte';
-  import LandingPage from './components/LandingPage.svelte';
-  import UpdateNotice from './components/UpdateNotice.svelte';
+  import Header from './lib/shell/Header.svelte';
+  import ViewPanel from './lib/shell/ViewPanel.svelte';
+  import LoadError from './lib/shell/LoadError.svelte';
+  import DetailPanel from './lib/details/DetailPanel.svelte';
+  import DocumentViewer from './lib/documents/DocumentViewer.svelte';
+  import WhatsNew from './lib/dialogs/WhatsNew.svelte';
+  import Footer from './lib/shell/Footer.svelte';
+  import AboutDialog from './lib/dialogs/AboutDialog.svelte';
+  import HelpDialog from './lib/dialogs/HelpDialog.svelte';
+  import LandingPage from './lib/shell/LandingPage.svelte';
+  import UpdateNotice from './lib/shell/UpdateNotice.svelte';
 
   onMount(() => {
     dashboard.load();
@@ -27,8 +27,8 @@
 
   // Remember the view per project (FR-5): every change to filters, tab, panel or board options is saved
   $effect(() => dashboard.saveView());
-  // The Sprint filter in the URL (#sprint=, T-323)
-  $effect(() => dashboard.syncSprintHash());
+  // The Sprint filter in the address (?sprint=, T-323)
+  $effect(() => dashboard.syncSprintParam());
 </script>
 
 <UpdateNotice />
@@ -48,5 +48,3 @@
 <WhatsNew />
 <AboutDialog />
 <HelpDialog />
-
-<svelte:window onhashchange={() => dashboard.onHashChange()} />

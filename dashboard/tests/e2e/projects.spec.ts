@@ -1,6 +1,6 @@
 // Several projects (docs/multi-project-dashboard-proposal.md 3.2, 3.5): the landing page, #project= links, switching
 // between projects with their own saved views, and a project the server doesn't list.
-import { expect, openDashboard, sprintNumbers, summary, test } from './helpers';
+import { expect, openDashboard, sprintNumbers, summary, test, follow } from './helpers';
 
 test.describe('projects', () => {
   test('with several projects, the dashboard lands on the overview; a project opens from it', async ({
@@ -13,7 +13,7 @@ test.describe('projects', () => {
     await expect(page).toHaveTitle('Projects Overview');
     await expect(page.locator('#projects-grid .project-card')).toHaveCount(2);
     await page.locator('.project-card[data-id="second"] .project-card-open').click();
-    await expect(page).toHaveURL(/#project=second$/);
+    await expect(page).toHaveURL(/\/projects\/second(\?sprint=[^&]+)?$/);
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
     await page.goBack();
     await expect(page.locator('#landing')).toHaveAttribute('data-page', 'overview');
@@ -72,13 +72,13 @@ test.describe('projects', () => {
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
     await footerAtBottom();
     // The overview, with one project card
-    await page.goto('tasks-dashboard.html#overview');
+    await page.goto('/projects');
     await expect(page.locator('#landing')).toHaveAttribute('data-page', 'overview');
     await expect(page.locator('#projects-grid .project-card')).toHaveCount(1);
     await footerAtBottom();
     // No projects yet
     tasksServer.noProjects();
-    await page.goto('tasks-dashboard.html#');
+    await page.goto('/');
     await page.reload();
     await expect(page.locator('#no-projects')).toBeVisible();
     await footerAtBottom();
@@ -96,7 +96,7 @@ test.describe('projects', () => {
     await openDashboard(page, tasksServer, 'minimal');
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
     const onProject = await tabsTop();
-    await page.goto('tasks-dashboard.html#overview');
+    await page.goto('/projects');
     await expect(page.locator('#projects-grid .project-card')).toHaveCount(1);
     expect(await tabsTop()).toBe(onProject);
   });
@@ -110,16 +110,16 @@ test.describe('projects', () => {
   test('#project= links to a project; switching keeps each project’s own view', async ({ page, tasksServer }) => {
     tasksServer.addProject('second', 'minimal', 'Second Project');
     tasksServer.use('standard');
-    await page.goto('tasks-dashboard.html#project=second');
+    await page.goto('/projects/second');
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
     await page.locator('#task-search').fill('nothing matches this');
     await expect(page.locator('.task-card')).toHaveCount(0);
 
-    await page.evaluate((id) => (location.hash = `#project=${id}`), tasksServer.projectId);
+    await follow(page, `/projects/${tasksServer.projectId}`);
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
     await expect(page.locator('#task-search')).toHaveValue('');
 
-    await page.evaluate(() => (location.hash = '#project=second'));
+    await follow(page, '/projects/second');
     await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
     await expect(page.locator('#task-search')).toHaveValue('nothing matches this');
   });
@@ -130,7 +130,7 @@ test.describe('projects', () => {
   }) => {
     tasksServer.addProject('second', 'minimal', 'Second Project', summary({ percent: 75 }));
     tasksServer.use('standard');
-    await page.goto(`tasks-dashboard.html#project=second`);
+    await page.goto(`/projects/second`);
     await page.locator('#project-selector').click();
     await expect(page.locator('#project-filter')).toBeFocused();
     await expect(page.locator('#project-options [role=option]')).toHaveText([
@@ -150,18 +150,22 @@ test.describe('projects', () => {
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('.project-card[data-id="second"] .project-card-open').click();
     await page.locator('#project-selector').click();
+    // Focus moves to the field once the popover has opened (Bits UI, T-431)
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.type('thi');
     await expect(page.locator('#project-options [role=option]')).toHaveText(['Third Project']);
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/#project=third(&sprint=[^&]+)?$/);
+    await expect(page).toHaveURL(/\/projects\/third(\?sprint=[^&]+)?$/);
 
     await page.locator('#project-selector').click();
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.press('Home');
     await expect(page.locator('#project-filter')).toHaveAttribute('aria-activedescendant', 'project-option-overview');
     await page.keyboard.press('Escape');
     await expect(page.locator('#project-menu')).toHaveCount(0);
     await expect(page.locator('#project-selector')).toBeFocused();
     await page.keyboard.press('Enter');
+    await expect(page.locator('#project-filter')).toBeFocused();
     await page.keyboard.press('Home');
     await page.keyboard.press('Enter');
     await expect(page.locator('#landing')).toHaveAttribute('data-page', 'overview');
@@ -421,7 +425,7 @@ test.describe('projects', () => {
       'BL',
     );
     await page.locator('.project-option[data-id="withlogo"]').click();
-    await expect(page.locator('.title-row .project-logo img')).toHaveAttribute('src', 'p/withlogo/logo');
+    await expect(page.locator('.title-row .project-logo img')).toHaveAttribute('src', '/p/withlogo/logo');
   });
 
   test('without the task list (an older server), “needs you” opens the Kanban filtered to review and blocked', async ({
@@ -431,7 +435,7 @@ test.describe('projects', () => {
     tasksServer.addProject('asks', 'v4', 'Asks', summary({ needs_you: { review: 1, blocked_on_user: 1 } }));
     await openDashboard(page, tasksServer, 'standard');
     await page.locator('.project-card[data-id="asks"] .project-card-need').click();
-    await expect(page).toHaveURL(/project=asks/);
+    await expect(page).toHaveURL(/\/projects\/asks(\/|\?|$)/);
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.filter-chip')).toHaveText(['Status: In Review, Blocked']);
   });
@@ -449,7 +453,7 @@ test.describe('projects', () => {
     const chip = page.locator('.project-card[data-id="asks"] .project-card-need');
     await expect(chip).toHaveText('1 needs you');
     await chip.click();
-    await expect(page).toHaveURL(/project=asks/);
+    await expect(page).toHaveURL(/\/projects\/asks(\/|\?|$)/);
     await expectDetail(page, 'T-004');
   });
 
@@ -467,7 +471,7 @@ test.describe('projects', () => {
     await expect(rows.first()).toBeFocused();
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(/project=asks/);
+    await expect(page).toHaveURL(/\/projects\/asks(\/|\?|$)/);
     await expectDetail(page, 'T-005');
   });
 
@@ -548,7 +552,7 @@ test.describe('projects', () => {
     await page.locator('#about-project-details').click();
     await expect(page.locator('#about-overlay.open')).toHaveCount(0);
     await expect(page.locator('#tab-project')).toHaveAttribute('aria-selected', 'true');
-    await expect(page).toHaveURL(/view=project/);
+    await expect(page).toHaveURL(/\/project(\?|$)/);
   });
 
   test('a project whose folder is gone says how to remove it', async ({ page, tasksServer }) => {
@@ -562,7 +566,7 @@ test.describe('projects', () => {
     tasksServer,
   }) => {
     tasksServer.use('standard');
-    await page.goto('tasks-dashboard.html#project=gone123');
+    await page.goto('/projects/gone123');
     await expect(page.locator('#unknown-project')).toContainText('No project “gone123”');
     await page.locator('#unknown-project a').click();
     await expect(page.locator('#landing')).toHaveAttribute('data-page', 'overview');

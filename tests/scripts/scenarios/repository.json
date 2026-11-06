@@ -2,15 +2,15 @@
   {
     "name": "repository without an address says how to set it",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["repository"],
+    "args": ["vcs", "repository"],
     "expect": {
-      "stdout": "No repository address yet. Set it with `atm repository set <url>` (a git remote works too).\n"
+      "stdout": "No repository address yet. Set it with `atm vcs repository <url>` (a git remote works too).\n"
     }
   },
   {
     "name": "repository set takes an https URL, without .git or a trailing slash",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "meta": { "project": "P" }, "tasks": [] } } },
-    "args": ["repository", "set", "https://github.com/acme/demo.git/"],
+    "args": ["vcs", "repository", "https://github.com/acme/demo.git/"],
     "expect": {
       "stdout": "Repository address set: https://github.com/acme/demo\n",
       "files": {
@@ -24,25 +24,25 @@
   {
     "name": "repository set turns an scp-style git remote into the web address",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["repository", "set", "git@github.com:acme/demo.git", "--json"],
+    "args": ["vcs", "repository", "git@github.com:acme/demo.git", "--json"],
     "expect": { "json": { "repository": "https://github.com/acme/demo", "moved_links": 0 } }
   },
   {
     "name": "repository set turns an ssh:// remote (with a port and user) into the web address",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["repository", "set", "ssh://git@gitlab.example.com:2222/team/app.git", "--json"],
+    "args": ["vcs", "repository", "ssh://git@gitlab.example.com:2222/team/app.git", "--json"],
     "expect": { "json": { "repository": "https://gitlab.example.com/team/app", "moved_links": 0 } }
   },
   {
     "name": "repository set drops credentials from an https remote",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["repository", "set", "https://token@github.com/acme/demo.git", "--json"],
+    "args": ["vcs", "repository", "https://token@github.com/acme/demo.git", "--json"],
     "expect": { "json": { "repository": "https://github.com/acme/demo", "moved_links": 0 } }
   },
   {
     "name": "repository set refuses something that isn't an address, and nothing changes",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["repository", "set", "not a url"],
+    "args": ["vcs", "repository", "not a url"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["is not a repository address"],
@@ -75,7 +75,7 @@
         }
       }
     },
-    "args": ["repository", "set", "git@github.com:new-org/demo.git"],
+    "args": ["vcs", "repository", "git@github.com:new-org/demo.git"],
     "expect": {
       "stdout": "Repository address set: https://github.com/new-org/demo (2 PR links moved from https://github.com/old/demo)\n",
       "files": {
@@ -114,7 +114,7 @@
         }
       }
     },
-    "args": ["repository", "set", "https://github.com/new-org/demo", "--from", "https://github.com/old/demo", "--json"],
+    "args": ["vcs", "repository", "https://github.com/new-org/demo", "--from", "https://github.com/old/demo", "--json"],
     "expect": {
       "json": { "repository": "https://github.com/new-org/demo", "moved_links": 1 },
       "files": {
@@ -134,7 +134,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "repository": "https://github.com/acme/demo" }, "tasks": [] }
       }
     },
-    "args": ["repository", "--json"],
+    "args": ["vcs", "repository", "--json"],
     "expect": { "json": { "repository": "https://github.com/acme/demo" } }
   },
   {
@@ -144,7 +144,7 @@
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234" }, "tasks": [] } },
       "commands": [["git", "remote", "add", "origin", "git@github.com:acme/demo.git"]]
     },
-    "args": ["init"],
+    "args": ["db", "init"],
     "expect": {
       "stdoutIncludes": ["Recorded the repository address (https://github.com/acme/demo)"],
       "files": {
@@ -161,7 +161,7 @@
       "git": true,
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234" }, "tasks": [] } }
     },
-    "args": ["init", "--json"],
+    "args": ["db", "init", "--json"],
     "expect": { "stdoutIncludes": ["\"repository\": null"] }
   }
 ]

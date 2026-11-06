@@ -24,6 +24,19 @@ describe('CI workflow hardening (T-230)', () => {
     for (const i of checkouts) expect(lines.slice(i + 1, i + 3).join('\n')).toMatch(/persist-credentials: false/);
   });
 
+  it('pnpm comes at a fixed version, and installs exactly the lockfile (T-427)', () => {
+    const installs = lines.filter((line) => /pnpm install|npm (ci|install)/.test(line));
+    expect(installs.length).toBeGreaterThan(0);
+    for (const line of installs) {
+      if (/npm install --global/.test(line)) expect(line).toMatch(/pnpm@\d+\.\d+\.\d+$/);
+      else expect(line).toMatch(/pnpm install --frozen-lockfile$/);
+    }
+  });
+
+  it('installs no Python packages: Typer and Click are vendored (T-425)', () => {
+    expect(lines.filter((line) => /pip install/.test(line))).toEqual([]);
+  });
+
   it('every container image is pinned by digest', () => {
     const images = lines.filter((line) => /^\s*(container|image):/.test(line) && !line.includes('${{'));
     expect(images.length).toBeGreaterThan(0);

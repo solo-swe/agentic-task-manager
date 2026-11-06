@@ -2,21 +2,21 @@
   {
     "name": "workflow: none set yet",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow"],
+    "args": ["project", "workflow"],
     "expect": {
-      "stdout": "No workflow set: /atm:push asks for one, or run `atm workflow set direct|pull-request`.\n"
+      "stdout": "No workflow set: /atm:push asks for one, or run `atm project workflow set direct|pull-request`.\n"
     }
   },
   {
     "name": "workflow --json without one",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "--json"],
+    "args": ["project", "workflow", "--json"],
     "expect": { "json": { "type": null } }
   },
   {
     "name": "workflow set: writes meta.workflow; the defaults fill in the rest",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "pull-request", "--base", "main", "--json"],
+    "args": ["project", "workflow", "set", "pull-request", "--base", "main", "--json"],
     "expect": {
       "json": {
         "verify": true,
@@ -43,7 +43,7 @@
         }
       }
     },
-    "args": ["workflow", "set", "direct", "--verify", "false", "--max-rounds", "5"],
+    "args": ["project", "workflow", "set", "direct", "--verify", "false", "--max-rounds", "5"],
     "expect": {
       "stdout": "workflow: direct\n  base: dev\n  verify before pushing: no\n  CI fix rounds: 5\n  commit message: feat({id}): {name}\n  trailers: none (Co-Authored-By lines are removed)\n",
       "files": {
@@ -60,6 +60,7 @@
     "name": "workflow set --trailers require takes the lines; --trailers none leaves them to the agent",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": [
+      "project",
       "workflow",
       "set",
       "pull-request",
@@ -89,8 +90,8 @@
   {
     "name": "workflow set needs a type",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "trunk"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm workflow set needs a type: direct or pull-request"] }
+    "args": ["project", "workflow", "set", "trunk"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm project workflow set needs a type: direct or pull-request"] }
   },
   {
     "name": "an invalid meta.workflow is reported, naming the field",
@@ -102,13 +103,13 @@
         }
       }
     },
-    "args": ["workflow"],
+    "args": ["project", "workflow"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: meta.workflow.max_rounds must be a positive whole number"] }
   },
   {
     "name": "workflow set --trailers require without lines",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "direct", "--trailers", "require"],
+    "args": ["project", "workflow", "set", "direct", "--trailers", "require"],
     "expect": { "exit": 2, "stderrIncludes": ["--trailers require needs at least one --trailer LINE"] }
   }
 ]

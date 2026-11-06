@@ -3,7 +3,7 @@
     "name": "skip: a todo task that isn't needed; the reason stays as a note",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-001", "--reason", "Covered by T-002"],
+    "args": ["task", "state", "T-001", "skipped", "--reason", "Covered by T-002"],
     "expect": {
       "stdout": "T-001: todo -> skipped\n",
       "files": {
@@ -42,7 +42,7 @@
       }
     },
     "env": { "ATM_AGENT": "bob", "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["skip", "T-001", "--reason", "Not needed"],
+    "args": ["task", "state", "T-001", "skipped", "--reason", "Not needed"],
     "expect": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -64,13 +64,86 @@
   {
     "name": "skip needs a reason",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "todo" }] } } },
-    "args": ["skip", "T-001"],
+    "args": ["task", "state", "T-001", "skipped"],
     "expect": { "exit": 2, "stderrIncludes": ["--reason"] }
   },
   {
-    "name": "skip refuses a task that is in progress or done",
+    "name": "skip refuses a finished task",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["skip", "T-001", "--reason", "x"],
-    "expect": { "exit": 1, "stderrIncludes": ["can't skip T-001: it is done, not todo or blocked"] }
+    "args": ["task", "state", "T-001", "skipped", "--reason", "x"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["can't skip T-001: it is done, not todo or in_progress or in_review or blocked"]
+    }
+  },
+  {
+    "name": "skip from in progress drops the claim; from a rejected review too (T-438)",
+    "setup": {
+      "git": true,
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            { "id": "T-001", "status": "todo" },
+            { "id": "T-002", "status": "in_review", "review_state": "rejected" }
+          ]
+        }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_NOW=2026-05-01T10:00:00Z \"$ATM\" task state T-001 in_progress --agent alice"],
+        [
+          "sh",
+          "-c",
+          "ATM_NOW=2026-05-01T10:10:00Z \"$ATM\" task state T-001 skipped --reason 'Not needed' --agent alice"
+        ],
+        ["sh", "-c", "ATM_NOW=2026-05-01T10:10:00Z \"$ATM\" task state T-002 skipped --reason 'Rejected' --agent Hakan"]
+      ]
+    },
+    "args": ["claim", "list", "--json"],
+    "env": { "ATM_NOW": "2026-05-01T10:15:00Z" },
+    "expect": {
+      "json": [],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [
+            {
+              "id": "T-001",
+              "status": "skipped",
+              "updated_at": "2026-05-01T10:10:00Z",
+              "updated_by": "alice",
+              "started_at": "2026-05-01T10:00:00Z",
+              "started_by": "alice",
+              "skipped_at": "2026-05-01T10:10:00Z",
+              "notes": [{ "at": "2026-05-01T10:10:00Z", "kind": "note", "text": "Skipped: Not needed", "by": "alice" }]
+            },
+            {
+              "id": "T-002",
+              "status": "skipped",
+              "updated_at": "2026-05-01T10:10:00Z",
+              "updated_by": "Hakan",
+              "skipped_at": "2026-05-01T10:10:00Z",
+              "notes": [{ "at": "2026-05-01T10:10:00Z", "kind": "note", "text": "Skipped: Rejected", "by": "Hakan" }]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "skip from an undecided review is refused (T-438)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-003", "status": "in_review", "review_state": "waiting" }]
+        }
+      }
+    },
+    "args": ["task", "state", "T-003", "skipped", "--reason", "x"],
+    "env": { "ATM_AGENT": "Hakan" },
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": [
+        "atm: can't skip T-003: its review isn't rejected (atm task review reject T-003 --reason … decides it)"
+      ]
+    }
   }
 ]

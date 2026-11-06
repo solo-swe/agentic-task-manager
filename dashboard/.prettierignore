@@ -1,7 +1,8 @@
 
+.svelte-kit/
 coverage/
 playwright-report/
 test-results/
 tests/legacy/
 tests/e2e/__screenshots__/
-package-lock.json
+pnpm-lock.yaml

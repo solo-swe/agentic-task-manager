@@ -17,13 +17,13 @@ function withProject(data, check) {
 }
 
 function summary(root) {
-  const r = runAtm(['summary'], root);
+  const r = runAtm(['project', 'summary'], root);
   assert.equal(r.code, 0, r.stderr);
   return JSON.parse(r.stdout);
 }
 
 function atmNext(root) {
-  const r = runAtm(['next', '--json'], root);
+  const r = runAtm(['loop', 'next', '--json'], root);
   assert.ok(r.code === 0 || r.code === 3, r.stderr);
   return JSON.parse(r.stdout).task?.id ?? null;
 }

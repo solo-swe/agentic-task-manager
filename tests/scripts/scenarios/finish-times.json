@@ -51,7 +51,7 @@
         }
       }
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": {
       "stdout": "Filled in the finish time of 3 finished tasks that had none, from the last update (completed_at/skipped_at).\n",
       "files": {
@@ -123,9 +123,9 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "\"$ATM\" migrate"]]
+      "commands": [["sh", "-c", "\"$ATM\" db migrate"]]
     },
-    "args": ["migrate"],
+    "args": ["db", "migrate"],
     "expect": { "stdout": "Nothing to migrate.\n" }
   },
   {
@@ -136,9 +136,11 @@
           "tasks": [{ "id": "T-1", "name": "a", "type": "feature", "status": "todo" }]
         }
       },
-      "commands": [["sh", "-c", "ATM_NOW=2026-01-01T09:00:00Z ATM_AGENT=me \"$ATM\" skip T-1 --reason 'not needed'"]]
+      "commands": [
+        ["sh", "-c", "ATM_NOW=2026-01-01T09:00:00Z ATM_AGENT=me \"$ATM\" task state T-1 skipped --reason 'not needed'"]
+      ]
     },
-    "args": ["reopen", "T-1", "--reason", "needed after all"],
+    "args": ["task", "state", "T-1", "todo", "--reason", "needed after all"],
     "env": { "ATM_NOW": "2026-01-02T09:00:00Z", "ATM_AGENT": "me" },
     "expect": {
       "files": {
@@ -180,7 +182,7 @@
         }
       }
     },
-    "args": ["skip", "T-1", "--reason", "not needed", "--json"],
+    "args": ["task", "state", "T-1", "skipped", "--reason", "not needed", "--json"],
     "env": { "ATM_NOW": "2026-01-01T09:00:00Z", "ATM_AGENT": "me" },
     "expect": { "stdoutIncludes": ["\"skipped_at\": \"2026-01-01T09:00:00Z\""] }
   },
@@ -202,7 +204,7 @@
         }
       }
     },
-    "args": ["archive", "--dry-run"],
+    "args": ["db", "archive", "--dry-run"],
     "env": { "ATM_NOW": "2026-03-02T00:00:00Z" },
     "expect": { "stdoutIncludes": ["T-1"] }
   }

@@ -128,7 +128,7 @@ through its record and pid; what both know about the server (its record, the das
 anything else the CLI (T-379, §11.1).
 
 What a store alone has (the JSON-in-git store's paths, lock, merge driver and migrations; the user's registry of
-projects) is reached through boot, by the commands about it (`atm paths`, `migrate`, `merge-driver`, `init`'s merge
+projects) is reached through boot, by the commands about it (`atm project config`, `migrate`, `merge-driver`, `init`'s merge
 driver, the hook's registering).
 
 ## 2. Git's two roles
@@ -147,9 +147,9 @@ atm runs `git` today for two different reasons, and the design keeps them apart.
 
 **Git as the code's version control** (the vcs interface):
 
-- `atm commit`: commits exactly a task's files with `tasks.json`, and records the SHA on the task (`lib/code.py` `commit_task`, through `vcs/git.py`; before step 13, `git_ops.py`);
-- `atm commit --record`: checks a commit is in the history (`merge-base --is-ancestor`);
-- `atm workflow`'s default base branch (`origin/HEAD`), `atm repository`'s remote address.
+- `atm vcs commit`: commits exactly a task's files with `tasks.json`, and records the SHA on the task (`lib/code.py` `commit_task`, through `vcs/git.py`; before step 13, `git_ops.py`);
+- `atm vcs commit --record`: checks a commit is in the history (`merge-base --is-ancestor`);
+- `atm project workflow`'s default base branch (`origin/HEAD`), `atm vcs repository`'s remote address.
 
 ```python
 class Vcs(Protocol):
@@ -162,7 +162,7 @@ class Vcs(Protocol):
     def branch(self) -> str | None: ...                               # the checked-out branch
 ```
 
-**The code host is already outside atm.** `atm pr` and `atm merged` only record what they are given; the skills call
+**The code host is already outside atm.** `atm vcs pr` and `atm vcs pushed` only record what they are given; the skills call
 `gh`. The dashboard already builds commit and PR links for GitHub, GitLab, Bitbucket and Gitea (`repo.ts:26`).
 Supporting GitLab needs no change to these layers: it is a change in the skills.
 
@@ -171,7 +171,7 @@ Supporting GitLab needs no change to these layers: it is a change in the skills.
 - **Another store for tasks.** Merge driver, commit-to-share and worktree-shared claims all move into the JSON-in-git
   store. A cloud store replaces them with its own sync and locking, and atm-lib doesn't change. This is the main gain,
   and it needs those three to leave `core.py`, `merge.py`, `claims.py` and `registry.py`.
-- **Code in git, tasks elsewhere.** With a cloud store, `atm commit` still commits the code through vcs and records
+- **Code in git, tasks elsewhere.** With a cloud store, `atm vcs commit` still commits the code through vcs and records
   the SHA in the store, but no longer commits `tasks.json`: atm-lib asks the store for the files that travel with
   code commits (`Store.files_for_commit()`, `[".agentic-task-manager/tasks.json"]` for JSON-in-git, none for a cloud
   store) instead of assuming them.
@@ -201,7 +201,7 @@ entities. The interface models those, as they are used today, and nothing more.
 | **Component** | `tasks.json` `meta.components` | `components add` | `components`, `add`, `edit`, `check` | `components edit` | — |
 | **Claim** (a task's holder and lease) | the claims store, shared by a clone's worktrees | `start`, `next --claim` | `claims`, `status`, `next`, the dashboard | `heartbeat` (the lease) | `done`, `review`, `block`, `release`, `fail`; expiry |
 | **Resolution** (a review or block decided in another worktree) | the claims store | the decision | `status`, the worktrees' boards | — | when that worktree's copy catches up |
-| **Registered project** | `~/.agentic-task-manager/projects.json` | `projects add`, every atm run (registers) | `projects`, `atm serve` | `seen_at`, id and name follow `meta` | `projects remove`, `prune` |
+| **Registered project** | `~/.agentic-task-manager/projects.json` | `projects add`, every atm run (registers) | `projects`, `atm service` | `seen_at`, id and name follow `meta` | `projects remove`, `prune` |
 
 Two counters live with them: `meta.next_id` (the next task ID, so new IDs never need the archive) and
 `meta.archived` (the archive's size, for the dashboard). Both are the store's job, not atm-lib's.
@@ -270,8 +270,8 @@ the rules change several entities at once (a status, its claim, the worktrees' r
 together. The reads are per entity where atm-lib needs only one kind (`get_settings`, `get_vocabularies`,
 `list_sprints`, `list_releases`, `list_components`, `list_tasks`, `get_task`, `get_archived_task`, `list_archived`,
 `read_claims`), and the whole document (`document()`) where a rule takes it whole (§11.3). Besides: `sizes`,
-`problems` and `raw` (`atm check`, tolerant reads), `files_for_commit`, `working_copy`, `exists` and `create`
-(`atm init`), `stamp` (the REST API's ETags), `logo` and `check_logo`, `working_copies` and `copy_tasks` (the worktrees'
+`problems` and `raw` (`atm doctor`, tolerant reads), `files_for_commit`, `working_copy`, `exists` and `create`
+(`atm db init`), `stamp` (the REST API's ETags), `logo` and `check_logo`, `working_copies` and `copy_tasks` (the worktrees'
 copies). Only atm-lib and boot reach a project's store: the build refuses `.store` in the CLI and the REST API.
 
 `TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
@@ -282,8 +282,8 @@ showing it (the REST API's reads for the dashboard), and says what is wrong (`pr
 task's); every task it hands out fits the task schema. Writes are always strict, as are atm's commands.
 
 Things only one store has stay out of the interface and are reached through that store directly by the code that
-needs them: the JSON-in-git store's merge driver (`atm merge-driver`, which git runs), its migrations of old layouts
-(`atm migrate`), its file locations (`atm paths`) and its worktrees' copies (`worktrees.json`). A cloud store has no
+needs them: the JSON-in-git store's merge driver (`atm db merge-driver`, which git runs), its migrations of old layouts
+(`atm db migrate`), its file locations (`atm project config`) and its worktrees' copies (`worktrees.json`). A cloud store has no
 such things; atm-lib never calls them. As built, the commands about them reach them through `boot/jsongit.py`, since
 the CLI may import only common, atm-lib and boot; the worktrees' copies went into the interface after all
 (`working_copies`, `copy_tasks`, §11.2).
@@ -336,7 +336,7 @@ Today the model is written twice, by hand: in Python (`model.py`, `core.py`) and
 
 | Schema | Describes | Used by |
 |---|---|---|
-| `tasks.schema.json` | `tasks.json`: `meta` and `tasks` | the JSON-in-git store, `atm check`, the tests |
+| `tasks.schema.json` | `tasks.json`: `meta` and `tasks` | the JSON-in-git store, `atm doctor`, the tests |
 | `archive.schema.json` | `tasks-archive.json` (`meta.archived_at`, `tasks`) | the JSON-in-git store |
 | `task.schema.json` | one task, every field of `docs/v4/data-model.md` §4 | all of the above, the API |
 | `meta.schema.json` | settings, vocabularies, sprints, releases, components, workflow, archive settings | as above |
@@ -530,7 +530,7 @@ of that store).
 
 ## 6. The REST API
 
-**Today it is a file server.** `atm serve` sends `tasks.json`, `tasks-archive.json` and `claims.json` as they are on
+**Today it is a file server.** `atm service` sends `tasks.json`, `tasks-archive.json` and `claims.json` as they are on
 disk (`server.py:600`), plus a few computed answers. The Dashboard then applies the rules itself: which tasks are
 ready or waiting (`waiting.ts`, `work.ts`), status kinds and defaults (`vocab.ts`), effective review modes and
 releases (`review.ts`, `releases.ts`), the archive's threshold notice. Those are atm-lib's rules computed a second
@@ -614,7 +614,7 @@ loads, decides, saves and prints), and most also do storage. `cli.py` imports a 
 `overview-data.ts`: they become one client module (`dashboard/src/lib/api/`), the only one that calls `fetch`.
 
 **The dev server plays the API a second time** (`dashboard/build/dev-data.ts`, 152 lines), already calling
-`atm summary` for part of it. In the target it runs the real REST API, so there is one implementation.
+`atm project summary` for part of it. In the target it runs the real REST API, so there is one implementation.
 
 ## 8. Layout, the rule's check, and what stays
 
@@ -647,7 +647,7 @@ atm-cli/atm/
 **Constraints that stay:**
 
 - atm-cli is standard-library Python 3.9 and ships as one file; the plugin needs nothing installed but Python.
-- The Dashboard is one self-contained HTML file, served by `atm serve`.
+- The Dashboard is one self-contained HTML file, served by `atm service`.
 - The security invariants in `docs/security-architecture.md` hold at every step. The REST API stays read-only and
   localhost-only, with its Host check. A route that writes is a new entry point and needs its own design (CSRF
   protection, a token, the security document updated in the same PR).
@@ -677,7 +677,7 @@ switches storage in one go: the code moves into the store as its slices do.
 
 | # | Step | Afterwards, end to end |
 |---|---|---|
-| 1 | **The skeleton.** The layer folders, the rule and the ratchet in `build.py`, `Project`, the `Store` and `Vcs` interfaces; the JSON-in-git store wrapping today's code; the in-memory store and the contract test harness. First slice: `atm show` | `show`: CLI → atm-lib → store |
+| 1 | **The skeleton.** The layer folders, the rule and the ratchet in `build.py`, `Project`, the `Store` and `Vcs` interfaces; the JSON-in-git store wrapping today's code; the in-memory store and the contract test harness. First slice: `atm task details` | `show`: CLI → atm-lib → store |
 | 2 | **The schema's seed.** `task.schema.json`, the TypeScript and Python generators, CI's staleness check; the Dashboard uses the generated `Task` type instead of its hand-written one | one type, generated for both sides |
 | 3 | **The reads.** `list`, `deps`, `status`, `backlog`, `summary` and `projects` through atm-lib; typed errors and the CLI's mapping to exit codes; their result types in the schema | every read command on the new path |
 | 4 | **The REST API on atm-lib.** Today's routes answered through atm-lib; `GET /api/v1/projects/<p>/tasks` with the tasks' derived values (`TaskView`); `docs/multi-project-api.md` | the server holds no logic |
@@ -722,7 +722,7 @@ are unchanged (the atm-cli suite, at every step).
 ### 11.1 The `app` layer (T-379)
 
 - **Design:** the CLI and the REST API never call each other (§1); there was no layer above them.
-- **Built (T-374):** `atm serve`, the server process (`_serve-child`) and the refresh every command runs first
+- **Built (T-374):** `atm service`, the server process (`_serve-child`) and the refresh every command runs first
   (`refresh_server`) are the API's, but the `atm` command must reach them. `app/main.py` imports both and hands the
   API's server commands to the CLI's parser (`cli/main.py` `Serving`); `app` may import only `cli` and `api`, and
   nothing imports it.
@@ -731,8 +731,8 @@ are unchanged (the atm-cli suite, at every step).
 - **Decision:** two launchers. `plugin/scripts/atm` runs the CLI; an internal `atm-serve` runs the API's server (one
   dispatch in the one built file). The CLI manages the server as a process (spawn, signal, read its record); the
   cheap refresh check stays in-process, with the server record's format and the dashboard's version tags in common.
-  `atm serve` and every skill, hook and permission stay as they are. The `app` layer goes.
-- **Settled (T-379):** `cli/serve.py` has `atm serve` (start, stop, status, refresh) and the refresh every command
+  `atm service` and every skill, hook and permission stay as they are. The `app` layer goes.
+- **Settled (T-379):** `cli/serve.py` has `atm service` (start, stop, status, refresh) and the refresh every command
   runs first; it starts the server with `common/dashboard.py`'s `server_command` (this Python, the built `atm.py`
   with `--server`). `api/server.py` is the server process only, entered with `serve_main`. `common/dashboard.py`
   holds the dashboard file's tags and the server record's names. The build appends the one entry (`ENTRY` in
@@ -772,7 +772,7 @@ are unchanged (the atm-cli suite, at every step).
   `working_copies`, `copy_tasks`.
 - **Problem:** another store would have to load a whole project into a `Working`; atm-lib's rules are bound to the
   file's shape. And the REST API and the CLI reach the store through `project.store` (`document()["meta"]` in the v1
-  route, `stamp()` and `working_copies()` in the server, `working_copy()` in `atm logo`), which the build's import
+  route, `stamp()` and `working_copies()` in the server, `working_copy()` in `atm project logo`), which the build's import
   rule can't see.
 - **Decision:** `change(fn)` with its change list is the write path, by design: §3.2 and §3.3 say so. atm-lib's reads
   move off `document()` to per-entity reads (`list_sprints`, `list_releases`, `list_components`, `get_settings`),
@@ -783,7 +783,7 @@ are unchanged (the atm-cli suite, at every step).
   - The stores have `get_settings`, `list_sprints`, `list_releases` and `list_components` (contract-tested on both).
     The workflow, the repository, the logo and `commit_task` read through them.
   - The REST API and the CLI no longer touch `project.store`: what they read is atm-lib's (`task_snapshot` for the
-    v1 route and `atm list --derived --tolerant`, `project_stamp`, `working_copies`, `set_logo` taking the path as
+    v1 route and `atm task list --derived --tolerant`, `project_stamp`, `working_copies`, `set_logo` taking the path as
     given). The build refuses a `.store` or `._store` attribute in `cli/` and `api/` (checked on the syntax tree). The
     attribute keeps its name, `store`: the check is what keeps it private, and atm-lib and boot may use it.
   - **Left:** about a dozen of atm-lib's reads still take `document()`, because the rules they feed take the task
@@ -799,7 +799,7 @@ are unchanged (the atm-cli suite, at every step).
 - **Built (T-374):** it became a hook in `common/model.py` (`use_archive(lookup)`, `archived_task(id)`) that the
   JSON-in-git store's loaders set; `unfinished_dependencies`, `find_task`, `change_status`, the `edit` and `status`
   checks and the renderer use it without knowing which project they mean.
-- **Problem:** a bug. `atm serve` is threaded and serves many projects in one process: a request for one project can
+- **Problem:** a bug. `atm service` is threaded and serves many projects in one process: a request for one project can
   be judged against another's archive, so a dependency that is only in its own archive counts as missing and a ready
   task shows as waiting (since T-364). On the in-memory store the hook is never set, so archived dependencies count
   as missing there, and a stale lookup from an earlier store in the same process can answer.
@@ -865,12 +865,12 @@ are unchanged (the atm-cli suite, at every step).
   results typed in the schema (§11.10). The CLI moves onto them, unchanged for users. §5.1 then matches the code.
   Before §11.6's frozen signatures.
 - **Settled (T-383):** `start_task` … `release_task`, one per status change, each returning a `StatusChange`
-  (`api.schema.json`, with `Claim` and `TaskShown`; its `view` is what `atm start` prints, so the CLI no longer
+  (`api.schema.json`, with `Claim` and `TaskShown`; its `view` is what `atm task state <id> in_progress` prints, so the CLI no longer
   gets the document); `change_task_status` is internal. Sprints, releases and task edits take keyword parameters
   (`Changes` is gone; `edit_existing_task(project, id, name=…, add_labels=[…])`); `commit_task` takes paths
   relative to the repository, and `repository_paths` resolves names from a folder; `live_claims` is
   `expire_claims` (the internal rule it used is `drop_expired_claims`), `workflow_settings` is `get_workflow`,
-  `list_matching` is internal and `atm list` reads `task_views`. The CLI builds `Filters` from its options instead of
+  `list_matching` is internal and `atm task list` reads `task_views`. The CLI builds `Filters` from its options instead of
   passing them. §5.1 lists the functions as built; the changelog says what changed. Left: `add_new_tasks` still takes
   draft dicts (they are the task's own fields), and the results that stay in the CLI (sprints, releases, the
   archive) aren't in the schema yet.
@@ -880,7 +880,7 @@ are unchanged (the atm-cli suite, at every step).
 - **Design:** git's two roles apart: carrying the task files is the store's, versioning the code the vcs's (§2).
 - **Built:** the store runs git through `db/jsongit/gitrun.py`, the vcs through its own runners in `vcs/git.py` (the
   same ten lines, renamed: db and vcs may import only common, which does no I/O). The branch is read from
-  `.git/HEAD` by `GitVcs.branch()` (the card, `atm status`) and by a copy in `db/jsongit/worktrees.py` (the worktree
+  `.git/HEAD` by `GitVcs.branch()` (the card, `atm project status`) and by a copy in `db/jsongit/worktrees.py` (the worktree
   list), but with `git rev-parse --abbrev-ref HEAD` by the store's `here()` (the branch in a claim): on a detached
   HEAD a claim says `HEAD` while the card shows the short SHA. "Is this a git repository" is asked two ways too.
 - **Decision:** a small layer below db and vcs, **host** (`host/`), allowed I/O: the subprocess runner and the HEAD
@@ -889,7 +889,7 @@ are unchanged (the atm-cli suite, at every step).
 - **Settled (T-385):** `host/git.py` has `git` (a question: None on failure), `run_git` (a step: raises), `in_git`,
   `head_branch` and `checked_out_branch(worktree)` (follows a linked worktree's `.git` file). The store's modules,
   `GitVcs` and the worktree list use them; `ask_git`, `GitVcs.branch`'s copy of the HEAD reader and the store's
-  `rev-parse --abbrev-ref` are gone, and `atm init` asks `project.vcs.in_repository()`. The build allows `host` to
+  `rev-parse --abbrev-ref` are gone, and `atm db init` asks `project.vcs.in_repository()`. The build allows `host` to
   db and vcs only (a build test). A claim now names the branch HEAD names even before the first commit (it was
   null), as the card did. `tests/scripts/serve.test.mjs` checks a detached HEAD: the claim, the summary's branch and
   `working`, and both worktrees in the list give the short SHA.
@@ -907,7 +907,7 @@ are unchanged (the atm-cli suite, at every step).
   missing; the dev page's CSP is checked against the server's; a test starts `vite dev` and reads `api/projects`
   through it.
 - **Settled (T-386):** `dev-api.ts` watches `atm.py` and restarts the API server on a rebuild (once the writes have
-  settled), lists a folder without a task file as missing (an entry in its private registry, as `atm serve` lists a
+  settled), lists a folder without a task file as missing (an entry in its private registry, as `atm service` lists a
   gone folder), and logs its `ATM_HOME`. `build/security-headers.ts` exports `devCsp`, the server's policy plus
   `DEV_ADDITIONS` (Vite's own scripts and styles, its WebSocket); `tests/unit/security-headers.test.ts` reads
   `page_csp` from `server.py` and holds the two to exactly that. `tests/scripts/dev-api.test.mjs` starts `vite dev`
@@ -920,7 +920,7 @@ are unchanged (the atm-cli suite, at every step).
 - **A. Worktree copies (T-387).** `worktrees.json` gives the linked worktrees' differing tasks without atm's derived values,
   so the Dashboard keeps its own rules for them (readiness in `kanban.ts`, together-now in `waiting.ts`, the
   effective review in `review.ts`): the duplication §1 set out to remove. **Decision:** each copy's derived values
-  are computed on its own worktree's data, which is what `atm next` does there (a dependency done in another worktree
+  are computed on its own worktree's data, which is what `atm loop next` does there (a dependency done in another worktree
   counts once the branches merge), by `lib/worktrees.py` opening each worktree's store; the Dashboard's fallbacks go.
   **Settled (T-387):** the store interface has `copy_store(folder)` (the JSON-in-git store opens the worktree's own
   task files, tolerantly, with the symlink checks; the in-memory one has none), and `worktree_copies` gives each
@@ -929,7 +929,7 @@ are unchanged (the atm-cli suite, at every step).
   atm's word only: a task without derived values isn't ready and has no review mode. Left: `sprints.ts`'s
   `effectiveRelease` keeps its fallback, which the release and filter views' tests lean on; every task now comes with
   `effective_release`, so it can go too.
-- **B. `ProjectSummary` and `StatusReport` (T-382).** `api/projects`' summaries and `atm status --json` aren't in
+- **B. `ProjectSummary` and `StatusReport` (T-382).** `api/projects`' summaries and `atm project status --json` aren't in
   `api.schema.json`; the Dashboard's `ProjectSummary` is written by hand. The generator can't express a field that
   may be `null`. **Decision:** the generator learns nullable types (`Optional[...]`, `T | null`); both schemas are
   written and the hand-written type replaced; a test validates a real summary and the e2e fixture against them.

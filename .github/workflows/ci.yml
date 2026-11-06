@@ -20,8 +20,8 @@ defaults:
   run:
     working-directory: dashboard
 
-# Actions and images are pinned by commit SHA and digest (I19); Dependabot (.github/dependabot.yml) proposes updates for
-# the actions and npm. The images are updated by hand: the Playwright image must match @playwright/test's version.
+# Actions and images are pinned by commit SHA and digest (I19), pnpm by version; Dependabot (.github/dependabot.yml)
+# proposes updates for the actions and the dashboard's packages (its npm ecosystem reads pnpm-lock.yaml). The images are updated by hand: the Playwright image must match @playwright/test's version.
 jobs:
   check:
     name: Lint, unit tests, build freshness
@@ -33,18 +33,18 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: dashboard/package-lock.json
-      - run: npm ci
+      # pnpm at the version the lockfile was written with, from the npm registry (no third-party action)
+      - run: npm install --global pnpm@12.14.0
+      - run: pnpm install --frozen-lockfile
       - run: node scripts/check-versions.mjs
-      - run: npm run check
-      - run: npm run test:coverage
-      - run: npm run build
+      - run: pnpm run check
+      - run: pnpm run test:coverage
+      - run: pnpm run build
       # The plugin ships the committed build output; it must match the sources (CI never commits it for you)
       - name: Built dashboard is up to date
         run: |
           git diff --exit-code -- ../plugin/templates/tasks-dashboard.html || {
-            echo "::error::plugin/templates/tasks-dashboard.html is stale. Run 'npm run build' in dashboard/ and commit it."
+            echo "::error::plugin/templates/tasks-dashboard.html is stale. Run 'pnpm run build' in dashboard/ and commit it."
             exit 1
           }
 
@@ -92,8 +92,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: npm ci
-      - run: npm run build
+      - run: npm install --global pnpm@12.14.0
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       # Baselines are per platform. Any macOS baseline without a Linux counterpart (new, or deleted because the UI
       # changed on purpose) is generated here in the pinned container, uploaded, and the job fails until the
       # generated files are committed. update-snapshots regenerates all Linux baselines.
@@ -110,7 +111,7 @@ jobs:
           echo "generate=$([ $mode = none ] && echo false || echo true)" >> "$GITHUB_OUTPUT"
       - name: Generate screenshot baselines
         if: steps.baselines.outputs.generate == 'true'
-        run: npx playwright test visual --update-snapshots=${{ steps.baselines.outputs.mode }}
+        run: pnpm exec playwright test visual --update-snapshots=${{ steps.baselines.outputs.mode }}
       # Only the Linux baselines: whoever downloads it extracts nothing else (docs/security-review.md F16)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.baselines.outputs.generate == 'true'
@@ -124,10 +125,10 @@ jobs:
           exit 1
       - name: Run e2e tests
         if: steps.baselines.outputs.generate == 'false'
-        run: npx playwright test
+        run: pnpm exec playwright test
       - name: Benchmark the dashboard
         if: steps.baselines.outputs.generate == 'false'
-        run: npm run bench -- --dashboard --check
+        run: pnpm run bench --dashboard --check
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ failure() }}
         with:

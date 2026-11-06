@@ -31,13 +31,14 @@ export default defineConfig({
     locale: 'en-US',
     timezoneId: 'UTC',
     // Only when CI retries a failed test: recording one for every test made the suite ~40% slower (T-345). Locally,
-    // `npx playwright test <spec> --trace on` records them while looking into a failure
+    // `pnpm exec playwright test <spec> --trace on` records them while looking into a failure
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'svelte', use: { baseURL: `http://localhost:${PORT}/svelte/` } }],
+  // The dashboard at its pages' paths, as atm serve serves it (T-429)
+  projects: [{ name: 'svelte', use: { baseURL: `http://localhost:${PORT}/` } }],
   webServer: {
     command: 'node tests/e2e/serve.mjs',
-    url: `http://localhost:${PORT}/svelte/tasks-dashboard.html`,
+    url: `http://localhost:${PORT}/`,
     env: { PORT: String(PORT) },
     reuseExistingServer: !process.env.CI,
   },

@@ -10,7 +10,7 @@
         }
       }
     },
-    "args": ["release", "T-1", "--note", "Linux baselines still to regenerate; src/a.ts is uncommitted"],
+    "args": ["task", "state", "T-1", "todo", "--note", "Linux baselines still to regenerate; src/a.ts is uncommitted"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "stdout": "T-1: in_progress -> todo\n",
@@ -47,7 +47,7 @@
         }
       }
     },
-    "args": ["done", "T-1", "--note", "Added the footer; 3 new tests", "--commit", "abc1234"],
+    "args": ["task", "state", "T-1", "done", "--note", "Added the footer; 3 new tests", "--commit", "abc1234"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "bob" },
     "expect": {
       "files": {
@@ -92,7 +92,7 @@
         }
       }
     },
-    "args": ["note", "T-1", "Follow-up in T-9", "--json"],
+    "args": ["task", "note", "T-1", "Follow-up in T-9", "--json"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "carol" },
     "expect": {
       "json": { "at": "2026-05-01T10:00:00Z", "kind": "note", "text": "Follow-up in T-9", "by": "carol" },
@@ -121,7 +121,7 @@
         ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "agent": "someone-before" }] }
       }
     },
-    "args": ["start", "T-1"],
+    "args": ["task", "state", "T-1", "in_progress"],
     "env": { "ATM_NOW": "2026-05-01T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "files": {
@@ -173,7 +173,7 @@
         }
       }
     },
-    "args": ["merge-driver", "base.json", "ours.json", "theirs.json"],
+    "args": ["db", "merge-driver", "base.json", "ours.json", "theirs.json"],
     "expect": {
       "exit": 0,
       "files": {

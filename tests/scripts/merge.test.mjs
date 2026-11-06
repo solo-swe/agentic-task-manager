@@ -1,5 +1,5 @@
 // The tasks.json merge driver, with real `git merge`s: the experiments from docs/parallel-agents-design.md §2
-// (Evidence), now with the driver registered by `atm migrate`/`atm init`.
+// (Evidence), now with the driver registered by `atm db migrate`/`atm db init`.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -31,7 +31,7 @@ const find = (data, taskId) => data.tasks.find((t) => t.id === taskId);
 /** A repo on `main` with the base task list and the merge driver registered (as any atm skill would leave it). */
 function repo() {
   const root = makeProject({ commit: true, files: { [FILE]: BASE } });
-  assert.equal(runAtm(['init'], root).code, 0);
+  assert.equal(runAtm(['db', 'init'], root).code, 0);
   git(['commit', '-q', '-am', 'atm init'], root);
   return root;
 }
@@ -64,21 +64,21 @@ function withRepo(fn) {
 const progress = (task, status, at, extra = {}) => Object.assign(task, { status, updated_at: at, ...extra });
 
 describe('merge driver (real git merges)', () => {
-  test('atm init registers the driver and .gitattributes; it is idempotent', () => {
+  test('atm db init registers the driver and .gitattributes; it is idempotent', () => {
     withRepo((root) => {
       assert.match(
         git(['config', '--get', 'merge.atm.driver'], root),
-        /\/plugin\/scripts\/atm' merge-driver %O %A %B$/,
+        /\/plugin\/scripts\/atm' db merge-driver %O %A %B$/,
       );
       assert.equal(
         fs.readFileSync(path.join(root, '.agentic-task-manager/.gitattributes'), 'utf8'),
         "# 'atm' is defined in each clone's git config (merge.atm.driver), registered by the atm plugin on every run.\n# Without it, git merges tasks.json line by line as usual.\ntasks.json merge=atm\n",
       );
-      assert.match(runAtm(['init'], root).stdout, /already set/);
+      assert.match(runAtm(['db', 'init'], root).stdout, /already set/);
       // init also gave the project an id (for the dashboard's saved view), and keeps it
       const projectId = read(root).meta.id;
       assert.match(projectId, /^[0-9a-f]{8}$/);
-      assert.doesNotMatch(runAtm(['init'], root).stdout, /Gave this project an id/);
+      assert.doesNotMatch(runAtm(['db', 'init'], root).stdout, /Gave this project an id/);
       assert.equal(read(root).meta.id, projectId);
     });
   });
@@ -379,7 +379,7 @@ describe('merge-driver command', () => {
   test('a side that is not valid JSON is a conflict, and ours is left alone', () => {
     const { dir, paths } = files('{"tasks": []}', '{"tasks": [', '{"tasks": []}');
     try {
-      const r = runAtm(['merge-driver', ...paths], dir);
+      const r = runAtm(['db', 'merge-driver', ...paths], dir);
       assert.equal(r.code, 1);
       assert.match(r.stderr, /not valid JSON/);
       assert.equal(fs.readFileSync(paths[1], 'utf8'), '{"tasks": [');
@@ -396,7 +396,7 @@ describe('merge-driver command', () => {
       JSON.stringify({ tasks: [t('T-1', 'todo'), t('T-2', 'todo')] }),
     );
     try {
-      assert.equal(runAtm(['merge-driver', ...paths], dir).code, 0);
+      assert.equal(runAtm(['db', 'merge-driver', ...paths], dir).code, 0);
       assert.deepEqual(JSON.parse(fs.readFileSync(paths[1], 'utf8')).tasks, [t('T-1', 'todo'), t('T-2', 'todo')]);
     } finally {
       removeDir(dir);

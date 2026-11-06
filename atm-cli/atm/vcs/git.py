@@ -45,7 +45,7 @@ class GitVcs:
         picked = []
         for name in files:
             if name in WHOLE_TREE or name.startswith(":"):
-                raise Invalid(f"atm commit stages only the files you name; {name!r} would stage the whole tree")
+                raise Invalid(f"atm vcs commit stages only the files you name; {name!r} would stage the whole tree")
             full = os.path.realpath(os.path.join(cwd or self.root, name))
             relative = os.path.relpath(full, self.root)
             if relative == "." or relative.startswith(".." + os.sep) or relative == "..":

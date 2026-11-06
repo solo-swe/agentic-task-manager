@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
-import Header from '../../src/components/Header.svelte';
+import Header from '../../src/lib/shell/Header.svelte';
 import { dashboard } from '../../src/lib/state.svelte';
 import type { TasksFile } from '../../src/lib/types';
 import archive from '../fixtures/archive.json';

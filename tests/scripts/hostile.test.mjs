@@ -20,7 +20,7 @@ describe('hostile task files', () => {
     try {
       fs.mkdirSync(path.join(root, '.agentic-task-manager'));
       fs.writeFileSync(path.join(root, TASKS), '['.repeat(100000) + ']'.repeat(100000));
-      const r = runAtm(['status'], root, env(root));
+      const r = runAtm(['project', 'status'], root, env(root));
       assert.equal(r.code, 1, r.stderr);
       assert.match(r.stderr, /not a valid task file/);
       assert.doesNotMatch(r.stderr, /Traceback/);
@@ -37,9 +37,9 @@ describe('hostile task files', () => {
     ]) {
       const root = makeProject({ files: { [TASKS]: { tasks } } });
       try {
-        const r = runAtm(['status'], root, env(root));
+        const r = runAtm(['project', 'status'], root, env(root));
         assert.equal(r.code, 1, JSON.stringify(tasks));
-        assert.match(r.stderr, /run atm check/);
+        assert.match(r.stderr, /run atm doctor/);
         assert.doesNotMatch(r.stderr, /Traceback/);
       } finally {
         removeDir(root);
@@ -51,11 +51,11 @@ describe('hostile task files', () => {
     const chain = Array.from({ length: 3000 }, (_, i) => task(`T-${i + 1}`, i ? { dependencies: [`T-${i}`] } : {}));
     const root = makeProject({ files: { [TASKS]: { tasks: chain } } });
     try {
-      const ok = runAtm(['check', '--json'], root, env(root));
+      const ok = runAtm(['doctor', '--json'], root, env(root));
       assert.equal(ok.code, 0, ok.stderr);
       chain[0].dependencies = ['T-3000'];
       fs.writeFileSync(path.join(root, TASKS), JSON.stringify({ tasks: chain }));
-      const cycle = runAtm(['check', '--json'], root, env(root));
+      const cycle = runAtm(['doctor', '--json'], root, env(root));
       assert.equal(cycle.code, 1, cycle.stderr);
       assert.match(JSON.parse(cycle.stdout).errors.join('\n'), /dependency cycle: T-1 -> T-3000 -> .* -> T-1/);
     } finally {
@@ -72,7 +72,7 @@ describe('hostile task files', () => {
       fs.writeFileSync(files[1], JSON.stringify({ tasks: [{ id, name: 'ours', status: 'todo' }] }));
       fs.writeFileSync(files[2], JSON.stringify({ tasks: [{ id, name: 'theirs', status: 'todo' }] }));
       const started = Date.now();
-      const r = runAtm(['merge-driver', ...files], dir);
+      const r = runAtm(['db', 'merge-driver', ...files], dir);
       assert.equal(r.code, 0, r.stderr);
       assert.ok(Date.now() - started < 5000, `took ${Date.now() - started} ms`);
       const ids = JSON.parse(fs.readFileSync(files[1], 'utf8')).tasks.map((t) => t.id);
@@ -97,7 +97,7 @@ describe('hostile task files', () => {
       fs.writeFileSync(record, JSON.stringify({ pid: victim.pid, port: server.address().port }));
       git(['add', '-f', '.agentic-task-manager/.server.json'], root);
       git(['commit', '-q', '-m', 'a record from someone else'], root);
-      const r = runAtm(['migrate'], root, env(root));
+      const r = runAtm(['db', 'migrate'], root, env(root));
       assert.equal(r.code, 0, r.stderr);
       assert.equal(fs.existsSync(record), false);
       assert.equal(asked, false, 'the port was asked');

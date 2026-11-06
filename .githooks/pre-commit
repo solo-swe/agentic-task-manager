@@ -2,14 +2,14 @@
 # Rebuild the shipped build artifacts whenever their inputs are part of the commit, so they never go stale: the
 # dashboard (plugin/templates/tasks-dashboard.html) and atm-cli (plugin/scripts/atm.py). CI checks the same thing
 # (see .github/workflows/ci.yml).
-# Enabled by `npm install` in dashboard/ (the "prepare" script sets core.hooksPath to .githooks).
+# Enabled by `pnpm install` in dashboard/ (the "prepare" script sets core.hooksPath to .githooks).
 if git diff --cached --name-only | grep -qE '^atm-cli/'; then
   echo "pre-commit: rebuilding plugin/scripts/atm.py"
   python3 atm-cli/build.py || { echo "pre-commit: atm-cli build failed"; exit 1; }
   git add plugin/scripts/atm.py
 fi
-if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|index\.html|vite\.config\.ts|svelte\.config\.js|package(-lock)?\.json)|plugin/\.claude-plugin/plugin\.json|plugin/CHANGELOG\.md)'; then
+if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|vite\.config\.ts|tsconfig\.json|package\.json|pnpm-(lock|workspace)\.yaml)|plugin/\.claude-plugin/plugin\.json|plugin/CHANGELOG\.md|plugin/WHATS-NEW\.md)'; then
   echo "pre-commit: rebuilding plugin/templates/tasks-dashboard.html"
-  (cd dashboard && npm run build --silent >/dev/null) || { echo "pre-commit: dashboard build failed"; exit 1; }
+  (cd dashboard && pnpm run --silent build >/dev/null) || { echo "pre-commit: dashboard build failed"; exit 1; }
   git add plugin/templates/tasks-dashboard.html
 fi

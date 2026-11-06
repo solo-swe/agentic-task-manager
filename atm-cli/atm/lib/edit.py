@@ -77,7 +77,7 @@ def open_sprint(vocab, name):
     """The ID of the sprint called `name`, which a task can be put in: it must exist and not be closed (SR-2.5)."""
     sprint = find_sprint(vocab, name)
     if sprint is None:
-        known = ", ".join(s["id"] for s in vocab["sprints"] if s["state"] != "closed") or "none yet: atm sprints add"
+        known = ", ".join(s["id"] for s in vocab["sprints"] if s["state"] != "closed") or "none yet: atm sprint add"
         raise AtmError(f"no sprint {name!r}; the open sprints: {known}", 2)
     if sprint["state"] == "closed":
         raise AtmError(f"the sprint {sprint['id']!r} is closed; a task can only go into a planned or active sprint", 2)
@@ -427,7 +427,7 @@ def check_data(data, root, files=False, archived=()):
     for task_id in sorted({i for i in ids if ids.count(i) > 1}, key=str):
         errors.append(f"{task_id}: the ID is used by {ids.count(task_id)} tasks")
     for task_id in sorted(set(ids) & archived_ids, key=str):
-        errors.append(f"{task_id}: in both tasks.json and the archive (atm archive keeps the tasks.json copy)")
+        errors.append(f"{task_id}: in both tasks.json and the archive (atm db archive keeps the tasks.json copy)")
     known_ids = set(ids) | archived_ids
     statuses = {s["id"] for s in vocab["statuses"]}
     types = {t["id"] for t in vocab["types"]}

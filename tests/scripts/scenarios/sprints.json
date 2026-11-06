@@ -20,7 +20,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "stdout": "tasks.json is fine (1 tasks)\n" }
   },
   {
@@ -38,7 +38,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["meta.sprints: only one sprint can be active, but A and B are"] }
   },
   {
@@ -51,7 +51,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["meta.sprints: 'themes' is listed twice"] }
   },
   {
@@ -64,7 +64,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["'Themes' has the state 'finished'; use one of planned, active, closed"] }
   },
   {
@@ -77,7 +77,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["'Themes' has the due date 'next week'; use YYYY-MM-DD"] }
   },
   {
@@ -87,7 +87,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "sprint_names": "planets" }, "tasks": [] }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["meta.sprint_names must be one of people, time"] }
   },
   {
@@ -100,7 +100,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "exit": 1, "stdoutIncludes": ["T-1: the sprint 'Gone' is not one of meta.sprints"] }
   },
   {
@@ -120,7 +120,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--sprint", "beta", "--json"],
+    "args": ["task", "edit", "T-1", "--sprint", "beta", "--json"],
     "env": { "ATM_NOW": "2026-05-02T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": {
@@ -153,7 +153,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--backlog", "--json"],
+    "args": ["task", "edit", "T-1", "--backlog", "--json"],
     "env": { "ATM_NOW": "2026-05-02T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": {
@@ -175,7 +175,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--sprint", "Old"],
+    "args": ["task", "edit", "T-1", "--sprint", "Old"],
     "expect": { "exit": 2, "stderrIncludes": ["the sprint 'Old' is closed"] }
   },
   {
@@ -188,7 +188,7 @@
         }
       }
     },
-    "args": ["edit", "T-1", "--sprint", "Nope"],
+    "args": ["task", "edit", "T-1", "--sprint", "Nope"],
     "expect": { "exit": 2, "stderrIncludes": ["no sprint 'Nope'; the open sprints: Next"] }
   },
   {
@@ -201,7 +201,7 @@
         }
       }
     },
-    "args": ["add", "--name", "a", "--type", "feature", "--sprint", "Themes", "--json"],
+    "args": ["task", "add", "--name", "a", "--type", "feature", "--sprint", "Themes", "--json"],
     "env": { "ATM_NOW": "2026-05-02T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
       "json": [
@@ -244,10 +244,10 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": [
-        "warning: 1 open task in closed sprints, which the loop won't take: T-1 (Old) (atm move <id> --to backlog or --to active)\n"
+        "warning: 1 open task in closed sprints, which the loop won't take: T-1 (Old) (atm sprint move <id> --to backlog or --to active)\n"
       ]
     }
   },
@@ -261,7 +261,7 @@
         }
       }
     },
-    "args": ["status", "--json"],
+    "args": ["project", "status", "--json"],
     "expect": {
       "stdoutIncludes": [
         "\"open_in_closed_sprints\": [\n    {\n      \"id\": \"T-1\",\n      \"name\": \"Stuck\",\n      \"status\": \"blocked\",\n      \"sprint\": \"Old\"\n    }\n  ]"
@@ -281,12 +281,12 @@
         }
       }
     },
-    "args": ["check", "--json"],
+    "args": ["doctor", "--json"],
     "expect": {
       "json": {
         "errors": [],
         "warnings": [
-          "T-1: todo in the closed sprint 'Old', where the loop won't take it: atm move T-1 --to backlog (or --to active)"
+          "T-1: todo in the closed sprint 'Old', where the loop won't take it: atm sprint move T-1 --to backlog (or --to active)"
         ]
       }
     }
@@ -301,9 +301,9 @@
         }
       }
     },
-    "args": ["reopen", "T-1", "--reason", "Not quite"],
+    "args": ["task", "state", "T-1", "todo", "--reason", "Not quite"],
     "expect": {
-      "stdout": "T-1: done -> todo\n  T-1 is now open in the closed sprint 'Old', where the loop won't take it: atm move T-1 --to backlog (or --to active)\n",
+      "stdout": "T-1: done -> todo\n  T-1 is now open in the closed sprint 'Old', where the loop won't take it: atm sprint move T-1 --to backlog (or --to active)\n",
       "files": { ".agentic-task-manager/tasks.json": true }
     }
   },
@@ -317,7 +317,7 @@
         }
       }
     },
-    "args": ["reopen", "T-1", "--reason", "Not quite"],
+    "args": ["task", "state", "T-1", "todo", "--reason", "Not quite"],
     "expect": { "stdout": "T-1: done -> todo\n" }
   }
 ]

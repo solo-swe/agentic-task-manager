@@ -301,7 +301,7 @@ def merge_files(base_path, ours_path, theirs_path):
 
 def launcher_command():
     launcher = os.path.join(SCRIPT_DIR, "atm").replace("'", "'\\''")
-    return f"'{launcher}' merge-driver %O %A %B"
+    return f"'{launcher}' db merge-driver %O %A %B"
 
 
 def ensure_merge_driver(paths):

@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import ProjectSelector from '../../src/components/ProjectSelector.svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import ProjectSelector from '../../src/lib/shell/ProjectSelector.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
 import { summary as fullSummary } from './summary.helpers';
@@ -51,15 +51,16 @@ describe('ProjectSelector', () => {
     expect(container.querySelector('[data-id="a"] .project-option-dot')).not.toBeNull();
   });
 
-  it('typing filters; Enter opens the active project in the URL', async () => {
+  it('typing filters; Enter opens the active project’s address', async () => {
     const { container } = render(ProjectSelector);
     await fireEvent.click(container.querySelector('#project-selector')!);
     const filter = container.querySelector('#project-filter') as HTMLInputElement;
     await fireEvent.input(filter, { target: { value: 'bet' } });
     expect([...container.querySelectorAll('[role=option]')].map((o) => o.getAttribute('data-id'))).toEqual(['b']);
     await fireEvent.keyDown(filter, { key: 'Enter' });
-    expect(location.hash).toBe('#project=b');
-    expect(container.querySelector('#project-menu')).toBeNull();
+    expect(location.pathname).toBe('/projects/b');
+    // Bits UI's popover (T-431) closes once its layer has let go of the page
+    await vi.waitFor(() => expect(container.querySelector('#project-menu')).toBeNull());
   });
 
   it('Projects Overview goes to the overview; typing its name finds it (T-274)', async () => {
@@ -70,6 +71,6 @@ describe('ProjectSelector', () => {
       'overview',
     ]);
     await fireEvent.click(container.querySelector('[data-id="overview"]')!);
-    expect(location.hash).toBe('#overview');
+    expect(location.pathname).toBe('/projects');
   });
 });

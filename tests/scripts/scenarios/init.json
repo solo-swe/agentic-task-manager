@@ -7,7 +7,7 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-01T12:00:00Z" },
-    "args": ["init", "--meta-file", "meta.json", "--json"],
+    "args": ["db", "init", "--meta-file", "meta.json", "--json"],
     "expect": {
       "stdoutIncludes": ["\"project_id\""]
     }
@@ -28,7 +28,7 @@
         }
       }
     },
-    "args": ["init", "--meta-file", "meta.json"],
+    "args": ["db", "init", "--meta-file", "meta.json"],
     "expect": {
       "stdoutIncludes": ["Updated tasks.json meta: default_priority, priorities, project\n"],
       "files": {
@@ -53,7 +53,7 @@
         "meta.json": { "statuses": [{ "id": "todo", "label": "To Do", "kind": "todo" }] }
       }
     },
-    "args": ["init", "--meta-file", "meta.json"],
+    "args": ["db", "init", "--meta-file", "meta.json"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["meta.statuses"],
@@ -63,7 +63,7 @@
   {
     "name": "init --meta-file needs a JSON object",
     "setup": { "files": { "meta.json": ["not", "an", "object"] } },
-    "args": ["init", "--meta-file", "meta.json"],
+    "args": ["db", "init", "--meta-file", "meta.json"],
     "expect": { "exit": 2, "stderrIncludes": ["must hold a JSON object"] }
   }
 ]

@@ -68,7 +68,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "stdout": "Next: T-2 Task T-2 (backlog, feature)\n",
       "files": {
@@ -211,7 +211,7 @@
         }
       }
     },
-    "args": ["next", "--type", "test", "--json"],
+    "args": ["loop", "next", "--type", "test", "--json"],
     "expect": {
       "json": {
         "task": {
@@ -300,7 +300,7 @@
         }
       }
     },
-    "args": ["next", "--type", "docs"],
+    "args": ["loop", "next", "--type", "docs"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: nothing left to do.\n"
@@ -347,7 +347,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: 2 todo task(s) waiting on dependencies.\n"
@@ -378,7 +378,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: nothing left to do.\n"
@@ -457,7 +457,7 @@
         }
       }
     },
-    "args": ["next", "--claim", "--json"],
+    "args": ["loop", "next", "--claim", "--json"],
     "expect": {
       "json": {
         "task": {
@@ -638,7 +638,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "stdout": "Next: T-5 Task T-5 (backlog, test)\n"
     },
@@ -680,7 +680,7 @@
         }
       }
     },
-    "args": ["next", "--type", "feature"],
+    "args": ["loop", "next", "--type", "feature"],
     "expect": {
       "exit": 3,
       "stdout": "No task available: 1 todo task(s) waiting on dependencies or claimed by other agents (T-2).\n"
@@ -771,7 +771,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": {
       "stdout": "Next: T-2 Task T-2 (backlog, feature)\n"
     },
@@ -793,7 +793,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-3 Urgent (backlog, feature)\n" }
   },
   {
@@ -808,7 +808,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-1 Later, urgent (backlog, feature)\n" }
   },
   {
@@ -824,7 +824,7 @@
         }
       }
     },
-    "args": ["next", "--claim"],
+    "args": ["loop", "next", "--claim"],
     "env": { "ATM_AGENT": "alice" },
     "expect": { "stdout": "Claimed: T-3 High (backlog, feature)\n" }
   },
@@ -844,7 +844,7 @@
         }
       }
     },
-    "args": ["next"],
+    "args": ["loop", "next"],
     "expect": { "stdout": "Next: T-2 Should (backlog, feature)\n" }
   }
 ]

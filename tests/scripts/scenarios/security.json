@@ -2,7 +2,7 @@
   {
     "name": "workflow set refuses a base branch with shell characters (T-222, F5)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "pull-request", "--base", "main$(touch x)"],
+    "args": ["project", "workflow", "set", "pull-request", "--base", "main$(touch x)"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["meta.workflow.base must be a branch name"],
@@ -12,7 +12,7 @@
   {
     "name": "workflow set refuses a base branch starting with -",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "direct", "--base=--upload-pack=x"],
+    "args": ["project", "workflow", "set", "direct", "--base=--upload-pack=x"],
     "expect": { "exit": 1, "stderrIncludes": ["meta.workflow.base must be a branch name"] }
   },
   {
@@ -25,19 +25,19 @@
         }
       }
     },
-    "args": ["workflow", "--json"],
+    "args": ["project", "workflow", "--json"],
     "expect": { "exit": 1, "stderrIncludes": ["meta.workflow.base must be a branch name"] }
   },
   {
     "name": "a branch name with slashes, dots and dashes is fine",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["workflow", "set", "pull-request", "--base", "release/v1.2-rc_1"],
+    "args": ["project", "workflow", "set", "pull-request", "--base", "release/v1.2-rc_1"],
     "expect": { "stdoutIncludes": ["release/v1.2-rc_1"] }
   },
   {
     "name": "pr refuses a URL that isn't http(s), and nothing changes (T-225, F9)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-001", "status": "done" }] } } },
-    "args": ["pr", "T-001", "--number", "7", "--url", "javascript:alert(1)"],
+    "args": ["vcs", "pr", "T-001", "--number", "7", "--url", "javascript:alert(1)"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["--url must be an http:// or https:// address"],
@@ -53,7 +53,7 @@
         }
       }
     },
-    "args": ["status"],
+    "args": ["project", "status"],
     "expect": { "exit": 1, "stderrIncludes": ["has characters atm doesn't allow"] }
   },
   {
@@ -68,7 +68,7 @@
         }
       }
     },
-    "args": ["check", "--json"],
+    "args": ["doctor", "--json"],
     "expect": {
       "exit": 1,
       "json": {

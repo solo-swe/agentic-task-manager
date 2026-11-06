@@ -20,6 +20,7 @@
       }
     },
     "args": [
+      "task",
       "edit",
       "T-2",
       "--name",
@@ -71,7 +72,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "name": "Same", "status": "todo" }] } }
     },
-    "args": ["edit", "T-1", "--name", "Same"],
+    "args": ["task", "edit", "T-1", "--name", "Same"],
     "expect": {
       "stdout": "T-1: nothing changed\n",
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "name": "Same", "status": "todo" }] } }
@@ -87,6 +88,7 @@
       }
     },
     "args": [
+      "task",
       "edit",
       "T-1",
       "--add-requirement",
@@ -126,7 +128,7 @@
         ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "requirements": ["FR-1"] }] }
       }
     },
-    "args": ["edit", "T-1", "--add-requirement", "FR-1", "--remove-use-case", "UC-9"],
+    "args": ["task", "edit", "T-1", "--add-requirement", "FR-1", "--remove-use-case", "UC-9"],
     "expect": {
       "stdout": "T-1: nothing changed\n",
       "files": {
@@ -139,7 +141,7 @@
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } }
     },
-    "args": ["edit", "T-1", "--add-use-case", "UC-1", "--add-requirement", "  "],
+    "args": ["task", "edit", "T-1", "--add-use-case", "UC-1", "--add-requirement", "  "],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["atm: an empty requirement can't be added"],
@@ -158,7 +160,7 @@
         }
       }
     },
-    "args": ["edit", "T-2", "--add-dep", "T-1"],
+    "args": ["task", "edit", "T-2", "--add-dep", "T-1"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["atm: these dependencies would make a cycle: T-1 -> T-2 -> T-1"],
@@ -175,26 +177,26 @@
   {
     "name": "edit refuses a missing dependency, a dependency on itself, and unknown types",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["edit", "T-1", "--add-dep", "T-404"],
+    "args": ["task", "edit", "T-1", "--add-dep", "T-404"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: T-1 can't depend on T-404, which doesn't exist"] }
   },
   {
     "name": "edit refuses a dependency on itself",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["edit", "T-1", "--add-dep", "T-1"],
+    "args": ["task", "edit", "T-1", "--add-dep", "T-1"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: T-1 can't depend on itself"] }
   },
   {
     "name": "edit refuses an unknown type",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["edit", "T-1", "--type", "spike"],
+    "args": ["task", "edit", "T-1", "--type", "spike"],
     "expect": { "exit": 2, "stderrIncludes": ["atm: unknown type 'spike'"] }
   },
   {
     "name": "edit has no --status: statuses change only through the status commands",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
-    "args": ["edit", "T-1", "--status", "done"],
-    "expect": { "exit": 2, "stderrIncludes": ["unrecognized arguments: --status done"] }
+    "args": ["task", "edit", "T-1", "--status", "done"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --status"] }
   },
   {
     "name": "check: a good file",
@@ -208,7 +210,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "stdout": "tasks.json is fine (2 tasks)\n" }
   },
   {
@@ -241,7 +243,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": {
       "exit": 1,
       "stdout": "error: T-4: the ID is used by 2 tasks\nerror: T-2: the status 'waiting' is not one of the project's statuses\nerror: T-2: the label 'Bad Label' isn't lowercase letters, digits, - and _\nerror: T-3: depends on T-404, which doesn't exist\nerror: dependency cycle: T-1 -> T-3 -> T-1\nwarning: T-2: the type 'spike' is not one of the project's types\nwarning: T-2: the priority 'P9' is not one of the project's priorities\n"
@@ -257,7 +259,7 @@
         }
       }
     },
-    "args": ["check", "--json"],
+    "args": ["doctor", "--json"],
     "expect": {
       "exit": 1,
       "json": { "errors": ["meta.statuses needs at least one status of the kind 'active'"], "warnings": [] }
@@ -272,7 +274,7 @@
         }
       }
     },
-    "args": ["check"],
+    "args": ["doctor"],
     "expect": { "stdout": "tasks.json is fine (1 tasks)\n" }
   },
   {
@@ -295,7 +297,7 @@
         }
       }
     },
-    "args": ["check", "--files"],
+    "args": ["doctor", "--files"],
     "expect": {
       "stdout": "warning: T-1: the file src/gone.ts doesn't exist\ntasks.json is fine (2 tasks, 1 warnings)\n"
     }

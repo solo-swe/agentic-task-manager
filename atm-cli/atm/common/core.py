@@ -5,6 +5,7 @@ import contextlib
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 
@@ -12,7 +13,14 @@ from .errors import AtmFailure
 
 # Where the built plugin/scripts/atm.py lives (only the built file is run, never these modules)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PLUGIN_ROOT = os.path.dirname(SCRIPT_DIR)
+# Built, this is plugin/scripts/atm.py and the plugin is its parent folder. Run from source (atm2, atm-lib's unit
+# tests), this is atm-cli/atm/common/core.py, and the plugin is plugin/ in the same checkout.
+_SOURCE = os.path.basename(SCRIPT_DIR) == "common" and os.path.basename(os.path.dirname(SCRIPT_DIR)) == "atm"
+PLUGIN_ROOT = (
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))), "plugin")
+    if _SOURCE
+    else os.path.dirname(SCRIPT_DIR)
+)
 TASK_DIR = ".agentic-task-manager"
 TASKS_FILE = "tasks.json"
 DASHBOARD_FILE = "tasks-dashboard.html"
@@ -156,6 +164,17 @@ def pid_alive(pid):
     except PermissionError:
         return True
     return not is_zombie(pid)
+
+
+def process_started(pid):
+    """When process `pid` started, as `ps` says it (macOS and Linux), or None when there is no such process: with its
+    pid, it tells a process from a later one that got the same pid. `ps` is the one command run, with a number."""
+    try:
+        result = subprocess.run(["ps", "-o", "lstart=", "-p", str(int(pid))], capture_output=True, text=True)
+    except OSError:
+        return None
+    started = result.stdout.strip()
+    return started if result.returncode == 0 and started else None
 
 
 WHOAMI = "/__atm/whoami"

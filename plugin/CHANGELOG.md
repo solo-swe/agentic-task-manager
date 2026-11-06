@@ -4,6 +4,116 @@ All notable changes to the atm plugin and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with the plugin: updating the plugin updates it everywhere.
 
+## [0.31.0] - 2026-11-06
+
+The sprint *CLI ergonomics* (release 0.31.0).
+
+### Changed
+- **atm's commands are a tree of groups** (T-412–T-425, `docs/improving-atm-cli-ergonomics.md`), built with Typer
+  on Click (`atm-cli/atm/cli/main.py`): `task` (`list`, `details`, `deps`, `add`, `edit`, `note`, `state`,
+  `review`), `loop` (`next`), `claim` (`list`, `heartbeat`, `hold`), `vcs` (`commit`, `pr`, `pushed`, `repository`),
+  `release` and `component` (`list`, `add`, `edit`, …), `project` (`status`, `config`, `workflow`, `logo`, `list`,
+  `add`, `remove`, `prune`), `sprint` (`list`, `add`, `edit`, `start`, `close`, `delete`, `move`, `backlog`); `db`
+  (`migrate`, `init`, `archive`, `unarchive`), `doctor` and `service` for maintenance; `help` and `version`.
+  `db merge-driver`, `project summary` and `_lock-test` work but aren't listed.
+- **`atm task state <id> <state>`** (`in_progress`, `in_review`, `done`, `todo`, `blocked`, `skipped`) is every
+  status change: `todo` runs the one for where the task is (in progress: a failure with `--reason`, else a release
+  with an optional `--note`; in review: a rejection; blocked: the answers, `--answer`; done or skipped: a reopen,
+  `--reason`), here or, for a task claimed, blocked or in review in another worktree, there (`todo_command` in
+  `lib/status.py`). It refuses options that aren't for the change (`--commit: not for in_progress (start)`) and asks
+  for the ones it needs. The agent comes from `--agent`, `ATM_AGENT` or the session, as before.
+- **A review's decisions are `atm task review approve <id> [--note]`, `request-changes <id> --reason` and `reject
+  <id> --reason`** (T-425, T-438): the decision first, so a permission rule tells them apart. No skill pre-approves
+  them (I23). Each leaves the task in review with its `review_state` (`approved`, `changes_requested`, `rejected`)
+  and opens one way out, which atm guards for agents and people alike: approved, `done` (or `in_progress` for what
+  is left); changes requested, `in_progress`; rejected, `todo` (its work dropped; atm-lib `drop_task`) or
+  `skipped`. Without the decision, atm refuses (`can't finish T-1: its review isn't approved …`). The task's
+  `waiting` record carries the decision, so an exit taken in another worktree meets the same guard. A rejected task
+  isn't handed out by `atm loop next`. The dashboard labels `rejected`. `reject_task` is the decision now (it used to
+  send the task back to to do).
+- **`skipped` from any open state** (T-438): to do, blocked, in progress (its claim dropped) or in review (once
+  rejected). **`done` takes no `--resolution`**: a done task is done; one that ends without its work done is skipped,
+  with its resolution. atm-lib's `done_task` loses `resolution` (`tests/lib/public-surface.json`).
+- **`--json` (`-j`) and `--dry-run` (`-n`) go anywhere on the line** (before a `--`); `atm --dir PATH <command>`
+  as before. Errors are `atm: <message>`, or `{"error", "code"}` with `--json`; a usage error (Click's: a missing
+  argument, an unknown option or command) has the command's usage line and exit code 2. Shell completion for zsh,
+  bash and fish (`atm --install-completion`), with task IDs, sprints, releases, components and the vocabularies.
+- **Messages and hints name the new commands** (`atm db archive` would move …, `atm sprint move <id> --to backlog`,
+  `Run atm task state T-1 in_progress, then atm task state T-1 done again.`, `run atm doctor`, …).
+- **The merge driver is `atm db merge-driver %O %A %B`**: `atm db migrate` and `atm db init` register it again.
+- **The plugin's hooks** run `atm claim heartbeat --auto` and `atm service --refresh`.
+- **The skills, `plugin/CLAUDE.md` and the README** use the new names; each skill pre-approves its commands one by
+  one (`Bash(atm task state:*)`, …), never a review decision; `/atm:close-sprint` pre-approves no
+  status change, so a skip asks for permission. An approval or a request for changes is the user's.
+- **Typer and Click ship with the plugin** (T-425), copied as they are into `plugin/scripts/vendor/` (click 8.1.8,
+  typer 0.15.4, as `atm-cli/uv.lock` pins them; without Typer's rich support, so help is plain Click output on every
+  machine); `atm.py` puts the folder first on its import path. Nothing is installed; CI's pip step is gone.
+- **The task state machine** is `transitions` (T-417, T-418), vendored and built into `atm.py`, with the same
+  refusals, notes and exit codes as before.
+- **The dashboard is a SvelteKit app** (T-428, the Svelte guide): SvelteKit 3.1.1 with the static adapter, its
+  options in `vite.config.ts`'s `sveltekit({ … })` call (no `svelte.config.js`); rendered in the browser only, from
+  the adapter's fallback page with every script and style inlined (`output.bundleStrategy: 'inline'`), so it is still
+  one self-contained file, which `build/finish-page.ts` stamps (version, favicon, build ID) and writes to
+  `plugin/templates/tasks-dashboard.html` (`pnpm run build:page`). About 60 kB more (SvelteKit's runtime; 23 kB gzipped): the size guardrail is
+  650 KiB. The dev page's Content-Security-Policy is now worked out from each page as sent (SvelteKit renders it per
+  request, with its own inline start-up script): its inline scripts by hash, as `atm serve` allows the built page's
+  (`dev-api.test.mjs` checks it). `vite-plugin-singlefile` is gone.
+- **The dashboard's views have addresses** (T-429, SvelteKit routes): `/projects/<id>/<tab>` a project on a tab
+  (`/projects/<id>` on its saved one), `/projects` the overview's cards, `/board`, `/progress` and `/agents` its other
+  tabs, `/` the landing page (a single project then takes its own address). What is open over a page is in the query:
+  `?task=T-1` a task's details (new: linkable; opening them is a history entry, so Back closes them), `?doc=` a
+  document, `?sprint=` the Sprint filter, `?about`, `?help`. `atm serve` answers those paths with the page
+  (`PAGE_PATH`, `docs/multi-project-api.md` §2.7) and nothing else under them. Old `#project=…&view=…` links still
+  open and move to the new address. A link in task text to a dashboard page opens in place. The page's API requests
+  are from the server's root (`/api/…`, `/p/<id>/…`), and so is a project's logo. `lib/routes.ts` and `lib/address.ts`
+  (instead of `lib/hash.ts`), `lib/navigation.ts` (SvelteKit's `goto`), `lib/sprint-param.ts` (was `sprint-hash.ts`).
+- **The dashboard's dialogs, menus and popovers are Bits UI's** (`bits-ui` 2.20.6, T-431): `Dialog.svelte` (About,
+  Help, What's new) on its dialog (focus trapped while open, the page under it doesn't scroll); the "need you" list
+  and the scope bar's sprint menu on its dropdown menu (roving focus, typeahead; the sprints as radio items); the
+  settings, the Filters popup, the project selector and the ⓘ tips on its popover. Each is placed where it was (its
+  static content, no floating positioning), with the same ids and classes; the menus aren't modal. About 150 kB more:
+  the size guardrail is 850 KiB, only to catch a runaway build (no size target until the Rust/Tauri move sets new
+  ones). `runed`'s SvelteKit 2 peer is allowed for 3 (`pnpm-workspace.yaml`).
+- **The dashboard's design tokens are one file**, `src/tokens.css` (T-433): the colours (moved from `app.css`; the
+  themes set them, as before), a spacing scale (`--space-1` … `--space-10`: 2, 4, 6, 8, 10, 12, 16, 20, 24, 32 px),
+  radii (`--radius-sm|md|lg|xl`: 4, 6, 8, 12 px, `--radius-pill`, `--radius-round`), text sizes (`--text-2xs` …
+  `--text-4xl`) and the page's font. Every padding, margin, gap and radius uses them: a value off the scale moved to
+  the nearest step (105 of 571; mostly 1 to 2 px), radii of 16 px and over are pills; text sizes were replaced where
+  one matched, the others kept, and `em` values and layout sizes stay as they are. `tests/unit/tokens.test.ts` keeps
+  it so.
+- **What can be clicked on the dashboard is a control** (T-434): a card's task name and its dependency links, and
+  the details panel's dependency rows, are buttons (reached with Tab, pressed with Enter), looking as before.
+  `tests/unit/accessible-controls.test.ts` fails on a click handler on a `div` or `span` (but a card that is a
+  button by ARIA, and three containers, each with its reason) and on an icon-only button without `aria-label`.
+- **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
+  `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
+  version is the plugin's, so the same sources build the same page.
+- **The icons come from Lucide's package** (`lucide` 1.69.0, T-432) instead of embedded SVG copies: imported by
+  name, drawn by `Icon.svelte` as elements, never as markup, so `{@html}` is left only in `Logo.svelte` (I15). Its
+  Svelte package was 14 kB larger (a component per icon); this is about 3 kB more than the embedded copies. Lucide
+  now calls `history` `rotate-ccw-clock`.
+- **The dashboard's development uses pnpm** (T-427): `pnpm-lock.yaml`, overrides in `pnpm-workspace.yaml`, CI and
+  the hooks on pnpm 12.14.0.
+
+### Added
+- **`atm claim hold <id> [--max MINUTES] [--every SECONDS]`** (T-437): keeps a claim alive while the shell that ran it
+  lives (`atm claim hold T-1 && npm test`), and runs nothing. It renews the claim (refused when it isn't yours), leaves
+  a detached watcher and returns; the watcher renews three times per lease (at least once a minute) and stops when
+  the shell ends (checked by its pid and start time), a renewal fails (the claim was released, finished or taken
+  over), or `--max` is up (240 minutes by default, at most 720). `--json`: `{task, claim, watcher, watching,
+  until}`. The skills pre-approve it and use it before long commands.
+
+### Removed
+- **The old flat commands** (`atm start`, `done`, `review`, `block`, `show`, `list`, `sprints`, `commit`, `serve`,
+  `check`, …): "No such command". No aliases.
+- **`atm loop run <id> -- <command>`** (formerly `atm run`, T-437): atm runs no command it is given (I24,
+  `docs/security-architecture.md`); `atm claim hold` replaces it.
+- **`atm2`** and its launcher: the tree is `atm`.
+
+### Docs
+- **ADR-001**: filtering and search stay in the dashboard (T-435). The coding guides (`docs/guides/`) are linked from
+  `AGENTS.md`.
+
 ## [0.30.0] - 2026-11-04
 
 The sprint *Viewer fixes* (release 0.30.0).

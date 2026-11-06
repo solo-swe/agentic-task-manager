@@ -16,9 +16,10 @@ export function effectiveReview(task: Task): ReviewMode {
   return isMode(task.derived?.effective_review) ? task.derived.effective_review : 'none';
 }
 
-/** The review state as a short label: "Changes requested", "Approved", "Waiting for review" */
+/** The review state as a short label: "Changes requested", "Approved", "Rejected", "Waiting for review" */
 export const REVIEW_STATE_LABELS: Record<string, string> = {
   waiting: 'Waiting for review',
   changes_requested: 'Changes requested',
   approved: 'Approved',
+  rejected: 'Rejected', // T-438: back to to do, or skipped, is the next step
 };

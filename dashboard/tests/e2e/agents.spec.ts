@@ -193,7 +193,7 @@ test.describe('Agents tab: time range', () => {
     await page.locator('#tab-graph').click();
     // Half an hour later, the "last hour" is still the last hour
     await page.clock.setFixedTime(new Date('2026-04-01T12:30:00Z'));
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await page.locator('#tab-agents').click();
     await expect(range(page)).toHaveText('11:30 AM – now');
 

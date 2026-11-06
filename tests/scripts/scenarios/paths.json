@@ -1,7 +1,7 @@
 [
   {
     "name": "empty directory outside git: the current directory is the root",
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -22,7 +22,7 @@
       }
     },
     "cwd": "src/a",
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -45,7 +45,7 @@
       }
     },
     "cwd": "src/deep",
-    "args": ["paths"],
+    "args": ["project", "config"],
     "expect": {
       "stdout": "root: {root}\ndir: {root}/.agentic-task-manager\ntasks: {root}/.agentic-task-manager/tasks.json\ndashboard: {root}/.agentic-task-manager/tasks-dashboard.html\n"
     }
@@ -60,7 +60,7 @@
         }
       }
     },
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -84,7 +84,7 @@
       }
     },
     "cwd": "docs",
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -108,7 +108,7 @@
         }
       }
     },
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -135,7 +135,7 @@
         }
       }
     },
-    "args": ["paths", "--json"],
+    "args": ["project", "config", "--json"],
     "expect": {
       "json": {
         "root": "{root}",
@@ -159,7 +159,7 @@
         }
       }
     },
-    "args": ["paths"],
+    "args": ["project", "config"],
     "expect": {
       "stdout": "root: {root}\ndir: {root}/.agentic-task-manager\ntasks: {root}/.agentic-task-manager/tasks.json\ndashboard: {root}/.agentic-task-manager/tasks-dashboard.html\nlegacy: {root}/docs/tasks.json\n"
     }

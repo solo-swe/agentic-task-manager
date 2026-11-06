@@ -30,12 +30,12 @@
         }
       }
     },
-    "args": ["done", "T-1", "--note", "finished"],
+    "args": ["task", "state", "T-1", "done", "--note", "finished"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:00Z" },
     "expect": {
       "exit": 4,
       "stderrIncludes": [
-        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Your commit is kept. Run `atm start T-1`, then `atm done T-1` again."
+        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Your commit is kept. Run `atm task state T-1 in_progress`, then `atm task state T-1 done` again."
       ],
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -75,12 +75,12 @@
         }
       }
     },
-    "args": ["release", "T-1"],
+    "args": ["task", "state", "T-1", "todo"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:00Z" },
     "expect": {
       "exit": 4,
       "stderrIncludes": [
-        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Run `atm start T-1`, then `atm release T-1` again."
+        "T-1: your lease expired at 10:30 UTC (no heartbeat for 30 min), so it went back to todo. Run `atm task state T-1 in_progress`, then `atm task state T-1 todo` again."
       ]
     }
   },
@@ -103,9 +103,9 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "ATM_AGENT=alice ATM_NOW=2026-05-01T11:05:00Z \"$ATM\" start T-1"]]
+      "commands": [["sh", "-c", "ATM_AGENT=alice ATM_NOW=2026-05-01T11:05:00Z \"$ATM\" task state T-1 in_progress"]]
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:10:00Z" },
     "expect": {
       "stdout": "T-1: in_progress -> done\n",
@@ -151,7 +151,7 @@
         }
       }
     },
-    "args": ["done", "T-1"],
+    "args": ["task", "state", "T-1", "done"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:00Z" },
     "expect": {
       "exit": 1,
@@ -178,12 +178,12 @@
         }
       }
     },
-    "args": ["heartbeat", "T-1"],
+    "args": ["claim", "heartbeat", "T-1"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:00Z" },
     "expect": {
       "exit": 4,
       "stderrIncludes": [
-        "T-1: your lease expired at 10:45 UTC (no heartbeat for 45 min), so it went back to todo. Run `atm start T-1` to claim it again."
+        "T-1: your lease expired at 10:45 UTC (no heartbeat for 45 min), so it went back to todo. Run `atm task state T-1 in_progress` to claim it again."
       ]
     }
   },
@@ -212,9 +212,11 @@
           ]
         }
       },
-      "commands": [["sh", "-c", "ATM_AGENT=alice ATM_NOW=2026-05-01T11:00:00Z \"$ATM\" fail T-2 --reason broke"]]
+      "commands": [
+        ["sh", "-c", "ATM_AGENT=alice ATM_NOW=2026-05-01T11:00:00Z \"$ATM\" task state T-2 todo --reason broke"]
+      ]
     },
-    "args": ["release", "T-1"],
+    "args": ["task", "state", "T-1", "todo"],
     "env": { "ATM_AGENT": "alice", "ATM_NOW": "2026-05-01T11:00:00Z" },
     "expect": {
       "stdout": "T-1: in_progress -> todo\n",

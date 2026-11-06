@@ -2,7 +2,7 @@
 
 **Status:** agreed format for phase 15 (T-165) · **Design:** [the proposal](multi-project-dashboard-proposal.md)
 
-One `atm serve` per user serves the dashboard and every registered project. This page fixes what the server answers
+One `atm service` per user serves the dashboard and every registered project. This page fixes what the server answers
 and what it stores, so atm-cli (the registry and the server) and the dashboard (which reads them) can be built in
 parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev-data.ts`) implement the same routes.
 
@@ -21,7 +21,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 
 | Route | Answer | ETag |
 |---|---|---|
-| `GET /` | the dashboard (`text/html`), from the plugin, held in memory since the server started | no |
+| `GET /` and the dashboard's other pages (§2.7) | the dashboard (`text/html`), from the plugin, held in memory since the server started | no |
 | `GET /api/projects` | the registered projects with their summaries (§3) | yes |
 | `GET /api/search?q=<text>` | the tasks matching a search, in every project (§2.4) | no |
 | `GET /p/<id>/claims.json` | that project's live claims, from every worktree (§2.1) | yes |
@@ -84,7 +84,7 @@ the first claim there is no store yet, and the answer is an empty list.
   it has; the main worktree's tasks are `tasks.json` itself. A task blocked or in review there but already decided in
   another worktree (the claims store's `resolved`) is left out: that copy is stale until atm runs there next.
 - Each is a view, `{task, derived}`, like the v1 tasks route's (`TaskView`, §2.5): the derived values worked out on
-  that worktree's own data, as `atm next` there would (a dependency done in another worktree counts once the branches
+  that worktree's own data, as `atm loop next` there would (a dependency done in another worktree counts once the branches
   merge; T-387). The dashboard takes them as they are and applies no rule of its own to a copy.
 - The ETag changes when a worktree is added or removed, switches branch, its `tasks.json` changes, or the claims
   store does.
@@ -95,11 +95,11 @@ the first claim there is no store yet, and the answer is an empty list.
 ### 2.3 `logo`: the project's logo
 
 - **Which file.** `meta.logo` in the project's `tasks.json`: a path relative to the project root, set with
-  `atm logo set <path>` (and removed with `atm logo unset`). Without it, the first usable file of `logo.svg`,
+  `atm project logo set <path>` (and removed with `atm project logo unset`). Without it, the first usable file of `logo.svg`,
   `logo.png`, `.github/logo.*`, `public/favicon.*`, `assets/logo.*` (each `.*` tried as `.svg`, `.png`, `.webp`,
   `.ico`). A `meta.logo` that is unusable means no logo: nothing is searched for then.
 - **Usable** means an SVG, PNG, WebP or ICO file (by its extension), inside the project folder once symbolic links are
-  followed, and at most 512 KB. `atm logo set` refuses anything else; the server answers `404` with
+  followed, and at most 512 KB. `atm project logo set` refuses anything else; the server answers `404` with
   `{"error": "no logo"}` for a project without a usable logo.
 - `Content-Type` is the image type (`image/svg+xml`, `image/png`, `image/webp`, `image/x-icon`). Unlike the other
   routes it has `Cache-Control: no-cache`: the browser may keep it but asks again, and gets `304` while it is unchanged
@@ -128,17 +128,17 @@ task's), `priority` (or the default), `effective_review`, `effective_release`, `
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
 - **A malformed task file is shown, not refused** (T-377): the route reads it tolerantly, as far as it can be read,
-  where every `atm` command refuses it (`atm list --derived --tolerant` prints the same). An entry that isn't a task
+  where every `atm` command refuses it (`atm task list --derived --tolerant` prints the same). An entry that isn't a task
   is left out; a task with an ID atm doesn't allow is kept, one whose `dependencies` aren't a list of IDs with the IDs
   that can be read; a vocabulary `meta` can't use falls back to its default (left out of the `meta` sent). Each
-  problem is said, in `atm check`'s words: a task's in its `derived.problems` (it isn't `ready` then), the file's in
+  problem is said, in `atm doctor`'s words: a task's in its `derived.problems` (it isn't `ready` then), the file's in
   the response's `problems`. The dashboard shows a notice and each task's problems in its details. A file that isn't
   a task file at all still gets an error.
 - **The archive** (T-372): `?archived=true` gives the archive's tasks, as views; the dashboard loads its archive from
   here, no longer from `tasks-archive.json` (a project without one: `404`, an empty archive). Without it, the response
   carries `archive_hint` when atm suggests archiving (its `bytes`, `finished`, `archivable`, `auto` and `text`, as
-  `atm status --json` has it): the dashboard's footer notice.
-- **Filters**, as `atm list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
+  `atm project status --json` has it): the dashboard's footer notice.
+- **Filters**, as `atm task list` takes them: `status`, `label` and `sprint` repeatable (`?status=todo&status=blocked`);
   `type`, `priority`, `agent`, `release`, `component`; the flags `backlog`, `ready`, `blocked`, `in_pr`, `with_user`
   and `archived` (`true` or `1`). Other parameters are ignored. A filter naming no such sprint or release gets `400`.
 - The ETag changes with the project's `tasks.json`, its archive and the query. A `tasks.json` over the size limit gets
@@ -163,6 +163,25 @@ reads the working copy through the version control. `path` is relative to the pr
 - Refused: a malformed path (`..`, absolute, empty parts, a backslash, over 512 characters) `400`; a hidden file or
   folder, a key file (`*.pem`, `id_rsa*`, …) or one git ignores `403`; a missing file, or one reached through a
   symlink, `404`; over 1 MB (5 MB for an image) `413`. Each with `{"error": …}`.
+
+### 2.7 The dashboard's pages
+
+The dashboard's views have addresses (T-429), and the server answers each with the same page, with the same
+Content-Security-Policy, as `/`; the page reads its address and shows that view (`dashboard/src/lib/address.ts`,
+SvelteKit routes in `dashboard/src/routes/`). The server sends nothing else under these paths: an ID or a tab in one is
+text the page reads, never a file it looks up.
+
+| Path | The page shows |
+|---|---|
+| `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
+| `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
+| `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`) |
+
+What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
+document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
+query. The paths are `PAGE_PATH` in `api/server.py` (a tab is lowercase letters; nothing deeper than a tab), any other
+path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
+old parameters from its hash and moves to the new address.
 
 ## 3. `GET /api/projects`
 
@@ -219,7 +238,7 @@ change (the server combines their size/mtime stamps and the worktree lists). Pro
 
 | Field | Meaning |
 |---|---|
-| `id` | the project's `meta.id` (8 hex characters, which `atm init` adds). A registered project without one gets `p` plus the first 7 hex characters of the SHA-1 of its `path`, stable as long as the path is, until `meta.id` is set |
+| `id` | the project's `meta.id` (8 hex characters, which `atm db init` adds). A registered project without one gets `p` plus the first 7 hex characters of the SHA-1 of its `path`, stable as long as the path is, until `meta.id` is set |
 | `name` | `meta.project`, or the folder's name when it has none |
 | `path` | the project root (the main worktree's folder) |
 | `missing` | `true` when the folder or its `.agentic-task-manager/tasks.json` is gone (or unreadable); the project then has `"summary": null` |
@@ -243,11 +262,11 @@ logic (`query.py`). Task names in `working`, `next`, `last_done` and `needs_you_
 | `recent_sprints` | up to 4 sprints with tasks for the overview's rings, in the project's order: the active and planned ones, then the most recently closed (by `end`) to fill up to 4. Each is `{ id, state, due, release, done, total, percent }`. `null` for a project without sprints (the card then shows one ring for all its tasks). Servers before 0.24 sent `current_phase` and `recent_phases` instead |
 | `agents_working` | live claims (lease not expired) in the claims store |
 | `working` | those claims, oldest first: `{ task, name, agent, branch }` (the task's name from this `tasks.json`; `branch` as the claim recorded it, `null` outside git) |
-| `next` | up to 2 tasks `atm next` would hand out, in its order, by the same code (`loop_order` in `claims.py`): tasks back from review first, then to do; dependencies done, not claimed, not done or waiting in another worktree, not done together with the user; in the loop's default selection, the active sprint's or else every task; most urgent priority, lowest ID. `{ id, name }`. The project card lists them; the project's Kanban marks the first *Next up* (T-321), so the dashboard never applies the loop's rule itself. `atm summary` prints this whole summary for the project it runs in |
+| `next` | up to 2 tasks `atm loop next` would hand out, in its order, by the same code (`loop_order` in `claims.py`): tasks back from review first, then to do; dependencies done, not claimed, not done or waiting in another worktree, not done together with the user; in the loop's default selection, the active sprint's or else every task; most urgent priority, lowest ID. `{ id, name }`. The project card lists them; the project's Kanban marks the first *Next up* (T-321), so the dashboard never applies the loop's rule itself. `atm project summary` prints this whole summary for the project it runs in |
 | `last_done` | the done-kind task with the latest `completed_at`: `{ id, name, completed_at }`, or `null` |
 | `description` | `meta.description` (an optional line about the project), trimmed and capped at 200 characters; `null` without one. The card shows it only as the name's tooltip |
 | `git.branch` | the main worktree's checked-out branch (from `.git/HEAD`; a detached HEAD's short SHA), or `null` outside git |
-| `git.pr` | the latest PR recorded on the tasks (`atm pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm merged`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
+| `git.pr` | the latest PR recorded on the tasks (`atm vcs pr`; the highest number): `{ number, url, state }`, `url` as recorded (or `null`), `state` `"merged"` once a task of it has `merged_at` (`atm vcs pushed`), else `"open"`; `null` without one. No forge is asked, and there is no CI state |
 | `needs_you.review` | review-kind tasks, but those a reviewer approved or asked changes for (back with the agent) |
 | `needs_you.blocked_on_user` | blocked-kind tasks with `waiting_on: "user"` |
 | `needs_you.together` | to-do tasks with `with: "user"` the user can take up now (T-347): in the active sprint (in any sprint or the backlog without an active sprint), their dependencies done (an archived one counts as done) |
@@ -287,7 +306,7 @@ above, the priority the project's default when a task has none), plus `by` (the 
 ```
 
 `home` identifies the atm folder (`ATM_HOME`) the server serves: the first 16 hex digits of the SHA-256 of its real
-path, never the path itself (T-390). `atm serve status` and `stop` look at the 20 ports from `--port` (8765 by
+path, never the path itself (T-390). `atm service status` and `stop` look at the 20 ports from `--port` (8765 by
 default) for servers of their own folder that `server.json` doesn't name, a server whose record was lost or
 overwritten: `status` reports them (`unrecorded` in `--json`), `stop` stops them. A server of another folder, or one
 too old to give `home`, is never touched.
@@ -301,7 +320,7 @@ worktree) is left alone, or two installs would restart the server in turn and ev
 The open dashboard compares `build` with its own to offer a reload.
 
 The old per-project servers (0.10.0–0.14.0) answer `{atm, folder, pid}`. The `folder` key identifies one, which is how
-`atm migrate` recognises and stops it.
+`atm db migrate` recognises and stops it.
 
 ## 5. Files in `ATM_HOME`
 
@@ -349,7 +368,7 @@ file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
 Written by the server once it listens, and removed when it stops. A record is trusted only if `whoami` on its port
 answers with the same `pid`. Otherwise it is stale and is removed, as today.
 
-T-390: `atm serve` starts a server under `ATM_HOME/server.lock`, held across "is one running?", the start and its
+T-390: `atm service` starts a server under `ATM_HOME/server.lock`, held across "is one running?", the start and its
 record, so two at once (two sessions' hooks) start one server and the second reports it. `stop` sends SIGTERM, then
 SIGKILL if the server outlives five seconds; the record is removed only once that server is gone, and only if it is
 still that server's: a running server is never forgotten.

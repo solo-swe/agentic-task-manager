@@ -1,6 +1,6 @@
 import { render } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
-import ProjectCard from '../../src/components/ProjectCard.svelte';
+import ProjectCard from '../../src/lib/overview/ProjectCard.svelte';
 import type { ProjectEntry, ProjectSummary } from '../../src/lib/load';
 import { dashboard } from '../../src/lib/state.svelte';
 import { olderServer, summary } from './summary.helpers';

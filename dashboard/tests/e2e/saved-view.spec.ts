@@ -31,13 +31,13 @@ test.describe('saved view', () => {
     await closeFilters(page);
     await page.locator('#tab-graph').click();
 
-    await page.goto('tasks-dashboard.html'); // no #view=: the saved tab applies, the graph (not the default Kanban)
+    await page.goto('/'); // no tab in the address: the saved tab applies, the graph (not the default Kanban)
     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 1', 'Type: Feature']);
     await expect(page.locator('#task-search')).toHaveValue('user');
     await expect(matchCount(page)).toHaveText('1 of 12 tasks');
     await expect(page.locator('#tab-graph')).toHaveAttribute('aria-selected', 'true');
-    // The saved Sprint filter goes into the hash too (#sprint=, T-323)
-    await expect(page).toHaveURL(/#view=graph&sprint=Phase%201$/);
+    // The project's address, with the saved tab, and the saved Sprint filter in it too (?sprint=, T-323)
+    await expect(page).toHaveURL(/\/projects\/p1\/graph\?sprint=Phase%201$/);
     await page.locator('#tab-kanban').click();
     await expect(page.locator('#kanban-show-skipped')).toBeChecked();
     await openFilters(page);
@@ -86,17 +86,17 @@ test.describe('saved view', () => {
     await filterButton(page, 'sprint', 'Phase 2').click();
     // Opened fresh (no #sprint= from the other project's address, T-323)
     tasksServer.use(project('p2'));
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await expect(page.locator('.filter-chip')).toHaveCount(0);
     tasksServer.use(project('p1'));
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await expect(page.locator('.filter-chip')).toHaveText(['Sprint: Phase 2']);
   });
 
   test('a #view= link wins over the saved tab', async ({ page, tasksServer }) => {
     await openDashboard(page, tasksServer, project('p1'));
     await page.locator('#tab-progress').click();
-    await page.goto('tasks-dashboard.html#view=kanban');
+    await page.goto('/?view=kanban');
     await page.reload();
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
   });
@@ -128,7 +128,7 @@ test.describe('saved view', () => {
     await expect(page.locator('.filter-btn.active')).toHaveCount(0);
     await expect(page.locator('#task-search')).toHaveValue('');
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
-    await page.goto('tasks-dashboard.html');
+    await page.goto('/');
     await expect(matchCount(page)).toHaveText('12 of 12 tasks');
   });
 

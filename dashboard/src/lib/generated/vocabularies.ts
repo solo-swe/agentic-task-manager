@@ -1,5 +1,5 @@
 // The status kinds and the default vocabularies, generated from atm-cli/atm/common/schema/vocabularies.json by
-// atm-cli/build.py: don't edit it, change that file and run `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+// atm-cli/build.py: don't edit it, change that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 
 /** What a status means; everything acts on kinds, never on status names. */
 export type StatusKind = 'todo' | 'active' | 'review' | 'blocked' | 'done' | 'skipped';

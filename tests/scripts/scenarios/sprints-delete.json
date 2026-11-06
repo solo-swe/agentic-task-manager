@@ -14,7 +14,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "oops"],
+    "args": ["sprint", "delete", "oops"],
     "expect": {
       "stdout": "Deleted the sprint “Oops” (planned).\n",
       "files": {
@@ -35,7 +35,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "Old", "--json"],
+    "args": ["sprint", "delete", "Old", "--json"],
     "expect": {
       "json": { "deleted": "Old", "state": "closed", "moved": [], "to": "backlog" },
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [] }, "tasks": [] } }
@@ -51,7 +51,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "Old", "--force"],
+    "args": ["sprint", "delete", "Old", "--force"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["the sprint 'Old' is closed and had tasks (T-1): its record and report stay"]
@@ -68,7 +68,7 @@
         ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-9", "status": "done", "sprint": "Old" }] }
       }
     },
-    "args": ["sprints", "delete", "Old"],
+    "args": ["sprint", "delete", "Old"],
     "expect": { "exit": 2, "stderrIncludes": ["closed and had tasks (T-9)"] }
   },
   {
@@ -91,9 +91,9 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
-    "args": ["sprints", "delete", "A"],
+    "args": ["sprint", "delete", "A"],
     "expect": {
-      "stdout": "Deleted the sprint “A” (active): 2 tasks moved to the backlog (T-1, T-2).\nNo sprint is active now: start the next one (atm sprints start <name>), or plan one with /atm:plan-sprint.\n",
+      "stdout": "Deleted the sprint “A” (active): 2 tasks moved to the backlog (T-1, T-2).\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": { "sprints": [{ "id": "B", "state": "planned" }] },
@@ -122,7 +122,7 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
-    "args": ["sprints", "delete", "A", "--move-to", "b", "--json"],
+    "args": ["sprint", "delete", "A", "--move-to", "b", "--json"],
     "expect": {
       "json": { "deleted": "A", "state": "planned", "moved": ["T-1"], "to": "B" },
       "files": {
@@ -155,7 +155,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "A"],
+    "args": ["sprint", "delete", "A"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["tasks finished in the sprint 'A' or moved on from it (T-2): delete it with --force"]
@@ -186,7 +186,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "A"],
+    "args": ["sprint", "delete", "A"],
     "expect": { "exit": 2, "stderrIncludes": ["moved on from it (T-1)"] }
   },
   {
@@ -203,7 +203,7 @@
       }
     },
     "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
-    "args": ["sprints", "delete", "A", "--force", "--json"],
+    "args": ["sprint", "delete", "A", "--force", "--json"],
     "expect": {
       "json": { "deleted": "A", "state": "active", "moved": ["T-1", "T-2"], "to": "backlog" },
       "files": {
@@ -227,7 +227,7 @@
         }
       }
     },
-    "args": ["sprints", "delete", "A"],
+    "args": ["sprint", "delete", "A"],
     "expect": {
       "exit": 2,
       "stderrIncludes": ["T-1 is in progress: finish or release it before deleting the sprint"]
@@ -240,7 +240,7 @@
         ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }, { "id": "B" }] }, "tasks": [] }
       }
     },
-    "args": ["sprints", "delete", "C"],
+    "args": ["sprint", "delete", "C"],
     "expect": { "exit": 2, "stderrIncludes": ["no sprint 'C'; the sprints: A, B"] }
   },
   {
@@ -253,15 +253,15 @@
         }
       }
     },
-    "args": ["sprints", "delete", "A", "--move-to", "A"],
+    "args": ["sprint", "delete", "A", "--move-to", "A"],
     "expect": { "exit": 2, "stderrIncludes": ["the tasks can't move to the sprint being deleted ('A')"] }
   },
   {
-    "name": "atm sprints delete needs a sprint name",
+    "name": "atm sprint delete needs a sprint name",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
     },
-    "args": ["sprints", "delete"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm sprints delete needs a sprint name"] }
+    "args": ["sprint", "delete"],
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Missing argument 'NAME'.", "Usage: atm sprint delete"] }
   }
 ]

@@ -84,7 +84,7 @@ def release_fields(release, name, target):
 
 
 def unknown_release(vocab, release_id):
-    known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm releases add <R>"
+    known = ", ".join(r["id"] for r in vocab["releases"]) or "none yet: atm release add <R>"
     return NotFound(f"no release {release_id!r}; the releases: {known}", 2)
 
 
