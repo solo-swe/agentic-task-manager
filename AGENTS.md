@@ -13,6 +13,9 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
 - `tests/scripts/` — tests for atm-cli (dev only)
 - `.agentic-task-manager/tasks.json` — this repo's own task list; we dogfood atm here (`/atm:serve` shows it)
 - `docs/` — requirements, designs and plans the tasks were created from
+- `docs/guides/` — the coding guides: [Svelte](docs/guides/svelte.md) (the dashboard), [Rust](docs/guides/rust.md)
+  (the Rust port of atm-cli) and [Tauri](docs/guides/tauri.md) (the atm app). A Python guide for atm-cli is still to
+  come. Where the code doesn't follow a guide yet, a task says so; follow the guide in new code
 
 ## Security
 `docs/security-architecture.md` holds the threat model and the invariants every change keeps, each with its check.
@@ -27,7 +30,7 @@ agents or the dashboard act on, a skill instruction that runs commands or reads 
 updates that document in the same PR.
 
 ## Dashboard (`dashboard/`)
-Builds to a **single self-contained HTML file** (vite-plugin-singlefile). The `atm-dashboard-version` meta tag is
+Coding rules: the [Svelte guide](docs/guides/svelte.md). Builds to a **single self-contained HTML file** (vite-plugin-singlefile). The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
 
 `npm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.

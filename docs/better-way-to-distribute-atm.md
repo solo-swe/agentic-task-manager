@@ -85,6 +85,8 @@ If you mean the Mac App Store, its sandbox works against this whole design. A sa
 4. A Claude Code plugin (and a Codex plugin if your users are there) that wraps the same folder
 5. Other harness-specific plugins only on demand
 
+Guides for building the app: [Tauri](guides/tauri.md), [Rust](guides/rust.md) and [Svelte](guides/svelte.md).
+
 Sources:
 
 - [vercel-labs/skills CLI (fork with agent path table)](https://github.com/Harries/skills-cli)

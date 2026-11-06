@@ -143,6 +143,7 @@ You freeze the Python CLI design as-is and treat the Rust port as a reimplementa
 
 ## 7. Related documents
 
+- [`docs/guides/rust.md`](guides/rust.md) — the Rust guide the port follows (toolchain, lints, errors, tests)
 - `docs/improving-atm-cli-ergonomics.md` — proposed `atm` command structure (the spec to port)
 - `docs/modernizing-build-approach.md` — developer stack, Click/Typer, build evolution
 - `docs/task-states.md` — current task state model and transitions
