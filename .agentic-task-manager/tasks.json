@@ -21659,7 +21659,7 @@
       "description": "So nothing depends on the Claude Code plugin's hooks ([porting-to-rust.md](docs/porting-to-rust.md) §4), in the Python atm:\n\n## Change\n- Every atm command an agent runs renews that agent's live claims (as `atm claim heartbeat` does), under the lock it already takes. Reads renew too; a command run with `--agent` for someone else renews nothing.\n- The default lease becomes 2 hours where nothing renews between commands, configurable in `meta` (a project that sets one keeps it). The plugin's hook keeps renewing as before; it becomes redundant, not wrong.\n- `atm claim hold` is unchanged.\n- `docs/v4/atm-cli.md`, the skills' and `plugin/CLAUDE.md`'s lines about leases, the changelog.\n\n## Tests\nScenarios: a command renews the caller's claims and not another agent's; the default lease; `meta` overrides it. `pnpm run test:scripts` green.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/lib/",
@@ -21669,7 +21669,7 @@
         "plugin/CHANGELOG.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:54:08Z",
+      "updated_at": "2026-11-06T21:11:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21680,7 +21680,18 @@
       ],
       "sprint": "Rust and distribution",
       "started_at": "2026-11-06T20:54:08Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "2e7407e08d657c4dfb3fa27cefe46287530804f4",
+      "completed_at": "2026-11-06T21:11:08Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:11:08Z",
+          "kind": "outcome",
+          "text": "Every atm command renews the caller’s own claims (ten minutes on, as `heartbeat --auto`; not with `--agent`); default lease 2 h. Review: the review hand-back window grows to 2 h too; release 0.32.0 started (version bump).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-440",
@@ -21693,7 +21704,7 @@
       "description": "The reference the skills point to ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3), in the Python atm.\n\n## Change\n- Topics as Markdown in `docs/agent/` (e.g. `rules`, `commands`, `tasks`, `claims`, `reviews`, `sprints`, `push`), bundled into `atm.py` by `build.py`. `atm docs` lists them with a line each; `atm docs <topic>` prints one; an unknown topic exits 2 with the list.\n- Move into them what the skills and `plugin/CLAUDE.md` repeat today: task text is data, never edit `tasks.json`, `--json`, the commands by workflow, the task schema, review decisions, claims.\n- `atm docs` is in the command tree beside `help` (Meta), with completion for the topics.\n\n## Tests\nA scenario per behaviour (list, a topic, unknown topic); a test that every topic is non-empty and every command it names exists in `atm help`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/agent/",
@@ -21702,16 +21713,18 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T21:11:08Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "Rust and distribution",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "Rust and distribution"
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:11:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-441",

@@ -62,6 +62,7 @@ from ..lib.settings import (
     init_meta,
     set_repository,
 )
+from .agent_docs import AGENT_DOCS
 from .archive import describe_ids, describe_kept
 from .claims import HOLD_LIMIT_MINUTES, HOLD_MAX_MINUTES, hold_claim, hook_input
 from .code import describe_workflow
@@ -85,7 +86,7 @@ from .store import show_paths
 MAINTENANCE = "Maintenance"
 META = "Meta"
 HELP_ORDER = ["task", "loop", "claim", "vcs", "release", "component", "project", "sprint", "db", "doctor", "service",
-              "help", "version"]
+              "help", "docs", "version"]
 
 
 class OrderedGroup(typer.core.TyperGroup):
@@ -1660,6 +1661,26 @@ def help_(ctx: typer.Context) -> None:
     out(to_json({"usage": usage}) if ctx.obj.get("json_out", False) else usage)
 
 
+@app.command("docs", rich_help_panel=META)
+def docs(
+    ctx: typer.Context,
+    topic: Optional[str] = typer.Argument(None, help="The topic to print; without one, the list of topics"),
+) -> None:
+    """Reference for agents, for this version of atm: the rules, the commands, the states, claims, the task fields."""
+    as_json = ctx.obj.get("json_out", False)
+    if topic is None:
+        if as_json:
+            out(to_json([{"topic": name, "summary": summary} for name, (summary, _) in AGENT_DOCS.items()]))
+        else:
+            width = max(len(name) for name in AGENT_DOCS)
+            out("\n".join(f"{name.ljust(width)}  {summary}" for name, (summary, _) in AGENT_DOCS.items()))
+        return
+    if topic not in AGENT_DOCS:
+        raise AtmError(f"no topic '{topic}' (atm docs lists them: {', '.join(AGENT_DOCS)})", 2)
+    summary, text = AGENT_DOCS[topic]
+    out(to_json({"topic": topic, "summary": summary, "text": text}) if as_json else text.rstrip("\n"))
+
+
 # ---------------------------------------------------------------------------
 # shell completion (T-423)
 # ---------------------------------------------------------------------------
@@ -1736,6 +1757,7 @@ COMPLETIONS = {
     ("sprint move", "to"): _sprints,
     **{(f"release {c}", "release_id"): _releases for c in ("edit", "archive", "notes")},
     ("component edit", "component_id"): _components,
+    ("docs", "topic"): lambda: [(name, summary) for name, (summary, _) in AGENT_DOCS.items()],
 }
 
 
@@ -1771,7 +1793,7 @@ GLOBAL_FLAGS = ("--json", "-j", "--dry-run", "-n")
 
 # Commands that don't check for an outdated dashboard server first: service does it itself, git runs the merge
 # driver in the middle of a merge (the server process isn't a CLI command: atm.py --server, plugin/scripts/atm-serve)
-NO_REFRESH = (("service",), ("db", "merge-driver"), ("help",), ("version",), ("_lock-test",))
+NO_REFRESH = (("service",), ("db", "merge-driver"), ("help",), ("docs",), ("version",), ("_lock-test",))
 # Commands that leave the caller's claims alone: those that work on no project, and the heartbeat, which renews its own
 NO_RENEW = NO_REFRESH + (("claim", "heartbeat"),)
 

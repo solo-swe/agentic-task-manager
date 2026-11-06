@@ -77,6 +77,7 @@ const MODULES_ORDER = [
   'cli.settings',
   'cli.store',
   'cli.serve',
+  'cli.agent_docs',
   'cli.main',
   'api.server',
 ];

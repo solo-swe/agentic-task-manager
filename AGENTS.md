@@ -13,6 +13,8 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
 - `tests/scripts/` — tests for atm-cli (dev only)
 - `.agentic-task-manager/tasks.json` — this repo's own task list; we dogfood atm here (`/atm:serve` shows it)
 - `docs/` — requirements, designs and plans the tasks were created from
+- `docs/agent/` — the reference `atm docs <topic>` prints for agents (one topic per file, first line
+  `# <Title>: <summary>`), built into `atm.py` by `atm-cli/build.py`; the skills point to it rather than repeat it
 - `docs/adr/` — architecture decisions, one per file (`ADR-NNN-<title>.md`: status, context, decision, consequences);
   a decision that changes one is a new ADR that replaces it
 - `docs/guides/` — the coding guides: [Svelte](docs/guides/svelte.md) (the dashboard), [Rust](docs/guides/rust.md)

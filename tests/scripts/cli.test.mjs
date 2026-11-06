@@ -35,7 +35,7 @@ function inProject(setup, body) {
 }
 
 describe('the command tree', () => {
-  test('--help lists the everyday commands first; maintenance, then help and version, after them', () => {
+  test('--help lists the everyday commands first; maintenance, then help, docs and version, after them', () => {
     inProject(SETUP, (root) => {
       const help = atm(['--help'], root);
       assert.equal(help.code, 0, help.stderr);
@@ -48,7 +48,7 @@ describe('the command tree', () => {
       assert.deepEqual(listed, [
         ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'],
         ...['db', 'doctor', 'service'],
-        ...['help', 'version'],
+        ...['help', 'docs', 'version'],
       ]);
     });
   });

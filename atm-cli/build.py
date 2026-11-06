@@ -96,6 +96,7 @@ MODULES = [
     "cli.settings",
     "cli.store",
     "cli.serve",
+    "cli.agent_docs",
     "cli.main",
     "api.server",
 ]
@@ -594,8 +595,48 @@ def generated_typescript_vocabularies(data):
     return "\n".join(lines) + "\n"
 
 
+AGENT_DOCS_DIR = os.path.join(os.path.dirname(HERE), "docs", "agent")
+PY_AGENT_DOCS = os.path.join(PACKAGE, "cli", "agent_docs.py")
+TOPIC_NAME = re.compile(r"[a-z][a-z0-9-]*")
+
+
+def agent_docs():
+    """`atm docs`' topics (T-440), from docs/agent/<topic>.md: {topic: (summary, text)}. Each file starts with
+    `# <Title>: <summary>`, the line `atm docs` lists."""
+    topics = {}
+    for file in sorted(os.listdir(AGENT_DOCS_DIR)):
+        name, ext = os.path.splitext(file)
+        if ext != ".md":
+            continue
+        if not TOPIC_NAME.fullmatch(name):
+            raise BuildError(f"docs/agent/{file}: a topic's name is lowercase letters, digits and -")
+        with open(os.path.join(AGENT_DOCS_DIR, file), encoding="utf-8") as f:
+            text = f.read()
+        first = text.split("\n", 1)[0]
+        if not first.startswith("# ") or ": " not in first:
+            raise BuildError(f"docs/agent/{file}: the first line is `# <Title>: <summary>`")
+        topics[name] = (first[2:].split(": ", 1)[1].strip(), text.rstrip("\n") + "\n")
+    if not topics:
+        raise BuildError("docs/agent/ has no topics")
+    return topics
+
+
+def generated_python_agent_docs(topics):
+    lines = [
+        '"""`atm docs` topics, reference for agents that matches this version of atm (T-440): generated from',
+        f'docs/agent/*.md by atm-cli/build.py. Don\'t edit it: change those files and run {GENERATED_HOW}"""',
+        "",
+        "# topic -> (summary, Markdown)",
+        "AGENT_DOCS = {",
+    ]
+    for name, (summary, text) in topics.items():
+        lines.append(f"    {json.dumps(name)}: ({json.dumps(summary, ensure_ascii=False)}, {json.dumps(text, ensure_ascii=False)}),")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def generated_files():
-    """The files generated from the schemas and the vocabularies, by path."""
+    """The files generated from the schemas, the vocabularies and the agents' reference, by path."""
     types = schema_types()
     vocabularies = vocabulary_data()
     return {
@@ -603,6 +644,7 @@ def generated_files():
         TS_TYPES: generated_typescript(types),
         PY_VOCABULARIES: generated_python_vocabularies(vocabularies),
         TS_VOCABULARIES: generated_typescript_vocabularies(vocabularies),
+        PY_AGENT_DOCS: generated_python_agent_docs(agent_docs()),
     }
 
 
