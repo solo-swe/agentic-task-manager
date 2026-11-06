@@ -55,20 +55,47 @@ describe('atm2 task group', { skip: !available && 'atm2 needs Typer (uv sync --d
   test('list, details and deps read the same', () => {
     parity([
       [['list'], ['task', 'list']],
-      [['list', '--status', 'todo', '--label', 'ui'], ['task', 'list', '--status', 'todo', '--label', 'ui']],
-      [['list', '--json'], ['-j', 'task', 'list']],
-      [['list', '--ready'], ['task', 'list', '--ready']],
-      [['show', 'T-1', 'T-2'], ['task', 'details', 'T-1', 'T-2']],
-      [['show', 'T-2', '--json'], ['-j', 'task', 'details', 'T-2']],
-      [['deps', 'T-2'], ['task', 'deps', 'T-2']],
+      [
+        ['list', '--status', 'todo', '--label', 'ui'],
+        ['task', 'list', '--status', 'todo', '--label', 'ui'],
+      ],
+      [
+        ['list', '--json'],
+        ['-j', 'task', 'list'],
+      ],
+      [
+        ['list', '--ready'],
+        ['task', 'list', '--ready'],
+      ],
+      [
+        ['show', 'T-1', 'T-2'],
+        ['task', 'details', 'T-1', 'T-2'],
+      ],
+      [
+        ['show', 'T-2', '--json'],
+        ['-j', 'task', 'details', 'T-2'],
+      ],
+      [
+        ['deps', 'T-2'],
+        ['task', 'deps', 'T-2'],
+      ],
     ]);
   });
 
   test('errors are reported as atm reports them', () => {
     parity([
-      [['show', 'T-9'], ['task', 'details', 'T-9']],
-      [['show', 'T-9', '--json'], ['-j', 'task', 'details', 'T-9']],
-      [['deps', 'T-9'], ['task', 'deps', 'T-9']],
+      [
+        ['show', 'T-9'],
+        ['task', 'details', 'T-9'],
+      ],
+      [
+        ['show', 'T-9', '--json'],
+        ['-j', 'task', 'details', 'T-9'],
+      ],
+      [
+        ['deps', 'T-9'],
+        ['task', 'deps', 'T-9'],
+      ],
     ]);
   });
 
@@ -78,44 +105,104 @@ describe('atm2 task group', { skip: !available && 'atm2 needs Typer (uv sync --d
         ['add', '--name', 'Fourth', '--type', 'feature', '--label', 'api', '--dep', 'T-1'],
         ['task', 'add', '--name', 'Fourth', '--type', 'feature', '--label', 'api', '--dep', 'T-1'],
       ],
-      [['add', '--name', 'Fifth', '--type', 'nope'], ['task', 'add', '--name', 'Fifth', '--type', 'nope']],
+      [
+        ['add', '--name', 'Fifth', '--type', 'nope'],
+        ['task', 'add', '--name', 'Fifth', '--type', 'nope'],
+      ],
       [
         ['edit', 'T-3', '--name', 'Third, renamed', '--add-label', 'x', '--priority', 'P1'],
         ['task', 'edit', 'T-3', '--name', 'Third, renamed', '--add-label', 'x', '--priority', 'P1'],
       ],
-      [['edit', 'T-3', '--json'], ['-j', 'task', 'edit', 'T-3']],
-      [['note', 'T-1', 'a note'], ['task', 'note', 'T-1', 'a note']],
-      [['note', 'T-1', 'another', '--json'], ['-j', 'task', 'note', 'T-1', 'another']],
+      [
+        ['edit', 'T-3', '--json'],
+        ['-j', 'task', 'edit', 'T-3'],
+      ],
+      [
+        ['note', 'T-1', 'a note'],
+        ['task', 'note', 'T-1', 'a note'],
+      ],
+      [
+        ['note', 'T-1', 'another', '--json'],
+        ['-j', 'task', 'note', 'T-1', 'another'],
+      ],
     ]);
   });
 
   test('state moves a task through review the way the status commands do', () => {
     parity([
-      [['start', 'T-1'], ['task', 'state', 'T-1', 'in_progress']],
-      [['review', 'T-1', '--note', 'look'], ['task', 'state', 'T-1', 'in_review', '--note', 'look']],
-      [['reject', 'T-1', '--reason', 'redo'], ['task', 'state', 'T-1', 'todo', '--reason', 'redo']],
-      [['start', 'T-1'], ['task', 'state', 'T-1', 'in_progress']],
-      [['review', 'T-1'], ['task', 'state', 'T-1', 'in_review']],
-      [['request-changes', 'T-1', '--reason', 'tweak'], ['task', 'state', 'T-1', 'changes_requested', '--reason', 'tweak']],
-      [['start', 'T-1'], ['task', 'state', 'T-1', 'in_progress']],
-      [['done', 'T-1', '--note', 'finished', '--json'], ['-j', 'task', 'state', 'T-1', 'done', '--note', 'finished']],
-      [['reopen', 'T-1', '--reason', 'not yet'], ['task', 'state', 'T-1', 'todo', '--reason', 'not yet']],
+      [
+        ['start', 'T-1'],
+        ['task', 'state', 'T-1', 'in_progress'],
+      ],
+      [
+        ['review', 'T-1', '--note', 'look'],
+        ['task', 'state', 'T-1', 'in_review', '--note', 'look'],
+      ],
+      [
+        ['reject', 'T-1', '--reason', 'redo'],
+        ['task', 'state', 'T-1', 'todo', '--reason', 'redo'],
+      ],
+      [
+        ['start', 'T-1'],
+        ['task', 'state', 'T-1', 'in_progress'],
+      ],
+      [
+        ['review', 'T-1'],
+        ['task', 'state', 'T-1', 'in_review'],
+      ],
+      [
+        ['request-changes', 'T-1', '--reason', 'tweak'],
+        ['task', 'state', 'T-1', 'changes_requested', '--reason', 'tweak'],
+      ],
+      [
+        ['start', 'T-1'],
+        ['task', 'state', 'T-1', 'in_progress'],
+      ],
+      [
+        ['done', 'T-1', '--note', 'finished', '--json'],
+        ['-j', 'task', 'state', 'T-1', 'done', '--note', 'finished'],
+      ],
+      [
+        ['reopen', 'T-1', '--reason', 'not yet'],
+        ['task', 'state', 'T-1', 'todo', '--reason', 'not yet'],
+      ],
     ]);
   });
 
   test('state: back to todo from in progress (fail, release) and from blocked (unblock), and skip', () => {
     parity([
-      [['start', 'T-3'], ['task', 'state', 'T-3', 'in_progress']],
-      [['fail', 'T-3', '--reason', 'broke'], ['task', 'state', 'T-3', 'todo', '--reason', 'broke']],
-      [['start', 'T-3'], ['task', 'state', 'T-3', 'in_progress']],
-      [['release', 'T-3', '--note', 'handoff'], ['task', 'state', 'T-3', 'todo', '--note', 'handoff']],
+      [
+        ['start', 'T-3'],
+        ['task', 'state', 'T-3', 'in_progress'],
+      ],
+      [
+        ['fail', 'T-3', '--reason', 'broke'],
+        ['task', 'state', 'T-3', 'todo', '--reason', 'broke'],
+      ],
+      [
+        ['start', 'T-3'],
+        ['task', 'state', 'T-3', 'in_progress'],
+      ],
+      [
+        ['release', 'T-3', '--note', 'handoff'],
+        ['task', 'state', 'T-3', 'todo', '--note', 'handoff'],
+      ],
       [
         ['block', 'T-3', '--on', 'user', '--question', 'which?'],
         ['task', 'state', 'T-3', 'blocked', '--on', 'user', '--question', 'which?'],
       ],
-      [['unblock', 'T-3', '--answer', 'this'], ['task', 'state', 'T-3', 'todo', '--answer', 'this']],
-      [['skip', 'T-3', '--reason', 'not needed'], ['task', 'state', 'T-3', 'skipped', '--reason', 'not needed']],
-      [['start', 'T-2'], ['task', 'state', 'T-2', 'in_progress']],
+      [
+        ['unblock', 'T-3', '--answer', 'this'],
+        ['task', 'state', 'T-3', 'todo', '--answer', 'this'],
+      ],
+      [
+        ['skip', 'T-3', '--reason', 'not needed'],
+        ['task', 'state', 'T-3', 'skipped', '--reason', 'not needed'],
+      ],
+      [
+        ['start', 'T-2'],
+        ['task', 'state', 'T-2', 'in_progress'],
+      ],
     ]);
   });
 });

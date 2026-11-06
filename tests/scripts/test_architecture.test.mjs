@@ -8,99 +8,99 @@
 //   - A module only imports from earlier modules in MODULES order (build concatenation order)
 //   - No two modules define the same top-level name
 
-import fs from "node:fs";
-import path from "node:path";
+import fs from 'node:fs';
+import path from 'node:path';
 
-const ROOT = path.join(process.cwd(), "atm-cli", "atm");
+const ROOT = path.join(process.cwd(), 'atm-cli', 'atm');
 const MODULES_ORDER = [
-  "common.errors",
-  "common.vocabularies",
-  "common.core",
-  "common.dashboard",
-  "common.model",
-  "common.fields",
-  "common.types",
-  "common.components",
-  "common.sprint_names",
-  "common.repository",
-  "host.git",
-  "db.interface",
-  "vcs.interface",
-  "db.jsongit.gitrun",
-  "db.jsongit.files",
-  "db.jsongit.paths",
-  "db.jsongit.lock",
-  "db.jsongit.worktrees",
-  "db.jsongit.claims",
-  "db.jsongit.logo",
-  "db.jsongit.merge",
-  "db.jsongit.migrate",
-  "db.registry",
-  "db.working",
-  "db.jsongit.store",
-  "db.memory",
-  "vcs.git",
-  "lib.project",
-  "lib.state",
-  "lib.loop",
-  "lib.tasks",
-  "lib.query",
-  "lib.status",
-  "lib.claims",
-  "lib.edit",
-  "lib.components",
-  "lib.sprints",
-  "lib.releases",
-  "lib.archive",
-  "lib.code",
-  "lib.projects",
-  "lib.settings",
-  "lib.worktrees",
-  "lib.documents",
-  "boot.identity",
-  "boot.open",
-  "boot.jsongit",
-  "cli.render",
-  "cli.query",
-  "cli.status",
-  "cli.claims",
-  "cli.edit",
-  "cli.components",
-  "cli.sprints",
-  "cli.releases",
-  "cli.archive",
-  "cli.show",
-  "cli.code",
-  "cli.projects",
-  "cli.settings",
-  "cli.store",
-  "cli.serve",
-  "cli.main",
-  "api.server",
+  'common.errors',
+  'common.vocabularies',
+  'common.core',
+  'common.dashboard',
+  'common.model',
+  'common.fields',
+  'common.types',
+  'common.components',
+  'common.sprint_names',
+  'common.repository',
+  'host.git',
+  'db.interface',
+  'vcs.interface',
+  'db.jsongit.gitrun',
+  'db.jsongit.files',
+  'db.jsongit.paths',
+  'db.jsongit.lock',
+  'db.jsongit.worktrees',
+  'db.jsongit.claims',
+  'db.jsongit.logo',
+  'db.jsongit.merge',
+  'db.jsongit.migrate',
+  'db.registry',
+  'db.working',
+  'db.jsongit.store',
+  'db.memory',
+  'vcs.git',
+  'lib.project',
+  'lib.state',
+  'lib.loop',
+  'lib.tasks',
+  'lib.query',
+  'lib.status',
+  'lib.claims',
+  'lib.edit',
+  'lib.components',
+  'lib.sprints',
+  'lib.releases',
+  'lib.archive',
+  'lib.code',
+  'lib.projects',
+  'lib.settings',
+  'lib.worktrees',
+  'lib.documents',
+  'boot.identity',
+  'boot.open',
+  'boot.jsongit',
+  'cli.render',
+  'cli.query',
+  'cli.status',
+  'cli.claims',
+  'cli.edit',
+  'cli.components',
+  'cli.sprints',
+  'cli.releases',
+  'cli.archive',
+  'cli.show',
+  'cli.code',
+  'cli.projects',
+  'cli.settings',
+  'cli.store',
+  'cli.serve',
+  'cli.main',
+  'api.server',
 ];
 
 // Which layers may import from which layers (docs/layered-architecture.md §1).
 const ALLOWED = {
-  common: ["common"],
-  host: ["common", "host"],
-  "db-interface": ["common", "db-interface"],
-  db: ["common", "host", "db-interface", "db"],
-  "vcs-interface": ["common", "vcs-interface"],
-  vcs: ["common", "host", "vcs-interface", "vcs"],
-  lib: ["common", "db-interface", "vcs-interface", "lib"],
-  boot: ["common", "db-interface", "db", "vcs-interface", "vcs", "lib", "boot"],
-  cli: ["common", "lib", "boot", "cli"],
-  api: ["common", "lib", "boot", "api"],
+  common: ['common'],
+  host: ['common', 'host'],
+  'db-interface': ['common', 'db-interface'],
+  db: ['common', 'host', 'db-interface', 'db'],
+  'vcs-interface': ['common', 'vcs-interface'],
+  vcs: ['common', 'host', 'vcs-interface', 'vcs'],
+  lib: ['common', 'db-interface', 'vcs-interface', 'lib'],
+  boot: ['common', 'db-interface', 'db', 'vcs-interface', 'vcs', 'lib', 'boot'],
+  cli: ['common', 'lib', 'boot', 'cli'],
+  api: ['common', 'lib', 'boot', 'api'],
 };
 
 function layerOf(module) {
-  const parts = module.split(".");
+  const parts = module.split('.');
   if (parts.length === 1) {
     throw new Error(`${module}.py is outside the layers: put it in a layer's folder`);
   }
-  if (parts[0] === "db" || parts[0] === "vcs") {
-    if (parts[1] === "interface") {
-      return parts[0] + "-interface";
+  if (parts[0] === 'db' || parts[0] === 'vcs') {
+    if (parts[1] === 'interface') {
+      return parts[0] + '-interface';
     }
   }
   if (!(parts[0] in ALLOWED)) {
@@ -110,7 +110,7 @@ function layerOf(module) {
 }
 
 function resolve(importer, node) {
-  const parts = importer.split(".");
+  const parts = importer.split('.');
   const packageParts = parts.slice(0, -1);
   const level = node.level || 1;
   if (level - 1 > packageParts.length) {
@@ -120,24 +120,24 @@ function resolve(importer, node) {
   if (!node.module) {
     throw new Error(`${importer}: 'from . import x' between modules doesn't survive the build`);
   }
-  return [...base, node.module].join(".");
+  return [...base, node.module].join('.');
 }
 
 function topLevelNames(source) {
   // Very lightweight Python AST-free approximation: look for top-level def/class/assign.
   // Good enough for catching duplicate names across modules.
   const names = new Set();
-  const lines = source.split("\n");
+  const lines = source.split('\n');
   let indent = 0;
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (!trimmed || trimmed.startsWith('#')) continue;
     const lineIndent = line.length - line.trimStart().length;
     if (lineIndent === 0) {
-      if (trimmed.startsWith("def ") || trimmed.startsWith("class ")) {
+      if (trimmed.startsWith('def ') || trimmed.startsWith('class ')) {
         const m = trimmed.match(/^(?:def|class)\s+([A-Za-z_]\w*)/);
         if (m) names.add(m[1]);
-      } else if (trimmed.startsWith("__all__")) {
+      } else if (trimmed.startsWith('__all__')) {
         // skip
       }
     }
@@ -151,9 +151,9 @@ function findModules(dir) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       result.push(...findModules(full));
-    } else if (entry.name.endsWith(".py") && entry.name !== "__init__.py") {
+    } else if (entry.name.endsWith('.py') && entry.name !== '__init__.py') {
       const rel = path.relative(ROOT, full);
-      const module = rel.replace(/\\/g, "/").replace(/\.py$/, "").replace(/\//g, ".");
+      const module = rel.replace(/\\/g, '/').replace(/\.py$/, '').replace(/\//g, '.');
       result.push({ module, path: full });
     }
   }
@@ -167,11 +167,7 @@ const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
 // Modules that are NOT part of the atm.py build concatenation.
 // atm2 is a separate CLI entry point (Typer-based) that delegates to `atm` via subprocess.
 // It is not bundled into plugin/scripts/atm.py by build.py.
-const EXCLUDED_MODULES = new Set([
-  "cli._delegate",
-  "cli.atm2",
-  "cli.atm2_main",
-]);
+const EXCLUDED_MODULES = new Set(['cli._delegate', 'cli.atm2', 'cli.atm2_main']);
 
 const errors = [];
 
@@ -194,11 +190,11 @@ for (const module of MODULES_ORDER) {
 const importsByModule = new Map();
 for (const { module, path: filePath } of modules) {
   if (EXCLUDED_MODULES.has(module)) continue;
-  const source = fs.readFileSync(filePath, "utf8");
+  const source = fs.readFileSync(filePath, 'utf8');
   const names = new Set();
 
   // crude line-by-line import parsing
-  const lines = source.split("\n");
+  const lines = source.split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
 
@@ -240,9 +236,7 @@ for (const { module } of modules) {
     if (!MODULES_ORDER.includes(target)) continue; // external import (click, etc.)
     const targetLayer = layerOf(target);
     if (!allowed.has(targetLayer)) {
-      errors.push(
-        `${module} (${layer}) imports from ${target} (${targetLayer}), which the ${layer} layer may not use`
-      );
+      errors.push(`${module} (${layer}) imports from ${target} (${targetLayer}), which the ${layer} layer may not use`);
     }
   }
 }
@@ -256,9 +250,7 @@ for (const { module } of modules) {
     if (!MODULES_ORDER.includes(target)) continue; // external import
     const tidx = orderIndex.get(target);
     if (tidx === undefined || tidx >= idx) {
-      errors.push(
-        `${module} imports from ${target}, which is not an earlier module in build order`
-      );
+      errors.push(`${module} imports from ${target}, which is not an earlier module in build order`);
     }
   }
 }
@@ -267,18 +259,18 @@ for (const { module } of modules) {
 for (const { module, path: filePath } of modules) {
   if (EXCLUDED_MODULES.has(module)) continue;
   const layer = layerOf(module);
-  if (layer !== "cli" && layer !== "api") continue;
-  const source = fs.readFileSync(filePath, "utf8");
-  const lines = source.split("\n");
+  if (layer !== 'cli' && layer !== 'api') continue;
+  const source = fs.readFileSync(filePath, 'utf8');
+  const lines = source.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
     // Skip import statements — importing cli/store module is fine
-    if (trimmed.startsWith("import ") || trimmed.startsWith("from ")) continue;
+    if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) continue;
     // Check for attribute access to .store or ._store (project's store, not cli/store module)
     if (/\.(store|_store)\b/.test(line)) {
       errors.push(
-        `${module}:${i + 1} reaches a project's store (.store/_store): the ${layer} layer reads and changes data only through atm-lib`
+        `${module}:${i + 1} reaches a project's store (.store/_store): the ${layer} layer reads and changes data only through atm-lib`,
       );
     }
   }
@@ -288,24 +280,22 @@ for (const { module, path: filePath } of modules) {
 const defined = new Map();
 for (const { module, path: filePath } of modules) {
   if (EXCLUDED_MODULES.has(module)) continue;
-  const source = fs.readFileSync(filePath, "utf8");
+  const source = fs.readFileSync(filePath, 'utf8');
   const names = topLevelNames(source);
   for (const name of names) {
     if (defined.has(name)) {
-      errors.push(
-        `${name} is defined in both ${module_file(defined.get(name))} and ${module_file(module)}`
-      );
+      errors.push(`${name} is defined in both ${module_file(defined.get(name))} and ${module_file(module)}`);
     }
     defined.set(name, module);
   }
 }
 
 function module_file(name) {
-  return name.replace(/\./g, "/") + ".py";
+  return name.replace(/\./g, '/') + '.py';
 }
 
 if (errors.length > 0) {
-  console.error("Architecture rule violations:");
+  console.error('Architecture rule violations:');
   for (const e of errors) {
     console.error(`  - ${e}`);
   }
