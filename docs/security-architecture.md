@@ -614,6 +614,20 @@ became pointers to `atm docs`; the pre-approvals (`allowed-tools`) are the same,
 `skills/claude-code.json`. Written review in place of the sandbox run (no API key): nothing new to run, fetch or
 install, and no new pre-approval.
 
+**`atm agents install|status|uninstall` (T-442).** A new entry point that writes outside the project: into another
+tool's folder (`~/.claude/skills/`, or with `--project` the project's `.claude/skills/`) and atm's own
+(`<ATM_HOME>/skills/`, `<ATM_HOME>/agents.json`). Bounds:
+- **Opt-in only.** Only the command (and, later, the app's button calling the same code) installs; nothing installs
+  on its own, after an install, an update or a first run. No skill pre-approves `atm agents`.
+- **Writes only the skill folders it names**, each `<folder>/atm-<skill>/SKILL.md`, with text built into atm (no file,
+  path or URL is read to produce it); prints every path. It never edits another tool's settings or hooks.
+- **Never replaces what it didn't write:** a folder of the same name that isn't in atm's record is left alone and
+  reported (exit 1). `uninstall` removes exactly the recorded paths, and atm's own copies.
+- **Links point into atm's folder only** (`<ATM_HOME>/skills/<harness>/<skill>`); a project gets copies, so nothing
+  committed points into one person's home folder.
+- **What the skills carry** is reviewed with the skills (T-441 above): Claude Code's copy adds the same pre-approvals
+  the plugin's copy has, from `skills/claude-code.json`.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

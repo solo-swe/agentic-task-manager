@@ -47,7 +47,7 @@ describe('the command tree', () => {
         .filter(Boolean);
       assert.deepEqual(listed, [
         ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'],
-        ...['db', 'doctor', 'service'],
+        ...['db', 'doctor', 'service', 'agents'],
         ...['help', 'docs', 'version'],
       ]);
     });
