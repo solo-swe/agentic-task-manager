@@ -20856,14 +20856,14 @@
     },
     {
       "id": "T-432",
-      "name": "Dashboard: lucide icons instead of icons.ts",
+      "name": "Dashboard: lucide’s Svelte package instead of embedded Lucide icons",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "svelte-guide",
         "dashboard"
       ],
-      "description": "Replace `src/lib/icons.ts` and `Icon.svelte` with lucide's Svelte package, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks. Pick the closest lucide icon for each of ours, keep sizes, colours (`currentColor`) and labels, and import icons one by one so only the used ones are bundled.\n\n## Tests\nThe unit and e2e tests that look for icons; `size` reported in the outcome note (it must not grow by more than a few KB).",
+      "description": "Replace `src/lib/icons.ts` and `Icon.svelte` with lucide's Svelte package, as the [Svelte guide](docs/guides/svelte.md#components-and-styling) asks.\n\nThe icons are Lucide's already: `icons.ts` embeds their SVG paths, fetched from Iconify when it was written. So this is no change of look: the package replaces the embedded copies, and new icons come from it instead of being copied in. Keep sizes, colours (`currentColor`) and labels, and import icons one by one so only the used ones are bundled.\n\n## Tests\nThe unit and e2e tests that look for icons; `size` reported in the outcome note (it must not grow by more than a few KB). If the package makes the single file noticeably larger than the embedded paths, say so in the outcome and keep the smaller one.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20876,7 +20876,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:54Z",
+      "updated_at": "2026-11-06T06:41:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20978,13 +20978,13 @@
       "description": "The [Svelte guide](docs/guides/svelte.md#where-logic-lives) puts validation, queries, ordering, search and what atm derives from tasks in atm-lib, served through the v1 API ([layered-architecture.md](docs/layered-architecture.md) §6.2). Today `dashboard/src/lib/*.ts` computes much of that itself.\n\n## Change\nWrite `docs/dashboard-logic-inventory.md`: for each module in `dashboard/src/lib/` that computes domain values (e.g. stages, readiness, waiting, claims, sprint progress, burndown, velocity, forecasts, insights, filters, search), what it computes, whether atm-lib already has it, which v1 route should serve it, and what stays in the dashboard as view logic (layout, formatting, the graph's geometry).\n\nThen review it with the user and split the moves into follow-up tasks with `/atm:create-tasks`, in the order the doc proposes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/dashboard-logic-inventory.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T06:38:13Z",
+      "updated_at": "2026-11-06T06:40:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20999,7 +20999,19 @@
       ],
       "review": "batch",
       "started_at": "2026-11-06T06:38:13Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "bad89e5e9347bdc8093682137fba7b857c1bdb1a",
+      "completed_at": "2026-11-06T06:40:59Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:40:59Z",
+          "kind": "review",
+          "text": "Review `docs/dashboard-logic-inventory.md` with the user: about 20 modules apply atm’s rules again (stage, kind, priority, needs-you, vocabularies from `meta`, work spans, the charts’ series). It proposes 5 steps, starting with the derived values that already exist. One open decision: should filtering and search stay client-side (§2, `filters.ts`)? Once agreed, the follow-up tasks come from §3 via `/atm:create-tasks`.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }
