@@ -20330,14 +20330,14 @@
       "description": "Port `atm2 loop next`, `loop run`, `claim list` and `claim heartbeat` (with `--auto`, the PostToolUse hook's mode) in [atm2.py](atm-cli/atm/cli/atm2.py) from running `atm` (`run_atm`) to calling atm-lib directly: copy what `cmd_next`, `cmd_run`, `cmd_claims`, `cmd_heartbeat` and `auto_heartbeat` in [cli/claims.py](atm-cli/atm/cli/claims.py) do, as T-412 did for the `task` group (commit `7f44e21`). `loop next` takes `--status` as `atm next` does; its selections (`--sprint`, `--tasks`, `--all`, `--backlog`) exclude each other; no task is exit code 3.\n\n## Tests\nParity steps in [atm2.test.mjs](tests/scripts/atm2.test.mjs): `next`, `next --claim`, `claims`, `heartbeat`, `run <id> -- <command>` (exit code passed through).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "atm-cli/atm/cli/atm2.py",
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T06:09:18Z",
+      "updated_at": "2026-11-06T06:12:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20352,7 +20352,19 @@
       "sprint": "CLI ergonomics",
       "review": "batch",
       "started_at": "2026-11-06T06:09:18Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "62461cacfaf13cea9223ffe955048e59a72ad9c2",
+      "completed_at": "2026-11-06T06:12:14Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending",
+      "notes": [
+        {
+          "at": "2026-11-06T06:12:14Z",
+          "kind": "review",
+          "text": "Check `atm-cli/atm/cli/atm2.py`: `loop next` (now with `--status`, and refusing two selections), `loop run` (with `--agent`), `claim list` and `claim heartbeat [--auto]` call atm-lib as `cli/claims.py` does, with no `run_atm`. Parity steps in `tests/scripts/atm2.test.mjs`; `parity()` now writes each project’s folder as `<root>`, since claims name their worktree. `heartbeat --auto` is silent, so it has no parity step.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-421",
@@ -20365,7 +20377,7 @@
       "description": "Port the last groups of [atm2.py](atm-cli/atm/cli/atm2.py) that run `atm` to atm-lib, copying what atm does:\n\n- `project config` (`cmd_paths`), `project status` (`cmd_status`), `project workflow [set …]` (`cmd_workflow`), `project logo [set|unset]` (`cmd_logo`), and `project list|add|remove|prune` (`cmd_projects`);\n- `sprint list|add|edit|start|close|delete` (`cmd_sprints`), `sprint move <id>… --to` (`cmd_move`) and `sprint backlog` (`cmd_backlog`); only `list` and `add` exist in atm2 now.\n\nThen nothing uses `run_atm`: delete [_delegate.py](atm-cli/atm/cli/_delegate.py), its entry in `EXCLUDED_MODULES` in [test_architecture.test.mjs](tests/scripts/test_architecture.test.mjs), and the \"delegates to atm\" wording in atm2's help and docstrings.\n\n## Tests\nParity steps for each command in [atm2.test.mjs](tests/scripts/atm2.test.mjs).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-420"
       ],
@@ -20376,7 +20388,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:47Z",
+      "updated_at": "2026-11-06T06:12:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20389,7 +20401,9 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T06:12:19Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-422",

@@ -77,8 +77,13 @@ def cmd_status(args):
         open_project(os.getcwd()),
         Filters(sprint=args.sprint, backlog=args.backlog, release=args.release, component=args.component),
     )
+    show_status(status, args.json)
+
+
+def show_status(status, as_json):
+    """Print atm-lib's status report (`atm status`, `atm2 project status`)."""
     result = status["report"]
-    if args.json:
+    if as_json:
         out(to_json(result))
         return
     sprint, stranded = result["sprint"], result.get("open_in_closed_sprints")

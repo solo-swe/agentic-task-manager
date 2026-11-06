@@ -10986,8 +10986,13 @@ def cmd_status(args):
         open_project(os.getcwd()),
         Filters(sprint=args.sprint, backlog=args.backlog, release=args.release, component=args.component),
     )
+    show_status(status, args.json)
+
+
+def show_status(status, as_json):
+    """Print atm-lib's status report (`atm status`, `atm2 project status`)."""
     result = status["report"]
-    if args.json:
+    if as_json:
         out(to_json(result))
         return
     sprint, stranded = result["sprint"], result.get("open_in_closed_sprints")
@@ -11787,24 +11792,28 @@ def damaged_notice(damaged):
 
 
 def cmd_projects(args):
-    registry = open_registry()
-    if args.action == "add":
-        result = add_project(registry, args.target)
-        if args.json:
+    projects_action(open_registry(), args.action, args.target, args.json)
+
+
+def projects_action(registry, action, target, as_json):
+    """List, add, remove or prune the dashboard's projects (`atm projects`, `atm2 project list|add|remove|prune`)."""
+    if action == "add":
+        result = add_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
             out(damaged_notice(result["damaged"]))
         out(f"{'Added' if result['result'] == 'added' else 'Already registered'}: {describe_entry(result['project'])}")
-    elif args.action == "remove":
-        result = remove_project(registry, args.target)
-        if args.json:
+    elif action == "remove":
+        result = remove_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         out(f"Removed: {describe_entry(result['removed'])}")
-    elif args.action == "prune":
+    elif action == "prune":
         result = prune_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
@@ -11814,10 +11823,10 @@ def cmd_projects(args):
         for e in result["removed"]:
             out(f"Removed: {describe_entry(e)}")
     else:
-        if args.target:
-            raise Invalid(f"unexpected argument '{args.target}'")
+        if target:
+            raise Invalid(f"unexpected argument '{target}'")
         result = list_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
@@ -11898,13 +11907,17 @@ def cmd_repository(args):
 
 
 def cmd_logo(args):
-    project = open_project(os.getcwd())
-    if args.action is None:
-        if args.path is not None:
-            raise Invalid(f"unexpected argument '{args.path}' (atm logo set PATH)")
+    logo_action(open_project(os.getcwd()), args.action, args.path, args.json)
+
+
+def logo_action(project, action, path, as_json):
+    """Print, set or unset the logo (`atm logo`, `atm2 project logo`)."""
+    if action is None:
+        if path is not None:
+            raise Invalid(f"unexpected argument '{path}' (atm logo set PATH)")
         info = get_logo(project)
         logo, chosen = info["found"], info["set"]
-        if args.json:
+        if as_json:
             found = {"logo": logo["path"], "source": logo["source"]} if logo else {"logo": None, "source": None}
             out(to_json({**found, "set": chosen}))
         elif logo:
@@ -11914,15 +11927,15 @@ def cmd_logo(args):
         else:
             out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
         return
-    if args.action == "unset":
+    if action == "unset":
         removed = unset_logo(project)
-        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
+        out(to_json({"logo": None}) if as_json else "Logo unset." if removed else "No logo was set.")
         return
-    if args.path is None:
+    if path is None:
         raise Invalid("atm logo set needs a path")
     # The path is relative to where atm runs, like every path atm takes; atm-lib keeps it relative to the project
-    relative = set_logo(project, args.path)
-    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
+    relative = set_logo(project, path)
+    out(to_json({"logo": relative}) if as_json else f"Logo set: {relative}")
 
 
 # ==== cli/store.py ====
@@ -11951,8 +11964,12 @@ def cmd_merge_driver(args):
 
 
 def cmd_paths(args):
-    paths = task_paths(os.getcwd())
-    if args.json:
+    show_paths(task_paths(os.getcwd()), args.json)
+
+
+def show_paths(paths, as_json):
+    """Print where the task files are (`atm paths`, `atm2 project config`)."""
+    if as_json:
         out(to_json(paths))
         return
     for key in ["root", "dir", "tasks", "dashboard"]:

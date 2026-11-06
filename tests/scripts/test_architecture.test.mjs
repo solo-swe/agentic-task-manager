@@ -169,9 +169,9 @@ test('atm-cli modules keep the layer rules, the build order and unique top-level
   const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
 
   // Modules that are NOT part of the atm.py build concatenation.
-  // atm2 is a separate CLI entry point (Typer-based) that delegates to `atm` via subprocess.
+  // atm2 is a separate CLI entry point (Typer-based, run from atm-cli/atm2) over the same atm-lib calls.
   // It is not bundled into plugin/scripts/atm.py by build.py.
-  const EXCLUDED_MODULES = new Set(['cli._delegate', 'cli.atm2', 'cli.atm2_main']);
+  const EXCLUDED_MODULES = new Set(['cli.atm2', 'cli.atm2_main']);
 
   const errors = [];
 

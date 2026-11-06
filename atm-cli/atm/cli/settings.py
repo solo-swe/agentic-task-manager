@@ -85,13 +85,17 @@ def cmd_repository(args):
 
 
 def cmd_logo(args):
-    project = open_project(os.getcwd())
-    if args.action is None:
-        if args.path is not None:
-            raise Invalid(f"unexpected argument '{args.path}' (atm logo set PATH)")
+    logo_action(open_project(os.getcwd()), args.action, args.path, args.json)
+
+
+def logo_action(project, action, path, as_json):
+    """Print, set or unset the logo (`atm logo`, `atm2 project logo`)."""
+    if action is None:
+        if path is not None:
+            raise Invalid(f"unexpected argument '{path}' (atm logo set PATH)")
         info = get_logo(project)
         logo, chosen = info["found"], info["set"]
-        if args.json:
+        if as_json:
             found = {"logo": logo["path"], "source": logo["source"]} if logo else {"logo": None, "source": None}
             out(to_json({**found, "set": chosen}))
         elif logo:
@@ -101,12 +105,12 @@ def cmd_logo(args):
         else:
             out("No logo. Set one with `atm logo set <path>` (SVG, PNG, WebP or ICO, inside the project).")
         return
-    if args.action == "unset":
+    if action == "unset":
         removed = unset_logo(project)
-        out(to_json({"logo": None}) if args.json else "Logo unset." if removed else "No logo was set.")
+        out(to_json({"logo": None}) if as_json else "Logo unset." if removed else "No logo was set.")
         return
-    if args.path is None:
+    if path is None:
         raise Invalid("atm logo set needs a path")
     # The path is relative to where atm runs, like every path atm takes; atm-lib keeps it relative to the project
-    relative = set_logo(project, args.path)
-    out(to_json({"logo": relative}) if args.json else f"Logo set: {relative}")
+    relative = set_logo(project, path)
+    out(to_json({"logo": relative}) if as_json else f"Logo set: {relative}")

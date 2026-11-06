@@ -15,24 +15,28 @@ def damaged_notice(damaged):
 
 
 def cmd_projects(args):
-    registry = open_registry()
-    if args.action == "add":
-        result = add_project(registry, args.target)
-        if args.json:
+    projects_action(open_registry(), args.action, args.target, args.json)
+
+
+def projects_action(registry, action, target, as_json):
+    """List, add, remove or prune the dashboard's projects (`atm projects`, `atm2 project list|add|remove|prune`)."""
+    if action == "add":
+        result = add_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
             out(damaged_notice(result["damaged"]))
         out(f"{'Added' if result['result'] == 'added' else 'Already registered'}: {describe_entry(result['project'])}")
-    elif args.action == "remove":
-        result = remove_project(registry, args.target)
-        if args.json:
+    elif action == "remove":
+        result = remove_project(registry, target)
+        if as_json:
             out(to_json(result))
             return
         out(f"Removed: {describe_entry(result['removed'])}")
-    elif args.action == "prune":
+    elif action == "prune":
         result = prune_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:
@@ -42,10 +46,10 @@ def cmd_projects(args):
         for e in result["removed"]:
             out(f"Removed: {describe_entry(e)}")
     else:
-        if args.target:
-            raise Invalid(f"unexpected argument '{args.target}'")
+        if target:
+            raise Invalid(f"unexpected argument '{target}'")
         result = list_projects(registry)
-        if args.json:
+        if as_json:
             out(to_json(result))
             return
         if result["damaged"]:

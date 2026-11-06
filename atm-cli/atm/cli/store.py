@@ -30,8 +30,12 @@ def cmd_merge_driver(args):
 
 
 def cmd_paths(args):
-    paths = task_paths(os.getcwd())
-    if args.json:
+    show_paths(task_paths(os.getcwd()), args.json)
+
+
+def show_paths(paths, as_json):
+    """Print where the task files are (`atm paths`, `atm2 project config`)."""
+    if as_json:
         out(to_json(paths))
         return
     for key in ["root", "dir", "tasks", "dashboard"]:

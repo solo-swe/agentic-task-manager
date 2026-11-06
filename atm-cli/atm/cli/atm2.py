@@ -1,11 +1,10 @@
-"""atm2: a Typer-based CLI entry point for `atm`.
+"""atm2: the Typer-based command tree for atm (docs/improving-atm-cli-ergonomics.md).
 
-This is an experimental CLI that delegates to the existing `atm` commands via
-subprocess. It evaluates Typer's ergonomics (nested groups, type-hinted
-options, auto-generated help) without touching the `atm` command surface.
-
-Each subcommand builds an argument list for `atm <cmd>` and runs it as a
-subprocess, passing through stdout, stderr, and the exit code.
+Nested groups (task, loop, claim, vcs, db, release, component, project, sprint)
+over the same atm-lib calls the `atm` commands make, with the same output,
+errors and exit codes (tests/scripts/atm2.test.mjs checks them side by side).
+Where `atm` already has a helper that prints a result, atm2 uses it, so both
+print the same text.
 """
 
 from __future__ import annotations
@@ -23,8 +22,8 @@ from typing import Annotated, Optional
 import typer
 
 from ..boot.identity import agent_identity, session_identity
-from ..boot.jsongit import dashboard_id, hook_project, migrate_folder, register_project, set_up_store
-from ..boot.open import open_project
+from ..boot.jsongit import dashboard_id, hook_project, migrate_folder, register_project, set_up_store, task_paths
+from ..boot.open import open_project, open_registry
 from ..common.core import (
     AtmExit, out, to_json, atm_home, ensure_home,
     format_duration, now, parse_iso, parse_version, pid_alive,
@@ -39,19 +38,30 @@ from ..lib.archive import archive_finished, unarchive_tasks
 from ..lib.code import (
     commit_task,
     folder_changes,
+    get_workflow,
     record_commit,
     record_merge,
     record_pr,
     repository_paths,
+    set_workflow,
 )
 from ..lib.archive import task_snapshot
 from ..lib.claims import expire_claims, next_task_for, renew_due_claims, renew_lease, selection
 from ..lib.components import add_component, edit_component, list_components
 from ..lib.edit import add_new_tasks, check_project, edit_existing_task
-from ..lib.query import Filters, task_dependencies, task_views
+from ..lib.query import Filters, status_report, summary, task_dependencies, task_views
 from ..lib.status import STATUS_FUNCTIONS, add_task_note
 from ..lib.tasks import show_tasks
 from ..lib.releases import add_release, archive_release, edit_release, list_releases, release_notes
+from ..lib.sprints import (
+    add_sprint,
+    backlog_tasks,
+    close_sprint,
+    delete_sprint,
+    edit_sprint,
+    move_tasks,
+    start_sprint,
+)
 from ..lib.settings import (
     ensure_project_id,
     ensure_repository,
@@ -61,11 +71,16 @@ from ..lib.settings import (
 )
 from .archive import describe_ids, describe_kept
 from .claims import hook_input
+from .code import describe_workflow
 from .components import moved_text
 from .edit import read_entries, suggestion_line
+from .projects import projects_action
+from .query import show_status
 from .render import list_lines, render_task, report_expired, view_row
+from .settings import logo_action
+from .sprints import show_close, show_delete, show_sprints
 from .status import COMMAND_OPTIONS, LIST_OPTIONS
-from ._delegate import run_atm
+from .store import show_paths
 
 
 # ── constants ported from atm cli/serve.py ──────────────────────────────────
@@ -77,7 +92,7 @@ KILL_WAIT = 2.0
 
 app = typer.Typer(
     name="atm2",
-    help="atm2: Typer-based ATM CLI (delegates to `atm` commands)",
+    help="atm2: atm's commands in groups (task, loop, claim, vcs, db, release, component, project, sprint)",
     no_args_is_help=True,
     rich_markup_mode="rich",
 )
@@ -1272,39 +1287,43 @@ project_app = typer.Typer(help="Project-level config")
 app.add_typer(project_app, name="project")
 
 
+def _choice(name, value, choices):
+    """A value that must be one of `choices` (or not given), refused as atm's argparse refuses it (exit code 2)."""
+    if value is not None and value not in choices:
+        raise Invalid(f"{name}: invalid choice '{value}' (choose from {', '.join(choices)})")
+    return value
+
+
+def _dry(ctx, what):
+    """With --dry-run, say what would be done and stop; otherwise go on."""
+    if ctx.obj.get("dry_run", False):
+        out(f"[dry-run] would {what}")
+        return True
+    return False
+
+
 @project_app.command("config")
 def project_config(
     ctx: typer.Context,
 ) -> None:
     """Print where this project's task files are."""
-    args = ["paths"]
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    show_paths(task_paths(os.getcwd()), ctx.obj.get("json_out", False))
 
 
 @project_app.command("status")
 def project_status(
     ctx: typer.Context,
-    sprint: Optional[list[str]] = typer.Option(None, "--sprint"),
-    backlog: bool = typer.Option(False, "--backlog"),
-    release: Optional[str] = typer.Option(None, "--release"),
-    component: Optional[str] = typer.Option(None, "--component"),
+    sprint: Optional[list[str]] = typer.Option(None, "--sprint", help="Only this sprint's tasks (repeatable)"),
+    backlog: bool = typer.Option(False, "--backlog", help="Only the tasks with no sprint"),
+    release: Optional[str] = typer.Option(None, "--release", help="Only the tasks in this release"),
+    component: Optional[str] = typer.Option(None, "--component", help="Only the tasks in this component"),
 ) -> None:
-    """The project overview: counts, what is in progress, in review or blocked."""
-    args = ["status"]
-    if sprint:
-        for s in sprint:
-            args += ["--sprint", s]
-    if backlog:
-        args.append("--backlog")
-    if release:
-        args += ["--release", release]
-    if component:
-        args += ["--component", component]
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    """The overview: counts, what is in progress, in review or blocked, the next task, the file's size."""
+    status = status_report(
+        open_project(os.getcwd()),
+        Filters(sprint=sprint or None, backlog=backlog, release=release, component=component),
+    )
+    show_status(status, ctx.obj.get("json_out", False))
 
 
 @project_app.command("workflow")
@@ -1312,66 +1331,90 @@ def project_workflow(
     ctx: typer.Context,
     action: Optional[str] = typer.Argument(None, help="set: change the workflow"),
     wf_type: Optional[str] = typer.Argument(None, help="direct or pull-request"),
-    base: Optional[str] = typer.Option(None, "--base"),
-    verify: Optional[str] = typer.Option(None, "--verify"),
-    max_rounds: Optional[int] = typer.Option(None, "--max-rounds"),
-    commit_template: Optional[str] = typer.Option(None, "--commit-template"),
-    trailers: Optional[str] = typer.Option(None, "--trailers"),
-    trailer: Optional[list[str]] = typer.Option(None, "--trailer"),
+    base: Optional[str] = typer.Option(None, "--base", help="The branch PRs target, or that direct pushes to"),
+    verify: Optional[str] = typer.Option(None, "--verify", help="Run the project's verify before pushing (true|false)"),
+    max_rounds: Optional[int] = typer.Option(None, "--max-rounds", help="CI fix rounds before /atm:push stops"),
+    commit_template: Optional[str] = typer.Option(
+        None, "--commit-template", metavar="TEXT", help='Commit messages, e.g. "feat({id}): {name}"'
+    ),
+    trailers: Optional[str] = typer.Option(
+        None, "--trailers", help="forbid Co-Authored-By lines, require the --trailer lines, or none (the agent's)"
+    ),
+    trailer: Optional[list[str]] = typer.Option(None, "--trailer", metavar="LINE", help="A required trailer line"),
 ) -> None:
-    """Print the project's workflow, or set it."""
-    args = ["workflow"]
-    if action:
-        args.append(action)
-    if wf_type:
-        args.append(wf_type)
-    if base:
-        args += ["--base", base]
-    if verify:
-        args += ["--verify", verify]
-    if max_rounds:
-        args += ["--max-rounds", str(max_rounds)]
-    if commit_template:
-        args += ["--commit-template", commit_template]
-    if trailers:
-        args += ["--trailers", trailers]
-    if trailer:
-        for t in trailer:
-            args += ["--trailer", t]
+    """Print the project's workflow, or set it (atm2 project workflow set TYPE)."""
+    _choice("action", action, ["set"])
+    _choice("--verify", verify, ["true", "false"])
+    _choice("--trailers", trailers, ["forbid", "require", "none"])
+    project = open_project(os.getcwd())
+    if action is None:
+        workflow = get_workflow(project)
+    else:
+        if _dry(ctx, f"set the workflow to {wf_type}"):
+            return
+        workflow = set_workflow(
+            project,
+            wf_type,
+            base=base,
+            verify=None if verify is None else verify == "true",
+            max_rounds=max_rounds,
+            commit_template=commit_template,
+            trailers=trailers,
+            trailer=trailer or [],
+        )
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(workflow or {"type": None}))
+    else:
+        out(describe_workflow(workflow, project.vcs.default_base))
 
 
 @project_app.command("logo")
 def project_logo(
     ctx: typer.Context,
-    action: Optional[str] = typer.Argument(None, help="set or unset"),
-    path: Optional[str] = typer.Argument(None, help="The image (set)"),
+    action: Optional[str] = typer.Argument(None, help="set or unset it"),
+    path: Optional[str] = typer.Argument(None, help="set: the image (SVG, PNG, WebP or ICO), relative to here"),
 ) -> None:
-    """Print, set or unset the project's logo."""
-    args = ["logo"]
-    if action:
-        args.append(action)
-    if path:
-        args.append(path)
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    """Print, set or unset the project's logo for the dashboard (meta.logo)."""
+    _choice("action", action, ["set", "unset"])
+    if action is not None and _dry(ctx, f"{action} the logo"):
+        return
+    logo_action(open_project(os.getcwd()), action, path, ctx.obj.get("json_out", False))
 
 
 @project_app.command("list")
-def project_list(
-    ctx: typer.Context,
-    target: Optional[str] = typer.Argument(None, help="Add: project folder; Remove: ID or path"),
-) -> None:
+def project_list(ctx: typer.Context) -> None:
     """List the projects the dashboard shows."""
-    args = ["projects", "list"]
-    if target:
-        args.append(target)
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    projects_action(open_registry(), "list", None, ctx.obj.get("json_out", False))
+
+
+@project_app.command("add")
+def project_add(
+    ctx: typer.Context,
+    target: Optional[str] = typer.Argument(None, help="The project's folder (default: here)"),
+) -> None:
+    """Add a project to the dashboard's list."""
+    if _dry(ctx, f"add {target or 'this folder'} to the dashboard's projects"):
+        return
+    projects_action(open_registry(), "add", target, ctx.obj.get("json_out", False))
+
+
+@project_app.command("remove")
+def project_remove(
+    ctx: typer.Context,
+    target: Annotated[str, typer.Argument(help="The project's ID or path")],
+) -> None:
+    """Remove a project from the dashboard's list."""
+    if _dry(ctx, f"remove {target} from the dashboard's projects"):
+        return
+    projects_action(open_registry(), "remove", target, ctx.obj.get("json_out", False))
+
+
+@project_app.command("prune")
+def project_prune(ctx: typer.Context) -> None:
+    """Drop the projects whose folder is gone from the dashboard's list."""
+    if _dry(ctx, "drop the projects whose folder is gone"):
+        return
+    projects_action(open_registry(), "prune", None, ctx.obj.get("json_out", False))
 
 
 # ---------------------------------------------------------------------------
@@ -1387,42 +1430,138 @@ def sprint_list(
     ctx: typer.Context,
     all_: bool = typer.Option(False, "--all", help="List closed sprints too"),
 ) -> None:
-    """List sprints with task counts."""
-    args = ["sprints", "list"]
-    if all_:
-        args.append("--all")
-    if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+    """List the sprints with their task counts, and the backlog's size."""
+    show_sprints(open_project(os.getcwd()), all_, ctx.obj.get("json_out", False))
+
+
+AGENT_HELP = "Who you are (default: ATM_AGENT, else this session)"
 
 
 @sprint_app.command("add")
 def sprint_add(
     ctx: typer.Context,
-    name: Optional[str] = typer.Argument(None, help="The sprint's name"),
-    goal: Optional[str] = typer.Option(None, "--goal"),
-    release: Optional[str] = typer.Option(None, "--release"),
-    due: Optional[str] = typer.Option(None, "--due"),
-    after: Optional[str] = typer.Option(None, "--after"),
-    agent: Optional[str] = typer.Option(None, "--agent"),
+    name: Optional[str] = typer.Argument(None, help="The sprint's name (generated when left out)"),
+    goal: Optional[str] = typer.Option(None, "--goal", help="What the sprint is for"),
+    release: Optional[str] = typer.Option(None, "--release", help="The release it delivers to"),
+    due: Optional[str] = typer.Option(None, "--due", metavar="DATE", help="The planned end, YYYY-MM-DD"),
+    after: Optional[str] = typer.Option(None, "--after", metavar="NAME", help="Put it after this sprint (default: last)"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
 ) -> None:
-    """Add a sprint."""
-    args = ["sprints", "add"]
-    if name:
-        args.append(name)
-    if goal:
-        args += ["--goal", goal]
-    if release:
-        args += ["--release", release]
-    if due:
-        args += ["--due", due]
-    if after:
-        args += ["--after", after]
-    if agent:
-        args += ["--agent", agent]
+    """Add a sprint (planned)."""
+    if _dry(ctx, f"add the sprint {name or '(a generated name)'}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    sprint = add_sprint(project, name, goal=goal, release=release, due=due, after=after)
+    out(to_json(sprint) if ctx.obj.get("json_out", False) else f"Added the sprint “{sprint['id']}” (planned).")
+
+
+@sprint_app.command("edit")
+def sprint_edit(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    goal: Optional[str] = typer.Option(None, "--goal", help="What the sprint is for (empty: remove it)"),
+    release: Optional[str] = typer.Option(None, "--release", help="The release it delivers to (empty: remove it)"),
+    due: Optional[str] = typer.Option(None, "--due", metavar="DATE", help="The planned end, YYYY-MM-DD (empty: remove it)"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Change a sprint's goal, release or due date."""
+    if _dry(ctx, f"edit the sprint {name}"):
+        return
+    result = edit_sprint(open_project(os.getcwd(), agent_identity(agent)), name, goal=goal, release=release, due=due)
+    sprint, changed = result["sprint"], result["changed"]
     if ctx.obj.get("json_out", False):
-        args.append("--json")
-    sys.exit(run_atm(args, dry_run=ctx.obj.get("dry_run", False)))
+        out(to_json(sprint))
+    else:
+        out(f"{sprint['id']}: changed {', '.join(changed)}" if changed else f"{sprint['id']}: nothing changed")
+
+
+@sprint_app.command("start")
+def sprint_start(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Make a planned sprint the active one."""
+    if _dry(ctx, f"start the sprint {name}"):
+        return
+    sprint = start_sprint(open_project(os.getcwd(), agent_identity(agent)), name)
+    out(to_json(sprint) if ctx.obj.get("json_out", False) else f"The sprint “{sprint['id']}” is now active.")
+
+
+@sprint_app.command("close")
+def sprint_close(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    carry_to: Optional[str] = typer.Option(
+        None, "--carry-to", metavar="WHERE", help="Where unfinished tasks go: a sprint's name, new, or backlog"
+    ),
+    new_name: Optional[str] = typer.Option(
+        None, "--name", metavar="NAME", help="With --carry-to new: the new sprint's name (default: generated)"
+    ),
+    reviewed: bool = typer.Option(
+        False, "--reviewed", help="Its batch tasks were reviewed with the user (the sprint review)"
+    ),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Close a sprint: record its report and move its unfinished tasks on."""
+    if _dry(ctx, f"close the sprint {name}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    closed = close_sprint(project, name, carry_to=carry_to, new_name=new_name, reviewed=reviewed)
+    show_close(closed, ctx.obj.get("json_out", False))
+
+
+@sprint_app.command("delete")
+def sprint_delete(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="The sprint's name")],
+    move_to: Optional[str] = typer.Option(
+        None, "--move-to", metavar="WHERE", help="Where its tasks go: a sprint's name or backlog (default)"
+    ),
+    force: bool = typer.Option(False, "--force", help="Also a sprint tasks finished in or moved on from"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Delete a sprint created by mistake."""
+    if _dry(ctx, f"delete the sprint {name}"):
+        return
+    project = open_project(os.getcwd(), agent_identity(agent))
+    show_delete(delete_sprint(project, name, move_to=move_to, force=force), ctx.obj.get("json_out", False))
+
+
+@sprint_app.command("move")
+def sprint_move(
+    ctx: typer.Context,
+    ids: Annotated[list[str], typer.Argument(help="Task IDs")],
+    to: str = typer.Option(..., "--to", metavar="WHERE", help="A sprint's name, next, active, or backlog"),
+    agent: Optional[str] = typer.Option(None, "--agent", help=AGENT_HELP),
+) -> None:
+    """Move tasks into a sprint, the next sprint, the active one, or the backlog."""
+    if _dry(ctx, f"move {', '.join(ids)} to {to}"):
+        return
+    moved = move_tasks(open_project(os.getcwd(), agent_identity(agent)), ids, to)
+    if ctx.obj.get("json_out", False):
+        out(to_json(moved))
+        return
+    for m in moved:
+        before, after = m["from"] or "backlog", m["to"] or "backlog"
+        out(f"{m['id']}: {before} -> {after}" if before != after else f"{m['id']}: already in {after}")
+
+
+@sprint_app.command("backlog")
+def sprint_backlog(
+    ctx: typer.Context,
+    all_: bool = typer.Option(False, "--all", help="Also the finished tasks with no sprint"),
+) -> None:
+    """The tasks with no sprint (not finished ones, unless --all)."""
+    found = backlog_tasks(open_project(os.getcwd()), finished=all_)
+    rows = [summary(found["vocab"], t) for t in found["tasks"]]
+    if ctx.obj.get("json_out", False):
+        out(to_json(rows))
+    elif not rows:
+        out("The backlog is empty.")
+    else:
+        for line in list_lines(rows):
+            out(line)
 
 
 # ---------------------------------------------------------------------------
