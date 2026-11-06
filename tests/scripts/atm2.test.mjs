@@ -1,7 +1,6 @@
 // atm2 (the Typer-based CLI, T-412) against atm: each step runs an `atm` command on one project and its atm2
-// equivalent on an identical one, and both must give the same exit code, stdout, stderr and tasks.json. atm2 needs
-// Typer (uv's dev environment, or atm-cli/atm2-requirements.txt installed with pip); where it can't run, these tests
-// are skipped, unless ATM2_REQUIRED is set (CI installs Typer and sets it), when that is a failure.
+// equivalent on an identical one, and both must give the same exit code, stdout, stderr and tasks.json. atm2 takes
+// Typer and Click from plugin/scripts/vendor/, so it runs wherever atm does.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -12,12 +11,6 @@ import { REPO, baseEnv, makeProject, removeDir, runAtm } from './helpers.mjs';
 
 const ATM2 = path.join(REPO, 'atm-cli/atm2');
 const ENV = { ATM_AGENT: 'alice', ATM_NOW: '2026-11-05T10:00:00Z' };
-const probe = spawnSync(ATM2, ['--help'], { encoding: 'utf8', env: baseEnv() });
-const available = probe.status === 0;
-
-test('atm2 runs where it is required (ATM2_REQUIRED, as CI sets it)', { skip: !process.env.ATM2_REQUIRED }, () => {
-  assert.equal(probe.status, 0, `atm2 --help failed:\n${probe.stderr}`);
-});
 
 function runAtm2(args, cwd, env = ENV) {
   const result = spawnSync(ATM2, args, { cwd, encoding: 'utf8', env: { ...baseEnv(), ...env } });
@@ -83,7 +76,7 @@ function parity(steps, setup = SETUP) {
   }
 }
 
-describe('atm2 task group', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 task group', () => {
   test('list, details and deps read the same', () => {
     parity([
       [['list'], ['task', 'list']],
@@ -239,7 +232,7 @@ describe('atm2 task group', { skip: !available && 'atm2 needs Typer (uv sync --d
   });
 });
 
-describe('atm2 loop and claim groups', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 loop and claim groups', () => {
   test('next, next --claim, claims and heartbeat read and change the same', () => {
     parity([
       [['next'], ['loop', 'next']],
@@ -339,7 +332,7 @@ const write = (file, text) => (root) => {
   fs.writeFileSync(path.join(root, file), text);
 };
 
-describe('atm2 groups ported before T-420 (T-422)', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 groups ported before T-420 (T-422)', () => {
   test('vcs: commit, record, pr, pushed and repository, the same', () => {
     parity([
       [
@@ -526,7 +519,7 @@ describe('atm2 groups ported before T-420 (T-422)', { skip: !available && 'atm2 
   });
 });
 
-describe('atm2 project group', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 project group', () => {
   test('config, status and workflow read and change the same', () => {
     parity([
       [['paths'], ['project', 'config']],
@@ -610,7 +603,7 @@ describe('atm2 project group', { skip: !available && 'atm2 needs Typer (uv sync 
   });
 });
 
-describe('atm2 sprint group', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 sprint group', () => {
   test('a sprint from add to close, and the backlog, the same', () => {
     parity([
       [['sprints'], ['sprint', 'list']],
@@ -684,26 +677,25 @@ describe('atm2 sprint group', { skip: !available && 'atm2 needs Typer (uv sync -
   });
 });
 
-describe('atm2 infra commands, kept apart', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 infra commands, kept apart', () => {
   const WIDE = { ...ENV, COLUMNS: '120' };
 
-  test('--help lists the everyday commands first; Maintenance and Meta after them', () => {
+  test('--help lists the everyday commands first; maintenance, then help and version, after them', () => {
     const root = makeProject(SETUP);
     try {
       const help = runAtm2(['--help'], root, WIDE);
       assert.equal(help.code, 0, help.stderr);
-      const at = (word) => {
-        const i = help.stdout.search(new RegExp(`\\b${word}\\b`));
-        assert.notEqual(i, -1, `${word} in atm2 --help:\n${help.stdout}`);
-        return i;
-      };
-      const everyday = ['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'];
-      const maintenance = at('Maintenance');
-      for (const name of everyday) assert.ok(at(name) < maintenance, `${name} before Maintenance`);
-      for (const name of ['db', 'doctor', 'service']) assert.ok(at(name) > maintenance, `${name} under Maintenance`);
-      const meta = at('Meta');
-      for (const name of ['help', 'version'])
-        assert.ok(help.stdout.indexOf(` ${name} `, meta) > meta, `${name} under Meta`);
+      // The command names, in the order the Commands section lists them (plain Click help: no rich panels)
+      const listed = help.stdout
+        .split('Commands:\n')[1]
+        .split('\n')
+        .map((line) => /^ {2}(\S+)/.exec(line)?.[1])
+        .filter(Boolean);
+      assert.deepEqual(listed, [
+        ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'],
+        ...['db', 'doctor', 'service'],
+        ...['help', 'version'],
+      ]);
     } finally {
       removeDir(root);
     }
@@ -802,7 +794,7 @@ function complete(line, cwd) {
   return result.stdout.split('\n').filter(Boolean);
 }
 
-describe('atm2 shell completion', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 shell completion', () => {
   const SPRINTS = {
     ...SETUP,
     files: {
@@ -857,7 +849,7 @@ describe('atm2 shell completion', { skip: !available && 'atm2 needs Typer (uv sy
   });
 });
 
-describe('atm2 task state, its own checks', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+describe('atm2 task state, its own checks', () => {
   test('refuses options that are not for the transition, and asks for the ones it needs', () => {
     const root = makeProject(SETUP);
     try {

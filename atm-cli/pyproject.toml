@@ -26,13 +26,8 @@ dev = [
     "transitions>=0.9.3",
     "typer>=0.9,<0.16",
 ]
-
-# What atm2 needs to run, and nothing else: CI installs it with pip from atm2-requirements.txt (its exact versions
-# and hashes, exported from uv.lock: `uv export --only-group atm2 --no-emit-project -o atm2-requirements.txt`).
-# transitions isn't here: atm-cli/vendored/ carries it.
-atm2 = [
-    "typer>=0.9,<0.16",
-]
+# typer (and click) are copied into plugin/scripts/vendor/ at the versions uv.lock pins (its README; checked by
+# tests/scripts/vendor.test.mjs); transitions into atm-cli/vendored/, which build.py bundles into atm.py.
 
 [tool.uv]
 # uv manages the dev environment; requires-python in [project] declares 3.9+ compatibility

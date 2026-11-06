@@ -12,9 +12,11 @@ import sys
 # when run as a script directly (./atm-cli/atm2).
 _ATM_CLI = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # The third-party code atm-cli uses (transitions) from atm-cli/vendored/, the copy the build bundles, as atm-lib's unit
-# tests take it (tests/lib/support.py): atm2 then needs only Typer installed. six is one module in a folder of its name.
+# tests take it (tests/lib/support.py), and Typer and Click from plugin/scripts/vendor/, the copy the plugin ships:
+# nothing to install. six is one module in a folder of its name.
 _VENDORED = os.path.join(_ATM_CLI, "vendored")
-sys.path[:0] = [_ATM_CLI, _VENDORED, os.path.join(_VENDORED, "six")]
+_SHIPPED = os.path.join(os.path.dirname(_ATM_CLI), "plugin", "scripts", "vendor")
+sys.path[:0] = [_SHIPPED, _ATM_CLI, _VENDORED, os.path.join(_VENDORED, "six")]
 
 from atm.cli.atm2 import command
 from atm.common.core import AtmError, AtmExit, to_json

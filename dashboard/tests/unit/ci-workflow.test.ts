@@ -33,10 +33,8 @@ describe('CI workflow hardening (T-230)', () => {
     }
   });
 
-  it('Python packages are installed only by hash (T-422)', () => {
-    const pips = lines.filter((line) => /pip install/.test(line));
-    expect(pips.length).toBeGreaterThan(0);
-    for (const line of pips) expect(line).toMatch(/pip install( --quiet)? --require-hashes -r atm-cli\/[\w-]+\.txt$/);
+  it('installs no Python packages: Typer and Click are vendored (T-425)', () => {
+    expect(lines.filter((line) => /pip install/.test(line))).toEqual([]);
   });
 
   it('every container image is pinned by digest', () => {

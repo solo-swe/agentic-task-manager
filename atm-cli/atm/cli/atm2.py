@@ -98,18 +98,30 @@ SERVER_LOCK_WAIT = 15.0
 STOP_WAIT = 5.0
 KILL_WAIT = 2.0
 
+# `atm2 --help` lists the commands people and agents use first (task, loop, claim, vcs, release, component, project,
+# sprint), then the maintenance ones, then help and version; what git, hooks and the server call is hidden
+# (db merge-driver, project summary). The panels are rich's, which isn't vendored (plugin/scripts/vendor/README.md):
+# plain Click help shows the order only.
+MAINTENANCE = "Maintenance"
+META = "Meta"
+HELP_ORDER = ["task", "loop", "claim", "vcs", "release", "component", "project", "sprint", "db", "doctor", "service",
+              "help", "version"]
+
+
+class OrderedGroup(typer.core.TyperGroup):
+    """The top-level commands in HELP_ORDER (Typer lists commands before groups)."""
+
+    def list_commands(self, ctx):
+        names = super().list_commands(ctx)
+        return sorted(names, key=lambda n: HELP_ORDER.index(n) if n in HELP_ORDER else len(HELP_ORDER))
+
+
 app = typer.Typer(
     name="atm2",
     help="atm2: atm's commands, by group",
     no_args_is_help=True,
-    rich_markup_mode="rich",
+    cls=OrderedGroup,
 )
-
-
-# `atm2 --help` lists the commands people and agents use first (task, loop, claim, vcs, release, component, project,
-# sprint); what git, hooks and the server call is hidden (db merge-driver, project summary) or under Maintenance
-MAINTENANCE = "Maintenance"
-META = "Meta"
 
 
 @app.callback()
