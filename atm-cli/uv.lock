@@ -20,6 +20,9 @@ dev = [
 ]
 
 [package.dev-dependencies]
+atm2 = [
+    { name = "typer" },
+]
 dev = [
     { name = "mypy" },
     { name = "pytest" },
@@ -38,6 +41,7 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
+atm2 = [{ name = "typer", specifier = ">=0.9,<0.16" }]
 dev = [
     { name = "mypy", specifier = ">=1.8,<1.12" },
     { name = "pytest", specifier = ">=7.0,<9.0" },

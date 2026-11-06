@@ -10,7 +10,11 @@ import sys
 
 # Ensure the package parent is on sys.path so relative imports work
 # when run as a script directly (./atm-cli/atm2).
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_ATM_CLI = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# The third-party code atm-cli uses (transitions) from atm-cli/vendored/, the copy the build bundles, as atm-lib's unit
+# tests take it (tests/lib/support.py): atm2 then needs only Typer installed. six is one module in a folder of its name.
+_VENDORED = os.path.join(_ATM_CLI, "vendored")
+sys.path[:0] = [_ATM_CLI, _VENDORED, os.path.join(_VENDORED, "six")]
 
 from atm.cli.atm2 import command
 from atm.common.core import AtmError, AtmExit, to_json

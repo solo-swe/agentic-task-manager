@@ -1,6 +1,7 @@
 // atm2 (the Typer-based CLI, T-412) against atm: each step runs an `atm` command on one project and its atm2
 // equivalent on an identical one, and both must give the same exit code, stdout, stderr and tasks.json. atm2 needs
-// Typer (uv's dev environment); where it can't run, these tests are skipped.
+// Typer (uv's dev environment, or atm-cli/atm2-requirements.txt installed with pip); where it can't run, these tests
+// are skipped, unless ATM2_REQUIRED is set (CI installs Typer and sets it), when that is a failure.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -11,7 +12,12 @@ import { REPO, baseEnv, makeProject, removeDir, runAtm } from './helpers.mjs';
 
 const ATM2 = path.join(REPO, 'atm-cli/atm2');
 const ENV = { ATM_AGENT: 'alice', ATM_NOW: '2026-11-05T10:00:00Z' };
-const available = spawnSync(ATM2, ['--help'], { encoding: 'utf8', env: baseEnv() }).status === 0;
+const probe = spawnSync(ATM2, ['--help'], { encoding: 'utf8', env: baseEnv() });
+const available = probe.status === 0;
+
+test('atm2 runs where it is required (ATM2_REQUIRED, as CI sets it)', { skip: !process.env.ATM2_REQUIRED }, () => {
+  assert.equal(probe.status, 0, `atm2 --help failed:\n${probe.stderr}`);
+});
 
 function runAtm2(args, cwd, env = ENV) {
   const result = spawnSync(ATM2, args, { cwd, encoding: 'utf8', env: { ...baseEnv(), ...env } });
@@ -19,7 +25,10 @@ function runAtm2(args, cwd, env = ENV) {
   return { code: result.status, stdout: result.stdout, stderr: result.stderr };
 }
 
-const tasksOf = (root) => fs.readFileSync(path.join(root, '.agentic-task-manager/tasks.json'), 'utf8');
+/** Commit SHAs (full or short) as <sha>: the two projects' repositories make different commits of the same change. */
+const unsha = (text) => text.replace(/\b[0-9a-f]{40}\b/g, '<sha>').replace(/\b[0-9a-f]{7}\b(?= )/g, '<sha>');
+
+const tasksOf = (root) => unsha(fs.readFileSync(path.join(root, '.agentic-task-manager/tasks.json'), 'utf8'));
 
 const SETUP = {
   files: {
@@ -43,19 +52,26 @@ function relative(result, root, home) {
     [fs.realpathSync(home), '<home>'],
     [home, '<home>'],
   ];
-  const strip = (text) => names.reduce((t, [from, to]) => t.split(from).join(to), text);
+  const strip = (text) => unsha(names.reduce((t, [from, to]) => t.split(from).join(to), text));
   return { ...result, stdout: strip(result.stdout), stderr: strip(result.stderr) };
 }
 
 /** Run each [atm args, atm2 args] step on two identical projects, each with its own atm home (its project registry),
- * in order, comparing every result. */
+ * in order, comparing every result. A step that is a function prepares both projects instead: it is called with each
+ * project's folder (to write a file the next step commits, say). */
 function parity(steps, setup = SETUP) {
   const one = makeProject(setup);
   const two = makeProject(setup);
   const homeOne = fs.mkdtempSync(path.join(os.tmpdir(), 'atm2-home-'));
   const homeTwo = fs.mkdtempSync(path.join(os.tmpdir(), 'atm2-home-'));
   try {
-    for (const [atmArgs, atm2Args] of steps) {
+    for (const step of steps) {
+      if (typeof step === 'function') {
+        step(one);
+        step(two);
+        continue;
+      }
+      const [atmArgs, atm2Args] = step;
       const label = `atm ${atmArgs.join(' ')} / atm2 ${atm2Args.join(' ')}`;
       const expected = relative(runAtm(atmArgs, one, { ...ENV, ATM_HOME: homeOne }), one, homeOne);
       const actual = relative(runAtm2(atm2Args, two, { ...ENV, ATM_HOME: homeTwo }), two, homeTwo);
@@ -317,6 +333,198 @@ const WITH_ID = {
     'logo.svg': '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"/>\n',
   },
 };
+
+const write = (file, text) => (root) => {
+  fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+  fs.writeFileSync(path.join(root, file), text);
+};
+
+describe('atm2 groups ported before T-420 (T-422)', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
+  test('vcs: commit, record, pr, pushed and repository, the same', () => {
+    parity([
+      [
+        ['start', 'T-1'],
+        ['task', 'state', 'T-1', 'in_progress'],
+      ],
+      write('src/first.txt', 'one\n'),
+      [
+        ['commit', 'T-1', '--file', 'src/first.txt'],
+        ['vcs', 'commit', 'T-1', '--file', 'src/first.txt'],
+      ],
+      write('src/second.txt', 'two\n'),
+      [
+        ['commit', 'T-1', '--file', 'src/second.txt', '--message', 'feat(T-1): the second file', '--json'],
+        ['-j', 'vcs', 'commit', 'T-1', '--file', 'src/second.txt', '--message', 'feat(T-1): the second file'],
+      ],
+      [
+        ['commit', 'T-1'],
+        ['vcs', 'commit', 'T-1'],
+      ],
+      [
+        ['commit', 'T-1', '--record', 'HEAD'],
+        ['vcs', 'commit', 'T-1', '--record', 'HEAD'],
+      ],
+      [
+        ['commit', 'T-1', '--record', 'HEAD', '--file', 'src/first.txt'],
+        ['vcs', 'commit', 'T-1', '--record', 'HEAD', '--file', 'src/first.txt'],
+      ],
+      [
+        ['done', 'T-1'],
+        ['task', 'state', 'T-1', 'done'],
+      ],
+      [
+        ['pr', 'T-1', '--number', '7', '--url', 'https://github.com/o/r/pull/7'],
+        ['vcs', 'pr', 'T-1', '--number', '7', '--url', 'https://github.com/o/r/pull/7'],
+      ],
+      [
+        ['merged', '--pr', '7', '--at', '2026-11-05T11:00:00Z'],
+        ['vcs', 'pushed', '--pr', '7', '--at', '2026-11-05T11:00:00Z'],
+      ],
+      [
+        ['merged', '--pr', '7', '--json'],
+        ['-j', 'vcs', 'pushed', '--pr', '7'],
+      ],
+      [['repository'], ['vcs', 'repository']],
+      [
+        ['repository', 'set', 'https://github.com/o/r'],
+        ['vcs', 'repository', 'https://github.com/o/r'],
+      ],
+      [
+        ['repository', '--json'],
+        ['-j', 'vcs', 'repository'],
+      ],
+    ]);
+  });
+
+  test('db: migrate, init, archive (and its dry run) and unarchive, the same', () => {
+    parity(
+      [
+        [['migrate'], ['db', 'migrate']],
+        [['init'], ['db', 'init']],
+        [
+          ['init', '--json'],
+          ['-j', 'db', 'init'],
+        ],
+        [
+          ['skip', 'T-3', '--reason', 'not needed'],
+          ['task', 'state', 'T-3', 'skipped', '--reason', 'not needed'],
+        ],
+        [
+          ['archive', '--keep-days', '0', '--dry-run'],
+          ['-n', 'db', 'archive', '--keep-days', '0'],
+        ],
+        [
+          ['archive', '--keep-days', '0'],
+          ['db', 'archive', '--keep-days', '0'],
+        ],
+        [['archive'], ['db', 'archive']],
+        [
+          ['unarchive', 'T-3'],
+          ['db', 'unarchive', 'T-3'],
+        ],
+        [
+          ['unarchive', 'T-3'],
+          ['db', 'unarchive', 'T-3'],
+        ],
+      ],
+      // With an id already: `init` gives a project without one a random id, which two projects can't share
+      WITH_ID,
+    );
+  });
+
+  test('release: add, list, edit, notes and archive, the same', () => {
+    parity([
+      [['releases'], ['release', 'list']],
+      [
+        ['releases', 'add', '1.0', '--target', '2026-12-01'],
+        ['release', 'add', '1.0', '--target', '2026-12-01'],
+      ],
+      [
+        ['edit', 'T-1', '--release', '1.0'],
+        ['task', 'edit', 'T-1', '--release', '1.0'],
+      ],
+      [
+        ['releases', 'edit', '1.0', '--name', 'First'],
+        ['release', 'edit', '1.0', '--name', 'First'],
+      ],
+      [['releases'], ['release', 'list']],
+      [
+        ['releases', '--json'],
+        ['-j', 'release', 'list'],
+      ],
+      [
+        ['releases', 'notes', '1.0'],
+        ['release', 'notes', '1.0'],
+      ],
+      [
+        ['releases', 'notes', '2.0'],
+        ['release', 'notes', '2.0'],
+      ],
+      [
+        ['releases', 'archive', '1.0'],
+        ['release', 'archive', '1.0'],
+      ],
+      [
+        ['releases', '--all', '--json'],
+        ['-j', 'release', 'list', '--all'],
+      ],
+    ]);
+  });
+
+  test('component: add, edit and list, the same', () => {
+    parity([
+      [['components'], ['component', 'list']],
+      [
+        ['components', 'add', 'ui', '--path', 'src/**', '--label', 'UI'],
+        ['component', 'add', 'ui', '--path', 'src/**', '--label', 'UI'],
+      ],
+      [
+        ['components', 'edit', 'ui', '--review', 'batch'],
+        ['component', 'edit', 'ui', '--review', 'batch'],
+      ],
+      [
+        ['components', 'add', 'api', '--from-label', 'ui'],
+        ['component', 'add', 'api', '--from-label', 'ui'],
+      ],
+      [['components'], ['component', 'list']],
+      [
+        ['components', '--json'],
+        ['-j', 'component', 'list'],
+      ],
+    ]);
+  });
+
+  test('doctor and service status, the same', () => {
+    parity([
+      [['check'], ['doctor']],
+      [
+        ['check', '--files', '--json'],
+        ['-j', 'doctor', '--files'],
+      ],
+      [
+        ['serve', 'status'],
+        ['service', 'status'],
+      ],
+    ]);
+  });
+
+  test('reads run under --dry-run: they change nothing', () => {
+    const root = makeProject(SETUP);
+    try {
+      for (const args of [
+        ['-n', 'release', 'list'],
+        ['-n', 'component', 'list'],
+        ['-n', 'claim', 'list'],
+      ]) {
+        const result = runAtm2(args, root);
+        assert.equal(result.code, 0, result.stderr);
+        assert.doesNotMatch(result.stdout, /\[dry-run\]/, args.join(' '));
+      }
+    } finally {
+      removeDir(root);
+    }
+  });
+});
 
 describe('atm2 project group', { skip: !available && 'atm2 needs Typer (uv sync --dev)' }, () => {
   test('config, status and workflow read and change the same', () => {

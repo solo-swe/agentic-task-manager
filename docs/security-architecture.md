@@ -91,7 +91,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I18 | **CI tokens are read-only by default; checkouts don't keep credentials** | `dashboard/tests/unit/ci-workflow.test.ts` |
-| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
+| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`; the test-only Python packages, Typer for atm2, with `pip install --require-hashes` from `atm-cli/atm2-requirements.txt`, exported from `uv.lock`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the committed build artifacts match their sources | CI's freshness checks |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
 

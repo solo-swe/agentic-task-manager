@@ -71,6 +71,9 @@ jobs:
         with:
           persist-credentials: false
       - run: python3 --version && git --version
+      # atm2 (the Typer command tree) needs Typer: exactly the versions and hashes in the file, from uv.lock. Only the
+      # tests use it; the plugin's atm.py stays standard library only (its third-party code is vendored)
+      - run: python3 -m pip install --quiet --require-hashes -r atm-cli/atm2-requirements.txt
       # The plugin ships the committed build of atm-cli/; it must match the modules (CI never commits it for you)
       - name: Built atm-cli is up to date
         run: python3 atm-cli/build.py --check
@@ -78,7 +81,10 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+      # With Typer installed above, atm2's parity tests must run, not skip
       - run: node tests/scripts/run.mjs
+        env:
+          ATM2_REQUIRED: '1'
       # Large task files (1k and 10k tasks): fails only far over generous limits (tests/scripts/bench.mjs)
       - name: Benchmark atm-cli
         run: node tests/scripts/bench.mjs --cli --check

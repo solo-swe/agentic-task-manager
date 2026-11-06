@@ -646,10 +646,7 @@ def claim_list(
     ctx: typer.Context,
 ) -> None:
     """List live claims, shared by all worktrees of this clone."""
-    if ctx.obj.get("dry_run", False):
-        out("[dry-run] would list live claims")
-        return
-    live = expire_claims(open_project(os.getcwd()))["claims"]
+    live =expire_claims(open_project(os.getcwd()))["claims"]
     if ctx.obj.get("json_out", False):
         out(to_json(live))
         return
@@ -918,20 +915,9 @@ def db_archive(
     before: Optional[str] = typer.Option(None, "--before"),
     keep_days: Optional[float] = typer.Option(None, "--keep-days"),
 ) -> None:
-    """Move finished tasks to tasks-archive.json."""
+    """Move finished tasks to tasks-archive.json (with --dry-run: say which, and move nothing)."""
+    # atm-lib's own dry run says which tasks would move, as `atm archive --dry-run` does
     dry_run = ctx.obj.get("dry_run", False)
-    if dry_run:
-        parts = []
-        if sprint:
-            for s in sprint:
-                parts.append(f"--sprint {s}")
-        if before:
-            parts.append(f"--before {before}")
-        if keep_days:
-            parts.append(f"--keep-days {keep_days}")
-        parts_str = " " + " ".join(parts) if parts else ""
-        out(f"[dry-run] would archive finished tasks{parts_str}")
-        return
     result = archive_finished(
         open_project(os.getcwd()), sprint, before, keep_days, dry_run
     )
@@ -1062,10 +1048,6 @@ def release_list(
     all_: bool = typer.Option(False, "--all", help="List archived releases too"),
 ) -> None:
     """List releases with their tasks by kind and stage."""
-    dry_run = ctx.obj.get("dry_run", False)
-    if dry_run:
-        out("[dry-run] would list releases")
-        return
     project = open_project(os.getcwd())
     listed = list_releases(project, all_)
     if ctx.obj.get("json_out", False):
@@ -1172,7 +1154,7 @@ def release_archive(
     if ctx.obj.get("json_out", False):
         out(to_json(release))
     else:
-        out(f'Archived the release "{release["id"]}".')
+        out(f"Archived the release “{release['id']}”.")
 
 
 @release_app.command("notes")
@@ -1181,10 +1163,6 @@ def release_notes_cmd(
     release_id: Annotated[str, typer.Argument(help="The release's ID (letters, digits, '.', '-', '_')")],
 ) -> None:
     """Print a Markdown draft of a release's changes."""
-    dry_run = ctx.obj.get("dry_run", False)
-    if dry_run:
-        out(f"[dry-run] would print release notes for {release_id}")
-        return
     project = open_project(os.getcwd())
     notes = release_notes(project, release_id)
     if ctx.obj.get("json_out", False):
@@ -1218,10 +1196,6 @@ def component_list(
     ctx: typer.Context,
 ) -> None:
     """List components with their task counts."""
-    dry_run = ctx.obj.get("dry_run", False)
-    if dry_run:
-        out("[dry-run] would list components")
-        return
     project = open_project(os.getcwd())
     listed = list_components(project)
     if ctx.obj.get("json_out", False):

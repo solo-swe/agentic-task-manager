@@ -20436,13 +20436,13 @@
       "description": "[atm2.test.mjs](tests/scripts/atm2.test.mjs) checks only the `task` group. Add parity steps (same exit code, stdout, stderr and tasks.json as atm) for the groups ported before it: `vcs commit|pr|pushed|repository`, `db migrate|archive|unarchive|init`, `release list|add|edit|archive|notes`, `component list|add|edit`, `doctor` and `service status`. Fix what they find. `release list` and `component list` print a dry-run message under `--dry-run` although they change nothing: reads should just run.\n\nThe tests skip where atm2 can't run (no Typer), which is CI today. Decide with the user how CI gets Typer (uv in the workflow, or the vendored copy from T-416); this changes the CI workflow, so it is done together with the user, and `docs/security-architecture.md` is updated if a permission changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T05:35:48Z",
+      "updated_at": "2026-11-06T07:30:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20459,7 +20459,17 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T07:30:33Z",
+      "started_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T07:30:34Z",
+          "kind": "note",
+          "text": "The user decided the CI question (2026-11-06): CI installs Typer with `pip`, at the versions and hashes pinned from `uv.lock`.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-423",
