@@ -20436,13 +20436,13 @@
       "description": "[atm2.test.mjs](tests/scripts/atm2.test.mjs) checks only the `task` group. Add parity steps (same exit code, stdout, stderr and tasks.json as atm) for the groups ported before it: `vcs commit|pr|pushed|repository`, `db migrate|archive|unarchive|init`, `release list|add|edit|archive|notes`, `component list|add|edit`, `doctor` and `service status`. Fix what they find. `release list` and `component list` print a dry-run message under `--dry-run` although they change nothing: reads should just run.\n\nThe tests skip where atm2 can't run (no Typer), which is CI today. Decide with the user how CI gets Typer (uv in the workflow, or the vendored copy from T-416); this changes the CI workflow, so it is done together with the user, and `docs/security-architecture.md` is updated if a permission changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T07:30:34Z",
+      "updated_at": "2026-11-06T07:48:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20468,8 +20468,18 @@
           "kind": "note",
           "text": "The user decided the CI question (2026-11-06): CI installs Typer with `pip`, at the versions and hashes pinned from `uv.lock`.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:48:35Z",
+          "kind": "review",
+          "text": "Check: CI’s Python jobs pip-install Typer by hash from `atm-cli/atm2-requirements.txt` (exported from `uv.lock`) and set `ATM2_REQUIRED`, so atm2 tests fail rather than skip. `atm2_main` takes `transitions` from `vendored/`. New parity steps: `vcs`, `db`, `release`, `component`, `doctor`, `service status`. They found 2 differences, fixed: `db archive -n` didn’t preview; `release archive` used straight quotes. Reads run under `-n`. 582 pass; CI not run yet.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "commit": "76efd8362db52fea30d6b209606f7112eba4efd7",
+      "completed_at": "2026-11-06T07:48:35Z",
+      "completed_by": "claude:34798264",
+      "sprint_review": "pending"
     },
     {
       "id": "T-423",
@@ -20745,7 +20755,7 @@
       "description": "Move the dashboard from plain Svelte + Vite to SvelteKit, as the [Svelte guide](docs/guides/svelte.md#basics) asks.\n\n## Change\n- SvelteKit 3 with the static adapter and an SPA fallback; its options in the `sveltekit({ … })` call in `vite.config.ts`; `svelte.config.js` removed; `tsconfig.json` extends `$app/tsconfig`.\n- The build still writes **one self-contained HTML file** to `plugin/templates/tasks-dashboard.html` (with the `atm-dashboard-version` meta tag) and the CompMD runtime to `plugin/assets/compmd/<version>/`, and `atm serve` serves it under the same Content-Security-Policy (invariants I13 and I16 in [security-architecture.md](docs/security-architecture.md)). The dev server (`build/dev-api.ts`, `build/security-headers.ts`) keeps working.\n- No change in behaviour: the hash routes stay until the next task.\n\nIf SvelteKit's static output can't be made into the single file (or only at a cost in size or CSP), stop and block the task on the user with the options found, rather than changing the single-file or CSP rules.\n\n## Tests\n`check`, the unit tests, `tests/scripts/dev-api.test.mjs` and the functional e2e suite pass; `size` is no larger than before by more than a few KB.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-427"
       ],
@@ -20759,7 +20769,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T05:35:51Z",
+      "updated_at": "2026-11-06T07:54:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20772,7 +20782,22 @@
       "components": [
         "dashboard"
       ],
-      "review": "batch"
+      "review": "batch",
+      "started_at": "2026-11-06T07:48:44Z",
+      "started_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T07:54:15Z",
+          "kind": "note",
+          "text": "Prototype (undone): SvelteKit 3.1.1 + `adapter-static` (SPA fallback) + `output.bundleStrategy: inline` gives one HTML file, with one inline script and no `eval`, which `atm serve`’s per-script hashes allow. Size: 635 KB against 575 KB (+60 KB, +10%), 195 against 172 KB gzipped. `router.type: hash` can’t be used: SvelteKit takes over `location.hash`, where the dashboard keeps its state. Its own `history.pushState`/`replaceState` calls (`state.svelte.ts`) would move to `$app/navigation`.",
+          "by": "claude:34798264"
+        }
+      ],
+      "waiting_on": "user",
+      "questions": [
+        "SvelteKit fits the single file and the security policy, but adds about 60 KB (+10%; +23 KB gzipped) for its runtime, over the few KB this task allows. Accept that and migrate? Or keep plain Svelte + Vite and drop SvelteKit from the guide (T-429 then gives real routes with a small router of our own)? Or defer it until the atm app needs SvelteKit?"
+      ],
+      "blocked_at": "2026-11-06T07:54:16Z"
     },
     {
       "id": "T-429",
