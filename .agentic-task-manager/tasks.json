@@ -21013,7 +21013,7 @@
         "docs/dashboard-logic-inventory.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T06:40:59Z",
+      "updated_at": "2026-11-06T07:28:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21038,6 +21038,12 @@
           "at": "2026-11-06T06:40:59Z",
           "kind": "review",
           "text": "Review `docs/dashboard-logic-inventory.md` with the user: about 20 modules apply atm’s rules again (stage, kind, priority, needs-you, vocabularies from `meta`, work spans, the charts’ series). It proposes 5 steps, starting with the derived values that already exist. One open decision: should filtering and search stay client-side (§2, `filters.ts`)? Once agreed, the follow-up tasks come from §3 via `/atm:create-tasks`.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-06T07:28:54Z",
+          "kind": "note",
+          "text": "Decided with the user: filtering and search stay in the dashboard, recorded in `docs/adr/ADR-001-filters-and-search-stay-in-the-dashboard.md`, until a server-side design handles them properly. The inventory’s step 5 is deferred.",
           "by": "claude:34798264"
         }
       ]
