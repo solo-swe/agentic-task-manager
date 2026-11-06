@@ -20138,7 +20138,6 @@
       "dependencies": [
         "T-412",
         "T-414",
-        "T-416",
         "T-425"
       ],
       "files": [
@@ -20146,7 +20145,7 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T05:34:03Z",
+      "updated_at": "2026-11-06T06:52:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20161,7 +20160,7 @@
       "description": "Incorporate third-party libraries into atm-cli (enabled by T-414 build modernization).\n\nSee docs/cli-improvements-with-3p.md for the full survey: click/typer for CLI parsing, pydantic for data validation,\ntransitions for the state machine, rich for output formatting, loguru for logging, pendulum/arrow for date/time,\nhttpx/uvicorn for the REST API server, watchdog for serve --refresh, filelock for cross-platform locking, jsonschema\nfor tasks.json validation, pytest/hypothesis for testing.\n\nWork items:\n1. Add click (or typer) for one command group (e.g. atm task state), keeping old argparse commands as wrappers\n2. Add pydantic for task/meta model validation (fail-fast at load time)\n3. Add transitions for the task state machine (declarative guards and hooks)\n4. Add rich for atm list / atm show output (color-coded statuses, tables, panels)\n5. Add loguru for structured logging (levels, rotation, clean backtraces)\n6. Add filelock for cross-platform file locking (replaces fcntl + custom mkdir lock)\n7. Add jsonschema validation for tasks.json at load time (atm doctor)\n8. Add httpx + uvicorn for atm serve REST API (proper HTTP, async)\n9. Add watchdog for serve --refresh (file events instead of polling)\n10. Remove hand-rolled validation, parsing, and rendering code one area at a time\n\nDepends on T-414 (build modernization must bundle 3rd-party deps into plugin/scripts/atm.py).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "skipped",
       "dependencies": [
         "T-414"
       ],
@@ -20169,7 +20168,7 @@
         "docs/cli-improvements-with-3p.md"
       ],
       "created_at": "2026-11-05T07:21:08Z",
-      "updated_at": "2026-11-06T05:35:44Z",
+      "updated_at": "2026-11-06T06:52:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20183,7 +20182,16 @@
         }
       ],
       "sprint": "CLI ergonomics",
-      "review": "batch"
+      "review": "batch",
+      "skipped_at": "2026-11-06T06:52:05Z",
+      "notes": [
+        {
+          "at": "2026-11-06T06:52:05Z",
+          "kind": "note",
+          "text": "Skipped: Typer (atm2) and `transitions` (the state machine) are in; the rest of the survey isn’t worth doing in Python with the Rust port coming (T-415).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-417",
