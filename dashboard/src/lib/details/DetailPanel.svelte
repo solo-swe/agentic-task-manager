@@ -21,7 +21,7 @@
   import PriorityBadge from '../ui/PriorityBadge.svelte';
   import StageChip from '../ui/StageChip.svelte';
   import Icon from '../ui/Icon.svelte';
-  import type { IconName } from '../icons';
+  import type { IconName } from '../ui/Icon.svelte';
   import type { Task } from '../types';
 
   // An archived task opens too (listed with "Include archived")

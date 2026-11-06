@@ -1,6 +1,6 @@
 <script lang="ts">
   import { DOC_STYLES, MODE_LABELS, MODE_PREFS, THEMES, type ModePref } from '../appearance';
-  import type { IconName } from '../icons';
+  import type { IconName } from '../ui/Icon.svelte';
   import { dashboard } from '../state.svelte';
   import Icon from '../ui/Icon.svelte';
 

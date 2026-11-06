@@ -50,9 +50,9 @@ describe('security invariants (docs/security-architecture.md)', () => {
     );
   });
 
-  it('I15: {@html} only in the built-in icons and the bundled logo, never on data', () => {
+  it('I15: {@html} only in the bundled logo, never on data (the icons are components since T-432)', () => {
     const using = filesIn('dashboard/src', '.svelte').filter((file) => read(file).includes('{@html'));
-    expect(using.sort()).toEqual(['dashboard/src/lib/ui/Icon.svelte', 'dashboard/src/lib/ui/Logo.svelte']);
+    expect(using.sort()).toEqual(['dashboard/src/lib/ui/Logo.svelte']);
   });
 
   it('every test file the invariants table names exists', () => {

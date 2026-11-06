@@ -59,6 +59,13 @@ The sprint *CLI ergonomics* (release 0.31.0).
   650 KiB. The dev page's Content-Security-Policy is now worked out from each page as sent (SvelteKit renders it per
   request, with its own inline start-up script): its inline scripts by hash, as `atm serve` allows the built page's
   (`dev-api.test.mjs` checks it). `vite-plugin-singlefile` is gone.
+- **The dashboard's components are grouped by area** under `src/lib/` (`shell/`, `ui/`, `kanban/`, `tasks/`,
+  `graph/`, `details/`, `dialogs/`, `documents/`, `progress/`, `agents/`, `overview/`; T-430). SvelteKit's app
+  version is the plugin's, so the same sources build the same page.
+- **The icons come from Lucide's package** (`lucide` 1.69.0, T-432) instead of embedded SVG copies: imported by
+  name, drawn by `Icon.svelte` as elements, never as markup, so `{@html}` is left only in `Logo.svelte` (I15). Its
+  Svelte package was 14 kB larger (a component per icon); this is about 3 kB more than the embedded copies. Lucide
+  now calls `history` `rotate-ccw-clock`.
 - **The dashboard's development uses pnpm** (T-427): `pnpm-lock.yaml`, overrides in `pnpm-workspace.yaml`, CI and
   the hooks on pnpm 12.14.0.
 
