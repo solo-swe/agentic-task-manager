@@ -1,0 +1,4 @@
+# pnpm's settings for dashboard/ (a single package, not a workspace of several).
+overrides:
+  # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)
+  minimatch: 11.0.1

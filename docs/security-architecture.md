@@ -91,7 +91,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I18 | **CI tokens are read-only by default; checkouts don't keep credentials** | `dashboard/tests/unit/ci-workflow.test.ts` |
-| I19 | **Actions are pinned by commit SHA and images by digest**; Dependabot proposes action and npm updates, grouped (one PR a week per ecosystem; an npm major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
+| I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the committed build artifacts match their sources | CI's freshness checks |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
 
@@ -99,9 +99,9 @@ with the task that adds it.
 
 The schedule (T-236):
 
-- **Every PR (CI)**: everything in §2 that is a test: `npm run test:scripts` (the hostile-repo suites), the unit tests
+- **Every PR (CI)**: everything in §2 that is a test: `pnpm run test:scripts` (the hostile-repo suites), the unit tests
   (skills, links, CI workflow, static checks, invariants table), the e2e suite under the page's CSP, and the build
-  freshness checks. Dependabot proposes action and npm updates weekly.
+  freshness checks. Dependabot proposes action and package updates weekly.
 - **Every PR that changes what agents read** (a skill, `plugin/CLAUDE.md`, or atm's output agents act on), before
   it is merged: the agent sandbox's red-team run (I1). Here **every PR to `main` is a release** (the version is
   bumped and `/plugin marketplace update` delivers it), so "before a release" means "before merging such a PR". PRs
@@ -129,7 +129,7 @@ a user does. Most of it exists since phase 20's fixes:
 
 T-234 added the static checks (I5: no `shell=True` / `os.system` / `eval` / `exec` in `atm-cli/`; I15: `{@html}` only
 in `Icon.svelte` and `Logo.svelte`) and a check that every test the §2 table names exists, all in
-`dashboard/tests/unit/security-invariants.test.ts`. **Cost:** seconds; runs in CI on every PR with `npm run test:scripts` and the unit tests.
+`dashboard/tests/unit/security-invariants.test.ts`. **Cost:** seconds; runs in CI on every PR with `pnpm run test:scripts` and the unit tests.
 
 **Level 2: the agent sandbox (the skills).** The only way to test I1 (task text is data) is to let a real agent loop
 over hostile tasks and see what it does. It must run where a mistake costs nothing:
@@ -368,7 +368,7 @@ agents act on changed, so there is no agent sandbox run; this written review tak
 (description, notes, the review note, questions) with CompMD instead of `markdown.ts`. Task text is untrusted (anyone
 who can change `tasks.json` wrote it), so:
 - **What runs is atm's, shipped with the plugin:** CompMD's processor (WebAssembly) and renderer, built from pinned
-  npm packages into `plugin/assets/compmd/<version>/` and checked against a fresh build by `npm run check`. Nothing
+  npm packages into `plugin/assets/compmd/<version>/` and checked against a fresh build by `pnpm run check`. Nothing
   is fetched from elsewhere, and the text brings no code: it has no files to import, no packs (`imports: listed`,
   none listed), no remote data (no allowed origin), and only one `host:` source, the task's own data, which the
   reader sees in the same panel anyway. A frontmatter written in the text is only text: the dashboard puts its own
@@ -440,7 +440,8 @@ sandbox:
   (it has had XSS bugs) stays in the frame. The e2e test puts `<img onerror>` and `<script>` in a label: the markup
   reaches the frame's document, its policy refuses it, and nothing runs in the dashboard.
 - **What runs:** only what the plugin ships, pinned by `@compmd/vite` (`dashboard/compmd.config.json`: the pack's
-  exact version, from the lockfile's integrity). The frame loads the pack's module by URL with its SRI hash, so a
+  exact version, from the lockfile's integrity, `pnpm-lock.yaml`; `@compmd/vite` 0.5.0 loses it when the lockfile has
+  two documents, as `devEngines` makes it, so the dashboard has no `devEngines` until T-436). The frame loads the pack's module by URL with its SRI hash, so a
   file changed on its way never runs (tested: the diagram stays its code). Packs are `imports: "listed"`, strict, and
   the Mermaid pack is the only one; a component the text defines itself in a fence is never given to the sandbox, so
   its code never runs.

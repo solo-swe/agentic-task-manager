@@ -12,7 +12,7 @@ import { compmdVersion } from './build/compmd.ts';
 // - compmd/, @compmd/vite's: the sandbox's frame documents, and the built modules of the packs compmd.config.json
 //   lists (the Mermaid pack, ambient), whose versions and hashes it pins.
 // `base` is where atm serve serves the folder: @compmd/vite gives the frames' and modules' URLs from it. Committed, like
-// tasks-dashboard.html; `npm run check` fails when it is stale (scripts/check-compmd-assets.mjs).
+// tasks-dashboard.html; `pnpm run check` fails when it is stale (scripts/check-compmd-assets.mjs).
 
 const assets = fileURLToPath(new URL('../plugin/assets/compmd/', import.meta.url));
 const version = compmdVersion();

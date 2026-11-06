@@ -1,11 +1,11 @@
-// Dev server only: `npm run dev` runs the real REST API (docs/layered-architecture.md §9, step 15; §11.9), this
+// Dev server only: `pnpm run dev` runs the real REST API (docs/layered-architecture.md §9, step 15; §11.9), this
 // checkout's atm-cli, so the dashboard in development talks to exactly what atm serve answers. ATM_DEV_DATA picks the
 // task folders (.agentic-task-manager paths, separated like PATH); the default is this repo's own.
 //
 // The API server runs on a private ATM_HOME (a temporary folder, removed when Vite stops) that lists only those
 // projects, so the developer's own `atm serve`, its registry and its port are never touched. Vite forwards the API's
 // paths to it; everything else (the page, its modules, hot reload) stays Vite's. When atm-cli is rebuilt
-// (`npm run build:cli` writes plugin/scripts/atm.py), the API server restarts on it: no Vite restart needed.
+// (`pnpm run build:cli` writes plugin/scripts/atm.py), the API server restarts on it: no Vite restart needed.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { request } from 'node:http';

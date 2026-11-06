@@ -1,5 +1,5 @@
 # Generated from atm-cli/atm/ by atm-cli/build.py. Don't edit this file: edit the modules and run
-# `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+# `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 """atm: the Agentic Task Manager helper that the skills run.
 
 Run through the `atm` launcher, which checks for Python 3.9+. Standard library only: the plugin is used as cloned,
@@ -2424,7 +2424,7 @@ class Claimed(AtmFailure):
 
 # ==== common/vocabularies.py ====
 # The status kinds and the default vocabularies, generated from common/schema/vocabularies.json by
-# atm-cli/build.py: don't edit it, change that file and run `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+# atm-cli/build.py: don't edit it, change that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 
 KINDS = ('todo', 'active', 'review', 'blocked', 'done', 'skipped')
 DEFAULT_STATUSES = [
@@ -3366,7 +3366,7 @@ def started_by(task):
 
 # ==== common/types.py ====
 # Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
-# `npm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
+# `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 # no typing.Required).
 
 StatusEntry = TypedDict(

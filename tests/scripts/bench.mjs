@@ -7,7 +7,7 @@
 // regressions on slow CI runners, not to measure precisely.
 //
 // Usage: node tests/scripts/bench.mjs [--cli] [--dashboard] [--check] [--sizes 1000,10000]
-//        (no --cli or --dashboard: both). `npm run bench` in dashboard/ runs both.
+//        (no --cli or --dashboard: both). `pnpm run bench` in dashboard/ runs both.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';

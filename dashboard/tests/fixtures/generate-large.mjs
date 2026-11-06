@@ -1,7 +1,7 @@
 // Deterministically generates the large fixtures:
 // - large-90.json: a wide graph (90 tasks, 40 done, 1 in progress), as used by the graph and visual specs.
 // - large-500.json: 500 tasks for the performance checks (300 done with start/complete times, 1 in progress).
-// Run: node tests/fixtures/generate-large.mjs && npx prettier --write tests/fixtures
+// Run: node tests/fixtures/generate-large.mjs && pnpm exec prettier --write tests/fixtures
 import { writeFileSync } from 'node:fs';
 
 const TYPES = ['feature', 'test', 'infra', 'docs', 'refactor', 'bugfix', 'polish'];

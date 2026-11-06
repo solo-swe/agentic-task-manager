@@ -1,5 +1,5 @@
 // Enforces the layered-architecture rules (docs/layered-architecture.md §1, §8, §11.3) that were removed from
-// atm-cli/build.py. Runs as part of npm run test:scripts.
+// atm-cli/build.py. Runs as part of pnpm run test:scripts.
 //
 // Rules:
 //   - Every module lives in a layer's folder (common/, db/, vcs/, lib/, boot/, cli/, api/)

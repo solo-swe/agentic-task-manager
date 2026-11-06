@@ -1,4 +1,4 @@
-// `npm run dev`'s REST API (dashboard/build/dev-api.ts, T-386, docs/layered-architecture.md §11.9): `vite dev` runs
+// `pnpm run dev`'s REST API (dashboard/build/dev-api.ts, T-386, docs/layered-architecture.md §11.9): `vite dev` runs
 // this checkout's atm-cli on a private ATM_HOME and forwards the API's paths to it. Started here on a temporary
 // project and a folder without a task file; a rebuild restarts it; stopping Vite leaves no server and no home behind.
 import assert from 'node:assert/strict';
@@ -45,7 +45,7 @@ const alive = (pid) => {
 };
 
 const NAME = 'vite dev serves the real API for ATM_DEV_DATA, restarts it on a rebuild, and leaves nothing running';
-const skip = !fs.existsSync(VITE) && 'needs `npm ci` in dashboard/';
+const skip = !fs.existsSync(VITE) && 'needs `pnpm install` in dashboard/';
 
 test(NAME, { skip }, async () => {
   const project = makeProject({

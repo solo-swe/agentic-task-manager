@@ -1,8 +1,8 @@
 // Fails if the committed CompMD runtime (plugin/assets/compmd/<version>/, docs/compmd-rendering-design.md §2, §3c)
 // isn't what the build makes now from the installed packages, compmd.config.json and compmd/entry.ts: it builds again
 // into a temporary folder and compares every file, in every folder (the sandbox's frames and the packs, which
-// @compmd/vite writes). Run by `npm run check`, so CI catches a package or configuration change committed without
-// `npm run build`.
+// @compmd/vite writes). Run by `pnpm run check`, so CI catches a package or configuration change committed without
+// `pnpm run build`.
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
@@ -16,7 +16,7 @@ const version = JSON.parse(
 ).version;
 
 const fail = (message) => {
-  console.error(`plugin/assets/compmd is stale: ${message}. Run 'npm run build' in dashboard/ and commit it.`);
+  console.error(`plugin/assets/compmd is stale: ${message}. Run 'pnpm run build' in dashboard/ and commit it.`);
   process.exit(1);
 };
 

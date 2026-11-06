@@ -1,5 +1,5 @@
 """Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
-`npm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
+`pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 no typing.Required)."""
 
 from typing import Dict, List, Literal, Optional, TypedDict

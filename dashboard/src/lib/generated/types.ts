@@ -1,5 +1,5 @@
 // Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
-// `npm run build:cli` in dashboard/ (the pre-commit hook does it too).
+// `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).
 
 export interface StatusEntry {
   id: string;

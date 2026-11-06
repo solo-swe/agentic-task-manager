@@ -757,19 +757,21 @@ The dashboard is developed in `dashboard/` (Svelte 5, TypeScript, Vite) and buil
 file** at `plugin/templates/tasks-dashboard.html`. That file is committed, because the plugin installs straight from
 git with no build step.
 
+It uses [pnpm](https://pnpm.io/installation) (installed with its standalone installer, not through corepack):
+
 ```bash
 cd dashboard
-npm install          # also enables the pre-commit hook (git core.hooksPath = .githooks)
-npm run dev          # Vite dev server
-npm run verify       # check + unit tests with coverage + build + e2e - run before committing
+pnpm install --frozen-lockfile   # also enables the pre-commit hook (git core.hooksPath = .githooks)
+pnpm run dev                     # Vite dev server
+pnpm run verify                  # check + unit tests with coverage + build + e2e - run before committing
 ```
 
-| Script                               | What it does                                                                                  |
-| ------------------------------------ | --------------------------------------------------------------------------------------------- |
-| `npm run build`                      | Builds `plugin/templates/tasks-dashboard.html`; the version meta tag comes from `plugin.json` |
-| `npm test` / `npm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib`              |
-| `npm run test:e2e`                   | Build, then the Playwright regression suite (`tests/e2e/`)                                    |
-| `npm run check`                      | Version consistency, svelte-check, ESLint, Prettier                                           |
+| Script                                 | What it does                                                                                  |
+| -------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm run build`                       | Builds `plugin/templates/tasks-dashboard.html`; the version meta tag comes from `plugin.json` |
+| `pnpm test` / `pnpm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib`              |
+| `pnpm run test:e2e`                    | Build, then the Playwright regression suite (`tests/e2e/`)                                    |
+| `pnpm run check`                       | Version consistency, svelte-check, ESLint, Prettier                                           |
 
 **Tests.** e2e specs play atm serve's API with fixtures from `tests/fixtures/` as each project's `tasks.json`, and
 fail on any external request.
@@ -780,7 +782,7 @@ container and generates any missing Linux baselines for you to commit.
 it when dashboard sources change, and CI fails if the committed file doesn't match a fresh build.
 
 **Releasing.** Bump `version` in both `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`
-(`npm run check` enforces that they match) and rebuild, so running dashboard servers restart on the new dashboard.
+(`pnpm run check` enforces that they match) and rebuild, so running dashboard servers restart on the new dashboard.
 
 ---
 

@@ -33,31 +33,36 @@ updates that document in the same PR.
 Coding rules: the [Svelte guide](docs/guides/svelte.md). Builds to a **single self-contained HTML file** (vite-plugin-singlefile). The `atm-dashboard-version` meta tag is
 injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
 
-`npm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.
+`pnpm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.
 The pre-commit hook in `.githooks/` rebuilds and stages it when dashboard sources are committed (enabled by
-`npm ci` in `dashboard/`, which sets `core.hooksPath`); CI fails if the committed file is stale. Install with `npm ci`,
-not `npm install`: it installs exactly the locked versions and never updates the lockfile.
+`pnpm install` in `dashboard/`, which sets `core.hooksPath`); CI fails if the committed file is stale.
+
+**pnpm**, installed with its [standalone installer](https://pnpm.io/installation) (not corepack, not npm), at the
+version CI installs (`.github/workflows/ci.yml`). Install with `pnpm install --frozen-lockfile`: it installs exactly the
+locked versions and never updates the lockfile (`pnpm-lock.yaml`); a plain `pnpm install` only when you change
+`package.json` on purpose. Overrides (security pins) are in `pnpm-workspace.yaml`. The guide's `devEngines` pins come
+with T-436, once CompMD reads pnpm 12's two-document lockfile.
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):
-- `npm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
+- `pnpm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
   temporary `ATM_HOME`, so your own `atm serve` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
   to it) for this repo's `.agentic-task-manager/`, or for other folders with
-  `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] npm run dev` (a folder without a task file is listed as
-  missing). `npm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
+  `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] pnpm run dev` (a folder without a task file is listed as
+  missing). `pnpm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
   The dev page runs under the server's Content-Security-Policy plus what Vite needs (`build/security-headers.ts`);
   `tests/scripts/dev-api.test.mjs` starts `vite dev` and checks all of this
-- `npm run build` — single-file build, and the CompMD runtime the details panel loads (`vite.compmd.config.ts`,
-  into `plugin/assets/compmd/<version>/`, committed; `npm run check` fails when it is stale)
-- `npm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
-- `npm test` / `npm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
-- `npm run test:e2e` — build, then the Playwright e2e suite without the screenshots
-- `npm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
-- `npm run check` — svelte-check, ESLint, Prettier
-- `npm run build:cli` — build `plugin/scripts/atm.py` from `atm-cli/` (see below)
-- `npm run test:scripts` — atm-cli's test suite (see below)
-- `npm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
-- `npm run verify` — everything above (needs Docker for the screenshots)
+- `pnpm run build` — single-file build, and the CompMD runtime the details panel loads (`vite.compmd.config.ts`,
+  into `plugin/assets/compmd/<version>/`, committed; `pnpm run check` fails when it is stale)
+- `pnpm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
+- `pnpm test` / `pnpm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
+- `pnpm run test:e2e` — build, then the Playwright e2e suite without the screenshots
+- `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
+- `pnpm run check` — svelte-check, ESLint, Prettier
+- `pnpm run build:cli` — build `plugin/scripts/atm.py` from `atm-cli/` (see below)
+- `pnpm run test:scripts` — atm-cli's test suite (see below)
+- `pnpm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
+- `pnpm run verify` — everything above (needs Docker for the screenshots)
 
 ## atm-cli (`atm-cli/`, built into `plugin/scripts/`)
 atm-cli is the `atm` command the skills run (earlier docs call it "the helper"). `plugin/scripts/atm` is a POSIX sh
@@ -77,9 +82,9 @@ refuses an import the layer rule forbids, with no exceptions. atm-lib's public s
 modules: `atm.lib` (`atm/lib/__init__.py`, its `__all__`) and `atm.boot` (`open_project`, `open_memory_project`,
 `open_registry`). Their names and signatures are frozen in `tests/lib/public-surface.json`: a change fails
 `test_public.py` until that list is updated, and goes in the changelog. atm-lib's
-unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `npm run test:scripts`).
+unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `pnpm run test:scripts`).
 
-Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `npm run test:scripts`) drive the built atm-cli
+Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `pnpm run test:scripts`) drive the built atm-cli
 through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of
 `scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
 git merges). CI runs the suite with Python 3.9 and a current version.
@@ -100,12 +105,12 @@ git merges). CI runs the suite with Python 3.9 and a current version.
   `.filter-btn[data-filter]`, `.task-card[data-id]`, `#detail-overlay.open`, …) that date from the pre-Svelte
   dashboard, which was the parity oracle during the port and is kept, unused, at `tests/legacy/`.
 - **Which tests to run (T-345):** while working on a task, the specs of the area you change
-  (`npx playwright test kanban`, after `npm run build`) and the unit tests; the whole functional suite
-  (`npm run test:e2e`, about 40 s) once, before committing. Not the screenshots: they run in CI on every push, and are
-  regenerated once a sprint, in the release task. `npm run verify` runs everything, the screenshots too.
+  (`pnpm exec playwright test kanban`, after `pnpm run build`) and the unit tests; the whole functional suite
+  (`pnpm run test:e2e`, about 40 s) once, before committing. Not the screenshots: they run in CI on every push, and are
+  regenerated once a sprint, in the release task. `pnpm run verify` runs everything, the screenshots too.
 - **Screenshots** (`visual.spec.ts`) have **Linux baselines only**, made and checked in the pinned Playwright
-  container, the same as CI's; on macOS the tests skip. With Docker running: `npm run test:e2e:visual` compares,
-  `npm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). They are of
+  container, the same as CI's; on macOS the tests skip. With Docker running: `pnpm run test:e2e:visual` compares,
+  `pnpm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). They are of
   parts (a panel, a menu, a card, a theme's Kanban column) rather than whole pages, so one change touches few; a
   few dozen differing pixels pass (anti-aliasing), a real change doesn't.
 - A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are
@@ -116,7 +121,7 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 ## CI
 - **Workflow:** `pull-request` (also in `tasks.json` `meta.workflow`, so `/atm:push` knows): work happens on a
   release branch (e.g. `dev/v4`) and reaches `main` through **one combined PR per release branch**.
-- **Linux screenshot baselines:** made locally with `npm run test:e2e:visual:update` (Docker), normally. As a
+- **Linux screenshot baselines:** made locally with `pnpm run test:e2e:visual:update` (Docker), normally. As a
   fallback, CI generates missing ones: it fails until the `-linux.png` baselines are committed, and attaches them as
   the `linux-screenshot-baselines` artifact. Find its ID with
   `gh api repos/solo-swe/agentic-task-manager/actions/runs/<run-id>/artifacts`; **check its `workflow_run` is your
@@ -125,10 +130,12 @@ git merges). CI runs the suite with Python 3.9 and a current version.
   `gh api repos/solo-swe/agentic-task-manager/actions/artifacts/<id>/zip > <scratch>/baselines.zip` (`gh run download`
   fails on the zip's duplicate entries), extract only the missing `*-linux.png` files into
   `dashboard/tests/e2e/__screenshots__/` (`unzip -n`), look at one to check it shows what you expect, then commit them.
-- **Pinned:** actions by commit SHA, container images by digest, the token read-only (`permissions: contents:
-  read`), checkouts without stored credentials. Dependabot proposes action and npm updates, grouped: one PR a week
-  for the actions, one for npm's minor and patch updates, and one per npm major (T-275); bump an image digest by
-  hand (`docker buildx imagetools inspect <image>`), the Playwright image together with `@playwright/test`.
+- **Pinned:** actions by commit SHA, container images by digest, pnpm by version (installed from the npm registry in
+  each job, and in the Docker screenshot scripts), the token read-only (`permissions: contents: read`), checkouts
+  without stored credentials. Dependabot proposes action and package updates, grouped: one PR a week for the actions,
+  one for the packages' minor and patch updates, and one per major (T-275; its `npm` ecosystem reads
+  `pnpm-lock.yaml`); bump an image digest by hand (`docker buildx imagetools inspect <image>`), the Playwright image
+  together with `@playwright/test`, and pnpm's version in `ci.yml` and `package.json`'s Docker scripts together.
 - **Performance budgets:** the e2e interaction budget is 200 ms locally and twice that in CI
   (`tests/e2e/performance.spec.ts`), and CI runners are about 3× slower than a developer Mac. A failure only in CI
   (e.g. 407 ms against 400) still needs a local measurement and a real fix: never raise the budget or just re-run.
@@ -139,7 +146,7 @@ git merges). CI runs the suite with Python 3.9 and a current version.
 dashboard or skills change, so `/plugin marketplace update` delivers them and running dashboard servers restart on the
 new dashboard (`atm serve --refresh`).
 
-Every release gets **two** entries (`npm run check` fails without either):
+Every release gets **two** entries (`pnpm run check` fails without either):
 - `plugin/CHANGELOG.md` — the detailed record, for developers: every change, with command names and flags.
 - `plugin/WHATS-NEW.md` — what users see in the dashboard's What's new: 3–6 short
   bullets in plain language about what a user notices. No command flags, internals or file names; one idea per

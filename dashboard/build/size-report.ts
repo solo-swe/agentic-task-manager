@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite';
 
 /**
- * `npm run size`: what the shipped single-file dashboard is made of (T-342), largest first: each module's share of the
+ * `pnpm run size`: what the shipped single-file dashboard is made of (T-342), largest first: each module's share of the
  * minified JavaScript as Rollup renders it, grouped by package for node_modules, and the CSS and the page's other
  * assets. Only when ATM_SIZE_REPORT is set, so ordinary builds stay quiet.
  */

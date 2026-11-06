@@ -138,7 +138,7 @@ def resolve(importer, node):
     return ".".join(base + [node.module])
 HEADER = (
     "# Generated from atm-cli/atm/ by atm-cli/build.py. Don't edit this file: edit the modules and run\n"
-    "# `npm run build:cli` in dashboard/ (the pre-commit hook does it too).\n"
+    "# `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too).\n"
 )
 
 
@@ -382,7 +382,7 @@ def build():
 
 
 GENERATED = "Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run"
-GENERATED_HOW = "`npm run build:cli` in dashboard/ (the pre-commit hook does it too)."
+GENERATED_HOW = "`pnpm run build:cli` in dashboard/ (the pre-commit hook does it too)."
 
 
 FILE_TYPES = {}  # schema file -> the type it defines (its title), for $refs between files
@@ -616,7 +616,7 @@ def main(argv):
         for path, content in generated.items():
             if read_text(path) != content:
                 sys.stderr.write(
-                    f"build.py: {os.path.relpath(path, os.path.dirname(HERE))} is stale. Run `npm run build:cli` in "
+                    f"build.py: {os.path.relpath(path, os.path.dirname(HERE))} is stale. Run `pnpm run build:cli` in "
                     "dashboard/ and commit it.\n"
                 )
                 return 1
@@ -627,7 +627,7 @@ def main(argv):
             current = None
         if current != text:
             sys.stderr.write(
-                "build.py: plugin/scripts/atm.py is stale. Run `npm run build:cli` in dashboard/ and commit it.\n"
+                "build.py: plugin/scripts/atm.py is stale. Run `pnpm run build:cli` in dashboard/ and commit it.\n"
             )
             return 1
         return 0
