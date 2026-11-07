@@ -91,7 +91,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I18 | **CI tokens are read-only by default; checkouts don't keep credentials** | `dashboard/tests/unit/ci-workflow.test.ts` |
+| I18 | **CI tokens are read-only by default; checkouts don't keep credentials.** The one exception is the release workflow's last job, which drafts the release and builds nothing (T-452) | `dashboard/tests/unit/ci-workflow.test.ts` |
 | I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`); no Python packages are installed: Typer and Click are vendored in `plugin/scripts/vendor/` at the versions `atm-cli/uv.lock` pins (`vendor.test.mjs`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the committed build artifacts match their sources | CI's freshness checks |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
@@ -627,6 +627,22 @@ tool's folder (`~/.claude/skills/`, or with `--project` the project's `.claude/s
   committed points into one person's home folder.
 - **What the skills carry** is reviewed with the skills (T-441 above): Claude Code's copy adds the same pre-approvals
   the plugin's copy has, from `skills/claude-code.json`.
+
+**The release machinery (T-452, `packaging/README.md`).** The first workflows that publish anything, so the first
+CI permission beyond reading and the first secrets:
+- **Who can release:** a `v*` tag runs `.github/workflows/release.yml`, and only people who can push tags can make
+  one; it drafts the release, which a person publishes after checking it. Publishing runs
+  `.github/workflows/homebrew.yml`, which updates the formula. Nothing is released from a branch or a pull request.
+- **Write access in one job:** both workflows default to `contents: read` (I18). Only the release's last job has
+  `contents: write`, and it builds and runs no code from the repository: it downloads the build jobs' artifacts,
+  checksums them (`SHA256SUMS`) and drafts the release with `gh`. The build jobs, which compile the dependencies,
+  can't write. `ci-workflow.test.ts` checks this.
+- **Secrets, where they're read:** the Developer ID certificate and the notarization key only in the macOS build
+  steps that sign and notarize (in a keychain of the job's own, files removed after); the tap's deploy key only in
+  the Homebrew job, which writes one file (`Formula/atm.rb`) to `solo-swe/homebrew-tap`. No secret reaches a pull
+  request's run: neither workflow runs on pull requests.
+- **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
+  with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 
 ## 4. Keeping it current
 

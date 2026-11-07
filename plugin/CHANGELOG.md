@@ -30,6 +30,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `lib/agents.py`, so others (T-413) are an entry each. Opt-in only: nothing installs on its own.
 
 ### Development
+- **Release machinery for the atm CLI** (T-452, `packaging/README.md`): a `v*` tag runs
+  `.github/workflows/release.yml`, which builds atm for macOS (arm64, x86_64; signed with the Developer ID and
+  notarized), Linux (x86_64, arm64) and Windows and drafts a GitHub release with the archives and `SHA256SUMS`;
+  publishing the draft runs `.github/workflows/homebrew.yml`, which writes `Formula/atm.rb` to `solo-swe/homebrew-tap`
+  (`brew install solo-swe/tap/atm`). `packaging/release.sh` checks the version and tags; `sign-macos.sh` and
+  `homebrew-formula.sh` are the workflows' steps. Only the job that drafts the release can write (I18).
 - **Generated files live in `.generated/`, never committed**: `atm-cli/build.py` writes the data model's types, the
   vocabularies, `atm docs`' topics and the skills as Python modules into `.generated/atm-cli/atm/` (the build reads
   them from there, beside `atm-cli/atm/`), and the dashboard's types and vocabularies into `.generated/dashboard/`
