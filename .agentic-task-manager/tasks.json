@@ -22219,7 +22219,7 @@
       "description": "Slice 5d of [porting-to-rust.md](docs/porting-to-rust.md) §5 (split in three: this, then the `component` group, and the rest of `project` with the registry of projects): `release list|add|edit|archive|notes` (`lib/releases.py`, `cli/commands/release.py`).\n\n## Change\n- `release list` (open releases with their tasks by kind and stage; a task's release is its own, else its sprint's; `--all` with the archived ones), `add` (ID, name, target date, `--released-at`, `--pr` giving it every task of those pull requests, in both files), `edit` (empty values remove a field), `archive`, `notes` (done tasks by type in the project's order with their outcome notes, what isn't done yet); text and `--json` as in Python.\n\n## Tests\nThe `releases.json` scenarios leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-447"
       ],
@@ -22227,7 +22227,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T03:06:36Z",
+      "updated_at": "2026-11-07T03:11:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22238,7 +22238,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T03:05:07Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "bd06bbaab8d501379efb8ae8959f1d479f380a22",
+      "completed_at": "2026-11-07T03:11:03Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:11:03Z",
+          "kind": "outcome",
+          "text": "Rust `release list|add|edit|archive|notes`; split with T-473 (components) and T-474 (project config, workflow, logo, registry); 13 tests left the list (258 left).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-473",
@@ -22251,7 +22262,7 @@
       "description": "Slice 5e of [porting-to-rust.md](docs/porting-to-rust.md) §5: `component list|add|edit` (`lib/components.py`, `cli/commands/component.py`): globs (`--path`, `--add-path`), `--label` and `--review` (empty removes them), `--from-label` turning a label into the component on every task (archived ones too), `--assign` giving it to the tasks its globs match; the checks (IDs, a component already there, a label no task has, `--assign` without a glob); text and `--json` as in Python.\n\n## Tests\nThe `components.json` scenarios leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-472"
       ],
@@ -22259,16 +22270,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:06:37Z",
-      "updated_at": "2026-11-07T03:06:37Z",
+      "updated_at": "2026-11-07T03:11:08Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T03:06:37Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:11:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-474",

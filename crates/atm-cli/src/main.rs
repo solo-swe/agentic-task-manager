@@ -19,6 +19,7 @@ use commands::{
     Context,
     agents::AgentsCommand,
     claim::{ClaimCommand, WatchArgs},
+    component::ComponentCommand,
     loop_::LoopCommand,
     project::ProjectCommand,
     release::ReleaseCommand,
@@ -61,6 +62,9 @@ enum Command {
     /// Release management
     #[command(subcommand)]
     Release(ReleaseCommand),
+    /// Component management
+    #[command(subcommand)]
+    Component(ComponentCommand),
     /// The work loop
     #[command(subcommand)]
     Loop(LoopCommand),
@@ -156,6 +160,56 @@ fn wants_json(args: &[OsString]) -> bool {
         .any(|a| a == "--json" || a == "-j")
 }
 
+/// What clap found wrong with the line, reported as the Python atm (Click) words it where agents and the tests read
+/// it: an unknown option, a missing argument or option, with the command's usage line (not in JSON). Returns the exit
+/// code: 0 for help, else 2.
+fn parse_error(e: &clap::Error, as_json: bool) -> u8 {
+    if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
+        let _ = e.print();
+        return 0;
+    }
+    let message = match (e.kind(), e.get(ContextKind::InvalidArg)) {
+        (ErrorKind::UnknownArgument, Some(ContextValue::String(option)))
+            if option.starts_with('-') =>
+        {
+            Some(format!(
+                "No such option: {}",
+                option.split('=').next().unwrap_or(option)
+            ))
+        }
+        (ErrorKind::MissingRequiredArgument, Some(ContextValue::Strings(missing))) => {
+            missing.first().map(|first| {
+                let name = first.split(' ').next().unwrap_or(first);
+                if name.starts_with('-') {
+                    format!("Missing option '{name}'.")
+                } else {
+                    format!("Missing argument '{}'.", name.trim_matches(['<', '>']))
+                }
+            })
+        }
+        _ => None,
+    };
+    let rendered = e.render().to_string();
+    match message {
+        Some(message) => match rendered
+            .lines()
+            .find(|l| l.starts_with("Usage:"))
+            .filter(|_| !as_json)
+        {
+            Some(usage) => report(&format!("{message}\n{usage}"), 2, false),
+            None => report(&message, 2, as_json),
+        },
+        None if as_json => {
+            let first = rendered.lines().next().unwrap_or_default();
+            report(first.strip_prefix("error: ").unwrap_or(first), 2, true);
+        }
+        None => {
+            let _ = e.print();
+        }
+    }
+    2
+}
+
 fn run(args: &[OsString]) -> u8 {
     let (target, args) = leading_dir(args);
     let as_json = wants_json(args);
@@ -175,48 +229,7 @@ fn run(args: &[OsString]) -> u8 {
         std::iter::once(OsString::from("atm")).chain(args.iter().cloned()),
     ) {
         Ok(cli) => cli,
-        Err(e) => {
-            if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
-                let _ = e.print();
-                return 0;
-            }
-            // An unknown option, as Click words it (the Python atm's message; agents and the tests read it)
-            if e.kind() == ErrorKind::UnknownArgument
-                && let Some(ContextValue::String(option)) = e.get(ContextKind::InvalidArg)
-                && option.starts_with('-')
-            {
-                let name = option.split('=').next().unwrap_or(option);
-                report(&format!("No such option: {name}"), 2, as_json);
-                return 2;
-            }
-            // A missing argument or option, as Click words it, with the command's usage line (not in JSON)
-            if e.kind() == ErrorKind::MissingRequiredArgument
-                && let Some(ContextValue::Strings(missing)) = e.get(ContextKind::InvalidArg)
-                && let Some(first) = missing.first()
-            {
-                let name = first.split(' ').next().unwrap_or(first);
-                let message = if name.starts_with('-') {
-                    format!("Missing option '{name}'.")
-                } else {
-                    format!("Missing argument '{}'.", name.trim_matches(['<', '>']))
-                };
-                let rendered = e.render().to_string();
-                let usage = rendered.lines().find(|l| l.starts_with("Usage:"));
-                match usage.filter(|_| !as_json) {
-                    Some(usage) => report(&format!("{message}\n{usage}"), 2, false),
-                    None => report(&message, 2, as_json),
-                }
-                return 2;
-            }
-            if as_json {
-                let rendered = e.render().to_string();
-                let first = rendered.lines().next().unwrap_or_default();
-                report(first.strip_prefix("error: ").unwrap_or(first), 2, true);
-            } else {
-                let _ = e.print();
-            }
-            return 2;
-        }
+        Err(e) => return parse_error(&e, as_json),
     };
     let ctx = Context {
         json: cli.json,
@@ -239,6 +252,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
         Command::Sprint(command) => commands::sprint::run(command, ctx, &cwd).map(|()| 0),
         Command::Release(command) => commands::release::run(command, ctx, &cwd).map(|()| 0),
+        Command::Component(command) => commands::component::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),

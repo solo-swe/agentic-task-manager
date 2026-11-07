@@ -122,6 +122,11 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   as in Python: releases with their tasks by kind and stage (a task's release its own, else its sprint's), `--pr`
   giving a new release every task of those pull requests in both files, `--released-at`, `--name` and `--target`
   (empty removes them), archiving, and the Markdown notes draft. Thirteen more tests left the expected-failures list.
+- **The `component` group in the Rust atm** (T-473): `atm component list|add|edit` as in Python: globs (`--path`,
+  `--add-path`), `--label` and `--review` (empty removes them on edit), `--from-label` moving a label onto the
+  component on every task of both files, `--assign` giving it to the tasks its globs match, and their checks. An
+  unknown option is reported with the command's usage line, as Click does. Sixteen more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).
