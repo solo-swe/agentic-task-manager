@@ -24,7 +24,7 @@ fn split_id(id: &str) -> Option<(&str, &str)> {
     (digits > 0).then(|| id.split_at(id.len() - digits))
 }
 
-fn task_ids(document: &Value) -> impl Iterator<Item = &str> {
+pub(crate) fn task_ids(document: &Value) -> impl Iterator<Item = &str> {
     document["tasks"]
         .as_array()
         .into_iter()
@@ -108,7 +108,7 @@ fn check_labels(labels: &[Value]) -> Result<()> {
 }
 
 /// The ID of the sprint called `name`, which a task can be put in: it must exist and not be closed (SR-2.5).
-fn open_sprint(vocab: &Vocabulary, name: &Value) -> Result<String> {
+pub(crate) fn open_sprint(vocab: &Vocabulary, name: &Value) -> Result<String> {
     let state = |s: &Map<String, Value>| s.get("state").and_then(Value::as_str) == Some("closed");
     let Some(sprint) = vocab.find_sprint(Some(name)) else {
         let open: Vec<String> = vocab

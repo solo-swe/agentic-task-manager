@@ -12,6 +12,7 @@ pub mod ids;
 pub mod py;
 pub mod rules;
 pub mod skills;
+pub mod sprint_names;
 pub mod time;
 pub mod vocabulary;
 

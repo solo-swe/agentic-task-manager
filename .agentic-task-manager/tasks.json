@@ -22131,7 +22131,7 @@
       "description": "Slice 5b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task edit <id>` (`lib/edit.py`'s `edit_existing_task`) with all its options: `--name`, `--description` / `--description-file`, `--type`, `--priority`, `--sprint` / `--backlog` (with `sprint_history`), `--release`, `--review`, `--with`, `--add-dep` / `--remove-dep` (refusing cycles), `--add-label` / `--remove-label`, `--add-file` / `--remove-file`, `--add-component` / `--remove-component`, `--add-requirement` / `--remove-requirement`, `--add-use-case` / `--remove-use-case`, `--related`; what changed, in words, as in Python, and `--json`.\n\n## Tests\nThe `task edit` scenarios (`edit.json`, `with-user.json`, `components.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-447"
       ],
@@ -22139,7 +22139,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T02:33:44Z",
+      "updated_at": "2026-11-07T02:37:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22150,7 +22150,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T02:33:44Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "729ccdd5ceebdf6ddbfe2332f51ff143721bfd76",
+      "completed_at": "2026-11-07T02:37:53Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:37:53Z",
+          "kind": "outcome",
+          "text": "Rust `task edit` with every option, all-or-nothing checks and the changed fields in words; Click-style `No such option`; 22 tests left the list (318 left).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-471",
@@ -22163,7 +22174,7 @@
       "description": "Slice 5c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `sprint list|add|edit|start|close|delete|move|backlog` (`lib/sprints.py`): names (generated, `people` or `time`), goals, releases and due dates, one active sprint, closing with its report and the unfinished tasks carried to the next sprint, a new one or the backlog (`--carry-to`, `--reviewed`), moving tasks with their `sprint_history`; text and `--json` as in Python.\n\n## Tests\nThe sprint scenarios (`sprints.json`, `sprint-commands.json`, `sprint-close.json`, `sprints-delete.json`, `review-modes.json`) and `sprints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-447"
       ],
@@ -22171,16 +22182,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T02:37:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T02:05:18Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:37:58Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-472",

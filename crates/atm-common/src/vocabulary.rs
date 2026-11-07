@@ -161,7 +161,8 @@ const SPRINT_NAMING: [&str; 2] = ["people", "time"];
 /// The review modes (SR-3.8): a task's, a component's or the project's.
 pub const REVIEW_MODES: [&str; 4] = ["blocker", "async", "batch", "none"];
 const RELEASE_STATES: [&str; 3] = ["planned", "released", "archived"];
-const MAX_SPRINT_NAME: usize = 48;
+/// The longest sprint name, in characters.
+pub const MAX_SPRINT_NAME: usize = 48;
 
 fn fail(message: impl Into<String>) -> Error {
     Error::failed(message)
@@ -172,7 +173,9 @@ fn one_of(value: &Value, choices: &[&str]) -> bool {
 }
 
 /// `YYYY-MM-DD`, digits and dashes only (not a check of the calendar).
-fn is_date(value: &Value) -> bool {
+/// Whether the value is a date, `YYYY-MM-DD`.
+#[must_use]
+pub fn is_date(value: &Value) -> bool {
     value.as_str().is_some_and(|s| {
         let bytes = s.as_bytes();
         bytes.len() == 10

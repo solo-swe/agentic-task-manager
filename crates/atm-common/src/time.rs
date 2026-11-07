@@ -50,6 +50,24 @@ fn civil_from_days(days: i64) -> (i64, i64, i64) {
     (yoe + era * 400 + i64::from(month <= 2), month, day)
 }
 
+/// atm's clock ([`now`]) in the local time zone (`TZ`, else the system's), as seconds since 1970 shifted by the zone's
+/// offset at that moment: the calendar fields of [`civil`] are then the local ones. UTC when the zone can't be read.
+#[must_use]
+pub fn local_now() -> i64 {
+    let now = now();
+    let offset = jiff::Timestamp::from_second(now)
+        .map_or(0, |at| jiff::tz::TimeZone::system().to_offset(at).seconds());
+    now + i64::from(offset)
+}
+
+/// A time's calendar fields: year, month (1–12), day, hour, minute.
+#[must_use]
+pub fn civil(seconds: i64) -> (i64, i64, i64, i64, i64) {
+    let (days, rest) = (seconds.div_euclid(86_400), seconds.rem_euclid(86_400));
+    let (year, month, day) = civil_from_days(days);
+    (year, month, day, rest / 3600, rest % 3600 / 60)
+}
+
 /// Seconds since 1970 as `YYYY-MM-DDTHH:MM:SSZ`.
 #[must_use]
 pub fn format_iso(seconds: i64) -> String {
@@ -132,6 +150,16 @@ mod tests {
         ] {
             assert_eq!(parse_iso(bad), None, "{bad}");
         }
+    }
+
+    #[test]
+    fn local_time_is_now_shifted_by_a_zone_offset() {
+        let shift = local_now() - now();
+        assert!(shift.abs() <= 14 * 3600 && shift % 900 == 0, "{shift}");
+        assert_eq!(
+            civil(parse_iso("2026-05-12T22:38:00Z").unwrap()),
+            (2026, 5, 12, 22, 38)
+        );
     }
 
     #[test]

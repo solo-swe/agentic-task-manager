@@ -112,6 +112,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   before anything is written (cycles, missing or self dependencies, empty requirements), what changed in words, and
   `--json`. An unknown option is reported as Click words it (`No such option: --status`). Twenty-two more tests left
   the expected-failures list.
+- **The `sprint` group in the Rust atm** (T-471): `atm sprint list|add|edit|start|close|delete|move|backlog` as in
+  Python: generated names (`people`, picked with `ATM_SEED` in tests, or `time` in the local time zone, read with the
+  new `jiff` dependency), goals, releases and due dates, one active sprint, closing with its report and the
+  unfinished tasks carried to a sprint, a new one or the backlog (`--carry-to`, `--name`, `--reviewed`), deleting one
+  made by mistake (`--move-to`, `--force`), and moving tasks with their `sprint_history`. A missing argument is
+  reported as Click words it (`Missing argument 'NAME'.`). Forty-seven more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

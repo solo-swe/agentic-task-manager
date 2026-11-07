@@ -21,6 +21,7 @@ use commands::{
     claim::{ClaimCommand, WatchArgs},
     loop_::LoopCommand,
     project::ProjectCommand,
+    sprint::SprintCommand,
     task::TaskCommand,
 };
 use serde_json::json;
@@ -53,6 +54,9 @@ enum Command {
     /// Project-level config
     #[command(subcommand)]
     Project(ProjectCommand),
+    /// Sprint management
+    #[command(subcommand)]
+    Sprint(SprintCommand),
     /// The work loop
     #[command(subcommand)]
     Loop(LoopCommand),
@@ -181,6 +185,25 @@ fn run(args: &[OsString]) -> u8 {
                 report(&format!("No such option: {name}"), 2, as_json);
                 return 2;
             }
+            // A missing argument or option, as Click words it, with the command's usage line (not in JSON)
+            if e.kind() == ErrorKind::MissingRequiredArgument
+                && let Some(ContextValue::Strings(missing)) = e.get(ContextKind::InvalidArg)
+                && let Some(first) = missing.first()
+            {
+                let name = first.split(' ').next().unwrap_or(first);
+                let message = if name.starts_with('-') {
+                    format!("Missing option '{name}'.")
+                } else {
+                    format!("Missing argument '{}'.", name.trim_matches(['<', '>']))
+                };
+                let rendered = e.render().to_string();
+                let usage = rendered.lines().find(|l| l.starts_with("Usage:"));
+                match usage.filter(|_| !as_json) {
+                    Some(usage) => report(&format!("{message}\n{usage}"), 2, false),
+                    None => report(&message, 2, as_json),
+                }
+                return 2;
+            }
             if as_json {
                 let rendered = e.render().to_string();
                 let first = rendered.lines().next().unwrap_or_default();
@@ -210,6 +233,7 @@ fn run(args: &[OsString]) -> u8 {
     let result: Result<u8, Error> = match cli.command {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
+        Command::Sprint(command) => commands::sprint::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
