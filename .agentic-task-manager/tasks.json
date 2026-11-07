@@ -21210,7 +21210,7 @@
       "description": "Slice 4 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the claims store, `claim list|heartbeat|hold`, the renewal by every command and the lease of §4. The watcher is the binary started detached (`atm _claim-watch`), following the shell by pid and start time (`sysinfo`, proposed to Hakan first as a new dependency); invariant I24's check moves to the Rust code.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-445",
         "T-439",
@@ -21221,7 +21221,7 @@
         "dashboard/tests/unit/security-invariants.test.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T02:27:14Z",
+      "updated_at": "2026-11-07T02:33:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21232,7 +21232,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T02:27:14Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "1f5189cc84db09e934fbf59093b6bf04e6b4bd7b",
+      "completed_at": "2026-11-07T02:33:39Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:33:39Z",
+          "kind": "outcome",
+          "text": "Rust `claim list|heartbeat|hold` (watcher = `atm _claim-watch`, detached, following the shell by pid and start time via sysinfo) and renewal by every command; I24 check covers Rust; 15 tests left the list (340 left). The registry listing in `heartbeat --auto` waits for T-472.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-447",
@@ -22120,7 +22131,7 @@
       "description": "Slice 5b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task edit <id>` (`lib/edit.py`'s `edit_existing_task`) with all its options: `--name`, `--description` / `--description-file`, `--type`, `--priority`, `--sprint` / `--backlog` (with `sprint_history`), `--release`, `--review`, `--with`, `--add-dep` / `--remove-dep` (refusing cycles), `--add-label` / `--remove-label`, `--add-file` / `--remove-file`, `--add-component` / `--remove-component`, `--add-requirement` / `--remove-requirement`, `--add-use-case` / `--remove-use-case`, `--related`; what changed, in words, as in Python, and `--json`.\n\n## Tests\nThe `task edit` scenarios (`edit.json`, `with-user.json`, `components.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-447"
       ],
@@ -22128,16 +22139,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T02:33:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T02:05:18Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:33:44Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-471",

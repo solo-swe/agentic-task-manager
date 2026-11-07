@@ -453,5 +453,327 @@ pub fn add_new_tasks(project: &mut Project, entries: &[Task]) -> Result<Added> {
     added.ok_or_else(|| Error::failed("no tasks added"))
 }
 
+/// What `atm task edit` changes: what isn't given (`None`, or an empty list) changes nothing; an empty `release`,
+/// `review` or `with_` removes it; `backlog` takes the task out of its sprint; `components_auto` adds the components its
+/// files are in.
+#[derive(Debug, Clone, Default)]
+#[allow(clippy::struct_excessive_bools)] // reason: each is one of the command's flags, as the Python atm has them
+pub struct TaskEdit {
+    /// A new name.
+    pub name: Option<String>,
+    /// A new description.
+    pub description: Option<String>,
+    /// The sprint to move it to.
+    pub sprint: Option<String>,
+    /// Out of its sprint, into the backlog.
+    pub backlog: bool,
+    /// A new type.
+    pub type_: Option<String>,
+    /// A new priority.
+    pub priority: Option<String>,
+    /// A new release (empty: none).
+    pub release: Option<String>,
+    /// A new review mode (empty: none).
+    pub review: Option<String>,
+    /// Who it is done together with (empty: no one).
+    pub with_: Option<String>,
+    /// Add the components its files are in.
+    pub components_auto: bool,
+    /// Files to add.
+    pub add_files: Vec<String>,
+    /// Files to remove.
+    pub remove_files: Vec<String>,
+    /// Dependencies to add.
+    pub add_dependencies: Vec<String>,
+    /// Dependencies to remove.
+    pub remove_dependencies: Vec<String>,
+    /// Labels to add.
+    pub add_labels: Vec<String>,
+    /// Labels to remove.
+    pub remove_labels: Vec<String>,
+    /// Components to add.
+    pub add_components: Vec<String>,
+    /// Components to remove.
+    pub remove_components: Vec<String>,
+    /// Related tasks to add.
+    pub add_related: Vec<String>,
+    /// Related tasks to remove.
+    pub remove_related: Vec<String>,
+    /// Requirements to add.
+    pub add_requirements: Vec<String>,
+    /// Requirements to remove.
+    pub remove_requirements: Vec<String>,
+    /// Use cases to add.
+    pub add_use_cases: Vec<String>,
+    /// Use cases to remove.
+    pub remove_use_cases: Vec<String>,
+}
+
+/// What `atm task edit` did: the task after it, the fields that changed (in the order they were changed), and the
+/// vocabularies (for the components new files suggest).
+#[derive(Debug, Clone)]
+pub struct Edited {
+    /// The task after the edit.
+    pub task: Task,
+    /// The names of the fields that changed; nothing is written when none did.
+    pub changed: Vec<String>,
+    /// The project's vocabularies.
+    pub vocab: Vocabulary,
+}
+
+fn strings(values: &[String]) -> Vec<Value> {
+    values.iter().map(|v| json!(v)).collect()
+}
+
+/// Apply the edit to `task` (a copy: the caller writes it back only when this succeeds). Returns the fields changed.
+#[allow(clippy::too_many_lines)] // reason: one step per option, in the order the Python edit_task applies them
+fn edit_task(
+    work: &mut Working,
+    task: &mut Task,
+    edit: &TaskEdit,
+    archived: &mut Archived,
+) -> Result<Vec<String>> {
+    let vocab = Vocabulary::of_document(&work.document)?;
+    let mut changed: Vec<String> = Vec::new();
+    let task_id = task.get("id").map(py_str).unwrap_or_default();
+    let set_field = |task: &mut Task, changed: &mut Vec<String>, key: &str, value: Value| {
+        if task.get(key) != Some(&value) {
+            task.insert(key.into(), value);
+            changed.push(key.into());
+        }
+    };
+    let edit_list = |task: &mut Task,
+                     changed: &mut Vec<String>,
+                     key: &str,
+                     add: &[Value],
+                     remove: &[Value]|
+     -> Result<()> {
+        let current = py_list(task.get(key), key)?;
+        let mut updated: Vec<Value> = current
+            .iter()
+            .filter(|v| !remove.contains(v))
+            .cloned()
+            .collect();
+        updated.extend(add.iter().filter(|v| !current.contains(v)).cloned());
+        if updated != current {
+            task.insert(key.into(), Value::Array(updated));
+            changed.push(key.into());
+        }
+        Ok(())
+    };
+
+    if let Some(name) = &edit.name {
+        set_field(task, &mut changed, "name", json!(name));
+    }
+    if let Some(description) = &edit.description {
+        set_field(task, &mut changed, "description", json!(description));
+    }
+    if edit.sprint.is_some() || edit.backlog {
+        let sprint = match (&edit.sprint, edit.backlog) {
+            (_, true) | (None, _) => None,
+            (Some(name), false) => Some(open_sprint(&vocab, &json!(name))?),
+        };
+        if set_sprint(task, sprint.as_deref(), &now_iso()) {
+            changed.push("sprint".into());
+        }
+    }
+    if let Some(type_) = &edit.type_ {
+        if !vocab.types.iter().any(|t| &t.id == type_) {
+            let known: Vec<&str> = vocab.types.iter().map(|t| t.id.as_str()).collect();
+            return Err(Error::Invalid(format!(
+                "unknown type {}; use one of {}",
+                py_repr(&json!(type_)),
+                known.join(", ")
+            )));
+        }
+        set_field(task, &mut changed, "type", json!(type_));
+    }
+    if let Some(priority) = &edit.priority {
+        if !vocab.priorities.iter().any(|p| &p.id == priority) {
+            let known: Vec<&str> = vocab.priorities.iter().map(|p| p.id.as_str()).collect();
+            return Err(Error::Invalid(format!(
+                "unknown priority {}; use one of {}",
+                py_repr(&json!(priority)),
+                known.join(", ")
+            )));
+        }
+        set_field(task, &mut changed, "priority", json!(priority));
+    }
+    edit_list(
+        task,
+        &mut changed,
+        "files",
+        &strings(&edit.add_files),
+        &strings(&edit.remove_files),
+    )?;
+    let labels = strings(&edit.add_labels);
+    check_labels(&labels)?;
+    edit_list(
+        task,
+        &mut changed,
+        "labels",
+        &labels,
+        &strings(&edit.remove_labels),
+    )?;
+    // An entry is an ID or a Markdown link to where it is defined (T-391): any text but an empty one
+    for (key, add, remove) in [
+        (
+            "requirements",
+            &edit.add_requirements,
+            &edit.remove_requirements,
+        ),
+        ("use_cases", &edit.add_use_cases, &edit.remove_use_cases),
+    ] {
+        if add.iter().any(|v| atm_common::py::strip(v).is_empty()) {
+            let what = key[..key.len() - 1].replace('_', " ");
+            return Err(Error::Invalid(format!("an empty {what} can't be added")));
+        }
+        edit_list(task, &mut changed, key, &strings(add), &strings(remove))?;
+    }
+    for (key, value) in [
+        ("release", &edit.release),
+        ("review", &edit.review),
+        ("with", &edit.with_),
+    ] {
+        match value.as_deref() {
+            Some("") => {
+                if task.shift_remove(key).is_some() {
+                    changed.push(key.into());
+                }
+            }
+            Some(value) => {
+                let value = json!(value);
+                match key {
+                    "release" => vocab.known_release(&py_str(&value))?,
+                    "review" => check_review(&value)?,
+                    _ => check_with(&value)?,
+                }
+                set_field(task, &mut changed, key, value);
+            }
+            None => {}
+        }
+    }
+    if edit.components_auto {
+        let files = py_list(task.get("files"), "files")?;
+        let suggested: Vec<Value> = suggest_components(&vocab, &files)
+            .into_iter()
+            .map(Value::String)
+            .collect();
+        edit_list(task, &mut changed, "components", &suggested, &[])?;
+    }
+    let components = component_ids(&vocab, &strings(&edit.add_components))?;
+    edit_list(
+        task,
+        &mut changed,
+        "components",
+        &components,
+        &strings(&edit.remove_components),
+    )?;
+    let known: HashSet<String> = task_ids(&work.document).map(String::from).collect();
+    for other in &edit.add_related {
+        if *other == task_id {
+            return Err(Error::Invalid(format!(
+                "{task_id} can't be related to itself"
+            )));
+        }
+        if !known.contains(other) && !archived.has(work, &json!(other))? {
+            return Err(Error::Invalid(format!(
+                "{task_id} can't be related to {other}, which doesn't exist"
+            )));
+        }
+    }
+    edit_list(
+        task,
+        &mut changed,
+        "related",
+        &strings(&edit.add_related),
+        &strings(&edit.remove_related),
+    )?;
+    for key in ["components", "related"] {
+        if task.get(key).is_some_and(|v| !truthy(v)) {
+            task.shift_remove(key);
+        }
+    }
+    let mut missing = Vec::new();
+    for dep in &edit.add_dependencies {
+        if !known.contains(dep) && !archived.has(work, &json!(dep))? {
+            missing.push(dep.clone());
+        }
+    }
+    if !missing.is_empty() {
+        return Err(Error::Invalid(format!(
+            "{task_id} can't depend on {}, which doesn't exist",
+            missing.join(", ")
+        )));
+    }
+    if edit.add_dependencies.contains(&task_id) {
+        return Err(Error::Invalid(format!("{task_id} can't depend on itself")));
+    }
+    edit_list(
+        task,
+        &mut changed,
+        "dependencies",
+        &strings(&edit.add_dependencies),
+        &strings(&edit.remove_dependencies),
+    )?;
+    Ok(changed)
+}
+
+/// `atm task edit`: change a task's definition (never its status), as the project's actor.
+///
+/// # Errors
+/// An unknown task (it says when the task is archived), an invalid value, a dependency that doesn't exist or makes a
+/// cycle: nothing is written then.
+pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit) -> Result<Edited> {
+    let actor = project.actor().map(String::from);
+    let mut edited: Option<Edited> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let mut archived = Archived::default();
+        let at = work.document["tasks"].as_array().and_then(|list| {
+            list.iter()
+                .position(|t| t.get("id").and_then(Value::as_str) == Some(task_id))
+        });
+        let Some(at) = at else {
+            let hint = if archived.has(work, &json!(task_id))? {
+                " (it is archived: atm db unarchive brings it back)"
+            } else {
+                ""
+            };
+            return Err(Error::failed(format!("no task {task_id}{hint}")));
+        };
+        let mut task = work.document["tasks"][at]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        let changed = edit_task(work, &mut task, edit, &mut archived)?;
+        // The cycle check sees the task as edited
+        let mut all: Vec<Task> = work.document["tasks"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|t| t.as_object().cloned().unwrap_or_default())
+            .collect();
+        all[at].clone_from(&task);
+        if let Some(cycle) = find_cycle(&all.iter().collect::<Vec<_>>()) {
+            return Err(Error::Invalid(format!(
+                "these dependencies would make a cycle: {}",
+                cycle.join(" -> ")
+            )));
+        }
+        if !changed.is_empty() {
+            atm_common::edits::touch(&mut task, actor.as_deref(), &now_iso());
+            work.tasks()[at] = Value::Object(task.clone());
+        }
+        let vocab = Vocabulary::of_document(&work.document)?;
+        edited = Some(Edited {
+            task,
+            changed,
+            vocab,
+        });
+        Ok(())
+    })?;
+    edited.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
+}
+
 #[cfg(test)]
 mod tests;

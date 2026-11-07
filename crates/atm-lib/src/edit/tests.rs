@@ -174,3 +174,81 @@ fn a_note_goes_on_any_task_and_says_when_it_is_archived() {
     let long = "x".repeat(501);
     assert!(crate::changes::add_task_note(&mut p, "T-1", &long).is_err());
 }
+
+#[test]
+fn an_edit_says_what_changed_and_writes_nothing_when_it_fails() {
+    let mut p = project(
+        json!([
+            {"id": "T-1", "name": "a", "status": "todo", "labels": ["x"], "release": "R"},
+            {"id": "T-2", "name": "b", "status": "todo", "dependencies": ["T-1"]}
+        ]),
+        json!({"releases": [{"id": "R"}]}),
+    );
+    let edit = TaskEdit {
+        name: Some("A".into()),
+        add_labels: vec!["y".into()],
+        remove_labels: vec!["x".into()],
+        release: Some(String::new()),
+        ..TaskEdit::default()
+    };
+    let edited = edit_existing_task(&mut p, "T-1", &edit).unwrap();
+    assert_eq!(edited.changed, ["name", "labels", "release"]);
+    assert_eq!(edited.task["labels"], json!(["y"]));
+    assert!(edited.task.get("release").is_none());
+    assert_eq!(edited.task["updated_by"], json!("claude:a"));
+
+    let nothing = edit_existing_task(&mut p, "T-1", &TaskEdit::default()).unwrap();
+    assert_eq!(nothing.changed.len(), 0);
+
+    let cycle = TaskEdit {
+        name: Some("changed".into()),
+        add_dependencies: vec!["T-2".into()],
+        ..TaskEdit::default()
+    };
+    let err = edit_existing_task(&mut p, "T-1", &cycle).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "these dependencies would make a cycle: T-1 -> T-2 -> T-1"
+    );
+    assert_eq!(
+        p.store().document().unwrap()["tasks"][0]["name"],
+        json!("A")
+    );
+    for (edit, message) in [
+        (
+            TaskEdit {
+                add_dependencies: vec!["T-1".into()],
+                ..TaskEdit::default()
+            },
+            "T-1 can't depend on itself",
+        ),
+        (
+            TaskEdit {
+                add_dependencies: vec!["T-9".into()],
+                ..TaskEdit::default()
+            },
+            "T-1 can't depend on T-9, which doesn't exist",
+        ),
+        (
+            TaskEdit {
+                add_requirements: vec![" ".into()],
+                ..TaskEdit::default()
+            },
+            "an empty requirement can't be added",
+        ),
+        (
+            TaskEdit {
+                add_related: vec!["T-1".into()],
+                ..TaskEdit::default()
+            },
+            "T-1 can't be related to itself",
+        ),
+    ] {
+        assert_eq!(
+            edit_existing_task(&mut p, "T-1", &edit)
+                .unwrap_err()
+                .to_string(),
+            message
+        );
+    }
+}

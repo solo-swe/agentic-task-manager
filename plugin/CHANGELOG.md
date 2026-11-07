@@ -106,6 +106,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   hidden `atm _claim-watch`, following the shell by pid and start time (`sysinfo`); invariant I24's check
   (`security-invariants.test.ts`) covers the Rust atm: it starts only `git` and itself. Fifteen more tests left the
   expected-failures list.
+- **`atm task edit` in the Rust atm** (T-470): every option of the Python command (name, description or its file,
+  sprint or backlog with the sprint's history, type, priority, release, review, `with`, `--components auto`, and the
+  add/remove pairs for files, dependencies, labels, components, related tasks, requirements and use cases), checked
+  before anything is written (cycles, missing or self dependencies, empty requirements), what changed in words, and
+  `--json`. An unknown option is reported as Click words it (`No such option: --status`). Twenty-two more tests left
+  the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

@@ -13,7 +13,7 @@ use std::process::ExitCode;
 
 use atm_common::Error;
 use atm_common::py::to_json;
-use clap::error::ErrorKind;
+use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{Parser, Subcommand};
 use commands::{
     Context,
@@ -171,6 +171,15 @@ fn run(args: &[OsString]) -> u8 {
             if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
                 let _ = e.print();
                 return 0;
+            }
+            // An unknown option, as Click words it (the Python atm's message; agents and the tests read it)
+            if e.kind() == ErrorKind::UnknownArgument
+                && let Some(ContextValue::String(option)) = e.get(ContextKind::InvalidArg)
+                && option.starts_with('-')
+            {
+                let name = option.split('=').next().unwrap_or(option);
+                report(&format!("No such option: {name}"), 2, as_json);
+                return 2;
             }
             if as_json {
                 let rendered = e.render().to_string();

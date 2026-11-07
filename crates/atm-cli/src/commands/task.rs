@@ -108,6 +108,8 @@ pub enum TaskCommand {
     Add(add::AddArgs),
     /// Add a note to a task (at most 500 characters).
     Note(add::NoteArgs),
+    /// Change a task's definition (not its status: use `atm task state`).
+    Edit(edit::EditArgs),
     /// Move a task to another state: `in_progress`, `in_review`, done, todo, blocked or skipped. A review's decision is
     /// `atm task review`.
     State(state::StateArgs),
@@ -127,6 +129,7 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
         TaskCommand::Deps { task_id } => deps(&task_id, ctx, cwd),
         TaskCommand::Add(args) => add::add(args, ctx, cwd),
         TaskCommand::Note(args) => add::note(&args, ctx, cwd),
+        TaskCommand::Edit(args) => edit::edit(args, ctx, cwd),
         TaskCommand::State(args) => state::run(&args, ctx, cwd),
         TaskCommand::Review(command) => review::run(command, ctx, cwd),
     }
@@ -415,6 +418,7 @@ fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
 }
 
 mod add;
+mod edit;
 mod review;
 mod state;
 
