@@ -10,6 +10,7 @@ pub mod edits;
 pub mod error;
 pub mod home;
 pub mod ids;
+pub mod pathtext;
 pub mod py;
 pub mod repository;
 pub mod rules;
@@ -22,6 +23,7 @@ pub mod vocabulary;
 
 pub use error::{Error, Result};
 pub use ids::TaskId;
+pub use pathtext::Shown;
 pub use vocabulary::{Kind, Vocabulary};
 
 /// atm's version: the workspace's, its one source (the dashboard is stamped with it; until the switch the plugin's

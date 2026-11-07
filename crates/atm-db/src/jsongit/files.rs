@@ -3,6 +3,8 @@
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::ids::valid_task_id;
 use atm_common::py::repr_str;
 use atm_common::{Error, Result, Task, Vocabulary};
@@ -43,7 +45,7 @@ fn read_task_file(paths: &Paths) -> Result<Value> {
     if !paths.tasks.is_file() {
         return Err(Error::failed(format!(
             "no tasks.json in {}. Run /atm:create-tasks first.",
-            paths.dir.display()
+            paths.dir.shown()
         )));
     }
     read_json(&paths.tasks)
@@ -51,7 +53,7 @@ fn read_task_file(paths: &Paths) -> Result<Value> {
         .ok_or_else(|| {
             Error::failed(format!(
                 "{} is not a valid task file (expected an object with a 'tasks' list)",
-                paths.tasks.display()
+                paths.tasks.shown()
             ))
         })
 }
@@ -64,7 +66,7 @@ fn read_task_file(paths: &Paths) -> Result<Value> {
 pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
     let document = read_task_file(paths)?;
     let vocabulary = Vocabulary::of_document(&document)?;
-    let file = paths.tasks.display();
+    let file = paths.tasks.shown();
     for (i, task) in document["tasks"]
         .as_array()
         .into_iter()
@@ -196,7 +198,7 @@ pub fn archive_document(paths: &Paths) -> Result<Value> {
         .ok_or_else(|| {
             Error::failed(format!(
                 "{} is not a valid archive (expected an object with a 'tasks' list)",
-                path.display()
+                path.shown()
             ))
         })
 }

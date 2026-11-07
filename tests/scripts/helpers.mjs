@@ -50,9 +50,11 @@ export function git(args, cwd) {
   return result.stdout.trim();
 }
 
-/** A fresh temporary directory (real path, so it matches what the scripts report on macOS). */
+/** A fresh temporary directory, as atm writes its path: the real path (macOS's /var is /private/var), and on Windows
+ * the long names (never `RUNNER~1`) with `/` between the parts (T-480). Node's fs takes `/` on Windows too. */
 export function tempDir(prefix = 'atm-test-') {
-  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return process.platform === 'win32' ? fs.realpathSync.native(dir).replace(/\\/g, '/') : fs.realpathSync(dir);
 }
 
 /**

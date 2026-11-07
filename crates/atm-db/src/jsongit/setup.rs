@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::{Error, Result};
 
 use super::paths::Paths;
@@ -32,7 +34,7 @@ pub fn rel(root: &Path, path: &Path) -> String {
             .map(|part| part.as_os_str().to_string_lossy())
             .collect::<Vec<_>>()
             .join("/"),
-        Err(_) => path.display().to_string(),
+        Err(_) => path.shown(),
     }
 }
 
@@ -58,12 +60,12 @@ pub fn stage(root: &Path, paths: &[&Path]) {
 /// The command git runs to merge the task files: this atm, quoted for the shell.
 #[must_use]
 pub fn launcher_command() -> String {
-    let exe = std::env::current_exe().map_or_else(|_| "atm".into(), |p| p.display().to_string());
+    let exe = std::env::current_exe().map_or_else(|_| "atm".into(), |p| p.shown());
     format!("'{}' db merge-driver %O %A %B", exe.replace('\'', "'\\''"))
 }
 
 fn write(path: &Path, text: &str) -> Result<()> {
-    std::fs::write(path, text).map_err(|e| Error::failed(format!("{}: {e}", path.display())))
+    std::fs::write(path, text).map_err(|e| Error::failed(format!("{}: {e}", path.shown())))
 }
 
 /// In git: `tasks.json merge=atm` in the task folder's `.gitattributes` (staged when added), and the driver registered
@@ -91,7 +93,7 @@ pub fn ensure_merge_driver(paths: &Paths) -> Result<bool> {
         return Ok(false);
     }
     std::fs::create_dir_all(&paths.dir)
-        .map_err(|e| Error::failed(format!("{}: {e}", paths.dir.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", paths.dir.shown())))?;
     let separator = if text.is_empty() || text.ends_with('\n') {
         ""
     } else {
@@ -118,7 +120,7 @@ pub fn ensure_archive_merge(paths: &Paths) -> Result<bool> {
     ensure_merge_driver(paths)?;
     let attributes = paths.dir.join(".gitattributes");
     let text = std::fs::read_to_string(&attributes)
-        .map_err(|e| Error::failed(format!("{}: {e}", attributes.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", attributes.shown())))?;
     if text.lines().any(|l| l == ARCHIVE_ATTRIBUTES_LINE) {
         return Ok(false);
     }

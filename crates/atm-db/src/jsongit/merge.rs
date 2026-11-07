@@ -6,6 +6,8 @@
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::home::write_text_atomic;
 use atm_common::py::{py_repr, py_str, to_json};
 use atm_common::{Error, Kind, Result, Vocabulary};
@@ -616,7 +618,7 @@ pub fn merge_files(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String
     };
     let (merged, conflicts) = merge_task_files(b, o, t);
     write_text_atomic(ours, &(to_json(&merged) + "\n"))
-        .map_err(|e| Error::failed(format!("{}: {e}", ours.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", ours.shown())))?;
     Ok(conflicts)
 }
 

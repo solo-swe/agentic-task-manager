@@ -22572,7 +22572,7 @@
       "description": "Part 2 of the switch (split from T-454), ready to land with it: `tests/scripts/` runs only against the Rust binary (no `ATM_IMPL`, no expected-failures list; `expectRust` becomes `expect`), the Python-only tests go (`build.test.mjs`, `vendor.test.mjs`, `tests/lib/`), `pnpm run dev`'s API is `atm _serve`, the e2e fixture calls the Rust `atm`; CI's Python jobs go. The suite on Windows is T-480's.\n\nPrepared on a branch (`dev/0.33.0-switch`), merged with T-454.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-477"
       ],
@@ -22582,7 +22582,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-07T23:09:45Z",
+      "updated_at": "2026-11-07T23:14:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22592,7 +22592,7 @@
         }
       ],
       "sprint": "The Rust port",
-      "commit": "bd438cfe46e6524b63d0dfe77d2f80337d7797b2",
+      "commit": "2c2909734953474944e1b61a83f2860534b65e17",
       "notes": [
         {
           "at": "2026-11-07T18:52:57Z",
@@ -22603,10 +22603,18 @@
           "at": "2026-11-07T23:00:14Z",
           "kind": "failure",
           "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-07T23:14:24Z",
+          "kind": "outcome",
+          "text": "On `dev/0.33.0-switch` (lands with T-454): the suite runs only against the binary (577 pass, CI green on Linux and macOS), Python-only tests and the expected-failures list gone, `expectRust` merged into `expect`, the e2e fixture and `pnpm run dev` on the binary, CI’s Python jobs gone. Windows suite split out as T-480.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-07T23:00:33Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-07T23:14:24Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-479",
@@ -22650,7 +22658,7 @@
       "description": "Split from T-478: `tests/scripts/` passes on Windows, and CI's `windows-latest` job runs it (today it runs `cargo test` only; the suite step is skipped there). Work on `dev/0.33.0-switch`, which lands with T-454.\n\n## Where it stands\nCI run 42423363722: 479 pass, 40 fail, and `claims.test.mjs` and `serve.test.mjs` hang until the watchdog kills them. The failures, by area:\n- `agents.test.mjs`: links and copies of the skills\n- `git.test.mjs` (`atm commit`, `--dir`): paths with `\\` instead of `/`\n- scenarios `paths.json`, `logo.json`, `projects.json`, `dir.json`: path text in the output\n- `docs.test.mjs`: the topics' line ends (CRLF)\n- `lock.test.mjs` (SIGTERM), `registry.test.mjs` (a linked worktree), `stress.test.mjs`, `dev-api.test.mjs`, `sandbox-verdict.test.mjs`\n- scenarios that run `sh` (Git's `sh` is on the runners' PATH)\n\n## Change\nFix atm where it is wrong on Windows (paths it prints or gives git with `/`, as `atm-db`'s `rel` does since 50c98f5); fix the tests where they assume POSIX (signals, symlinks, file modes); find why `claims` and `serve` hang. Then drop the `if` that skips the suite on Windows in `.github/workflows/ci.yml`.\n\n## Tests\nThe suite passes on all three platforms in CI.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-478"
       ],
@@ -22660,7 +22668,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-07T23:09:20Z",
-      "updated_at": "2026-11-07T23:09:24Z",
+      "updated_at": "2026-11-07T23:46:53Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22673,7 +22681,16 @@
       "components": [
         "cli",
         "ci"
-      ]
+      ],
+      "notes": [
+        {
+          "at": "2026-11-07T23:46:43Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-07T23:46:53Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

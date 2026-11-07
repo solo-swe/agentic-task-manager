@@ -2,6 +2,8 @@
 //! the nearest folder with a task folder), the task folder, and the checks that keep atm inside the project.
 
 use std::fs;
+
+use atm_common::Shown;
 use std::path::{Path, PathBuf};
 
 use atm_common::{ARCHIVE_FILE, Error, Result, TASK_DIR, TASKS_FILE};
@@ -43,7 +45,7 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
     if is_symlink(task_dir) {
         return Err(Error::failed(format!(
             "{} is a symlink; atm works only on a real folder inside the project",
-            task_dir.display()
+            task_dir.shown()
         )));
     }
     if !task_dir.is_dir() {
@@ -54,8 +56,8 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
     if !real_dir.starts_with(&real_root) {
         return Err(Error::failed(format!(
             "{} leads outside the project ({})",
-            task_dir.display(),
-            real_dir.display()
+            task_dir.shown(),
+            real_dir.shown()
         )));
     }
     for name in FOLDER_FILES {
@@ -63,7 +65,7 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
         if is_symlink(&file) {
             return Err(Error::failed(format!(
                 "{} is a symlink; atm reads and writes only regular files there",
-                file.display()
+                file.shown()
             )));
         }
     }
@@ -71,11 +73,12 @@ pub fn check_task_folder(root: &Path, task_dir: &Path) -> Result<()> {
 }
 
 /// The project's root for `cwd`: git's top level; outside git, the nearest folder with a task folder or
-/// `docs/tasks.json`, else `cwd` itself.
+/// `docs/tasks.json`, else `cwd` itself. On Windows its real, long form (atm-common's `pathtext::real`), as the
+/// working folder is, so that paths under one compare with paths under the other.
 #[must_use]
 pub fn project_root(cwd: &Path) -> PathBuf {
     if let Some(top) = git(&["rev-parse", "--show-toplevel"], cwd) {
-        return PathBuf::from(top);
+        return atm_common::pathtext::real(Path::new(&top));
     }
     let mut d = cwd;
     loop {
