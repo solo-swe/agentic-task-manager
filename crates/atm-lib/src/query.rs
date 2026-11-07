@@ -108,6 +108,55 @@ fn sprint_names(vocab: &Vocabulary, given: &[String]) -> Result<Vec<String>> {
         .collect()
 }
 
+/// The tasks `--sprint` (repeatable), `--backlog`, `--release` and `--component` keep (SR-3.2): `task list`'s and
+/// `project status`'s scope. A task's release is its effective one (its own, else its sprint's).
+pub(crate) struct Scope {
+    names: Vec<String>,
+    backlog: bool,
+    release: Option<String>,
+    component: Option<String>,
+}
+
+impl Scope {
+    /// The scope of the filters, after checking that the sprints and the release they name exist.
+    pub(crate) fn new(vocab: &Vocabulary, filters: &Filters) -> Result<Self> {
+        let names = sprint_names(vocab, &filters.sprint)?;
+        // An option given as an empty text keeps everything, as in Python
+        let release = filters.release.clone().filter(|r| !r.is_empty());
+        if let Some(release) = &release {
+            vocab.known_release(release)?;
+        }
+        let component = filters.component.clone().filter(|c| !c.is_empty());
+        Ok(Self {
+            names,
+            backlog: filters.backlog,
+            release,
+            component,
+        })
+    }
+
+    pub(crate) fn keeps(&self, vocab: &Vocabulary, t: &Task) -> bool {
+        let sprint = vocab
+            .find_sprint(t.get("sprint"))
+            .and_then(|s| s.get("id"))
+            .and_then(Value::as_str);
+        if !self.names.is_empty() && !sprint.is_some_and(|s| self.names.iter().any(|n| n == s)) {
+            return false;
+        }
+        if self.backlog && sprint.is_some_and(|s| !s.is_empty()) {
+            return false;
+        }
+        if let Some(release) = &self.release
+            && vocab.effective_release(t).as_ref().and_then(Value::as_str) != Some(release.as_str())
+        {
+            return false;
+        }
+        self.component
+            .as_deref()
+            .is_none_or(|c| contains(t.get("components").filter(|v| truthy(v)), c))
+    }
+}
+
 /// A task's labels as a set, as Python's `set(labels or [])` makes one (a text's characters, if it is one).
 fn label_set(labels: Option<&Value>) -> HashSet<String> {
     match labels {
@@ -129,18 +178,14 @@ pub fn list_matching<'p>(project: &'p Project, filters: &Filters) -> Result<Vec<
     let store = project.store();
     let vocab = store.vocabulary()?;
     let ready = ready_ids(project)?;
-    let names = sprint_names(vocab, &filters.sprint)?;
+    let scope = Scope::new(vocab, filters)?;
     // An option given as an empty text keeps everything, as in Python
     let given = |o: &Option<String>| o.clone().filter(|v| !v.is_empty());
-    let (release, type_, priority, agent) = (
-        given(&filters.release),
+    let (type_, priority, agent) = (
         given(&filters.type_),
         given(&filters.priority),
         given(&filters.agent),
     );
-    if let Some(release) = &release {
-        vocab.known_release(release)?;
-    }
     let source = if filters.archived {
         store.list_archived()?
     } else {
@@ -148,24 +193,7 @@ pub fn list_matching<'p>(project: &'p Project, filters: &Filters) -> Result<Vec<
     };
     let mut kept = Vec::new();
     for t in source {
-        let sprint = vocab
-            .find_sprint(t.get("sprint"))
-            .and_then(|s| s.get("id"))
-            .and_then(Value::as_str);
-        if !names.is_empty() && !sprint.is_some_and(|s| names.iter().any(|n| n == s)) {
-            continue;
-        }
-        if filters.backlog && sprint.is_some_and(|s| !s.is_empty()) {
-            continue;
-        }
-        if let Some(release) = &release
-            && vocab.effective_release(t).as_ref().and_then(Value::as_str) != Some(release.as_str())
-        {
-            continue;
-        }
-        if let Some(component) = filters.component.as_deref().filter(|c| !c.is_empty())
-            && !contains(t.get("components").filter(|c| truthy(c)), component)
-        {
+        if !scope.keeps(vocab, t) {
             continue;
         }
         let kind = vocab.kind_of(t.get("status"));

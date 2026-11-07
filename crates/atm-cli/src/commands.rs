@@ -3,6 +3,7 @@
 
 pub mod agents;
 pub mod meta;
+pub mod project;
 pub mod task;
 
 use atm_common::py::to_json;

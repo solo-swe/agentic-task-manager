@@ -21811,7 +21811,7 @@
       "description": "Slice 2c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task deps <id>`, a task's dependency chain (`lib/query.py`'s `task_dependencies`: what it waits for, what waits for it, archived tasks counted as done), text and `--json` identical to Python's, in `commands/task.rs`.\n\n## Tests\nUnit tests for the chain; the `task deps` scenarios leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-444"
       ],
@@ -21819,7 +21819,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T01:35:51Z",
+      "updated_at": "2026-11-07T01:38:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21830,7 +21830,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T01:35:51Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "8b9df8715434cacda4dc9a3aabf59c9e2399015b",
+      "completed_at": "2026-11-07T01:38:07Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:38:07Z",
+          "kind": "outcome",
+          "text": "`task deps` in Rust (`task_dependencies` in `atm-lib` `query.rs`, `commands/task.rs`): waits for, waited on by, archived ones marked; 7 off the expected list",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-464",
@@ -21843,7 +21854,7 @@
       "description": "Slice 2d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `project status`, the overview (`lib/query.py`'s `status_report` and `project_summary`): the active sprint and its goal, the counts by status, sprint, type and label, what waits for review, is blocked or waits on dependencies, what's next by the loop's rule, the archive hint and the file sizes; text and `--json` identical to Python's, in `commands/project.rs`. `atm serve`'s `api/projects` (T-449) reuses the summary.\n\n## Tests\nUnit tests for the report; the `project status` scenarios (`status.json` and the others that read it) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-462"
       ],
@@ -21851,16 +21862,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T01:38:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T00:51:41Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:38:14Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-465",
@@ -21941,16 +21954,24 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T01:47:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:21:53Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T01:47:06Z",
+          "kind": "note",
+          "text": "The selection, the loop order and `next_task` with its reasons are ported already (T-464, `atm-lib` `loop_rules.rs`, with tests): this slice adds `loop next` itself, `--claim` on the write path (T-445), expired claims and the resolutions from other worktrees.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }

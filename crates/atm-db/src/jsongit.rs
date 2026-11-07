@@ -157,6 +157,24 @@ impl Store for JsonGitStore {
         Some(&self.paths.root)
     }
 
+    fn document(&self) -> Result<&Value> {
+        Ok(&self.loaded()?.document)
+    }
+
+    fn read_claims(&self) -> serde_json::Map<String, Value> {
+        read_store(&self.paths)
+    }
+
+    fn sizes(&self) -> (u64, u64) {
+        let size = |p: &std::path::Path| {
+            std::fs::metadata(p)
+                .ok()
+                .filter(std::fs::Metadata::is_file)
+                .map_or(0, |m| m.len())
+        };
+        (size(&self.paths.tasks), size(&self.paths.archive()))
+    }
+
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
         self.apply(change)
     }

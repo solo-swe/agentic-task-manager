@@ -15,6 +15,30 @@ pub fn to_json(value: &Value) -> String {
     serde_json::to_string_pretty(value).expect("a serde_json Value always serializes")
 }
 
+/// JSON on one line as Python's `json.dumps(value, ensure_ascii=False)` writes it, `", "` and `": "` between the
+/// parts: what atm measures a task's size by (`project status`'s largest tasks).
+///
+/// # Panics
+/// Never: a `serde_json::Value` always serializes.
+#[must_use]
+pub fn dumps(value: &Value) -> String {
+    match value {
+        Value::Array(items) => format!(
+            "[{}]",
+            items.iter().map(dumps).collect::<Vec<_>>().join(", ")
+        ),
+        Value::Object(map) => format!(
+            "{{{}}}",
+            map.iter()
+                .map(|(k, v)| format!("{}: {}", dumps(&Value::String(k.clone())), dumps(v)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Value::Number(n) if n.is_f64() => n.as_f64().map_or_else(|| n.to_string(), float_repr),
+        other => serde_json::to_string(other).expect("a serde_json Value always serializes"),
+    }
+}
+
 /// Whether Python would take the value as true in `if value:`.
 #[must_use]
 pub fn truthy(value: &Value) -> bool {
@@ -245,6 +269,15 @@ mod tests {
             to_json(&json!({"a": [1, "é"], "b": {}, "c": []})),
             "{\n  \"a\": [\n    1,\n    \"é\"\n  ],\n  \"b\": {},\n  \"c\": []\n}"
         );
+    }
+
+    #[test]
+    fn dumps_writes_one_line_as_python_does() {
+        assert_eq!(
+            dumps(&json!({"id": "T-1", "n": [1, 2.5, null], "é": true})),
+            "{\"id\": \"T-1\", \"n\": [1, 2.5, null], \"é\": true}"
+        );
+        assert_eq!(dumps(&json!("a\"b\n")), "\"a\\\"b\\n\"");
     }
 
     #[test]

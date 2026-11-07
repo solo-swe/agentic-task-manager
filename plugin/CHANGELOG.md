@@ -73,6 +73,11 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `docs/porting-to-rust.md` §3 now says the lock is the lock folder, not `File::lock`.
 - **`atm task deps` in the Rust atm** (T-463): what a task waits for and what waits for it, archived tasks included
   and marked, text and `--json` as in Python. Seven more tests left the expected-failures list.
+- **`atm project status` in the Rust atm** (T-464): the overview with its scope options, text and `--json` as in
+  Python: the active sprint, counts by status, sprint, type and label, what is in progress, in review, blocked (here
+  or in another worktree) or waiting, the next task by the loop's rule with why there is none, the largest tasks,
+  the archive and its hint, open tasks in closed sprints. The loop's selection and order (`atm-lib` `loop_rules.rs`)
+  come with it, for `loop next` (T-467). Sixteen more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

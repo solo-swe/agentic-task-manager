@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use atm_common::{Result, Task, Vocabulary};
+use serde_json::{Map, Value};
 
 use crate::working::Working;
 
@@ -41,6 +42,19 @@ pub trait Store {
 
     /// The folder the project's files are in (its working copy), when the store has one.
     fn working_copy(&self) -> Option<&Path>;
+
+    /// The whole task document (`{meta, tasks}`), for the rules that still take it.
+    ///
+    /// # Errors
+    /// When the task data can't be read.
+    fn document(&self) -> Result<&Value>;
+
+    /// The claims store, read without the lock (it is replaced atomically): `claims`, `completed`, `waiting`,
+    /// `resolved`, `hints`.
+    fn read_claims(&self) -> Map<String, Value>;
+
+    /// The task data's sizes in bytes: (`tasks.json`, the archive).
+    fn sizes(&self) -> (u64, u64);
 
     /// Run `change` on the task data under the store's isolation, and write what it changed; nothing when it fails.
     /// The store's snapshot is read again afterwards.
