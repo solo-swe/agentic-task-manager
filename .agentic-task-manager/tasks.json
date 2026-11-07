@@ -21243,7 +21243,7 @@
       "description": "Slice 5a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 5, split in four: this, then `task edit`, the `sprint` group, and the `release`, `component` and `project` groups), on T-445's write path.\n\n## Change\n- `task add` (`lib/edit.py`'s `add_new_tasks`): one task from options, or many from `--json-file` (a list, or `{\"tasks\": [...]}`), placeholder IDs (`new-1`) replaced by the next IDs in the project's pattern and followed in dependencies; the whole file refused, nothing written, for an unknown type or priority, an invalid label, an unknown or closed sprint, a dependency that doesn't exist or a cycle; `created_by`, timestamps, the components a task's files suggest (SR-2.7); text and `--json` as in Python.\n- `task note <id> <text>`: a note on a task, whatever its status, at most 500 characters.\n\n## Tests\nThe `task add` and `task note` scenarios (`add.json`, `notes.json`, …) and `add.test.mjs` (eight agents adding at once) leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-445",
         "T-465"
@@ -21252,7 +21252,7 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T02:05:06Z",
+      "updated_at": "2026-11-07T02:20:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21263,7 +21263,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T02:04:13Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "7c66afdc9aa552036bb6a57abfcab23d0fc8062d",
+      "completed_at": "2026-11-07T02:20:52Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:20:52Z",
+          "kind": "outcome",
+          "text": "Rust `task add` (options or `--json-file`, placeholders, all-or-nothing checks, cycles, components) and `task note`; 23 tests left the expected-failures list (402 left).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-448",
@@ -21955,7 +21966,7 @@
       "description": "Slice 3c of [porting-to-rust.md](docs/porting-to-rust.md) §5: a review's decisions (T-438): `task review approve <id> [--note]`, `request-changes <id> --reason`, `reject <id> --reason`, each leaving the task in review with its `review_state` and opening one way out of it, as `lib/status.py` has them; text and `--json` as in Python.\n\n## Tests\nThe review scenarios (`review.json`, `review-states.json`, `review-modes.json`) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-465"
       ],
@@ -21963,16 +21974,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T02:20:57Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:21:53Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:20:57Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-467",

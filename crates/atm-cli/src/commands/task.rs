@@ -111,6 +111,9 @@ pub enum TaskCommand {
     /// Move a task to another state: `in_progress`, `in_review`, done, todo, blocked or skipped. A review's decision is
     /// `atm task review`.
     State(state::StateArgs),
+    /// Decide a task's review: approve it, ask for changes, or reject it; it stays in review
+    #[command(subcommand)]
+    Review(review::ReviewCommand),
 }
 
 /// Run a task command in `cwd`.
@@ -125,6 +128,7 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
         TaskCommand::Add(args) => add::add(args, ctx, cwd),
         TaskCommand::Note(args) => add::note(&args, ctx, cwd),
         TaskCommand::State(args) => state::run(&args, ctx, cwd),
+        TaskCommand::Review(command) => review::run(command, ctx, cwd),
     }
 }
 
@@ -411,6 +415,7 @@ fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
 }
 
 mod add;
+mod review;
 mod state;
 
 #[cfg(test)]
