@@ -1,5 +1,5 @@
-//! `atm task`: a task's lifecycle. The Rust atm has `task list` and `task details` so far; the Python atm's
-//! `cli/commands/task.py` has the rest.
+//! `atm task`: a task's lifecycle. The Rust atm has `task list`, `details`, `deps`, `add`, `note` and `state` so far;
+//! the Python atm's `cli/commands/task.py` has the rest.
 
 use std::path::Path;
 
@@ -104,6 +104,10 @@ pub enum TaskCommand {
         /// The task ID
         task_id: String,
     },
+    /// Add a task with the next ID, or many from a JSON file.
+    Add(add::AddArgs),
+    /// Add a note to a task (at most 500 characters).
+    Note(add::NoteArgs),
     /// Move a task to another state: `in_progress`, `in_review`, done, todo, blocked or skipped. A review's decision is
     /// `atm task review`.
     State(state::StateArgs),
@@ -118,6 +122,8 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
         TaskCommand::List(args) => list(args, ctx, cwd),
         TaskCommand::Details { task_ids } => details(&task_ids, ctx, cwd),
         TaskCommand::Deps { task_id } => deps(&task_id, ctx, cwd),
+        TaskCommand::Add(args) => add::add(args, ctx, cwd),
+        TaskCommand::Note(args) => add::note(&args, ctx, cwd),
         TaskCommand::State(args) => state::run(&args, ctx, cwd),
     }
 }
@@ -404,6 +410,7 @@ fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
     lines
 }
 
+mod add;
 mod state;
 
 #[cfg(test)]

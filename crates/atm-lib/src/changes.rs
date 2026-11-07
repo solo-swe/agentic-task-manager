@@ -418,5 +418,37 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
     }
 }
 
+/// `atm task note`: a note on a task, whatever its status (DM-4), at most 500 characters, as the project's actor.
+/// Returns the task.
+///
+/// # Errors
+/// An unknown task (it says when the task is archived), a note too long, a store error.
+pub fn add_task_note(project: &mut Project, task_id: &str, text: &str) -> Result<Task> {
+    let actor = project.actor().map(String::from);
+    let mut noted: Option<Task> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let (tasks, at) = snapshot(&work.document, task_id);
+        let Some(at) = at else {
+            let archived = archived_tasks(work)?
+                .iter()
+                .any(|t| id_of(t) == Some(task_id));
+            let hint = if archived {
+                " (it is archived: atm db unarchive brings it back)"
+            } else {
+                ""
+            };
+            return Err(Error::failed(format!("no task {task_id}{hint}")));
+        };
+        let mut task = tasks[at].clone();
+        let stamp = now_iso();
+        atm_common::edits::add_note(&mut task, "note", text, actor.as_deref(), &stamp, true)?;
+        atm_common::edits::touch(&mut task, actor.as_deref(), &stamp);
+        work.tasks()[at] = Value::Object(task.clone());
+        noted = Some(task);
+        Ok(())
+    })?;
+    noted.ok_or_else(|| Error::failed(format!("no note on {task_id}")))
+}
+
 #[cfg(test)]
 mod tests;

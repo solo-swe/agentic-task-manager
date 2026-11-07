@@ -85,6 +85,14 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   explained, exit 4), the records shared by worktrees (completed, waiting, resolved), the archive hint once a day, and
   the actor (`--agent`, `ATM_AGENT`, the Claude Code session, git's user name). Seventy-nine more tests left the
   expected-failures list.
+- **`atm task add` and `atm task note` in the Rust atm** (T-447): one task from options or many from `--json-file` (a
+  list or `{"tasks": [...]}`), placeholder IDs replaced by the next IDs in the project's pattern (never behind the
+  highest, `meta.next_id` advanced) and followed in dependencies and `related`; the whole file refused, nothing
+  written, for an unknown type, priority or sprint, a closed sprint, a bad label, review or `with`, a missing
+  dependency (an archived one is fine) or a cycle; `created_by`, timestamps, the sprint's history, `--components
+  auto` and the components a task's files suggest (`atm-common` `components.rs`, globs matched as Python's
+  `fnmatchcase`). A note on a task in any status, at most 500 characters. Twenty-three more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

@@ -194,6 +194,46 @@ pub fn answer_note(questions: &[String], answers: &[String]) -> String {
         .join("; ")
 }
 
+/// Put `task` in `sprint` (a sprint's ID), or in the backlog (`None`). Every change ends the open `sprint_history`
+/// entry and, for a sprint, starts a new one (SR-2.5). Returns whether anything changed.
+pub fn set_sprint(task: &mut Task, sprint: Option<&str>, stamp: &str) -> bool {
+    if task.get("sprint").and_then(Value::as_str) == sprint
+        && (sprint.is_some() || task.get("sprint").is_none_or(Value::is_null))
+    {
+        return false;
+    }
+    let history = task.entry("sprint_history").or_insert_with(|| json!([]));
+    if !history.is_array() {
+        *history = json!([]);
+    }
+    if let Value::Array(entries) = history {
+        for entry in entries.iter_mut().filter_map(Value::as_object_mut) {
+            if !entry.contains_key("to") {
+                entry.insert("to".into(), json!(stamp));
+            }
+        }
+    }
+    match sprint {
+        None => {
+            task.shift_remove("sprint");
+        }
+        Some(sprint) => {
+            task.insert("sprint".into(), json!(sprint));
+            if let Some(Value::Array(entries)) = task.get_mut("sprint_history") {
+                entries.push(json!({"sprint": sprint, "from": stamp}));
+            }
+        }
+    }
+    if task
+        .get("sprint_history")
+        .and_then(Value::as_array)
+        .is_some_and(Vec::is_empty)
+    {
+        task.shift_remove("sprint_history");
+    }
+    true
+}
+
 /// Whether an actor is an agent (a Claude Code session, `claude:…`); anyone else is a person.
 #[must_use]
 pub fn is_agent(actor: Option<&str>) -> bool {

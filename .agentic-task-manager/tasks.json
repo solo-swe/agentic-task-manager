@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 470,
+    "next_id": 473,
     "labels": [
       {
         "id": "architecture",
@@ -21234,16 +21234,16 @@
     },
     {
       "id": "T-447",
-      "name": "Rust: defining work (task add|edit|note, sprint, release, component, project)",
+      "name": "Rust: task add and task note",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 5 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task add|edit|note` (with `--json-file`), the `sprint`, `release`, `component` and `project` groups, with their scenarios. Split further when the sprint is planned.",
+      "description": "Slice 5a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 5, split in four: this, then `task edit`, the `sprint` group, and the `release`, `component` and `project` groups), on T-445's write path.\n\n## Change\n- `task add` (`lib/edit.py`'s `add_new_tasks`): one task from options, or many from `--json-file` (a list, or `{\"tasks\": [...]}`), placeholder IDs (`new-1`) replaced by the next IDs in the project's pattern and followed in dependencies; the whole file refused, nothing written, for an unknown type or priority, an invalid label, an unknown or closed sprint, a dependency that doesn't exist or a cycle; `created_by`, timestamps, the components a task's files suggest (SR-2.7); text and `--json` as in Python.\n- `task note <id> <text>`: a note on a task, whatever its status, at most 500 characters.\n\n## Tests\nThe `task add` and `task note` scenarios (`add.json`, `notes.json`, …) and `add.test.mjs` (eight agents adding at once) leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-445",
         "T-465"
@@ -21252,7 +21252,7 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:21:59Z",
+      "updated_at": "2026-11-07T02:05:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21261,7 +21261,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:04:13Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-448",
@@ -21276,15 +21278,18 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-447"
+        "T-447",
+        "T-470",
+        "T-471",
+        "T-472"
       ],
       "files": [
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T02:05:23Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -21907,7 +21912,7 @@
       "description": "Slice 3b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-445's write path: the states of [task-states.md](docs/task-states.md) as enums with a transition table checked with `match`, and its guards as functions (dependencies, review modes, resolutions, `--status` of the right kind); the notes and timestamps each transition writes (`lib/state.py`, `lib/status.py`); claiming on start and dropping the claim on finish; `task state <id> <state>` with all its options (`--note`, `--reason`, `--on`, `--question`, `--answer`, `--resolution`, `--duplicate-of`, `--commit`, `--status`), text and `--json` as in Python.\n\n## Tests\nProperty tests of the transition table against task-states.md; the `task state` scenarios (`block.json`, `unblock.json`, `reopen.json`, `skip.json`, `resolution.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-445"
       ],
@@ -21915,7 +21920,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T01:55:10Z",
+      "updated_at": "2026-11-07T02:04:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21926,7 +21931,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T01:55:10Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "0b37bbfe3832f31ae3b3d9822451ceb0459de73c",
+      "completed_at": "2026-11-07T02:04:06Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:04:06Z",
+          "kind": "outcome",
+          "text": "`task state` in Rust: the state machine (`atm-lib` `state.rs`, an exhaustive test of every kind × command against task-states.md instead of proptest, which needs no new dependency), the status changes with claims and worktree records (`changes.rs`, `leases.rs`), the task edits (`atm-common` `edits.rs`), the actor (`atm-boot`); 79 off the expected list",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-466",
@@ -22052,6 +22068,96 @@
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:54:50Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-470",
+      "name": "Rust: task edit",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task edit <id>` (`lib/edit.py`'s `edit_existing_task`) with all its options: `--name`, `--description` / `--description-file`, `--type`, `--priority`, `--sprint` / `--backlog` (with `sprint_history`), `--release`, `--review`, `--with`, `--add-dep` / `--remove-dep` (refusing cycles), `--add-label` / `--remove-label`, `--add-file` / `--remove-file`, `--add-component` / `--remove-component`, `--add-requirement` / `--remove-requirement`, `--add-use-case` / `--remove-use-case`, `--related`; what changed, in words, as in Python, and `--json`.\n\n## Tests\nThe `task edit` scenarios (`edit.json`, `with-user.json`, `components.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T02:05:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-471",
+      "name": "Rust: the sprint group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `sprint list|add|edit|start|close|delete|move|backlog` (`lib/sprints.py`): names (generated, `people` or `time`), goals, releases and due dates, one active sprint, closing with its report and the unfinished tasks carried to the next sprint, a new one or the backlog (`--carry-to`, `--reviewed`), moving tasks with their `sprint_history`; text and `--json` as in Python.\n\n## Tests\nThe sprint scenarios (`sprints.json`, `sprint-commands.json`, `sprint-close.json`, `sprints-delete.json`, `review-modes.json`) and `sprints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T02:05:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-472",
+      "name": "Rust: the release, component and project groups",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `release list|add|edit|archive|notes` (`lib/releases.py`), `component list|add|edit` (`lib/components.py`: globs, `--from-label`, `--assign`), and the rest of `project`: `config`, `workflow [set]`, `logo`, and the dashboard's list of projects (`project list|add|remove|prune`, the registry `projects.json`); text and `--json` as in Python.\n\n## Tests\nThe scenarios of these groups (`releases.json`, `components.json`, `workflow.json`, `projects.json`, `logo.json`, `repository.json`) and `registry.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T02:05:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
         }
       ],
       "sprint": "The Rust port"

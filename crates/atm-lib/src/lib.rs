@@ -4,6 +4,7 @@
 
 pub mod agents;
 pub mod changes;
+pub mod edit;
 pub mod leases;
 pub mod loop_rules;
 pub mod project;
