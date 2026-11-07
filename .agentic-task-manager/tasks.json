@@ -21285,7 +21285,7 @@
       "labels": [
         "rust"
       ],
-      "description": "Slice 7 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-api` on axum/tokio with the routes of [multi-project-api.md](docs/multi-project-api.md) (read-only, the Host check, the CSP and headers of I12–I13), the dashboard and CompMD's runtime embedded at build, `atm serve` detached as today, `service start|stop|status|--refresh`. `serve.test.mjs` and the e2e suite pass against it.",
+      "description": "Slice 7 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-api` on axum/tokio with the routes of [multi-project-api.md](docs/multi-project-api.md) (read-only, the Host check, the CSP and headers of I12–I13), the dashboard and CompMD's runtime embedded at build, `atm serve` detached as today, `service start|stop|status|--refresh`. `serve.test.mjs` and the e2e suite pass against it.\n\nAlso the **tolerant read** the v1 tasks route uses (`load_tasks_tolerant` in the Python `db/jsongit/files.py`, T-377: a malformed `tasks.json` read as far as it can be, with its problems), and with it `atm task list --derived --tolerant` (`lib/archive.py`'s `task_snapshot`), which the Rust `task list` refuses until then (T-462).\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -21298,7 +21298,7 @@
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T00:51:45Z",
+      "updated_at": "2026-11-07T01:20:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21321,7 +21321,7 @@
       "description": "Slice 8 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm agents install|status|uninstall` (Claude Code only, the harness table as in Python) and `atm docs`, with `skills/` and `docs/agent/` embedded in the binary; `agents.test.mjs` and the docs scenarios pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-440",
         "T-442",
@@ -21331,7 +21331,7 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:08:32Z",
+      "updated_at": "2026-11-07T01:14:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21342,7 +21342,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T01:08:32Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "9deaa6be9e2b71414953495a9f4a651d24c1aef6",
+      "completed_at": "2026-11-07T01:14:11Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:14:11Z",
+          "kind": "outcome",
+          "text": "`atm agents install|status|uninstall` (`atm-lib` agents, `commands/agents.rs`) and `atm docs` (`commands/meta.rs`) in Rust; `build.rs` embeds `skills/` and `docs/agent/`; `agents.test.mjs`, the docs scenarios and the first docs test pass (10 off the list); the second docs test waits for the whole command tree",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-451",
@@ -21391,7 +21402,7 @@
       "description": "How the CLI reaches users ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §1): release builds for macOS (arm64, x86_64, signed and notarized), Linux and Windows on a tag, with checksums; the Homebrew formula and a release script in `packaging/`. CI changes pinned as `AGENTS.md` says; distribution entries in the security doc.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-443"
       ],
@@ -21401,16 +21412,25 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T01:14:29Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:14:16Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "macOS signing and notarization need an Apple Developer ID (a Developer ID Application certificate and a notarytool login) stored as repository secrets: do you have one, and which secret names should the release workflow read? Or release unsigned macOS builds for now?",
+        "Publishing a release on a tag needs a new workflow with `contents: write` (CI is read-only today): OK to add `.github/workflows/release.yml` with that permission, scoped to that one job?",
+        "The Homebrew formula needs a tap repository: create `solo-swe/homebrew-tap` (users run `brew install solo-swe/tap/atm`), or another name? The release workflow would also need a token that can push to it."
+      ],
+      "blocked_at": "2026-11-07T01:14:29Z"
     },
     {
       "id": "T-453",
@@ -21715,7 +21735,7 @@
       "description": "Slice 2b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-444's model and store.\n\n## Change\n- `atm-lib`: the queries of `lib/query.py` that `task list` uses (`list_matching`, `Filters`, the views), and what atm derives for a task: its kind, `ready`, `waiting_for` (an archived dependency counts as done), the effective priority and review mode (`effective_review`, from the task, its components and `meta.review`), `archived`.\n- `atm-cli` (`commands/task.rs`): `task list` with every filter the Python command has (`--status`, `--sprint`/`--backlog`, `--type`, `--priority`, `--label`, `--ready`, `--blocked`, `--in-pr`, `--archived`, `--with-user`, …) and `--derived`, text and `--json` identical to Python's.\n\n## Tests\nUnit tests for the derived fields; the `task list` scenarios (`query.json` and the others that list) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-444"
       ],
@@ -21723,16 +21743,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T01:14:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T00:51:41Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:14:30Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-463",

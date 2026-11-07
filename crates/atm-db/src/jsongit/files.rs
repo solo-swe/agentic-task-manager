@@ -1,7 +1,6 @@
 //! The JSON-in-git store's files (docs/v4/data-model.md §1), as the Python atm's `db/jsongit/files.py` reads them:
 //! `tasks.json` strictly (every command stops on a file it can't trust) and the archive, `tasks-archive.json`.
 
-use std::collections::HashMap;
 use std::path::Path;
 
 use atm_common::ids::valid_task_id;
@@ -103,14 +102,15 @@ pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
     })
 }
 
-/// The archived tasks by ID (a later entry with the same ID wins, as in the Python atm); empty without an archive.
+/// The archived tasks, in the archive's order (its entries that are objects); empty without an archive. Looking one
+/// up by ID takes the last with that ID, as in the Python atm.
 ///
 /// # Errors
 /// When the archive exists but isn't an object with a `tasks` list.
-pub fn load_archive(paths: &Paths) -> Result<HashMap<String, Task>> {
+pub fn load_archive(paths: &Paths) -> Result<Vec<Task>> {
     let path = paths.archive();
     if !path.is_file() {
-        return Ok(HashMap::new());
+        return Ok(Vec::new());
     }
     let data = read_json(&path)
         .filter(|d| d.is_object() && d.get("tasks").is_some_and(Value::is_array))
@@ -125,12 +125,17 @@ pub fn load_archive(paths: &Paths) -> Result<HashMap<String, Task>> {
         .into_iter()
         .flatten()
         .filter_map(Value::as_object)
-        .filter_map(|t| {
-            t.get("id")
-                .and_then(Value::as_str)
-                .map(|id| (id.to_string(), t.clone()))
-        })
+        .cloned()
         .collect())
+}
+
+/// The last task with this ID in a list of tasks (a later entry wins, as a dict of them by ID has it).
+#[must_use]
+pub fn last_with_id<'a>(tasks: &'a [Task], id: &str) -> Option<&'a Task> {
+    tasks
+        .iter()
+        .rev()
+        .find(|t| t.get("id").and_then(Value::as_str) == Some(id))
 }
 
 #[cfg(test)]
@@ -216,13 +221,18 @@ mod tests {
     #[test]
     fn the_archive_is_read_by_id_and_may_be_missing() {
         let (dir, paths) = project(r#"{"tasks": []}"#);
-        assert!(load_archive(&paths).unwrap().is_empty());
+        assert_eq!(
+            load_archive(&paths).unwrap(),
+            [] as [serde_json::Map<std::string::String, serde_json::Value>; 0]
+        );
         std::fs::write(
             dir.path().join(TASK_DIR).join("tasks-archive.json"),
             r#"{"tasks": [{"id": "T-1", "v": 1}, "junk", {"id": "T-1", "v": 2}]}"#,
         )
         .unwrap();
-        assert_eq!(load_archive(&paths).unwrap()["T-1"]["v"], json!(2));
+        let archive = load_archive(&paths).unwrap();
+        assert_eq!(archive.len(), 2, "the entries that are objects, in order");
+        assert_eq!(last_with_id(&archive, "T-1").unwrap()["v"], json!(2));
         std::fs::write(dir.path().join(TASK_DIR).join("tasks-archive.json"), "[]").unwrap();
         assert!(
             load_archive(&paths)

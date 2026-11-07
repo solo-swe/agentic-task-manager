@@ -31,6 +31,12 @@ pub trait Store {
     /// When the archive exists but can't be read.
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>>;
 
+    /// The archived tasks, in the archive's order.
+    ///
+    /// # Errors
+    /// When the archive exists but can't be read.
+    fn list_archived(&self) -> Result<Vec<&Task>>;
+
     /// The folder the project's files are in (its working copy), when the store has one.
     fn working_copy(&self) -> Option<&Path>;
 }

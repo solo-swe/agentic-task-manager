@@ -7,6 +7,7 @@ pub mod error;
 pub mod home;
 pub mod ids;
 pub mod py;
+pub mod rules;
 pub mod skills;
 pub mod vocabulary;
 

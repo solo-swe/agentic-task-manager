@@ -51,12 +51,11 @@ impl Store for MemoryStore {
     }
 
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>> {
-        // The last one with the ID, as the archive's lookup has it
-        Ok(self
-            .archive
-            .iter()
-            .rev()
-            .find(|t| t.get("id").and_then(Value::as_str) == Some(id)))
+        Ok(crate::jsongit::files::last_with_id(&self.archive, id))
+    }
+
+    fn list_archived(&self) -> Result<Vec<&Task>> {
+        Ok(self.archive.iter().collect())
     }
 }
 

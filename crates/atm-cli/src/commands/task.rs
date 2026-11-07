@@ -1,19 +1,98 @@
-//! `atm task`: a task's lifecycle. This slice has `task details`; the Python atm's `cli/commands/task.py` has the rest.
+//! `atm task`: a task's lifecycle. The Rust atm has `task list` and `task details` so far; the Python atm's
+//! `cli/commands/task.py` has the rest.
 
 use std::path::Path;
 
 use atm_boot::open_project;
 use atm_common::py::{py_str, py_str_opt, splitlines, strip, truthy};
-use atm_common::{Result, TaskId};
+use atm_common::{Error, Result, TaskId};
+use atm_lib::query::{Filters, task_views};
 use atm_lib::tasks::{TaskView, show_tasks};
-use clap::Subcommand;
-use serde_json::Value;
+use clap::{Args, Subcommand};
+use serde_json::{Value, json};
 
 use super::{Context, print_json};
+
+/// `atm task list`'s options.
+#[derive(Debug, Args)]
+#[allow(clippy::struct_excessive_bools)] // reason: each is one of the command's flags, as the Python atm has them
+pub struct ListArgs {
+    /// Only these statuses (repeatable)
+    #[arg(long)]
+    status: Vec<String>,
+    /// Only this sprint's tasks (repeatable)
+    #[arg(long)]
+    sprint: Vec<String>,
+    /// Only tasks with no sprint
+    #[arg(long)]
+    backlog: bool,
+    /// Only tasks in this release
+    #[arg(long)]
+    release: Option<String>,
+    /// Only tasks in this component
+    #[arg(long)]
+    component: Option<String>,
+    /// Only this task type
+    #[arg(long = "type")]
+    type_: Option<String>,
+    /// Only this priority
+    #[arg(long)]
+    priority: Option<String>,
+    /// Only tasks with this label (repeatable)
+    #[arg(long)]
+    label: Vec<String>,
+    /// Only tasks started by this agent
+    #[arg(long)]
+    agent: Option<String>,
+    /// Only to-do tasks whose dependencies are done
+    #[arg(long)]
+    ready: bool,
+    /// Only blocked tasks and to-do tasks still waiting
+    #[arg(long)]
+    blocked: bool,
+    /// Only tasks in a PR that isn't recorded as merged
+    #[arg(long)]
+    in_pr: bool,
+    /// Only tasks done together with the user
+    #[arg(long)]
+    with_user: bool,
+    /// List the archive instead
+    #[arg(long)]
+    archived: bool,
+    /// Each task in full as JSON
+    #[arg(long)]
+    derived: bool,
+    /// With --derived: read a malformed tasks.json as far as it can be read
+    #[arg(long)]
+    tolerant: bool,
+}
+
+impl ListArgs {
+    fn filters(self) -> Filters {
+        Filters {
+            sprint: self.sprint,
+            backlog: self.backlog,
+            release: self.release,
+            component: self.component,
+            status: self.status,
+            type_: self.type_,
+            priority: self.priority,
+            label: self.label,
+            agent: self.agent,
+            ready: self.ready,
+            blocked: self.blocked,
+            in_pr: self.in_pr,
+            with_user: self.with_user,
+            archived: self.archived,
+        }
+    }
+}
 
 /// The task commands.
 #[derive(Debug, Subcommand)]
 pub enum TaskCommand {
+    /// List tasks: one line per task: ID, status, priority, labels, name.
+    List(ListArgs),
     /// Tasks in full (description, dependencies, files, notes).
     Details {
         /// Task IDs
@@ -28,8 +107,88 @@ pub enum TaskCommand {
 /// What atm-lib refuses (an unknown task), or a task file that can't be read.
 pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
+        TaskCommand::List(args) => list(args, ctx, cwd),
         TaskCommand::Details { task_ids } => details(&task_ids, ctx, cwd),
     }
+}
+
+fn list(args: ListArgs, ctx: Context, cwd: &Path) -> Result<()> {
+    if args.derived && args.tolerant {
+        // The tolerant read comes with `atm serve`, whose REST API reads that way (T-449)
+        return Err(Error::Failed {
+            message: "--tolerant isn't in the Rust atm yet (T-449)".into(),
+            code: 2,
+        });
+    }
+    let derived = args.derived;
+    let filters = args.filters();
+    let project = open_project(cwd)?;
+    let views = task_views(&project, &filters)?;
+    if derived {
+        // JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
+        print_json(&Value::Array(views));
+        return Ok(());
+    }
+    let rows: Vec<Value> = views.iter().map(view_row).collect();
+    if ctx.json {
+        print_json(&Value::Array(rows));
+    } else if rows.is_empty() {
+        println!("No tasks match.");
+    } else {
+        for line in list_lines(&rows) {
+            println!("{line}");
+        }
+    }
+    Ok(())
+}
+
+/// The fields `atm task list` shows of a task, from its view (`{task, derived}`), as `--json` prints them.
+#[must_use]
+pub fn view_row(view: &Value) -> Value {
+    let task = &view["task"];
+    let derived = &view["derived"];
+    let mut row = json!({
+        "id": task.get("id").cloned().unwrap_or(Value::Null),
+        "status": task.get("status").cloned().unwrap_or(Value::Null),
+        "kind": derived.get("kind").cloned().unwrap_or(Value::Null),
+        "sprint": task.get("sprint").cloned().unwrap_or(Value::Null),
+        "priority": derived.get("priority").cloned().unwrap_or(Value::Null),
+        "labels": task.get("labels").cloned().unwrap_or_else(|| json!([])),
+        "name": task.get("name").cloned().unwrap_or_else(|| json!("")),
+    });
+    if let Some(pr) = task.get("pr").filter(|p| p.is_object()) {
+        row["pr"] = pr.clone();
+        row["merged_at"] = task.get("merged_at").cloned().unwrap_or(Value::Null);
+    }
+    row
+}
+
+/// One line per task, as `atm task list` prints them: ID, status, priority, labels, name, the IDs and statuses
+/// padded to the longest.
+#[must_use]
+pub fn list_lines(rows: &[Value]) -> Vec<String> {
+    let width = |key: &str| {
+        rows.iter()
+            .map(|r| py_str(&r[key]).chars().count())
+            .max()
+            .unwrap_or(0)
+    };
+    let (id_width, status_width) = (width("id"), width("status"));
+    rows.iter()
+        .map(|t| {
+            let labels = t
+                .get("labels")
+                .filter(|l| truthy(l))
+                .map_or_else(String::new, |l| format!("[{}] ", join(l)));
+            format!(
+                "{:<id_width$}  {:<status_width$}  {}  {labels}{}",
+                py_str(&t["id"]),
+                py_str(&t["status"]),
+                py_str(&t["priority"]),
+                py_str(&t["name"])
+            )
+        })
+        .collect()
 }
 
 fn details(task_ids: &[String], ctx: Context, cwd: &Path) -> Result<()> {

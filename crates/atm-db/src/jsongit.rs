@@ -5,12 +5,11 @@ pub mod files;
 pub mod paths;
 
 use std::cell::OnceCell;
-use std::collections::HashMap;
 
 use atm_common::{Result, Task, Vocabulary};
 
 use crate::interface::Store;
-use files::{Loaded, load_archive, load_tasks};
+use files::{Loaded, last_with_id, load_archive, load_tasks};
 use paths::Paths;
 
 /// The task files of one project, read once (one atm command works on one snapshot of them).
@@ -18,7 +17,7 @@ use paths::Paths;
 pub struct JsonGitStore {
     paths: Paths,
     loaded: OnceCell<Result<Loaded>>,
-    archive: OnceCell<Result<HashMap<String, Task>>>,
+    archive: OnceCell<Result<Vec<Task>>>,
 }
 
 impl JsonGitStore {
@@ -45,10 +44,10 @@ impl JsonGitStore {
             .map_err(Clone::clone)
     }
 
-    fn archive(&self) -> Result<&HashMap<String, Task>> {
+    fn archive(&self) -> Result<&[Task]> {
         self.archive
             .get_or_init(|| load_archive(&self.paths))
-            .as_ref()
+            .as_deref()
             .map_err(Clone::clone)
     }
 }
@@ -70,7 +69,11 @@ impl Store for JsonGitStore {
     }
 
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>> {
-        Ok(self.archive()?.get(id))
+        Ok(last_with_id(self.archive()?, id))
+    }
+
+    fn list_archived(&self) -> Result<Vec<&Task>> {
+        Ok(self.archive()?.iter().collect())
     }
 
     fn working_copy(&self) -> Option<&std::path::Path> {

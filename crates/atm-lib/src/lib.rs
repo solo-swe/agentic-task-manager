@@ -4,6 +4,7 @@
 
 pub mod agents;
 pub mod project;
+pub mod query;
 pub mod tasks;
 
 pub use project::Project;

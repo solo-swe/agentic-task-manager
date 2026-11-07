@@ -54,6 +54,11 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   (the harness table, the record in `<ATM_HOME>/agents.json`, links or copies, folders atm didn't write left alone),
   and `atm docs [topic]`. Build scripts embed `skills/` (`atm-common`) and `docs/agent/` (`atm-cli`) in the binary,
   checking each topic's first line as `build.py` does. Ten more tests left the expected-failures list.
+- **`atm task list` in the Rust atm** (T-462): every filter (`--status`, `--sprint`, `--backlog`, `--release`,
+  `--component`, `--type`, `--priority`, `--label`, `--agent`, `--ready`, `--blocked`, `--in-pr`, `--with-user`,
+  `--archived`) and `--derived`, with what atm derives for a task (kind, readiness, `waiting_for`, effective priority,
+  review and release, stage), text and `--json` as in Python. `--tolerant` comes with `atm serve` (T-449). Fourteen
+  more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).
