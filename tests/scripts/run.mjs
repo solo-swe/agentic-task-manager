@@ -7,7 +7,7 @@
 // With ATM_IMPL=rust, the tests the Rust atm doesn't pass yet are listed in rust-expected-failures.json (by file and
 // name). The run fails on a failure not listed, and on a listed test that passes: the list only shrinks, as slices are
 // ported. `--write-expected` writes the list from a run (the first, or after renaming tests), never to hide one.
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
@@ -24,6 +24,15 @@ const files = fs
 
 // `--rust` is ATM_IMPL=rust: the test files (and the processes node:test runs them in) see it from the environment
 if (process.argv.includes('--rust')) process.env.ATM_IMPL = 'rust';
+
+// What atm-cli/build.py generates (.generated/, not committed): atm-lib's tests import the generated modules
+const generate = spawnSync('python3', [path.join(dir, '..', '..', 'atm-cli', 'build.py'), '--generated'], {
+  stdio: 'inherit',
+});
+if (generate.status !== 0) {
+  console.error('run.mjs: `python3 atm-cli/build.py --generated` failed');
+  process.exit(1);
+}
 
 if (process.env.ATM_IMPL !== 'rust') {
   for (const file of files) await import(pathToFileURL(path.join(dir, file)).href);

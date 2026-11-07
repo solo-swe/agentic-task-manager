@@ -52,6 +52,11 @@ tests/
 atm-cli/                the Python atm, until the switch (§5), then removed
 ```
 
+- **One module per top-level command in `atm-cli`.** `src/commands/<group>.rs` for each group (`task`, `loop`,
+  `claim`, `vcs`, `db`, `release`, `component`, `project`, `sprint`, `agents`), and `maintenance.rs` (`doctor`,
+  `service`) and `meta.rs` (`version`, `help`, `docs`) for the single commands. Each holds its clap subcommand enum
+  and the handlers, with its area's text renderers beside them. `main.rs` holds only the root `Cli`, the global
+  options, the dispatch and the exit codes. The Python CLI is split the same way (`atm-cli/atm/cli/commands/`).
 - **One crate per layer.** A crate can use only what its `Cargo.toml` declares, so the layer rule
   ([layered-architecture.md](layered-architecture.md) §2) is the compiler's: `atm-api` and `atm-cli` depend on
   `atm-lib` and `atm-boot`, never on each other; `atm-lib` never on `atm-db`'s jsongit module (it takes the store

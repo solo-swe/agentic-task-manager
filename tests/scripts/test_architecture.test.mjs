@@ -15,6 +15,8 @@ import { test } from 'node:test';
 import { REPO } from './helpers.mjs';
 
 const ROOT = path.join(REPO, 'atm-cli', 'atm');
+// The modules atm-cli/build.py generates (common.types, cli.agent_docs, …): the same package, in .generated/
+const GENERATED_ROOT = path.join(REPO, '.generated', 'atm-cli', 'atm');
 const MODULES_ORDER = [
   'common.errors',
   'common.vocabularies',
@@ -66,20 +68,22 @@ const MODULES_ORDER = [
   'boot.open',
   'boot.jsongit',
   'cli.render',
-  'cli.query',
-  'cli.status',
-  'cli.claims',
-  'cli.edit',
-  'cli.components',
-  'cli.sprints',
-  'cli.releases',
-  'cli.archive',
-  'cli.code',
-  'cli.projects',
-  'cli.settings',
   'cli.store',
   'cli.serve',
   'cli.agent_docs',
+  'cli.app',
+  'cli.commands.task',
+  'cli.commands.loop',
+  'cli.commands.claim',
+  'cli.commands.vcs',
+  'cli.commands.db',
+  'cli.commands.release',
+  'cli.commands.component',
+  'cli.commands.project',
+  'cli.commands.sprint',
+  'cli.commands.maintenance',
+  'cli.commands.agents',
+  'cli.commands.meta',
   'cli.main',
   'api.server',
 ];
@@ -150,14 +154,14 @@ function topLevelNames(source) {
   return names;
 }
 
-function findModules(dir) {
+function findModules(dir, root = dir) {
   const result = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      result.push(...findModules(full));
+      result.push(...findModules(full, root));
     } else if (entry.name.endsWith('.py') && entry.name !== '__init__.py') {
-      const rel = path.relative(ROOT, full);
+      const rel = path.relative(root, full);
       const module = rel.replace(/\\/g, '/').replace(/\.py$/, '').replace(/\//g, '.');
       result.push({ module, path: full });
     }
@@ -166,7 +170,7 @@ function findModules(dir) {
 }
 
 test('atm-cli modules keep the layer rules, the build order and unique top-level names', () => {
-  const modules = findModules(ROOT);
+  const modules = [...findModules(ROOT), ...findModules(GENERATED_ROOT)];
   const moduleMap = new Map(modules.map((m) => [m.module, m]));
   const orderIndex = new Map(MODULES_ORDER.map((m, i) => [m, i]));
 

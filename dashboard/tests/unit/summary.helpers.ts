@@ -1,6 +1,6 @@
 // A project's summary as the server sends it (api.schema.json's ProjectSummary, T-382): every field, for a project
 // with nothing going on; a test changes what it is about.
-import type { BoardColumn, ProjectBoard, ProjectSummary } from '../../src/lib/generated/types';
+import type { BoardColumn, ProjectBoard, ProjectSummary } from '$generated/types';
 
 const column = (): BoardColumn => ({ count: 0, cards: [] });
 

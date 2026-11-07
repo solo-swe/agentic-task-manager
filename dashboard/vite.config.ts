@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
@@ -7,6 +7,7 @@ import { changelogModule } from './build/changelog.ts';
 import { compmdModule } from './build/compmd.ts';
 import { devApi } from './build/dev-api.ts';
 import { PAGES } from './build/finish-page.ts';
+import { GENERATED } from './build/generated.ts';
 import { helpModule } from './build/help.ts';
 import { readPluginVersion } from './build/inject-version.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
@@ -46,4 +47,11 @@ export default defineConfig({
     securityHeaders(),
     sizeReport(),
   ],
+  // The TypeScript atm-cli/build.py generates (the data model's types, the vocabularies), in .generated/ (not
+  // committed; `pnpm run generate` writes it, and every script here that needs it runs that first). A Vite alias, as
+  // SvelteKit's own `alias` is deprecated and subpath imports can't reach outside dashboard/; tsconfig.json's `paths`
+  // says the same to TypeScript
+  resolve: { alias: { $generated: GENERATED } },
+  // The dev server serves .generated/ too (outside dashboard/, Vite's root for what it serves)
+  server: { fs: { allow: [searchForWorkspaceRoot(process.cwd()), GENERATED] } },
 });

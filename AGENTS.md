@@ -14,6 +14,11 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)
 - `atm-cli/` — atm-cli's source modules and the build that writes `plugin/scripts/atm.py` (dev only, not shipped)
 - `dashboard/` — Svelte 5 + TypeScript source for the dashboard (dev only, not shipped)
+- `.generated/` — what `atm-cli/build.py` generates for the build and the dashboard (the data model's types, the
+  vocabularies, `atm docs`' topics and the skills as Python modules in `.generated/atm-cli/atm/`; the TypeScript in
+  `.generated/dashboard/`, imported as `$generated/…`). **Never committed** (gitignored): `pnpm install` in
+  `dashboard/`, the dashboard's scripts and `tests/scripts/run.mjs` write it, or `pnpm run generate`. What the plugin
+  ships is generated too but committed (`plugin/scripts/atm.py`, `plugin/skills/`): users install from git
 - `tests/scripts/` — tests for atm-cli (dev only)
 - `.agentic-task-manager/tasks.json` — this repo's own task list; we dogfood atm here (`/atm:serve` shows it)
 - `docs/` — requirements, designs and plans the tasks were created from
@@ -88,14 +93,16 @@ Commands (run in `dashboard/`):
 atm-cli is the `atm` command the skills run (earlier docs call it "the helper"). `plugin/scripts/atm` is a POSIX sh
 launcher that runs `atm.py` with Python 3.9+ (or explains that Python is needed). atm-cli uses the standard library
 and three vendored libraries, nothing installed: `transitions` (the task state machine; `atm-cli/vendored/`, bundled
-into `atm.py`) and Typer with Click (the command tree, `atm-cli/atm/cli/main.py`; copied as they are into
+into `atm.py`) and Typer with Click (the command tree: its root in `atm-cli/atm/cli/app.py`, one module per top-level command in
+`atm-cli/atm/cli/commands/`, the entry in `cli/main.py`; copied as they are into
 `plugin/scripts/vendor/`, which `atm.py` puts first on its import path; versions as `atm-cli/uv.lock` pins them,
 `tests/scripts/vendor.test.mjs`). It must stay compatible with Python 3.9, the version macOS's Command Line Tools
 ship. Python is the plugin's one runtime requirement; why there is a single implementation is in
 `docs/helper-runtime-proposal.md`.
 
 **Edit the modules in `atm-cli/atm/`, never `plugin/scripts/atm.py`.** That file is a **committed build artifact**:
-`atm-cli/build.py` concatenates the modules in dependency order (its `MODULES` list; a module imports only from
+`atm-cli/build.py` concatenates the modules, those it generates into `.generated/atm-cli/atm/` too, in dependency
+order (its `MODULES` list; a module imports only from
 earlier ones, and no two modules may define the same top-level name). The pre-commit hook rebuilds it when `atm-cli/`
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 

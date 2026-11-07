@@ -41,8 +41,8 @@ atm's own rules for the dashboard in `dashboard/`, served by `atm serve` and lat
   **One exception:** filtering, the filter counts, sorting and search over the loaded tasks stay in the dashboard
   ([ADR-001](../adr/ADR-001-filters-and-search-stay-in-the-dashboard.md)); the values they compare come from atm.
 - **The typed client wrapper is the only path to the server** (`src/lib/api/`). It is built on the types generated
-  from atm's schemas (`src/lib/generated/`, [layered-architecture.md](../layered-architecture.md) §4), which are never
-  edited by hand. Components never call `fetch` directly.
+  from atm's schemas (`$generated/`, in `.generated/dashboard/`, [layered-architecture.md](../layered-architecture.md)
+  §4), which are never committed or edited by hand. Components never call `fetch` directly.
 - **Live data comes from a rune-based helper** in a `.svelte.ts` module that loads from the API, keeps the view up to
   date and stops when its component is destroyed. Components never re-fetch whole lists.
 - Shared UI state lives in `.svelte.ts` modules with `$state`, not in global stores.

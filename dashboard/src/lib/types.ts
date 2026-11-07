@@ -1,6 +1,6 @@
-import type { Task as StoredTask, TaskDerived } from './generated/types';
+import type { Task as StoredTask, TaskDerived } from '$generated/types';
 
-export type { Note } from './generated/types';
+export type { Note } from '$generated/types';
 
 /** The default statuses; a project may define its own in meta.statuses (see vocab.ts). */
 export type KnownStatus = 'todo' | 'in_progress' | 'in_review' | 'blocked' | 'done' | 'skipped';
@@ -10,7 +10,7 @@ export type KnownTaskType = 'feature' | 'bugfix' | 'bug' | 'test' | 'infra' | 'd
 export type TaskType = KnownTaskType | (string & {});
 
 /** A task: its fields come from common's schema (atm-cli/atm/common/schema/task.schema.json, generated into
- * generated/types.ts). The dashboard reads two of them more narrowly than the file allows, as it always has: a task
+ * $generated/types.ts). The dashboard reads two of them more narrowly than the file allows, as it always has: a task
  * from before sprints has a `phase`, and a missing description reads as empty. */
 export interface Task extends StoredTask {
   phase: number;

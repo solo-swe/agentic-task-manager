@@ -1,6 +1,6 @@
 // Tasks waiting on someone rather than on agent work (docs/v4/dashboard.md section 3): how long, and what was said.
 import { formatMinutes } from './format';
-import type { NeedsYouItem } from './generated/types';
+import type { NeedsYouItem } from '$generated/types';
 import { activeSprint, type SprintModel } from './sprints';
 import type { Note, Task } from './types';
 import { DEFAULT_VOCABULARY, kindOf, type Vocabulary } from './vocab';

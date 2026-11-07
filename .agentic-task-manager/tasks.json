@@ -21840,7 +21840,7 @@
       "description": "Step 1 of [porting-to-rust.md](docs/porting-to-rust.md) §5, following the [Rust guide](docs/guides/rust.md).\n\n## Change\n- `Cargo.toml` (workspace: edition 2024, lints, `[workspace.dependencies]`), `rust-toolchain.toml`, `deny.toml`; the crates of §2 (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`) with their allowed dependencies only; `atm version` from the binary (the plugin's version).\n- `tests/scripts` runs against the Rust binary when `ATM_IMPL=rust` (the launcher it uses picks it); an expected-failures list (by scenario file and test) that a test checks only shrinks.\n- CI: a Rust job on macOS, Linux and Windows (fmt, clippy, tests, cargo-deny, the suite with `ATM_IMPL=rust` and its expected failures); pinned as the CI rules in `AGENTS.md` say.\n- `AGENTS.md`: how to build and test the Rust side.\n\n## Tests\nThe crates' unit tests; `atm version` passes its scenario under `ATM_IMPL=rust`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -21852,7 +21852,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T22:00:31Z",
+      "updated_at": "2026-11-06T23:11:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21862,8 +21862,24 @@
         }
       ],
       "sprint": "Rust and distribution",
-      "started_at": "2026-11-06T22:00:31Z",
-      "started_by": "claude:34798264"
+      "commit": "0d58d44e5ec33ab4aa2e61ddaf0257abffedf5b7",
+      "notes": [
+        {
+          "at": "2026-11-06T23:11:34Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-06T23:11:44Z",
+          "kind": "outcome",
+          "text": "Cargo workspace (7 crates, toolchain 1.99, cargo-deny), CI `rust` job on Linux/macOS/Windows, the suite against the binary with `run.mjs --rust` (per-file watchdog; 566 expected failures in `rust-expected-failures.json`); fixed `lock.test.mjs` polling forever when the holder exits",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-06T23:11:39Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-06T23:11:44Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-444",
@@ -21873,7 +21889,7 @@
       "labels": [
         "rust"
       ],
-      "description": "Slice 2 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the model and the JSON store (tasks.json, the archive) in `atm-common`/`atm-db`, reads in `atm-lib`, and `task list`, `task details`, `task deps`, `project status` in `atm-cli`, text and `--json` as §1 says. Their scenarios leave the expected-failures list. Split further when the sprint is planned.",
+      "description": "Slice 2 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the model and the JSON store (tasks.json, the archive) in `atm-common`/`atm-db`, reads in `atm-lib`, and `task list`, `task details`, `task deps`, `project status` in `atm-cli`, text and `--json` as §1 says. Their scenarios leave the expected-failures list. Split further when the sprint is planned.\n\n## Layout of `atm-cli`\nSet up the layout the later slices fill ([porting-to-rust.md](docs/porting-to-rust.md#:~:text=One%20module%20per%20top%2Dlevel%20command), as the Python CLI is split in `atm-cli/atm/cli/commands/`):\n- `src/main.rs`: only the root `Cli` (clap derive), the global options (`-j/--json`, `--dir`, …), the dispatch to the groups and the exit codes.\n- `src/commands/<group>.rs`, one per top-level command (`task`, `project` in this slice; the others as their slices come): its clap subcommand enum, its handlers, and its area's text renderers.\n- `maintenance.rs` (`doctor`, `service`) and `meta.rs` (`version`, `help`, `docs`) for the single commands; `version` moves there from `main.rs`.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -21884,9 +21900,9 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T00:14:43Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",

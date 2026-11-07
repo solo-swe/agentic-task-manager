@@ -30,6 +30,15 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `lib/agents.py`, so others (T-413) are an entry each. Opt-in only: nothing installs on its own.
 
 ### Development
+- **Generated files live in `.generated/`, never committed**: `atm-cli/build.py` writes the data model's types, the
+  vocabularies, `atm docs`' topics and the skills as Python modules into `.generated/atm-cli/atm/` (the build reads
+  them from there, beside `atm-cli/atm/`), and the dashboard's types and vocabularies into `.generated/dashboard/`
+  (imported as `$generated/…`). `build.py --generated` writes only that; `pnpm install`, the dashboard's scripts
+  (`pnpm run generate`) and `tests/scripts/run.mjs` run it first. What the plugin ships stays committed.
+- **The command tree is one module per top-level command**: `atm-cli/atm/cli/commands/<group>.py` (task, loop, claim,
+  vcs, db, release, component, project, sprint, agents; `maintenance.py` for doctor and service, `meta.py` for
+  version, help and docs), each adding itself to the root in `cli/app.py`, with the small rendering helpers only it
+  used folded in; `cli/main.py` keeps shell completion and the entry. No command, option or output changes.
 - **The Rust port's skeleton** (T-443, `docs/porting-to-rust.md`): a Cargo workspace (`Cargo.toml`,
   `rust-toolchain.toml` at 1.99.0, `deny.toml`) with a crate per layer under `crates/`, and `atm version` from the
   binary. CI's new `rust` job builds, lints and tests it on Linux, macOS and Windows, checks its dependencies with

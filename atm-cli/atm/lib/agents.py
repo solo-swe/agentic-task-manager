@@ -1,6 +1,6 @@
 """atm-lib: installing atm's skills into the agent harnesses (T-442, docs/better-way-to-distribute-atm.md §3, §5).
 
-The skills of this atm's version (common/skills.py) are written once per harness into the user's atm folder
+The skills of this atm's version (common/skills.py, generated into .generated/) are written once per harness into the user's atm folder
 (`<ATM_HOME>/skills/<harness>/<skill>/SKILL.md`) and linked from the folder each harness reads its skills from; copied
 there instead with `copy`, where a link can't be made, and always for a project (whose copy is committed for a team, so
 it can't point into one person's home folder). What install wrote is recorded (`<ATM_HOME>/agents.json`), so uninstall

@@ -11,12 +11,16 @@ is `db.jsongit.store`, in the db layer), and an import the rule doesn't allow is
 layers' folders. The rule has no exceptions (the migration's ratchet, atm-cli/layers.json, went with its last step).
 
 It generates the data model's types too (docs/layered-architecture.md §4): from the JSON Schemas in
-atm-cli/atm/common/schema/, the Python TypedDicts in atm-cli/atm/common/types.py and the TypeScript interfaces in
-dashboard/src/lib/generated/types.ts. One generator, in the standard library, for both languages.
+atm-cli/atm/common/schema/, the Python TypedDicts in .generated/atm-cli/atm/common/types.py and the TypeScript
+interfaces in .generated/dashboard/types.ts. One generator, in the standard library, for both languages. Everything it
+generates for itself or the dashboard goes into .generated/ (gitignored; GENERATED_DIR below); what the plugin ships
+(plugin/scripts/atm.py, plugin/skills/) is committed, as users install the plugin from git.
 
-Usage: python3 atm-cli/build.py           write the generated types and plugin/scripts/atm.py (only if they changed)
-       python3 atm-cli/build.py --check   exit 1 if any of them is not what the sources build
-       python3 atm-cli/build.py --output F   write the build to F instead (the generated types are left alone)
+Usage: python3 atm-cli/build.py           write .generated/, the plugin's skills and plugin/scripts/atm.py (only
+                                          what changed)
+       python3 atm-cli/build.py --generated   write .generated/ only
+       python3 atm-cli/build.py --check   write .generated/; exit 1 if what the plugin ships is not what the sources build
+       python3 atm-cli/build.py --output F   write .generated/, and the build to F instead
 Design: docs/v4/atm-cli.md, section 2.
 """
 
@@ -31,8 +35,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.join(HERE, "atm")
 TARGET = os.path.join(os.path.dirname(HERE), "plugin", "scripts", "atm.py")
 SCHEMA_DIR = os.path.join(PACKAGE, "common", "schema")
-PY_TYPES = os.path.join(PACKAGE, "common", "types.py")
-TS_TYPES = os.path.join(os.path.dirname(HERE), "dashboard", "src", "lib", "generated", "types.ts")
+# What the build generates for itself and the dashboard, never committed (.gitignore): .generated/atm-cli/atm/ holds
+# the generated modules, beside the package's own folders (the build, and tests/lib/support.py, read both), and
+# .generated/dashboard/ the dashboard's generated TypeScript ($generated in dashboard/vite.config.ts)
+GENERATED_DIR = os.path.join(os.path.dirname(HERE), ".generated")
+GENERATED_PACKAGE = os.path.join(GENERATED_DIR, "atm-cli", "atm")
+PY_TYPES = os.path.join(GENERATED_PACKAGE, "common", "types.py")
+TS_TYPES = os.path.join(GENERATED_DIR, "dashboard", "types.ts")
 # Dependency order: a module may only import from modules before it. A dotted name is a module in a layer's folder.
 MODULES = [
     "common.errors",
@@ -85,20 +94,23 @@ MODULES = [
     "boot.open",
     "boot.jsongit",
     "cli.render",
-    "cli.query",
-    "cli.status",
-    "cli.claims",
-    "cli.edit",
-    "cli.components",
-    "cli.sprints",
-    "cli.releases",
-    "cli.archive",
-    "cli.code",
-    "cli.projects",
-    "cli.settings",
     "cli.store",
     "cli.serve",
     "cli.agent_docs",
+    "cli.app",
+    # One module per top-level command, in the order they register (the help's order is cli/app.py's HELP_ORDER)
+    "cli.commands.task",
+    "cli.commands.loop",
+    "cli.commands.claim",
+    "cli.commands.vcs",
+    "cli.commands.db",
+    "cli.commands.release",
+    "cli.commands.component",
+    "cli.commands.project",
+    "cli.commands.sprint",
+    "cli.commands.maintenance",
+    "cli.commands.agents",
+    "cli.commands.meta",
     "cli.main",
     "api.server",
 ]
@@ -175,6 +187,8 @@ def top_level_names(tree):
 
 def read_module(name):
     path = os.path.join(PACKAGE, module_file(name))
+    if not os.path.exists(path):
+        path = os.path.join(GENERATED_PACKAGE, module_file(name))
     with open(path, encoding="utf-8") as f:
         source = f.read()
     tree = ast.parse(source, path)
@@ -540,7 +554,7 @@ def generated_python(types):
 
 
 VOCABULARIES = os.path.join(SCHEMA_DIR, "vocabularies.json")
-PY_VOCABULARIES = os.path.join(PACKAGE, "common", "vocabularies.py")
+PY_VOCABULARIES = os.path.join(GENERATED_PACKAGE, "common", "vocabularies.py")
 TS_VOCABULARIES = os.path.join(os.path.dirname(TS_TYPES), "vocabularies.ts")
 VOCABULARY_NAMES = (  # key in vocabularies.json -> the constant's name in both languages
     ("kinds", "KINDS"),
@@ -598,7 +612,7 @@ def generated_typescript_vocabularies(data):
 
 
 AGENT_DOCS_DIR = os.path.join(os.path.dirname(HERE), "docs", "agent")
-PY_AGENT_DOCS = os.path.join(PACKAGE, "cli", "agent_docs.py")
+PY_AGENT_DOCS = os.path.join(GENERATED_PACKAGE, "cli", "agent_docs.py")
 TOPIC_NAME = re.compile(r"[a-z][a-z0-9-]*")
 
 
@@ -686,7 +700,7 @@ def plugin_skills():
     return files
 
 
-PY_SKILLS = os.path.join(PACKAGE, "common", "skills.py")
+PY_SKILLS = os.path.join(GENERATED_PACKAGE, "common", "skills.py")
 
 
 def generated_python_skills():
@@ -711,7 +725,8 @@ def generated_python_skills():
 
 
 def generated_files():
-    """The files generated from the schemas, the vocabularies, the agents' reference and the skills, by path."""
+    """The files generated into .generated/ from the schemas, the vocabularies, the agents' reference and the skills,
+    by path: the build's own inputs and the dashboard's, never committed."""
     types = schema_types()
     vocabularies = vocabulary_data()
     return {
@@ -721,7 +736,6 @@ def generated_files():
         TS_VOCABULARIES: generated_typescript_vocabularies(vocabularies),
         PY_AGENT_DOCS: generated_python_agent_docs(agent_docs()),
         PY_SKILLS: generated_python_skills(),
-        **plugin_skills(),
     }
 
 
@@ -733,21 +747,35 @@ def read_text(path):
         return None
 
 
+def write_text(path, content):
+    """Write a file only when it changes, in one step: several test processes may build at once, and none may read
+    half a file."""
+    if read_text(path) == content:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    partial = f"{path}.{os.getpid()}.tmp"
+    with open(partial, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(partial, path)
+
+
 def main(argv):
     try:
-        generated = generated_files()
+        # .generated/ is always written: the build reads its modules from there
+        for path, content in generated_files().items():
+            write_text(path, content)
+        if "--generated" in argv:
+            return 0
+        shipped = plugin_skills()
         if "--check" not in argv and "--output" not in argv:
-            for path, content in generated.items():
-                if read_text(path) != content:
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(content)
+            for path, content in shipped.items():
+                write_text(path, content)
         text = build()
     except BuildError as e:
         sys.stderr.write(f"build.py: {e}\n")
         return 1
     if "--check" in argv:
-        for path, content in generated.items():
+        for path, content in shipped.items():
             if read_text(path) != content:
                 sys.stderr.write(
                     f"build.py: {os.path.relpath(path, os.path.dirname(HERE))} is stale. Run `pnpm run build:cli` in "
