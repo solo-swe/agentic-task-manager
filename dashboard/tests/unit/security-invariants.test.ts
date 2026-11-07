@@ -36,7 +36,7 @@ describe('security invariants (docs/security-architecture.md)', () => {
     );
     // os.fork starts no program: atm's own watcher (`atm claim hold`), which only renews a claim
     expect(filesIn('atm-cli/atm', '.py').filter((file) => /os\.fork\(/.test(read(file)))).toEqual([
-      'atm-cli/atm/cli/claims.py',
+      'atm-cli/atm/cli/commands/claim.py',
     ]);
     expect(starts.sort()).toEqual(
       [
