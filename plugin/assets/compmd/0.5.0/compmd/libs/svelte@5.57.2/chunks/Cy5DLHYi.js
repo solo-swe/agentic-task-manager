@@ -1,1 +1,0 @@
-var e=!1,t=!1,n=!1;function r(){e=!0}function i(){t=!0}export{n as a,t as i,r as n,i as r,e as t};
