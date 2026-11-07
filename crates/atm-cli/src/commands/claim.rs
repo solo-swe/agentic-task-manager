@@ -95,7 +95,7 @@ pub fn run(command: ClaimCommand, ctx: Context, cwd: &Path) -> Result<()> {
 }
 
 /// `3s`, `5m`, `2h 10m`, as the Python atm's `format_duration`.
-fn format_duration(seconds: i64) -> String {
+pub(crate) fn format_duration(seconds: i64) -> String {
     let seconds = seconds.max(0);
     if seconds < 60 {
         format!("{seconds}s")

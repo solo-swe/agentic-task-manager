@@ -59,7 +59,8 @@ atm-cli/                the Python atm, until the switch (§5), then removed
   options, the dispatch and the exit codes. The Python CLI is split the same way (`atm-cli/atm/cli/commands/`).
 - **One crate per layer.** A crate can use only what its `Cargo.toml` declares, so the layer rule
   ([layered-architecture.md](layered-architecture.md) §2) is the compiler's: `atm-api` and `atm-cli` depend on
-  `atm-lib` and `atm-boot`, never on each other; `atm-lib` never on `atm-db`'s jsongit module (it takes the store
+  `atm-lib` and `atm-boot`; `atm-api` never on `atm-cli`, and `atm-cli` on `atm-api` only to enter the server
+  (`atm _serve`, the process `atm service` starts: one binary), its commands never using it; `atm-lib` never on `atm-db`'s jsongit module (it takes the store
   interface); only `atm-db` and `atm-vcs` run git. `build.py`'s import check retires with Python.
 - **Nothing built is committed.** `plugin/scripts/atm.py` and `plugin/templates/tasks-dashboard.html` were committed
   because the plugin shipped them; the binary is built in CI and released. The dashboard is built before the binary,

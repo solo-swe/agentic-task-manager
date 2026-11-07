@@ -30,6 +30,9 @@ sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 signal-hook = "0.4"
 # The local time zone (TZ, /etc/localtime, the system's tz database), for sprints named by the time (T-471)
 jiff = "0.2"
+# `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -74,6 +74,17 @@ pub fn register_project(cwd: &Path) -> Result<()> {
     Ok(())
 }
 
+/// (id, listed) of the project at or above `cwd` on the dashboard, after registering it: the ID the registry gave it
+/// (`meta.id`, or another when that one is taken) and whether it is listed (`meta.dashboard.listed`).
+///
+/// # Errors
+/// The task folder's checks, the registry's lock or file.
+pub fn dashboard_id(cwd: &Path) -> Result<(String, bool)> {
+    let paths = find_paths(cwd)?;
+    atm_db::registry::register(&paths, true)?;
+    Ok(atm_db::registry::registered_id(&paths))
+}
+
 /// What `atm db init` set up in the store's working copy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetUp {
@@ -166,6 +177,42 @@ pub fn process_started(pid: u32) -> Option<u64> {
         .process(pid)
         .filter(|p| p.status() != sysinfo::ProcessStatus::Zombie)
         .map(sysinfo::Process::start_time)
+}
+
+/// Whether process `pid` runs (an ended one nobody reaped yet doesn't).
+#[must_use]
+pub fn pid_alive(pid: u32) -> bool {
+    process_started(pid).is_some()
+}
+
+/// Whether there is a process `pid` at all, one that ended but isn't reaped yet included.
+#[must_use]
+pub fn pid_exists(pid: u32) -> bool {
+    let pid = sysinfo::Pid::from_u32(pid);
+    let Ok(mut system) = sysinfo::System::new() else {
+        return false;
+    };
+    system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    system.process(pid).is_some()
+}
+
+/// Ask process `pid` to stop (SIGTERM), or with `kill`, end it (SIGKILL). Whether the signal was sent.
+#[must_use]
+pub fn signal_process(pid: u32, kill: bool) -> bool {
+    let pid = sysinfo::Pid::from_u32(pid);
+    let Ok(mut system) = sysinfo::System::new() else {
+        return false;
+    };
+    system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    let signal = if kill {
+        sysinfo::Signal::Kill
+    } else {
+        sysinfo::Signal::Term
+    };
+    system
+        .process(pid)
+        .and_then(|p| p.kill_with(signal))
+        .unwrap_or(false)
 }
 
 use atm_db::jsongit::paths::main_worktree;

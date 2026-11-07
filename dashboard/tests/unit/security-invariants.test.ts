@@ -50,7 +50,7 @@ describe('security invariants (docs/security-architecture.md)', () => {
     );
   });
 
-  it('I24 in the Rust atm: it starts only git and itself (the claim’s watcher, `atm _claim-watch`) (T-446)', () => {
+  it('I24 in the Rust atm: it starts only git, itself (the claim’s watcher, the dashboard server) and the browser opener (T-446, T-449)', () => {
     // Every place that starts a process, and the program it starts; the shell's start time comes from sysinfo, not ps
     const starts = filesIn('crates', '.rs').flatMap((file) =>
       [...read(file).matchAll(/Command::new\(\s*([^\s,)]+)/g)].map(
@@ -58,10 +58,22 @@ describe('security invariants (docs/security-architecture.md)', () => {
       ),
     );
     expect(starts.sort()).toEqual(
-      ['atm-cli/src/commands/claim.rs: own_binary', 'atm-db/src/git.rs: "git"', 'atm-vcs/src/lib.rs: "git"'].sort(),
+      [
+        'atm-cli/src/commands/claim.rs: own_binary',
+        'atm-cli/src/commands/maintenance.rs: own_binary',
+        'atm-cli/src/commands/maintenance.rs: opener',
+        'atm-db/src/git.rs: "git"',
+        'atm-vcs/src/lib.rs: "git"',
+      ].sort(),
     );
-    // The watcher is started with atm's own path, never one from the command line or a task
-    expect(read('crates/atm-cli/src/commands/claim.rs')).toContain('let own_binary = std::env::current_exe()');
+    // The watcher and the server are started with atm's own path, never one from the command line or a task; the
+    // browser opener is `open` or `xdg-open`, with the URL atm made
+    for (const file of ['claim.rs', 'maintenance.rs']) {
+      expect(read(`crates/atm-cli/src/commands/${file}`)).toContain('let own_binary = std::env::current_exe()');
+    }
+    expect(read('crates/atm-cli/src/commands/maintenance.rs')).toMatch(
+      /let opener = if cfg!\(target_os = "macos"\) \{\s*"open"\s*\} else \{\s*"xdg-open"\s*\};/,
+    );
   });
 
   it('I15: {@html} only in the bundled logo, never on data (the icons are components since T-432)', () => {

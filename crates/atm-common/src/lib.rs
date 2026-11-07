@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod components;
+pub mod dashboard;
 pub mod edits;
 pub mod error;
 pub mod home;
@@ -13,6 +14,7 @@ pub mod py;
 pub mod repository;
 pub mod rules;
 pub mod sha1;
+pub mod sha256;
 pub mod skills;
 pub mod sprint_names;
 pub mod time;

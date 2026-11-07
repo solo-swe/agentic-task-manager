@@ -8,7 +8,7 @@
 mod commands;
 
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use atm_common::Error;
@@ -85,6 +85,35 @@ enum Command {
         #[arg(long)]
         files: bool,
     },
+    /// Run the dashboard server in the background.
+    Service {
+        /// start, stop or status
+        #[arg(default_value = "start", value_parser = ["start", "stop", "status"])]
+        action: String,
+        /// Also open the dashboard in the browser
+        #[arg(long)]
+        open: bool,
+        /// Show all projects overview
+        #[arg(long)]
+        all: bool,
+        /// The port to try first
+        #[arg(long, default_value_t = atm_common::dashboard::DEFAULT_PORT)]
+        port: u16,
+        /// The project to show
+        #[arg(long)]
+        dir: Option<String>,
+        /// Only restart if dashboard is older
+        #[arg(long)]
+        refresh: bool,
+    },
+    /// The dashboard server itself (what `atm service` starts).
+    #[command(name = "_serve", hide = true)]
+    Serve {
+        /// The user's atm folder
+        home: PathBuf,
+        /// The first port to try
+        port: u16,
+    },
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
@@ -111,14 +140,21 @@ impl Command {
     /// Whether running it renews the caller's own claims (T-439): not the commands that work on no project, nor the
     /// heartbeat and the watcher, which renew their own.
     fn renews_claims(&self) -> bool {
+        self.refreshes_server() && !matches!(self, Command::Claim(ClaimCommand::Heartbeat { .. }))
+    }
+
+    /// Whether running it first brings an outdated dashboard server along (after an update, the first atm command
+    /// restarts it on the new dashboard): every command that works on a project, the hook's heartbeat too.
+    fn refreshes_server(&self) -> bool {
         !matches!(
             self,
             Command::Docs { .. }
                 | Command::Version
                 | Command::LockTest { .. }
                 | Command::ClaimWatch(_)
+                | Command::Service { .. }
+                | Command::Serve { .. }
                 | Command::Db(DbCommand::MergeDriver { .. })
-                | Command::Claim(ClaimCommand::Heartbeat { .. })
         )
     }
 }
@@ -257,6 +293,10 @@ fn run(args: &[OsString]) -> u8 {
             return 1;
         }
     };
+    if cli.command.refreshes_server() {
+        // Never in the way of the command itself
+        let _ = commands::maintenance::refresh_server(&atm_common::home::atm_home());
+    }
     if cli.command.renews_claims() {
         renew_own_claims(args, &cwd);
     }
@@ -272,7 +312,26 @@ fn run(args: &[OsString]) -> u8 {
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Vcs(command) => commands::vcs::run(command, ctx, &cwd).map(|()| 0),
         Command::Db(command) => commands::db::run(command, ctx, &cwd),
-        Command::Doctor { files } => commands::doctor::run(files, ctx, &cwd),
+        Command::Doctor { files } => commands::maintenance::doctor(files, ctx, &cwd),
+        Command::Service {
+            action,
+            open,
+            all,
+            port,
+            dir,
+            refresh,
+        } => {
+            let args = commands::maintenance::ServiceArgs {
+                action,
+                open,
+                all,
+                port,
+                dir,
+                refresh,
+            };
+            commands::maintenance::service(&args, ctx, &cwd).map(|()| 0)
+        }
+        Command::Serve { home, port } => Ok(commands::maintenance::serve(&home, port)),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {

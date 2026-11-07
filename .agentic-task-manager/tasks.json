@@ -21348,7 +21348,7 @@
       "description": "Slice 7a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 7, split in three: this, then the read API and the project's files): `atm serve` itself, in `atm-api` on axum/tokio (§3), as the Python atm's `cli/serve.py` and `api/server.py` run it.\n\n## Change\n- `atm serve start|stop|status` and `atm service [--refresh] [--port] [--open] [--all] [--dir]`: one detached server per user (`ATM_HOME`), started as the `atm` binary itself, its record (pid, port, build, version) in `ATM_HOME`, a busy port moving to the next, a stale record cleaned up, `stop` ending only the recorded server (SIGTERM, then SIGKILL), two starts at once starting one server, `--refresh` restarting an older or rebuilt dashboard on the same port; `/__atm/whoami`.\n- The **registry** of projects (`db/registry.py`, `projects.json`): adding a project when a command runs in it, IDs from `meta.id` (another when it is taken), `meta.dashboard.listed`.\n- The **Host check** (DNS rebinding), `[::1]` and `127.0.0.1` both, and the security headers and CSP of [security-architecture.md](docs/security-architecture.md) I12–I13.\n- The dashboard page, from `plugin/templates/tasks-dashboard.html`, embedded at build and served from memory at each of its paths (T-429's routes); CompMD's runtime from `plugin/assets/compmd/`, at `/assets/`, read-only.\n- New dependencies: `axum` and `tokio` (named in §3).\n\n## Tests\nThe `serve.test.mjs` tests about the server's lifecycle, the page, the headers and the Host check leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-444",
         "T-464",
@@ -21361,7 +21361,7 @@
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T03:28:21Z",
+      "updated_at": "2026-11-07T04:06:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21377,8 +21377,16 @@
           "kind": "handoff",
           "text": "Not started: `atm serve start` runs the folder’s migration first (`migrate_folder`, `atm db migrate`), which is T-448’s, so T-449 now depends on T-448. Split into T-449 (the server), T-468 (read API), T-469 (files, search, e2e).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T03:59:54Z",
+          "kind": "handoff",
+          "text": "Not started: it adds `axum` and `tokio`, new dependencies that need the user’s approval first.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-07T04:06:36Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-450",
@@ -22406,7 +22414,7 @@
       "description": "Slice 6c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db migrate` (legacy locations moved and staged, phases into sprints, older leftovers cleaned up, the project listed on the dashboard), `db init` (`--meta-file`, the merge driver registered, `meta.repository` from origin), `db archive|unarchive` (thresholds, `--sprint`, the hint), and `doctor` (`lib/edit.py`'s `check_data`: errors and warnings, `--files`); text and `--json` as in Python.\n\n## Tests\nThe `migrate`, `init`, `archive`, `hints`, `doctor`/`check` scenarios and `hints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-448"
       ],
@@ -22414,7 +22422,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:28:15Z",
-      "updated_at": "2026-11-07T03:40:48Z",
+      "updated_at": "2026-11-07T03:59:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22425,7 +22433,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T03:40:48Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "b646c18a9e0c2d7991271ae1639b40d40b4a60eb",
+      "completed_at": "2026-11-07T03:59:46Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:59:46Z",
+          "kind": "outcome",
+          "text": "Ported `db migrate|init|archive|unarchive` and `doctor`; 89 tests left the expected-failures list (67 remain). `db init` registers the Rust binary as the merge driver, so the test expecting Python’s launcher stays listed until the switch.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }

@@ -34,8 +34,6 @@ const IGNORED: [&str; 6] = [
 ];
 const OLD_SERVER_RECORD: &str = ".server.json";
 const OLD_SERVER_LOG: &str = ".server.log";
-/// The path an atm server answers who it is on.
-const WHOAMI: &str = "/__atm/whoami";
 /// Recorded in `meta.migrations` once `interactive` labels became `with: user`.
 const WITH_USER_MIGRATION: &str = "interactive-label";
 
@@ -80,32 +78,7 @@ fn written_by_atm(root: &Path, path: &Path) -> bool {
 
 /// Ask the atm server on this port who it is (on localhost); none if nothing, or not an atm server, answers.
 fn whoami(port: u64) -> Option<Map<String, Value>> {
-    use std::io::{Read, Write};
-    use std::net::{TcpStream, ToSocketAddrs};
-    use std::time::Duration;
-    let port = u16::try_from(port).ok()?;
-    let timeout = Duration::from_secs(1);
-    let mut stream = ("localhost", port)
-        .to_socket_addrs()
-        .ok()?
-        .find_map(|address| TcpStream::connect_timeout(&address, timeout).ok())?;
-    stream.set_read_timeout(Some(timeout)).ok()?;
-    stream.set_write_timeout(Some(timeout)).ok()?;
-    write!(
-        stream,
-        "GET {WHOAMI} HTTP/1.0\r\nHost: localhost:{port}\r\nConnection: close\r\n\r\n"
-    )
-    .ok()?;
-    let mut response = Vec::new();
-    stream.take(1 << 20).read_to_end(&mut response).ok()?;
-    let text = String::from_utf8(response).ok()?;
-    let (head, body) = text.split_once("\r\n\r\n")?;
-    if head.split(' ').nth(1).is_none_or(|code| code != "200") {
-        return None;
-    }
-    let info: Value = serde_json::from_str(body).ok()?;
-    let info = info.as_object()?;
-    info.get("atm").is_some_and(truthy).then(|| info.clone())
+    atm_common::dashboard::whoami(port, std::time::Duration::from_secs(1))
 }
 
 /// Stop process `pid` (SIGTERM); whether the signal was sent.

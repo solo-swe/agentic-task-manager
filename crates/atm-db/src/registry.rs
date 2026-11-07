@@ -245,6 +245,32 @@ pub fn register(paths: &Paths, wait: bool) -> Result<Option<&'static str>> {
     Ok(Some(result))
 }
 
+/// (id, listed) of the project of `paths` as the registry has it: the ID it gave the project (`meta.id`, or another
+/// when that one is taken), and whether it is listed on the dashboard.
+#[must_use]
+pub fn registered_id(paths: &Paths) -> (String, bool) {
+    let path = main_worktree(&paths.root);
+    let meta = project_meta(&path)
+        .or_else(|| project_meta(&paths.root))
+        .unwrap_or_default();
+    let key = text(&path);
+    let registry = read_json(&atm_home().join(REGISTRY_FILE)).unwrap_or(Value::Null);
+    let given = registry
+        .get("projects")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .find(|e| e.get("path").and_then(Value::as_str) == Some(key.as_str()))
+        .and_then(|e| e.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(String::from);
+    (
+        given.unwrap_or_else(|| project_id(&meta, &key)),
+        listed(&meta),
+    )
+}
+
 /// The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
 /// waiting for the lock) only when the project isn't listed yet or was last seen a day ago.
 ///

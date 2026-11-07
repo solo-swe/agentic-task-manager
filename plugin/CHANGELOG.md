@@ -157,6 +157,18 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   and why, duplicates dropped, the archive's `.gitattributes` line on the first move) and `atm doctor [--files]`
   (`atm-lib` `check.rs`). The store gained `exists`, `create` and `raw`. Eighty-nine more tests left the
   expected-failures list; the one that checks the merge driver points at Python's launcher stays until the switch.
+- **`atm service` and its server in the Rust atm** (T-449): `atm service start|stop|status [--open] [--all] [--port]
+  [--dir] [--refresh]` (`atm-cli` `commands/maintenance.rs`, with `doctor`) starts the binary itself, detached, as
+  `atm _serve <home> <port>`: one server per `ATM_HOME`, its record in `server.json`, the server lock so two starts
+  start one, a stale record removed, `stop` ending only a server whose whoami confirms it (SIGTERM, then SIGKILL) and
+  this folder's unrecorded ones, `--refresh` and every other command restarting an older dashboard on the same port
+  (a newer one, or another install of the same version, is left alone). The server (`atm-api`, on `axum` and `tokio`,
+  the new dependencies) listens on `127.0.0.1` and `[::1]`, moves past a busy port, answers only GET and HEAD for the
+  Host `localhost:<port>` or `127.0.0.1:<port>`, sends `nosniff`, CORP same-origin and `no-store` on every response,
+  and serves the dashboard and CompMD's runtime embedded in the binary (`atm-common` `dashboard.rs`; `atm-api`
+  `build.rs`), the page at each of its paths with its CSP (the inline scripts' SHA-256, `atm-common` `sha256.rs`), and
+  `/__atm/whoami`. Invariant I24's check lists the server and the browser opener; the read API follows (T-468).
+  Eighteen more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).
