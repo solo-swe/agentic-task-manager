@@ -503,6 +503,39 @@ pub fn set_repository(project: &mut Project, url: &str, previous: Option<&str>) 
     Ok(outcome)
 }
 
+/// `atm db init`: fill `meta.repository` from the version control's remote when there is none. The address set, if
+/// it set one.
+///
+/// # Errors
+/// A store error.
+pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<Option<String>> {
+    if !project.store().exists() {
+        return Ok(None);
+    }
+    let Some(url) = vcs
+        .and_then(GitVcs::remote_url)
+        .and_then(|remote| repository_url(&remote))
+    else {
+        return Ok(None);
+    };
+    let mut set = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        if !work.document.get("meta").is_some_and(Value::is_object) {
+            work.document["meta"] = json!({});
+        }
+        if work.document["meta"]
+            .get("repository")
+            .is_some_and(atm_common::py::truthy)
+        {
+            return Ok(());
+        }
+        work.document["meta"]["repository"] = json!(url);
+        set = Some(url.clone());
+        Ok(())
+    })?;
+    Ok(set)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

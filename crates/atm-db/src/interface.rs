@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use atm_common::{Result, Task, Vocabulary};
+use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::{Map, Value};
 
 use crate::working::Working;
@@ -62,4 +62,40 @@ pub trait Store {
     /// # Errors
     /// The data can't be read or written, or `change` fails (or deferred an error).
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()>;
+
+    /// Whether the project has task data yet.
+    fn exists(&self) -> bool {
+        true
+    }
+
+    /// Write the project's first task data (`atm db init`).
+    ///
+    /// # Errors
+    /// When it has some already, or it can't be written.
+    fn create(&mut self, _document: &Value) -> Result<()> {
+        Err(Error::failed("the project has task data already"))
+    }
+
+    /// The task data as stored, unchecked, for `atm doctor` to report on.
+    ///
+    /// # Errors
+    /// When there is no task data at all.
+    fn raw(&self) -> Result<Raw> {
+        Ok(Raw {
+            document: Some(self.document()?.clone()),
+            archive: self.list_archived()?.into_iter().cloned().collect(),
+            archive_error: None,
+        })
+    }
+}
+
+/// The task data as stored ([`Store::raw`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Raw {
+    /// The task document, none when it isn't task data (an object with a `tasks` list).
+    pub document: Option<Value>,
+    /// The archived tasks (empty when the archive can't be read).
+    pub archive: Vec<Task>,
+    /// Why the archive can't be read, if it can't.
+    pub archive_error: Option<String>,
 }

@@ -6,7 +6,7 @@ use std::path::Path;
 
 use atm_common::Result;
 use atm_db::JsonGitStore;
-use atm_db::jsongit::paths::{check_task_folder, find_paths};
+use atm_db::jsongit::paths::{DASHBOARD_FILE, check_task_folder, find_paths, legacy_files};
 use atm_lib::Project;
 
 /// The project at or above `cwd`, on the JSON-in-git store. Nothing is read until the project's data is asked for.
@@ -20,11 +20,6 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
-/// Where task files were kept before `.agentic-task-manager/`, in the order they are looked for.
-const LEGACY_DIRS: [&str; 2] = ["docs", "."];
-/// The dashboard file an older atm put beside the task file.
-const DASHBOARD_FILE: &str = "tasks-dashboard.html";
-
 /// `atm project config`: where the project's task files are (the JSON-in-git store's own locations): root, dir,
 /// tasks (and whether it exists), the old dashboard's place, and a task file left in a legacy location.
 ///
@@ -33,19 +28,10 @@ const DASHBOARD_FILE: &str = "tasks-dashboard.html";
 pub fn task_paths(cwd: &Path) -> Result<serde_json::Value> {
     let paths = find_paths(cwd)?;
     let text = |p: &Path| p.display().to_string();
-    let legacy = LEGACY_DIRS.iter().find_map(|d| {
-        let folder = if *d == "." {
-            paths.root.clone()
-        } else {
-            paths.root.join(d)
-        };
-        let tasks = folder.join(atm_common::TASKS_FILE);
-        tasks.is_file().then(|| {
-            let dashboard = folder.join(DASHBOARD_FILE);
-            serde_json::json!({
-                "tasks": text(&tasks),
-                "dashboard": dashboard.is_file().then(|| text(&dashboard)),
-            })
+    let legacy = legacy_files(&paths.root).map(|l| {
+        serde_json::json!({
+            "tasks": text(&l.tasks),
+            "dashboard": l.dashboard.as_deref().map(text),
         })
     });
     Ok(serde_json::json!({
@@ -77,6 +63,70 @@ pub fn default_base(cwd: &Path) -> String {
 /// A version that isn't task data, or a result that can't be written.
 pub fn merge_versions(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
     atm_db::jsongit::merge::merge_files(base, ours, theirs)
+}
+
+/// List the project at or above `cwd` on the dashboard, by its folder (every command that sets a project up does).
+///
+/// # Errors
+/// The task folder's checks, the registry's lock or file.
+pub fn register_project(cwd: &Path) -> Result<()> {
+    atm_db::registry::register(&find_paths(cwd)?, true)?;
+    Ok(())
+}
+
+/// What `atm db init` set up in the store's working copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetUp {
+    /// Whether the project is in a git repository.
+    pub git: bool,
+    /// Whether `.gitattributes` gained the merge driver's line (staged).
+    pub gitattributes_added: bool,
+}
+
+/// `atm db init`: set the store up in its working copy: in git, the merge driver for the task files (registered in
+/// the clone, `.gitattributes` staged).
+///
+/// # Errors
+/// The task folder's checks, a `.gitattributes` that can't be written.
+pub fn set_up_store(cwd: &Path) -> Result<SetUp> {
+    let paths = find_paths(cwd)?;
+    let git = open_vcs(cwd).in_repository();
+    let gitattributes_added = git && atm_db::jsongit::setup::ensure_merge_driver(&paths)?;
+    Ok(SetUp {
+        git,
+        gitattributes_added,
+    })
+}
+
+/// What `atm db migrate` did: its result, the same in words, and whether there is a task file now.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Migration {
+    /// What it did (see [`atm_db::jsongit::migrate::migrate`]).
+    pub result: serde_json::Map<String, serde_json::Value>,
+    /// The same, a line each.
+    pub lines: Vec<String>,
+    /// Whether the project has a task file now.
+    pub tasks_exists: bool,
+}
+
+/// `atm db migrate` (and `atm service`, before it shows a project): bring the task folder at or above `cwd` up to
+/// date. With `register_it`, the project is listed on the dashboard too (every skill runs migrate first).
+///
+/// # Errors
+/// The task folder's checks, a file that can't be moved, read or written.
+pub fn migrate_folder(cwd: &Path, register_it: bool) -> Result<Migration> {
+    let paths = find_paths(cwd)?;
+    let result = atm_db::jsongit::migrate::migrate(&paths)?;
+    let tasks_exists = paths.tasks.is_file();
+    if register_it && tasks_exists {
+        atm_db::registry::register(&paths, true)?;
+    }
+    let lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
+    Ok(Migration {
+        result,
+        lines,
+        tasks_exists,
+    })
 }
 
 /// The version control of the project at or above `cwd`: git, at the project's root.

@@ -75,17 +75,41 @@ fn finished(vocab: &Vocabulary, task: &Task) -> bool {
 /// in an open PR.
 #[must_use]
 pub fn archivable<'a>(document: &'a Value, vocab: &Vocabulary) -> Vec<&'a Task> {
-    let settings = archive_settings(document);
+    archivable_by(document, vocab, None, None)
+}
+
+/// The time `keep` days before now (`meta.archive.keep_days` without one).
+#[must_use]
+pub fn recent_since(document: &Value, keep: Option<f64>) -> i64 {
+    let days = keep.unwrap_or_else(|| archive_settings(document).keep_days);
     #[allow(clippy::cast_possible_truncation)]
     // reason: days of seconds fit an i64 for any sane setting
-    let recent = now() - (settings.keep_days * 86_400.0) as i64;
+    {
+        now() - (days * 86_400.0) as i64
+    }
+}
+
+/// Whether the task is in a PR that isn't merged yet.
+#[must_use]
+pub fn in_open_pr(task: &Task) -> bool {
+    task.get("pr").is_some_and(Value::is_object) && !task.get("merged_at").is_some_and(truthy)
+}
+
+/// [`archivable`], keeping the tasks finished in the last `keep` days (`meta.archive.keep_days` without it), and only
+/// those finished before `before` when given (`atm db archive --keep-days`, `--before`).
+#[must_use]
+pub fn archivable_by<'a>(
+    document: &'a Value,
+    vocab: &Vocabulary,
+    before: Option<i64>,
+    keep: Option<f64>,
+) -> Vec<&'a Task> {
+    let recent = recent_since(document, keep);
     tasks_of(document)
         .filter(|t| finished(vocab, t))
-        // Not in an open PR: no PR recorded, or merged
-        .filter(|t| {
-            !t.get("pr").is_some_and(Value::is_object) || t.get("merged_at").is_some_and(truthy)
-        })
+        .filter(|t| !in_open_pr(t))
         .filter(|t| finished_at(t).is_none_or(|f| f <= recent))
+        .filter(|t| before.is_none_or(|b| finished_at(t).is_some_and(|f| f < b)))
         .collect()
 }
 

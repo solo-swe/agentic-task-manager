@@ -60,6 +60,12 @@ fn next_number(document: &Value, prefix: &str) -> i128 {
     }
 }
 
+/// The number the next new task gets, in the project's pattern (`meta.next_id`, never behind the file's IDs).
+pub(crate) fn next_free_number(document: &Value) -> i128 {
+    let (prefix, _) = id_format(document);
+    next_number(document, &prefix)
+}
+
 /// `count` new IDs in the project's pattern; advances `meta.next_id`.
 fn allocate_ids(document: &mut Value, count: usize) -> Vec<String> {
     let (prefix, width) = id_format(document);
@@ -259,7 +265,7 @@ fn new_task(vocab: &Vocabulary, fields: &Task, actor: Option<&str>, stamp: &str)
 
 /// A dependency cycle among `tasks` (as a list of IDs), if there is one. Depth-first with an explicit stack, not
 /// recursion: a chain of thousands of tasks (or a hostile file) can't overflow it (docs/security-review.md F12).
-fn find_cycle(tasks: &[&Task]) -> Option<Vec<String>> {
+pub(crate) fn find_cycle(tasks: &[&Task]) -> Option<Vec<String>> {
     let mut order: Vec<String> = Vec::new();
     let mut deps: HashMap<String, Vec<String>> = HashMap::new();
     for t in tasks {

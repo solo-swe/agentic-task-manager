@@ -148,6 +148,15 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   ours and says where. Seeded property tests check that an unchanged side changes nothing and that every task keeps
   an ID of its own. The real-git merge tests follow with `db init` (T-476). Seven more tests left the
   expected-failures list.
+- **The `db` group and `doctor` in the Rust atm** (T-476): `atm db migrate` (`atm-db` `jsongit/migrate.rs`: a legacy
+  `docs/tasks.json` moved with `git mv` or renamed, `.gitignore` entries, finish times filled in, phases turned into
+  sprints, `interactive` labels into `with: user`, old per-project dashboards and servers cleaned up),
+  `db init [--meta-file]` (meta merged or the task file created, `meta.id`, `meta.repository` from origin, the
+  registry, the merge driver in git config and `.gitattributes`; `jsongit/setup.rs`, registering the Rust binary
+  itself), `db archive [--sprint] [--before] [--keep-days]` and `db unarchive` (`atm-lib` `archive.rs`: what stays
+  and why, duplicates dropped, the archive's `.gitattributes` line on the first move) and `atm doctor [--files]`
+  (`atm-lib` `check.rs`). The store gained `exists`, `create` and `raw`. Eighty-nine more tests left the
+  expected-failures list; the one that checks the merge driver points at Python's launcher stays until the switch.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

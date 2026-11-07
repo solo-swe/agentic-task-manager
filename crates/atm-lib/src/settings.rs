@@ -28,6 +28,84 @@ fn meta_mut(document: &mut Value) -> &mut Map<String, Value> {
         .expect("made an object just above")
 }
 
+/// `atm db init --meta-file`: merge `new`'s keys into `meta` (project, description, vocabularies, ...), creating the
+/// task data when there is none, so `/atm:create-tasks` never writes the file itself. The vocabularies are checked
+/// before anything is written; `meta.id` is kept. Returns (created, the keys set, sorted).
+///
+/// # Errors
+/// Vocabularies that can't work, a store error.
+pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(bool, Vec<String>)> {
+    let new: Map<String, Value> = new
+        .iter()
+        .filter(|(k, _)| *k != "id")
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let mut keys: Vec<String> = new.keys().cloned().collect();
+    keys.sort();
+    if !project.store().exists() {
+        let mut meta = Map::new();
+        meta.insert(
+            "created".into(),
+            json!(&atm_common::time::format_iso(atm_common::time::now())[..10]),
+        );
+        meta.extend(new);
+        let document = json!({"meta": meta, "tasks": []});
+        // Refused, naming the problem, before anything is written
+        atm_common::Vocabulary::of_document(&document)?;
+        project.store_mut().create(&document)?;
+        return Ok((true, keys));
+    }
+    project.store_mut().change(&mut |work: &mut Working| {
+        let meta = meta_mut(&mut work.document);
+        for (key, value) in &new {
+            meta.insert(key.clone(), value.clone());
+        }
+        atm_common::Vocabulary::of_document(&work.document)?;
+        Ok(())
+    })?;
+    Ok((false, keys))
+}
+
+/// Eight random hexadecimal digits: a new project's `meta.id`.
+fn random_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::hash::RandomState::new().build_hasher();
+    hasher.write_u128(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos()),
+    );
+    hasher.write_u32(std::process::id());
+    format!("{:08x}", hasher.finish() & 0xffff_ffff)
+}
+
+/// `atm db init`: give the project a `meta.id` if it has none (the dashboard keeps each project's saved view under
+/// it). The new ID, if it gave one.
+///
+/// # Errors
+/// A store error.
+pub fn ensure_project_id(project: &mut Project) -> Result<Option<String>> {
+    if !project.store().exists() {
+        return Ok(None);
+    }
+    let mut given = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let meta = meta_mut(&mut work.document);
+        if meta
+            .get("id")
+            .and_then(Value::as_str)
+            .is_some_and(|id| !id.is_empty())
+        {
+            return Ok(());
+        }
+        let id = random_id();
+        meta.insert("id".into(), json!(id));
+        given = Some(id);
+        Ok(())
+    })?;
+    Ok(given)
+}
+
 /// `atm project workflow`: the project's workflow with its defaults, or none when none is set.
 ///
 /// # Errors

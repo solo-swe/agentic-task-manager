@@ -6,7 +6,9 @@ pub mod files;
 pub mod lock;
 pub mod logo;
 pub mod merge;
+pub mod migrate;
 pub mod paths;
+pub mod setup;
 
 use std::cell::OnceCell;
 
@@ -16,7 +18,7 @@ use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::Value;
 
 use crate::git::checked_out_branch;
-use crate::interface::Store;
+use crate::interface::{Raw, Store};
 use crate::working::{Here, Working};
 use claims::{locked_with_claims, read_store, write_store};
 use files::{Loaded, archive_document, last_with_id, load_archive, load_tasks};
@@ -113,6 +115,8 @@ impl JsonGitStore {
         if work.archive_first() {
             if let Some(archive) = &archive {
                 self.write_archive(archive)?;
+                // Tasks moved in: the archive merges task by task too
+                setup::ensure_archive_merge(&self.paths)?;
             }
             self.write_tasks(&work.document)?;
         } else {
@@ -179,6 +183,51 @@ impl Store for JsonGitStore {
 
     fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
         self.apply(change)
+    }
+
+    fn exists(&self) -> bool {
+        self.paths.tasks.is_file()
+    }
+
+    fn create(&mut self, document: &Value) -> Result<()> {
+        let folder = &self.paths.dir;
+        let _lock = if folder.is_dir() {
+            Some(lock::lock(folder, None)?)
+        } else {
+            None
+        };
+        if self.exists() {
+            return Err(Error::failed(format!(
+                "{} exists already",
+                self.paths.tasks.display()
+            )));
+        }
+        std::fs::create_dir_all(folder)
+            .map_err(|e| Error::failed(format!("{}: {e}", folder.display())))?;
+        write_text_atomic(&self.paths.tasks, &(to_json(document) + "\n"))
+            .map_err(|e| Error::failed(format!("{}: {e}", self.paths.tasks.display())))?;
+        self.loaded = OnceCell::new();
+        Ok(())
+    }
+
+    fn raw(&self) -> Result<Raw> {
+        if !self.exists() {
+            return Err(Error::failed(format!(
+                "no tasks.json in {}. Run /atm:create-tasks first.",
+                self.paths.dir.display()
+            )));
+        }
+        let document = files::read_json(&self.paths.tasks)
+            .filter(|d| d.is_object() && d.get("tasks").is_some_and(Value::is_array));
+        let (archive, archive_error) = match load_archive(&self.paths) {
+            Ok(archive) => (archive, None),
+            Err(e) => (Vec::new(), Some(e.to_string())),
+        };
+        Ok(Raw {
+            document,
+            archive,
+            archive_error,
+        })
     }
 }
 

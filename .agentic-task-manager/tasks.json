@@ -22363,7 +22363,7 @@
       "description": "Slice 6b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db merge-driver` (`db/jsongit/merge.py`): tasks.json merged task by task (both branches' additions kept, theirs renumbered with their dependencies following; notes, blocks, reviews and related merged as Python merges them; sprints and releases by their own rules; a real conflict stops with where), with property tests and the same fixtures as Python's.\n\n## Tests\nThe merge-driver scenarios and `merge.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-448"
       ],
@@ -22371,7 +22371,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:28:15Z",
-      "updated_at": "2026-11-07T03:35:22Z",
+      "updated_at": "2026-11-07T03:40:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22382,7 +22382,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T03:35:22Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "41023d0e128cb8663d334ec769837b7f0f9369d0",
+      "completed_at": "2026-11-07T03:40:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:40:42Z",
+          "kind": "outcome",
+          "text": "Rust merge driver (`db merge-driver`) with seeded property tests; 7 tests left the list (156 left). The real-git merge tests need `db init`, in T-476.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-476",
@@ -22395,7 +22406,7 @@
       "description": "Slice 6c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db migrate` (legacy locations moved and staged, phases into sprints, older leftovers cleaned up, the project listed on the dashboard), `db init` (`--meta-file`, the merge driver registered, `meta.repository` from origin), `db archive|unarchive` (thresholds, `--sprint`, the hint), and `doctor` (`lib/edit.py`'s `check_data`: errors and warnings, `--files`); text and `--json` as in Python.\n\n## Tests\nThe `migrate`, `init`, `archive`, `hints`, `doctor`/`check` scenarios and `hints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-448"
       ],
@@ -22403,16 +22414,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:28:15Z",
-      "updated_at": "2026-11-07T03:28:15Z",
+      "updated_at": "2026-11-07T03:40:48Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T03:28:15Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:40:48Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

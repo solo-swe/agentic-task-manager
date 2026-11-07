@@ -105,6 +105,40 @@ pub fn main_worktree(root: &Path) -> PathBuf {
     root.to_path_buf()
 }
 
+/// Where task files were kept before `.agentic-task-manager/`, in the order they are looked for.
+const LEGACY_DIRS: [&str; 2] = ["docs", "."];
+/// The dashboard file an older atm put beside the task file.
+pub const DASHBOARD_FILE: &str = "tasks-dashboard.html";
+
+/// A task file left where an older atm kept it, with the dashboard copy beside it if there is one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Legacy {
+    /// The old `tasks.json`.
+    pub tasks: PathBuf,
+    /// The old `tasks-dashboard.html` beside it.
+    pub dashboard: Option<PathBuf>,
+}
+
+/// The task file left in a legacy location of the project at `root` (`docs/`, then the root itself), if any.
+#[must_use]
+pub fn legacy_files(root: &Path) -> Option<Legacy> {
+    LEGACY_DIRS.iter().find_map(|d| {
+        let folder = if *d == "." {
+            root.to_path_buf()
+        } else {
+            root.join(d)
+        };
+        let tasks = folder.join(TASKS_FILE);
+        tasks.is_file().then(|| {
+            let dashboard = folder.join(DASHBOARD_FILE);
+            Legacy {
+                tasks,
+                dashboard: dashboard.is_file().then_some(dashboard),
+            }
+        })
+    })
+}
+
 /// Where the task files of the project at or above `cwd` are, after the task folder's checks.
 ///
 /// # Errors

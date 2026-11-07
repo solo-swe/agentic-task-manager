@@ -18,7 +18,8 @@ use crate::git::git;
 
 const CLAIMS_STORE: &str = "claims.json"; // in <git common dir>/atm/, shared by all worktrees of a clone
 const CLAIMS_STORE_NO_GIT: &str = "claims-store.json"; // in the task folder, outside git
-const CLAIMS_SNAPSHOT: &str = "claims.json"; // in the task folder (gitignored): what the dashboard reads
+/// The snapshot of the live claims the dashboard reads, in the task folder (gitignored).
+pub const CLAIMS_SNAPSHOT: &str = "claims.json";
 
 /// Where the claims store is: `<git common dir>/atm/`, or the task folder outside git.
 #[must_use]
@@ -125,7 +126,10 @@ pub fn write_store(paths: &Paths, store: &Map<String, Value>) -> Result<()> {
 }
 
 /// The gitignored copy of the live claims the dashboard polls, as a list by task.
-fn write_claims_snapshot(paths: &Paths, claims: Option<&Value>) -> Result<()> {
+///
+/// # Errors
+/// When the file can't be written.
+pub fn write_claims_snapshot(paths: &Paths, claims: Option<&Value>) -> Result<()> {
     if !paths.dir.is_dir() {
         return Ok(());
     }
