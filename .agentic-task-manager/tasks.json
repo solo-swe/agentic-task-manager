@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 477,
+    "next_id": 480,
     "labels": [
       {
         "id": "architecture",
@@ -21454,7 +21454,7 @@
       "description": "Slice 9 of [porting-to-rust.md](docs/porting-to-rust.md) §5: shell completion (`clap_complete`, proposed first as a new dependency, with atm's value completers), `atm help`, and every place where the Rust text output or command structure differs from Python's: listed for Hakan, kept only with his approval (§1), the scenarios updated for those. Done together with Hakan.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-446",
         "T-448",
@@ -21467,7 +21467,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T05:35:56Z",
+      "updated_at": "2026-11-07T06:12:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21479,7 +21479,18 @@
       "sprint": "The Rust port",
       "with": "user",
       "started_at": "2026-11-07T05:35:56Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "89014417867b6870518c25072be1517c789da57c",
+      "completed_at": "2026-11-07T06:12:57Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T06:12:57Z",
+          "kind": "outcome",
+          "text": "Decided with Hakan: clap’s help and usage-error wording behind `atm:` and `--json`, everyday-first order, `atm help` a command, bare `atm` exits 0; completion is clap_complete’s dynamic engine with atm’s values (`atm completion <shell>`). Fixed `meta: null` written by `vcs pushed`. Only the merge-launcher test is left on the expected list.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-452",
@@ -21573,20 +21584,23 @@
     },
     {
       "id": "T-454",
-      "name": "The switch: atm is the Rust binary; Python, plugin/ and build.py go",
+      "name": "The switch: remove atm-cli/, plugin/ and build.py (0.33.0)",
       "type": "refactor",
       "priority": "P1",
       "labels": [
         "rust",
         "distribution"
       ],
-      "description": "[porting-to-rust.md](docs/porting-to-rust.md) §5, §6: once every scenario passes under `ATM_IMPL=rust` on all three platforms (the expected-failures list is empty) and the formula and release binaries exist, remove `atm-cli/`, `plugin/` and `build.py` in one change; the suite runs only against Rust; `AGENTS.md`, the README and the docs say how atm is installed (the formula, the app) and how plugin users move. The plugin's last release before this says the same. Reviewed before it lands.",
+      "description": "[porting-to-rust.md](docs/porting-to-rust.md) §5, §6, the last part of the switch (split into T-477, T-478, T-479 and this, with Hakan): remove `atm-cli/`, `plugin/` and `build.py` in one change, landing in 0.33.0, after 0.32.0 (the plugin's last release, T-479).\n\n## Before it lands\n- A real release exists: the formula in `solo-swe/homebrew-tap` and the signed release binaries (T-452's machinery, with the release secrets and the tap's deploy key in place).\n- CI is green for the Rust atm on Linux, macOS and Windows (T-478), and the last expected failure is gone (the merge driver's path: the test then expects the `atm` binary).\n- T-477 has moved out of `plugin/` and `atm-cli/` everything the workspace and the dashboard build from.\n\n## Change\n- Delete `atm-cli/`, `plugin/` (with `.claude-plugin/marketplace.json`) and `build.py`; T-478's suite and CI land with it.\n- `AGENTS.md`, the README and the docs say how atm is installed (the formula, the app) and how plugin users move.\n\nReviewed with Hakan before it lands.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [
         "T-451",
-        "T-452"
+        "T-452",
+        "T-477",
+        "T-478",
+        "T-479"
       ],
       "files": [
         "atm-cli/",
@@ -21596,17 +21610,25 @@
         "docs/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T06:21:09Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
-          "from": "2026-11-06T20:53:32Z"
+          "from": "2026-11-06T20:53:32Z",
+          "to": "2026-11-07T06:21:00Z"
         }
       ],
-      "sprint": "The Rust port",
-      "review": "blocker"
+      "review": "blocker",
+      "notes": [
+        {
+          "at": "2026-11-07T06:21:09Z",
+          "kind": "handoff",
+          "text": "Split with Hakan into T-477 (move what Rust and the dashboard need), T-478 (suite, dev and e2e on Rust only), T-479 (0.32.0, the plugin’s last release: the move note) and this, the removal, in the backlog for 0.33.0, after a real release and green CI.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-455",
@@ -22487,6 +22509,101 @@
           "by": "claude:34798264"
         }
       ]
+    },
+    {
+      "id": "T-477",
+      "name": "Before the switch: move what Rust and the dashboard need out of plugin/ and atm-cli/",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "Part 1 of the switch ([porting-to-rust.md](docs/porting-to-rust.md) §5, split from T-454): nothing the Rust workspace or the dashboard builds from may live in `plugin/` or `atm-cli/`, so that T-454 can delete them.\n\n## Change\n- The JSON Schemas and `vocabularies.json` (`atm-cli/atm/common/schema/`) to a folder of their own (e.g. `schema/`), read by `atm-common`'s `build.rs` and the dashboard's generation.\n- The dashboard's build output and CompMD's runtime: where the Rust crates embed them from (not `plugin/templates/`, `plugin/assets/`); the page is built before the binary (§2: nothing built is committed).\n- The changelog and What's New (`plugin/CHANGELOG.md`, `plugin/WHATS-NEW.md`) and the version's source (the workspace's `Cargo.toml` instead of `plugin.json`), with `check-versions.mjs` and the dashboard's readers.\n- `build.py`'s generation for the dashboard (the TypeScript types and vocabularies in `.generated/dashboard/`) as a Node script in `dashboard/`.\n\nThe Python atm keeps working until T-454 (it may read the moved files from their new places).\n\n## Tests\n`pnpm run verify`'s checks and the e2e suite pass; the suite passes against both implementations.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/",
+        "plugin/",
+        "dashboard/",
+        "crates/"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-07T06:20:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-478",
+      "name": "Before the switch: the suite, the dev server and e2e on the Rust atm only",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "rust"
+      ],
+      "description": "Part 2 of the switch (split from T-454), ready to land with it: `tests/scripts/` runs only against the Rust binary (no `ATM_IMPL`, no expected-failures list; `expectRust` becomes `expect`), the Python-only tests go (`build.test.mjs`, `vendor.test.mjs`, `tests/lib/`), `pnpm run dev`'s API is `atm _serve`, the e2e fixture calls the Rust `atm`; CI's Python jobs go and the Rust suite runs on Windows too (scenarios without `sh`).\n\nPrepared on a branch, merged with T-454.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-477"
+      ],
+      "files": [
+        "tests/",
+        "dashboard/",
+        ".github/workflows/"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-07T06:20:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-479",
+      "name": "The plugin's last release (0.32.0): how plugin users move to the CLI",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "0.32.0 is the Claude Code plugin's last release (decided with Hakan): its What's New, changelog and README say that the next version comes as the `atm` CLI (the Homebrew formula, the release binaries) and the app, and how a plugin user moves: install the CLI, `atm agents install`, remove the plugin; the skills are `atm-…` then, not `/atm:`. Reviewed with Hakan before the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "plugin/WHATS-NEW.md",
+        "plugin/CHANGELOG.md",
+        "README.md"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-07T06:20:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "with": "user"
     }
   ]
 }
