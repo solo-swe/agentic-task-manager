@@ -71,6 +71,8 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   the change transaction, which writes only what changed, atomically. `atm _lock-test`, and `lock.test.mjs` passes.
   New dependencies: `sysinfo` (whether a lock's owner still runs, the host name) and `signal-hook` (Unix).
   `docs/porting-to-rust.md` §3 now says the lock is the lock folder, not `File::lock`.
+- **`atm task deps` in the Rust atm** (T-463): what a task waits for and what waits for it, archived tasks included
+  and marked, text and `--json` as in Python. Seven more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

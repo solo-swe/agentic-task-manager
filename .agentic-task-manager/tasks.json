@@ -21418,7 +21418,7 @@
       "description": "How the CLI reaches users ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §1): release builds for macOS (arm64, x86_64, signed and notarized), Linux and Windows on a tag, with checksums; the Homebrew formula and a release script in `packaging/`. CI changes pinned as `AGENTS.md` says; distribution entries in the security doc.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-443"
       ],
@@ -21428,7 +21428,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:30:37Z",
+      "updated_at": "2026-11-07T01:35:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21451,10 +21451,19 @@
           "kind": "answer",
           "text": "macOS signing and notarization need an Apple Developer ID (a Developer ID Application certificate and a notarytool login) stored as repository secrets: do you have one, and which secret names should the release workflow read? Or release unsigned macOS builds for now? → Yes: Hakan has an Apple Developer ID. Sign and notarize the macOS builds, reading the same secrets as solo-swe/agentic-status-bar’s release workflow (look its names up there).; Publishing a release on a tag needs a new workflow with `contents: write` (CI is read-only today): OK to add `.github/workflows/release.yml` with that permission, scoped to that one job? → Yes: a separate workflow for `v*` tag releases, with `contents: write` for that job only.; The Homebrew formula needs a tap repository: create `solo-swe/homebrew-tap` (users run `brew install solo-swe/tap/atm`), or another name? The release workflow would also need a token that can push to it. → Use the Homebrew tap solo-swe/agentic-status-bar already publishes to, and in-app updates the way that project does them; follow its release setup.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T01:35:44Z",
+          "kind": "outcome",
+          "text": "`release.yml` (v* tags: 5 targets, macOS signed and notarized, draft release with `SHA256SUMS`; only the drafting job can write), `homebrew.yml` (on publish: `Formula/atm.rb` in solo-swe/homebrew-tap), `packaging/` scripts and README (the secrets to add); tests for the formula, release.sh and the workflows’ hardening; security doc I18 and §3. Not run end to end until the secrets are set and a tag is pushed",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-07T01:30:37Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "6c4b4d0a04f06621a301a01dcae32c1fdac5a377",
+      "completed_at": "2026-11-07T01:35:44Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-453",
@@ -21802,7 +21811,7 @@
       "description": "Slice 2c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task deps <id>`, a task's dependency chain (`lib/query.py`'s `task_dependencies`: what it waits for, what waits for it, archived tasks counted as done), text and `--json` identical to Python's, in `commands/task.rs`.\n\n## Tests\nUnit tests for the chain; the `task deps` scenarios leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-444"
       ],
@@ -21810,16 +21819,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T01:35:51Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T00:51:41Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:35:51Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-464",

@@ -6,7 +6,7 @@ use std::path::Path;
 use atm_boot::open_project;
 use atm_common::py::{py_str, py_str_opt, splitlines, strip, truthy};
 use atm_common::{Error, Result, TaskId};
-use atm_lib::query::{Filters, task_views};
+use atm_lib::query::{Filters, task_dependencies, task_views};
 use atm_lib::tasks::{TaskView, show_tasks};
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
@@ -99,6 +99,11 @@ pub enum TaskCommand {
         #[arg(required = true, value_name = "TASK_IDS")]
         task_ids: Vec<String>,
     },
+    /// What a task waits for, and what waits for it.
+    Deps {
+        /// The task ID
+        task_id: String,
+    },
 }
 
 /// Run a task command in `cwd`.
@@ -109,7 +114,32 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
         TaskCommand::List(args) => list(args, ctx, cwd),
         TaskCommand::Details { task_ids } => details(&task_ids, ctx, cwd),
+        TaskCommand::Deps { task_id } => deps(&task_id, ctx, cwd),
     }
+}
+
+fn deps(task_id: &str, ctx: Context, cwd: &Path) -> Result<()> {
+    let deps = task_dependencies(&open_project(cwd)?, task_id)?;
+    if ctx.json {
+        print_json(&deps);
+        return Ok(());
+    }
+    let line = |key: &str| {
+        let items: Vec<String> = deps[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|i| format!("{} ({})", py_str(&i["id"]), py_str(&i["status"])))
+            .collect();
+        if items.is_empty() {
+            "nothing".to_string()
+        } else {
+            items.join(", ")
+        }
+    };
+    println!("{task_id} waits for: {}", line("waits_for"));
+    println!("{task_id} is waited on by: {}", line("waited_on_by"));
+    Ok(())
 }
 
 fn list(args: ListArgs, ctx: Context, cwd: &Path) -> Result<()> {

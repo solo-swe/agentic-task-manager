@@ -264,3 +264,40 @@ fn views_derive_what_applies_and_leave_out_the_rest() {
         ]
     );
 }
+
+#[test]
+fn deps_say_what_a_task_waits_for_and_what_waits_for_it_archived_ones_too() {
+    let p = project_with(
+        json!({}),
+        json!([
+            {"id": "T-2", "name": "Two", "status": "todo", "dependencies": ["T-1", "T-9"]},
+            {"id": "T-5", "name": "Live", "status": "todo", "dependencies": ["T-2"]}
+        ]),
+        json!([
+            {"id": "T-1", "name": "Old", "status": "done"},
+            {"id": "T-3", "name": "Older", "status": "done", "dependencies": ["T-2"]}
+        ]),
+    );
+    assert_eq!(
+        task_dependencies(&p, "T-2").unwrap(),
+        json!({
+            "id": "T-2",
+            "waits_for": [
+                {"id": "T-1", "status": "done, archived", "name": "Old"},
+                {"id": "T-9", "status": "missing", "name": ""}
+            ],
+            "waited_on_by": [
+                {"id": "T-5", "status": "todo", "name": "Live"},
+                {"id": "T-3", "status": "done, archived", "name": "Older"}
+            ]
+        })
+    );
+    assert_eq!(
+        task_dependencies(&p, "T-1").unwrap()["waits_for"],
+        json!([])
+    );
+    assert_eq!(
+        task_dependencies(&p, "T-7").unwrap_err(),
+        Error::NotFound("no task T-7".into())
+    );
+}

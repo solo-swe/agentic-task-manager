@@ -1,5 +1,5 @@
-//! The read commands (docs/layered-architecture.md §5.1): the Python atm's `lib/query.py`. This slice has `task list`
-//! (`list_matching`, `task_views`); `task deps` and `project status` come with theirs. Reads never write.
+//! The read commands (docs/layered-architecture.md §5.1): the Python atm's `lib/query.py`: `task list`
+//! (`list_matching`, `task_views`) and `task deps`; `project status` comes with its slice. Reads never write.
 
 use std::collections::HashSet;
 
@@ -269,6 +269,65 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         views.push(json!({"task": t, "derived": derived}));
     }
     Ok(views)
+}
+
+/// `atm task deps`: what a task waits for, and what waits for it, archived tasks included (T-358):
+/// `{id, waits_for: [{id, status, name}], waited_on_by: [...]}`. An archived task's status says so (`done, archived`);
+/// an unknown dependency is `missing`; a task in both files is the `tasks.json` one.
+///
+/// # Errors
+/// `NotFound` when the task is neither a working nor an archived one; task data that can't be read.
+pub fn task_dependencies(project: &Project, task_id: &str) -> Result<Value> {
+    let store = project.store();
+    let task = match store.get_task(task_id)?.filter(|t| !t.is_empty()) {
+        Some(task) => task,
+        None => store
+            .get_archived_task(task_id)?
+            .ok_or_else(|| Error::NotFound(format!("no task {task_id}")))?,
+    };
+    let tasks = store.list_tasks()?;
+    // The last task with an ID, as a dict of them by ID has it
+    let live = |id: &str| tasks.iter().rev().find(|t| id_of(t) == Some(id)).copied();
+    let name = |t: &Task| t.get("name").cloned().unwrap_or_else(|| json!(""));
+    let archived_status = |t: &Task| {
+        json!(format!(
+            "{}, archived",
+            atm_common::py::py_str_opt(t.get("status"))
+        ))
+    };
+    let mut waits_for = Vec::new();
+    for d in task
+        .get("dependencies")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+    {
+        let entry = match live(d).filter(|t| !t.is_empty()) {
+            Some(t) => {
+                json!({"id": d, "status": t.get("status").cloned().unwrap_or(Value::Null), "name": name(t)})
+            }
+            None => match store.get_archived_task(d)?.filter(|t| !t.is_empty()) {
+                Some(t) => json!({"id": d, "status": archived_status(t), "name": name(t)}),
+                None => json!({"id": d, "status": "missing", "name": ""}),
+            },
+        };
+        waits_for.push(entry);
+    }
+    let depends_on_it =
+        |t: &Task| contains(t.get("dependencies").filter(|d| d.is_array()), task_id);
+    let mut waited_on_by: Vec<Value> = tasks
+        .iter()
+        .filter(|t| depends_on_it(t))
+        .map(|t| json!({"id": t.get("id"), "status": t.get("status"), "name": name(t)}))
+        .collect();
+    for t in store.list_archived()? {
+        if id_of(t).is_none_or(|id| live(id).is_none()) && depends_on_it(t) {
+            waited_on_by
+                .push(json!({"id": t.get("id"), "status": archived_status(t), "name": name(t)}));
+        }
+    }
+    Ok(json!({"id": task_id, "waits_for": waits_for, "waited_on_by": waited_on_by}))
 }
 
 #[cfg(test)]
