@@ -178,6 +178,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `atm task list --derived --tolerant`. `atm service stop` counts a process gone only after three missed checks in a
   row, re-sending SIGKILL while it is seen, and waits for it to be reaped. Twenty-eight more tests left the
   expected-failures list; the document viewer and search follow (T-469).
+- **The document viewer's files and search in the Rust atm's server** (T-469): `/api/v1/projects/<id>/documents` and
+  `files` (`atm-lib` `documents.rs`: the path checks, no hidden, ignored or key file, size caps, no symlinks, images
+  by their bytes, code fenced in its language; `atm-vcs`'s reads of the working copy, a git submodule's files by its
+  own rules) and `/api/search` (every word, in any field or the project's name, capped). `atm-common`'s errors gain
+  `Refused` and `TooLarge` (403 and 413). `pnpm run test:e2e:rust` runs the dashboard's e2e suite with the Rust atm
+  giving the fixture its task views and summaries; it passes. The last three `serve.test.mjs` tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

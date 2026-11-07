@@ -18,6 +18,7 @@
     "test:e2e": "pnpm run build:page && playwright test --grep-invert visual",
     "test:scripts": "node ../tests/scripts/run.mjs",
     "test:scripts:rust": "cargo build --manifest-path ../Cargo.toml && node ../tests/scripts/run.mjs --rust",
+    "test:e2e:rust": "cargo build --manifest-path ../Cargo.toml && ATM_IMPL=rust pnpm run test:e2e",
     "bench": "node ../tests/scripts/bench.mjs",
     "branding": "node ../branding/generate.mjs",
     "lint": "eslint .",

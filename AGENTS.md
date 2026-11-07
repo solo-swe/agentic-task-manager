@@ -132,6 +132,8 @@ binary.
   against the Rust `atm`. The tests it doesn't pass yet are in `tests/scripts/rust-expected-failures.json`; the run
   fails on any other failure, and on a listed test that passes: take it out of the list in the change that makes it
   pass. `--write-expected` rewrites the list from a run, never to hide a failure.
+- `pnpm run test:e2e:rust` in `dashboard/`: the e2e suite with the Rust `atm` giving the fixture its task views and
+  summaries (`ATM_IMPL=rust`, as the scripts suite).
 
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the

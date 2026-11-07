@@ -9,6 +9,7 @@ pub mod check;
 pub mod claims;
 pub mod code;
 pub mod components;
+pub mod documents;
 pub mod edit;
 pub mod leases;
 pub mod loop_rules;

@@ -318,6 +318,56 @@ pub fn read_problems(project: &Project) -> Result<Vec<String>> {
     Ok(project.store().problems()?.file)
 }
 
+/// What a task is found by: its ID, name, description, type, labels and notes (T-258), in lowercase.
+fn search_text(task: &Task) -> String {
+    let mut strings: Vec<&str> = ["id", "name", "description", "type"]
+        .iter()
+        .filter_map(|f| task.get(*f).and_then(Value::as_str))
+        .collect();
+    if let Some(labels) = task.get("labels").and_then(Value::as_array) {
+        strings.extend(labels.iter().filter_map(Value::as_str));
+    }
+    if let Some(notes) = task
+        .get("notes")
+        .filter(|n| truthy(n))
+        .and_then(Value::as_array)
+    {
+        strings.extend(
+            notes
+                .iter()
+                .filter_map(|n| n.get("text").and_then(Value::as_str)),
+        );
+    }
+    strings.join(" ").to_lowercase()
+}
+
+/// The IDs of the working tasks (not the archive) in which every word of `query` appears, case-insensitively, in the
+/// task's text or in `also` (the project's name, so it finds all of its tasks), in the project's order.
+///
+/// # Errors
+/// Task data that can't be read.
+pub fn search_tasks(project: &Project, query: &str, also: &str) -> Result<Vec<String>> {
+    let query = query.to_lowercase();
+    let terms: Vec<&str> = query.split_whitespace().collect();
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let extra = also.to_lowercase();
+    Ok(project
+        .store()
+        .list_tasks()?
+        .into_iter()
+        .filter_map(|t| {
+            let id = id_of(t)?;
+            let text = format!("{extra} {}", search_text(t));
+            terms
+                .iter()
+                .all(|term| text.contains(term))
+                .then(|| id.to_string())
+        })
+        .collect())
+}
+
 /// The project's claims, from every working copy, by task.
 #[must_use]
 pub fn list_claims(project: &Project) -> Vec<Value> {

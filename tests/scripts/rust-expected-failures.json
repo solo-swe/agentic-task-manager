@@ -17,8 +17,5 @@
   "scenarios.test.mjs > scenarios > block.json: block --on must be user or agent",
   "scenarios.test.mjs > scenarios > dir.json: --dir is listed in the help",
   "scenarios.test.mjs > scenarios > pr.json: merged sets merged_at on that PR's tasks only",
-  "scenarios.test.mjs > scenarios > status.json: a missing id is a usage error",
-  "serve.test.mjs > serve > a project's files for the document viewer: documents and files, read-only, with their checks (T-392)",
-  "serve.test.mjs > serve > api/search: every word, in any field or the project name, case-insensitive, read-only, capped (T-258)",
-  "serve.test.mjs > serve > files in a git submodule: its own ignore rules decide, and the document names its repository (T-408)"
+  "scenarios.test.mjs > scenarios > status.json: a missing id is a usage error"
 ]

@@ -10,6 +10,13 @@ pub enum Error {
     /// The request itself is wrong: an unknown option value, a malformed ID (exit code 2, like a usage error).
     #[error("{0}")]
     Invalid(String),
+    /// The thing exists but atm won't hand it out: a project file it doesn't show (hidden, ignored, a key file)
+    /// (exit code 1).
+    #[error("{0}")]
+    Refused(String),
+    /// Larger than atm hands out (exit code 1).
+    #[error("{0}")]
+    TooLarge(String),
     /// Anything else atm refuses or can't do, with its exit code (1 unless said otherwise).
     #[error("{message}")]
     Failed {
@@ -33,7 +40,7 @@ impl Error {
     #[must_use]
     pub fn code(&self) -> u8 {
         match self {
-            Self::NotFound(_) => 1,
+            Self::NotFound(_) | Self::Refused(_) | Self::TooLarge(_) => 1,
             Self::Invalid(_) => 2,
             Self::Failed { code, .. } => *code,
         }

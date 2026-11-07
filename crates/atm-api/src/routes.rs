@@ -369,10 +369,170 @@ fn project_file(projects: &Projects, id: &str, name: &str, request: &HeaderMap) 
     }
 }
 
+/// Characters of a search query that count.
+const SEARCH_QUERY_CAP: usize = 200;
+/// Task IDs per project in a search's answer.
+const SEARCH_RESULTS_CAP: usize = 200;
+
+/// `/api/search?q=`: per project, the IDs of the working tasks (not the archive) in which every word of the query
+/// appears, case-insensitively, as the dashboard's own search finds them; the project's name counts as part of every
+/// task's text. Read-only, like every route; `{}` for an empty query.
+fn api_search(projects: &Projects, query: &str) -> Response {
+    let given = parse_query(query);
+    let q: String = given
+        .iter()
+        .find(|(n, _)| n == "q")
+        .map(|(_, v)| v.chars().take(SEARCH_QUERY_CAP).collect())
+        .unwrap_or_default();
+    let mut results = serde_json::Map::new();
+    if q.split_whitespace().next().is_none() {
+        return send(
+            StatusCode::OK,
+            to_json(&json!(results)).into_bytes(),
+            "application/json",
+            None,
+            &[],
+        );
+    }
+    for entry in projects.registry.entries() {
+        let Some(stamp) = data_stamp(&entry) else {
+            continue;
+        };
+        if stamp["tasks"][0]
+            .as_u64()
+            .is_some_and(|size| size > MAX_SERVED_BYTES)
+        {
+            continue;
+        }
+        let name = entry
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let ids = open_project(&folder(&entry))
+            .and_then(|p| atm_lib::query::search_tasks(&p, &q, name))
+            .unwrap_or_default();
+        if !ids.is_empty() {
+            let id = atm_common::py::py_str_opt(entry.get("id"));
+            results.insert(
+                id,
+                json!(ids.into_iter().take(SEARCH_RESULTS_CAP).collect::<Vec<_>>()),
+            );
+        }
+    }
+    send(
+        StatusCode::OK,
+        to_json(&json!(results)).into_bytes(),
+        "application/json",
+        None,
+        &[],
+    )
+}
+
+/// atm-lib's refusals as HTTP statuses: a malformed path, no such file, one too large, one atm doesn't show.
+fn file_error(error: &atm_common::Error) -> Response {
+    let status = match error {
+        atm_common::Error::Invalid(_) => StatusCode::BAD_REQUEST,
+        atm_common::Error::NotFound(_) => StatusCode::NOT_FOUND,
+        atm_common::Error::TooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+        atm_common::Error::Refused(_) => StatusCode::FORBIDDEN,
+        atm_common::Error::Failed { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    send_error(status, &error.to_string())
+}
+
+/// `GET /api/v1/projects/<p>/documents?path=` (the viewer's JSON) or `…/files?path=` (an image), through atm-lib,
+/// which checks the path and reads the file from the working copy. The `ETag` is the file's size and mtime (and, for
+/// a document, the current commit, which it names), so the viewer's poll gets a 304 without the file being read again.
+fn api_v1_file(
+    projects: &Projects,
+    id: &str,
+    route: &str,
+    query: &str,
+    request: &HeaderMap,
+) -> Response {
+    let Some(entry) = projects.find(id) else {
+        return send_error(StatusCode::NOT_FOUND, "unknown project");
+    };
+    if data_stamp(&entry).is_none() {
+        return send_error(StatusCode::NOT_FOUND, "not found");
+    }
+    let path = parse_query(query)
+        .into_iter()
+        .find(|(n, _)| n == "path")
+        .map(|(_, v)| v)
+        .unwrap_or_default();
+    let vcs = atm_boot::open_vcs(&folder(&entry));
+    let stamp = match atm_lib::documents::document_stamp(Some(&vcs), &path) {
+        Ok(stamp) => stamp,
+        Err(e) => return file_error(&e),
+    };
+    let unchanged = |tag: &str| {
+        request
+            .get(axum::http::header::IF_NONE_MATCH)
+            .and_then(|v| v.to_str().ok())
+            == Some(tag)
+    };
+    if route == "documents" {
+        let tag = etag(&json!([
+            "document",
+            [stamp.0, stamp.1.to_string()],
+            vcs.head()
+        ]));
+        if unchanged(&tag) {
+            return send(
+                StatusCode::NOT_MODIFIED,
+                Vec::new(),
+                "application/json",
+                Some(&tag),
+                &[],
+            );
+        }
+        return match atm_lib::documents::read_document(Some(&vcs), &path) {
+            Ok(document) => send(
+                StatusCode::OK,
+                to_json(&document).into_bytes(),
+                "application/json",
+                Some(&tag),
+                &[],
+            ),
+            Err(e) => file_error(&e),
+        };
+    }
+    let tag = format!("\"{:x}-{:x}\"", stamp.0, stamp.1);
+    if unchanged(&tag) {
+        return send(
+            StatusCode::NOT_MODIFIED,
+            Vec::new(),
+            "application/json",
+            Some(&tag),
+            &LOGO_HEADERS,
+        );
+    }
+    match atm_lib::documents::read_image(Some(&vcs), &path) {
+        Ok((data, content_type)) => send(
+            StatusCode::OK,
+            data,
+            content_type,
+            Some(&tag),
+            &LOGO_HEADERS,
+        ),
+        Err(e) => file_error(&e),
+    }
+}
+
 /// The routes past the page, its assets and whoami: the read API; everything else is 404.
 pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) -> Response {
     if path == "/api/projects" {
         return api_projects(projects, request);
+    }
+    if path == "/api/search" {
+        return api_search(projects, query);
+    }
+    if let Some(rest) = path.strip_prefix("/api/v1/projects/")
+        && let Some((id, route @ ("documents" | "files"))) = rest.split_once('/')
+        && !id.is_empty()
+    {
+        return api_v1_file(projects, id, route, query, request);
     }
     if let Some(rest) = path.strip_prefix("/api/v1/projects/")
         && let Some((id, "tasks")) = rest.split_once('/')

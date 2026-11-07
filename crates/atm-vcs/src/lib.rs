@@ -324,6 +324,129 @@ impl GitVcs {
     pub fn message(&self, sha: &str) -> Result<String> {
         step(&["log", "-1", "--format=%B", sha], &self.root, false)
     }
+
+    // The working copy's files, for the document viewer (docs/compmd-viewer-design.md §4). atm-lib checks the path
+    // first (`documents.rs`); these read only below the root, through no symbolic link
+
+    /// The file's path, or none when a segment from the root down is a symbolic link or it isn't a regular file.
+    fn file(&self, relative: &str) -> Option<PathBuf> {
+        let mut current = self.root.clone();
+        for segment in relative.split('/') {
+            current.push(segment);
+            if std::fs::symlink_metadata(&current).is_ok_and(|m| m.file_type().is_symlink()) {
+                return None;
+            }
+        }
+        current.is_file().then_some(current)
+    }
+
+    /// `(size, nanosecond mtime)` of a file of the working copy, or none when it isn't one atm reads.
+    #[must_use]
+    pub fn file_stamp(&self, relative: &str) -> Option<(u64, u128)> {
+        let meta = std::fs::metadata(self.file(relative)?).ok()?;
+        let mtime = meta
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_nanos();
+        Some((meta.len(), mtime))
+    }
+
+    /// The bytes of a file of the working copy.
+    ///
+    /// # Errors
+    /// `NotFound` when it isn't one atm reads, or can't be read.
+    pub fn read_file(&self, relative: &str) -> Result<Vec<u8>> {
+        self.file(relative)
+            .and_then(|p| std::fs::read(p).ok())
+            .ok_or_else(|| Error::NotFound(format!("{relative}: no such file")))
+    }
+
+    /// The submodule `relative` is in, nearest the root, as (its folder, the path inside it), or none. A submodule is a
+    /// folder this repository records as a commit (mode 160000) with a checkout of its own (`.git`); git answers
+    /// nothing about the files in it from here, only from its own repository (T-408).
+    fn submodule(&self, relative: &str) -> Option<(String, String)> {
+        let parts: Vec<&str> = relative.split('/').collect();
+        for i in 1..parts.len() {
+            let folder = parts[..i].join("/");
+            if std::fs::symlink_metadata(self.root.join(&folder).join(".git")).is_err() {
+                continue;
+            }
+            let listed = ask(&[LITERAL, "ls-files", "--stage", "--", &folder], &self.root)
+                .unwrap_or_default();
+            for line in listed.lines() {
+                let (meta, path) = line.split_once('\t').unwrap_or((line, ""));
+                if path == folder && meta.split(' ').next() == Some("160000") {
+                    return Some((folder, parts[i..].join("/")));
+                }
+            }
+        }
+        None
+    }
+
+    /// The submodule's own version control and the path inside it, or none outside one.
+    fn in_submodule(&self, relative: &str) -> Option<(GitVcs, String)> {
+        self.submodule(relative)
+            .map(|(folder, inside)| (GitVcs::new(&self.root.join(folder)), inside))
+    }
+
+    /// git's ignore rules, as `git status` applies them: a file git tracks is never ignored. It fails closed: only
+    /// git's "not ignored" (exit 1) lets a file through; an error counts as ignored. A file in a submodule: the
+    /// submodule's own rules decide, down to the innermost submodule.
+    #[must_use]
+    pub fn ignored(&self, relative: &str) -> bool {
+        if !self.in_repository() {
+            return false;
+        }
+        if let Some((sub, inside)) = self.in_submodule(relative) {
+            return sub.ignored(&inside);
+        }
+        run(&["check-ignore", "-q", "--", relative], &self.root)
+            .is_none_or(|o| o.status.code() != Some(1))
+    }
+
+    /// Whether git tracks the file; none outside a repository.
+    #[must_use]
+    pub fn tracked(&self, relative: &str) -> Option<bool> {
+        if !self.in_repository() {
+            return None;
+        }
+        if let Some((sub, inside)) = self.in_submodule(relative) {
+            return sub.tracked(&inside);
+        }
+        Some(self.known(relative))
+    }
+
+    /// The current commit's SHA; none outside a repository.
+    #[must_use]
+    pub fn head(&self) -> Option<String> {
+        if self.in_repository() {
+            self.resolve("HEAD")
+        } else {
+            None
+        }
+    }
+
+    /// For a file in a submodule (the innermost): `{path: its folder from the root, commit: its HEAD, repository: its
+    /// origin's web address or null}`; none for any other file.
+    #[must_use]
+    pub fn submodule_of(&self, relative: &str) -> Option<serde_json::Value> {
+        if !self.in_repository() {
+            return None;
+        }
+        let (folder, inside) = self.submodule(relative)?;
+        let sub = GitVcs::new(&self.root.join(&folder));
+        if let Some(mut nested) = sub.submodule_of(&inside) {
+            let path = format!("{folder}/{}", nested["path"].as_str().unwrap_or_default());
+            nested["path"] = serde_json::json!(path);
+            return Some(nested);
+        }
+        let repository = sub
+            .remote_url()
+            .and_then(|r| atm_common::repository::repository_url(&r));
+        Some(serde_json::json!({"path": folder, "commit": sub.head(), "repository": repository}))
+    }
 }
 
 #[cfg(test)]

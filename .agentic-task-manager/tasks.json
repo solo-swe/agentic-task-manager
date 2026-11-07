@@ -22105,7 +22105,7 @@
       "description": "Slice 7b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-449's server: the routes the dashboard polls, as [multi-project-api.md](docs/multi-project-api.md) has them and the Python atm's `api/server.py` serves them.\n\n## Change\n- `api/projects`: each project's summary (`lib/query.py`'s `project_summary`: counts by kind, the active sprint and recent ones, working and next, the board, stats, the git branch and latest PR, the logo), an opted-out project left out, a missing or unreadable one listed as missing.\n- `api/v1/projects/<id>/tasks`: the tasks with what atm derives, filtered, with ETags and 304s; the **tolerant read** (`load_tasks_tolerant`, T-377), and with it `atm task list --derived --tolerant` (which the Rust `task list` refuses until now, T-462).\n- `p/<id>/claims.json` and `worktrees.json` (a project's git worktrees, their changed tasks, their claims); everything else 404 or 405.\n\n## Tests\nThe `serve.test.mjs` tests about these routes leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-449"
       ],
@@ -22113,7 +22113,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:54:50Z",
-      "updated_at": "2026-11-07T05:08:42Z",
+      "updated_at": "2026-11-07T05:23:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22128,10 +22128,19 @@
           "at": "2026-11-07T05:08:31Z",
           "kind": "failure",
           "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-07T05:23:15Z",
+          "kind": "outcome",
+          "text": "The read API: `/api/projects` with each project’s summary, `/api/v1/projects/<id>/tasks` (tolerant read, filters, ETags), `/p/<id>/claims.json`, `worktrees.json` and `logo`; `project summary` and `task list --derived --tolerant`. 28 tests left the expected list (22 remain). `service stop` is now robust to a missed process check under load.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-07T05:08:42Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "48e9702fb6379e203c3bca44f39d240075646d28",
+      "completed_at": "2026-11-07T05:23:15Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-469",
@@ -22144,7 +22153,7 @@
       "description": "Slice 7c of [porting-to-rust.md](docs/porting-to-rust.md) §5: the last of `atm serve`.\n\n## Change\n- The document viewer's routes (`lib/documents.py`, T-392): a project's documents and files, read-only, with their checks (inside the project, not ignored or hidden, not a key file, a size cap, no symlinks), files in a git submodule by its own rules (T-408).\n- `p/<id>/logo`: the project's logo with its type; none, outside or too large is 404 (`db/jsongit/logo.py`).\n- `api/search`: every word, in any field or the project's name, case-insensitive, read-only, capped (T-258).\n\n## Tests\nThe rest of `serve.test.mjs` leaves `tests/scripts/rust-expected-failures.json`, and the dashboard's e2e suite (`pnpm run test:e2e`) passes against the Rust `atm serve`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-468"
       ],
@@ -22152,16 +22161,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:54:50Z",
-      "updated_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-07T05:23:21Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:54:50Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T05:23:21Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-470",
