@@ -46,6 +46,10 @@ impl Store for MemoryStore {
         Ok(find(&self.tasks, id))
     }
 
+    fn working_copy(&self) -> Option<&std::path::Path> {
+        None
+    }
+
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>> {
         // The last one with the ID, as the archive's lookup has it
         Ok(self

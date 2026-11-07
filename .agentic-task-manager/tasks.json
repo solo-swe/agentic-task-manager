@@ -21321,7 +21321,7 @@
       "description": "Slice 8 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm agents install|status|uninstall` (Claude Code only, the harness table as in Python) and `atm docs`, with `skills/` and `docs/agent/` embedded in the binary; `agents.test.mjs` and the docs scenarios pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-440",
         "T-442",
@@ -21331,16 +21331,18 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T01:08:32Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:08:32Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-451",

@@ -79,27 +79,7 @@ fn join(value: &Value) -> String {
 pub fn render_task(view: &TaskView) -> String {
     let task = &view.task;
     let get = |key: &str| task.get(key).filter(|v| truthy(v));
-    let mut header = vec![
-        py_str_opt(task.get("status")),
-        get("sprint").map_or_else(|| "backlog".to_string(), py_str),
-    ];
-    // A task from the archive says so (found in T-277, T-353)
-    if view.archived {
-        header.push("archived".into());
-    }
-    header.push(py_str_opt(task.get("type")));
-    header.push(view.priority.clone());
-    if let Some(labels) = get("labels") {
-        header.push(format!("labels: {}", join(labels)));
-    }
-    let mut lines = vec![
-        format!(
-            "{}  {}",
-            py_str_opt(task.get("id")),
-            task.get("name").map_or_else(String::new, py_str)
-        ),
-        format!("  {}", header.join(" · ")),
-    ];
+    let mut lines = heading(view);
     if !view.dependencies.is_empty() {
         let deps: Vec<String> = view
             .dependencies
@@ -135,6 +115,45 @@ pub fn render_task(view: &TaskView) -> String {
             lines.push(format!("  {}: {}", key.replace('_', " "), join(items)));
         }
     }
+    lines.extend(who(view));
+    if let Some(commit) = get("commit") {
+        lines.push(format!("  commit: {}", py_str(commit)));
+    }
+    lines.extend(description_and_notes(task));
+    lines.join("\n")
+}
+
+/// The task's first two lines: its ID and name, then its status, sprint, type, priority and labels.
+fn heading(view: &TaskView) -> Vec<String> {
+    let task = &view.task;
+    let get = |key: &str| task.get(key).filter(|v| truthy(v));
+    let mut header = vec![
+        py_str_opt(task.get("status")),
+        get("sprint").map_or_else(|| "backlog".to_string(), py_str),
+    ];
+    // A task from the archive says so (found in T-277, T-353)
+    if view.archived {
+        header.push("archived".into());
+    }
+    header.push(py_str_opt(task.get("type")));
+    header.push(view.priority.clone());
+    if let Some(labels) = get("labels") {
+        header.push(format!("labels: {}", join(labels)));
+    }
+    vec![
+        format!(
+            "{}  {}",
+            py_str_opt(task.get("id")),
+            task.get("name").map_or_else(String::new, py_str)
+        ),
+        format!("  {}", header.join(" · ")),
+    ]
+}
+
+/// When it was created, started, sent for review and completed, and by whom: one line, or none.
+fn who(view: &TaskView) -> Option<String> {
+    let task = &view.task;
+    let get = |key: &str| task.get(key).filter(|v| truthy(v));
     let started_by = view.started_by.as_ref().filter(|v| truthy(v));
     let who: Vec<String> = [
         ("created", "created_at", get("created_by")),
@@ -150,12 +169,13 @@ pub fn render_task(view: &TaskView) -> String {
         })
     })
     .collect();
-    if !who.is_empty() {
-        lines.push(format!("  {}", who.join(" · ")));
-    }
-    if let Some(commit) = get("commit") {
-        lines.push(format!("  commit: {}", py_str(commit)));
-    }
+    (!who.is_empty()).then(|| format!("  {}", who.join(" · ")))
+}
+
+/// The description, indented, then the notes (or, in files from before notes, the last failure).
+fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
+    let get = |key: &str| task.get(key).filter(|v| truthy(v));
+    let mut lines = Vec::new();
     let description = get("description").map_or_else(String::new, py_str);
     let description = strip(&description);
     if !description.is_empty() {
@@ -188,7 +208,7 @@ pub fn render_task(view: &TaskView) -> String {
             py_str_opt(failure.get("reason"))
         ));
     }
-    lines.join("\n")
+    lines
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 //! One module per top-level command (docs/porting-to-rust.md §2): each holds its clap subcommands, its handlers and
 //! its area's text. The groups come with their slices (§5); the Python atm's `cli/commands/` has them all.
 
+pub mod agents;
 pub mod meta;
 pub mod task;
 

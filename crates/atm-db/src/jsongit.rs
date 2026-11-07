@@ -72,6 +72,10 @@ impl Store for JsonGitStore {
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>> {
         Ok(self.archive()?.get(id))
     }
+
+    fn working_copy(&self) -> Option<&std::path::Path> {
+        Some(&self.paths.root)
+    }
 }
 
 #[cfg(test)]

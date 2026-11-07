@@ -15,7 +15,7 @@ use atm_common::Error;
 use atm_common::py::to_json;
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
-use commands::{Context, task::TaskCommand};
+use commands::{Context, agents::AgentsCommand, task::TaskCommand};
 use serde_json::json;
 
 /// atm, the Agentic Task Manager's command line: its commands, by group. `atm <command> --help` describes one.
@@ -42,6 +42,14 @@ enum Command {
     /// Task lifecycle commands
     #[command(subcommand)]
     Task(TaskCommand),
+    /// Install atm's skills where your agent harnesses read them (Claude Code for now)
+    #[command(subcommand)]
+    Agents(AgentsCommand),
+    /// Reference for agents, for this version of atm: the rules, the commands, the states, claims, the task fields.
+    Docs {
+        /// The topic to print; without one, the list of topics
+        topic: Option<String>,
+    },
     /// Print the plugin version.
     Version,
 }
@@ -121,15 +129,18 @@ fn run(args: &[OsString]) -> u8 {
             return 1;
         }
     };
-    let result: Result<(), Error> = match cli.command {
-        Command::Task(command) => commands::task::run(command, ctx, &cwd),
+    // Each command's exit code when it ends without an error (`agents install` ends with 1 when it left a folder alone)
+    let result: Result<u8, Error> = match cli.command {
+        Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
+        Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
+        Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {
             commands::meta::version(ctx);
-            Ok(())
+            Ok(0)
         }
     };
     match result {
-        Ok(()) => 0,
+        Ok(code) => code,
         Err(error) => {
             report(&error.to_string(), error.code(), as_json);
             error.code()

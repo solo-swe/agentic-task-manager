@@ -4,8 +4,10 @@
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
 pub mod error;
+pub mod home;
 pub mod ids;
 pub mod py;
+pub mod skills;
 pub mod vocabulary;
 
 pub use error::{Error, Result};

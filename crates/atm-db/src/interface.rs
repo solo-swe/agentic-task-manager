@@ -1,6 +1,8 @@
 //! The store's interface (docs/layered-architecture.md §3.1): what atm-lib reads a project's task data through,
 //! whatever holds it. The Python atm's `db/interface.py`; this slice has its reads.
 
+use std::path::Path;
+
 use atm_common::{Result, Task, Vocabulary};
 
 /// A project's task data, as atm-lib reads it. One store is one snapshot: the data is read once, on first use.
@@ -28,4 +30,7 @@ pub trait Store {
     /// # Errors
     /// When the archive exists but can't be read.
     fn get_archived_task(&self, id: &str) -> Result<Option<&Task>>;
+
+    /// The folder the project's files are in (its working copy), when the store has one.
+    fn working_copy(&self) -> Option<&Path>;
 }
