@@ -22313,7 +22313,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:06:37Z",
-      "updated_at": "2026-11-07T03:16:39Z",
+      "updated_at": "2026-11-07T03:25:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22324,7 +22324,8 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T03:16:39Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "c6df10cb8bcac31e286e3c04187e3c90081e5a7b"
     }
   ]
 }
