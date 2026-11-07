@@ -73,11 +73,11 @@ with T-436, once CompMD reads pnpm 12's two-document lockfile.
 The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4.0.html` (see `docs/svelte-migration-plan.md`).
 
 Commands (run in `dashboard/`):
-- `pnpm run dev` — Vite dev server, with the real REST API: this checkout's atm-cli (`plugin/scripts/atm-serve` on a
-  temporary `ATM_HOME`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`, `p/` and `__atm/`
-  to it) for this repo's `.agentic-task-manager/`, or for other folders with
+- `pnpm run dev` — Vite dev server, with the real REST API: this checkout's Rust atm (`cargo build` first; its
+  `atm _serve` on a temporary `ATM_HOME`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`,
+  `p/`, `__atm/` and `assets/` to it) for this repo's `.agentic-task-manager/`, or for other folders with
   `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] pnpm run dev` (a folder without a task file is listed as
-  missing). `pnpm run build:cli` is enough to pick up atm-cli changes: the API server restarts when `atm.py` changes.
+  missing). `cargo build` is enough to pick up atm changes: the API server restarts when the binary changes.
   The dev page runs under the server's Content-Security-Policy plus what Vite needs (`build/security-headers.ts`);
   `tests/scripts/dev-api.test.mjs` starts `vite dev` and checks all of this
 - `pnpm run build` — single-file build, and the CompMD runtime the details panel loads (`vite.compmd.config.ts`,

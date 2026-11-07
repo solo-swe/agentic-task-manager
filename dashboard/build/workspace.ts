@@ -17,7 +17,9 @@ export type WorkspacePackage = Record<string, string | string[]>;
 /** Cargo.toml's `[workspace.package]`: its keys with a string or a list of strings (the subset atm's file uses; other
  * values are left out). */
 export function workspacePackage(toml: string): WorkspacePackage {
-  const table = /^\[workspace\.package\]\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m.exec(toml)?.[1];
+  // CRLF on a Windows checkout
+  const lines = toml.replace(/\r\n/g, '\n');
+  const table = /^\[workspace\.package\]\n([\s\S]*?)(?=^\[|$(?![\s\S]))/m.exec(lines)?.[1];
   if (table === undefined) throw new Error('Cargo.toml has no [workspace.package]');
   const values: WorkspacePackage = {};
   for (const line of table.split('\n')) {

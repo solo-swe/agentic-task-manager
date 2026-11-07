@@ -1112,8 +1112,10 @@ describe('serve', () => {
     const atmHome = home();
     const root = project();
     const port = ports();
+    // The atm under test: the Python plugin's copy, or the Rust atm, which serves what it embedded from the build
+    // (the planted files above aren't in it: they must be refused all the same)
     const run = (args) =>
-      spawnSync(path.join(plugin, 'scripts/atm'), args, {
+      spawnSync(IMPL === 'rust' ? ATM : path.join(plugin, 'scripts/atm'), args, {
         cwd: root,
         encoding: 'utf8',
         env: { ...baseEnv(), ATM_HOME: atmHome },

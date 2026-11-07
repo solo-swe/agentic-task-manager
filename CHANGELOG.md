@@ -21,6 +21,8 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   `plugin/assets/` (gitignored) for the Python atm. CI's Rust and Python jobs and `release.yml` build the dashboard
   first; the staleness checks of the committed copies (CI's, `check-compmd-assets.mjs`, the pre-commit hook's
   rebuild of the page) are gone.
+- **`pnpm run dev`'s REST API is the Rust atm** (T-478): `atm _serve` from `target/debug/` (`cargo build` first),
+  restarted when the binary is rebuilt; `dev-api.test.mjs` runs it from a copy of the binary.
 
 ## [0.32.0] - 2026-11-06
 

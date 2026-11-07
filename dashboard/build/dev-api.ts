@@ -1,11 +1,12 @@
 // Dev server only: `pnpm run dev` runs the real REST API (docs/layered-architecture.md §9, step 15; §11.9), this
-// checkout's atm-cli, so the dashboard in development talks to exactly what atm serve answers. ATM_DEV_DATA picks the
-// task folders (.agentic-task-manager paths, separated like PATH); the default is this repo's own.
+// checkout's Rust atm (`cargo build` first; T-478), so the dashboard in development talks to exactly what atm serve
+// answers. ATM_DEV_DATA picks the task folders (.agentic-task-manager paths, separated like PATH); the default is this
+// repo's own.
 //
 // The API server runs on a private ATM_HOME (a temporary folder, removed when Vite stops) that lists only those
 // projects, so the developer's own `atm serve`, its registry and its port are never touched. Vite forwards the API's
-// paths to it; everything else (the page, its modules, hot reload) stays Vite's. When atm-cli is rebuilt
-// (`pnpm run build:cli` writes plugin/scripts/atm.py), the API server restarts on it: no Vite restart needed.
+// paths to it; everything else (the page, its modules, hot reload) stays Vite's. When atm is rebuilt (`cargo build`
+// writes target/debug/atm), the API server restarts on it: no Vite restart needed.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
 import { request } from 'node:http';
@@ -14,11 +15,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
 
-/** This checkout's plugin/scripts (atm.py, and atm-serve, the server process's launcher as `atm serve` starts it);
- * ATM_DEV_SCRIPTS points at another copy, for the dev server's own test */
-const SCRIPTS = process.env.ATM_DEV_SCRIPTS || fileURLToPath(new URL('../../plugin/scripts', import.meta.url));
-const ATM = path.join(SCRIPTS, 'atm.py');
-const ATM_SERVE = path.join(SCRIPTS, 'atm-serve');
+/** This checkout's atm (`cargo build`), whose hidden `atm _serve <home> <port>` is the server `atm service` starts;
+ * ATM_DEV_BIN points at another copy, for the dev server's own test */
+const ATM =
+  process.env.ATM_DEV_BIN ||
+  fileURLToPath(new URL(`../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`, import.meta.url));
 /** The paths atm serve answers (docs/multi-project-api.md §2), the plugin's assets among them (the CompMD runtime,
  * docs/compmd-rendering-design.md §2); the rest is the dev server's own */
 const API_PATHS = /^\/(api\/|p\/|__atm\/|assets\/)/;
@@ -60,7 +61,7 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
       continue;
     }
     try {
-      execFileSync('python3', [ATM, 'project', 'add', project], { env, stdio: 'pipe' });
+      execFileSync(ATM, ['project', 'add', project], { env, stdio: 'pipe' });
     } catch (e) {
       log(`  atm: can't list ${dir}: ${String((e as { stderr?: Buffer }).stderr ?? e).trim()}`);
     }
@@ -72,7 +73,7 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
   const launch = () => {
     rmSync(record, { force: true });
     port = null;
-    child = spawn(ATM_SERVE, [home, String(FIRST_PORT)], { env, stdio: ['ignore', 'ignore', 'inherit'] });
+    child = spawn(ATM, ['_serve', home, String(FIRST_PORT)], { env, stdio: ['ignore', 'ignore', 'inherit'] });
   };
   launch();
   return {
@@ -103,19 +104,21 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
   };
 }
 
-/** Restart the API server when atm.py changes (a rebuild), once the writes have settled */
+/** Restart the API server when the binary changes (a rebuild), once the writes have settled. Its folder is watched,
+ * not the file: cargo replaces the file, which a watch on the file itself would lose */
 function restartOnRebuild(api: Api, log: (line: string) => void): FSWatcher | null {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
-    return watch(ATM, () => {
+    return watch(path.dirname(ATM), (_event, name) => {
+      if (name !== path.basename(ATM)) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        log('  atm: atm.py changed, restarting the REST API');
+        log('  atm: atm was rebuilt, restarting the REST API');
         api.restart();
       }, RESTART_AFTER_MS);
     });
   } catch {
-    return null; // no atm.py to watch: the API server says why it doesn't start
+    return null; // no atm built: the API server says why it doesn't start
   }
 }
 
@@ -128,7 +131,8 @@ export function devApi(defaultDir: string): Plugin {
       const log = (line: string) => server.config.logger.info(line);
       const api = startApi(dirs, log);
       const watcher = restartOnRebuild(api, log);
-      log(`  atm: the REST API (this checkout's atm-cli) for ${dirs.join(', ')}, on ATM_HOME ${api.home}`);
+      if (!existsSync(ATM)) log(`  atm: ${ATM} isn't built: run \`cargo build\` (the REST API is this checkout's atm)`);
+      log(`  atm: the REST API (this checkout's atm) for ${dirs.join(', ')}, on ATM_HOME ${api.home}`);
       const stop = () => {
         watcher?.close();
         api.stop();

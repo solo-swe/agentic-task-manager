@@ -41,6 +41,10 @@ describe('readPluginInfo', () => {
     expect(readPluginInfo(cargoToml, changelog).year).toBe('2027');
   });
 
+  it('reads a Cargo.toml with CRLF line ends (a Windows checkout)', () => {
+    expect(readPluginInfo(cargoToml.replace(/\n/g, '\r\n'), changelog).version).toBe('1.2.0');
+  });
+
   it('throws without a dated release, or without a field it shows', () => {
     expect(() => readPluginInfo(cargoToml, '## [Unreleased]\n')).toThrow(/No dated release/);
     expect(() => readPluginInfo(cargoToml.replace(/^license.*\n/m, ''), changelog)).toThrow(/has no license/);
