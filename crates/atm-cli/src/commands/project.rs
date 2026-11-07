@@ -1,5 +1,5 @@
-//! `atm project`: the project. The Rust atm has `project status` so far; the Python atm's `cli/commands/project.py`
-//! has the rest (config, workflow, logo, and the dashboard's list of projects).
+//! `atm project`: the project (status here; config, workflow, logo and the dashboard's list of projects in
+//! `project/settings.rs`), as the Python atm's `cli/commands/project.py` has them.
 
 use std::path::Path;
 
@@ -31,6 +31,31 @@ pub enum ProjectCommand {
         #[arg(long)]
         component: Option<String>,
     },
+    /// Print where this project's task files are.
+    Config,
+    /// Print the project's workflow, or set it (atm project workflow set TYPE).
+    Workflow(settings::WorkflowArgs),
+    /// Print, set or unset the project's logo for the dashboard (meta.logo).
+    Logo {
+        /// set or unset it
+        action: Option<String>,
+        /// set: the image (SVG, PNG, WebP or ICO), relative to here
+        path: Option<String>,
+    },
+    /// List the projects the dashboard shows.
+    List,
+    /// Add a project to the dashboard's list.
+    Add {
+        /// The project's folder (default: here)
+        target: Option<String>,
+    },
+    /// Remove a project from the dashboard's list.
+    Remove {
+        /// The project's ID or path
+        target: String,
+    },
+    /// Drop the projects whose folder is gone from the dashboard's list.
+    Prune,
 }
 
 /// Run a project command in `cwd`.
@@ -62,8 +87,19 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             Ok(())
         }
+        ProjectCommand::Config => settings::config(ctx, cwd),
+        ProjectCommand::Workflow(args) => settings::workflow(args, ctx, cwd),
+        ProjectCommand::Logo { action, path } => {
+            settings::logo(action.as_deref(), path.as_deref(), ctx, cwd)
+        }
+        ProjectCommand::List => settings::projects("list", None, ctx, cwd),
+        ProjectCommand::Add { target } => settings::projects("add", target.as_deref(), ctx, cwd),
+        ProjectCommand::Remove { target } => settings::projects("remove", Some(&target), ctx, cwd),
+        ProjectCommand::Prune => settings::projects("prune", None, ctx, cwd),
     }
 }
+
+mod settings;
 
 fn text(value: &Value) -> String {
     py_str(value)

@@ -127,6 +127,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   component on every task of both files, `--assign` giving it to the tasks its globs match, and their checks. An
   unknown option is reported with the command's usage line, as Click does. Sixteen more tests left the
   expected-failures list.
+- **The rest of `atm project` in the Rust atm** (T-474): `project config` (where the task files are, a legacy one
+  too), `project workflow [set]` (its defaults, trailers, the remote's default base), `project logo [set|unset]`
+  (meta.logo or one found in the usual places, refused outside the project, too large or not an image), and the
+  dashboard's list of projects, `project list|add|remove|prune`, in `$ATM_HOME/projects.json` (`atm-db`
+  `registry.rs`: a linked worktree registers its main one, an unreadable file is moved aside, project IDs from the
+  path's SHA-1 as in Python); `claim heartbeat --auto` lists the project once a day. Forty-eight more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

@@ -20,8 +20,64 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
-/// The project the plugin's hook (`claim heartbeat --auto`) works on in `cwd`, as `actor`; none when there are no task
-/// files there. (Listing it on the dashboard comes with the registry, T-472.)
+/// Where task files were kept before `.agentic-task-manager/`, in the order they are looked for.
+const LEGACY_DIRS: [&str; 2] = ["docs", "."];
+/// The dashboard file an older atm put beside the task file.
+const DASHBOARD_FILE: &str = "tasks-dashboard.html";
+
+/// `atm project config`: where the project's task files are (the JSON-in-git store's own locations): root, dir,
+/// tasks (and whether it exists), the old dashboard's place, and a task file left in a legacy location.
+///
+/// # Errors
+/// When the project's task folder fails its checks (a symlink, or one leading outside the project).
+pub fn task_paths(cwd: &Path) -> Result<serde_json::Value> {
+    let paths = find_paths(cwd)?;
+    let text = |p: &Path| p.display().to_string();
+    let legacy = LEGACY_DIRS.iter().find_map(|d| {
+        let folder = if *d == "." {
+            paths.root.clone()
+        } else {
+            paths.root.join(d)
+        };
+        let tasks = folder.join(atm_common::TASKS_FILE);
+        tasks.is_file().then(|| {
+            let dashboard = folder.join(DASHBOARD_FILE);
+            serde_json::json!({
+                "tasks": text(&tasks),
+                "dashboard": dashboard.is_file().then(|| text(&dashboard)),
+            })
+        })
+    });
+    Ok(serde_json::json!({
+        "root": text(&paths.root),
+        "dir": text(&paths.dir),
+        "tasks": text(&paths.tasks),
+        "tasks_exists": paths.tasks.is_file(),
+        "dashboard": text(&paths.dir.join(DASHBOARD_FILE)),
+        "legacy": legacy,
+    }))
+}
+
+/// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
+#[must_use]
+pub fn default_base(cwd: &Path) -> String {
+    let root = atm_db::jsongit::paths::project_root(cwd);
+    atm_db::git::git(
+        &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        &root,
+    )
+    .and_then(|r| r.split_once('/').map(|(_, branch)| branch.to_string()))
+    .unwrap_or_else(|| "main".into())
+}
+
+/// The user's registry of projects (the dashboard's list), in `$ATM_HOME`.
+#[must_use]
+pub fn open_registry() -> atm_db::registry::FileRegistry {
+    atm_db::registry::FileRegistry::new()
+}
+
+/// The project the plugin's hook (`claim heartbeat --auto`) works on in `cwd`, as `actor`, after listing it on the
+/// dashboard (one read of the registry when it is listed already); none when there are no task files there.
 #[must_use]
 pub fn hook_project(cwd: &Path, actor: String) -> Option<Project> {
     let paths = find_paths(cwd).ok()?;
@@ -29,6 +85,8 @@ pub fn hook_project(cwd: &Path, actor: String) -> Option<Project> {
         return None;
     }
     check_task_folder(&paths.root, &paths.dir).ok()?;
+    // The hook never fails on the registry
+    let _ = atm_db::registry::register_if_needed(&paths);
     Some(Project::new(Box::new(JsonGitStore::new(paths))).with_actor(Some(actor)))
 }
 
@@ -45,29 +103,7 @@ pub fn process_started(pid: u32) -> Option<u64> {
         .map(sysinfo::Process::start_time)
 }
 
-/// The main worktree's folder for a project root: itself, unless it is a linked git worktree.
-fn main_worktree(root: &Path) -> std::path::PathBuf {
-    if let Some(common) = atm_db::git::git(&["rev-parse", "--git-common-dir"], root) {
-        let common = atm_common::home::absolute(&root.join(common));
-        // `..` worked out without reading links, as Python's normpath does
-        let mut normal = std::path::PathBuf::new();
-        for part in common.components() {
-            match part {
-                std::path::Component::ParentDir => {
-                    normal.pop();
-                }
-                std::path::Component::CurDir => {}
-                other => normal.push(other),
-            }
-        }
-        if normal.file_name().is_some_and(|n| n == ".git") {
-            return normal
-                .parent()
-                .map_or_else(|| root.to_path_buf(), Path::to_path_buf);
-        }
-    }
-    root.to_path_buf()
-}
+use atm_db::jsongit::paths::main_worktree;
 
 /// A Claude Code session's identity: `claude:` and 8 characters of its ID; in a linked git worktree, also
 /// `@<worktree folder>`, so agents in separate worktrees have identities of their own.

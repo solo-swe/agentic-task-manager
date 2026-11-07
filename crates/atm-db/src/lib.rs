@@ -6,6 +6,7 @@ pub mod git;
 pub mod interface;
 pub mod jsongit;
 pub mod memory;
+pub mod registry;
 pub mod working;
 
 #[cfg(test)]

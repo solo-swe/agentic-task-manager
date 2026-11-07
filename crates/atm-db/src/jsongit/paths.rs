@@ -89,6 +89,22 @@ pub fn project_root(cwd: &Path) -> PathBuf {
     }
 }
 
+/// The main worktree's folder for a project root: itself, unless it is a linked git worktree (the registry lists a
+/// repository once, by its main worktree).
+#[must_use]
+pub fn main_worktree(root: &Path) -> PathBuf {
+    if let Some(common) = git(&["rev-parse", "--git-common-dir"], root) {
+        let normal =
+            crate::jsongit::logo::normalize(&atm_common::home::absolute(&root.join(common)));
+        if normal.file_name().is_some_and(|n| n == ".git") {
+            return normal
+                .parent()
+                .map_or_else(|| root.to_path_buf(), Path::to_path_buf);
+        }
+    }
+    root.to_path_buf()
+}
+
 /// Where the task files of the project at or above `cwd` are, after the task folder's checks.
 ///
 /// # Errors

@@ -155,7 +155,8 @@ pub fn default_statuses() -> &'static [Status] {
     &DEFAULTS.statuses
 }
 
-const WORKFLOW_TYPES: [&str; 2] = ["direct", "pull-request"];
+/// The workflows a project can follow: commits straight to the base branch, or through pull requests.
+pub const WORKFLOW_TYPES: [&str; 2] = ["direct", "pull-request"];
 const SPRINT_STATES: [&str; 3] = ["planned", "active", "closed"];
 const SPRINT_NAMING: [&str; 2] = ["people", "time"];
 /// The review modes (SR-3.8): a task's, a component's or the project's.
@@ -327,6 +328,29 @@ pub fn check_workflow(workflow: Option<&Value>) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The project's workflow (`meta.workflow`) with its defaults filled in (verify, max rounds, the commit template,
+/// first, as the Python atm merges them), or none when it has none.
+///
+/// # Errors
+/// When the workflow is set but isn't one atm can follow.
+pub fn workflow_of(meta: &Map<String, Value>) -> Result<Option<Map<String, Value>>> {
+    let Some(workflow) = meta.get("workflow").filter(|w| !w.is_null()) else {
+        return Ok(None);
+    };
+    check_workflow(Some(workflow))?;
+    let mut filled = Map::new();
+    filled.insert("verify".into(), Value::Bool(true));
+    filled.insert("max_rounds".into(), Value::from(3));
+    filled.insert(
+        "commit_template".into(),
+        Value::String("feat({id}): {name}".into()),
+    );
+    for (key, value) in workflow.as_object().into_iter().flatten() {
+        filled.insert(key.clone(), value.clone());
+    }
+    Ok(Some(filled))
 }
 
 fn with_state(item: &Map<String, Value>) -> Map<String, Value> {

@@ -12,6 +12,7 @@ pub mod loop_rules;
 pub mod project;
 pub mod query;
 pub mod releases;
+pub mod settings;
 pub mod sprints;
 pub mod state;
 pub mod status;

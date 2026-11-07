@@ -11,6 +11,7 @@ pub mod home;
 pub mod ids;
 pub mod py;
 pub mod rules;
+pub mod sha1;
 pub mod skills;
 pub mod sprint_names;
 pub mod time;
