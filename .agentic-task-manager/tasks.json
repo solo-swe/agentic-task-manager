@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 473,
+    "next_id": 475,
     "labels": [
       {
         "id": "architecture",
@@ -21305,13 +21305,15 @@
         "T-447",
         "T-470",
         "T-471",
-        "T-472"
+        "T-472",
+        "T-473",
+        "T-474"
       ],
       "files": [
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T02:05:23Z",
+      "updated_at": "2026-11-07T03:06:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22174,7 +22176,7 @@
       "description": "Slice 5c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `sprint list|add|edit|start|close|delete|move|backlog` (`lib/sprints.py`): names (generated, `people` or `time`), goals, releases and due dates, one active sprint, closing with its report and the unfinished tasks carried to the next sprint, a new one or the backlog (`--carry-to`, `--reviewed`), moving tasks with their `sprint_history`; text and `--json` as in Python.\n\n## Tests\nThe sprint scenarios (`sprints.json`, `sprint-commands.json`, `sprint-close.json`, `sprints-delete.json`, `review-modes.json`) and `sprints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-447"
       ],
@@ -22182,7 +22184,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T02:37:58Z",
+      "updated_at": "2026-11-07T03:05:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22193,20 +22195,31 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T02:37:58Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "dcf5892e000512a3ba9b438aef808c0dd03116a7",
+      "completed_at": "2026-11-07T03:05:02Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:05:02Z",
+          "kind": "outcome",
+          "text": "Rust `sprint list|add|edit|start|close|delete|move|backlog`; time names in local time with `jiff` (approved by Hakan); Click-style `Missing argument`; 47 tests left the list (271 left).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-472",
-      "name": "Rust: the release, component and project groups",
+      "name": "Rust: the release group",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 5d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `release list|add|edit|archive|notes` (`lib/releases.py`), `component list|add|edit` (`lib/components.py`: globs, `--from-label`, `--assign`), and the rest of `project`: `config`, `workflow [set]`, `logo`, and the dashboard's list of projects (`project list|add|remove|prune`, the registry `projects.json`); text and `--json` as in Python.\n\n## Tests\nThe scenarios of these groups (`releases.json`, `components.json`, `workflow.json`, `projects.json`, `logo.json`, `repository.json`) and `registry.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "description": "Slice 5d of [porting-to-rust.md](docs/porting-to-rust.md) §5 (split in three: this, then the `component` group, and the rest of `project` with the registry of projects): `release list|add|edit|archive|notes` (`lib/releases.py`, `cli/commands/release.py`).\n\n## Change\n- `release list` (open releases with their tasks by kind and stage; a task's release is its own, else its sprint's; `--all` with the archived ones), `add` (ID, name, target date, `--released-at`, `--pr` giving it every task of those pull requests, in both files), `edit` (empty values remove a field), `archive`, `notes` (done tasks by type in the project's order with their outcome notes, what isn't done yet); text and `--json` as in Python.\n\n## Tests\nThe `releases.json` scenarios leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-447"
       ],
@@ -22214,13 +22227,75 @@
         "crates/"
       ],
       "created_at": "2026-11-07T02:05:18Z",
-      "updated_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-07T03:06:36Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:05:07Z",
+      "started_by": "claude:34798264"
+    },
+    {
+      "id": "T-473",
+      "name": "Rust: the component group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5e of [porting-to-rust.md](docs/porting-to-rust.md) §5: `component list|add|edit` (`lib/components.py`, `cli/commands/component.py`): globs (`--path`, `--add-path`), `--label` and `--review` (empty removes them), `--from-label` turning a label into the component on every task (archived ones too), `--assign` giving it to the tasks its globs match; the checks (IDs, a component already there, a label no task has, `--assign` without a glob); text and `--json` as in Python.\n\n## Tests\nThe `components.json` scenarios leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-472"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:06:37Z",
+      "updated_at": "2026-11-07T03:06:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "sprint_history": [
         {
           "sprint": "The Rust port",
-          "from": "2026-11-07T02:05:18Z"
+          "from": "2026-11-07T03:06:37Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-474",
+      "name": "Rust: project config, workflow, logo and the registry",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5f of [porting-to-rust.md](docs/porting-to-rust.md) §5: the rest of `project` (`cli/commands/project.py`, `lib/settings.py`): `config`, `workflow [set]`, `logo`, and the dashboard's list of projects, the registry `projects.json` (`project list|add|remove|prune`, a project that opts out with `meta.dashboard.listed: false`); `claim heartbeat --auto` lists the project on the dashboard as in Python (once, then only reads the registry until a day has passed); text and `--json` as in Python.\n\n## Tests\nThe `workflow.json`, `projects.json`, `logo.json` and `repository.json` scenarios and `registry.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-472"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:06:37Z",
+      "updated_at": "2026-11-07T03:06:37Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:06:37Z"
         }
       ],
       "sprint": "The Rust port"

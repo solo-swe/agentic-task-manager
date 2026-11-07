@@ -21,6 +21,7 @@ use commands::{
     claim::{ClaimCommand, WatchArgs},
     loop_::LoopCommand,
     project::ProjectCommand,
+    release::ReleaseCommand,
     sprint::SprintCommand,
     task::TaskCommand,
 };
@@ -57,6 +58,9 @@ enum Command {
     /// Sprint management
     #[command(subcommand)]
     Sprint(SprintCommand),
+    /// Release management
+    #[command(subcommand)]
+    Release(ReleaseCommand),
     /// The work loop
     #[command(subcommand)]
     Loop(LoopCommand),
@@ -234,6 +238,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
         Command::Sprint(command) => commands::sprint::run(command, ctx, &cwd).map(|()| 0),
+        Command::Release(command) => commands::release::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),

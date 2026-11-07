@@ -118,6 +118,10 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   unfinished tasks carried to a sprint, a new one or the backlog (`--carry-to`, `--name`, `--reviewed`), deleting one
   made by mistake (`--move-to`, `--force`), and moving tasks with their `sprint_history`. A missing argument is
   reported as Click words it (`Missing argument 'NAME'.`). Forty-seven more tests left the expected-failures list.
+- **The `release` group in the Rust atm** (T-472, split with T-473 and T-474): `atm release list|add|edit|archive|notes`
+  as in Python: releases with their tasks by kind and stage (a task's release its own, else its sprint's), `--pr`
+  giving a new release every task of those pull requests in both files, `--released-at`, `--name` and `--target`
+  (empty removes them), archiving, and the Markdown notes draft. Thirteen more tests left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

@@ -90,7 +90,7 @@ pub fn time_name(month: i64, day: i64, hour: i64, minute: i64) -> String {
 fn seed_number(seed: Option<&str>) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     if let Some(seed) = seed {
-        seed.hash(&mut hasher)
+        seed.hash(&mut hasher);
     } else {
         std::time::SystemTime::now().hash(&mut hasher);
         std::process::id().hash(&mut hasher);

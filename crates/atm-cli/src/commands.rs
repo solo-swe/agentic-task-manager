@@ -6,6 +6,7 @@ pub mod claim;
 pub mod loop_;
 pub mod meta;
 pub mod project;
+pub mod release;
 pub mod sprint;
 pub mod task;
 
