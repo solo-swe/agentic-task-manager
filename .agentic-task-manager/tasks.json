@@ -922,14 +922,37 @@
       },
       {
         "id": "Rust and distribution",
-        "state": "active",
+        "state": "closed",
         "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks",
-        "start": "2026-11-06T20:03:49Z"
+        "start": "2026-11-06T20:03:49Z",
+        "end": "2026-11-07T00:36:53Z",
+        "report": {
+          "done": [
+            "T-415",
+            "T-426",
+            "T-439",
+            "T-440",
+            "T-441",
+            "T-442",
+            "T-443"
+          ],
+          "carried": [],
+          "added": [
+            "T-439",
+            "T-440",
+            "T-441",
+            "T-442",
+            "T-443"
+          ]
+        },
+        "release": "0.32.0"
       },
       {
         "id": "The Rust port",
-        "state": "planned",
-        "goal": "atm as one Rust binary: the slices of porting-to-rust.md §5, the release machinery, and the switch from Python"
+        "state": "active",
+        "goal": "atm as one Rust binary: the slices of porting-to-rust.md §5, the release machinery, and the switch from Python",
+        "release": "0.32.0",
+        "start": "2026-11-07T00:37:18Z"
       },
       {
         "id": "The atm app",
@@ -1131,6 +1154,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
         },
         "released_at": "2026-11-06T19:54:27Z"
+      },
+      {
+        "id": "0.32.0",
+        "state": "planned"
       }
     ],
     "migrations": [
