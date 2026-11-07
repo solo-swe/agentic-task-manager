@@ -27,7 +27,7 @@ const STOP_WAIT: Duration = Duration::from_secs(5);
 const KILL_WAIT: Duration = Duration::from_secs(2);
 const START_WAIT: Duration = Duration::from_secs(10);
 const POLL: Duration = Duration::from_millis(50);
-const REAP_WAIT: Duration = Duration::from_millis(500);
+const REAP_WAIT: Duration = Duration::from_secs(2);
 
 /// `atm doctor [--files]`: the errors and warnings in the task data; exit code 1 when there are errors.
 ///
@@ -265,15 +265,28 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
     Ok(url)
 }
 
-/// Whether process `pid` ends within `wait`. One that ended is given a moment more to be reaped by its parent, so
-/// that whoever started it sees it gone too; one nobody reaps (a container without an init) counts as gone then.
-fn wait_gone(pid: u32, wait: Duration) -> bool {
+/// How many checks in a row must miss a process before it counts as gone: a busy machine can make one look miss it.
+const GONE_CHECKS: u32 = 3;
+
+/// Whether process `pid` ends within `wait`, sending it `signal` again (SIGKILL) each time it is still seen. One that
+/// ended is given a moment more to be reaped by its parent, so that whoever started it sees it gone too; one nobody
+/// reaps (a container without an init) counts as gone then.
+fn wait_gone(pid: u32, wait: Duration, kill: bool) -> bool {
     let deadline = Instant::now() + wait;
-    while Instant::now() < deadline && pid_alive(pid) {
+    let mut missed = 0;
+    while missed < GONE_CHECKS {
+        if pid_alive(pid) {
+            missed = 0;
+            if Instant::now() >= deadline {
+                return false;
+            }
+            if kill {
+                let _ = signal_process(pid, true);
+            }
+        } else {
+            missed += 1;
+        }
         std::thread::sleep(POLL);
-    }
-    if pid_alive(pid) {
-        return false;
     }
     let reaped = Instant::now() + REAP_WAIT;
     while Instant::now() < reaped && pid_exists(pid) {
@@ -286,9 +299,9 @@ fn wait_gone(pid: u32, wait: Duration) -> bool {
 /// goes only once it is gone, and only if it is that server's: a server still running is never forgotten.
 fn stop_server(home: &Path, pid: u32) -> Result<()> {
     let _ = signal_process(pid, false);
-    if !wait_gone(pid, STOP_WAIT) {
+    if !wait_gone(pid, STOP_WAIT, false) {
         let _ = signal_process(pid, true);
-        if !wait_gone(pid, KILL_WAIT) {
+        if !wait_gone(pid, KILL_WAIT, true) {
             return Err(Error::failed(format!(
                 "the dashboard server (pid {pid}) didn't stop; its record is kept"
             )));

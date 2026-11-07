@@ -362,5 +362,53 @@ pub fn unarchive_tasks(project: &mut Project, ids: &[String]) -> Result<Unarchiv
     })
 }
 
+/// The suggestion to archive (CLI-5.1), or none: when the working tasks are over the threshold.
+///
+/// # Errors
+/// Task data that can't be read.
+pub fn archive_hint_now(project: &Project) -> Result<Option<Value>> {
+    let store = project.store();
+    Ok(atm_common::archive::archive_hint(
+        store.document()?,
+        store.vocabulary()?,
+        store.sizes().0,
+    ))
+}
+
+/// The project's tasks as the REST API's v1 route gives them (docs/multi-project-api.md §2.5), in one snapshot:
+/// `meta` (as read: a tolerant read leaves out what doesn't work), `bytes` (how big the task data is), `tasks` (each
+/// with what atm derives for it), `problems` (what a tolerant read found wrong with the file) and, for the working
+/// tasks, `archive_hint` when atm suggests archiving.
+///
+/// # Errors
+/// A filter naming no such sprint or release (exit code 2), task data that can't be read.
+pub fn task_snapshot(project: &Project, filters: &crate::query::Filters) -> Result<Value> {
+    let store = project.store();
+    let meta = store
+        .document()?
+        .get("meta")
+        .filter(|m| atm_common::py::truthy(m))
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let mut snapshot = json!({
+        "meta": meta,
+        "bytes": store.sizes().0,
+        "tasks": crate::query::task_views(project, filters)?,
+        "problems": crate::query::read_problems(project)?,
+    });
+    if !filters.archived
+        && let Some(hint) = archive_hint_now(project)?
+    {
+        snapshot["archive_hint"] = hint;
+    }
+    Ok(snapshot)
+}
+
+/// What changes when the project's data does (`{tasks, archive, claims, head, copies}`), for the REST API's `ETag`s.
+#[must_use]
+pub fn project_stamp(project: &Project) -> Value {
+    project.store().stamp()
+}
+
 #[cfg(test)]
 mod tests;

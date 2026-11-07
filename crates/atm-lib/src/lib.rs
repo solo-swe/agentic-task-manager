@@ -19,6 +19,8 @@ pub mod settings;
 pub mod sprints;
 pub mod state;
 pub mod status;
+pub mod summary;
 pub mod tasks;
+pub mod worktrees;
 
 pub use project::Project;

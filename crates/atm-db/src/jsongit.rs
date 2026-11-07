@@ -9,6 +9,7 @@ pub mod merge;
 pub mod migrate;
 pub mod paths;
 pub mod setup;
+pub mod worktrees;
 
 use std::cell::OnceCell;
 
@@ -18,17 +19,21 @@ use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::Value;
 
 use crate::git::checked_out_branch;
-use crate::interface::{Raw, Store};
+use crate::interface::{Problems, Raw, Store};
 use crate::working::{Here, Working};
-use claims::{locked_with_claims, read_store, write_store};
-use files::{Loaded, archive_document, last_with_id, load_archive, load_tasks};
+use claims::{claims_store_path, locked_with_claims, read_store, write_store};
+use files::{
+    Loaded, archive_document, last_with_id, load_archive, load_tasks, load_tasks_tolerant,
+    read_json,
+};
 use paths::Paths;
 
 /// The task files of one project, read once (one atm command works on one snapshot of them).
 #[derive(Debug)]
 pub struct JsonGitStore {
     paths: Paths,
-    loaded: OnceCell<Result<Loaded>>,
+    tolerant: bool,
+    loaded: OnceCell<Result<(Loaded, Problems)>>,
     archive: OnceCell<Result<Vec<Task>>>,
 }
 
@@ -38,8 +43,20 @@ impl JsonGitStore {
     pub fn new(paths: Paths) -> Self {
         Self {
             paths,
+            tolerant: false,
             loaded: OnceCell::new(),
             archive: OnceCell::new(),
+        }
+    }
+
+    /// The same, reading a malformed task file as far as it can be read and saying what is wrong
+    /// ([`Store::problems`]), instead of refusing it: for showing it (the REST API's reads, T-377). Writes are strict
+    /// either way.
+    #[must_use]
+    pub fn tolerant(paths: Paths) -> Self {
+        Self {
+            tolerant: true,
+            ..Self::new(paths)
         }
     }
 
@@ -49,11 +66,29 @@ impl JsonGitStore {
         &self.paths
     }
 
-    fn loaded(&self) -> Result<&Loaded> {
+    fn read(&self) -> Result<&(Loaded, Problems)> {
         self.loaded
-            .get_or_init(|| load_tasks(&self.paths))
+            .get_or_init(|| {
+                if self.tolerant {
+                    load_tasks_tolerant(&self.paths)
+                } else {
+                    load_tasks(&self.paths).map(|l| (l, Problems::default()))
+                }
+            })
             .as_ref()
             .map_err(Clone::clone)
+    }
+
+    fn loaded(&self) -> Result<&Loaded> {
+        self.read().map(|(loaded, _)| loaded)
+    }
+
+    /// The task file's path relative to the project's root (the same in every working copy).
+    fn relative_tasks(&self) -> std::path::PathBuf {
+        self.paths
+            .tasks
+            .strip_prefix(&self.paths.root)
+            .map_or_else(|_| self.paths.tasks.clone(), std::path::Path::to_path_buf)
     }
 
     fn archive(&self) -> Result<&[Task]> {
@@ -229,6 +264,74 @@ impl Store for JsonGitStore {
             archive_error,
         })
     }
+
+    fn problems(&self) -> Result<Problems> {
+        self.read().map(|(_, problems)| problems.clone())
+    }
+
+    fn branch(&self) -> Option<String> {
+        checked_out_branch(&self.paths.root)
+    }
+
+    fn stamp(&self) -> Value {
+        let relative = self.relative_tasks();
+        let copies: Vec<Value> = worktrees::worktrees(&self.paths.root)
+            .into_iter()
+            .map(|tree| {
+                let path = tree
+                    .get("path")
+                    .and_then(Value::as_str)
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_default();
+                let stamp = file_stamp(&path.join(&relative));
+                serde_json::json!([tree, stamp])
+            })
+            .collect();
+        serde_json::json!({
+            "tasks": file_stamp(&self.paths.tasks),
+            "archive": file_stamp(&self.paths.archive()),
+            "claims": file_stamp(&claims_store_path(&self.paths)),
+            "head": file_stamp(&self.paths.root.join(".git").join("HEAD")),
+            "copies": copies,
+        })
+    }
+
+    fn working_copies(&self) -> Vec<Value> {
+        worktrees::worktrees(&self.paths.root)
+    }
+
+    fn copy_tasks(&self, folder: &str) -> Vec<Value> {
+        let data = read_json(&std::path::Path::new(folder).join(self.relative_tasks()));
+        data.as_ref()
+            .and_then(|d| d.get("tasks"))
+            .and_then(Value::as_array)
+            .map(|tasks| {
+                tasks
+                    .iter()
+                    .filter(|t| t.get("id").is_some_and(Value::is_string))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn copy_store(&self, folder: &str) -> Result<Box<dyn Store>> {
+        let paths = paths::find_paths(std::path::Path::new(folder))?;
+        Ok(Box::new(JsonGitStore::tolerant(paths)))
+    }
+}
+
+/// `[size, nanosecond mtime]` of a file, or null if it doesn't exist: it changes with the file.
+fn file_stamp(path: &std::path::Path) -> Value {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return Value::Null;
+    };
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    serde_json::json!([meta.len(), mtime.to_string()])
 }
 
 #[cfg(test)]

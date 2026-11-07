@@ -56,6 +56,9 @@ pub enum ProjectCommand {
     },
     /// Drop the projects whose folder is gone from the dashboard's list.
     Prune,
+    /// The project's summary, as the dashboard's overview gets it (JSON).
+    #[command(hide = true)]
+    Summary,
 }
 
 /// Run a project command in `cwd`.
@@ -96,6 +99,10 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
         ProjectCommand::Add { target } => settings::projects("add", target.as_deref(), ctx, cwd),
         ProjectCommand::Remove { target } => settings::projects("remove", Some(&target), ctx, cwd),
         ProjectCommand::Prune => settings::projects("prune", None, ctx, cwd),
+        ProjectCommand::Summary => {
+            print_json(&atm_lib::summary::project_summary(&open_project(cwd)?)?);
+            Ok(())
+        }
     }
 }
 

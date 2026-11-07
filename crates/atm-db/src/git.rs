@@ -22,7 +22,8 @@ pub fn git(args: &[&str], cwd: &Path) -> Option<String> {
 }
 
 /// The branch checked out per a git folder's `HEAD`; a detached `HEAD` gives its short SHA, no file None.
-fn head_branch(git_dir: &Path) -> Option<String> {
+#[must_use]
+pub fn head_branch(git_dir: &Path) -> Option<String> {
     let text = std::fs::read_to_string(git_dir.join("HEAD")).ok()?;
     let head = strip(text.split('\n').next().unwrap_or_default());
     if let Some(reference) = head.strip_prefix("ref: ") {

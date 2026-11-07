@@ -346,6 +346,45 @@ impl FileRegistry {
         Self { home: atm_home() }
     }
 
+    /// The registry of the atm folder `home` (the server's, given on its command line).
+    #[must_use]
+    pub fn at(home: &Path) -> Self {
+        Self {
+            home: home.to_path_buf(),
+        }
+    }
+
+    /// The entries as the file has them now, without the lock (the server reads them on every request): those with
+    /// a `path`.
+    #[must_use]
+    pub fn entries(&self) -> Vec<Value> {
+        let registry = read_json(&self.home.join(REGISTRY_FILE)).unwrap_or(Value::Null);
+        registry
+            .get("projects")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter(|e| e.get("path").is_some_and(Value::is_string))
+                    .cloned()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// The file's size and modification time, null while there is none: it changes when the list does.
+    #[must_use]
+    pub fn stamp(&self) -> Value {
+        let Ok(meta) = std::fs::metadata(self.home.join(REGISTRY_FILE)) else {
+            return Value::Null;
+        };
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos());
+        json!([meta.len(), mtime.to_string()])
+    }
+
     fn locked(&self) -> Result<crate::jsongit::lock::Lock> {
         ensure_home(&self.home)
             .map_err(|e| Error::failed(format!("{}: {e}", self.home.display())))?;

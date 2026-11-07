@@ -9,6 +9,7 @@ use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::Value;
 
 use super::paths::Paths;
+use crate::interface::Problems;
 
 /// The file's JSON, or None when it can't be read or parsed (atm treats both as "not valid").
 #[must_use]
@@ -100,6 +101,69 @@ pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
         document,
         vocabulary,
     })
+}
+
+/// `tasks.json` read as far as it can be, for showing it (the dashboard, T-377): what [`load_tasks`] refuses is kept
+/// where it can be, and said. Entries that aren't tasks (no string `id`) are left out; a task with an ID atm doesn't
+/// allow is kept as it is, one whose dependencies aren't a list of IDs with the IDs that can be read (so every task
+/// read fits the task schema); the vocabularies that don't work are left out of `meta`. The data is for reading only.
+///
+/// # Errors
+/// When there is no task file, or it isn't one at all.
+pub fn load_tasks_tolerant(paths: &Paths) -> Result<(Loaded, Problems)> {
+    let mut document = read_task_file(paths)?;
+    let mut problems = Problems::default();
+    let mut kept = Vec::new();
+    let tasks = document["tasks"].as_array().cloned().unwrap_or_default();
+    for (i, mut task) in tasks.into_iter().enumerate() {
+        let Some(id) = task.get("id").and_then(Value::as_str).map(String::from) else {
+            problems.file.push(format!(
+                "task #{} isn't a task (an object with an \"id\"): left out",
+                i + 1
+            ));
+            continue;
+        };
+        let mut own = Vec::new();
+        if !valid_task_id(&id) {
+            own.push(Value::String(format!(
+                "the ID {} has characters atm doesn't allow (letters, digits, '.', '_' and '-')",
+                repr_str(&id)
+            )));
+        }
+        let deps = task.get("dependencies").cloned();
+        let deps_ok = deps
+            .as_ref()
+            .is_none_or(|d| d.as_array().is_some_and(|d| d.iter().all(Value::is_string)));
+        if !deps_ok {
+            // Shown with the IDs that can be read, so what reads it gets a task of the schema's shape
+            let readable: Vec<Value> = deps
+                .as_ref()
+                .and_then(Value::as_array)
+                .map(|d| d.iter().filter(|x| x.is_string()).cloned().collect())
+                .unwrap_or_default();
+            task["dependencies"] = Value::Array(readable);
+            own.push(Value::String(
+                "its dependencies aren't a list of task IDs (shown with the IDs that can be read)"
+                    .into(),
+            ));
+        }
+        if !own.is_empty() {
+            problems.tasks.insert(id, Value::Array(own));
+        }
+        kept.push(task);
+    }
+    document["tasks"] = Value::Array(kept);
+    // The rules read the vocabularies from meta: what doesn't work is left out of it (the problems say what)
+    let (vocabulary, vocabulary_problems, meta) = Vocabulary::tolerant(document.get("meta"));
+    problems.file.extend(vocabulary_problems);
+    document["meta"] = Value::Object(meta);
+    Ok((
+        Loaded {
+            document,
+            vocabulary,
+        },
+        problems,
+    ))
 }
 
 /// The archived tasks, in the archive's order (its entries that are objects); empty without an archive. Looking one

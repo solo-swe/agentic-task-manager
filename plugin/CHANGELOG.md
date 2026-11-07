@@ -169,6 +169,15 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `build.rs`), the page at each of its paths with its CSP (the inline scripts' SHA-256, `atm-common` `sha256.rs`), and
   `/__atm/whoami`. Invariant I24's check lists the server and the browser opener; the read API follows (T-468).
   Eighteen more tests left the expected-failures list.
+- **The read API of the Rust atm's server** (T-468): `/api/projects` (each registered project's summary, `atm-lib`
+  `summary.rs`: counts by kind, the active and recent sprints, who works on what, next, needs-you, the git line, the
+  board and its active-sprint view, the stats; a project that can't be read listed as missing), `/api/v1/projects/<id>/tasks`
+  (the tasks with what atm derives, filtered by the query, the tolerant read of a malformed task file with its
+  problems, T-377), `/p/<id>/claims.json`, `worktrees.json` (`atm-db` `jsongit/worktrees.rs`, `atm-lib`
+  `worktrees.rs`) and `logo`, each with an `ETag` and 304s; the hidden `atm project summary`, and
+  `atm task list --derived --tolerant`. `atm service stop` counts a process gone only after three missed checks in a
+  row, re-sending SIGKILL while it is seen, and waits for it to be reaped. Twenty-eight more tests left the
+  expected-failures list; the document viewer and search follow (T-469).
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

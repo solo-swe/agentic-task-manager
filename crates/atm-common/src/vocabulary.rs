@@ -586,6 +586,51 @@ impl Vocabulary {
         )
     }
 
+    /// The vocabularies of `meta` as far as they work, and what doesn't (the dashboard reads them so, T-377): each
+    /// list or setting [`Vocabulary::of_meta`] refuses is left out, its default used instead. Returns (the
+    /// vocabularies, the problems in their words, the meta without what was left out).
+    ///
+    /// # Panics
+    /// Never: an empty `meta` is the defaults, which always work.
+    #[must_use]
+    pub fn tolerant(meta: Option<&Value>) -> (Vocabulary, Vec<String>, Map<String, Value>) {
+        let mut usable = meta.and_then(Value::as_object).cloned().unwrap_or_default();
+        let mut problems = Vec::new();
+        loop {
+            match Vocabulary::of_meta(&usable) {
+                Ok(vocab) => return (vocab, problems, usable),
+                Err(e) => {
+                    let message = e.to_string();
+                    let key = message.find("meta.").map(|at| {
+                        message[at + "meta.".len()..]
+                            .chars()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect::<String>()
+                    });
+                    problems.push(message);
+                    match key.filter(|k| !k.is_empty() && usable.contains_key(k)) {
+                        Some(key) => {
+                            usable.shift_remove(&key);
+                            if key == "priorities" {
+                                // It names one of them
+                                usable.shift_remove("default_priority");
+                            }
+                        }
+                        None if usable.is_empty() => {
+                            return (
+                                Vocabulary::of_meta(&Map::new()).expect("the defaults work"),
+                                problems,
+                                usable,
+                            );
+                        }
+                        // Nothing to narrow it to: the defaults
+                        None => usable = Map::new(),
+                    }
+                }
+            }
+        }
+    }
+
     /// The vocabularies `meta` defines, with the defaults for the rest.
     ///
     /// # Errors

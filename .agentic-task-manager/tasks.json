@@ -21348,7 +21348,7 @@
       "description": "Slice 7a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 7, split in three: this, then the read API and the project's files): `atm serve` itself, in `atm-api` on axum/tokio (§3), as the Python atm's `cli/serve.py` and `api/server.py` run it.\n\n## Change\n- `atm serve start|stop|status` and `atm service [--refresh] [--port] [--open] [--all] [--dir]`: one detached server per user (`ATM_HOME`), started as the `atm` binary itself, its record (pid, port, build, version) in `ATM_HOME`, a busy port moving to the next, a stale record cleaned up, `stop` ending only the recorded server (SIGTERM, then SIGKILL), two starts at once starting one server, `--refresh` restarting an older or rebuilt dashboard on the same port; `/__atm/whoami`.\n- The **registry** of projects (`db/registry.py`, `projects.json`): adding a project when a command runs in it, IDs from `meta.id` (another when it is taken), `meta.dashboard.listed`.\n- The **Host check** (DNS rebinding), `[::1]` and `127.0.0.1` both, and the security headers and CSP of [security-architecture.md](docs/security-architecture.md) I12–I13.\n- The dashboard page, from `plugin/templates/tasks-dashboard.html`, embedded at build and served from memory at each of its paths (T-429's routes); CompMD's runtime from `plugin/assets/compmd/`, at `/assets/`, read-only.\n- New dependencies: `axum` and `tokio` (named in §3).\n\n## Tests\nThe `serve.test.mjs` tests about the server's lifecycle, the page, the headers and the Host check leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-444",
         "T-464",
@@ -21361,7 +21361,7 @@
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T04:06:36Z",
+      "updated_at": "2026-11-07T04:33:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21383,10 +21383,19 @@
           "kind": "handoff",
           "text": "Not started: it adds `axum` and `tokio`, new dependencies that need the user’s approval first.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T04:33:51Z",
+          "kind": "outcome",
+          "text": "The server: `atm service start|stop|status|--refresh` and `atm _serve` on axum/tokio, page and CompMD assets embedded, Host check, headers and CSP, `/__atm/whoami`. 18 tests left the expected list (49 remain, the read API’s and the files’, T-468/T-469). atm-cli now depends on atm-api, only for `_serve`; the docs say so.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-07T04:06:36Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "9add4c39a3cb9c671881f764843da6d1ed937bcf",
+      "completed_at": "2026-11-07T04:33:51Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-450",
@@ -22096,7 +22105,7 @@
       "description": "Slice 7b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-449's server: the routes the dashboard polls, as [multi-project-api.md](docs/multi-project-api.md) has them and the Python atm's `api/server.py` serves them.\n\n## Change\n- `api/projects`: each project's summary (`lib/query.py`'s `project_summary`: counts by kind, the active sprint and recent ones, working and next, the board, stats, the git branch and latest PR, the logo), an opted-out project left out, a missing or unreadable one listed as missing.\n- `api/v1/projects/<id>/tasks`: the tasks with what atm derives, filtered, with ETags and 304s; the **tolerant read** (`load_tasks_tolerant`, T-377), and with it `atm task list --derived --tolerant` (which the Rust `task list` refuses until now, T-462).\n- `p/<id>/claims.json` and `worktrees.json` (a project's git worktrees, their changed tasks, their claims); everything else 404 or 405.\n\n## Tests\nThe `serve.test.mjs` tests about these routes leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-449"
       ],
@@ -22104,16 +22113,25 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:54:50Z",
-      "updated_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-07T05:08:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:54:50Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T05:08:31Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-07T05:08:42Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-469",

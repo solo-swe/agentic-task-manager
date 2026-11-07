@@ -20,6 +20,17 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
+/// The project at or above `cwd`, its task file read as far as it can be read, saying what is wrong instead of
+/// refusing it (T-377): for showing it (the REST API, `atm task list --derived --tolerant`).
+///
+/// # Errors
+/// When the project's task folder fails its checks (a symlink, or one leading outside the project).
+pub fn open_project_tolerant(cwd: &Path) -> Result<Project> {
+    let paths = find_paths(cwd)?;
+    check_task_folder(&paths.root, &paths.dir)?;
+    Ok(Project::new(Box::new(JsonGitStore::tolerant(paths))))
+}
+
 /// `atm project config`: where the project's task files are (the JSON-in-git store's own locations): root, dir,
 /// tasks (and whether it exists), the old dashboard's place, and a task file left in a legacy location.
 ///
@@ -146,10 +157,19 @@ pub fn open_vcs(cwd: &Path) -> atm_vcs::GitVcs {
     atm_vcs::GitVcs::new(&atm_db::jsongit::paths::project_root(cwd))
 }
 
+/// The user's registry of projects (the dashboard's list).
+pub use atm_db::registry::FileRegistry as Registry;
+
 /// The user's registry of projects (the dashboard's list), in `$ATM_HOME`.
 #[must_use]
-pub fn open_registry() -> atm_db::registry::FileRegistry {
-    atm_db::registry::FileRegistry::new()
+pub fn open_registry() -> Registry {
+    Registry::new()
+}
+
+/// The registry of the atm folder `home` (the server's).
+#[must_use]
+pub fn open_registry_at(home: &Path) -> Registry {
+    Registry::at(home)
 }
 
 /// The project the plugin's hook (`claim heartbeat --auto`) works on in `cwd`, as `actor`, after listing it on the

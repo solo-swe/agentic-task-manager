@@ -260,9 +260,16 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
             .get_archived_task(id)
             .map(|t| t.is_some_and(|t| !t.is_empty()))
     };
+    // A task a tolerant read found wrong (T-377) says so; what its broken fields would decide isn't decided
+    let troubled = if filters.archived {
+        Map::new()
+    } else {
+        store.problems()?.tasks
+    };
     let mut views = Vec::new();
     for t in list_matching(project, filters)? {
         let kind = vocab.kind_of(t.get("status"));
+        let problems = id_of(t).and_then(|id| troubled.get(id));
         let waiting_for: Vec<String> = if kind == Some(Kind::Todo) {
             unfinished_dependencies(vocab, &tasks, t, &archived)?
                 .into_iter()
@@ -277,9 +284,12 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         }
         derived.insert(
             "ready".into(),
-            json!(id_of(t).is_some_and(|id| ready.contains(id))),
+            json!(id_of(t).is_some_and(|id| ready.contains(id)) && problems.is_none()),
         );
         derived.insert("waiting_for".into(), json!(waiting_for));
+        if let Some(problems) = problems {
+            derived.insert("problems".into(), problems.clone());
+        }
         if kind == Some(Kind::Blocked)
             && let Some(on) = t.get("waiting_on").filter(|v| !v.is_null())
         {
@@ -297,6 +307,38 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
         views.push(json!({"task": t, "derived": derived}));
     }
     Ok(views)
+}
+
+/// What a tolerant read found wrong with the project's task data as a whole (T-377): entries left out, the
+/// vocabularies that fell back to their defaults. Empty for a strict read, which refuses such data instead.
+///
+/// # Errors
+/// When the task data can't be read.
+pub fn read_problems(project: &Project) -> Result<Vec<String>> {
+    Ok(project.store().problems()?.file)
+}
+
+/// The project's claims, from every working copy, by task.
+#[must_use]
+pub fn list_claims(project: &Project) -> Vec<Value> {
+    let store = project.store().read_claims();
+    let mut listed: Vec<Value> = store
+        .get("claims")
+        .and_then(Value::as_object)
+        .map(|c| {
+            c.values()
+                .filter(|c| c.get("task").is_some_and(Value::is_string))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    listed.sort_by(|a, b| {
+        a["task"]
+            .as_str()
+            .unwrap_or_default()
+            .cmp(b["task"].as_str().unwrap_or_default())
+    });
+    listed
 }
 
 /// `atm task deps`: what a task waits for, and what waits for it, archived tasks included (T-358):

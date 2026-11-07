@@ -5,7 +5,7 @@ use std::path::Path;
 
 use atm_boot::open_project;
 use atm_common::py::{py_str, py_str_opt, splitlines, strip, truthy};
-use atm_common::{Error, Result, TaskId};
+use atm_common::{Result, TaskId};
 use atm_lib::query::{Filters, task_dependencies, task_views};
 use atm_lib::tasks::{TaskView, show_tasks};
 use clap::{Args, Subcommand};
@@ -160,15 +160,18 @@ fn deps(task_id: &str, ctx: Context, cwd: &Path) -> Result<()> {
 }
 
 fn list(args: ListArgs, ctx: Context, cwd: &Path) -> Result<()> {
-    if args.derived && args.tolerant {
-        // The tolerant read comes with `atm serve`, whose REST API reads that way (T-449)
-        return Err(Error::Failed {
-            message: "--tolerant isn't in the Rust atm yet (T-449)".into(),
-            code: 2,
-        });
-    }
-    let derived = args.derived;
+    let (derived, tolerant) = (args.derived, args.tolerant);
     let filters = args.filters();
+    if derived && tolerant {
+        // The REST API's snapshot, as the dashboard reads a malformed task file (T-377), without its size
+        let mut snapshot =
+            atm_lib::archive::task_snapshot(&atm_boot::open_project_tolerant(cwd)?, &filters)?;
+        if let Some(snapshot) = snapshot.as_object_mut() {
+            snapshot.shift_remove("bytes");
+        }
+        print_json(&snapshot);
+        return Ok(());
+    }
     let project = open_project(cwd)?;
     let views = task_views(&project, &filters)?;
     if derived {

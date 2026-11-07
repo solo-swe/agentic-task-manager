@@ -9,6 +9,7 @@
 
 mod assets;
 mod pages;
+mod routes;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
@@ -38,6 +39,7 @@ struct Served {
     build: String,
     home: String,
     hashes: Vec<String>,
+    projects: routes::Projects,
 }
 
 /// A response as atm sends them: `Cache-Control: no-store` unless `headers` say otherwise, no content sniffing, and
@@ -159,7 +161,22 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
             &[],
         );
     }
-    send_error(StatusCode::NOT_FOUND, "not found")
+    // The read API works on the projects' files: off the async workers
+    let (path, query) = (
+        path.to_string(),
+        request.uri().query().unwrap_or_default().to_string(),
+    );
+    let headers = request.headers().clone();
+    let worker = Arc::clone(&served);
+    tokio::task::spawn_blocking(move || {
+        // One bad request, or one project's broken files, gets a 500, never a dead connection
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            routes::serve(&worker.projects, &path, &query, &headers)
+        }))
+        .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
+    })
+    .await
+    .unwrap_or_else(|_| send_error(StatusCode::INTERNAL_SERVER_ERROR, "internal error"))
 }
 
 /// Something accepts connections on `127.0.0.1:port` or `[::1]:port` (`localhost` may resolve to either).
@@ -226,6 +243,7 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
         build: build.clone(),
         home: home_id(home),
         hashes: script_hashes(PAGE),
+        projects: routes::Projects::new(home),
     });
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
