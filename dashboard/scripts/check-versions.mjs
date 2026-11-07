@@ -1,38 +1,40 @@
-// Fails if the plugin manifest, the marketplace entry and the Rust workspace (Cargo.toml) disagree on the atm version,
-// or if plugin/CHANGELOG.md or plugin/WHATS-NEW.md has no entry for that version.
+// Fails if the Rust workspace (Cargo.toml, atm's version: T-477), the plugin manifest and the marketplace entry
+// disagree on the atm version, or if CHANGELOG.md or WHATS-NEW.md has no entry for that version. plugin.json and
+// marketplace.json go with the plugin (T-454); until then the Python atm reads its version from plugin.json.
 import { readFileSync } from 'node:fs';
 
-const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
-const plugin = read('../../plugin/.claude-plugin/plugin.json');
-const marketplace = read('../../.claude-plugin/marketplace.json');
-const entry = marketplace.plugins.find((p) => p.name === plugin.name);
-
+const text = (path) => readFileSync(new URL(path, import.meta.url), 'utf8');
+const cargo = text('../../Cargo.toml');
+const version = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(cargo)?.[1];
+if (!version) {
+  console.error("Cargo.toml's [workspace.package] has no version");
+  process.exit(1);
+}
+const plugin = JSON.parse(text('../../plugin/.claude-plugin/plugin.json'));
+const entry = JSON.parse(text('../../.claude-plugin/marketplace.json')).plugins.find((p) => p.name === plugin.name);
 if (!entry) {
   console.error(`marketplace.json has no entry for plugin "${plugin.name}"`);
   process.exit(1);
 }
-if (entry.version !== plugin.version) {
-  console.error(`Version mismatch: plugin.json ${plugin.version}, marketplace.json ${entry.version}`);
-  process.exit(1);
+for (const [file, other] of [
+  ['plugin.json', plugin.version],
+  ['marketplace.json', entry.version],
+]) {
+  if (other !== version) {
+    console.error(`Version mismatch: Cargo.toml's [workspace.package] ${version}, ${file} ${other}`);
+    process.exit(1);
+  }
 }
-// The Rust atm's version (T-443): the workspace's, in Cargo.toml
-const cargo = readFileSync(new URL('../../Cargo.toml', import.meta.url), 'utf8');
-const rust = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(cargo)?.[1];
-if (rust !== plugin.version) {
-  console.error(`Version mismatch: plugin.json ${plugin.version}, Cargo.toml's [workspace.package] ${rust}`);
-  process.exit(1);
-}
-const escaped = plugin.version.replace(/\./g, '\\.');
+const escaped = version.replace(/\./g, '\\.');
 // Every release has both: the detailed changelog (developers) and the short What's New (users, shown in the
 // dashboard)
 for (const [file, what] of [
   ['CHANGELOG.md', 'the detailed changes'],
   ['WHATS-NEW.md', 'a short, end-user summary'],
 ]) {
-  const text = readFileSync(new URL(`../../plugin/${file}`, import.meta.url), 'utf8');
-  if (!new RegExp(`^## \\[${escaped}\\]`, 'm').test(text)) {
-    console.error(`plugin/${file} has no "## [${plugin.version}]" entry. Add ${what} for this version.`);
+  if (!new RegExp(`^## \\[${escaped}\\]`, 'm').test(text(`../../${file}`))) {
+    console.error(`${file} has no "## [${version}]" entry. Add ${what} for this version.`);
     process.exit(1);
   }
 }
-console.log(`atm ${plugin.version}: plugin.json, marketplace.json, Cargo.toml, CHANGELOG.md and WHATS-NEW.md agree`);
+console.log(`atm ${version}: Cargo.toml, plugin.json, marketplace.json, CHANGELOG.md and WHATS-NEW.md agree`);

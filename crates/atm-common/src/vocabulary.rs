@@ -1,6 +1,6 @@
 //! A project's vocabularies (docs/v4/data-model.md §2–3): its statuses with their kinds, types and priorities, and the
 //! lists and settings of `meta` every command checks before it does anything (sprints, releases, components, the
-//! workflow), with the defaults of `atm-cli/atm/common/schema/vocabularies.json` for what a project doesn't define.
+//! workflow), with the defaults of `crates/atm-common/schema/vocabularies.json` for what a project doesn't define.
 //! As the Python atm's `common/model.py` `vocabulary()`: the same checks, in the same order, with the same messages.
 
 use std::sync::LazyLock;
@@ -12,8 +12,7 @@ use crate::ids::{valid_branch, valid_short_id};
 use crate::py::{capitalize, py_repr, py_repr_opt, repr_str, strip, truthy};
 
 /// The vocabularies' one source, shared with the dashboard.
-const VOCABULARIES_JSON: &str =
-    include_str!("../../../atm-cli/atm/common/schema/vocabularies.json");
+const VOCABULARIES_JSON: &str = include_str!("../schema/vocabularies.json");
 
 /// What a status means: every rule acts on a status's kind, never its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -14,9 +14,10 @@ export const ATM =
   IMPL === 'rust'
     ? process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm')
     : path.join(REPO, 'plugin/scripts/atm');
-export const PLUGIN_VERSION = JSON.parse(
-  fs.readFileSync(path.join(REPO, 'plugin/.claude-plugin/plugin.json'), 'utf8'),
-).version;
+/** atm's version: the Rust workspace's (Cargo.toml's [workspace.package]; plugin.json says the same until T-454) */
+export const PLUGIN_VERSION = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(
+  fs.readFileSync(path.join(REPO, 'Cargo.toml'), 'utf8'),
+)?.[1];
 /** The shipped dashboard's build ID (<meta name="atm-dashboard-build">) */
 export const PLUGIN_BUILD = /<meta name="atm-dashboard-build" content="([^"]*)"/.exec(
   fs.readFileSync(path.join(REPO, 'plugin/templates/tasks-dashboard.html'), 'utf8'),

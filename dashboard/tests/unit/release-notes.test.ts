@@ -5,10 +5,10 @@ import { RECENT_RELEASES, recentReleases } from '../../build/changelog';
 import { parseChangelog } from '../../src/lib/changelog';
 import { dashboardVersion, releaseNotes } from '../../src/lib/release-notes';
 
-const read = (name: string) => readFileSync(new URL(`../../../plugin/${name}`, import.meta.url), 'utf8');
+const read = (name: string) => readFileSync(new URL(`../../../${name}`, import.meta.url), 'utf8');
 
 describe('releaseNotes', () => {
-  it("is plugin/WHATS-NEW.md's newest releases (the users' notes, not the changelog), parsed at build time", () => {
+  it("is WHATS-NEW.md's newest releases (the users' notes, not the changelog), parsed at build time", () => {
     expect(releaseNotes).toEqual(parseChangelog(read('WHATS-NEW.md')).slice(0, RECENT_RELEASES));
     expect(releaseNotes.length).toBe(RECENT_RELEASES);
   });

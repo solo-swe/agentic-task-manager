@@ -1,14 +1,13 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { CHANGELOG, readVersion } from '../../build/workspace';
 import { compareVersions, entriesBetween, entryMarkdown, parseChangelog, UNRELEASED } from '../../src/lib/changelog';
 
-const real = readFileSync(new URL('../../../plugin/CHANGELOG.md', import.meta.url), 'utf8');
-const pluginVersion: string = JSON.parse(
-  readFileSync(new URL('../../../plugin/.claude-plugin/plugin.json', import.meta.url), 'utf8'),
-).version;
+const real = readFileSync(CHANGELOG, 'utf8');
+const pluginVersion = readVersion();
 
-describe('parseChangelog (plugin/CHANGELOG.md)', () => {
+describe('parseChangelog (CHANGELOG.md)', () => {
   const entries = parseChangelog(real);
 
   it('has an entry for every release, newest first', () => {

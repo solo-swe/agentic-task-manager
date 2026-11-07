@@ -3,12 +3,12 @@
 # dashboard (plugin/templates/tasks-dashboard.html) and atm-cli (plugin/scripts/atm.py). CI checks the same thing
 # (see .github/workflows/ci.yml).
 # Enabled by `pnpm install` in dashboard/ (the "prepare" script sets core.hooksPath to .githooks).
-if git diff --cached --name-only | grep -qE '^atm-cli/'; then
+if git diff --cached --name-only | grep -qE '^(atm-cli/|crates/atm-common/schema/)'; then
   echo "pre-commit: rebuilding plugin/scripts/atm.py"
   python3 atm-cli/build.py || { echo "pre-commit: atm-cli build failed"; exit 1; }
   git add plugin/scripts/atm.py
 fi
-if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|vite\.config\.ts|tsconfig\.json|package\.json|pnpm-(lock|workspace)\.yaml)|plugin/\.claude-plugin/plugin\.json|plugin/CHANGELOG\.md|plugin/WHATS-NEW\.md)'; then
+if git diff --cached --name-only | grep -qE '^(dashboard/(src/|build/|vite\.config\.ts|tsconfig\.json|package\.json|pnpm-(lock|workspace)\.yaml)|crates/atm-common/schema/|Cargo\.toml|CHANGELOG\.md|WHATS-NEW\.md)'; then
   echo "pre-commit: rebuilding plugin/templates/tasks-dashboard.html"
   (cd dashboard && pnpm run --silent build >/dev/null) || { echo "pre-commit: dashboard build failed"; exit 1; }
   git add plugin/templates/tasks-dashboard.html

@@ -1,4 +1,4 @@
-// Parses plugin/WHATS-NEW.md and plugin/CHANGELOG.md (Keep a Changelog subset) into releases, for picking them by
+// Parses WHATS-NEW.md and CHANGELOG.md (Keep a Changelog subset) into releases, for picking them by
 // version. Items keep their inline Markdown (backticks, links), which CompMD renders (entryMarkdown).
 
 export interface ChangelogSection {

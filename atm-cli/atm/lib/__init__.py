@@ -20,12 +20,12 @@ The public surface is two modules: what this one exports (`__all__`) and `atm.bo
 `open_memory_project`, `open_registry`). Everything else in atm, the other `atm.lib.*` and `atm.db` names included,
 is internal and may change in any release. The names and every function's signature are frozen in
 `tests/lib/public-surface.json`, which `tests/lib/test_public.py` compares with the code: a change fails it until the
-list is updated, and goes in `plugin/CHANGELOG.md` (the surface is versioned with the plugin,
+list is updated, and goes in `CHANGELOG.md` (the surface is versioned with the plugin,
 `plugin/.claude-plugin/plugin.json`). Failures are `AtmFailure` subclasses (`NotFound`, `Invalid`, `Conflict`,
 `NothingAvailable`, `Claimed`), each with the exit code the CLI gives it (`code`). A test opens a project in memory
 with `atm.boot.open_memory_project(tasks=[...])`.
 
-The results that cross to a front end are typed in `atm/common/schema/api.schema.json` (generated into
+The results that cross to a front end are typed in `crates/atm-common/schema/api.schema.json` (generated into
 `atm.common.types`): `TaskView` (task_views), `StatusChange` (the status changes), `DepsResult`, `StatusReport`,
 `ProjectSummary`.
 """

@@ -463,10 +463,10 @@ sandbox:
   Mermaid in a strict frame (I14), and `whoami`'s `home` (T-390) are all documented above, each with its tests. No
   CI permission changed.
 - **What the dashboard shows that isn't task text:** Help, What's new and About come with the plugin; What's new
-  links to `plugin/WHATS-NEW.md` on GitHub and About to CompMD's site, both opening in a new tab without access to the
+  links to `WHATS-NEW.md` on GitHub and About to CompMD's site, both opening in a new tab without access to the
   page, as every outside link does.
 
-**One Markdown renderer.** Help (`docs/help.md`) and What's new (`plugin/WHATS-NEW.md`) render with CompMD too, the
+**One Markdown renderer.** Help (`docs/help.md`) and What's new (`WHATS-NEW.md`) render with CompMD too, the
 same way as task text (`safeTree`, `secureLinks`, no `host:` data), and the dashboard's own parser (`markdown.ts`,
 `Markdown.svelte`) is gone. Both texts come with the plugin, so nothing untrusted is added; CompMD loads only when one
 of them is first opened. Tooltips and card excerpts still show text without markup (`plain-text.ts`): it only takes

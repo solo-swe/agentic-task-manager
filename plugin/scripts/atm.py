@@ -2755,7 +2755,7 @@ def server_command(home, port):
 # Every rule is written against a status's kind, never its name (docs/v4/data-model.md §3): a project may name its own
 # statuses in meta.statuses, each with one of the six kinds below.
 
-# The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
+# The kinds and the default vocabularies are common's (crates/atm-common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
 WAITING_ON = ("user", "agent")
@@ -3362,7 +3362,7 @@ def started_by(task):
 
 
 # ==== common/types.py ====
-# Generated from atm-cli/atm/common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
+# Generated from crates/atm-common/schema/ by atm-cli/build.py: don't edit it, change the schema and run
 # `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). TypedDicts with total=False: the required keys are marked in their comments (Python 3.9 has
 # no typing.Required).
 

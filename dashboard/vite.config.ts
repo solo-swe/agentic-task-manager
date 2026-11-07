@@ -9,15 +9,12 @@ import { devApi } from './build/dev-api.ts';
 import { PAGES } from './build/finish-page.ts';
 import { GENERATED } from './build/generated.ts';
 import { helpModule } from './build/help.ts';
-import { readPluginVersion } from './build/inject-version.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
 import { securityHeaders } from './build/security-headers.ts';
 import { sizeReport } from './build/size-report.ts';
-
-const pluginJson = fileURLToPath(new URL('../plugin/.claude-plugin/plugin.json', import.meta.url));
-const changelog = fileURLToPath(new URL('../plugin/CHANGELOG.md', import.meta.url));
 // What's new shows the short, end-user notes; the changelog (for developers) only dates the copyright
-const whatsNew = fileURLToPath(new URL('../plugin/WHATS-NEW.md', import.meta.url));
+import { CARGO_TOML, CHANGELOG, readVersion, WHATS_NEW } from './build/workspace.ts';
+
 const help = fileURLToPath(new URL('../docs/help.md', import.meta.url));
 const ownTasks = fileURLToPath(new URL('../.agentic-task-manager', import.meta.url));
 
@@ -35,19 +32,19 @@ export default defineConfig({
       output: { bundleStrategy: 'inline' },
       // The dashboard keeps its own state in location.hash (T-429 moves the views to routes)
       router: { type: 'pathname' },
-      // The app's version is the plugin's, not the build time (SvelteKit's default): the same sources build the same
-      // page, which CI checks against the committed one
-      version: { name: readPluginVersion(pluginJson) },
+      // The app's version is atm's (Cargo.toml's), not the build time (SvelteKit's default): the same sources build
+      // the same page
+      version: { name: readVersion() },
     }),
-    changelogModule(whatsNew),
+    changelogModule(WHATS_NEW),
     compmdModule(),
     helpModule(help),
-    pluginInfoModule(pluginJson, changelog),
+    pluginInfoModule(CARGO_TOML, CHANGELOG),
     devApi(ownTasks),
     securityHeaders(),
     sizeReport(),
   ],
-  // The TypeScript atm-cli/build.py generates (the data model's types, the vocabularies), in .generated/ (not
+  // The TypeScript build/generate.ts generates (the data model's types, the vocabularies), in .generated/ (not
   // committed; `pnpm run generate` writes it, and every script here that needs it runs that first). A Vite alias, as
   // SvelteKit's own `alias` is deprecated and subpath imports can't reach outside dashboard/; tsconfig.json's `paths`
   // says the same to TypeScript

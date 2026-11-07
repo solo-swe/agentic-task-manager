@@ -15,7 +15,7 @@ export function recentReleases(text: string, count = RECENT_RELEASES): string {
   return headings.length > count ? text.slice(0, headings[count]) : text;
 }
 
-// Exposes the release notes (plugin/WHATS-NEW.md), parsed, as `import changelog from 'virtual:atm-changelog'`: the
+// Exposes the release notes (WHATS-NEW.md), parsed, as `import changelog from 'virtual:atm-changelog'`: the
 // newest RECENT_RELEASES releases, so What's new stays short and the file doesn't grow with every release. They end up
 // inlined in the single-file build: no runtime request. Embedded as text and parsed when the page loads: smaller than
 // the parsed entries, and the parser is a few hundred bytes (T-342).

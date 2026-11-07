@@ -11,7 +11,7 @@ from datetime import timedelta
 from .vocabularies import DEFAULT_PRIORITIES, DEFAULT_PRIORITY, DEFAULT_STATUSES, DEFAULT_TYPES, KINDS
 from .core import AtmError, now, now_iso, parse_iso
 
-# The kinds and the default vocabularies are common's (common/schema/vocabularies.json), shared with the dashboard
+# The kinds and the default vocabularies are common's (crates/atm-common/schema/vocabularies.json), shared with the dashboard
 WORKFLOW_TYPES = ("direct", "pull-request")
 
 WAITING_ON = ("user", "agent")

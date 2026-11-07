@@ -8,7 +8,7 @@ import json
 import os
 import unittest
 
-from schema_check import load_schema, problems
+from schema_check import SCHEMA_DIR, load_schema, problems
 from support import REPO, task
 
 from atm.db.memory import MemoryStore
@@ -56,7 +56,7 @@ class TaskSchema(unittest.TestCase):
         self.assertGreater(checked, 0)
 
     def test_the_default_vocabularies_fit_meta(self):
-        with open(os.path.join(REPO, "atm-cli", "atm", "common", "schema", "vocabularies.json"), encoding="utf-8") as f:
+        with open(os.path.join(SCHEMA_DIR, "vocabularies.json"), encoding="utf-8") as f:
             defaults = json.load(f)
         meta = {k: defaults[k] for k in ("statuses", "types", "priorities", "default_priority")}
         self.assertEqual(problems(meta, META), [])

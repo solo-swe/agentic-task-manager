@@ -330,7 +330,7 @@ today's code moved behind a name: it would have tied every future store to whole
 ## 4. common and the generated types
 
 Today the model is written twice, by hand: in Python (`model.py`, `core.py`) and in TypeScript (`types.ts`,
-`vocab.ts`). common makes one source: **JSON Schemas**, in `atm-cli/atm/common/schema/`.
+`vocab.ts`). common makes one source: **JSON Schemas**, in `crates/atm-common/schema/` (T-477; `atm-cli/atm/common/schema/` before).
 
 ### 4.1 The schemas
 
@@ -372,7 +372,7 @@ unions):
 - **Python** `TypedDict`s (`.generated/atm-cli/atm/common/types.py`, the functional form, since keys such as `from`
   are keywords), so `atm.py` stays standard-library only;
 - **the kinds and the default vocabularies** (statuses, types, priorities, the default priority) as data,
-  `atm-cli/atm/common/schema/vocabularies.json`, generated into `.generated/atm-cli/atm/common/vocabularies.py` and
+  `crates/atm-common/schema/vocabularies.json`, generated into `.generated/atm-cli/atm/common/vocabularies.py` and
   `.generated/dashboard/vocabularies.ts`: atm-cli's `model.py` and the dashboard's `vocab.ts` keep no copy;
 - **where they go:** `.generated/` at the repository's root, never committed (`atm-cli/build.py` writes it; the
   dashboard's scripts and `tests/scripts/run.mjs` run it first). Only what the plugin ships is committed
@@ -414,7 +414,7 @@ start_task(project, "T-360")
   surface is two modules: `atm.lib` (what `atm/lib/__init__.py` exports in `__all__`, with how to use it) and
   `atm.boot`'s `__all__`: `open_project`, `open_memory_project` (a project in memory, so tools and their tests never
   import `atm.db`) and `open_registry`, which open the stores atm-lib may not know (T-376, T-384). It is versioned
-  with the plugin, a change to it in `plugin/CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py`
+  with the plugin, a change to it in `CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py`
   uses only that surface, and freezes it: the names and each function's signature against
   `tests/lib/public-surface.json`, so a change fails until that list is updated.
 

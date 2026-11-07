@@ -8,9 +8,9 @@ import { describe, test } from 'node:test';
 import { REPO, removeDir, tempDir } from './helpers.mjs';
 
 const BUILD = path.join(REPO, 'atm-cli/build.py');
-// The generated types, in .generated/ (gitignored; run.mjs writes it before the tests)
+// The generated types, in .generated/ (gitignored; run.mjs writes it before the tests). The dashboard's TypeScript is
+// dashboard/build/generate.ts's, tested in dashboard/tests/unit/generate.test.ts.
 const PY_TYPES = path.join(REPO, '.generated/atm-cli/atm/common/types.py');
-const TS_TYPES = path.join(REPO, '.generated/dashboard/types.ts');
 
 function runBuild(args, build = BUILD) {
   const result = spawnSync('python3', [build, ...args], { encoding: 'utf8' });
@@ -18,11 +18,11 @@ function runBuild(args, build = BUILD) {
   return { code: result.status, stderr: result.stderr };
 }
 
-/** A copy of atm-cli/ (and docs/agent/ and skills/, which it builds from) in a temporary directory, so a test can
- * break a module without touching the repo. */
+/** A copy of atm-cli/ (and the schemas, docs/agent/ and skills/, which it builds from) in a temporary directory, so a
+ * test can break a module without touching the repo. */
 function copyOfSources() {
   const dir = tempDir('atm-build-');
-  for (const part of ['atm-cli', 'docs/agent', 'skills'])
+  for (const part of ['atm-cli', 'crates/atm-common/schema', 'docs/agent', 'skills'])
     fs.cpSync(path.join(REPO, part), path.join(dir, part), { recursive: true });
   return dir;
 }
@@ -91,7 +91,7 @@ describe('build', () => {
   });
 });
 
-// The types generated from common's schemas (docs/layered-architecture.md §4): Python and TypeScript, one generator
+// The Python types generated from common's schemas (docs/layered-architecture.md §4)
 describe('generated types', () => {
   test('a schema changed without rebuilding fails the check: the generated types are rewritten, atm.py is stale', () => {
     const dir = copyOfSources();
@@ -100,7 +100,7 @@ describe('generated types', () => {
         fs.cpSync(path.join(REPO, part), path.join(dir, part), { recursive: true });
       const build = path.join(dir, 'atm-cli/build.py');
       assert.equal(runBuild(['--check'], build).code, 0, 'the copy builds what the repository has');
-      const file = path.join(dir, 'atm-cli/atm/common/schema/task.schema.json');
+      const file = path.join(dir, 'crates/atm-common/schema/task.schema.json');
       const schema = JSON.parse(fs.readFileSync(file, 'utf8'));
       schema.properties.estimate = { type: 'integer' };
       fs.writeFileSync(file, JSON.stringify(schema));
@@ -111,39 +111,30 @@ describe('generated types', () => {
         fs.readFileSync(path.join(dir, '.generated/atm-cli/atm/common/types.py'), 'utf8'),
         /"estimate": int/,
       );
-      assert.match(fs.readFileSync(path.join(dir, '.generated/dashboard/types.ts'), 'utf8'), /estimate\?: number;/);
     } finally {
       removeDir(dir);
     }
   });
 
-  test('both languages get every field, required or not', () => {
+  test('every field, required or not', () => {
     const python = fs.readFileSync(PY_TYPES, 'utf8');
-    const typescript = fs.readFileSync(TS_TYPES, 'utf8');
     assert.match(python, /# required; Letters, digits.*\n {8}"id": str,/);
     assert.match(python, /"from": str,/); // a Python keyword, as a key
     assert.match(python, /"notes": List\["Note"\],/); // a forward reference: defined anywhere in the file
-    assert.match(typescript, /\n {2}id: string;/);
-    assert.match(typescript, /\n {2}notes\?: Note\[\];/);
-    assert.match(typescript, /\n {2}pr\?: PullRequest;/);
   });
 
-  test('a field that may be null, and a map, in both languages (T-382)', () => {
+  test('a field that may be null, and a map (T-382)', () => {
     const python = fs.readFileSync(PY_TYPES, 'utf8');
-    const typescript = fs.readFileSync(TS_TYPES, 'utf8');
     assert.match(python, /"active_sprint": Optional\["ActiveSprint"\],/); // anyOf with null
     assert.match(python, /"recent_sprints": Optional\[List\["SprintNumbers"\]\],/); // a list of types with null
     assert.match(python, /"by_status": Dict\[str, int\],/);
     assert.match(python, /^from typing import Dict, List, Literal, Optional, TypedDict$/m);
-    assert.match(typescript, /\n {2}active_sprint: ActiveSprint \| null;/);
-    assert.match(typescript, /\n {2}recent_sprints: SprintNumbers\[\] \| null;/);
-    assert.match(typescript, /\n {2}by_status: Record<string, number>;/);
   });
 
   test('a list of types that is not one type and null is refused', () => {
     const dir = copyOfSources();
     try {
-      const file = path.join(dir, 'atm-cli/atm/common/schema/task.schema.json');
+      const file = path.join(dir, 'crates/atm-common/schema/task.schema.json');
       const schema = JSON.parse(fs.readFileSync(file, 'utf8'));
       schema.properties.estimate = { type: ['integer', 'string'] };
       fs.writeFileSync(file, JSON.stringify(schema));

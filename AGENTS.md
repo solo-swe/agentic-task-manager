@@ -14,10 +14,12 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)
 - `atm-cli/` — atm-cli's source modules and the build that writes `plugin/scripts/atm.py` (dev only, not shipped)
 - `dashboard/` — Svelte 5 + TypeScript source for the dashboard (dev only, not shipped)
-- `.generated/` — what `atm-cli/build.py` generates for the build and the dashboard (the data model's types, the
-  vocabularies, `atm docs`' topics and the skills as Python modules in `.generated/atm-cli/atm/`; the TypeScript in
-  `.generated/dashboard/`, imported as `$generated/…`). **Never committed** (gitignored): `pnpm install` in
-  `dashboard/`, the dashboard's scripts and `tests/scripts/run.mjs` write it, or `pnpm run generate`. What the plugin
+- `crates/atm-common/schema/` — the data model's JSON Schemas and the default vocabularies, the one source for the
+  Rust atm, the Python atm and the dashboard
+- `.generated/` — what is generated from them, never committed (gitignored): `atm-cli/build.py` writes the Python
+  modules into `.generated/atm-cli/atm/` (the types, the vocabularies, `atm docs`' topics and the skills; the build
+  and `tests/scripts/run.mjs` run it), `dashboard/build/generate.ts` the TypeScript into `.generated/dashboard/`,
+  imported as `$generated/…` (`pnpm run generate`; `pnpm install` and the dashboard's scripts run it). What the plugin
   ships is generated too but committed (`plugin/scripts/atm.py`, `plugin/skills/`): users install from git
 - `tests/scripts/` — tests for atm-cli (dev only)
 - `.agentic-task-manager/tasks.json` — this repo's own task list; we dogfood atm here (`/atm:serve` shows it)
@@ -192,13 +194,14 @@ binary.
   The large-file benchmark (`tests/scripts/bench.mjs --check`) has generous limits and fails only far over them.
 
 ## Versions
-`plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` versions must match. Bump both when the
-dashboard or skills change, so `/plugin marketplace update` delivers them and running dashboard servers restart on the
-new dashboard (`atm service --refresh`).
+atm's version is the Rust workspace's (`Cargo.toml`, `[workspace.package]`, with the description, author, licence and
+repository the dashboard's About dialog shows). Until the switch (T-454) `plugin/.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json` must say the same (`check-versions.mjs`). Bump them when the dashboard or skills
+change, so running dashboard servers restart on the new dashboard (`atm service --refresh`).
 
 Every release gets **two** entries (`pnpm run check` fails without either):
-- `plugin/CHANGELOG.md` — the detailed record, for developers: every change, with command names and flags.
-- `plugin/WHATS-NEW.md` — what users see in the dashboard's What's new: 3–6 short
+- `CHANGELOG.md` — the detailed record, for developers: every change, with command names and flags.
+- `WHATS-NEW.md` — what users see in the dashboard's What's new: 3–6 short
   bullets in plain language about what a user notices. No command flags, internals or file names; one idea per
   bullet; say what it does for them ("Agents can ask you a question instead of guessing"), not how it works. Write
   it from the changelog entry, not instead of it.

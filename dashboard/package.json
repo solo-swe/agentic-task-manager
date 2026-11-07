@@ -5,7 +5,7 @@
   "description": "Source for the Agentic Task Manager dashboard. Builds to a single self-contained HTML file.",
   "type": "module",
   "scripts": {
-    "generate": "python3 ../atm-cli/build.py --generated",
+    "generate": "node build/generate.ts",
     "dev": "pnpm run generate && vite",
     "build": "pnpm run build:page && vite build -c vite.compmd.config.ts",
     "build:page": "pnpm run generate && vite build && node build/finish-page.ts",

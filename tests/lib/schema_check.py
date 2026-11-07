@@ -7,7 +7,7 @@ import os
 
 from support import REPO
 
-SCHEMA_DIR = os.path.join(REPO, "atm-cli", "atm", "common", "schema")
+SCHEMA_DIR = os.path.join(REPO, "crates", "atm-common", "schema")
 
 TYPES = {
     "string": lambda v: isinstance(v, str),
