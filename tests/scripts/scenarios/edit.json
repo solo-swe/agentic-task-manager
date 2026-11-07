@@ -196,8 +196,7 @@
     "name": "edit has no --status: statuses change only through the status commands",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
     "args": ["task", "edit", "T-1", "--status", "done"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --status"] },
-    "expectRust": { "stderrIncludes": ["atm: unexpected argument '--status' found"] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: unexpected argument '--status' found"] }
   },
   {
     "name": "check: a good file",

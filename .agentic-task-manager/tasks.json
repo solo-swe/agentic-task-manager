@@ -22581,7 +22581,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-07T08:32:44Z",
+      "updated_at": "2026-11-07T23:00:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22591,7 +22591,20 @@
         }
       ],
       "sprint": "The Rust port",
-      "started_at": "2026-11-07T08:32:44Z",
+      "commit": "465352743b300a1a6b2cd7d82788402773b8ce1a",
+      "notes": [
+        {
+          "at": "2026-11-07T18:52:57Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-07T23:00:14Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-07T23:00:33Z",
       "started_by": "claude:34798264"
     },
     {

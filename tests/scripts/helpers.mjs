@@ -1,5 +1,4 @@
-// Shared helpers for the atm script tests. Tests run the helper through its launcher (plugin/scripts/atm), as the
-// skills do.
+// Shared helpers for the atm script tests. Tests run this checkout's atm binary, as users and agents do.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,14 +6,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-/** Which atm the suite runs (T-443): the Python one through its launcher, or with ATM_IMPL=rust the Rust binary
- * (`cargo build` first; ATM_RUST_BIN names another build, e.g. a release one) */
-export const IMPL = process.env.ATM_IMPL === 'rust' ? 'rust' : 'python';
+/** The atm the suite runs: this checkout's (`cargo build` first; ATM_RUST_BIN names another build, e.g. a release
+ * one) */
 export const ATM =
-  IMPL === 'rust'
-    ? process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm')
-    : path.join(REPO, 'plugin/scripts/atm');
-/** atm's version: the Rust workspace's (Cargo.toml's [workspace.package]; plugin.json says the same until T-454) */
+  process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm');
+/** atm's version: the Rust workspace's (Cargo.toml's [workspace.package]) */
 export const PLUGIN_VERSION = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(
   fs.readFileSync(path.join(REPO, 'Cargo.toml'), 'utf8'),
 )?.[1];

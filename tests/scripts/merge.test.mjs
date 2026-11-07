@@ -68,7 +68,8 @@ describe('merge driver (real git merges)', () => {
     withRepo((root) => {
       assert.match(
         git(['config', '--get', 'merge.atm.driver'], root),
-        /\/plugin\/scripts\/atm' db merge-driver %O %A %B$/,
+        // this atm, by its full path, as it was run
+        /[/\\]atm(\.exe)?' db merge-driver %O %A %B$/,
       );
       assert.equal(
         fs.readFileSync(path.join(root, '.agentic-task-manager/.gitattributes'), 'utf8'),

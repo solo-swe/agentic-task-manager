@@ -577,9 +577,6 @@
     "args": ["task", "state"],
     "expect": {
       "exit": 2,
-      "stderrIncludes": ["atm: Missing argument 'TASK_ID'.", "Usage: atm task state [OPTIONS] TASK_ID NEXT_STATE"]
-    },
-    "expectRust": {
       "stderrIncludes": [
         "atm: the following required arguments were not provided:",
         "<TASK_ID>",
