@@ -38,6 +38,7 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)] // reason: the command line is parsed once per process, so its size doesn't matter
 enum Command {
     /// Task lifecycle commands
     #[command(subcommand)]
@@ -131,7 +132,10 @@ fn run(args: &[OsString]) -> u8 {
             return 2;
         }
     };
-    let ctx = Context { json: cli.json };
+    let ctx = Context {
+        json: cli.json,
+        dry_run: cli.dry_run,
+    };
     let cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(e) => {

@@ -88,7 +88,14 @@ mod tests {
 
     #[test]
     fn an_unknown_topic_lists_the_topics() {
-        let error = docs(Some("nope"), Context { json: false }).unwrap_err();
+        let error = docs(
+            Some("nope"),
+            Context {
+                json: false,
+                dry_run: false,
+            },
+        )
+        .unwrap_err();
         assert_eq!(error.code(), 2);
         assert!(
             error

@@ -9,11 +9,13 @@ pub mod task;
 use atm_common::py::to_json;
 use serde_json::Value;
 
-/// What every command gets: how to print its result.
+/// What every command gets: how to print its result, and whether to only say what it would do.
 #[derive(Debug, Clone, Copy)]
 pub struct Context {
     /// `--json`: print the result as JSON.
     pub json: bool,
+    /// `--dry-run`: say what would be done, and do nothing.
+    pub dry_run: bool,
 }
 
 /// Print a JSON result, as atm prints JSON.

@@ -104,6 +104,9 @@ pub enum TaskCommand {
         /// The task ID
         task_id: String,
     },
+    /// Move a task to another state: `in_progress`, `in_review`, done, todo, blocked or skipped. A review's decision is
+    /// `atm task review`.
+    State(state::StateArgs),
 }
 
 /// Run a task command in `cwd`.
@@ -115,6 +118,7 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
         TaskCommand::List(args) => list(args, ctx, cwd),
         TaskCommand::Details { task_ids } => details(&task_ids, ctx, cwd),
         TaskCommand::Deps { task_id } => deps(&task_id, ctx, cwd),
+        TaskCommand::State(args) => state::run(&args, ctx, cwd),
     }
 }
 
@@ -399,6 +403,8 @@ fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
     }
     lines
 }
+
+mod state;
 
 #[cfg(test)]
 mod tests;

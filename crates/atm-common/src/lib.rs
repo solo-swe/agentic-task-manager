@@ -4,6 +4,7 @@
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
 pub mod archive;
+pub mod edits;
 pub mod error;
 pub mod home;
 pub mod ids;

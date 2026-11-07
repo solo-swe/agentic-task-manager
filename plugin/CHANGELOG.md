@@ -78,6 +78,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   or in another worktree) or waiting, the next task by the loop's rule with why there is none, the largest tasks,
   the archive and its hint, open tasks in closed sprints. The loop's selection and order (`atm-lib` `loop_rules.rs`)
   come with it, for `loop next` (T-467). Sixteen more tests left the expected-failures list.
+- **`atm task state` in the Rust atm** (T-465): the task states as an enum of commands with their table of sources
+  and destinations (checked against `docs/task-states.md` for every kind and command), the guards (dependencies,
+  review modes and decisions, resolutions, `--status` of the right kind), the notes, timestamps and intervals each
+  transition writes in Python's key order, claims taken on start and dropped on finish, expired leases (an agent's own
+  explained, exit 4), the records shared by worktrees (completed, waiting, resolved), the archive hint once a day, and
+  the actor (`--agent`, `ATM_AGENT`, the Claude Code session, git's user name). Seventy-nine more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

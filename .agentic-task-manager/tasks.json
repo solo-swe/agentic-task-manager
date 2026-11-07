@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 468,
+    "next_id": 470,
     "labels": [
       {
         "id": "architecture",
@@ -21295,26 +21295,27 @@
     },
     {
       "id": "T-449",
-      "name": "Rust: atm serve on axum, with the embedded dashboard",
+      "name": "Rust: atm serve itself: the server, its record, the registry, the page and its headers",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 7 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-api` on axum/tokio with the routes of [multi-project-api.md](docs/multi-project-api.md) (read-only, the Host check, the CSP and headers of I12–I13), the dashboard and CompMD's runtime embedded at build, `atm serve` detached as today, `service start|stop|status|--refresh`. `serve.test.mjs` and the e2e suite pass against it.\n\nAlso the **tolerant read** the v1 tasks route uses (`load_tasks_tolerant` in the Python `db/jsongit/files.py`, T-377: a malformed `tasks.json` read as far as it can be, with its problems), and with it `atm task list --derived --tolerant` (`lib/archive.py`'s `task_snapshot`), which the Rust `task list` refuses until then (T-462).\n",
+      "description": "Slice 7a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 7, split in three: this, then the read API and the project's files): `atm serve` itself, in `atm-api` on axum/tokio (§3), as the Python atm's `cli/serve.py` and `api/server.py` run it.\n\n## Change\n- `atm serve start|stop|status` and `atm service [--refresh] [--port] [--open] [--all] [--dir]`: one detached server per user (`ATM_HOME`), started as the `atm` binary itself, its record (pid, port, build, version) in `ATM_HOME`, a busy port moving to the next, a stale record cleaned up, `stop` ending only the recorded server (SIGTERM, then SIGKILL), two starts at once starting one server, `--refresh` restarting an older or rebuilt dashboard on the same port; `/__atm/whoami`.\n- The **registry** of projects (`db/registry.py`, `projects.json`): adding a project when a command runs in it, IDs from `meta.id` (another when it is taken), `meta.dashboard.listed`.\n- The **Host check** (DNS rebinding), `[::1]` and `127.0.0.1` both, and the security headers and CSP of [security-architecture.md](docs/security-architecture.md) I12–I13.\n- The dashboard page, from `plugin/templates/tasks-dashboard.html`, embedded at build and served from memory at each of its paths (T-429's routes); CompMD's runtime from `plugin/assets/compmd/`, at `/assets/`, read-only.\n- New dependencies: `axum` and `tokio` (named in §3).\n\n## Tests\nThe `serve.test.mjs` tests about the server's lifecycle, the page, the headers and the Host check leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [
         "T-444",
-        "T-464"
+        "T-464",
+        "T-448"
       ],
       "files": [
         "crates/atm-api/",
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:20:21Z",
+      "updated_at": "2026-11-07T01:55:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21323,7 +21324,15 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T01:55:09Z",
+          "kind": "handoff",
+          "text": "Not started: `atm serve start` runs the folder’s migration first (`migrate_folder`, `atm db migrate`), which is T-448’s, so T-449 now depends on T-448. Split into T-449 (the server), T-468 (read API), T-469 (files, search, e2e).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-450",
@@ -21387,16 +21396,17 @@
         "T-446",
         "T-448",
         "T-449",
-        "T-450"
+        "T-450",
+        "T-469"
       ],
       "files": [
         "crates/atm-cli/",
         "tests/scripts/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T01:54:56Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -21854,7 +21864,7 @@
       "description": "Slice 2d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `project status`, the overview (`lib/query.py`'s `status_report` and `project_summary`): the active sprint and its goal, the counts by status, sprint, type and label, what waits for review, is blocked or waits on dependencies, what's next by the loop's rule, the archive hint and the file sizes; text and `--json` identical to Python's, in `commands/project.rs`. `atm serve`'s `api/projects` (T-449) reuses the summary.\n\n## Tests\nUnit tests for the report; the `project status` scenarios (`status.json` and the others that read it) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-462"
       ],
@@ -21862,7 +21872,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T01:38:14Z",
+      "updated_at": "2026-11-07T01:47:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21873,7 +21883,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T01:38:14Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "cc3d2509feee7175f258e42868fceee8c9e33dcf",
+      "completed_at": "2026-11-07T01:47:12Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:47:12Z",
+          "kind": "outcome",
+          "text": "`project status` in Rust (`atm-lib` `status.rs`, `commands/project.rs`), with the loop rules it needs (`loop_rules.rs`: selection, order, `next_task` and its reasons) and the archive hint (`atm-common` `archive.rs`); 16 off the expected list",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-465",
@@ -21886,7 +21907,7 @@
       "description": "Slice 3b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-445's write path: the states of [task-states.md](docs/task-states.md) as enums with a transition table checked with `match`, and its guards as functions (dependencies, review modes, resolutions, `--status` of the right kind); the notes and timestamps each transition writes (`lib/state.py`, `lib/status.py`); claiming on start and dropping the claim on finish; `task state <id> <state>` with all its options (`--note`, `--reason`, `--on`, `--question`, `--answer`, `--resolution`, `--duplicate-of`, `--commit`, `--status`), text and `--json` as in Python.\n\n## Tests\nProperty tests of the transition table against task-states.md; the `task state` scenarios (`block.json`, `unblock.json`, `reopen.json`, `skip.json`, `resolution.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-445"
       ],
@@ -21894,16 +21915,18 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T01:55:10Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T01:21:53Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:55:10Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-466",
@@ -21972,6 +21995,66 @@
           "by": "claude:34798264"
         }
       ]
+    },
+    {
+      "id": "T-468",
+      "name": "Rust: atm serve's read API: projects, tasks, claims, worktrees",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-449's server: the routes the dashboard polls, as [multi-project-api.md](docs/multi-project-api.md) has them and the Python atm's `api/server.py` serves them.\n\n## Change\n- `api/projects`: each project's summary (`lib/query.py`'s `project_summary`: counts by kind, the active sprint and recent ones, working and next, the board, stats, the git branch and latest PR, the logo), an opted-out project left out, a missing or unreadable one listed as missing.\n- `api/v1/projects/<id>/tasks`: the tasks with what atm derives, filtered, with ETags and 304s; the **tolerant read** (`load_tasks_tolerant`, T-377), and with it `atm task list --derived --tolerant` (which the Rust `task list` refuses until now, T-462).\n- `p/<id>/claims.json` and `worktrees.json` (a project's git worktrees, their changed tasks, their claims); everything else 404 or 405.\n\n## Tests\nThe `serve.test.mjs` tests about these routes leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-449"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-07T01:54:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:54:50Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-469",
+      "name": "Rust: atm serve's project files: the document viewer, the logo, search",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7c of [porting-to-rust.md](docs/porting-to-rust.md) §5: the last of `atm serve`.\n\n## Change\n- The document viewer's routes (`lib/documents.py`, T-392): a project's documents and files, read-only, with their checks (inside the project, not ignored or hidden, not a key file, a size cap, no symlinks), files in a git submodule by its own rules (T-408).\n- `p/<id>/logo`: the project's logo with its type; none, outside or too large is 404 (`db/jsongit/logo.py`).\n- `api/search`: every word, in any field or the project's name, case-insensitive, read-only, capped (T-258).\n\n## Tests\nThe rest of `serve.test.mjs` leaves `tests/scripts/rust-expected-failures.json`, and the dashboard's e2e suite (`pnpm run test:e2e`) passes against the Rust `atm serve`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-468"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-07T01:54:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:54:50Z"
+        }
+      ],
+      "sprint": "The Rust port"
     }
   ]
 }

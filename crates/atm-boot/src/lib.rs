@@ -20,6 +20,75 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
+/// The main worktree's folder for a project root: itself, unless it is a linked git worktree.
+fn main_worktree(root: &Path) -> std::path::PathBuf {
+    if let Some(common) = atm_db::git::git(&["rev-parse", "--git-common-dir"], root) {
+        let common = atm_common::home::absolute(&root.join(common));
+        // `..` worked out without reading links, as Python's normpath does
+        let mut normal = std::path::PathBuf::new();
+        for part in common.components() {
+            match part {
+                std::path::Component::ParentDir => {
+                    normal.pop();
+                }
+                std::path::Component::CurDir => {}
+                other => normal.push(other),
+            }
+        }
+        if normal.file_name().is_some_and(|n| n == ".git") {
+            return normal
+                .parent()
+                .map_or_else(|| root.to_path_buf(), Path::to_path_buf);
+        }
+    }
+    root.to_path_buf()
+}
+
+/// A Claude Code session's identity: `claude:` and 8 characters of its ID; in a linked git worktree, also
+/// `@<worktree folder>`, so agents in separate worktrees have identities of their own.
+fn session_identity(session: &str, cwd: &Path) -> String {
+    let mut identity = format!("claude:{}", session.chars().take(8).collect::<String>());
+    let root = atm_db::jsongit::paths::project_root(cwd);
+    if main_worktree(&root) != root {
+        identity.push('@');
+        identity.push_str(
+            &root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        );
+    }
+    identity
+}
+
+/// Who runs a command (the actor, DM-4.5): `agent` (`--agent`), else `ATM_AGENT`, else this Claude Code session (per
+/// linked worktree), else git's user name (a person in a terminal), else `user@host`.
+#[must_use]
+pub fn agent_identity(agent: Option<&str>, cwd: &Path) -> String {
+    if let Some(agent) = agent.filter(|a| !a.is_empty()) {
+        return agent.to_string();
+    }
+    let env = |key: &str| std::env::var(key).ok().filter(|v| !v.is_empty());
+    if let Some(agent) = env("ATM_AGENT") {
+        return agent;
+    }
+    if let Some(session) = env("CLAUDE_CODE_SESSION_ID") {
+        return session_identity(&session, cwd);
+    }
+    let root = atm_db::jsongit::paths::project_root(cwd);
+    if let Some(name) = atm_db::git::git(&["config", "user.name"], &root).filter(|n| !n.is_empty())
+    {
+        return name;
+    }
+    let user = env("USER")
+        .or_else(|| env("USERNAME"))
+        .unwrap_or_else(|| "user".into());
+    format!(
+        "{user}@{}",
+        sysinfo::System::host_name().unwrap_or_default()
+    )
+}
+
 /// `atm _lock-test <seconds>`: hold the task folder's lock for `seconds`, logging `acquire <pid>` and `release <pid>`
 /// to `.lock-test.log` in it, so tests can check that two processes never hold it at once.
 ///
