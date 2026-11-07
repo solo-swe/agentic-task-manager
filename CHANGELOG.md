@@ -29,7 +29,7 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   `test_architecture`, `bin`, and the two tests of the plugin folder in `serve.test.mjs`); `run.mjs` always runs each
   file in its own process with a watchdog, and prints a failing file's TAP even with `--quiet`. The e2e fixture runs
   the binary (`pnpm run test:e2e` builds it; CI's e2e job takes one built on Ubuntu 22.04). CI's Python jobs are gone,
-  the suite runs on Windows too, and the benchmark runs against the binary.
+  and the benchmark runs against the binary. The suite on Windows is T-480's (40 failures on CI's first run there).
 
 ## [0.32.0] - 2026-11-06
 
