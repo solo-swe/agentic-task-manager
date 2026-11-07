@@ -10,6 +10,7 @@ pub mod error;
 pub mod home;
 pub mod ids;
 pub mod py;
+pub mod repository;
 pub mod rules;
 pub mod sha1;
 pub mod skills;

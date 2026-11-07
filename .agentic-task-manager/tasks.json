@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 475,
+    "next_id": 477,
     "labels": [
       {
         "id": "architecture",
@@ -21291,16 +21291,16 @@
     },
     {
       "id": "T-448",
-      "name": "Rust: git, the merge driver, db and doctor",
+      "name": "Rust: atm-vcs and the vcs group",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 6 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm-vcs` (running git), `vcs commit|pr|pushed|repository`, the merge driver (property tests; it merges the same fixtures as Python's), `db migrate|init|archive|unarchive|merge-driver`, `doctor`.",
+      "description": "Slice 6a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 6, split in three: this, then the merge driver, and the `db` group with `doctor`): `atm-vcs`, running git (the Python atm's `vcs/git.py`), and the `vcs` group (`lib/code.py`, `cli/commands/vcs.py`).\n\n## Change\n- `atm-vcs`: the version control behind a project (checked-out branch, user name, default base, remote URL, the files a commit stages, refusing whatever would stage more than the files named).\n- `vcs commit <id> --file … [--dir …]` (the task's files plus the store's, the workflow's commit template and trailers, the commit recorded on the task, refusing a file in another agent's claimed task), `vcs pr <id>… --number --url`, `vcs pushed --pr N --at` (merges recorded, a planned release released when all its tasks are merged), `vcs repository [URL] [--from]` (the web address from a remote, PR links moved); text and `--json` as in Python.\n\n## Tests\nThe `commit`, `pr`, `pushed` and `repository` scenarios and `git.test.mjs` leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-447",
         "T-470",
@@ -21313,7 +21313,7 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T03:06:43Z",
+      "updated_at": "2026-11-07T03:28:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21322,7 +21322,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:26:02Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-449",
@@ -21339,14 +21341,16 @@
       "dependencies": [
         "T-444",
         "T-464",
-        "T-448"
+        "T-448",
+        "T-475",
+        "T-476"
       ],
       "files": [
         "crates/atm-api/",
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:55:09Z",
+      "updated_at": "2026-11-07T03:28:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22305,7 +22309,7 @@
       "description": "Slice 5f of [porting-to-rust.md](docs/porting-to-rust.md) §5: the rest of `project` (`cli/commands/project.py`, `lib/settings.py`): `config`, `workflow [set]`, `logo`, and the dashboard's list of projects, the registry `projects.json` (`project list|add|remove|prune`, a project that opts out with `meta.dashboard.listed: false`); `claim heartbeat --auto` lists the project on the dashboard as in Python (once, then only reads the registry until a day has passed); text and `--json` as in Python.\n\n## Tests\nThe `workflow.json`, `projects.json`, `logo.json` and `repository.json` scenarios and `registry.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-472"
       ],
@@ -22313,7 +22317,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T03:06:37Z",
-      "updated_at": "2026-11-07T03:25:36Z",
+      "updated_at": "2026-11-07T03:25:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22325,7 +22329,77 @@
       "sprint": "The Rust port",
       "started_at": "2026-11-07T03:16:39Z",
       "started_by": "claude:34798264",
-      "commit": "c6df10cb8bcac31e286e3c04187e3c90081e5a7b"
+      "commit": "928fef235f6033ed020715ddb563cdd301c3f2fa",
+      "completed_at": "2026-11-07T03:25:57Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:25:57Z",
+          "kind": "outcome",
+          "text": "Rust `project config|workflow|logo|list|add|remove|prune`, the registry in atm-db (SHA-1 IDs, damaged file moved aside, main worktree), the hook listing; 48 tests left the list (194 left). `db init|migrate` and `vcs repository` tests wait for their own slices.",
+          "by": "claude:34798264"
+        }
+      ]
+    },
+    {
+      "id": "T-475",
+      "name": "Rust: the merge driver",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db merge-driver` (`db/jsongit/merge.py`): tasks.json merged task by task (both branches' additions kept, theirs renumbered with their dependencies following; notes, blocks, reviews and related merged as Python merges them; sprints and releases by their own rules; a real conflict stops with where), with property tests and the same fixtures as Python's.\n\n## Tests\nThe merge-driver scenarios and `merge.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-448"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:28:15Z",
+      "updated_at": "2026-11-07T03:28:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:28:15Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-476",
+      "name": "Rust: the db group and doctor",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db migrate` (legacy locations moved and staged, phases into sprints, older leftovers cleaned up, the project listed on the dashboard), `db init` (`--meta-file`, the merge driver registered, `meta.repository` from origin), `db archive|unarchive` (thresholds, `--sprint`, the hint), and `doctor` (`lib/edit.py`'s `check_data`: errors and warnings, `--files`); text and `--json` as in Python.\n\n## Tests\nThe `migrate`, `init`, `archive`, `hints`, `doctor`/`check` scenarios and `hints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-448"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:28:15Z",
+      "updated_at": "2026-11-07T03:28:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:28:15Z"
+        }
+      ],
+      "sprint": "The Rust port"
     }
   ]
 }

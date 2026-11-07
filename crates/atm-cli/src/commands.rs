@@ -10,6 +10,7 @@ pub mod project;
 pub mod release;
 pub mod sprint;
 pub mod task;
+pub mod vcs;
 
 use atm_common::py::to_json;
 use serde_json::Value;

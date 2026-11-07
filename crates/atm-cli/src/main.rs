@@ -25,6 +25,7 @@ use commands::{
     release::ReleaseCommand,
     sprint::SprintCommand,
     task::TaskCommand,
+    vcs::VcsCommand,
 };
 use serde_json::json;
 
@@ -71,6 +72,9 @@ enum Command {
     /// Claim lifecycle
     #[command(subcommand)]
     Claim(ClaimCommand),
+    /// Version control integration
+    #[command(subcommand)]
+    Vcs(VcsCommand),
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
@@ -255,6 +259,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Component(command) => commands::component::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
+        Command::Vcs(command) => commands::vcs::run(command, ctx, &cwd).map(|()| 0),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {

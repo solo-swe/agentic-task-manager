@@ -70,6 +70,12 @@ pub fn default_base(cwd: &Path) -> String {
     .unwrap_or_else(|| "main".into())
 }
 
+/// The version control of the project at or above `cwd`: git, at the project's root.
+#[must_use]
+pub fn open_vcs(cwd: &Path) -> atm_vcs::GitVcs {
+    atm_vcs::GitVcs::new(&atm_db::jsongit::paths::project_root(cwd))
+}
+
 /// The user's registry of projects (the dashboard's list), in `$ATM_HOME`.
 #[must_use]
 pub fn open_registry() -> atm_db::registry::FileRegistry {

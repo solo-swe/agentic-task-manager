@@ -134,6 +134,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `registry.rs`: a linked worktree registers its main one, an unreadable file is moved aside, project IDs from the
   path's SHA-1 as in Python); `claim heartbeat --auto` lists the project once a day. Forty-eight more tests left the
   expected-failures list.
+- **`atm-vcs` and the `vcs` group in the Rust atm** (T-448, split with T-475 and T-476): git as the code's version
+  control (`atm-vcs`: the files a commit stages, literal pathspecs, whole-tree pathspecs refused, deletions, `--dir`'s
+  changes under a folder), `atm vcs commit` (the workflow's template and trailer rule, `--record` for an existing
+  commit, refusing a file in another agent's claimed task), `vcs pr`, `vcs pushed` (merges recorded, releases
+  completed by the PR released) and `vcs repository` (web addresses from remotes, PR links moved; `atm-common`
+  `repository.rs`). Invariant I24's check lists git in `atm-vcs` too. Thirty-one more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

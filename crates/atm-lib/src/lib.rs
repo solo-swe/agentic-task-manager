@@ -5,6 +5,7 @@
 pub mod agents;
 pub mod changes;
 pub mod claims;
+pub mod code;
 pub mod components;
 pub mod edit;
 pub mod leases;

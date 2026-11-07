@@ -58,7 +58,7 @@ describe('security invariants (docs/security-architecture.md)', () => {
       ),
     );
     expect(starts.sort()).toEqual(
-      ['atm-cli/src/commands/claim.rs: own_binary', 'atm-db/src/git.rs: "git"'].sort(),
+      ['atm-cli/src/commands/claim.rs: own_binary', 'atm-db/src/git.rs: "git"', 'atm-vcs/src/lib.rs: "git"'].sort(),
     );
     // The watcher is started with atm's own path, never one from the command line or a task
     expect(read('crates/atm-cli/src/commands/claim.rs')).toContain('let own_binary = std::env::current_exe()');
