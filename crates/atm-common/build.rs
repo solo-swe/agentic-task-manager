@@ -1,6 +1,7 @@
 //! Embed the agent skills (`skills/atm-*/SKILL.md`, and Claude Code's pre-approvals in `skills/claude-code.json`) in
 //! the binary, so `atm agents install` writes the skills of the version that runs (T-442, docs/porting-to-rust.md §2).
-//! The Python atm's `build.py` makes `common/skills.py` the same way.
+//! The Python atm's `build.py` makes `common/skills.py` the same way. And check the dashboard is built: the binary
+//! embeds `dashboard/dist/tasks-dashboard.html` (`src/dashboard.rs`), which isn't committed (T-477).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -16,6 +17,13 @@ fn text_of(file: &Path) -> String {
 
 fn main() {
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
+    let page = Path::new(&manifest).join("../../dashboard/dist/tasks-dashboard.html");
+    println!("cargo:rerun-if-changed={}", page.display());
+    assert!(
+        page.is_file(),
+        "dashboard/dist/tasks-dashboard.html is missing: atm embeds the dashboard, so build it first \
+         (`pnpm install --frozen-lockfile && pnpm run build` in dashboard/)"
+    );
     let skills = Path::new(&manifest)
         .join("../../skills")
         .canonicalize()

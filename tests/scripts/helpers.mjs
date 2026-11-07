@@ -18,9 +18,9 @@ export const ATM =
 export const PLUGIN_VERSION = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(
   fs.readFileSync(path.join(REPO, 'Cargo.toml'), 'utf8'),
 )?.[1];
-/** The shipped dashboard's build ID (<meta name="atm-dashboard-build">) */
+/** The built dashboard's build ID (<meta name="atm-dashboard-build">; `pnpm run build` in dashboard/ writes it) */
 export const PLUGIN_BUILD = /<meta name="atm-dashboard-build" content="([^"]*)"/.exec(
-  fs.readFileSync(path.join(REPO, 'plugin/templates/tasks-dashboard.html'), 'utf8'),
+  fs.readFileSync(path.join(REPO, 'dashboard/dist/tasks-dashboard.html'), 'utf8'),
 )?.[1];
 
 /** atm's user folder (ATM_HOME: the project registry, the server record) for tests that don't pick their own, so no

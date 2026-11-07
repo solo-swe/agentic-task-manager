@@ -1,5 +1,6 @@
 
 .svelte-kit/
+dist/
 coverage/
 playwright-report/
 test-results/

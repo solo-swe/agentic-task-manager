@@ -9,8 +9,10 @@ Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own conte
   `skills/claude-code.json`
 - `plugin/skills/*/SKILL.md` — the `/atm:*` skills as the Claude Code plugin ships them: **generated** from `skills/`
   by `atm-cli/build.py` (with `allowed-tools`, `/atm:` links and the plugin's own `bin/atm`); never edit them by hand
-- `plugin/templates/tasks-dashboard.html` — the dashboard, served by `atm service` (one server per user, for all
-  projects; routes in `docs/multi-project-api.md`)
+- `dashboard/dist/` — the built dashboard (`tasks-dashboard.html`) and CompMD's runtime (`assets/`), served by
+  `atm service` (one server per user, for all projects; routes in `docs/multi-project-api.md`): **never committed**,
+  `pnpm run build` in `dashboard/` makes it, and the Rust atm embeds it, so build it before `cargo build` (T-477).
+  The build copies both into `plugin/templates/` and `plugin/assets/` for the Python atm (gitignored, until T-454)
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)
 - `atm-cli/` — atm-cli's source modules and the build that writes `plugin/scripts/atm.py` (dev only, not shipped)
 - `dashboard/` — Svelte 5 + TypeScript source for the dashboard (dev only, not shipped)
@@ -58,11 +60,10 @@ the routes and `atm serve`'s `PAGE_PATH` are listed in `docs/multi-project-api.m
 tokens in `src/tokens.css` (T-433; the themes set the colours): use `var(--space-N)`, `var(--radius-…)`,
 `var(--text-…)`, never a px literal for a padding, margin, gap or radius (`tokens.test.ts`). Dialogs, menus and
 popovers are Bits UI's (T-431). The `atm-dashboard-version` meta tag is
-injected from `plugin/.claude-plugin/plugin.json` at build time; never edit it by hand.
+injected from `Cargo.toml` (atm's version) at build time; never edit it by hand.
 
-`pnpm run build` writes `plugin/templates/tasks-dashboard.html` — a **committed build artifact**, never edit it by hand.
-The pre-commit hook in `.githooks/` rebuilds and stages it when dashboard sources are committed (enabled by
-`pnpm install` in `dashboard/`, which sets `core.hooksPath`); CI fails if the committed file is stale.
+`pnpm run build` writes `dashboard/dist/tasks-dashboard.html` — a build output, **never committed** (T-477): CI and
+the release build it before the binary that embeds it.
 
 **pnpm**, installed with its [standalone installer](https://pnpm.io/installation) (not corepack, not npm), at the
 version CI installs (`.github/workflows/ci.yml`). Install with `pnpm install --frozen-lockfile`: it installs exactly the
@@ -80,7 +81,8 @@ Commands (run in `dashboard/`):
   The dev page runs under the server's Content-Security-Policy plus what Vite needs (`build/security-headers.ts`);
   `tests/scripts/dev-api.test.mjs` starts `vite dev` and checks all of this
 - `pnpm run build` — single-file build, and the CompMD runtime the details panel loads (`vite.compmd.config.ts`,
-  into `plugin/assets/compmd/<version>/`, committed; `pnpm run check` fails when it is stale)
+  into `dist/assets/compmd/<version>/`), both into `dist/`, never committed; then copies them for the Python atm
+  (`build/python-copy.ts`)
 - `pnpm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
 - `pnpm test` / `pnpm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `pnpm run test:e2e` — build, then the Playwright e2e suite without the screenshots
@@ -149,7 +151,7 @@ binary.
   The suffix matters: macOS file systems are case-insensitive, so `Filters.test.ts` would overwrite `filters.test.ts`.
 - Component tests share the `dashboard` state singleton; reset it with `loadIntoDashboard()` from
   `tests/unit/components.helpers.ts`.
-- Specs run against the build (`plugin/templates/tasks-dashboard.html`). They rely on stable DOM hooks (ids,
+- Specs run against the build (`dashboard/dist/tasks-dashboard.html`). They rely on stable DOM hooks (ids,
   `.filter-btn[data-filter]`, `.task-card[data-id]`, `#detail-overlay.open`, …) that date from the pre-Svelte
   dashboard, which was the parity oracle during the port and is kept, unused, at `tests/legacy/`.
 - **Which tests to run (T-345):** while working on a task, the specs of the area you change

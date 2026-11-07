@@ -22531,7 +22531,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-07T08:14:30Z",
+      "updated_at": "2026-11-07T08:15:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22549,7 +22549,8 @@
         }
       ],
       "started_at": "2026-11-07T08:14:30Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "90f625a3852ad8919bfebe7a19b95e8bf29a9dbb"
     },
     {
       "id": "T-478",

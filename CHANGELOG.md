@@ -15,6 +15,12 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   (`pnpm run generate`, no Python), not `build.py`; this changelog and `WHATS-NEW.md` are at the repository's root;
   and atm's version is `Cargo.toml`'s `[workspace.package]` (with the description, author, licence and repository the
   About dialog shows), which `plugin.json` and `marketplace.json` must match until the switch.
+- **The dashboard and CompMD's runtime are no longer committed** (T-477): `pnpm run build` in `dashboard/` writes
+  them into `dashboard/dist/` (`tasks-dashboard.html`, `assets/compmd/<version>/`), which the Rust atm embeds
+  (`cargo build` explains what to run when they're missing), and copies them into `plugin/templates/` and
+  `plugin/assets/` (gitignored) for the Python atm. CI's Rust and Python jobs and `release.yml` build the dashboard
+  first; the staleness checks of the committed copies (CI's, `check-compmd-assets.mjs`, the pre-commit hook's
+  rebuild of the page) are gone.
 
 ## [0.32.0] - 2026-11-06
 

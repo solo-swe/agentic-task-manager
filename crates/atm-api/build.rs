@@ -1,4 +1,5 @@
-//! Embeds the dashboard's assets (the `CompMD` runtime, `plugin/assets/`) in the binary: the files the server may serve
+//! Embeds the dashboard's assets (the `CompMD` runtime, `dashboard/dist/assets/`, built by `pnpm run build` in
+//! `dashboard/` and never committed: T-477) in the binary: the files the server may serve
 //! at `/assets/…`, as a list of (path, bytes). Only regular files reached through no symlink, each path segment a plain
 //! name, with the extensions the server serves (the Python atm's `api/server.py` `asset_file` checks).
 
@@ -49,10 +50,15 @@ fn walk(dir: &Path, relative: &str, found: &mut Vec<(String, PathBuf)>) {
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("cargo sets it"));
-    let assets = manifest.join("../../plugin/assets");
+    let assets = manifest.join("../../dashboard/dist/assets");
     println!("cargo:rerun-if-changed={}", assets.display());
     let mut found = Vec::new();
     walk(&assets, "", &mut found);
+    assert!(
+        !found.is_empty(),
+        "dashboard/dist/assets/ is missing: atm embeds CompMD's runtime, so build the dashboard first \
+         (`pnpm install --frozen-lockfile && pnpm run build` in dashboard/)"
+    );
     let mut code = String::from(
         "/// The embedded assets: (path under `/assets/`, bytes).\npub static ASSETS: &[(&str, &[u8])] = &[\n",
     );

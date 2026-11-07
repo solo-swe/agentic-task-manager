@@ -10,9 +10,10 @@ use serde_json::{Map, Value};
 use crate::py::truthy;
 use crate::sha256::{base64, sha256, sha256_hex};
 
-/// The dashboard (`plugin/templates/tasks-dashboard.html`, built from `dashboard/`), embedded when atm is built: the
-/// server serves it from memory, and `atm service --refresh` compares its build with the running server's.
-pub static PAGE: &[u8] = include_bytes!("../../../plugin/templates/tasks-dashboard.html");
+/// The dashboard (`dashboard/dist/tasks-dashboard.html`, built from `dashboard/` before atm, never committed: T-477),
+/// embedded when atm is built: the server serves it from memory, and `atm service --refresh` compares its build with
+/// the running server's.
+pub static PAGE: &[u8] = include_bytes!("../../../dashboard/dist/tasks-dashboard.html");
 
 /// In the user's atm folder: the running server's `{pid, port, version, build, plugin_root, home, started_at}`.
 pub const SERVER_RECORD: &str = "server.json";

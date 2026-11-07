@@ -10,7 +10,7 @@ const ID = 'virtual:atm-compmd';
 const RESOLVED_ID = '\0' + ID;
 const PROCESSOR = fileURLToPath(new URL('../node_modules/@compmd/processor/package.json', import.meta.url));
 
-/** The installed CompMD version: the asset folder's name (plugin/assets/compmd/<version>/), so a page left open
+/** The installed CompMD version: the asset folder's name (dist/assets/compmd/<version>/), so a page left open
  * across an update never loads another version's files */
 export function compmdVersion(): string {
   return JSON.parse(readFileSync(PROCESSOR, 'utf8')).version;

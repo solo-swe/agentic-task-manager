@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { TARGET } from '../../build/finish-page';
+import { readVersion } from '../../build/workspace';
 import { expect, test } from './helpers';
 
-// Checks on the shipped artifact itself (plugin/templates/tasks-dashboard.html), not on its behavior.
-const BUILT = new URL('../../../plugin/templates/tasks-dashboard.html', import.meta.url);
-const PLUGIN_JSON = new URL('../../../plugin/.claude-plugin/plugin.json', import.meta.url);
+// Checks on the built artifact itself (dist/tasks-dashboard.html, which atm embeds), not on its behavior.
+const BUILT = TARGET;
 // 500 KiB = 512,000 bytes (Vite's build output counts kB as 1,000 bytes, so it shows this as 512 kB). Raised from
 // 400 KiB in 0.23.0 for dagre, the dependency graph's layout (about 48 kB; the file is served locally, 134 kB gzipped),
 // then from 450 KiB in 0.24.0 for the sprint and release views (decided with Hakan in sprint planning, T-305/T-309),
@@ -35,13 +36,12 @@ test.describe('shipped dashboard file', () => {
     expect(Buffer.byteLength(html())).toBeLessThan(MAX_BYTES);
   });
 
-  test('carries the plugin version', () => {
-    const { version } = JSON.parse(readFileSync(PLUGIN_JSON, 'utf8'));
-    expect(html()).toContain(`<meta name="atm-dashboard-version" content="${version}"`);
+  test("carries atm's version", () => {
+    expect(html()).toContain(`<meta name="atm-dashboard-version" content="${readVersion()}"`);
   });
 
-  test("SvelteKit's app version is the plugin's, not the build time: the same sources build the same page (T-428)", () => {
-    const { version } = JSON.parse(readFileSync(PLUGIN_JSON, 'utf8'));
+  test("SvelteKit's app version is atm's, not the build time: the same sources build the same page (T-428)", () => {
+    const version = readVersion();
     expect(html()).toMatch(new RegExp(`version: "${version.replace(/\./g, '\\.')}"`));
   });
 });

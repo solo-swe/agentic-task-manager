@@ -152,7 +152,7 @@ function taskViews(data) {
 async function benchDashboard(n) {
   const require = createRequire(path.join(REPO, 'dashboard/package.json'));
   const { chromium } = require('@playwright/test');
-  const html = fs.readFileSync(path.join(REPO, 'plugin/templates/tasks-dashboard.html'), 'utf8');
+  const html = fs.readFileSync(path.join(REPO, 'dashboard/dist/tasks-dashboard.html'), 'utf8');
   const data = generate(n);
   let body = taskViews(data);
   const emptyArchive = JSON.stringify({ generated_at: at(0), bytes: 0, tasks: [] });

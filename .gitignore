@@ -29,7 +29,11 @@ __pycache__/
 
 # Dashboard dev project
 dashboard/node_modules/
+# What `pnpm run build` makes for atm to embed (T-477): the page and CompMD's runtime; and the Python atm's copies of
+# them (build/python-copy.ts, until T-454)
 dashboard/dist/
+/plugin/templates/tasks-dashboard.html
+/plugin/assets/
 dashboard/test-results/
 dashboard/playwright-report/
 dashboard/coverage/

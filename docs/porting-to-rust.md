@@ -68,8 +68,9 @@ atm-cli/                the Python atm, until the switch (§5), then removed
   (`atm _serve`, the process `atm service` starts: one binary), its commands never using it; `atm-lib` never on `atm-db`'s jsongit module (it takes the store
   interface); only `atm-db` and `atm-vcs` run git. `build.py`'s import check retires with Python.
 - **Nothing built is committed.** `plugin/scripts/atm.py` and `plugin/templates/tasks-dashboard.html` were committed
-  because the plugin shipped them; the binary is built in CI and released. The dashboard is built before the binary,
-  which embeds it, with CompMD's runtime (`plugin/assets/compmd/` today) and the skills.
+  because the plugin shipped them; the binary is built in CI and released. The dashboard is built before the binary
+  (`pnpm run build` in `dashboard/`, into `dashboard/dist/`, since T-477), which embeds it, with CompMD's runtime
+  (`dashboard/dist/assets/compmd/`) and the skills; `cargo build` says so when it isn't built.
 - **`plugin/` goes** at the switch: the app and the CLI are the only way to install atm (§6). Its hooks' job (renewing
   claims) moves into atm (§4).
 - **The skills' one copy** is `skills/<name>/SKILL.md` (`name`, `description`, Markdown, `references/`). The binary
