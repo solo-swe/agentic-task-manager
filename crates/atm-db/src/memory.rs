@@ -4,12 +4,15 @@ use atm_common::{Result, Task, Vocabulary};
 use serde_json::{Map, Value};
 
 use crate::interface::Store;
+use crate::working::{Here, Working};
 
 /// Task data held in memory.
 #[derive(Debug, Clone)]
 pub struct MemoryStore {
+    meta: Map<String, Value>,
     tasks: Vec<Task>,
     archive: Vec<Task>,
+    claims_store: Map<String, Value>,
     vocabulary: Vocabulary,
 }
 
@@ -19,12 +22,33 @@ impl MemoryStore {
     /// # Errors
     /// When `meta`'s vocabularies can't work.
     pub fn new(tasks: Vec<Task>, archive: Vec<Task>, meta: &Map<String, Value>) -> Result<Self> {
+        let claims_store = ["claims", "completed", "waiting", "resolved", "hints"]
+            .into_iter()
+            .map(|k| (k.to_string(), Value::Object(Map::new())))
+            .collect();
         Ok(Self {
+            meta: meta.clone(),
             tasks,
             archive,
+            claims_store,
             vocabulary: Vocabulary::of_meta(meta)?,
         })
     }
+
+    /// The claims store as the last change left it.
+    #[must_use]
+    pub fn claims_store(&self) -> &Map<String, Value> {
+        &self.claims_store
+    }
+}
+
+fn objects(list: &Value) -> Vec<Task> {
+    list.as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .cloned()
+        .collect()
 }
 
 fn find<'a>(tasks: &'a [Task], id: &str) -> Option<&'a Task> {
@@ -56,6 +80,34 @@ impl Store for MemoryStore {
 
     fn list_archived(&self) -> Result<Vec<&Task>> {
         Ok(self.archive.iter().collect())
+    }
+
+    fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()> {
+        let document = serde_json::json!({"meta": self.meta, "tasks": self.tasks});
+        let archive = serde_json::json!({"meta": {}, "tasks": self.archive});
+        let here = Here {
+            worktree: None,
+            branch: None,
+        };
+        let mut work = Working::new(
+            document,
+            self.claims_store.clone(),
+            here,
+            0,
+            Box::new(move || Ok(archive.clone())),
+        );
+        change(&mut work)?;
+        if let Some(archive) = work.changed_archive() {
+            self.archive = objects(&archive["tasks"]);
+        }
+        self.meta = work.document["meta"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        self.vocabulary = Vocabulary::of_meta(&self.meta)?;
+        self.tasks = objects(&work.document["tasks"]);
+        self.claims_store = std::mem::take(&mut work.claims_store);
+        work.take_deferred().map_or(Ok(()), Err)
     }
 }
 

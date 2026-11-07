@@ -20,6 +20,32 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
+/// `atm _lock-test <seconds>`: hold the task folder's lock for `seconds`, logging `acquire <pid>` and `release <pid>`
+/// to `.lock-test.log` in it, so tests can check that two processes never hold it at once.
+///
+/// # Errors
+/// When the lock can't be taken in time, or the log can't be written.
+pub fn hold_lock_for_test(cwd: &Path, seconds: f64) -> Result<()> {
+    use std::io::Write;
+    let dir = find_paths(cwd)?.dir;
+    let log = dir.join(".lock-test.log");
+    let append = |line: String| -> Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log)
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.display())))?;
+        writeln!(file, "{line}")
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.display())))
+    };
+    let held = atm_db::jsongit::lock::lock(&dir, None)?;
+    append(format!("acquire {}", std::process::id()))?;
+    std::thread::sleep(std::time::Duration::from_secs_f64(seconds.max(0.0)));
+    append(format!("release {}", std::process::id()))?;
+    drop(held);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::open_project;

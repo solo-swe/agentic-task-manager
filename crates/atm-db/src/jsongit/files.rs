@@ -108,18 +108,7 @@ pub fn load_tasks(paths: &Paths) -> Result<Loaded> {
 /// # Errors
 /// When the archive exists but isn't an object with a `tasks` list.
 pub fn load_archive(paths: &Paths) -> Result<Vec<Task>> {
-    let path = paths.archive();
-    if !path.is_file() {
-        return Ok(Vec::new());
-    }
-    let data = read_json(&path)
-        .filter(|d| d.is_object() && d.get("tasks").is_some_and(Value::is_array))
-        .ok_or_else(|| {
-            Error::failed(format!(
-                "{} is not a valid archive (expected an object with a 'tasks' list)",
-                path.display()
-            ))
-        })?;
+    let data = archive_document(paths)?;
     Ok(data["tasks"]
         .as_array()
         .into_iter()
@@ -127,6 +116,25 @@ pub fn load_archive(paths: &Paths) -> Result<Vec<Task>> {
         .filter_map(Value::as_object)
         .cloned()
         .collect())
+}
+
+/// The archive document as stored (`{meta, tasks}`), or an empty one when there is no archive (DM-1.2).
+///
+/// # Errors
+/// When the archive exists but isn't an object with a `tasks` list.
+pub fn archive_document(paths: &Paths) -> Result<Value> {
+    let path = paths.archive();
+    if !path.is_file() {
+        return Ok(serde_json::json!({"meta": {}, "tasks": []}));
+    }
+    read_json(&path)
+        .filter(|d| d.is_object() && d.get("tasks").is_some_and(Value::is_array))
+        .ok_or_else(|| {
+            Error::failed(format!(
+                "{} is not a valid archive (expected an object with a 'tasks' list)",
+                path.display()
+            ))
+        })
 }
 
 /// The last task with this ID in a list of tasks (a later entry wins, as a dict of them by ID has it).

@@ -20,4 +20,9 @@ impl Project {
     pub fn store(&self) -> &dyn Store {
         self.store.as_ref()
     }
+
+    /// Its store, to change.
+    pub fn store_mut(&mut self) -> &mut dyn Store {
+        self.store.as_mut()
+    }
 }

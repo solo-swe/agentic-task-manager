@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 465,
+    "next_id": 468,
     "labels": [
       {
         "id": "architecture",
@@ -21156,25 +21156,26 @@
     },
     {
       "id": "T-445",
-      "name": "Rust: task states, review decisions and the loop",
+      "name": "Rust: the write path: the lock folder, the change transaction, the claims store",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 3 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the states as enums with a transition table, the guards (review decisions, dependencies, resolutions), notes, `task state`, `task review`, `loop next`; writes under the lock (`std::fs::File::lock`, the same lock file as Python). Property tests against [task-states.md](docs/task-states.md). Split further when the sprint is planned.",
+      "description": "Slice 3a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 3, split in four: this, then the task states, `task review` and `loop next`): the store's write path, which every later slice writes through.\n\n## Change\n- `atm-db`: the task folder's **lock** as the Python atm has it (`db/jsongit/lock.py`): a lock folder with `owner.json`, waited for up to `ATM_LOCK_TIMEOUT`, broken when its owner is dead or it is over a minute old, released on exit and on SIGTERM; the same folder, so the Python and the Rust atm can run against one project during the switch (`lock.test.mjs`, and `atm _lock-test`). `porting-to-rust.md` §3 says `std::fs::File::lock`: correct it to the lock folder.\n- `atm-db`: the **claims store** (`db/jsongit/claims.py`): where it is (shared by a clone's worktrees), reading it, writing it atomically.\n- `atm-db`: the **change transaction** (`JsonGitStore.change`, `db/working.py`): under the lock, read `tasks.json` and the claims store, let the change run, write only what changed (`tasks.json` only when its text changed, with the archive first when tasks move into it), atomically, as `to_json` + newline.\n- `atm-lib`: the change's actor and time (`ATM_NOW`, `ATM_AGENT` / the session) as later slices need them.\n\n## Tests\nUnit tests for the lock (two holders, a dead owner, an old lock, the timeout) and for writing only what changed; `lock.test.mjs` leaves `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-444",
         "T-462"
       ],
       "files": [
-        "crates/"
+        "crates/",
+        "docs/porting-to-rust.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T00:51:44Z",
+      "updated_at": "2026-11-07T01:21:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21183,7 +21184,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:20:33Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-446",
@@ -21199,16 +21202,17 @@
       "status": "todo",
       "dependencies": [
         "T-445",
-        "T-439"
+        "T-439",
+        "T-467"
       ],
       "files": [
         "crates/",
         "dashboard/tests/unit/security-invariants.test.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T01:21:58Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -21230,15 +21234,16 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-445"
+        "T-445",
+        "T-465"
       ],
       "files": [
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T01:21:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -21402,7 +21407,7 @@
       "description": "How the CLI reaches users ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §1): release builds for macOS (arm64, x86_64, signed and notarized), Linux and Windows on a tag, with checksums; the Homebrew formula and a release script in `packaging/`. CI changes pinned as `AGENTS.md` says; distribution entries in the security doc.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-443"
       ],
@@ -21412,7 +21417,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:14:29Z",
+      "updated_at": "2026-11-07T01:24:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21422,15 +21427,21 @@
         }
       ],
       "sprint": "The Rust port",
-      "started_at": "2026-11-07T01:14:16Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "macOS signing and notarization need an Apple Developer ID (a Developer ID Application certificate and a notarytool login) stored as repository secrets: do you have one, and which secret names should the release workflow read? Or release unsigned macOS builds for now?",
-        "Publishing a release on a tag needs a new workflow with `contents: write` (CI is read-only today): OK to add `.github/workflows/release.yml` with that permission, scoped to that one job?",
-        "The Homebrew formula needs a tap repository: create `solo-swe/homebrew-tap` (users run `brew install solo-swe/tap/atm`), or another name? The release workflow would also need a token that can push to it."
+      "blocks": [
+        {
+          "from": "2026-11-07T01:14:29Z",
+          "to": "2026-11-07T01:24:48Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-07T01:14:29Z"
+      "notes": [
+        {
+          "at": "2026-11-07T01:24:48Z",
+          "kind": "answer",
+          "text": "macOS signing and notarization need an Apple Developer ID (a Developer ID Application certificate and a notarytool login) stored as repository secrets: do you have one, and which secret names should the release workflow read? Or release unsigned macOS builds for now? → Yes: Hakan has an Apple Developer ID. Sign and notarize the macOS builds, reading the same secrets as solo-swe/agentic-status-bar’s release workflow (look its names up there).; Publishing a release on a tag needs a new workflow with `contents: write` (CI is read-only today): OK to add `.github/workflows/release.yml` with that permission, scoped to that one job? → Yes: a separate workflow for `v*` tag releases, with `contents: write` for that job only.; The Homebrew formula needs a tap repository: create `solo-swe/homebrew-tap` (users run `brew install solo-swe/tap/atm`), or another name? The release workflow would also need a token that can push to it. → Use the Homebrew tap solo-swe/agentic-status-bar already publishes to, and in-app updates the way that project does them; follow its release setup.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-453",
@@ -21735,7 +21746,7 @@
       "description": "Slice 2b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-444's model and store.\n\n## Change\n- `atm-lib`: the queries of `lib/query.py` that `task list` uses (`list_matching`, `Filters`, the views), and what atm derives for a task: its kind, `ready`, `waiting_for` (an archived dependency counts as done), the effective priority and review mode (`effective_review`, from the task, its components and `meta.review`), `archived`.\n- `atm-cli` (`commands/task.rs`): `task list` with every filter the Python command has (`--status`, `--sprint`/`--backlog`, `--type`, `--priority`, `--label`, `--ready`, `--blocked`, `--in-pr`, `--archived`, `--with-user`, …) and `--derived`, text and `--json` identical to Python's.\n\n## Tests\nUnit tests for the derived fields; the `task list` scenarios (`query.json` and the others that list) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-444"
       ],
@@ -21743,7 +21754,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T00:51:41Z",
-      "updated_at": "2026-11-07T01:14:30Z",
+      "updated_at": "2026-11-07T01:20:27Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21754,7 +21765,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T01:14:30Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "126ea026e36479f850267b7895d909cc78690f77",
+      "completed_at": "2026-11-07T01:20:27Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:20:27Z",
+          "kind": "outcome",
+          "text": "`task list` with every filter and `--derived` in Rust (`atm-lib` `query.rs`, the rules in `atm-common` `rules.rs`, the archive kept in order); 14 off the expected list; `--tolerant` refused until T-449, which now covers the tolerant read",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-463",
@@ -21812,6 +21834,96 @@
         {
           "sprint": "The Rust port",
           "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-465",
+      "name": "Rust: the task states and task state",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-445's write path: the states of [task-states.md](docs/task-states.md) as enums with a transition table checked with `match`, and its guards as functions (dependencies, review modes, resolutions, `--status` of the right kind); the notes and timestamps each transition writes (`lib/state.py`, `lib/status.py`); claiming on start and dropping the claim on finish; `task state <id> <state>` with all its options (`--note`, `--reason`, `--on`, `--question`, `--answer`, `--resolution`, `--duplicate-of`, `--commit`, `--status`), text and `--json` as in Python.\n\n## Tests\nProperty tests of the transition table against task-states.md; the `task state` scenarios (`block.json`, `unblock.json`, `reopen.json`, `skip.json`, `resolution.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-445"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T01:21:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-466",
+      "name": "Rust: task review approve|request-changes|reject",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3c of [porting-to-rust.md](docs/porting-to-rust.md) §5: a review's decisions (T-438): `task review approve <id> [--note]`, `request-changes <id> --reason`, `reject <id> --reason`, each leaving the task in review with its `review_state` and opening one way out of it, as `lib/status.py` has them; text and `--json` as in Python.\n\n## Tests\nThe review scenarios (`review.json`, `review-states.json`, `review-modes.json`) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-465"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T01:21:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-467",
+      "name": "Rust: loop next and --claim",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `loop next` (`lib/loop.py`): the selections (`--sprint`, `--tasks`, `--all`, `--backlog`, `--with-user`, `--type`), the loop's order (active sprint, planned sprints, backlog; priority, then natural ID order), tasks handed back from review first, expired claims released, the reasons when nothing is ready (exit code 3), and `--claim` starting and claiming in one step; text and `--json` as in Python.\n\n## Tests\nThe `loop next` scenarios (`next.json`, `selections.json`, `with-user.json`, `lease.json`) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-465"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-07T01:21:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
         }
       ],
       "sprint": "The Rust port"

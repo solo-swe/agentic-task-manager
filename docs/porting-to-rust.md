@@ -82,8 +82,10 @@ atm-cli/                the Python atm, until the switch (§5), then removed
   dependencies, resolutions) as functions in atm-lib; property tests against [task-states.md](task-states.md).
 - **JSON:** `serde`, with the field order and formatting of today's files (2-space indent, keys in atm's order), so a
   file written by Rust diffs cleanly against one written by Python and merges with the same driver.
-- **The lock:** `std::fs::File::lock` (an advisory lock on every platform) on the same lock file Python uses, so
-  both can run against one project during the switch.
+- **The lock:** the Python atm's lock folder, the same protocol (`.lock/` with its `owner.json`, broken when its owner
+  is gone or it is over a minute old, released on SIGTERM), so both can run against one project during the switch
+  (T-445). `sysinfo` says whether an owner still runs, and gives the host name; `signal-hook` releases the lock on
+  SIGTERM.
 - **`atm claim hold`:** the watcher is the `atm` binary started detached (`atm _claim-watch …`), not a fork; it follows
   the calling shell by its process ID and start time (`sysinfo`), on every platform. Invariant I24 (atm runs no
   command it is given) and its test move with it: atm starts only git, itself (the watcher, `serve`) and the

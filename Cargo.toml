@@ -24,6 +24,10 @@ clap = { version = "4.5", features = ["derive"] }
 # JSON as atm writes it (docs/porting-to-rust.md §3): keys in the order they come, so a task prints as it is stored
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
+# The lock (T-445): the host name and whether a lock's owner still runs; `claim hold`'s watcher follows its shell with it
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+# The lock is released when atm is stopped with SIGTERM, as the Python atm releases it (Unix only)
+signal-hook = "0.4"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

@@ -5,6 +5,8 @@ use std::path::Path;
 
 use atm_common::{Result, Task, Vocabulary};
 
+use crate::working::Working;
+
 /// A project's task data, as atm-lib reads it. One store is one snapshot: the data is read once, on first use.
 pub trait Store {
     /// The project's vocabularies, checked.
@@ -39,4 +41,11 @@ pub trait Store {
 
     /// The folder the project's files are in (its working copy), when the store has one.
     fn working_copy(&self) -> Option<&Path>;
+
+    /// Run `change` on the task data under the store's isolation, and write what it changed; nothing when it fails.
+    /// The store's snapshot is read again afterwards.
+    ///
+    /// # Errors
+    /// The data can't be read or written, or `change` fails (or deferred an error).
+    fn change(&mut self, change: &mut dyn FnMut(&mut Working) -> Result<()>) -> Result<()>;
 }

@@ -52,6 +52,13 @@ enum Command {
     },
     /// Print the plugin version.
     Version,
+    /// Hold the task folder's lock for a while (for the lock's tests).
+    #[command(name = "_lock-test", hide = true)]
+    LockTest {
+        /// How long to hold it, in seconds
+        #[arg(default_value_t = 0.0)]
+        seconds: f64,
+    },
 }
 
 /// An error as atm reports it: `atm: <message>` on stderr, or `{"error", "code"}` with `--json`.
@@ -138,6 +145,7 @@ fn run(args: &[OsString]) -> u8 {
             commands::meta::version(ctx);
             Ok(0)
         }
+        Command::LockTest { seconds } => atm_boot::hold_lock_for_test(&cwd, seconds).map(|()| 0),
     };
     match result {
         Ok(code) => code,

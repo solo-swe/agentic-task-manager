@@ -59,6 +59,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `--archived`) and `--derived`, with what atm derives for a task (kind, readiness, `waiting_for`, effective priority,
   review and release, stage), text and `--json` as in Python. `--tolerant` comes with `atm serve` (T-449). Fourteen
   more tests left the expected-failures list.
+- **The Rust atm's write path** (T-445): the task folder's lock as the Python atm's lock folder, the same protocol
+  (`owner.json`, broken when its owner is gone or after a minute, released on SIGTERM), so both can work on one
+  project at once; the claims store (in the git common folder, shared by worktrees) and its dashboard snapshot; and
+  the change transaction, which writes only what changed, atomically. `atm _lock-test`, and `lock.test.mjs` passes.
+  New dependencies: `sysinfo` (whether a lock's owner still runs, the host name) and `signal-hook` (Unix).
+  `docs/porting-to-rust.md` §3 now says the lock is the lock folder, not `File::lock`.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).
