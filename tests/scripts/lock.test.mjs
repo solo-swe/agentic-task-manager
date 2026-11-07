@@ -30,7 +30,8 @@ function holdLock(root, seconds, env = {}) {
   const child = spawn(ATM, ['_lock-test', String(seconds)], { cwd: root, env: { ...process.env, ...env } });
   let stderr = '';
   child.stderr.on('data', (d) => (stderr += d));
-  const done = new Promise((resolve) => child.on('exit', (code) => resolve({ code, stderr })));
+  // `close`, not `exit`: all of stderr is read by then
+  const done = new Promise((resolve) => child.on('close', (code) => resolve({ code, stderr })));
   return { child, done };
 }
 

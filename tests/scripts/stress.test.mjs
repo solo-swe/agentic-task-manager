@@ -23,7 +23,8 @@ function atm(args, cwd, agent) {
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
-    child.on('exit', (code) => resolve({ code, stdout, stderr }));
+    // `close`, not `exit`: `exit` can come before the last of stdout is read, as it does with a fast binary under load
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
 }
 

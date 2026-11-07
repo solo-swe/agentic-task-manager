@@ -37,7 +37,10 @@ fn main() {
             valid,
             "docs/agent/{name}.md: a topic's name is lowercase letters, digits and -"
         );
-        let text = fs::read_to_string(&path).expect("a topic is UTF-8 text");
+        // LF line ends, whatever the checkout made them (git on Windows writes CRLF)
+        let text = fs::read_to_string(&path)
+            .expect("a topic is UTF-8 text")
+            .replace("\r\n", "\n");
         let first = text.split('\n').next().unwrap_or_default();
         let summary = first
             .strip_prefix("# ")
@@ -47,23 +50,21 @@ fn main() {
             panic!("docs/agent/{name}.md: the first line is `# <Title>: <summary>`")
         });
         println!("cargo:rerun-if-changed={}", path.display());
-        topics.push((name, summary, path.display().to_string()));
+        topics.push((name, summary, text));
     }
     assert!(!topics.is_empty(), "docs/agent/ has no topics");
     let compmd = docs.join("compmd-llms.txt");
     println!("cargo:rerun-if-changed={}", compmd.display());
-    topics.push((
-        "compmd".into(),
-        COMPMD_SUMMARY.into(),
-        compmd.display().to_string(),
-    ));
+    let compmd_text = fs::read_to_string(&compmd)
+        .expect("compmd-llms.txt is UTF-8 text")
+        .replace("\r\n", "\n");
+    topics.push(("compmd".into(), COMPMD_SUMMARY.into(), compmd_text));
     topics.sort();
     let mut code = String::from(
         "/// `atm docs`' topics, by name: (topic, summary, Markdown as written).\npub static AGENT_DOCS: &[(&str, &str, &str)] = &[\n",
     );
-    for (name, summary, file) in &topics {
-        writeln!(code, "    ({name:?}, {summary:?}, include_str!({file:?})),")
-            .expect("writing to a String");
+    for (name, summary, text) in &topics {
+        writeln!(code, "    ({name:?}, {summary:?}, {text:?}),").expect("writing to a String");
     }
     code.push_str("];\n");
     let out = Path::new(&env::var("OUT_DIR").expect("cargo sets OUT_DIR")).join("agent_docs.rs");

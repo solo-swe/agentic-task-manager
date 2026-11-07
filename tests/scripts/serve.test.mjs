@@ -1180,7 +1180,8 @@ describe('serve', () => {
       });
       let stdout = '';
       child.stdout.on('data', (d) => (stdout += d));
-      child.on('exit', (code) => resolve({ code, stdout }));
+      // `close`, not `exit`: all of stdout is read by then
+      child.on('close', (code) => resolve({ code, stdout }));
     });
 
   test('stop ends a server that ignores SIGTERM, and forgets it only once it is gone (T-390)', async () => {
@@ -1677,8 +1678,58 @@ describe('serve', () => {
     );
   }
 
+  /** For the Rust run, another install's atm as a stand-in: `service --port P` starts a server that answers as an atm
+   * server of `version` and `build` (whoami, the page's build tag), records itself in ATM_HOME as atm does, and stops
+   * on SIGTERM; anything else does nothing. (The copied Python plugin's server doesn't start on CI's macOS runners.) */
+  function standIn(version, build) {
+    const server = `
+      const fs = require('fs'), http = require('http'), path = require('path');
+      const { PORT, VERSION, BUILD, HOME_ID, ATM_HOME } = process.env;
+      const record = path.join(ATM_HOME, 'server.json');
+      const port = Number(PORT);
+      http.createServer((q, s) => {
+        if (q.url === '/__atm/whoami') {
+          s.setHeader('content-type', 'application/json');
+          s.end(JSON.stringify({ atm: true, pid: process.pid, port, version: VERSION, build: BUILD, home: HOME_ID }));
+        } else s.end('<meta name="atm-dashboard-build" content="' + BUILD + '">');
+      }).listen(port, () => fs.writeFileSync(record, JSON.stringify({ pid: process.pid, port, version: VERSION,
+        build: BUILD, plugin_root: '/another/install', home: HOME_ID, started_at: new Date().toISOString() })));
+      process.on('SIGTERM', () => {
+        try { if (JSON.parse(fs.readFileSync(record, 'utf8')).pid === process.pid) fs.rmSync(record); } catch {}
+        process.exit(0);
+      });`;
+    // Starts the server detached and waits for its record, so the run is over once the server is up
+    const launcher = `
+      const { spawn } = require('child_process'), fs = require('fs'), path = require('path');
+      const record = path.join(process.env.ATM_HOME, 'server.json');
+      fs.rmSync(record, { force: true });
+      spawn(process.execPath, ['-e', process.env.SERVER], { detached: true, stdio: 'ignore' }).unref();
+      const start = Date.now();
+      const wait = setInterval(() => {
+        if (fs.existsSync(record)) { clearInterval(wait); process.exit(0); }
+        if (Date.now() - start > 10000) { console.error('the stand-in server did not start'); process.exit(1); }
+      }, 20);`;
+    return (args, cwd, atmHome) => {
+      if (args[0] !== 'service' || args[1] !== '--port') return { status: 0, stdout: '', stderr: '' };
+      return spawnSync(process.execPath, ['-e', launcher], {
+        cwd,
+        encoding: 'utf8',
+        env: {
+          ...baseEnv(),
+          ATM_HOME: atmHome,
+          SERVER: server,
+          PORT: args[2],
+          VERSION: version,
+          BUILD: build,
+          HOME_ID: homeId(atmHome),
+        },
+      });
+    };
+  }
+
   /** A copy of the plugin whose dashboard claims to be `version` (and `build`), as another install would be. */
   function pluginAt(version, build = 'old-build') {
+    if (IMPL === 'rust') return standIn(version, build);
     const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
     fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
     cleanups.push(() => removeDir(path.dirname(plugin)));

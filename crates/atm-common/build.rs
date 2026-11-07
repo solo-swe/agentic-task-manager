@@ -6,6 +6,14 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::{env, fs};
 
+/// A file's text with LF line ends, whatever the checkout made them (git on Windows writes CRLF): the skills atm
+/// installs are the same on every platform.
+fn text_of(file: &Path) -> String {
+    fs::read_to_string(file)
+        .unwrap_or_else(|e| panic!("{}: {e}", file.display()))
+        .replace("\r\n", "\n")
+}
+
 fn main() {
     let manifest = env::var("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
     let skills = Path::new(&manifest)
@@ -26,20 +34,15 @@ fn main() {
     for name in &names {
         let file = skills.join(name).join("SKILL.md");
         println!("cargo:rerun-if-changed={}", file.display());
-        writeln!(
-            code,
-            "    ({name:?}, include_str!({:?})),",
-            file.display().to_string()
-        )
-        .expect("writing to a String");
+        writeln!(code, "    ({name:?}, {:?}),", text_of(&file)).expect("writing to a String");
     }
     code.push_str("];\n\n/// `skills/claude-code.json`: Claude Code's pre-approved commands for each skill.\n");
     let tools = skills.join("claude-code.json");
     println!("cargo:rerun-if-changed={}", tools.display());
     writeln!(
         code,
-        "pub static CLAUDE_CODE_JSON: &str = include_str!({:?});",
-        tools.display().to_string()
+        "pub static CLAUDE_CODE_JSON: &str = {:?};",
+        text_of(&tools)
     )
     .expect("writing to a String");
     let out = Path::new(&env::var("OUT_DIR").expect("cargo sets OUT_DIR")).join("skills.rs");
