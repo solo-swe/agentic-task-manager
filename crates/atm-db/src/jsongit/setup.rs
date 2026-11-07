@@ -22,13 +22,18 @@ pub fn in_git(folder: &Path) -> bool {
     git(&["rev-parse", "--git-dir"], folder).is_some()
 }
 
-/// `path` relative to `root`, as git is given it (the path itself when it isn't under `root`).
+/// `path` relative to `root`, as git is given it (the path itself when it isn't under `root`), with `/` between its
+/// parts on every platform: git takes them on Windows too, and atm's output is the same everywhere.
 #[must_use]
 pub fn rel(root: &Path, path: &Path) -> String {
-    path.strip_prefix(root)
-        .unwrap_or(path)
-        .display()
-        .to_string()
+    match path.strip_prefix(root) {
+        Ok(relative) => relative
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"),
+        Err(_) => path.display().to_string(),
+    }
 }
 
 /// Whether git tracks `path` in the repository at `root`.
