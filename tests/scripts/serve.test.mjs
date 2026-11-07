@@ -1683,15 +1683,24 @@ describe('serve', () => {
     fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
     cleanups.push(() => removeDir(path.dirname(plugin)));
     stamp(plugin, version, build);
-    const run = (args, cwd, atmHome) =>
-      spawnSync(path.join(plugin, 'scripts/atm'), args, {
+    const run = (args, cwd, atmHome) => {
+      const r = spawnSync(path.join(plugin, 'scripts/atm'), args, {
         cwd,
         encoding: 'utf8',
         env: { ...baseEnv(), ATM_HOME: atmHome },
       });
+      // A server that didn't start says why in its log: the assertion on the exit code shows it (`status, 0, stderr`)
+      if (r.status !== 0) {
+        const log = path.join(atmHome, 'server.log');
+        r.stderr += fs.existsSync(log) ? `\nserver.log:\n${fs.readFileSync(log, 'utf8')}` : '';
+      }
+      return r;
+    };
     run.plugin = plugin;
     return run;
   }
+  /** That a run of another install's atm worked, with its stderr (and the server's log) when it didn't */
+  const succeeded = (r) => assert.equal(r.status, 0, r.stderr);
 
   const whoami = async (port) => (await fetch(`http://localhost:${port}/__atm/whoami`)).json();
   /** The build in the <meta> of the page the server serves. */
@@ -1715,7 +1724,7 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const other = pluginAt(PLUGIN_VERSION, 'other-build');
-    assert.equal(other(['service', '--port', String(port)], root, atmHome).status, 0);
+    succeeded(other(['service', '--port', String(port)], root, atmHome));
     const pid = record(atmHome).pid;
     assert.equal(atm(['service', '--refresh'], root).stdout, '');
     assert.equal(atm(['project', 'status'], root).code, 0);
@@ -1734,7 +1743,7 @@ describe('serve', () => {
       const root = project();
       const port = ports();
       const install = pluginAt(PLUGIN_VERSION, 'first-build');
-      assert.equal(install(['service', '--port', String(port)], root, atmHome).status, 0);
+      succeeded(install(['service', '--port', String(port)], root, atmHome));
       const old = await whoami(port);
       assert.equal(old.build, 'first-build');
       stamp(install.plugin, PLUGIN_VERSION, 'second-build');
@@ -1754,7 +1763,7 @@ describe('serve', () => {
     const atm = atmIn(atmHome);
     const root = project();
     const port = ports();
-    assert.equal(pluginAt('0.0.1')(['service', '--port', String(port)], root, atmHome).status, 0);
+    succeeded(pluginAt('0.0.1')(['service', '--port', String(port)], root, atmHome));
     const old = await whoami(port);
     assert.equal(old.version, '0.0.1');
     const refreshed = atm(['service', '--refresh'], root);
@@ -1785,7 +1794,7 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
 
     // A newer plugin's server (another session already updated) is never downgraded
-    assert.equal(pluginAt('99.0.0')(['service', '--port', String(port + 1)], root, atmHome).status, 0);
+    succeeded(pluginAt('99.0.0')(['service', '--port', String(port + 1)], root, atmHome));
     const newer = record(atmHome).pid;
     assert.equal(atm(['service', '--refresh'], root).stdout, '');
     assert.equal(atm(['project', 'status'], root).code, 0);
@@ -1799,14 +1808,14 @@ describe('serve', () => {
     const root = project();
     const port = ports();
     const older = pluginAt('0.0.1');
-    assert.equal(older(['service', '--port', String(port)], root, atmHome).status, 0);
+    succeeded(older(['service', '--port', String(port)], root, atmHome));
     const status = atm(['project', 'status'], root);
     assert.equal(status.code, 0, status.stderr);
     assert.doesNotMatch(status.stdout, /restarted/, 'the command prints only its own output');
     assert.equal((await whoami(port)).version, PLUGIN_VERSION);
     atm(['service', 'stop'], root);
 
-    assert.equal(older(['service', '--port', String(port + 1)], root, atmHome).status, 0);
+    succeeded(older(['service', '--port', String(port + 1)], root, atmHome));
     const hook = atm(['claim', 'heartbeat', '--auto'], root);
     assert.equal(hook.stdout + hook.stderr, '');
     assert.equal((await whoami(port + 1)).version, PLUGIN_VERSION);

@@ -176,7 +176,11 @@ describe('options that go anywhere, and errors', () => {
 function complete(line, cwd) {
   const result = RUST
     ? atm(['--', ...line.split(' ')], cwd, { COMPLETE: 'fish' })
-    : atm([], cwd, { _ATM_COMPLETE: 'complete_fish', _TYPER_COMPLETE_FISH_ACTION: 'get-args', _TYPER_COMPLETE_ARGS: line });
+    : atm([], cwd, {
+        _ATM_COMPLETE: 'complete_fish',
+        _TYPER_COMPLETE_FISH_ACTION: 'get-args',
+        _TYPER_COMPLETE_ARGS: line,
+      });
   assert.equal(result.code, 0, result.stderr);
   // clap_complete offers the command's options too on an empty word; these tests are about atm's values
   return result.stdout

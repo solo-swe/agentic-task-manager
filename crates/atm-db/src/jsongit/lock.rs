@@ -6,7 +6,7 @@
 //! breaks the lock when its owner is provably gone (same host, process not running) or it is older than a minute.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, Once};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use std::{fs, io};
 
@@ -133,10 +133,14 @@ fn describe_owner(owner: Option<&Value>) -> String {
 
 /// The locks this process holds, removed if it is stopped with SIGTERM (as Python's handler exits through them).
 static HELD: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
-static ON_SIGTERM: Once = Once::new();
 
+/// Without SIGTERM (Windows) there is nothing to release on.
+#[cfg(not(unix))]
+fn release_on_sigterm() {}
+
+#[cfg(unix)]
 fn release_on_sigterm() {
-    #[cfg(unix)]
+    static ON_SIGTERM: std::sync::Once = std::sync::Once::new();
     ON_SIGTERM.call_once(|| {
         if let Ok(mut signals) = signal_hook::iterator::Signals::new([signal_hook::consts::SIGTERM])
         {

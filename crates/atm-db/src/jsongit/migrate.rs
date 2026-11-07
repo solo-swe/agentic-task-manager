@@ -45,35 +45,38 @@ fn write_json(path: &Path, value: &Value) -> Result<()> {
     write_text_atomic(path, &(to_json(value) + "\n")).map_err(|e| failed(path, &e))
 }
 
-/// The user running atm, as the owner of its own process.
+/// Whether the file is owned by the user running atm (the owner of atm's own process).
 #[cfg(unix)]
-fn current_uid() -> Option<u32> {
-    let pid = sysinfo::get_current_pid().ok()?;
-    let mut system = sysinfo::System::new().ok()?;
-    system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
-    system.process(pid)?.user_id().map(|u| **u)
+fn owned_by_user(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    let current = || -> Option<u32> {
+        let pid = sysinfo::get_current_pid().ok()?;
+        let mut system = sysinfo::System::new().ok()?;
+        // The user is read only when asked for (on Linux a plain refresh leaves it out)
+        system.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_user(sysinfo::UpdateKind::Always),
+        );
+        system.process(pid)?.user_id().map(|u| **u)
+    };
+    current() == Some(meta.uid())
+}
+
+/// Without user IDs (Windows), no file counts as the user's: an old server is never contacted there.
+#[cfg(not(unix))]
+fn owned_by_user(_path: &Path) -> bool {
+    false
 }
 
 /// Whether an old server record is one atm wrote here: owned by this user and not tracked by git (atm always kept it
 /// out of git). A record that came with the repository is only deleted: atm never contacts its port or signals its
 /// pid (docs/security-review.md F14).
 fn written_by_atm(root: &Path, path: &Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        let Ok(meta) = std::fs::metadata(path) else {
-            return false;
-        };
-        if current_uid() != Some(meta.uid()) {
-            return false;
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
-        return false;
-    }
-    !is_tracked(root, path)
+    owned_by_user(path) && !is_tracked(root, path)
 }
 
 /// Ask the atm server on this port who it is (on localhost); none if nothing, or not an atm server, answers.
