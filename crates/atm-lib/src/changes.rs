@@ -14,6 +14,7 @@ use crate::leases::{
     check_holder, claim_record, completion_record, drop_expired_claims, own_lease_expired,
     waiting_entry,
 };
+use crate::loop_rules::{Selection, next_task};
 use crate::project::Project;
 use crate::query::{Filters, task_views};
 use crate::state::{Command, Options, change_status};
@@ -416,6 +417,99 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
             other.map_or("None", Kind::as_str)
         ))),
     }
+}
+
+/// What `atm loop next` found: the task (after its start, with `--claim`), its new claim, why there is none, and the
+/// claims that expired on the way.
+#[derive(Debug, Clone, Default)]
+pub struct NextTask {
+    /// The next task, if there is one.
+    pub task: Option<Task>,
+    /// Its claim, when it was claimed.
+    pub claim: Option<Value>,
+    /// Why there is none.
+    pub reason: Option<String>,
+    /// The claims whose lease ran out on the way.
+    pub expired: Vec<Value>,
+}
+
+/// `atm loop next`: the task the loop takes next for the project's actor (the dashboard's Next up is the same rule);
+/// with `claim`, started and claimed in the same change, so no other agent can take it.
+///
+/// # Errors
+/// A selection that can't be (an unknown sprint), a start the state machine refuses, a store error.
+pub fn next_task_for(
+    project: &mut Project,
+    sel: &Selection,
+    with_user: bool,
+    claim: bool,
+    status: Option<&str>,
+) -> Result<NextTask> {
+    let agent = project.actor().map(String::from);
+    let agent = agent.as_deref();
+    let mut outcome = NextTask::default();
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = Vocabulary::of_document(&work.document)?;
+        let archive = archived_tasks(work)?;
+        let in_archive = |id: &str| -> Result<bool> {
+            Ok(archive
+                .iter()
+                .any(|t| id_of(t) == Some(id) && !t.is_empty()))
+        };
+        let mut claims = section(&mut work.claims_store, "claims").clone();
+        let expired = drop_expired_claims(&mut work.document, &mut claims, &vocab);
+        *section(&mut work.claims_store, "claims") = claims;
+        apply_resolutions(work, &vocab, &in_archive);
+        let (tasks, _) = snapshot(&work.document, "");
+        let refs: Vec<&Task> = tasks.iter().collect();
+        let (found, reason) = next_task(
+            &vocab,
+            &work.document,
+            &refs,
+            &work.claims_store,
+            sel,
+            agent,
+            with_user,
+            &in_archive,
+        )?;
+        let mut task = found.cloned();
+        let mut new = None;
+        if claim && let Some(t) = task.as_mut() {
+            let task_id = id_of(t).unwrap_or_default().to_string();
+            let options = Options {
+                status: status.map(String::from),
+                ..Options::default()
+            };
+            change_status(
+                t,
+                Command::Start,
+                &options,
+                &vocab,
+                &refs,
+                agent,
+                &now_iso(),
+                &in_archive,
+            )?;
+            if let Some(at) = work.document["tasks"].as_array().and_then(|list| {
+                list.iter()
+                    .position(|v| v.get("id").and_then(Value::as_str) == Some(&task_id))
+            }) {
+                work.tasks()[at] = Value::Object(t.clone());
+            }
+            let here = work.here().clone();
+            let record = claim_record(&here, &work.document, &task_id, agent);
+            section(&mut work.claims_store, "claims").insert(task_id, record.clone());
+            new = Some(record);
+        }
+        outcome = NextTask {
+            task,
+            claim: new,
+            reason,
+            expired,
+        };
+        Ok(())
+    })?;
+    Ok(outcome)
 }
 
 /// `atm task note`: a note on a task, whatever its status (DM-4), at most 500 characters, as the project's actor.

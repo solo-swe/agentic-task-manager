@@ -2,6 +2,7 @@
 //! its area's text. The groups come with their slices (§5); the Python atm's `cli/commands/` has them all.
 
 pub mod agents;
+pub mod loop_;
 pub mod meta;
 pub mod project;
 pub mod task;

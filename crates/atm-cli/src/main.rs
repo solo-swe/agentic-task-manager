@@ -15,7 +15,9 @@ use atm_common::Error;
 use atm_common::py::to_json;
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
-use commands::{Context, agents::AgentsCommand, project::ProjectCommand, task::TaskCommand};
+use commands::{
+    Context, agents::AgentsCommand, loop_::LoopCommand, project::ProjectCommand, task::TaskCommand,
+};
 use serde_json::json;
 
 /// atm, the Agentic Task Manager's command line: its commands, by group. `atm <command> --help` describes one.
@@ -46,6 +48,9 @@ enum Command {
     /// Project-level config
     #[command(subcommand)]
     Project(ProjectCommand),
+    /// The work loop
+    #[command(subcommand)]
+    Loop(LoopCommand),
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
@@ -143,10 +148,12 @@ fn run(args: &[OsString]) -> u8 {
             return 1;
         }
     };
-    // Each command's exit code when it ends without an error (`agents install` ends with 1 when it left a folder alone)
+    // Each command's exit code when it ends without an error (`agents install` ends with 1 when it left a folder alone,
+    // `loop next` with 3 when no task is available)
     let result: Result<u8, Error> = match cli.command {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
+        Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {

@@ -21966,7 +21966,7 @@
       "description": "Slice 3c of [porting-to-rust.md](docs/porting-to-rust.md) §5: a review's decisions (T-438): `task review approve <id> [--note]`, `request-changes <id> --reason`, `reject <id> --reason`, each leaving the task in review with its `review_state` and opening one way out of it, as `lib/status.py` has them; text and `--json` as in Python.\n\n## Tests\nThe review scenarios (`review.json`, `review-states.json`, `review-modes.json`) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-465"
       ],
@@ -21974,7 +21974,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T02:20:57Z",
+      "updated_at": "2026-11-07T02:23:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21985,7 +21985,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T02:20:57Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "380530e2a90138657118319de1d3384896479bc0",
+      "completed_at": "2026-11-07T02:23:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:23:41Z",
+          "kind": "outcome",
+          "text": "Rust `task review approve|request-changes|reject` on the T-465 state machine; 5 tests left the expected-failures list (397 left).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-467",
@@ -21998,7 +22009,7 @@
       "description": "Slice 3d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `loop next` (`lib/loop.py`): the selections (`--sprint`, `--tasks`, `--all`, `--backlog`, `--with-user`, `--type`), the loop's order (active sprint, planned sprints, backlog; priority, then natural ID order), tasks handed back from review first, expired claims released, the reasons when nothing is ready (exit code 3), and `--claim` starting and claiming in one step; text and `--json` as in Python.\n\n## Tests\nThe `loop next` scenarios (`next.json`, `selections.json`, `with-user.json`, `lease.json`) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-465"
       ],
@@ -22006,7 +22017,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T01:47:06Z",
+      "updated_at": "2026-11-07T02:23:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22023,7 +22034,9 @@
           "text": "The selection, the loop order and `next_task` with its reasons are ported already (T-464, `atm-lib` `loop_rules.rs`, with tests): this slice adds `loop next` itself, `--claim` on the write path (T-445), expired claims and the resolutions from other worktrees.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-07T02:23:45Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-468",

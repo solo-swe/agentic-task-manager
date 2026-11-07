@@ -96,6 +96,10 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
 - **`atm task review approve|request-changes|reject` in the Rust atm** (T-466): a review's decisions on the state
   machine of T-465, each leaving the task in review with its `review_state`; `--reason` required as Click words it.
   Five more tests left the expected-failures list.
+- **`atm loop next` in the Rust atm** (T-467): the selections (`--sprint`, `--tasks`, `--all`, `--backlog`, `--type`,
+  `--with-user`) on T-464's loop rules, expired claims released and other worktrees' decisions applied first, the
+  reason and exit code 3 when nothing is ready, and `--claim` starting and claiming the task in the same change.
+  Forty-two more tests left the expected-failures list, among them the 16-agent stress test.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

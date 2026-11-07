@@ -121,3 +121,25 @@ fn back_to_todo_is_decided_by_the_kind_the_task_is_in() {
         "no task T-9"
     );
 }
+
+#[test]
+fn next_shows_or_claims_the_loops_next_task_and_says_why_there_is_none() {
+    let mut p = project(
+        json!([
+            {"id": "T-1", "status": "todo", "dependencies": ["T-2"]},
+            {"id": "T-2", "status": "todo"}
+        ]),
+        "claude:a",
+    );
+    let sel = Selection::default();
+    let shown = next_task_for(&mut p, &sel, false, false, None).unwrap();
+    assert_eq!(shown.task.unwrap()["id"], json!("T-2"));
+    assert!(shown.claim.is_none());
+    let claimed = next_task_for(&mut p, &sel, false, true, None).unwrap();
+    assert_eq!(claimed.task.as_ref().unwrap()["status"], json!("in_progress"));
+    assert_eq!(claimed.claim.unwrap()["agent"], json!("claude:a"));
+    assert!(p.store().read_claims()["claims"].get("T-2").is_some());
+    let none = next_task_for(&mut p, &sel, false, false, None).unwrap();
+    assert!(none.task.is_none());
+    assert!(none.reason.is_some());
+}
