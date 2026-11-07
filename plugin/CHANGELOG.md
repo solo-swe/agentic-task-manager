@@ -185,6 +185,17 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `Refused` and `TooLarge` (403 and 413). `pnpm run test:e2e:rust` runs the dashboard's e2e suite with the Rust atm
   giving the fixture its task views and summaries; it passes. The last three `serve.test.mjs` tests left the
   expected-failures list.
+- **Help, usage errors and shell completion in the Rust atm** (T-451, decided with Hakan): clap's help layout and
+  usage lines, and its wording of usage errors (with its tips), behind atm's `atm:` prefix and, with `--json`, as
+  `{"error", "code"}` (the message's first paragraph on one line); the Click rewording the Rust atm carried is gone.
+  The help lists the commands everyday-first as before, `atm help` is a command of its own, and bare `atm` (or a
+  group without its command) prints its help and exits 0. Shell completion is `clap_complete`'s dynamic completion
+  (the new dependency), with atm's values: task IDs with their names, sprints, releases, components, statuses, types,
+  priorities, `task state`'s targets, docs topics and harnesses; `atm completion <shell>` prints the line that turns
+  it on. Help texts lost the backticks a lint had put into them. `atm vcs pushed` and `atm component edit
+  --from-label` no longer write `"meta": null` into a task file without a meta. Scenarios hold the Rust text as
+  `expectRust` until the switch. All but one test (the merge driver's path, at the switch) left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

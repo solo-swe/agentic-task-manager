@@ -5,6 +5,10 @@
 //! atm being the spec until the switch (tests/scripts, run with `ATM_IMPL=rust`). This file holds only the root of
 //! the tree, the options of the whole tree, the dispatch and the exit codes (§2); the commands are in `commands/`.
 
+// The doc comments on the commands, their arguments and options are their help text, shown as written: the lint's
+// backticks would show too (`in_progress`, `ATM_AGENT`)
+#![allow(clippy::doc_markdown)]
+
 mod commands;
 
 use std::ffi::OsString;
@@ -13,8 +17,8 @@ use std::process::ExitCode;
 
 use atm_common::Error;
 use atm_common::py::to_json;
-use clap::error::{ContextKind, ContextValue, ErrorKind};
-use clap::{Parser, Subcommand};
+use clap::error::ErrorKind;
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use commands::{
     Context,
     agents::AgentsCommand,
@@ -35,7 +39,11 @@ use serde_json::json;
 /// Every command takes --json (-j) and --dry-run (-n), anywhere on the line. atm --dir PATH <command> runs as if
 /// started in PATH.
 #[derive(Debug, Parser)]
-#[command(name = "atm", disable_version_flag = true)]
+#[command(
+    name = "atm",
+    disable_version_flag = true,
+    disable_help_subcommand = true
+)]
 struct Cli {
     /// Print result as JSON
     #[arg(short = 'j', long = "json", global = true)]
@@ -55,18 +63,6 @@ enum Command {
     /// Task lifecycle commands
     #[command(subcommand)]
     Task(TaskCommand),
-    /// Project-level config
-    #[command(subcommand)]
-    Project(ProjectCommand),
-    /// Sprint management
-    #[command(subcommand)]
-    Sprint(SprintCommand),
-    /// Release management
-    #[command(subcommand)]
-    Release(ReleaseCommand),
-    /// Component management
-    #[command(subcommand)]
-    Component(ComponentCommand),
     /// The work loop
     #[command(subcommand)]
     Loop(LoopCommand),
@@ -76,6 +72,18 @@ enum Command {
     /// Version control integration
     #[command(subcommand)]
     Vcs(VcsCommand),
+    /// Release management
+    #[command(subcommand)]
+    Release(ReleaseCommand),
+    /// Component management
+    #[command(subcommand)]
+    Component(ComponentCommand),
+    /// Project-level config
+    #[command(subcommand)]
+    Project(ProjectCommand),
+    /// Sprint management
+    #[command(subcommand)]
+    Sprint(SprintCommand),
     /// The task files' maintenance
     #[command(subcommand)]
     Db(DbCommand),
@@ -114,9 +122,17 @@ enum Command {
         /// The first port to try
         port: u16,
     },
+    /// Print the line that turns on shell completion (add it to your shell's startup file).
+    Completion {
+        /// bash, zsh, fish or powershell
+        #[arg(value_parser = ["bash", "zsh", "fish", "powershell"])]
+        shell: String,
+    },
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
+    /// Show the list of commands.
+    Help,
     /// Reference for agents, for this version of atm: the rules, the commands, the states, claims, the task fields.
     Docs {
         /// The topic to print; without one, the list of topics
@@ -150,6 +166,8 @@ impl Command {
             self,
             Command::Docs { .. }
                 | Command::Version
+                | Command::Help
+                | Command::Completion { .. }
                 | Command::LockTest { .. }
                 | Command::ClaimWatch(_)
                 | Command::Service { .. }
@@ -211,54 +229,42 @@ fn wants_json(args: &[OsString]) -> bool {
         .any(|a| a == "--json" || a == "-j")
 }
 
-/// What clap found wrong with the line, reported as the Python atm (Click) words it where agents and the tests read
-/// it: an unknown option, a missing argument or option, with the command's usage line (not in JSON). Returns the exit
-/// code: 0 for help, else 2.
+/// What clap found wrong with the line, in clap's words, as atm reports errors: `atm: <message>` and clap's tip and
+/// usage line on stderr, or `{"error", "code"}` with `--json`. Help (`--help`, or a command or group given without
+/// what it needs, `atm` alone) goes to stdout. Returns the exit code: 0 for help, else 2.
 fn parse_error(e: &clap::Error, as_json: bool) -> u8 {
-    if matches!(e.kind(), ErrorKind::DisplayHelp | ErrorKind::DisplayVersion) {
-        let _ = e.print();
-        return 0;
-    }
-    let message = match (e.kind(), e.get(ContextKind::InvalidArg)) {
-        (ErrorKind::UnknownArgument, Some(ContextValue::String(option)))
-            if option.starts_with('-') =>
-        {
-            Some(format!(
-                "No such option: {}",
-                option.split('=').next().unwrap_or(option)
-            ))
-        }
-        (ErrorKind::MissingRequiredArgument, Some(ContextValue::Strings(missing))) => {
-            missing.first().map(|first| {
-                let name = first.split(' ').next().unwrap_or(first);
-                if name.starts_with('-') {
-                    format!("Missing option '{name}'.")
-                } else {
-                    format!("Missing argument '{}'.", name.trim_matches(['<', '>']))
-                }
-            })
-        }
-        _ => None,
-    };
-    let rendered = e.render().to_string();
-    match message {
-        Some(message) => match rendered
-            .lines()
-            .find(|l| l.starts_with("Usage:"))
-            .filter(|_| !as_json)
-        {
-            Some(usage) => report(&format!("{message}\n{usage}"), 2, false),
-            None => report(&message, 2, as_json),
-        },
-        None if as_json => {
-            let first = rendered.lines().next().unwrap_or_default();
-            report(first.strip_prefix("error: ").unwrap_or(first), 2, true);
-        }
-        None => {
+    match e.kind() {
+        ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
             let _ = e.print();
+            return 0;
         }
+        ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+            print!("{}", e.render());
+            return 0;
+        }
+        _ => {}
+    }
+    let rendered = e.render().to_string();
+    let text = rendered.strip_prefix("error: ").unwrap_or(&rendered);
+    if as_json {
+        // The message without the tip and the usage: its first paragraph, on one line
+        let first = text.split("\n\n").next().unwrap_or_default();
+        let message: Vec<&str> = first
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        report(&message.join(" "), 2, true);
+    } else {
+        eprint!("atm: {text}");
     }
     2
+}
+
+/// The command tree, as clap parses it and shell completion reads it: the derived tree, with no `help` subcommand in
+/// any group (`atm help` is atm's own) and atm's values completed (task IDs, sprints, statuses, …).
+fn cli_command() -> clap::Command {
+    commands::completion::settle(Cli::command(), "")
 }
 
 fn run(args: &[OsString]) -> u8 {
@@ -276,9 +282,10 @@ fn run(args: &[OsString]) -> u8 {
             return 2;
         }
     }
-    let cli = match Cli::try_parse_from(
-        std::iter::once(OsString::from("atm")).chain(args.iter().cloned()),
-    ) {
+    let parsed = cli_command()
+        .try_get_matches_from(std::iter::once(OsString::from("atm")).chain(args.iter().cloned()))
+        .and_then(|matches| Cli::from_arg_matches(&matches));
+    let cli = match parsed {
         Ok(cli) => cli,
         Err(e) => return parse_error(&e, as_json),
     };
@@ -333,6 +340,14 @@ fn run(args: &[OsString]) -> u8 {
         }
         Command::Serve { home, port } => Ok(commands::maintenance::serve(&home, port)),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
+        Command::Help => {
+            print!("{}", cli_command().render_long_help());
+            Ok(0)
+        }
+        Command::Completion { shell } => {
+            println!("{}", commands::completion::activation(&shell));
+            Ok(0)
+        }
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {
             commands::meta::version(ctx);
@@ -354,6 +369,8 @@ fn run(args: &[OsString]) -> u8 {
 }
 
 fn main() -> ExitCode {
+    // `COMPLETE=<shell> atm …`: the shell asks for completions (`atm completion <shell>` prints the line that does)
+    clap_complete::CompleteEnv::with_factory(cli_command).complete();
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     ExitCode::from(run(&args))
 }

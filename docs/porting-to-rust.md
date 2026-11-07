@@ -18,7 +18,12 @@ Rust enums, the layer rule checked by the compiler. The atm app (Tauri) links th
 - **`--json` output is identical**, field for field: it is what agents and other tools read.
 - **Text output is the same or better.** clap's help, usage lines and argument errors may replace Click's where they
   read better; atm's own messages and hints stay as they are. A scenario whose text check changes says so in the
-  change that changes it.
+  change that changes it. Approved (T-451): clap's help layout and usage lines (`<TASK_ID>`, `--note <NOTE>`) and its
+  wording of usage errors (`unrecognized subcommand`, `unexpected argument`, `invalid value … [possible values: …]`,
+  with its tips), behind atm's `atm:` prefix and, with `--json`, as `{"error", "code"}`; the help's everyday-first
+  command order and `atm help` stay atm's. Bare `atm` (or a group without a command) prints its help and exits 0.
+  Shell completion is `clap_complete`'s dynamic completion (`atm completion <shell>` prints the line to add), not
+  Typer's `--install-completion`. Scenarios hold the Rust text as `expectRust` until the switch.
 - **Exit codes and files are identical:** 0, 1, 2 (usage), 3 (nothing to do), 4 (claimed), 127 (missing runtime, which
   goes away); `tasks.json`, `tasks-archive.json`, the claims store, `projects.json`, the server record, the merge
   driver's results.

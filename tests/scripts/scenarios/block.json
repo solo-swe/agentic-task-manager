@@ -256,7 +256,10 @@
     "name": "block --on must be user or agent",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo" }] } } },
     "args": ["task", "state", "T-1", "blocked", "--on", "team", "--question", "?"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--on': 'team' is not one of 'user', 'agent'."] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--on': 'team' is not one of 'user', 'agent'."] },
+    "expectRust": {
+      "stderrIncludes": ["atm: invalid value 'team' for '--on <ON>'", "[possible values: user, agent]"]
+    }
   },
   {
     "name": "block refuses a finished task; unblock refuses a task that isn't blocked",

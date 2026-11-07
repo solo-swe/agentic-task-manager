@@ -44,7 +44,7 @@ pub enum SprintCommand {
         /// Put it after this sprint (default: last)
         #[arg(long, value_name = "NAME")]
         after: Option<String>,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },
@@ -61,7 +61,7 @@ pub enum SprintCommand {
         /// The planned end, YYYY-MM-DD (empty: remove it)
         #[arg(long, value_name = "DATE")]
         due: Option<String>,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },
@@ -69,7 +69,7 @@ pub enum SprintCommand {
     Start {
         /// The sprint's name
         name: String,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },
@@ -86,7 +86,7 @@ pub enum SprintCommand {
         /// Its batch tasks were reviewed with the user (the sprint review)
         #[arg(long)]
         reviewed: bool,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },
@@ -100,7 +100,7 @@ pub enum SprintCommand {
         /// Also a sprint tasks finished in or moved on from
         #[arg(long)]
         force: bool,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },
@@ -112,7 +112,7 @@ pub enum SprintCommand {
         /// A sprint's name, next, active, or backlog
         #[arg(long, value_name = "WHERE")]
         to: Option<String>,
-        /// Who you are (default: `ATM_AGENT`, else this session)
+        /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
     },

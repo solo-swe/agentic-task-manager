@@ -21,6 +21,8 @@ atm-lib = { path = "crates/atm-lib" }
 atm-boot = { path = "crates/atm-boot" }
 atm-api = { path = "crates/atm-api" }
 clap = { version = "4.5", features = ["derive"] }
+# Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
+clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
 # JSON as atm writes it (docs/porting-to-rust.md §3): keys in the order they come, so a task prints as it is stored
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"

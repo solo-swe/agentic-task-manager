@@ -196,7 +196,7 @@ fn move_and_assign(
         }
     }
     if let Some(label) = label
-        && let Some(meta) = work.document["meta"].as_object_mut()
+        && let Some(meta) = work.document.get_mut("meta").and_then(Value::as_object_mut)
         && let Some(entries) = meta.get_mut("labels").and_then(Value::as_array_mut)
     {
         entries.retain(|e| label_entry(e) != Some(label));

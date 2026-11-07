@@ -349,8 +349,10 @@ fn release_with_merge(
             .cloned()
     });
     let (mut released, mut pending) = (Vec::new(), Map::new());
-    let Some(entries) = document["meta"]
-        .get_mut("releases")
+    // Not `document["meta"]`: indexing a missing key for change would add a null meta
+    let Some(entries) = document
+        .get_mut("meta")
+        .and_then(|m| m.get_mut("releases"))
         .and_then(Value::as_array_mut)
     else {
         return Ok((released, pending));

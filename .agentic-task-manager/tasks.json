@@ -21454,7 +21454,7 @@
       "description": "Slice 9 of [porting-to-rust.md](docs/porting-to-rust.md) §5: shell completion (`clap_complete`, proposed first as a new dependency, with atm's value completers), `atm help`, and every place where the Rust text output or command structure differs from Python's: listed for Hakan, kept only with his approval (§1), the scenarios updated for those. Done together with Hakan.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-446",
         "T-448",
@@ -21467,7 +21467,7 @@
         "tests/scripts/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:54:56Z",
+      "updated_at": "2026-11-07T05:35:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21477,7 +21477,9 @@
         }
       ],
       "sprint": "The Rust port",
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-07T05:35:56Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-452",
@@ -22153,7 +22155,7 @@
       "description": "Slice 7c of [porting-to-rust.md](docs/porting-to-rust.md) §5: the last of `atm serve`.\n\n## Change\n- The document viewer's routes (`lib/documents.py`, T-392): a project's documents and files, read-only, with their checks (inside the project, not ignored or hidden, not a key file, a size cap, no symlinks), files in a git submodule by its own rules (T-408).\n- `p/<id>/logo`: the project's logo with its type; none, outside or too large is 404 (`db/jsongit/logo.py`).\n- `api/search`: every word, in any field or the project's name, case-insensitive, read-only, capped (T-258).\n\n## Tests\nThe rest of `serve.test.mjs` leaves `tests/scripts/rust-expected-failures.json`, and the dashboard's e2e suite (`pnpm run test:e2e`) passes against the Rust `atm serve`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-468"
       ],
@@ -22161,7 +22163,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:54:50Z",
-      "updated_at": "2026-11-07T05:23:21Z",
+      "updated_at": "2026-11-07T05:31:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22172,7 +22174,18 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T05:23:21Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "b29db318f1f7ce90c3e7e66dcc14dffa39302dd9",
+      "completed_at": "2026-11-07T05:31:28Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T05:31:28Z",
+          "kind": "outcome",
+          "text": "Documents and files for the viewer (path checks, ignored and key files, size caps, submodules), `/api/search`; the logo came with T-468. All of `serve.test.mjs` passes against Rust (19 tests left on the list, T-451’s help text and the merge launcher path). The e2e suite passes with `ATM_IMPL=rust` (`pnpm run test:e2e:rust`, 411 tests).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-470",

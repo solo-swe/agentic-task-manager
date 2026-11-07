@@ -3,6 +3,7 @@
 
 pub mod agents;
 pub mod claim;
+pub mod completion;
 pub mod component;
 pub mod db;
 pub mod loop_;

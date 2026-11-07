@@ -10,12 +10,16 @@
     "expect": {
       "exit": 0,
       "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]...", "  task ", "  loop ", "  project "]
+    },
+    "expectRust": {
+      "stdoutIncludes": ["Usage: atm [OPTIONS] <COMMAND>", "  task ", "  loop ", "  project "]
     }
   },
   {
     "name": "help prints the help",
     "args": ["help"],
-    "expect": { "exit": 0, "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]..."] }
+    "expect": { "exit": 0, "stdoutIncludes": ["Usage: atm [OPTIONS] COMMAND [ARGS]..."] },
+    "expectRust": { "stdoutIncludes": ["Usage: atm [OPTIONS] <COMMAND>"] }
   },
   {
     "name": "an unknown command is a usage error",
@@ -24,6 +28,9 @@
       "exit": 2,
       "stdout": "",
       "stderrIncludes": ["atm: No such command 'frobnicate'.", "Usage: atm [OPTIONS] COMMAND [ARGS]..."]
+    },
+    "expectRust": {
+      "stderrIncludes": ["atm: unrecognized subcommand 'frobnicate'", "Usage: atm [OPTIONS] <COMMAND>"]
     }
   },
   {
@@ -42,6 +49,14 @@
         "--question",
         "Move a task to another state"
       ]
+    },
+    "expectRust": {
+      "stdoutIncludes": [
+        "Usage: atm task state [OPTIONS] <TASK_ID> <NEXT_STATE>",
+        "--agent",
+        "--question",
+        "Move a task to another state"
+      ]
     }
   },
   {
@@ -50,7 +65,8 @@
     "expect": {
       "exit": 0,
       "stdoutIncludes": ["Usage: atm vcs [OPTIONS] COMMAND [ARGS]...", "commit", "pr", "repository"]
-    }
+    },
+    "expectRust": { "stdoutIncludes": ["Usage: atm vcs [OPTIONS] <COMMAND>", "commit", "pr", "repository"] }
   },
   {
     "name": "help says every command takes --json, anywhere on the line, and how --dir works",
@@ -70,12 +86,14 @@
       "exit": 2,
       "stdout": "",
       "stderrIncludes": ["atm: No such option: --bogus", "Usage: atm loop next [OPTIONS]"]
-    }
+    },
+    "expectRust": { "stderrIncludes": ["atm: unexpected argument '--bogus' found", "Usage: atm loop next [OPTIONS]"] }
   },
   {
     "name": "an option's value is checked",
     "args": ["release", "add", "1.0", "--pr", "one"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--pr': 'one' is not a valid integer."] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Invalid value for '--pr': 'one' is not a valid integer."] },
+    "expectRust": { "stderrIncludes": ["atm: invalid value 'one' for '--pr <N>': invalid digit found in string"] }
   },
   {
     "name": "with --json, a usage error is JSON on stderr, with the same exit code",
@@ -84,6 +102,12 @@
       "exit": 2,
       "stdout": "",
       "stderrIncludes": ["\"error\": \"Missing argument 'TASK_ID'.\"", "\"code\": 2"]
+    },
+    "expectRust": {
+      "stderrIncludes": [
+        "\"error\": \"the following required arguments were not provided: <TASK_ID> <NEXT_STATE>\"",
+        "\"code\": 2"
+      ]
     }
   },
   {
@@ -94,6 +118,7 @@
   {
     "name": "with --json, an unknown command is JSON",
     "args": ["frobnicate", "--json"],
-    "expect": { "exit": 2, "stdout": "", "stderrIncludes": ["\"error\": \"No such command 'frobnicate'.\""] }
+    "expect": { "exit": 2, "stdout": "", "stderrIncludes": ["\"error\": \"No such command 'frobnicate'.\""] },
+    "expectRust": { "stderrIncludes": ["\"error\": \"unrecognized subcommand 'frobnicate'\""] }
   }
 ]

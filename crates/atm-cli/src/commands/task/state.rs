@@ -18,7 +18,7 @@ use crate::commands::{Context, print_json};
 pub struct StateArgs {
     /// The task ID
     task_id: String,
-    /// Next state: todo, `in_progress`, `in_review`, done, blocked, skipped
+    /// Next state: todo, in_progress, in_review, done, blocked, skipped
     next_state: String,
     /// A note
     #[arg(long)]
@@ -29,7 +29,7 @@ pub struct StateArgs {
     /// The task's commit SHA
     #[arg(long)]
     commit: Option<String>,
-    /// skipped: why it isn't needed (`wont_do`, obsolete or duplicate; default `wont_do`)
+    /// skipped: why it isn't needed (wont_do, obsolete or duplicate; default wont_do)
     #[arg(long)]
     resolution: Option<String>,
     /// The task it duplicates

@@ -1,21 +1,3 @@
 [
-  "cli.test.mjs > options that go anywhere, and errors > a usage error is `atm: <message>` and the usage line, exit code 2; with --json, JSON",
-  "cli.test.mjs > options that go anywhere, and errors > atm runs no command it is given: there is no loop run, and no command takes one (T-437)",
-  "cli.test.mjs > shell completion > outside a project, or with a task file atm can’t read, it completes nothing",
-  "cli.test.mjs > shell completion > task IDs with their names, sprints, statuses and the targets of task state",
-  "cli.test.mjs > the command tree > --help lists the everyday commands first; maintenance, then help, docs and version, after them",
-  "cli.test.mjs > the command tree > the old flat commands are gone, not aliases",
-  "docs.test.mjs > atm docs > every atm command a topic names exists",
-  "merge.test.mjs > merge driver (real git merges) > atm db init registers the driver and .gitattributes; it is idempotent",
-  "scenarios.test.mjs > scenarios > basics.json: --help on a command describes it",
-  "scenarios.test.mjs > scenarios > basics.json: a group's help lists its commands",
-  "scenarios.test.mjs > scenarios > basics.json: an option's value is checked",
-  "scenarios.test.mjs > scenarios > basics.json: an unknown command is a usage error",
-  "scenarios.test.mjs > scenarios > basics.json: help prints the help",
-  "scenarios.test.mjs > scenarios > basics.json: no command prints the help",
-  "scenarios.test.mjs > scenarios > basics.json: with --json, an unknown command is JSON",
-  "scenarios.test.mjs > scenarios > block.json: block --on must be user or agent",
-  "scenarios.test.mjs > scenarios > dir.json: --dir is listed in the help",
-  "scenarios.test.mjs > scenarios > pr.json: merged sets merged_at on that PR's tasks only",
-  "scenarios.test.mjs > scenarios > status.json: a missing id is a usage error"
+  "merge.test.mjs > merge driver (real git merges) > atm db init registers the driver and .gitattributes; it is idempotent"
 ]

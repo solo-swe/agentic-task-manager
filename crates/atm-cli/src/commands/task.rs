@@ -110,7 +110,7 @@ pub enum TaskCommand {
     Note(add::NoteArgs),
     /// Change a task's definition (not its status: use `atm task state`).
     Edit(edit::EditArgs),
-    /// Move a task to another state: `in_progress`, `in_review`, done, todo, blocked or skipped. A review's decision is
+    /// Move a task to another state: in_progress, in_review, done, todo, blocked or skipped. A review's decision is
     /// `atm task review`.
     State(state::StateArgs),
     /// Decide a task's review: approve it, ask for changes, or reject it; it stays in review
