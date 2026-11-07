@@ -5,6 +5,7 @@ pub mod claims;
 pub mod files;
 pub mod lock;
 pub mod logo;
+pub mod merge;
 pub mod paths;
 
 use std::cell::OnceCell;

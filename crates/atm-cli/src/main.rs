@@ -20,6 +20,7 @@ use commands::{
     agents::AgentsCommand,
     claim::{ClaimCommand, WatchArgs},
     component::ComponentCommand,
+    db::DbCommand,
     loop_::LoopCommand,
     project::ProjectCommand,
     release::ReleaseCommand,
@@ -75,6 +76,9 @@ enum Command {
     /// Version control integration
     #[command(subcommand)]
     Vcs(VcsCommand),
+    /// The task files' maintenance
+    #[command(subcommand)]
+    Db(DbCommand),
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
@@ -107,6 +111,7 @@ impl Command {
                 | Command::Version
                 | Command::LockTest { .. }
                 | Command::ClaimWatch(_)
+                | Command::Db(DbCommand::MergeDriver { .. })
                 | Command::Claim(ClaimCommand::Heartbeat { .. })
         )
     }
@@ -260,6 +265,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
         Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Vcs(command) => commands::vcs::run(command, ctx, &cwd).map(|()| 0),
+        Command::Db(command) => commands::db::run(command, ctx, &cwd),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {

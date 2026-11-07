@@ -141,6 +141,13 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   completed by the PR released) and `vcs repository` (web addresses from remotes, PR links moved; `atm-common`
   `repository.rs`). Invariant I24's check lists git in `atm-vcs` too. Thirty-one more tests left the
   expected-failures list.
+- **The merge driver in the Rust atm** (T-475): `atm db merge-driver` (`atm-db` `jsongit/merge.rs`) merges tasks.json
+  task by task as the Python atm does: the side further along wins a task's progress, notes, blocks, reviews and the
+  sprint history grow, `related` merges as a set, theirs' new tasks with a taken ID are renumbered with their
+  dependents, sprints, releases and components merge item by item (the further state wins), and a real conflict keeps
+  ours and says where. Seeded property tests check that an unchanged side changes nothing and that every task keeps
+  an ID of its own. The real-git merge tests follow with `db init` (T-476). Seven more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

@@ -70,6 +70,15 @@ pub fn default_base(cwd: &Path) -> String {
     .unwrap_or_else(|| "main".into())
 }
 
+/// `atm db merge-driver` (git runs it): merge the three versions of a task file task by task, writing the result over
+/// `ours`. Returns the conflicts (this branch's version was kept for each).
+///
+/// # Errors
+/// A version that isn't task data, or a result that can't be written.
+pub fn merge_versions(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
+    atm_db::jsongit::merge::merge_files(base, ours, theirs)
+}
+
 /// The version control of the project at or above `cwd`: git, at the project's root.
 #[must_use]
 pub fn open_vcs(cwd: &Path) -> atm_vcs::GitVcs {
