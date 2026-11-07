@@ -50,6 +50,20 @@ describe('security invariants (docs/security-architecture.md)', () => {
     );
   });
 
+  it('I24 in the Rust atm: it starts only git and itself (the claim’s watcher, `atm _claim-watch`) (T-446)', () => {
+    // Every place that starts a process, and the program it starts; the shell's start time comes from sysinfo, not ps
+    const starts = filesIn('crates', '.rs').flatMap((file) =>
+      [...read(file).matchAll(/Command::new\(\s*([^\s,)]+)/g)].map(
+        (call) => `${file.replace(/^crates\//, '')}: ${call[1]}`,
+      ),
+    );
+    expect(starts.sort()).toEqual(
+      ['atm-cli/src/commands/claim.rs: own_binary', 'atm-db/src/git.rs: "git"'].sort(),
+    );
+    // The watcher is started with atm's own path, never one from the command line or a task
+    expect(read('crates/atm-cli/src/commands/claim.rs')).toContain('let own_binary = std::env::current_exe()');
+  });
+
   it('I15: {@html} only in the bundled logo, never on data (the icons are components since T-432)', () => {
     const using = filesIn('dashboard/src', '.svelte').filter((file) => read(file).includes('{@html'));
     expect(using.sort()).toEqual(['dashboard/src/lib/ui/Logo.svelte']);

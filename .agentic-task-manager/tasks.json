@@ -21210,7 +21210,7 @@
       "description": "Slice 4 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the claims store, `claim list|heartbeat|hold`, the renewal by every command and the lease of §4. The watcher is the binary started detached (`atm _claim-watch`), following the shell by pid and start time (`sysinfo`, proposed to Hakan first as a new dependency); invariant I24's check moves to the Rust code.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-445",
         "T-439",
@@ -21221,7 +21221,7 @@
         "dashboard/tests/unit/security-invariants.test.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T01:21:58Z",
+      "updated_at": "2026-11-07T02:27:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21230,7 +21230,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:27:14Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-447",
@@ -22009,7 +22011,7 @@
       "description": "Slice 3d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `loop next` (`lib/loop.py`): the selections (`--sprint`, `--tasks`, `--all`, `--backlog`, `--with-user`, `--type`), the loop's order (active sprint, planned sprints, backlog; priority, then natural ID order), tasks handed back from review first, expired claims released, the reasons when nothing is ready (exit code 3), and `--claim` starting and claiming in one step; text and `--json` as in Python.\n\n## Tests\nThe `loop next` scenarios (`next.json`, `selections.json`, `with-user.json`, `lease.json`) leave `tests/scripts/rust-expected-failures.json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-465"
       ],
@@ -22017,7 +22019,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T01:21:53Z",
-      "updated_at": "2026-11-07T02:23:45Z",
+      "updated_at": "2026-11-07T02:27:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22033,10 +22035,19 @@
           "kind": "note",
           "text": "The selection, the loop order and `next_task` with its reasons are ported already (T-464, `atm-lib` `loop_rules.rs`, with tests): this slice adds `loop next` itself, `--claim` on the write path (T-445), expired claims and the resolutions from other worktrees.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T02:27:10Z",
+          "kind": "outcome",
+          "text": "Rust `loop next` with all selections and `--claim` (start and claim in one change); 42 tests left the expected-failures list (355 left), the 16-agent stress test among them.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-07T02:23:45Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "3cda06556599e2120d32c89fb8a32722a71b360e",
+      "completed_at": "2026-11-07T02:27:10Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-468",

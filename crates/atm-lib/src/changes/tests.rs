@@ -136,7 +136,10 @@ fn next_shows_or_claims_the_loops_next_task_and_says_why_there_is_none() {
     assert_eq!(shown.task.unwrap()["id"], json!("T-2"));
     assert!(shown.claim.is_none());
     let claimed = next_task_for(&mut p, &sel, false, true, None).unwrap();
-    assert_eq!(claimed.task.as_ref().unwrap()["status"], json!("in_progress"));
+    assert_eq!(
+        claimed.task.as_ref().unwrap()["status"],
+        json!("in_progress")
+    );
     assert_eq!(claimed.claim.unwrap()["agent"], json!("claude:a"));
     assert!(p.store().read_claims()["claims"].get("T-2").is_some());
     let none = next_task_for(&mut p, &sel, false, false, None).unwrap();

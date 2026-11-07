@@ -20,6 +20,31 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
     Ok(Project::new(Box::new(JsonGitStore::new(paths))))
 }
 
+/// The project the plugin's hook (`claim heartbeat --auto`) works on in `cwd`, as `actor`; none when there are no task
+/// files there. (Listing it on the dashboard comes with the registry, T-472.)
+#[must_use]
+pub fn hook_project(cwd: &Path, actor: String) -> Option<Project> {
+    let paths = find_paths(cwd).ok()?;
+    if !paths.tasks.is_file() {
+        return None;
+    }
+    check_task_folder(&paths.root, &paths.dir).ok()?;
+    Some(Project::new(Box::new(JsonGitStore::new(paths))).with_actor(Some(actor)))
+}
+
+/// When process `pid` started, in seconds since 1970, or none when there is no such process (or it has ended): with
+/// its pid, it tells a process from a later one that got the same pid.
+#[must_use]
+pub fn process_started(pid: u32) -> Option<u64> {
+    let pid = sysinfo::Pid::from_u32(pid);
+    let mut system = sysinfo::System::new().ok()?;
+    system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
+    system
+        .process(pid)
+        .filter(|p| p.status() != sysinfo::ProcessStatus::Zombie)
+        .map(sysinfo::Process::start_time)
+}
+
 /// The main worktree's folder for a project root: itself, unless it is a linked git worktree.
 fn main_worktree(root: &Path) -> std::path::PathBuf {
     if let Some(common) = atm_db::git::git(&["rev-parse", "--git-common-dir"], root) {
@@ -46,7 +71,8 @@ fn main_worktree(root: &Path) -> std::path::PathBuf {
 
 /// A Claude Code session's identity: `claude:` and 8 characters of its ID; in a linked git worktree, also
 /// `@<worktree folder>`, so agents in separate worktrees have identities of their own.
-fn session_identity(session: &str, cwd: &Path) -> String {
+#[must_use]
+pub fn session_identity(session: &str, cwd: &Path) -> String {
     let mut identity = format!("claude:{}", session.chars().take(8).collect::<String>());
     let root = atm_db::jsongit::paths::project_root(cwd);
     if main_worktree(&root) != root {

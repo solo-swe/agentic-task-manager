@@ -100,6 +100,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   `--with-user`) on T-464's loop rules, expired claims released and other worktrees' decisions applied first, the
   reason and exit code 3 when nothing is ready, and `--claim` starting and claiming the task in the same change.
   Forty-two more tests left the expected-failures list, among them the 16-agent stress test.
+- **Claims in the Rust atm** (T-446): `atm claim list|heartbeat|hold`, `heartbeat --auto` as the plugin's hook (the
+  session and folder from stdin, silent, never failing), and every command an agent runs renewing its own claims ten
+  minutes on (not one run with `--agent`). `claim hold`'s watcher is the binary itself, started detached as the
+  hidden `atm _claim-watch`, following the shell by pid and start time (`sysinfo`); invariant I24's check
+  (`security-invariants.test.ts`) covers the Rust atm: it starts only `git` and itself. Fifteen more tests left the
+  expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).

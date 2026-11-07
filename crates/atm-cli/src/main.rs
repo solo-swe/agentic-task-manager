@@ -16,7 +16,12 @@ use atm_common::py::to_json;
 use clap::error::ErrorKind;
 use clap::{Parser, Subcommand};
 use commands::{
-    Context, agents::AgentsCommand, loop_::LoopCommand, project::ProjectCommand, task::TaskCommand,
+    Context,
+    agents::AgentsCommand,
+    claim::{ClaimCommand, WatchArgs},
+    loop_::LoopCommand,
+    project::ProjectCommand,
+    task::TaskCommand,
 };
 use serde_json::json;
 
@@ -51,6 +56,9 @@ enum Command {
     /// The work loop
     #[command(subcommand)]
     Loop(LoopCommand),
+    /// Claim lifecycle
+    #[command(subcommand)]
+    Claim(ClaimCommand),
     /// Install atm's skills where your agent harnesses read them (Claude Code for now)
     #[command(subcommand)]
     Agents(AgentsCommand),
@@ -68,6 +76,43 @@ enum Command {
         #[arg(default_value_t = 0.0)]
         seconds: f64,
     },
+    /// Renew a claim while a shell lives (what `atm claim hold` leaves behind).
+    #[command(name = "_claim-watch", hide = true)]
+    ClaimWatch(WatchArgs),
+}
+
+impl Command {
+    /// Whether running it renews the caller's own claims (T-439): not the commands that work on no project, nor the
+    /// heartbeat and the watcher, which renew their own.
+    fn renews_claims(&self) -> bool {
+        !matches!(
+            self,
+            Command::Docs { .. }
+                | Command::Version
+                | Command::LockTest { .. }
+                | Command::ClaimWatch(_)
+                | Command::Claim(ClaimCommand::Heartbeat { .. })
+        )
+    }
+}
+
+/// Every atm command an agent runs renews that agent's live claims, so they last while it works, in any harness, with
+/// no hook (T-439, docs/porting-to-rust.md §4). As `claim heartbeat --auto`: only claims whose last renewal is ten
+/// minutes old, so most commands only read. Not for a command run as someone else (`--agent`), and never in the way of
+/// the command itself.
+fn renew_own_claims(args: &[OsString], cwd: &Path) {
+    let as_someone_else = args.iter().take_while(|a| *a != "--").any(|a| {
+        let a = a.to_string_lossy();
+        a == "--agent" || a.starts_with("--agent=")
+    });
+    if as_someone_else {
+        return;
+    }
+    if let Ok(project) = atm_boot::open_project(cwd) {
+        let actor = atm_boot::agent_identity(None, cwd);
+        // No project here, or one atm can't read: the command says so itself
+        let _ = atm_lib::claims::renew_due_claims(&mut project.with_actor(Some(actor)));
+    }
 }
 
 /// An error as atm reports it: `atm: <message>` on stderr, or `{"error", "code"}` with `--json`.
@@ -148,12 +193,16 @@ fn run(args: &[OsString]) -> u8 {
             return 1;
         }
     };
+    if cli.command.renews_claims() {
+        renew_own_claims(args, &cwd);
+    }
     // Each command's exit code when it ends without an error (`agents install` ends with 1 when it left a folder alone,
     // `loop next` with 3 when no task is available)
     let result: Result<u8, Error> = match cli.command {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),
+        Command::Claim(command) => commands::claim::run(command, ctx, &cwd).map(|()| 0),
         Command::Agents(command) => commands::agents::run(command, ctx, &cwd),
         Command::Docs { topic } => commands::meta::docs(topic.as_deref(), ctx).map(|()| 0),
         Command::Version => {
@@ -161,6 +210,10 @@ fn run(args: &[OsString]) -> u8 {
             Ok(0)
         }
         Command::LockTest { seconds } => atm_boot::hold_lock_for_test(&cwd, seconds).map(|()| 0),
+        Command::ClaimWatch(args) => {
+            commands::claim::watch(&args, &cwd);
+            Ok(0)
+        }
     };
     match result {
         Ok(code) => code,
