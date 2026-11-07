@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 462,
+    "next_id": 465,
     "labels": [
       {
         "id": "architecture",
@@ -21910,16 +21910,16 @@
     },
     {
       "id": "T-444",
-      "name": "Rust: reading the store, task list|details|deps, project status, --json",
+      "name": "Rust: the model, reading the store, task details",
       "type": "refactor",
       "priority": "P2",
       "labels": [
         "rust"
       ],
-      "description": "Slice 2 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the model and the JSON store (tasks.json, the archive) in `atm-common`/`atm-db`, reads in `atm-lib`, and `task list`, `task details`, `task deps`, `project status` in `atm-cli`, text and `--json` as §1 says. Their scenarios leave the expected-failures list. Split further when the sprint is planned.\n\n## Layout of `atm-cli`\nSet up the layout the later slices fill ([porting-to-rust.md](docs/porting-to-rust.md#:~:text=One%20module%20per%20top%2Dlevel%20command), as the Python CLI is split in `atm-cli/atm/cli/commands/`):\n- `src/main.rs`: only the root `Cli` (clap derive), the global options (`-j/--json`, `--dir`, …), the dispatch to the groups and the exit codes.\n- `src/commands/<group>.rs`, one per top-level command (`task`, `project` in this slice; the others as their slices come): its clap subcommand enum, its handlers, and its area's text renderers.\n- `maintenance.rs` (`doctor`, `service`) and `meta.rs` (`version`, `help`, `docs`) for the single commands; `version` moves there from `main.rs`.\n",
+      "description": "Slice 2a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 2, split in four: this, then `task list`, `task deps` and `project status`). Follows the [Rust guide](docs/guides/rust.md); the Python atm is the spec (§1: `--json` identical, text the same or better, exit codes identical).\n\n## Change\n- `atm-common`: the model the reads need (task, sprint, release, component, the vocabularies and kinds from `atm-cli/atm/common/schema/vocabularies.json`, the errors), with `serde` keeping atm's key order (§3).\n- `atm-db`: reading `.agentic-task-manager/tasks.json` and `tasks-archive.json` as the Python store does (`db/jsongit/`: finding the folder, refusing symlinks, the in-memory upgrades of older files), behind a store interface.\n- `atm-lib`: the reads `task details` uses (`lib/tasks.py`'s `show_tasks`).\n- `atm-boot`: opening a project from the current directory or `--dir`.\n- `atm-cli`: the layout the later slices fill: `src/main.rs` with only the root `Cli` (clap derive), the global options (`-j/--json`, `--dir`, anywhere on the line as today), the dispatch and the exit codes; `src/commands/<group>.rs` per top-level command (`task` here; `version` moves to `meta.rs`); `task details <id>...` as text and `--json`, with Python's error messages (unknown task, no task file).\n\n## Tests\nUnit tests in the crates; the `task details` scenarios (and the error and global-option ones it makes pass) leave `tests/scripts/rust-expected-failures.json`.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-443"
       ],
@@ -21927,7 +21927,7 @@
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T00:14:43Z",
+      "updated_at": "2026-11-07T00:51:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21936,7 +21936,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T00:39:33Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-445",
@@ -21951,15 +21953,16 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-444"
+        "T-444",
+        "T-462"
       ],
       "files": [
         "crates/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T00:51:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -22073,16 +22076,17 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-444"
+        "T-444",
+        "T-464"
       ],
       "files": [
         "crates/atm-api/",
         "crates/atm-cli/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T00:51:45Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -22483,6 +22487,96 @@
         }
       ],
       "sprint": "The atm app"
+    },
+    {
+      "id": "T-462",
+      "name": "Rust: task list, its filters and --derived",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-444's model and store.\n\n## Change\n- `atm-lib`: the queries of `lib/query.py` that `task list` uses (`list_matching`, `Filters`, the views), and what atm derives for a task: its kind, `ready`, `waiting_for` (an archived dependency counts as done), the effective priority and review mode (`effective_review`, from the task, its components and `meta.review`), `archived`.\n- `atm-cli` (`commands/task.rs`): `task list` with every filter the Python command has (`--status`, `--sprint`/`--backlog`, `--type`, `--priority`, `--label`, `--ready`, `--blocked`, `--in-pr`, `--archived`, `--with-user`, …) and `--derived`, text and `--json` identical to Python's.\n\n## Tests\nUnit tests for the derived fields; the `task list` scenarios (`query.json` and the others that list) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T00:51:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-463",
+      "name": "Rust: task deps",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task deps <id>`, a task's dependency chain (`lib/query.py`'s `task_dependencies`: what it waits for, what waits for it, archived tasks counted as done), text and `--json` identical to Python's, in `commands/task.rs`.\n\n## Tests\nUnit tests for the chain; the `task deps` scenarios leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T00:51:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-464",
+      "name": "Rust: project status",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `project status`, the overview (`lib/query.py`'s `status_report` and `project_summary`): the active sprint and its goal, the counts by status, sprint, type and label, what waits for review, is blocked or waits on dependencies, what's next by the loop's rule, the archive hint and the file sizes; text and `--json` identical to Python's, in `commands/project.rs`. `atm serve`'s `api/projects` (T-449) reuses the summary.\n\n## Tests\nUnit tests for the report; the `project status` scenarios (`status.json` and the others that read it) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-462"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-07T00:51:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port"
     }
   ]
 }

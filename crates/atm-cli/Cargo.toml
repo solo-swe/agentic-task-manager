@@ -16,6 +16,7 @@ atm-common.workspace = true
 atm-lib.workspace = true
 atm-boot.workspace = true
 clap.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true

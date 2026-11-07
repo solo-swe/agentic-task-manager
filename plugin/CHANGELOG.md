@@ -44,6 +44,12 @@ The sprint *Rust and distribution*: the groundwork for atm as an app that instal
   binary. CI's new `rust` job builds, lints and tests it on Linux, macOS and Windows, checks its dependencies with
   cargo-deny, and runs the CLI suite against the binary (`node tests/scripts/run.mjs --rust`; `pnpm run
   test:scripts:rust`) with the tests it doesn't pass yet listed in `tests/scripts/rust-expected-failures.json`.
+- **The Rust atm reads a project** (T-444): the model and the vocabularies' checks (`atm-common`), reading
+  `tasks.json` and the archive strictly with the task folder's symlink checks (`atm-db`, behind a store interface,
+  with an in-memory store for tests), `task details` as text and `--json` (`atm-lib`, `atm-cli`), and the CLI's
+  layout: `main.rs` with the global options (`-j/--json`, `-n/--dry-run`, a leading `--dir`), the errors and exit
+  codes, and one module per command group in `commands/`. New dependencies: `serde_json` (keys in stored order) and
+  `thiserror`. Nine scenarios left the expected-failures list.
 - **The skills' one source is `skills/atm-*/SKILL.md`** (T-441), portable to any agent harness: frontmatter `name`
   and `description` only, a version check first (`atm version`, at least 0.32.0), links to each other as
   `/atm-<name>`, reference detail from `atm docs` instead of repeated (the rules, leases, how task text renders).
