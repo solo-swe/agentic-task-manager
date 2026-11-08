@@ -194,6 +194,11 @@ fn start_server(home: &Path, port: u64) -> Result<Map<String, Value>> {
         use std::os::unix::process::CommandExt;
         command.process_group(0);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(crate::commands::claim::DETACHED);
+    }
     let mut child = command
         .spawn()
         .map_err(|e| Error::failed(format!("can't start the dashboard server: {e}")))?;

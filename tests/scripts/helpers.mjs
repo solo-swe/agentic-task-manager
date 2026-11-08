@@ -50,6 +50,10 @@ export function git(args, cwd) {
   return result.stdout.trim();
 }
 
+/** A path as atm prints it: `/` between its parts on every platform (T-480), where Node's path.join gives `\` on
+ * Windows. */
+export const shown = (p) => (process.platform === 'win32' ? p.replace(/\\/g, '/') : p);
+
 /** A fresh temporary directory, as atm writes its path: the real path (macOS's /var is /private/var), and on Windows
  * the long names (never `RUNNER~1`) with `/` between the parts (T-480). Node's fs takes `/` on Windows too. */
 export function tempDir(prefix = 'atm-test-') {
@@ -98,5 +102,7 @@ export function fill(value, vars) {
 }
 
 export function removeDir(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Windows refuses to remove a file a process still has open (EPERM, EBUSY) while one that just ended lets go: a few
+  // tries apart
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

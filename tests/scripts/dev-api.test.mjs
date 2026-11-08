@@ -120,6 +120,8 @@ test(NAME, { skip }, async () => {
     const record = path.join(home, 'server.json');
     const first = JSON.parse(fs.readFileSync(record, 'utf8')).pid;
     fs.copyFileSync(BINARY, `${atm}.new`);
+    // Windows can't replace a running program's file, only move it aside
+    if (process.platform === 'win32') fs.renameSync(atm, `${atm}.old`);
     fs.renameSync(`${atm}.new`, atm);
     const restarted = () => {
       try {
@@ -133,9 +135,14 @@ test(NAME, { skip }, async () => {
     assert.equal(alive(first), false);
     assert.ok(await until(projects, 'api/projects after the restart'));
 
-    // Stopping Vite stops the API server and removes its home
+    // Stopping Vite stops the API server and removes its home. Windows has no SIGTERM: Vite is ended at once, its exit
+    // handler never runs, so there the test stops the server itself
     vite.kill('SIGTERM');
     await exited;
+    if (process.platform === 'win32') {
+      process.kill(second);
+      removeDir(home);
+    }
     await until(() => !alive(second), 'the API server to stop', 5_000);
     assert.equal(fs.existsSync(home), false);
   } catch (e) {

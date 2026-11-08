@@ -79,8 +79,9 @@ fn normalize(path: &Path) -> PathBuf {
 
 /// The path with its links resolved, as Python's `realpath`: for one that doesn't exist, its nearest existing folder's.
 fn real_path(path: &Path) -> PathBuf {
+    // atm-common's `canonical`: on Windows without `\\?\`, so it compares with the root
     let normal = normalize(path);
-    if let Ok(real) = std::fs::canonicalize(&normal) {
+    if let Ok(real) = atm_common::pathtext::canonical(&normal) {
         return real;
     }
     let mut missing = Vec::new();
@@ -88,7 +89,7 @@ fn real_path(path: &Path) -> PathBuf {
     while let Some(parent) = existing.parent() {
         missing.push(existing.file_name().map(PathBuf::from).unwrap_or_default());
         existing = parent;
-        if let Ok(real) = std::fs::canonicalize(existing) {
+        if let Ok(real) = atm_common::pathtext::canonical(existing) {
             return missing.iter().rev().fold(real, |p, part| p.join(part));
         }
     }

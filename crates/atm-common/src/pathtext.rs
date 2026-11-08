@@ -40,16 +40,26 @@ pub fn real(path: &Path) -> PathBuf {
     if !cfg!(windows) {
         return path.to_path_buf();
     }
-    let Ok(canonical) = std::fs::canonicalize(path) else {
-        return PathBuf::from(slashed(&path.display().to_string()));
-    };
+    canonical(path).unwrap_or_else(|_| PathBuf::from(slashed(&path.display().to_string())))
+}
+
+/// `fs::canonicalize` (links resolved), and on Windows without the `\\?\` prefix it adds, with `/` between the
+/// parts, so the result compares with the paths atm makes (a `\\?\C:` prefix never equals `C:`).
+///
+/// # Errors
+/// As `fs::canonicalize`: the path doesn't exist, or can't be read.
+pub fn canonical(path: &Path) -> std::io::Result<PathBuf> {
+    let canonical = std::fs::canonicalize(path)?;
+    if !cfg!(windows) {
+        return Ok(canonical);
+    }
     let text = canonical.display().to_string();
     let plain = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
         format!(r"\\{unc}")
     } else {
         text.strip_prefix(r"\\?\").unwrap_or(&text).to_string()
     };
-    PathBuf::from(slashed(&plain))
+    Ok(PathBuf::from(slashed(&plain)))
 }
 
 #[cfg(test)]
