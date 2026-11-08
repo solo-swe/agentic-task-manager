@@ -22585,7 +22585,7 @@
       "description": "0.32.0 is the Claude Code plugin's last release (decided with Hakan): its What's New, changelog and README say that the next version comes as the `atm` CLI (the Homebrew formula, the release binaries) and the app, and how a plugin user moves: install the CLI, `atm agents install`, remove the plugin; the skills are `atm-…` then, not `/atm:`. Reviewed with Hakan before the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "plugin/WHATS-NEW.md",
@@ -22593,7 +22593,7 @@
         "README.md"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-08T01:51:08Z",
+      "updated_at": "2026-11-08T02:34:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22608,15 +22608,35 @@
       "started_by": "claude:34798264",
       "commit": "4bad16e64ed14e6a0c1a9ba6f8771fce88d25fd1",
       "review_requested_at": "2026-11-08T01:51:08Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-08T01:51:08Z",
           "kind": "review",
           "text": "Draft: README notice at the top and a \"Moving to the atm CLI\" section after Quick Start; What’s New 0.32.0 (two bullets); CHANGELOG 0.32.0 paragraph. Check the moving steps and the wording.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T02:34:37Z",
+          "kind": "note",
+          "text": "Approved: Approved in the session; \"macOS, Linux and Windows\" is enough.",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-08T02:34:44Z",
+          "kind": "outcome",
+          "text": "README notice and \"Moving to the atm CLI\", What’s New and CHANGELOG for 0.32.0, the plugin’s last release; approved by Hakan.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-08T01:51:08Z",
+          "to": "2026-11-08T02:34:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-08T02:34:44Z",
+      "completed_by": "claude:34798264"
     }
   ]
 }
