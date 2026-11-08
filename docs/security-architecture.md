@@ -25,7 +25,7 @@ this document is what changes with the code.
 | A collaborator, or anyone whose commits the user pulls | may write tasks, must not control the machine | `tasks.json`, the archive, `meta` |
 | A hostile repository the user clones | no | everything in it, symlinks included |
 | A web page in the user's browser | no | HTTP requests to `localhost` |
-| Another local user or process | no | the server's port, files in `ATM_HOME` |
+| Another local user or process | no | the server's port, files in atm's state folder (`ATM_STATE_DIR`, T-490) |
 | An outside contributor, CI output | no | PRs, CI logs, review comments the push skill reads |
 | The supply chain | partly | npm, crates.io, GitHub Actions, the CI container, the release and Homebrew tap |
 
@@ -37,7 +37,7 @@ this document is what changes with the code.
 | B2 | repository files → atm-cli | `tasks.json`, the archive, `.gitattributes`, paths, symlinks under `.agentic-task-manager/` |
 | B3 | browser → dashboard server | every HTTP request, from any page |
 | B4 | task data → dashboard rendering | names, Markdown, links, logos; every project's card fields in `api/projects` (`board`: names, types, labels, agents, times, T-257), rendered as text on the All projects board like a project's own cards (I15, T-259) |
-| B5 | local machine → atm's runtime files | `ATM_HOME`, the server's port |
+| B5 | local machine → atm's runtime files | the state folder (the platform's app data folder, or `ATM_STATE_DIR`; made owner-only, 0700, as `ATM_HOME` was), the server's port |
 | B6 | contributors and CI → repository → users | workflows, artifacts, dependencies, the build artifacts users run |
 
 The threats per boundary (STRIDE, with likelihood and impact) are in `docs/security-review.md` §2.4; new ones are

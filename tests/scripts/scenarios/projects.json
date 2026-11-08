@@ -9,7 +9,7 @@
     "args": ["project", "list"],
     "expect": {
       "stdout": "No projects registered. `atm project add [PATH]` adds one; atm adds a project when it runs there.\n",
-      "files": { ".atm-home/projects.json": false }
+      "files": { ".atm-home/workspaces/default.json": false }
     }
   },
   {
@@ -24,7 +24,7 @@
     "expect": {
       "stdout": "Added: abcd1234  Demo  {root}\n",
       "files": {
-        ".atm-home/projects.json": {
+        ".atm-home/workspaces/default.json": {
           "version": 1,
           "projects": [
             {
@@ -50,7 +50,7 @@
     "env": { "ATM_NOW": "2026-01-01T00:00:00Z" },
     "expect": {
       "files": {
-        ".atm-home/projects.json": {
+        ".atm-home/workspaces/default.json": {
           "version": 1,
           "projects": [
             {
@@ -76,13 +76,13 @@
     "args": ["db", "migrate"],
     "expect": {
       "stdout": "Nothing to migrate.\n",
-      "files": { ".atm-home/projects.json": true }
+      "files": { ".atm-home/workspaces/default.json": true }
     }
   },
   {
     "name": "migrate without tasks.json lists nothing",
     "args": ["db", "migrate"],
-    "expect": { "files": { ".atm-home/projects.json": false } }
+    "expect": { "files": { ".atm-home/workspaces/default.json": false } }
   },
   {
     "name": "projects add PATH from another folder, then it is already registered",
@@ -122,11 +122,11 @@
     "expect": {
       "exit": 1,
       "stderrIncludes": ["opts out of the dashboard"],
-      "files": { ".atm-home/projects.json": false }
+      "files": { ".atm-home/workspaces/default.json": false }
     }
   },
   {
-    "name": "projects marks a project whose folder is gone",
+    "name": "projects marks a project whose folder is gone, from a projects.json renamed into place (ADR-003)",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] },
@@ -145,13 +145,16 @@
       }
     },
     "args": ["project", "list"],
-    "expect": { "stdout": "0ld0ne00  Gone  /nonexistent/atm-test/gone  (not found)\n" }
+    "expect": {
+      "stdout": "0ld0ne00  Gone  /nonexistent/atm-test/gone  (not found)\n",
+      "files": { ".atm-home/projects.json": false, ".atm-home/workspaces/default.json": true }
+    }
   },
   {
     "name": "projects --json lists entries with missing",
     "setup": {
       "files": {
-        ".atm-home/projects.json": {
+        ".atm-home/workspaces/default.json": {
           "version": 1,
           "projects": [
             {
@@ -187,7 +190,7 @@
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] },
-        ".atm-home/projects.json": {
+        ".atm-home/workspaces/default.json": {
           "version": 1,
           "projects": [
             {
@@ -204,14 +207,14 @@
     "args": ["project", "prune"],
     "expect": {
       "stdout": "Removed: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
-      "files": { ".atm-home/projects.json": { "version": 1, "projects": [] } }
+      "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
     }
   },
   {
     "name": "projects remove by id",
     "setup": {
       "files": {
-        ".atm-home/projects.json": {
+        ".atm-home/workspaces/default.json": {
           "version": 1,
           "projects": [
             {
@@ -228,7 +231,7 @@
     "args": ["project", "remove", "0ld0ne00"],
     "expect": {
       "stdout": "Removed: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
-      "files": { ".atm-home/projects.json": { "version": 1, "projects": [] } }
+      "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
     }
   },
   {
@@ -242,7 +245,20 @@
     "args": ["project", "remove", "app"],
     "expect": {
       "stdout": "Removed: abcd1234  Demo  {root}/app\n",
-      "files": { ".atm-home/projects.json": { "version": 1, "projects": [] } }
+      "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
+    }
+  },
+  {
+    "name": "ATM_STATE_DIR names the state folder, over ATM_HOME, its older name (ADR-003)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
+      }
+    },
+    "args": ["project", "add"],
+    "env": { "ATM_STATE_DIR": "{root}/.state" },
+    "expect": {
+      "files": { ".state/workspaces/default.json": true, ".atm-home/workspaces/default.json": false }
     }
   },
   {
@@ -252,16 +268,16 @@
   },
   {
     "name": "an unreadable registry is moved aside and replaced",
-    "setup": { "files": { ".atm-home/projects.json": "{ not json" } },
+    "setup": { "files": { ".atm-home/workspaces/default.json": "{ not json" } },
     "args": ["project", "list"],
     "env": { "ATM_NOW": "2026-01-01T00:00:00Z" },
     "expect": {
       "stdoutIncludes": [
-        "projects.json was unreadable: moved it to {root}/.atm-home/projects.json.damaged-20260101T000000Z"
+        "The project list (workspaces/default.json) was unreadable: moved it to {root}/.atm-home/workspaces/default.json.damaged-20260101T000000Z"
       ],
       "files": {
-        ".atm-home/projects.json.damaged-20260101T000000Z": "{ not json",
-        ".atm-home/projects.json": { "version": 1, "projects": [] }
+        ".atm-home/workspaces/default.json.damaged-20260101T000000Z": "{ not json",
+        ".atm-home/workspaces/default.json": { "version": 1, "projects": [] }
       }
     }
   }

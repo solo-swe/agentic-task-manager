@@ -80,6 +80,14 @@ mod tests {
         );
     }
 
+    /// The state folder is named by atm-common's identifier, and the app's must be the same (ADR-003 §2)
+    #[test]
+    fn the_apps_identifier_is_atms() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(conf["identifier"], atm_common::home::APP_ID);
+    }
+
     #[test]
     fn an_empty_registry_lists_no_projects() {
         let home = scratch("empty");

@@ -262,7 +262,7 @@ fn describe_entry(entry: &Value) -> String {
 fn damaged_notice(result: &Value) {
     if let Some(damaged) = result["damaged"].as_str() {
         println!(
-            "projects.json was unreadable: moved it to {damaged} and started an empty registry."
+            "The project list (workspaces/default.json) was unreadable: moved it to {damaged} and started an empty one."
         );
     }
 }

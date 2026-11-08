@@ -75,7 +75,7 @@ The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4
 
 Commands (run in `dashboard/`):
 - `pnpm run dev` — Vite dev server, with the real REST API: this checkout's Rust atm (`cargo build` first; its
-  `atm _serve` on a temporary `ATM_HOME`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`,
+  `atm _serve` on a temporary state folder, `ATM_STATE_DIR`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`,
   `p/`, `__atm/` and `assets/` to it) for this repo's `.agentic-task-manager/`, or for other folders with
   `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] pnpm run dev` (a folder without a task file is listed as
   missing). `cargo build` is enough to pick up atm changes: the API server restarts when the binary changes.

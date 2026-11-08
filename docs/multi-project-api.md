@@ -322,12 +322,19 @@ The open dashboard compares `build` with its own to offer a reload.
 The old per-project servers (0.10.0–0.14.0) answer `{atm, folder, pid}`. The `folder` key identifies one, which is how
 `atm db migrate` recognises and stops it.
 
-## 5. Files in `ATM_HOME`
+## 5. Files in atm's state folder
 
-`ATM_HOME` is `~/.agentic-task-manager` unless the environment sets it. Both files are written atomically (temporary
-file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
+The state folder ([ADR-003](adr/ADR-003-workspaces.md) §2) is `ATM_STATE_DIR` when set, else `ATM_HOME` (its older
+name), else the platform's app data folder for `com.solo-swe.atm`: `~/Library/Application Support/com.solo-swe.atm/`
+(macOS), `$XDG_DATA_HOME/com.solo-swe.atm/` or `~/.local/share/com.solo-swe.atm/` (Linux),
+`%APPDATA%\com.solo-swe.atm\` (Windows). Without either variable, the first run moves `~/.agentic-task-manager/` there
+and leaves `MOVED.txt` in its place (T-490). Both files are written atomically (temporary file, then rename) under the
+folder's `.lock`, atm's usual lock directory.
 
-### 5.1 `projects.json`, the registry
+### 5.1 `workspaces/default.json`, the registry
+
+It was `projects.json` before T-490: an old one is renamed into place when atm first reads the folder. T-491 turns it
+into the `default` workspace (ADR-003 §1).
 
 ```json
 {
@@ -348,7 +355,7 @@ file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
 - `id` and `name` are copied from `meta.id` and `meta.project` when atm registers the project, and updated when they
   change. `id` follows §3.1 when `meta.id` is missing.
 - `seen_at` is the last time atm ran there, updated at most once a day.
-- An unreadable file is renamed to `projects.json.damaged-<UTC time, e.g. 20261025T215138Z>` and replaced by an empty
+- An unreadable file is renamed to `default.json.damaged-<UTC time, e.g. 20261025T215138Z>` and replaced by an empty
   registry.
 
 ### 5.2 `server.json`, the running server

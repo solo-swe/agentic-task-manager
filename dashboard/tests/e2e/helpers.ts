@@ -75,7 +75,7 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
       cwd: dir,
       encoding: 'utf8',
       maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
@@ -118,7 +118,7 @@ function atmSummary(body: string): Record<string, unknown> {
     const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status !== 0) throw new Error(`atm project summary failed: ${r.stderr}`);
     return JSON.parse(r.stdout) as Record<string, unknown>;

@@ -303,7 +303,7 @@ fn run(args: &[OsString]) -> u8 {
     };
     if cli.command.refreshes_server() {
         // Never in the way of the command itself
-        let _ = commands::maintenance::refresh_server(&atm_common::home::atm_home());
+        let _ = commands::maintenance::refresh_server(&atm_common::home::state_dir());
     }
     if cli.command.renews_claims() {
         renew_own_claims(args, &cwd);

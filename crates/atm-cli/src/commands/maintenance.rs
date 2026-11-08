@@ -13,7 +13,7 @@ use atm_boot::{dashboard_id, migrate_folder, open_project, pid_alive, pid_exists
 use atm_common::dashboard::{
     PAGE, SCAN_PORTS, SERVER_LOG, SERVER_RECORD, home_id, page_tags, parse_version, whoami,
 };
-use atm_common::home::{atm_home, ensure_home};
+use atm_common::home::{ensure_home, state_dir};
 use atm_common::py::{py_str_opt, to_json};
 use atm_common::time::{parse_iso, real_now};
 use atm_common::{Error, Result};
@@ -244,7 +244,7 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
             );
         }
     }
-    let home = atm_home();
+    let home = state_dir();
     let (record, started) = ensure_server(&home, u64::from(port))?;
     let url = server_url(
         record.get("port").unwrap_or(&Value::Null),
@@ -509,7 +509,7 @@ pub fn service(args: &ServiceArgs, ctx: Context, cwd: &Path) -> Result<()> {
         }
         None => cwd.to_path_buf(),
     };
-    let home = atm_home();
+    let home = state_dir();
     if args.refresh {
         if ctx.dry_run {
             println!("[dry-run] would refresh the dashboard server if outdated");

@@ -43,6 +43,8 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros
 # Windows only (T-480, approved): atm's own standard handles made non-inheritable before it starts a background
 # process, so the caller's pipes close when atm exits. Already in the tree through tokio and sysinfo
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
+# atm's state folder (ADR-003 §2, approved): the platform's app data folder, as Tauri finds it
+dirs = "7"
 # The atm app (T-455, docs/guides/tauri.md; approved): Tauri 2.11.1 or later (CVE-2026-42184), one instance, and its
 # commands' TypeScript types generated with tauri-specta. specta's crates are pre-releases, so pinned exactly
 serde = { version = "1", features = ["derive"] }

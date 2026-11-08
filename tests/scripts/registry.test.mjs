@@ -1,5 +1,5 @@
-// The project registry ($ATM_HOME/projects.json): what scenarios can't express, git worktrees and several processes
-// registering at once.
+// The project registry (the state folder's workspaces/default.json, ADR-003): what scenarios can't express, git
+// worktrees and several processes registering at once.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -9,7 +9,8 @@ import { describe, test } from 'node:test';
 import { ATM, baseEnv, git, makeProject, removeDir, runAtm, tempDir } from './helpers.mjs';
 
 const tasks = (id, project) => ({ meta: { id, project }, tasks: [] });
-const registry = (home) => JSON.parse(fs.readFileSync(path.join(home, 'projects.json'), 'utf8'));
+const REGISTRY = 'workspaces/default.json';
+const registry = (home) => JSON.parse(fs.readFileSync(path.join(home, REGISTRY), 'utf8'));
 
 /** Start `atm args...` without waiting; resolves with its exit code and stderr. */
 function startAtm(args, cwd, env) {
@@ -51,7 +52,7 @@ describe('project registry', () => {
   test('the hook (heartbeat --auto) lists a project once, then only reads the registry until a day has passed', () => {
     const root = makeProject({ files: { '.agentic-task-manager/tasks.json': tasks('abcd1234', 'Demo') } });
     const home = tempDir('atm-home-');
-    const file = path.join(home, 'projects.json');
+    const file = path.join(home, REGISTRY);
     const hook = (now) => runAtm(['claim', 'heartbeat', '--auto'], root, { ATM_HOME: home, ATM_NOW: now });
     try {
       assert.equal(hook('2026-01-01T00:00:00Z').code, 0);
@@ -90,12 +91,53 @@ describe('project registry', () => {
       assert.equal(r.code, 0, r.stderr);
       assert.equal(r.stdout + r.stderr, '');
       assert.ok(Date.now() - started < 3000, 'did not wait for the lock');
-      assert.equal(fs.existsSync(path.join(home, 'projects.json')), false);
+      assert.equal(fs.existsSync(path.join(home, REGISTRY)), false);
     } finally {
       removeDir(home);
       removeDir(root);
     }
   });
+
+  // Without ATM_STATE_DIR or ATM_HOME: the platform's app data folder, found from HOME (not on Windows, whose folder
+  // doesn't come from HOME), and ~/.agentic-task-manager moved into it once (ADR-003 §6)
+  test(
+    'the first run moves ~/.agentic-task-manager into the state folder',
+    { skip: process.platform === 'win32' },
+    () => {
+      const home = tempDir('atm-user-');
+      const legacy = path.join(home, '.agentic-task-manager');
+      const entry = {
+        id: 'abcd1234',
+        name: 'Demo',
+        path: '/nonexistent/atm-test/demo',
+        added_at: '2026-01-01T00:00:00Z',
+        seen_at: '2026-01-01T00:00:00Z',
+      };
+      fs.mkdirSync(path.join(legacy, 'skills'), { recursive: true });
+      fs.writeFileSync(path.join(legacy, 'projects.json'), JSON.stringify({ version: 1, projects: [entry] }));
+      const state =
+        process.platform === 'darwin'
+          ? path.join(home, 'Library/Application Support/com.solo-swe.atm')
+          : path.join(home, '.local/share/com.solo-swe.atm');
+      const env = { HOME: home, ATM_HOME: '', XDG_DATA_HOME: '' };
+      try {
+        const r = runAtm(['project', 'list', '--json'], home, env);
+        assert.equal(r.code, 0, r.stderr);
+        assert.deepEqual(
+          JSON.parse(r.stdout).projects.map((p) => p.id),
+          ['abcd1234'],
+        );
+        assert.ok(fs.existsSync(path.join(state, REGISTRY)), 'the registry, renamed in the state folder');
+        assert.ok(fs.existsSync(path.join(state, 'skills')), 'the rest moved as it was');
+        assert.match(fs.readFileSync(path.join(legacy, 'MOVED.txt'), 'utf8'), /com\.solo-swe\.atm/);
+        // Again: nothing moves twice
+        assert.equal(runAtm(['project', 'list'], home, env).code, 0);
+        assert.deepEqual(fs.readdirSync(legacy), ['MOVED.txt']);
+      } finally {
+        removeDir(home);
+      }
+    },
+  );
 
   test('projects registering at the same time all end up in one valid file', async () => {
     const home = tempDir('atm-home-');

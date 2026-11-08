@@ -392,7 +392,9 @@ the dashboard's project selector, next to the title, switches between them. **Al
 card per project: its progress, current phase, agents at work, what needs you, and recent activity. With two or more
 projects the dashboard opens on it.
 
-- **The list:** `~/.agentic-task-manager/projects.json` (set `ATM_HOME` to keep it elsewhere). `atm project list` lists the
+- **The list:** `workspaces/default.json` in atm's state folder: `~/Library/Application Support/com.solo-swe.atm/` on
+  macOS, `~/.local/share/com.solo-swe.atm/` on Linux, `%APPDATA%\com.solo-swe.atm\` on Windows (set `ATM_STATE_DIR` to
+  keep it elsewhere; atm moves an older `~/.agentic-task-manager/` there the first time). `atm project list` lists the
   projects, `atm project add [path]` adds one, `atm project remove <id|path>` removes one, and `atm project prune`
   drops those whose folder is gone.
 - **Opting out:** a project with `"dashboard": { "listed": false }` in its `tasks.json` meta isn't listed.

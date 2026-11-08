@@ -19,8 +19,9 @@ export const PLUGIN_BUILD = /<meta name="atm-dashboard-build" content="([^"]*)"/
   fs.readFileSync(path.join(REPO, 'dashboard/dist/tasks-dashboard.html'), 'utf8'),
 )?.[1];
 
-/** atm's user folder (ATM_HOME: the project registry, the server record) for tests that don't pick their own, so no
- * test reads or changes the real ~/.agentic-task-manager. */
+/** atm's state folder (the project list, the server record, ADR-003) for tests that don't pick their own, so no test
+ * reads or changes the real one. Tests that pick their own set ATM_HOME, its older name: baseEnv drops this machine's
+ * ATM_STATE_DIR, which would win over it. */
 const TEST_HOME = tempDir('atm-home-');
 process.on('exit', () => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
@@ -33,6 +34,7 @@ process.env.GIT_CONFIG_VALUE_0 = 'false';
 
 export function baseEnv() {
   const env = { ...process.env, ATM_HOME: TEST_HOME };
+  delete env.ATM_STATE_DIR;
   delete env.CLAUDE_CODE_SESSION_ID;
   delete env.ATM_AGENT;
   delete env.ATM_NOW;

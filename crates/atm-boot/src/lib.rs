@@ -162,7 +162,7 @@ pub fn open_vcs(cwd: &Path) -> atm_vcs::GitVcs {
 /// The user's registry of projects (the dashboard's list).
 pub use atm_db::registry::FileRegistry as Registry;
 
-/// The user's registry of projects (the dashboard's list), in `$ATM_HOME`.
+/// The user's registry of projects (the dashboard's list), in atm's state folder.
 #[must_use]
 pub fn open_registry() -> Registry {
     Registry::new()

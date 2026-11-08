@@ -21554,7 +21554,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §2 and §6, step 1.\n\n## Change\n- One function in atm-common gives atm's state folder: `ATM_STATE_DIR` when set, else the platform's app data folder for `com.solo-swe.atm` (the `dirs` crate, approved): `~/Library/Application Support/com.solo-swe.atm/`, `~/.local/share/com.solo-swe.atm/`, `%APPDATA%\\com.solo-swe.atm\\`. `ATM_HOME` keeps working as another name for `ATM_STATE_DIR`. Everything that used `atm_home()` uses it (the registry, the server's record, log and lock, `atm agents`).\n- The first run moves `~/.agentic-task-manager/` (or `$ATM_HOME`'s folder when it differs) into the state folder, under the lock: `projects.json` becomes `workspaces/default.json` (same entries), and the rest moves as it is. A note in the old folder says where it went.\n- A test that atm-common's identifier matches `tauri.conf.json`'s.\n- The test suite, the e2e fixture and the dev server set `ATM_STATE_DIR`.\n\n## Tests\nThe move (a folder with a registry, a server record and skills; an empty one; a second run that finds it moved), the platform folders, the alias.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-489"
       ],
@@ -21566,16 +21566,18 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:18:46Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-08T10:18:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:18:46Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-491",

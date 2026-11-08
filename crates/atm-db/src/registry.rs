@@ -1,15 +1,15 @@
-//! The user's project registry (`$ATM_HOME/projects.json`; the Python atm's `db/registry.py`): the projects the
-//! dashboard server shows (the `Registry` of docs/layered-architecture.md §3.2; its format is docs/multi-project-api.md
-//! §5.1).
+//! The user's project registry, the `default` workspace (`<state>/workspaces/default.json`, ADR-003; it was
+//! `projects.json` before, and is renamed the first time it is used): the projects the dashboard server shows (its
+//! format is docs/multi-project-api.md §5.1). T-491 gives atm-lib its workspaces on top of it.
 //!
-//! One file per user, guarded by `$ATM_HOME`'s lock (never taken while holding a project's), written atomically. A
-//! linked git worktree registers its repository's main worktree.
+//! One file per state folder, guarded by the folder's lock (never taken while holding a project's), written
+//! atomically. A linked git worktree registers its repository's main worktree.
 
 use std::path::{Path, PathBuf};
 
 use atm_common::Shown;
 
-use atm_common::home::{atm_home, ensure_home, write_text_atomic};
+use atm_common::home::{ensure_home, state_dir, write_text_atomic};
 use atm_common::py::to_json;
 use atm_common::sha1::sha1_hex;
 use atm_common::time::{format_iso, now, now_iso, parse_iso};
@@ -20,8 +20,25 @@ use crate::jsongit::files::read_json;
 use crate::jsongit::lock::lock;
 use crate::jsongit::paths::{Paths, find_paths, main_worktree};
 
-/// The registry's file, in `$ATM_HOME`.
-pub const REGISTRY_FILE: &str = "projects.json";
+/// The registry's file, the `default` workspace, in the state folder.
+pub const REGISTRY_FILE: &str = "workspaces/default.json";
+/// Its name before ADR-003, renamed to [`REGISTRY_FILE`] when found.
+pub const LEGACY_REGISTRY_FILE: &str = "projects.json";
+
+/// The registry's file in the state folder `home`: an old `projects.json` there is renamed into place first (one
+/// atomic step; if two processes race, one renames and the other finds it done).
+#[must_use]
+pub fn registry_file(home: &Path) -> PathBuf {
+    let file = home.join(REGISTRY_FILE);
+    let legacy = home.join(LEGACY_REGISTRY_FILE);
+    if !file.exists() && legacy.is_file() {
+        if let Some(folder) = file.parent() {
+            let _ = std::fs::create_dir_all(folder);
+        }
+        let _ = std::fs::rename(&legacy, &file);
+    }
+    file
+}
 const REGISTRY_VERSION: u64 = 1;
 /// Seconds between `seen_at` updates, so the registry isn't rewritten on every command.
 const SEEN_EVERY: i64 = 24 * 3600;
@@ -126,10 +143,10 @@ fn empty_registry() -> Value {
     json!({"version": REGISTRY_VERSION, "projects": []})
 }
 
-/// The registry and, when `projects.json` was unreadable, where it was moved (`projects.json.damaged-<time>`; an
-/// empty registry replaces it). Called holding the registry's lock.
+/// The registry and, when its file was unreadable, where it was moved (`default.json.damaged-<time>`; an empty
+/// registry replaces it). Called holding the registry's lock.
 fn read_registry(home: &Path) -> Result<(Value, Option<String>)> {
-    let path = home.join(REGISTRY_FILE);
+    let path = registry_file(home);
     if !path.exists() {
         return Ok((empty_registry(), None));
     }
@@ -156,7 +173,10 @@ fn read_registry(home: &Path) -> Result<(Value, Option<String>)> {
 }
 
 fn write_registry(home: &Path, registry: &Value) -> Result<()> {
-    let path = home.join(REGISTRY_FILE);
+    let path = registry_file(home);
+    if let Some(folder) = path.parent() {
+        ensure_home(folder).map_err(|e| Error::failed(format!("{}: {e}", folder.shown())))?;
+    }
     write_text_atomic(&path, &(to_json(registry) + "\n"))
         .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))
 }
@@ -217,7 +237,7 @@ fn registered_folder(paths: &Paths) -> Option<(PathBuf, Map<String, Value>)> {
 }
 
 fn home() -> Result<PathBuf> {
-    let home = atm_home();
+    let home = state_dir();
     ensure_home(&home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
     Ok(home)
 }
@@ -256,7 +276,7 @@ pub fn registered_id(paths: &Paths) -> (String, bool) {
         .or_else(|| project_meta(&paths.root))
         .unwrap_or_default();
     let key = text(&path);
-    let registry = read_json(&atm_home().join(REGISTRY_FILE)).unwrap_or(Value::Null);
+    let registry = read_json(&registry_file(&state_dir())).unwrap_or(Value::Null);
     let given = registry
         .get("projects")
         .and_then(Value::as_array)
@@ -273,14 +293,14 @@ pub fn registered_id(paths: &Paths) -> (String, bool) {
     )
 }
 
-/// The plugin hook's cheap path, run after every tool call: one read of projects.json, and registering (without
+/// The plugin hook's cheap path, run after every tool call: one read of the registry, and registering (without
 /// waiting for the lock) only when the project isn't listed yet or was last seen a day ago.
 ///
 /// # Errors
 /// The registry's file, when it has to be written.
 pub fn register_if_needed(paths: &Paths) -> Result<Option<&'static str>> {
     let path = text(&main_worktree(&paths.root));
-    let registry = read_json(&atm_home().join(REGISTRY_FILE)).unwrap_or(Value::Null);
+    let registry = read_json(&registry_file(&state_dir())).unwrap_or(Value::Null);
     let entry = registry
         .get("projects")
         .and_then(Value::as_array)
@@ -328,8 +348,8 @@ fn expand_home(path: &str) -> PathBuf {
     }
 }
 
-/// The registry in `$ATM_HOME/projects.json`. Each method holds the registry's lock while it reads and writes, and
-/// says where an unreadable projects.json was moved (`damaged`).
+/// The registry, the state folder's `workspaces/default.json`. Each method holds the registry's lock while it reads
+/// and writes, and says where an unreadable file was moved (`damaged`).
 #[derive(Debug, Clone)]
 pub struct FileRegistry {
     home: PathBuf,
@@ -342,13 +362,13 @@ impl Default for FileRegistry {
 }
 
 impl FileRegistry {
-    /// The registry of `$ATM_HOME`.
+    /// The registry of atm's state folder.
     #[must_use]
     pub fn new() -> Self {
-        Self { home: atm_home() }
+        Self { home: state_dir() }
     }
 
-    /// The registry of the atm folder `home` (the server's, given on its command line).
+    /// The registry of the state folder `home` (the server's, given on its command line).
     #[must_use]
     pub fn at(home: &Path) -> Self {
         Self {
@@ -360,7 +380,7 @@ impl FileRegistry {
     /// a `path`.
     #[must_use]
     pub fn entries(&self) -> Vec<Value> {
-        let registry = read_json(&self.home.join(REGISTRY_FILE)).unwrap_or(Value::Null);
+        let registry = read_json(&registry_file(&self.home)).unwrap_or(Value::Null);
         registry
             .get("projects")
             .and_then(Value::as_array)
@@ -376,7 +396,7 @@ impl FileRegistry {
     /// The file's size and modification time, null while there is none: it changes when the list does.
     #[must_use]
     pub fn stamp(&self) -> Value {
-        let Ok(meta) = std::fs::metadata(self.home.join(REGISTRY_FILE)) else {
+        let Ok(meta) = std::fs::metadata(registry_file(&self.home)) else {
             return Value::Null;
         };
         let mtime = meta

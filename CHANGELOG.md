@@ -6,6 +6,16 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Changed
+- **atm's state moves to the platform's app data folder** (T-490, [ADR-003](docs/adr/ADR-003-workspaces.md) §2):
+  `~/Library/Application Support/com.solo-swe.atm/` on macOS, `~/.local/share/com.solo-swe.atm/` (`$XDG_DATA_HOME`)
+  on Linux, `%APPDATA%\com.solo-swe.atm\` on Windows, the folder the app's Tauri APIs name too; `ATM_STATE_DIR` puts
+  it elsewhere, and `ATM_HOME` keeps working as its older name. The first run without either moves
+  `~/.agentic-task-manager/` there (one rename; `MOVED.txt` is left saying where), and the registry, `projects.json`,
+  becomes `workspaces/default.json`, renamed in place when found. The `dirs` crate (approved, already in the tree)
+  finds the folder; a test checks the app's identifier is atm-common's `APP_ID`. The tests, the e2e fixture and the
+  dev server use `ATM_STATE_DIR`, and the suite drops an inherited one.
+
 ### Added
 - **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one
   instance (opening it again focuses its window), the user's registry of projects in its state, two commands
