@@ -101,6 +101,10 @@ mod tests {
 
     /// Through the app's own context, so its capability is what lets the window call them
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
     fn the_main_windows_capability_lets_it_call_the_commands() {
         let home = scratch("ipc");
         let app = tauri::test::mock_builder()

@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:29:25Z",
+      "updated_at": "2026-11-08T08:36:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19967,7 +19967,7 @@
           "by": "claude:34798264"
         }
       ],
-      "commit": "f7fc91716c0be1dd67765dca7b4a847b8f04409d",
+      "commit": "97aa3496f2465bbe7697a77469042eb9bdf65747",
       "started_at": "2026-11-08T08:29:24Z",
       "started_by": "claude:34798264"
     },
@@ -21198,13 +21198,21 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-08T00:45:59Z",
+      "updated_at": "2026-11-08T08:44:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard",
         "cli",
         "ci"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T08:44:32Z",
+          "kind": "note",
+          "text": "From T-455: on Windows the app’s IPC test `the_main_windows_capability_lets_it_call_the_commands` (app/src-tauri/src/lib.rs) is ignored. Its request from `tauri://localhost` is refused as not local; Windows’ local origin is likely `http://tauri.localhost`. Also logged: the default window icon fails to load from the test executable’s resources.",
+          "by": "claude:34798264"
+        }
       ]
     },
     {
