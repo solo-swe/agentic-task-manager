@@ -21305,7 +21305,7 @@
       "description": "Since T-478 the e2e fixture runs the binary (`tests/e2e/helpers.ts`, `target/debug/atm`). `pnpm run test:e2e:visual` and `test:e2e:visual:update` run Playwright in a Linux container with the checkout mounted, so on a Mac they run the macOS binary, and every visual test fails with `target/debug/atm: 1: Syntax error: \"(\" unexpected`. CI is fine: its visual job downloads the `atm-linux` artifact.\n\n## Change\n- Give the helper a way to use another binary (for example an `ATM_E2E_BIN` variable, defaulting to `target/debug/atm`).\n- Make the Docker scripts use a Linux atm built for this checkout without fetching anything new into the container, for example a Linux build in its own target folder (a `cargo` container or `cross`, with approval if it adds a tool), or CI's `atm-linux` artifact of the branch's run as `AGENTS.md` describes for baselines.\n- `AGENTS.md`'s screenshot section says what to run.\n\n## Tests\n`pnpm run test:e2e:visual` passes on a Mac with Docker running.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21313,7 +21313,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T08:18:47Z",
+      "updated_at": "2026-11-08T08:22:58Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
@@ -21339,10 +21339,19 @@
           "kind": "answer",
           "text": "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1). → (1): build it in the official rust:1.99.0 image, pinned by digest, into target/linux/.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:22:58Z",
+          "kind": "outcome",
+          "text": "`pnpm run build:atm-linux` builds the CLI in the official rust:1.99.0-bookworm image (pinned by digest) into `target/linux/`; the visual scripts run it first and pass it to the fixture as `ATM_E2E_BIN`. `pnpm run test:e2e:visual` passes on a Mac (84 screenshots); functional e2e 411 pass.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-08T08:18:47Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "828aa94e57fb2998e290f6b3c0e466804feac4da",
+      "completed_at": "2026-11-08T08:22:58Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-486",
