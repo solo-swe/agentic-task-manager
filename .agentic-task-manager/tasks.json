@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 488,
+    "next_id": 489,
     "labels": [
       {
         "id": "architecture",
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:29:24Z",
+      "updated_at": "2026-11-08T08:29:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19967,7 +19967,7 @@
           "by": "claude:34798264"
         }
       ],
-      "commit": "f148c2e96fe442aacf103b7a78ce3621690d3f5c",
+      "commit": "f7fc91716c0be1dd67765dca7b4a847b8f04409d",
       "started_at": "2026-11-08T08:29:24Z",
       "started_by": "claude:34798264"
     },
@@ -21425,6 +21425,30 @@
       "created_by": "Hakan Serce",
       "updated_by": "Hakan Serce",
       "with": "user"
+    },
+    {
+      "id": "T-488",
+      "name": "Overhaul atm's human-readable output: alignment, grouping and styling",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "cli",
+        "rust"
+      ],
+      "description": "atm's plain output (without `--json`) is hard to scan. For example, `atm project status` prints the per-sprint, per-type and per-label counts as one long comma-separated line each, and the blocked and waiting lists as long lines joined with `;`. Make it read well in a terminal without changing what it says or what `--json` returns.\n\n## First, a design with the user\nPropose the look before changing code: a before/after of `atm project status`, `atm task list`, `atm task details`, `atm sprint list`, `atm release list` and `atm doctor`. Decide:\n- **Alignment:** columns padded to the widest value (IDs, statuses, priorities), long names cut or wrapped to the terminal's width, and sections with a heading and indented lines instead of `a, b, c` runs.\n- **Styling:** bold headings, colour for status kinds and priorities, dimmed secondary text. Only when standard output is a terminal; never with `NO_COLOR`, `--json`, or output going to a pipe or file.\n- **What `project status` leads with:** the active sprint and what's next first; the long breakdowns (all sprints, types, labels) shorter, or behind a flag.\n- **Dependencies:** terminal width and colour either hand-written or from a crate (e.g. `anstyle`, already in the tree through clap). Any new crate is proposed first.\n\n## Agents read this output too\nThe skills relay what atm prints, and agents act on it. Keep it plain text when it isn't a terminal, keep each fact on a line agents can find, and check `docs/agent/` and the skills that quote output. A change to output agents act on follows AGENTS.md's security checklist (the written review in `docs/security-architecture.md` §3.3).\n\n## Tests\nThe scenarios' exact `stdout` expectations change with the new layout: update them in one place per command. Add a test that a pipe gets no escape codes and that `NO_COLOR` turns colour off.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "tests/scripts/scenarios/",
+        "docs/agent/"
+      ],
+      "created_at": "2026-11-08T08:30:53Z",
+      "updated_at": "2026-11-08T08:30:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce"
     }
   ]
 }
