@@ -189,7 +189,9 @@ mod tests {
         }
         assert_eq!(csp["img-src"], json!("'self' data:"));
         assert_eq!(csp["connect-src"], json!("ipc: http://ipc.localhost"));
-        assert_eq!(csp["frame-ancestors"], json!("'none'"));
+        // No frame-ancestors (T-502): Tauri puts this policy on every HTML file, CompMD's frames too, which it would
+        // refuse in the page; the app's one window is its own, so it protected nothing
+        assert!(csp.get("frame-ancestors").is_none());
         assert_eq!(csp["form-action"], json!("'none'"));
         assert_eq!(conf["app"]["security"]["freezePrototype"], json!(true));
         assert_eq!(conf["app"]["withGlobalTauri"], json!(false));
@@ -538,5 +540,35 @@ mod tests {
         );
         assert!(remote.is_err(), "connect_agents answered a remote page");
         std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-502: what Tauri serves, not what the config says. Tauri puts the window's policy on every HTML file, `CompMD`'s
+    /// sandbox frames (Mermaid's diagrams) included: it must let the page frame them, and still allow their scripts
+    /// only from `CompMD`'s folder
+    #[test]
+    fn compmds_frames_are_served_with_a_policy_the_page_can_frame() {
+        let app = tauri::test::mock_builder()
+            .build(context())
+            .expect("the mock app");
+        let compmd = std::fs::read_dir(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd"),
+        )
+        .expect("the built dashboard's CompMD folder")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .next()
+        .expect("CompMD's version folder");
+        for frame in ["strict.html", "permissive.html"] {
+            let asset = app
+                .asset_resolver()
+                .get(format!("assets/compmd/{compmd}/compmd/{frame}"))
+                .expect("CompMD's frame in the app's files");
+            let csp = asset.csp_header.unwrap_or_default();
+            assert!(!csp.contains("frame-ancestors"), "{frame}: {csp}");
+            assert!(
+                csp.contains("script-src 'wasm-unsafe-eval' tauri://localhost/assets/compmd/"),
+                "{frame}: {csp}"
+            );
+        }
     }
 }

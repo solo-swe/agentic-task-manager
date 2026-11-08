@@ -28,8 +28,7 @@
         "img-src": "'self' data:",
         "connect-src": "ipc: http://ipc.localhost",
         "base-uri": "'none'",
-        "form-action": "'none'",
-        "frame-ancestors": "'none'"
+        "form-action": "'none'"
       },
       "freezePrototype": true
     }

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 496,
+    "next_id": 503,
     "labels": [
       {
         "id": "architecture",
@@ -20006,7 +20006,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-460"
       ],
@@ -20017,7 +20017,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-08T18:59:19Z",
+      "updated_at": "2026-11-08T21:17:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20027,15 +20027,21 @@
         }
       ],
       "sprint": "The atm app",
-      "started_at": "2026-11-08T18:59:09Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard?",
-        "The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in?",
-        "Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone."
+      "blocks": [
+        {
+          "from": "2026-11-08T18:59:19Z",
+          "to": "2026-11-08T21:17:35Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-08T18:59:19Z"
+      "notes": [
+        {
+          "at": "2026-11-08T21:17:35Z",
+          "kind": "answer",
+          "text": "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard? → Approved: add tauri-plugin-updater and @tauri-apps/plugin-updater.; The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in? → Open for now: the updater key pair (TAURI_SIGNING_PRIVATE_KEY and its password, and the public key in the app) is set up together with Hakan; build everything else so only the key is left.; Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone. → The app updates itself, in addition to brew upgrade: the cask says auto_updates true.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-484",
@@ -20589,6 +20595,219 @@
           "by": "claude:34798264"
         }
       ]
+    },
+    {
+      "id": "T-496",
+      "name": "Rename a sprint: atm sprint rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "A sprint's name is its identifier and can't be changed today: `atm sprint edit` changes only its goal, release and due date.\n\n## Change\n- `atm sprint rename <old> <new>`, the same form as `atm workspace rename`, in any state (planned, active, closed).\n- Every reference follows: each task's `sprint`, in `tasks.json` and in `tasks-archive.json`, and the other sprints' reports (`report.to`, and any other field naming a sprint).\n- Refused: a name another sprint has, an empty name.\n- The rename lives in atm-lib (`sprints.rs`); the CLI only maps to it.\n\n## Docs\n`docs/agent/commands.md`, and the sprint skills' text if they say a sprint can't be renamed.\n\n## Tests\nA scenario in `tests/scripts/scenarios/sprint-commands.json`: rename an active sprint with tasks (one of them archived) and a closed one that carried tasks to it; check the tasks, the archive and the report follow; a name in use is refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/sprints.rs",
+        "crates/atm-cli/src/commands/sprint.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/sprint-commands.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-497",
+      "name": "Rename a release's ID: atm release rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm release edit --name` sets a display name, but a release's ID (what tasks and sprints point to) can't change, so a typo in it (`0.34` for `0.34.0`) stays.\n\n## Change\n- `atm release rename <old> <new>`, the form of `atm workspace rename` and `atm sprint rename`.\n- Every reference follows: tasks' release, in `tasks.json` and `tasks-archive.json`, and sprints' `release`.\n- Refused: an ID in use, an ID that isn't valid (the rule `atm release add` checks).\n- In atm-lib (`releases.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/releases.json`: a release with tasks (one archived) and a sprint delivering to it, renamed; a clash refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/releases.rs",
+        "crates/atm-cli/src/commands/release.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/releases.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-498",
+      "name": "Rename a component's ID: atm component rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm component edit --label` sets the name shown, but the component's ID, which tasks list in `components`, can't change.\n\n## Change\n- `atm component rename <old> <new>`, the same form as the other renames.\n- Every reference follows: tasks' `components`, in `tasks.json` and `tasks-archive.json`.\n- Refused: an ID in use, an invalid ID.\n- In atm-lib (`components.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/components.json`: rename a component given to tasks (one archived); a clash refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/components.rs",
+        "crates/atm-cli/src/commands/component.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/components.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-499",
+      "name": "Rename a label across the tasks",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "Labels are per task (`atm task edit --add-label/--remove-label`): renaming one (`ui` to `dashboard`) means editing every task by hand.\n\n## Change\n- A rename of a label on every task that has it, in `tasks.json` and `tasks-archive.json`. Propose where it lives (`atm task relabel <old> <new>`, or a small `atm label` group with `list` and `rename`) and pick the one that fits the other renames.\n- A task that already has the new label keeps one.\n- The new label follows the label rule (lowercase letters, digits, `-`, `_`, at most 32 characters).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario: tasks with the old label, one with both, one archived.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/edit.rs",
+        "crates/atm-cli/src/commands/task.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/edit.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-500",
+      "name": "Rename a vocabulary entry: a status, a type or a priority",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "A project's statuses, types and priorities are set only with `atm db init --meta-file`, which replaces a whole list: changing an ID there leaves the tasks that use the old one invalid (`atm doctor` reports them).\n\n## Change\n- A rename of one entry's ID (and, separately, its label) that moves every task using it, in `tasks.json` and `tasks-archive.json`: a task's `status` and its history, `type`, `priority`, and `meta.default_priority`.\n- Refused: an ID in use in that list.\n- Propose the command's form so it matches the other renames (sprint, release, component, label).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/vocab.json`: rename a status in use (with history), a type and the default priority; `atm doctor` stays clean.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/settings.rs",
+        "crates/atm-cli/src/commands/meta.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/vocab.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:20Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-501",
+      "name": "An older atm beside the new state folder: no projects lost, no server mistaken for ours",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "cli"
+      ],
+      "description": "T-490 moves `~/.agentic-task-manager` into the state folder once (`atm_common::home::move_legacy_state`), leaving a note. An atm from before (Homebrew 0.33.0, on the same machine as the app or a newer atm) still uses the old folder: it makes it again, with only the projects it registers from then on, and its dashboard shows just those (seen on Hakan's machine: the 0.33.0 server listed one project, the app all three). And the moved folder brought the old server's record along, so the new atm reports a server that serves the old folder as its own (`atm service status`).\n\n## Change\n- **Projects added in the old folder afterwards reach `default`:** when the legacy folder exists again beside the state folder (it has a registry, not only the note), its projects are added to the `default` workspace (never removed from it), on the same start-up path as the move.\n- **The server record:** a record whose server serves another home (its whoami `home` isn't this state folder's) is not ours: `atm service` treats it as a stray of another atm, says so, and starts its own.\n- **The link `atm service` prints** for a project is the page address (`/projects/<id>`), not the old `/#project=<id>`.\n- Say in the 0.34.0 changelog and `packaging/README.md` that an older atm keeps the old folder, and how to tell (`atm version`).\n\n## Tests\n- atm-common: the legacy folder moved, then made again with a project: that project joins `default`.\n- The CLI suite (`tests/scripts/serve.test.mjs` or `registry.test.mjs`): a record naming a server of another home isn't reported as this atm's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-common/src/home.rs",
+        "crates/atm-db/src/registry.rs",
+        "crates/atm-cli/src/commands/maintenance.rs",
+        "tests/scripts/serve.test.mjs",
+        "CHANGELOG.md",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-08T21:25:33Z",
+      "updated_at": "2026-11-08T21:25:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T21:25:33Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "cli",
+        "api"
+      ]
+    },
+    {
+      "id": "T-502",
+      "name": "Mermaid diagrams in the app: the window's policy refused CompMD's frames",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "In the app, a ```mermaid block never draws. Tauri puts the window's CSP on every HTML file it serves, CompMD's frame documents (`assets/compmd/<v>/compmd/strict.html`) included, and that policy had `frame-ancestors 'none'` (copied from `atm serve`'s page policy), so the frame was refused in the page. Missed because the e2e app mode serves the files from the Node test server, and the CSP test read `tauri.conf.json` rather than what Tauri serves.\n\n## Change\n- `frame-ancestors` out of the app's CSP (`app/src-tauri/tauri.conf.json`): the app's one window is its own, so it protects nothing there. Config only, no code.\n- A test on what Tauri serves (its asset resolver): CompMD's frame document comes without `frame-ancestors`; the strict-CSP test updated.\n- `docs/security-architecture.md` (I26) says why.\n\n## Check\nBy hand in the real window: a task with a diagram draws it. If the frame's scripts are still refused (it has an opaque origin; Tauri answers with the app's origin), decide the next step with Hakan.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/src/lib.rs",
+        "docs/security-architecture.md",
+        "CHANGELOG.md"
+      ],
+      "created_at": "2026-11-08T22:32:25Z",
+      "updated_at": "2026-11-08T22:32:28Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T22:32:25Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "docs"
+      ],
+      "started_at": "2026-11-08T22:32:28Z",
+      "started_by": "claude:34798264"
     }
   ]
 }
