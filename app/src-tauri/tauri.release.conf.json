@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "externalBin": ["binaries/atm"],
+    "category": "DeveloperTool",
+    "shortDescription": "Agentic Task Manager: tasks for agentic development, and their dashboard",
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "hardenedRuntime": true
+    }
+  }
+}

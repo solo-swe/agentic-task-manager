@@ -20043,7 +20043,7 @@
       "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-456"
       ],
@@ -20054,7 +20054,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:14:54Z",
+      "updated_at": "2026-11-08T18:22:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20064,7 +20064,7 @@
         }
       ],
       "sprint": "The atm app",
-      "commit": "3403ff608dc5a36c66ac4bf2ee1f71057d8d70dd",
+      "commit": "e6554f41c8dee210dda19e8b8364e422ffee3b92",
       "notes": [
         {
           "at": "2026-11-08T11:19:24Z",
@@ -20077,6 +20077,12 @@
           "kind": "answer",
           "text": "The IPC transport needs `@tauri-apps/api` (Tauri’s own JS package, MIT/Apache-2.0, at the version matching tauri 2.12.x) as a dashboard dependency: the generated `.generated/app/bindings.ts` imports `@tauri-apps/api/core`, and the Playwright tests on mocked IPC use `@tauri-apps/api/mocks`. OK to add it (pnpm, pinned in the lockfile)? → Yes: add @tauri-apps/api (Hakan, 2026-11-08).; The app window: one window per workspace (ADR-003 §5) or one window that switches, for now? I would start with one window that opens the last opened workspace and switches in place, and add per-workspace windows with the deep links (T-459). → One window for now, switching workspaces in place; per-workspace windows can come with deep links (T-459).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:22:05Z",
+          "kind": "outcome",
+          "text": "IPC transport: `browserFetch` picks `ipcFetch` in the app (`isTauri()`), mapping the dashboard’s URLs to the app’s commands; logos as data: URLs (no CSP change); one window. `@tauri-apps/api` 2.12.4 added. Unit 1233, e2e 417 (app.spec on mocked IPC). Left for later: a document’s relative images show alt text in the app; a reload on a deep path in the app has no page fallback (deep links, T-459).",
+          "by": "claude:34798264"
         }
       ],
       "blocks": [
@@ -20087,7 +20093,9 @@
         }
       ],
       "started_at": "2026-11-08T18:14:54Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T18:22:05Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-458",
@@ -20165,7 +20173,7 @@
       "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-456",
         "T-452"
@@ -20176,7 +20184,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:00:57Z",
+      "updated_at": "2026-11-08T18:29:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20186,23 +20194,29 @@
         }
       ],
       "sprint": "The atm app",
-      "started_at": "2026-11-08T11:19:29Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "The cask bundles `atm` and puts it on PATH, as does the `atm` formula: should the cask `conflicts_with formula: \"atm\"` (one or the other; the cask’s atm replaces the formula’s), or should the cask depend on the formula and not bundle its own?",
-        "One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives?",
-        "Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done."
-      ],
-      "blocked_at": "2026-11-08T11:19:54Z",
       "notes": [
         {
           "at": "2026-11-08T18:00:57Z",
           "kind": "note",
           "text": "Hakan: ship in 0.34.0; leaning to the cask depending on the atm formula (downsides sent: the app’s built-in atm-lib and the formula’s CLI can drift apart, it clashes with the T-483 updater, the DMG still bundles atm for non-brew users). Universal vs per-arch: comparison sent, recommended universal DMG with per-arch CLI. Waiting on his pick.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:29:22Z",
+          "kind": "answer",
+          "text": "The cask bundles `atm` and puts it on PATH, as does the `atm` formula: should the cask `conflicts_with formula: \"atm\"` (one or the other; the cask’s atm replaces the formula’s), or should the cask depend on the formula and not bundle its own? → B: the cask bundles its own atm, links it onto PATH (binary from inside the app) and conflicts_with formula atm (Hakan, 2026-11-08).; One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives? → One universal DMG (arm64 + x86_64); the CLI archives stay per architecture.; Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done. → Ship in 0.34.0.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-08T11:19:54Z",
+          "to": "2026-11-08T18:29:22Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-08T18:29:22Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-461",

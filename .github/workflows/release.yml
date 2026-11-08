@@ -1,8 +1,8 @@
 name: Release
 
-# Push a tag like v0.33.0 (packaging/release.sh) to build atm for every platform, sign and notarize the macOS builds,
-# and attach them, with their checksums, to a draft GitHub release. Publishing the draft updates the Homebrew formula
-# (homebrew.yml). The secrets it needs are listed in packaging/README.md.
+# Push a tag like v0.33.0 (packaging/release.sh) to build atm for every platform and the atm app's universal DMG, sign
+# and notarize the macOS builds, and attach them, with their checksums, to a draft GitHub release. Publishing the draft
+# updates the Homebrew formula and cask (homebrew.yml). The secrets it needs are listed in packaging/README.md.
 on:
   push:
     tags: ["v*"]
@@ -47,7 +47,7 @@ jobs:
         working-directory: dashboard
       - run: pnpm run build
         working-directory: dashboard
-      # The CLI only: the app is released on its own (T-460)
+      # The CLI only: the app has a job of its own (app-macos)
       - run: cargo build --release --locked --target ${{ matrix.target }} -p atm-cli
 
       - name: Import the Developer ID certificate
@@ -55,17 +55,7 @@ jobs:
         env:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
-        run: |
-          keychain="$RUNNER_TEMP/signing.keychain-db"
-          password="$(uuidgen)"
-          security create-keychain -p "$password" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
-          security list-keychains -d user -s "$keychain" login.keychain-db
-          rm "$RUNNER_TEMP/cert.p12"
+        run: sh packaging/keychain-macos.sh
       - name: Sign and notarize
         if: runner.os == 'macOS'
         env:
@@ -96,9 +86,69 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  # The atm app (T-460): one universal DMG (arm64 and x86_64), its atm CLI bundled in it (Contents/MacOS/atm, which the
+  # cask puts on PATH), the app signed and notarized by Tauri's bundler, the DMG by packaging/notarize-dmg.sh
+  app-macos:
+    name: The app (universal DMG)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+      - name: The tag is the workspace's version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm install --global pnpm@12.14.0
+      - run: pnpm install --frozen-lockfile
+        working-directory: dashboard
+      - run: pnpm run build
+        working-directory: dashboard
+      # The CLI the app bundles: both architectures in one binary, where tauri.release.conf.json's externalBin wants it
+      - name: The universal atm CLI
+        run: |
+          for target in aarch64-apple-darwin x86_64-apple-darwin; do
+            cargo build --release --locked --target "$target" -p atm-cli
+          done
+          mkdir -p app/src-tauri/binaries
+          lipo -create -output app/src-tauri/binaries/atm-universal-apple-darwin \
+            target/aarch64-apple-darwin/release/atm target/x86_64-apple-darwin/release/atm
+      - name: Import the Developer ID certificate
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: sh packaging/keychain-macos.sh
+      - name: Build, sign and notarize the app and its DMG
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+          IDENTITY: Developer ID Application
+          NOTARY_KEY: ${{ runner.temp }}/notary.p8
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          printf '%s' "$NOTARY_KEY_P8" | base64 --decode > "$NOTARY_KEY"
+          # Tauri's bundler signs every binary in the app (the bundled CLI too) and notarizes the app
+          export APPLE_SIGNING_IDENTITY="$IDENTITY" APPLE_API_KEY="$NOTARY_KEY_ID" APPLE_API_ISSUER="$NOTARY_ISSUER"
+          export APPLE_API_KEY_PATH="$NOTARY_KEY"
+          pnpm --dir dashboard run app:bundle --target universal-apple-darwin
+          dmg=$(ls target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          sh packaging/notarize-dmg.sh "$dmg"
+          rm "$NOTARY_KEY"
+          mkdir -p dist
+          cp "$dmg" "dist/atm-app-${GITHUB_REF_NAME#v}-universal.dmg"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: app-macos
+          path: dist/*
+          if-no-files-found: error
+
   release:
     name: Draft the GitHub release
-    needs: build
+    needs: [build, app-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write

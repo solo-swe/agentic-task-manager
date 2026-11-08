@@ -1,8 +1,9 @@
 name: Homebrew
 
-# When a release is published (releases start as drafts, release.yml), point the atm formula in solo-swe/homebrew-tap
-# at it: Formula/atm.rb, from the release's SHA256SUMS (packaging/homebrew-formula.sh). Run it by hand with a tag to
-# publish the formula for an existing release. Needs HOMEBREW_TAP_DEPLOY_KEY (packaging/README.md).
+# When a release is published (releases start as drafts, release.yml), point the atm formula and the atm app's cask in
+# solo-swe/homebrew-tap at it: Formula/atm.rb and Casks/atm-app.rb, from the release's SHA256SUMS
+# (packaging/homebrew-formula.sh, homebrew-cask.sh). Run it by hand with a tag to publish them for an existing release.
+# Needs HOMEBREW_TAP_DEPLOY_KEY (packaging/README.md).
 on:
   release:
     types: [published]
@@ -39,16 +40,17 @@ jobs:
           chmod 600 "$RUNNER_TEMP/tap-key"
           export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           git clone git@github.com:solo-swe/homebrew-tap.git "$RUNNER_TEMP/tap"
-          mkdir -p "$RUNNER_TEMP/tap/Formula"
+          mkdir -p "$RUNNER_TEMP/tap/Formula" "$RUNNER_TEMP/tap/Casks"
           sh packaging/homebrew-formula.sh "$version" "$RUNNER_TEMP/SHA256SUMS" > "$RUNNER_TEMP/tap/Formula/atm.rb"
+          sh packaging/homebrew-cask.sh "$version" "$RUNNER_TEMP/SHA256SUMS" > "$RUNNER_TEMP/tap/Casks/atm-app.rb"
           cd "$RUNNER_TEMP/tap"
-          git add Formula/atm.rb
+          git add Formula/atm.rb Casks/atm-app.rb
           if git diff --cached --quiet; then
             echo "The formula is already at $version"
           else
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "atm $version"
+            git commit -m "atm and atm-app $version"
             git push
           fi
           rm "$RUNNER_TEMP/tap-key"

@@ -17,6 +17,7 @@
     "test:e2e": "pnpm run build && cargo build --manifest-path ../Cargo.toml && playwright test --grep-invert visual",
     "test:scripts": "cargo build --manifest-path ../Cargo.toml && node ../tests/scripts/run.mjs",
     "bench": "node ../tests/scripts/bench.mjs",
+    "app:bundle": "TAURI_APP_PATH=../app/src-tauri tauri build --config ../app/src-tauri/tauri.release.conf.json",
     "branding": "node ../branding/generate.mjs",
     "lint": "eslint .",
     "format": "prettier --config .prettierrc --write . ../tests/scripts",

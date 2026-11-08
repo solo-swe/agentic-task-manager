@@ -51,6 +51,41 @@ describe('packaging', () => {
     }
   });
 
+  // T-460: the app's universal DMG, its own atm on PATH, one or the other with the formula
+  test('the Homebrew cask has the universal DMG with its checksum, puts the app’s atm on PATH and conflicts with the formula', () => {
+    const dir = tempDir('atm-cask-');
+    try {
+      const sums = path.join(dir, 'SHA256SUMS');
+      fs.writeFileSync(
+        sums,
+        `${'a'.repeat(64)}  atm-1.2.3-aarch64-apple-darwin.tar.gz\n${'b'.repeat(64)}  atm-app-1.2.3-universal.dmg\n`,
+      );
+      const r = run('homebrew-cask.sh', ['1.2.3', sums]);
+      assert.equal(r.status, 0, r.stderr);
+      assert.match(r.stdout, /^cask "atm-app" do$/m);
+      assert.match(r.stdout, /^ {2}version "1\.2\.3"$/m);
+      assert.match(r.stdout, new RegExp(`^ {2}sha256 "${'b'.repeat(64)}"$`, 'm'));
+      assert.ok(
+        r.stdout.includes(
+          'url "https://github.com/solo-swe/agentic-task-manager/releases/download/v#{version}/atm-app-#{version}-universal.dmg"',
+        ),
+      );
+      assert.match(r.stdout, /^ {2}app "atm\.app"$/m);
+      assert.ok(r.stdout.includes('binary "#{appdir}/atm.app/Contents/MacOS/atm"'));
+      assert.match(r.stdout, /^ {2}conflicts_with formula: "solo-swe\/tap\/atm"$/m);
+      // It says how to connect agents, and does nothing to them
+      assert.ok(r.stdout.includes('Run `atm agents install` to let your AI agents use atm.'));
+      assert.doesNotMatch(r.stdout, /postflight|system_command/);
+
+      fs.writeFileSync(sums, `${'a'.repeat(64)}  atm-1.2.3-aarch64-apple-darwin.tar.gz\n`);
+      const missing = run('homebrew-cask.sh', ['1.2.3', sums]);
+      assert.notEqual(missing.status, 0);
+      assert.match(missing.stderr, /atm-app-1\.2\.3-universal\.dmg isn't in /);
+    } finally {
+      removeDir(dir);
+    }
+  });
+
   // ADR-002: the public skills repo is shared; atm's release changes only atm's part of it
   test('the skills export replaces atm’s skills and README section, and leaves another app’s alone', () => {
     const dir = tempDir('atm-skills-repo-');

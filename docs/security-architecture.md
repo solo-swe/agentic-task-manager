@@ -729,6 +729,19 @@ only its file, never a project's.
   skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
   list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
 
+**The app's DMG and cask (T-460).** A new release artifact and a new way onto users' PATH:
+- **Signed and notarized as the CLI is**, with the same secrets, read only in the macOS jobs (I20): Tauri's bundler
+  signs every binary in `atm.app` (the bundled `atm` CLI too, hardened runtime) and notarizes the app;
+  `packaging/notarize-dmg.sh` signs, notarizes and staples the DMG. The `app-macos` job has the workflow's read-only
+  token; only the last job, which builds nothing, writes the release. Its checksum is in `SHA256SUMS` with the rest.
+- **One `atm` on PATH:** the cask links the app's own CLI (`binary`) and `conflicts_with` the formula, so the CLI
+  agents run is the build the app was made with, never a second copy shadowing it.
+- **Nothing is installed into agent harnesses:** the cask only says to run `atm agents install`
+  (`packaging.test.mjs` checks it has no postflight or system command); the app's button for it is T-458's, never run
+  on its own.
+- **Its CI changes** (the `app-macos` job, the cask in the Homebrew workflow) add no permission, secret or action: the
+  same pinned actions, the tap's deploy key as before.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

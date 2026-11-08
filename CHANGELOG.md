@@ -32,6 +32,14 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **The atm app as a signed, notarized universal DMG and a Homebrew cask** (T-460): the release workflow's
+  `app-macos` job builds the app for arm64 and x86_64 in one DMG (`atm-app-<version>-universal.dmg`), with the `atm`
+  CLI built with it inside (`atm.app/Contents/MacOS/atm`, a universal binary); Tauri's bundler signs and notarizes
+  the app, `packaging/notarize-dmg.sh` the DMG (stapled). The Homebrew workflow also writes `Casks/atm-app.rb`
+  (`packaging/homebrew-cask.sh`): `brew install --cask solo-swe/tap/atm-app` puts the app's own `atm` on PATH and
+  `conflicts_with` the `atm` formula (one or the other, so the CLI and the app are always the same build); it only
+  says to run `atm agents install`. The app's release config is `app/src-tauri/tauri.release.conf.json`
+  (`pnpm run app:bundle`); the keychain import moved into `packaging/keychain-macos.sh`.
 - **The dashboard's IPC transport** (T-457): in the atm app the dashboard reads through the app's commands, not HTTP.
   `browserFetch` picks it at start (`isTauri()`); `lib/api/ipc.ts`'s `ipcFetch` maps the dashboard's URLs (v1 as
   `default`'s, v2) to `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`, `document`,

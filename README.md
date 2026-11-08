@@ -164,6 +164,18 @@ brew install solo-swe/tap/atm
 
 `brew upgrade` gets a new version.
 
+### The atm app (macOS)
+
+The dashboard in a window of its own, with the `atm` CLI built with it:
+
+```bash
+brew install --cask solo-swe/tap/atm-app
+```
+
+It puts its own `atm` on PATH, so it replaces the `atm` formula: uninstall that first (`brew uninstall atm`). Or
+download `atm-app-<version>-universal.dmg` from a release (signed and notarized, for Apple silicon and Intel) and drag
+the app to Applications.
+
 ### A download
 
 Every [release](https://github.com/solo-swe/agentic-task-manager/releases) has an archive per platform
