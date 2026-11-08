@@ -1,6 +1,6 @@
 //! Embed `atm docs`' topics in the binary (T-440): each `docs/agent/<topic>.md`, whose first line is
-//! `# <Title>: <summary>`, and `CompMD`'s guide for agents (`docs/agent/compmd-llms.txt`) as the topic `compmd`. Checked
-//! as the Python atm's `build.py` checks them: a topic's name is lowercase letters, digits and `-`.
+//! `# <Title>: <summary>`, and `CompMD`'s guide for agents (`docs/agent/compmd-llms.txt`) as the topic `compmd`. A
+//! topic's name is lowercase letters, digits and `-`.
 
 use std::fmt::Write as _;
 use std::path::Path;

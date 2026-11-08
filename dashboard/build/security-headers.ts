@@ -3,7 +3,7 @@ import type { ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 
 /**
- * What the dev page needs beyond `atm serve`'s policy (atm-cli/atm/api/server.py `page_csp`, T-226), and nothing
+ * What the dev page needs beyond `atm serve`'s policy (atm-common's `page_csp`, T-226), and nothing
  * else: its scripts and styles are the dev server's own files (`'self'`, which also covers the CompMD runtime the
  * server's policy names by its asset folder, forwarded by dev-api.ts), and Vite's client talks over a WebSocket.
  * tests/unit/security-headers.test.ts holds the two policies to this.

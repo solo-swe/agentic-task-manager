@@ -20,7 +20,7 @@
       <h2>No projects yet</h2>
       <p>The dashboard shows every project atm works in. To add one:</p>
       <ul>
-        <li>run <code>/atm:create-tasks</code> in a project, or</li>
+        <li>run <code>/atm-create-tasks</code> in a project, or</li>
         <li>run <code>atm projects add &lt;path&gt;</code> for a project that already has tasks.</li>
       </ul>
     </section>

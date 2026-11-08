@@ -19746,7 +19746,7 @@
       "description": "[porting-to-rust.md](docs/porting-to-rust.md) §5, §6, the last part of the switch (split into T-477, T-478, T-479 and this, with Hakan): remove `atm-cli/`, `plugin/` and `build.py` in one change, landing in 0.33.0, after 0.32.0 (the plugin's last release, T-479).\n\n## Before it lands\n- A real release exists: the formula in `solo-swe/homebrew-tap` and the signed release binaries (T-452's machinery, with the release secrets and the tap's deploy key in place).\n- CI is green for the Rust atm on Linux, macOS and Windows (T-478), and the last expected failure is gone (the merge driver's path: the test then expects the `atm` binary).\n- T-477 has moved out of `plugin/` and `atm-cli/` everything the workspace and the dashboard build from.\n\n## Change\n- Delete `atm-cli/`, `plugin/` (with `.claude-plugin/marketplace.json`) and `build.py`; T-478's suite and CI land with it.\n- `AGENTS.md`, the README and the docs say how atm is installed (the formula, the app) and how plugin users move.\n\nReviewed with Hakan before it lands.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-451",
         "T-452",
@@ -19763,7 +19763,7 @@
         "docs/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T00:46:13Z",
+      "updated_at": "2026-11-08T02:43:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19781,7 +19781,9 @@
           "text": "Split with Hakan into T-477 (move what Rust and the dashboard need), T-478 (suite, dev and e2e on Rust only), T-479 (0.32.0, the plugin’s last release: the move note) and this, the removal, in the backlog for 0.33.0, after a real release and green CI.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-08T02:43:13Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-455",
@@ -20973,11 +20975,19 @@
         "crates/atm-db/src/jsongit/lock.rs"
       ],
       "created_at": "2026-11-08T00:38:28Z",
-      "updated_at": "2026-11-08T00:38:33Z",
+      "updated_at": "2026-11-08T02:48:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "cli"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T02:48:33Z",
+          "kind": "note",
+          "text": "Also on macOS CI, twice on 2026-11-08 (runs 42433227055 on `dev/0.33.0`, 42439602611 on `dev/0.32.0`), each passing on another run: agent-16 timed out on atm’s 10 s lock wait in `wt2`. So the lock queues too long under 16 agents on slow runners, not only on Windows.",
+          "by": "claude:34798264"
+        }
       ]
     },
     {

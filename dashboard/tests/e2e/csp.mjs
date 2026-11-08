@@ -1,4 +1,4 @@
-// The Content-Security-Policy `atm serve` sends with the dashboard (atm-cli/atm/api/server.py page_csp), rebuilt here
+// The Content-Security-Policy `atm serve` sends with the dashboard (atm-common's page_csp), rebuilt here
 // for the e2e server (serve.mjs), so every e2e test runs under it; tests/scripts/serve.test.mjs checks the two agree.
 import { createHash } from 'node:crypto';
 

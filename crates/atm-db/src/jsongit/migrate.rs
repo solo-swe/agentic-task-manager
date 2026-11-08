@@ -493,11 +493,11 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
         if let Some(dashboard) = text("removed_dashboard") {
             line += "; removed ";
             line += &dashboard;
-            line += " (the dashboard now comes with the plugin: /atm:serve)";
+            line += " (the dashboard now comes with atm: /atm-serve)";
         }
         lines.push(line + ".");
     } else if !paths.tasks.is_file() {
-        lines.push("No tasks.json found. Run /atm:create-tasks to create one.".into());
+        lines.push("No tasks.json found. Run /atm-create-tasks to create one.".into());
     }
     if let Some(cleaned) = r.get("cleaned_up").filter(|c| truthy(c)) {
         let mut line = "Removed this project's old dashboard files".to_string();
@@ -506,9 +506,7 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
             line += &atm_common::py::py_str(pid);
             line += ")";
         }
-        lines.push(
-            line + ": one dashboard for all your projects now comes with the plugin (/atm:serve).",
-        );
+        lines.push(line + ": one dashboard for all your projects now comes with atm (/atm-serve).");
     }
     let count = |key: &str| r.get(key).and_then(Value::as_u64).unwrap_or(0);
     let filled = count("finish_times_filled");

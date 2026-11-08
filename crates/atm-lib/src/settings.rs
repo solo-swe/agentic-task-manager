@@ -29,7 +29,7 @@ fn meta_mut(document: &mut Value) -> &mut Map<String, Value> {
 }
 
 /// `atm db init --meta-file`: merge `new`'s keys into `meta` (project, description, vocabularies, ...), creating the
-/// task data when there is none, so `/atm:create-tasks` never writes the file itself. The vocabularies are checked
+/// task data when there is none, so `/atm-create-tasks` never writes the file itself. The vocabularies are checked
 /// before anything is written; `meta.id` is kept. Returns (created, the keys set, sorted).
 ///
 /// # Errors
@@ -121,7 +121,7 @@ pub struct WorkflowChange {
     pub base: Option<String>,
     /// Run the project's verify before pushing.
     pub verify: Option<bool>,
-    /// CI fix rounds before `/atm:push` stops.
+    /// CI fix rounds before `/atm-push` stops.
     pub max_rounds: Option<i64>,
     /// The commit message's template.
     pub commit_template: Option<String>,

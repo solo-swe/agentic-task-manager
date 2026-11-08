@@ -221,7 +221,7 @@
   {#if !timeline}
     <div class="agents-empty">
       {given !== undefined ? 'No task in these projects' : 'No task'} has a start time yet. Agents appear here once tasks
-      are started with <code>atm</code> (the <code>/atm:do-task</code> and <code>/atm:loop-tasks</code> skills do this).
+      are started with <code>atm</code> (the <code>/atm-do-task</code> and <code>/atm-loop-tasks</code> skills do this).
     </div>
   {:else}
     <div class="agents-toolbar">

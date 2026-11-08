@@ -25,7 +25,7 @@ describe('Footer', () => {
     dashboard.archiveHint = null;
   });
 
-  it('shows the copyright from plugin.json', () => {
+  it('shows the copyright from Cargo.toml', () => {
     render(Footer);
     expect(screen.getByText(`© ${pluginInfo.year} Hakan Serce · MIT License`)).toBeInTheDocument();
   });

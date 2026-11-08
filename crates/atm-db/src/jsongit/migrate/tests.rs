@@ -33,7 +33,7 @@ fn a_legacy_task_file_is_moved_and_the_folder_set_up() {
     assert_eq!(
         describe_migration(&result, &paths)[0],
         "Moved docs/tasks.json to .agentic-task-manager/tasks.json; removed docs/tasks-dashboard.html (the \
-         dashboard now comes with the plugin: /atm:serve)."
+         dashboard now comes with atm: /atm-serve)."
     );
     // A second run has nothing to do
     let again = migrate(&paths).unwrap();
@@ -103,7 +103,7 @@ fn phases_become_sprints_named_after_them() {
             "Phases are now sprints: turned 3 phases into sprints (staged, not committed).",
             "Closed (all their tasks finished): Setup.",
             "Planned: Setup (phase 2), Phase 3.",
-            "None is active yet: plan one with /atm:plan-sprint."
+            "None is active yet: plan one with /atm-plan-sprint."
         ]
     );
 }

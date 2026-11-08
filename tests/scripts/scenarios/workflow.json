@@ -4,7 +4,7 @@
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["project", "workflow"],
     "expect": {
-      "stdout": "No workflow set: /atm:push asks for one, or run `atm project workflow set direct|pull-request`.\n"
+      "stdout": "No workflow set: /atm-push asks for one, or run `atm project workflow set direct|pull-request`.\n"
     }
   },
   {

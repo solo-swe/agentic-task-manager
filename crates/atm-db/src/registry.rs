@@ -311,7 +311,7 @@ fn resolve_project(target: Option<&str>, cwd: &Path) -> Result<(PathBuf, Map<Str
         .or_else(|| project_meta(&paths.root))
         .ok_or_else(|| {
             Error::failed(format!(
-                "no tasks.json in {}. Run /atm:create-tasks there first.",
+                "no tasks.json in {}. Run /atm-create-tasks there first.",
                 path.join(TASK_DIR).shown()
             ))
         })?;

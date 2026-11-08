@@ -175,7 +175,7 @@ fn select<'t>(vocab: &Vocabulary, tasks: &[&'t Task], sel: &Selection) -> Result
                 rank: Vec::new(),
                 scope: "the active sprint".into(),
                 problem: Some(
-                    "no active sprint: plan one with /atm:plan-sprint, or run with --all".into(),
+                    "no active sprint: plan one with /atm-plan-sprint, or run with --all".into(),
                 ),
             });
         };

@@ -59,7 +59,7 @@
     <span title="{formatMinutesRange(forecast.pace.low, forecast.pace.high)} for the middle half of those tasks"
       >Pace: ~{formatMinutes(forecast.pace.likely)} per task (last {forecast.pace.basedOn} tasks, one agent at a time).</span
     >
-    The active sprint first, then the planned ones, then the backlog, like <code>/atm:loop-tasks --all</code>.
+    The active sprint first, then the planned ones, then the backlog, like <code>/atm-loop-tasks --all</code>.
   {:else}
     Not enough history to estimate yet: estimates need at least 3 completed tasks with timestamps.
   {/if}

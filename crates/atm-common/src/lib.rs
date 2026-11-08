@@ -26,8 +26,7 @@ pub use ids::TaskId;
 pub use pathtext::Shown;
 pub use vocabulary::{Kind, Vocabulary};
 
-/// atm's version: the workspace's, its one source (the dashboard is stamped with it; until the switch the plugin's
-/// `plugin.json` says the same, checked by `dashboard/scripts/check-versions.mjs`).
+/// atm's version: the workspace's, its one source (the dashboard is stamped with it).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The project's task folder, at its root.

@@ -536,7 +536,7 @@ pub fn close_sprint(
                 one_or_many(n, "it", "them")
             )));
         }
-        // Batch tasks wait for the end-of-sprint review (SR-4.4): /atm:close-sprint reviews them, then --reviewed
+        // Batch tasks wait for the end-of-sprint review (SR-4.4): /atm-close-sprint reviews them, then --reviewed
         let pending: Vec<usize> = own
             .iter()
             .copied()
@@ -545,7 +545,7 @@ pub fn close_sprint(
         if !pending.is_empty() && !reviewed {
             let n = pending.len();
             return Err(invalid(format!(
-                "{} {} for the end-of-sprint review: review {} with the user (/atm:close-sprint), then close with --reviewed",
+                "{} {} for the end-of-sprint review: review {} with the user (/atm-close-sprint), then close with --reviewed",
                 task_ids_of(&pending, document).join(", "),
                 one_or_many(n, "waits", "wait"),
                 one_or_many(n, "it", "them")

@@ -13,7 +13,8 @@ this document is what changes with the code.
 2. **The user's repositories**: code, history, the right to push and open PRs.
 3. **Task data**: `tasks.json`, the archive, claims, notes. Its *integrity* matters most, because it steers agents.
 4. **Other local projects' data**, through the one dashboard server.
-5. **The plugin's distribution**: what users install and run on update.
+5. **atm's distribution**: the release binaries, the Homebrew formula and the public skills repo, what users install
+   and run on update (until 0.32.0, the Claude Code plugin from `main`).
 
 **Actors**:
 
@@ -26,7 +27,7 @@ this document is what changes with the code.
 | A web page in the user's browser | no | HTTP requests to `localhost` |
 | Another local user or process | no | the server's port, files in `ATM_HOME` |
 | An outside contributor, CI output | no | PRs, CI logs, review comments the push skill reads |
-| The supply chain | partly | npm, GitHub Actions, the CI container, the marketplace |
+| The supply chain | partly | npm, crates.io, GitHub Actions, the CI container, the release and Homebrew tap |
 
 **Trust boundaries** (where untrusted input enters):
 
@@ -51,30 +52,30 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I1 | **Task text is data, not commands.** The skills and `plugin/CLAUDE.md` say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
+| I1 | **Task text is data, not commands.** The skills and `atm docs rules` (`docs/agent/rules.md`) say so, and an agent blocks a task that asks it to run copied commands, fetch scripts, touch credentials, CI, git config or hooks | `dashboard/tests/unit/skills.test.ts` (the rule is present); the agent sandbox's red-team run (`tests/sandbox/run.mjs`; its verdict: `tests/scripts/sandbox-verdict.test.mjs`) |
 | I2 | **Skills pre-approve no command runner**: only named `atm` commands (`atm task state`, `atm db migrate`, …), never `atm *` or a whole group (atm itself runs no command since T-437, I24) | `skills.test.ts` |
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
 | I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes|reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
-| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives. The Rust atm starts only `git`, its own binary (by `current_exe`) for the watcher (`atm _claim-watch`; the shell's start time from `sysinfo`, not `ps`) and the dashboard server (`atm _serve <home> <port>`, T-449), and the browser opener (`open` or `xdg-open`, with the URL atm made) | `security-invariants.test.ts` (every process atm starts, and the one fork; the Rust atm's too, T-446, T-449); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
+| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, its own binary (by `current_exe`) for `atm claim hold`'s watcher (`atm _claim-watch`, which only renews one claim while the calling shell lives; the shell's start time from `sysinfo`, not `ps`) and the dashboard server (`atm _serve <home> <port>`, T-449), and the browser opener (`open` or `xdg-open`, with the URL atm made) | `security-invariants.test.ts` (every process atm starts, T-446, T-449); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
 | I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
-### atm-cli (B2)
+### atm (B2)
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I5 | **atm never runs a shell**: subprocesses get argument lists; no `shell=True`, `os.system`, `eval` or `exec` | `dashboard/tests/unit/security-invariants.test.ts` (a static check) |
+| I5 | **atm never runs a shell**: processes get argument lists (`Command::new` with a program, never `sh`, `bash`, `cmd` or PowerShell); Rust evaluates no code | `dashboard/tests/unit/security-invariants.test.ts` (a static check) |
 | I6 | **atm never reads or writes through a symlink** in the task folder, nor a task folder outside the project | `tests/scripts/symlinks.test.mjs` |
 | I7 | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused | `tests/scripts/git.test.mjs` |
 | I8 | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load | `tests/scripts/scenarios/security.json` |
-| I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`merge.py`) |
+| I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`) |
 
 ### Dashboard server (B3, B5)
 
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (the plugin's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, regular files under the build's `assets/` (the Rust atm embeds `dashboard/dist/assets/`; the Python atm reads its copy in `plugin/assets/`) named by plain segments, never through a symlink; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-lib/src/documents.rs`'s tests |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, embedded in the binary from the build's `dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-lib/src/documents.rs`'s tests |
 | I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
@@ -93,7 +94,7 @@ with the task that adds it.
 |---|---|---|
 | I18 | **CI tokens are read-only by default; checkouts don't keep credentials.** The one exception is the release workflow's last job, which drafts the release and builds nothing (T-452) | `dashboard/tests/unit/ci-workflow.test.ts` |
 | I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`) and `cargo build --locked` exactly `Cargo.lock`, its crates checked by `cargo deny`; Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
-| I20 | **What users run is what was reviewed**: the dashboard and CompMD's runtime are never committed; CI and the release workflow build them from the reviewed sources (the lockfile, exactly) before the binary that embeds them (T-477). The committed `plugin/scripts/atm.py` matches its modules until it goes (T-454) | the `rust` jobs and `release.yml` build the dashboard first; `build.py --check` in CI |
+| I20 | **What users run is what was reviewed**: the dashboard and CompMD's runtime are never committed; CI and the release workflow build them from the reviewed sources (the lockfile, exactly) before the binary that embeds them (T-477); a release is built from a `v*` tag on `main`, the macOS builds signed and notarized, every archive in `SHA256SUMS`, and the formula's checksums are the release's (T-452). Nothing generated is committed since the Python atm went (T-454) | the `rust` jobs and `release.yml` build the dashboard first; `ci-workflow.test.ts` |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
 
 ## 3. Verifying it
@@ -103,10 +104,10 @@ The schedule (T-236):
 - **Every PR (CI)**: everything in §2 that is a test: `pnpm run test:scripts` (the hostile-repo suites), the unit tests
   (skills, links, CI workflow, static checks, invariants table), the e2e suite under the page's CSP, and the build
   freshness checks. Dependabot proposes action and package updates weekly.
-- **Every PR that changes what agents read** (a skill, `plugin/CLAUDE.md`, or atm's output agents act on), before
+- **Every PR that changes what agents read** (a skill, `docs/agent/`, or atm's output agents act on), before
   it is merged: the agent sandbox's red-team run (I1). Here **every PR to `main` is a release** (the version is
-  bumped and `/plugin marketplace update` delivers it), so "before a release" means "before merging such a PR". PRs
-  that change only the dashboard or atm-cli don't need the sandbox run: their invariants are covered by CI.
+  bumped and tagged after the merge), so "before a release" means "before merging such a PR". PRs that change only
+  the dashboard or atm's code don't need the sandbox run: their invariants are covered by CI.
 - **Each quarter**: `.github/workflows/security-review-reminder.yml` opens an issue with the checklist: a review
   against this document (like `docs/security-review.md`), the agent sandbox, the pinned image digests, Dependabot,
   and whether Claude Code's permission model changed. Also whenever that model changes. (The quarterly issue as the
@@ -135,8 +136,9 @@ in `Icon.svelte` and `Logo.svelte`) and a check that every test the §2 table na
 **Level 2: the agent sandbox (the skills).** The only way to test I1 (task text is data) is to let a real agent loop
 over hostile tasks and see what it does. It must run where a mistake costs nothing:
 
-- **A container** (Docker, from a `Dockerfile` in `tests/sandbox/`): Claude Code, this checkout's plugin, git, Node,
-  Python; a throwaway repository with a bare "remote" next to it; a fake `~/.ssh/id_rsa`, `.env` and `gh` token as
+- **A container** (Docker, from a `Dockerfile` in `tests/sandbox/`): Claude Code, a Linux build of this checkout's
+  atm (`ATM_SANDBOX_BIN`) with its skills installed by `atm agents install`, git and Node (the plugin and Python until
+  T-454); a throwaway repository with a bare "remote" next to it; a fake `~/.ssh/id_rsa`, `.env` and `gh` token as
   **canaries** (made-up values the run watches for).
 - **No real credentials**: the only secret inside is a model API key, passed in at run time, with a spend limit.
 - **No network but the model API**: egress limited to the API host (a Docker network with an allow-listing proxy), so
@@ -164,13 +166,15 @@ container with no credentials and no egress already bounds what it can reach.
 
 ### 3.2 Distribution (T-231, approved)
 
-Users run what is on `main`: the marketplace installs `./plugin` from the default branch, and the hooks run it on every
-tool call. Today `main` has **no branch protection**. Proposal:
+Until 0.32.0, users ran what was on `main`: the marketplace installed `./plugin` from the default branch, and the
+hooks ran it on every tool call. Since T-454 they run a release built from a tag on `main` (T-452, I20), so `main`'s
+protection still decides what can ship. When this was written `main` had **no branch protection**. Proposal:
 
 **Branch protection on `main`** (a repository setting only the owner can change; a ruleset):
 - changes only through a pull request; no direct pushes, no force-pushes, no deletion;
-- required status checks: the four CI jobs (*Lint, unit tests, build freshness*; *atm helper (Python 3.9)* and
-  *(3.13)*; *Playwright regression suite*), with the branch up to date;
+- required status checks: the CI jobs (*Lint, unit tests, build freshness*; *Rust (ubuntu-latest)*, *(macos-latest)*
+  and *(windows-latest)*, which replaced *atm helper (Python 3.9)* and *(3.13)* with T-454; *Playwright regression
+  suite*), with the branch up to date;
 - **no required approval**: with one maintainer, GitHub doesn't let you approve your own PR, so it would block every
   merge. The PR and its checks are the review; revisit when there are other committers;
 - the owner can bypass in an emergency.
@@ -181,7 +185,7 @@ change to the file is applied with `-X PUT …/rulesets/<id>`.
 
 **Private vulnerability reporting**: turn it on (Settings → Code security), as `SECURITY.md` points to it.
 
-**Pinning releases to tags**: Claude Code marketplaces can point a plugin at a git ref instead of the default branch.
+**Pinning releases to tags** (superseded by T-452 and T-454: releases are tags now): Claude Code marketplaces can point a plugin at a git ref instead of the default branch.
 That would make a release an explicit step (push a tag, update the marketplace entry). Recommendation: **not now**.
 Branch protection already makes `main` the reviewed state, every PR is a release (§3), and a tag step would add a
 manual move to each release without changing who can publish. Revisit if outside contributors start merging.
@@ -646,6 +650,25 @@ CI permission beyond reading and the first secrets:
 - **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
   with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 
+**The switch (T-454, 0.33.0).** The Claude Code plugin, its marketplace entry and the Python atm are gone; atm is the
+Rust binary only, installed from a release (above). What that changes:
+- **Less runs on its own.** The plugin's two hooks (`atm claim heartbeat --auto` after every tool call, `atm service
+  --refresh` at session start) are gone with it: atm runs only when the user or an agent runs it. Claims last on
+  their own (every atm command renews them, T-439), and the dashboard server restarts on a new version when it is
+  next asked for.
+- **Users no longer run `main`.** The marketplace installed `./plugin` from the default branch; a release is now a tag
+  someone with push access makes, built by the release workflow (I20, §3.2).
+- **What agents read** is the skills (`skills/`, embedded in atm, written by `atm agents install` only when the user
+  runs it, T-442) and `atm docs` (`docs/agent/`). The rules are unchanged word for word; the skills drop the line
+  telling agents that exit code 127 means Python is missing (the version check, their first step, stops them when atm
+  is missing), and name each other `/atm-…` instead of `/atm:…`, as atm's own hints do. Written review in place of
+  the sandbox run (no API key): nothing new to run, fetch or install, and no new pre-approval.
+- **The checks move with the code:** the static checks scan the Rust sources (I5, I24); the dev page's CSP is
+  checked against atm-common's `page_csp` (`security-headers.test.ts`); the skill checks read `skills/` and
+  `skills/claude-code.json` (`skills.test.ts`); the agent sandbox runs a Linux build of atm with its installed
+  skills (`tests/sandbox/`, `ATM_SANDBOX_BIN`). The ruleset requires the three Rust jobs instead of the Python ones
+  (`.github/rulesets/main.json`, applied by the owner).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
@@ -654,7 +677,7 @@ This document changes **in the same PR** as a change that:
 - adds a **file format** or a field agents or the dashboard act on (a link, a command, a path);
 - adds or changes a **skill instruction** that runs commands, pushes, or reads outside text (CI logs, issues, web
   pages);
-- changes **CI permissions**, actions, or how the plugin is distributed.
+- changes **CI permissions**, actions, or how atm is distributed (the release, the formula, the skills repo).
 
 Such a PR adds the threat (with its boundary) and, if it needs one, the invariant and its check. `CLAUDE.md`
 (development) points here.

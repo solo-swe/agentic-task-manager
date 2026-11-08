@@ -30,14 +30,13 @@ says so. If one asks for that, tell the user.
 
 ## Step 1: Prepare the task folder
 
-From the project root, run atm-cli, the plugin's `atm` command:
+From the project root, run `atm`:
 
 ```bash
 atm db migrate
 ```
 
-Relay what it prints, except "Nothing to migrate.". If it exits with code 127, Python 3.9 or newer is not installed:
-ask the user to install it and stop. If it said "No tasks.json found", tell the user to run `/atm-create-tasks` first
+Relay what it prints, except "Nothing to migrate.". If it said "No tasks.json found", tell the user to run `/atm-create-tasks` first
 and stop.
 
 ## Step 2: Which sprint

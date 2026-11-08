@@ -5,9 +5,9 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
-# atm's version, the one source (T-477): the dashboard is stamped with it, and until the switch (T-454) the plugin's
-# plugin.json and marketplace.json must say the same (dashboard/scripts/check-versions.mjs). The dashboard's About
-# dialog shows the description, the author, the licence and the repository
+# atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
+# entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
+# the licence and the repository
 version = "0.32.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]

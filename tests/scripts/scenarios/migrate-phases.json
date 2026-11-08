@@ -72,7 +72,7 @@
     "args": ["db", "migrate"],
     "env": { "ATM_NOW": "2026-02-01T00:00:00Z" },
     "expect": {
-      "stdout": "Phases are now sprints: turned 4 phases into sprints (staged, not committed).\nClosed (all their tasks finished): Foundations.\nPlanned: Phase 1, Foundations (phase 2), Later.\nNone is active yet: plan one with /atm:plan-sprint.\n",
+      "stdout": "Phases are now sprints: turned 4 phases into sprints (staged, not committed).\nClosed (all their tasks finished): Foundations.\nPlanned: Phase 1, Foundations (phase 2), Later.\nNone is active yet: plan one with /atm-plan-sprint.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {

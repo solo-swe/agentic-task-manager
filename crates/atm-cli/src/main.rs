@@ -138,7 +138,7 @@ enum Command {
         /// The topic to print; without one, the list of topics
         topic: Option<String>,
     },
-    /// Print the plugin version.
+    /// Print atm's version.
     Version,
     /// Hold the task folder's lock for a while (for the lock's tests).
     #[command(name = "_lock-test", hide = true)]

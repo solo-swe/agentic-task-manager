@@ -16,7 +16,7 @@
     },
     "args": ["db", "migrate"],
     "expect": {
-      "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json (staged with git mv, not committed); removed docs/tasks-dashboard.html (the dashboard now comes with the plugin: /atm:serve).\n",
+      "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json (staged with git mv, not committed); removed docs/tasks-dashboard.html (the dashboard now comes with atm: /atm-serve).\n",
       "files": {
         "docs/tasks.json": false,
         "docs/tasks-dashboard.html": false,
@@ -110,7 +110,7 @@
     "cwd": "docs",
     "args": ["db", "migrate"],
     "expect": {
-      "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json; removed docs/tasks-dashboard.html (the dashboard now comes with the plugin: /atm:serve).\n",
+      "stdout": "Moved docs/tasks.json to .agentic-task-manager/tasks.json; removed docs/tasks-dashboard.html (the dashboard now comes with atm: /atm-serve).\n",
       "files": {
         "docs/tasks.json": false,
         "docs/tasks-dashboard.html": false,
@@ -200,7 +200,7 @@
     },
     "args": ["db", "migrate"],
     "expect": {
-      "stdout": "Removed this project's old dashboard files: one dashboard for all your projects now comes with the plugin (/atm:serve).\n",
+      "stdout": "Removed this project's old dashboard files: one dashboard for all your projects now comes with atm (/atm-serve).\n",
       "files": {
         ".agentic-task-manager/tasks-dashboard.html": false
       }
@@ -248,7 +248,7 @@
     },
     "args": ["db", "migrate"],
     "expect": {
-      "stdout": "No tasks.json found. Run /atm:create-tasks to create one.\n",
+      "stdout": "No tasks.json found. Run /atm-create-tasks to create one.\n",
       "files": {
         ".agentic-task-manager": false
       }

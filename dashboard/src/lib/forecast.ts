@@ -133,7 +133,7 @@ const NO_AGENT_WORK = new Set<StatusKind | undefined>(['done', 'skipped', 'block
 
 /**
  * Per-sprint progress and estimates, the work accumulating in the loop's order (the active sprint, the planned ones
- * in order, the backlog), like /atm:loop-tasks --all. `history` is what the pace is measured on (all tasks), so
+ * in order, the backlog), like /atm-loop-tasks --all. `history` is what the pace is measured on (all tasks), so
  * filtering the view doesn't change the pace.
  */
 export function forecastSprints(

@@ -28,7 +28,7 @@ pub enum ClaimCommand {
     Heartbeat {
         /// The task ID
         task_id: Option<String>,
-        /// Renew your claims if their last renewal is ten minutes old; silent (the plugin's hook)
+        /// Renew your claims if their last renewal is ten minutes old; silent (for a harness's hook)
         #[arg(long)]
         auto: bool,
         /// Who you are
@@ -155,7 +155,7 @@ fn hook_input() -> serde_json::Map<String, Value> {
     }
 }
 
-/// `heartbeat --auto`, run by the plugin's hook after every tool call (CLI-6.2): renew this agent's live claims once
+/// `heartbeat --auto`, for a harness's hook after every tool call (CLI-6.2; the plugin's, before 0.33.0): renew this agent's live claims once
 /// their last renewal is ten minutes old. It never prints and never fails, so a tool call is never disturbed.
 fn auto_heartbeat(agent: Option<&str>, cwd: &Path) {
     let payload = hook_input();

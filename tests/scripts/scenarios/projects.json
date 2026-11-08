@@ -106,7 +106,7 @@
     "name": "projects add refuses a folder without tasks.json",
     "setup": { "files": { "empty/README.md": "nothing here\n" } },
     "args": ["project", "add", "empty"],
-    "expect": { "exit": 1, "stderrIncludes": ["no tasks.json in", "Run /atm:create-tasks there first."] }
+    "expect": { "exit": 1, "stderrIncludes": ["no tasks.json in", "Run /atm-create-tasks there first."] }
   },
   {
     "name": "projects add refuses a project that opted out",

@@ -253,7 +253,7 @@ pub fn describe_sprints_from_phases(sprints: &[Value]) -> Vec<String> {
     }
     if !planned.is_empty() {
         lines.push(format!("Planned: {}.", planned.join(", ")));
-        lines.push("None is active yet: plan one with /atm:plan-sprint.".into());
+        lines.push("None is active yet: plan one with /atm-plan-sprint.".into());
     }
     lines
 }

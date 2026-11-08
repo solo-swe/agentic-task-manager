@@ -1,6 +1,6 @@
 [
   {
-    "name": "version prints the plugin version",
+    "name": "version prints atm's version",
     "args": ["version"],
     "expect": { "exit": 0, "stdout": "{version}\n" }
   },

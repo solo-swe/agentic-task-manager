@@ -93,7 +93,7 @@
     "env": { "ATM_NOW": "2026-05-01T12:00:00Z", "ATM_AGENT": "alice" },
     "args": ["sprint", "delete", "A"],
     "expect": {
-      "stdout": "Deleted the sprint “A” (active): 2 tasks moved to the backlog (T-1, T-2).\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint.\n",
+      "stdout": "Deleted the sprint “A” (active): 2 tasks moved to the backlog (T-1, T-2).\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm-plan-sprint.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": { "sprints": [{ "id": "B", "state": "planned" }] },

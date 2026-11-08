@@ -140,7 +140,7 @@
       ><Icon name="info" size={13} />
       <button class="link-button" id="scope-show-leftovers" onclick={() => dashboard.setSprintScope(leftoverSprints)}
         >{tasks(dashboard.leftovers.length)} open in closed sprints</button
-      >&nbsp;· no loop takes {them} · move {them} with <code>/atm:plan-sprint</code></span
+      >&nbsp;· no loop takes {them} · move {them} with <code>/atm-plan-sprint</code></span
     >
   {/if}
 {/snippet}
@@ -240,7 +240,7 @@
               {counts.total - counts.done} open after closing · no loop takes {counts.total - counts.done === 1
                 ? 'it'
                 : 'them'} · move {counts.total - counts.done === 1 ? 'it' : 'them'} with
-              <code>/atm:plan-sprint</code></span
+              <code>/atm-plan-sprint</code></span
             >{/if}
           {#if s.report?.carried?.length}<span class="sprint-carried"
               >{s.report.carried.length} carried to {s.report.to === BACKLOG || !s.report.to
@@ -256,22 +256,22 @@
           {#if counts.done + counts.active + counts.review + counts.blocked}{@render progress()}{/if}
           <!-- atm starts no sprint while another is active: that one closes first -->
           {#if !model.derived && active}<span class="scope-hint" id="scope-hint"
-              >starts once {active.id} is closed · <code>/atm:close-sprint</code> then
-              <code>/atm:plan-sprint</code></span
+              >starts once {active.id} is closed · <code>/atm-close-sprint</code> then
+              <code>/atm-plan-sprint</code></span
             >{:else if !model.derived}<span class="scope-hint" id="scope-hint"
-              >start it with <code>/atm:plan-sprint</code></span
+              >start it with <code>/atm-plan-sprint</code></span
             >{/if}
         {:else if counts.total === 0}
           <span class="scope-hint" id="scope-hint"
-            >No tasks yet · pull some from the backlog ({tasks(backlogOpen)}) with <code>/atm:plan-sprint</code></span
+            >No tasks yet · pull some from the backlog ({tasks(backlogOpen)}) with <code>/atm-plan-sprint</code></span
           >
         {:else if sprintEnded && counts.review + counts.blocked === 0}
           <span class="scope-done" id="scope-done"><Icon name="check" size={14} /> All {tasks(counts.total)} done</span>
           <span class="scope-hint" id="scope-hint"
-            >Close it with <code>/atm:close-sprint</code>{#if s.release}&nbsp;· release {s.release} is ready to ship{/if}</span
+            >Close it with <code>/atm-close-sprint</code>{#if s.release}&nbsp;· release {s.release} is ready to ship{/if}</span
           >
           {#if backlogOpen}<span class="scope-hint"
-              >More work? Pull from the backlog ({tasks(backlogOpen)}) with <code>/atm:plan-sprint</code></span
+              >More work? Pull from the backlog ({tasks(backlogOpen)}) with <code>/atm-plan-sprint</code></span
             >{/if}
         {:else}
           {#if summary.dueIn !== undefined}
@@ -296,14 +296,14 @@
             >{/if}
           {#if summary.reviewPending}<span
               class="sprint-review-pending"
-              title="Done, waiting for the end-of-sprint review with you (/atm:close-sprint)"
+              title="Done, waiting for the end-of-sprint review with you (/atm-close-sprint)"
               >{summary.reviewPending} waiting for the sprint review</span
             >{/if}
         {/if}
       {:else if scope.kind === 'backlog'}
         <span class="sprint-size">{tasks(counts.total)} in no sprint</span>
         {@render progress()}
-        <span class="scope-hint" id="scope-hint">plan them into a sprint with <code>/atm:plan-sprint</code></span>
+        <span class="scope-hint" id="scope-hint">plan them into a sprint with <code>/atm-plan-sprint</code></span>
         {@render leftoverNote()}
       {:else if scope.kind === 'several'}
         {@render progress()}
@@ -324,7 +324,7 @@
                   Date.parse(scope.last.end),
                   dashboard.loadedAt,
                 )}{/if}{/if}{#if scope.next}&nbsp;· next planned: {scope.next.id} ({tasks(sizeOf(scope.next))}) · start
-              it with <code>/atm:plan-sprint</code>{:else}&nbsp;· plan one with <code>/atm:plan-sprint</code>{/if}</span
+              it with <code>/atm-plan-sprint</code>{:else}&nbsp;· plan one with <code>/atm-plan-sprint</code>{/if}</span
           >
         {/if}
       {/if}

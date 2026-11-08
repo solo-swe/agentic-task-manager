@@ -44,7 +44,7 @@ impl Loaded {
 fn read_task_file(paths: &Paths) -> Result<Value> {
     if !paths.tasks.is_file() {
         return Err(Error::failed(format!(
-            "no tasks.json in {}. Run /atm:create-tasks first.",
+            "no tasks.json in {}. Run /atm-create-tasks first.",
             paths.dir.shown()
         )));
     }
@@ -253,7 +253,7 @@ mod tests {
             load_tasks(&paths)
                 .unwrap_err()
                 .to_string()
-                .ends_with(". Run /atm:create-tasks first.")
+                .ends_with(". Run /atm-create-tasks first.")
         );
     }
 

@@ -232,7 +232,7 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
         }
         if !migration.tasks_exists {
             return Err(Error::failed(
-                "no tasks.json to serve. Run /atm:create-tasks first.",
+                "no tasks.json to serve. Run /atm-create-tasks first.",
             ));
         }
         let (id, shown) = dashboard_id(cwd)?;

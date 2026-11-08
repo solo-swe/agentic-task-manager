@@ -60,7 +60,7 @@ describe('ScopeBar (T-323)', () => {
     const { container } = render(ScopeBar);
     await tick();
     expect(text(container, '#scope-done')).toBe('All 3 tasks done');
-    expect(text(container, '#scope-hint')).toBe('Close it with /atm:close-sprint · release 1.0 is ready to ship');
+    expect(text(container, '#scope-hint')).toBe('Close it with /atm-close-sprint · release 1.0 is ready to ship');
     expect(container.querySelector('.scope-facts')?.textContent).toContain('Pull from the backlog (1 task)');
     expect(container.querySelector('.sprint-progress')).toBeNull();
   });
@@ -82,7 +82,7 @@ describe('ScopeBar (T-323)', () => {
     const { container } = render(ScopeBar);
     await tick();
     expect(text(container, '#scope-hint')).toBe(
-      'No tasks yet · pull some from the backlog (4 tasks) with /atm:plan-sprint',
+      'No tasks yet · pull some from the backlog (4 tasks) with /atm-plan-sprint',
     );
   });
 
@@ -93,7 +93,7 @@ describe('ScopeBar (T-323)', () => {
     expect(text(container, '.sprint-state')).toBe('planned');
     expect(text(container, '.sprint-size')).toBe('0 tasks');
     expect(text(container, '#scope-hint')).toBe(
-      'starts once Ada Lovelace is closed · /atm:close-sprint then /atm:plan-sprint',
+      'starts once Ada Lovelace is closed · /atm-close-sprint then /atm-plan-sprint',
     );
     const meta = {
       ...file.meta,
@@ -104,7 +104,7 @@ describe('ScopeBar (T-323)', () => {
     load(undefined, meta);
     dashboard.setSprintScope(['Alan Turing']);
     await tick();
-    expect(text(container, '#scope-hint')).toBe('start it with /atm:plan-sprint');
+    expect(text(container, '#scope-hint')).toBe('start it with /atm-plan-sprint');
   });
 
   it('open tasks left in a closed sprint: noted on it, and on All tasks with a link to those sprints', async () => {
@@ -113,12 +113,12 @@ describe('ScopeBar (T-323)', () => {
     const { container } = render(ScopeBar);
     await tick();
     expect(text(container, '#scope-leftovers')).toBe(
-      '1 open after closing · no loop takes it · move it with /atm:plan-sprint',
+      '1 open after closing · no loop takes it · move it with /atm-plan-sprint',
     );
     dashboard.setSprintScope([]);
     await tick();
     expect(text(container, '#scope-leftovers')).toBe(
-      '1 task open in closed sprints · no loop takes it · move it with /atm:plan-sprint',
+      '1 task open in closed sprints · no loop takes it · move it with /atm-plan-sprint',
     );
     await fireEvent.click(container.querySelector('#scope-show-leftovers')!);
     expect([...dashboard.filters.sprint]).toEqual(['Foundations']);
@@ -185,7 +185,7 @@ describe('ScopeBar (T-323)', () => {
     await tick();
     expect(text(container, '#scope-trigger')).toBe('All tasks');
     expect(text(container, '#scope-hint')).toMatch(
-      /^No active sprint · last: Foundations, closed .+ · next planned: Alan Turing \(0 tasks\) · start it with \/atm:plan-sprint$/,
+      /^No active sprint · last: Foundations, closed .+ · next planned: Alan Turing \(0 tasks\) · start it with \/atm-plan-sprint$/,
     );
   });
 

@@ -1,2 +1,4 @@
 # A sandbox run's transcript, evidence and proxy log (tests/sandbox/run.mjs)
 results/
+# The atm under test, copied in by run.mjs from ATM_SANDBOX_BIN
+bin/

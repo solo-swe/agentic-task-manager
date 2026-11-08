@@ -44,10 +44,9 @@ The helper:
   after older versions (a project's own copy of the dashboard and its own server);
 - adds the project to the dashboard's list of projects (`atm project list` shows them);
 - serves the dashboard on `localhost` in a background process that keeps running after this session ends. The
-  dashboard comes with the plugin, so updating the plugin updates it: the server restarts itself on the new version.
+  dashboard comes with atm, so updating atm updates it: a server still on an older version is restarted on this one.
 
-If it exits with code 127, Python 3.9 or newer is not installed: atm needs it, so tell the user to install it.
-For any other error, show its message.
+If it fails, show its message.
 
 ## Step 3: Report
 

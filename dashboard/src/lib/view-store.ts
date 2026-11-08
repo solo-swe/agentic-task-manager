@@ -60,7 +60,7 @@ export interface ProjectMeta {
   project?: unknown;
 }
 
-/** The key a project's view is stored under: meta.id (written by /atm:create-tasks), else the project name. */
+/** The key a project's view is stored under: meta.id (written by /atm-create-tasks), else the project name. */
 export function projectKey(meta: ProjectMeta | undefined): string {
   const id = typeof meta?.id === 'string' && meta.id ? meta.id : null;
   const name = typeof meta?.project === 'string' && meta.project ? meta.project : null;

@@ -250,7 +250,7 @@ impl Store for JsonGitStore {
     fn raw(&self) -> Result<Raw> {
         if !self.exists() {
             return Err(Error::failed(format!(
-                "no tasks.json in {}. Run /atm:create-tasks first.",
+                "no tasks.json in {}. Run /atm-create-tasks first.",
                 self.paths.dir.shown()
             )));
         }

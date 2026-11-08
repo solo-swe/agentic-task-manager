@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
+import { CARGO_TOML, workspacePackage } from '../../build/workspace';
 import { expect, openDashboard, test } from './helpers';
 
-const plugin = JSON.parse(readFileSync(new URL('../../../plugin/.claude-plugin/plugin.json', import.meta.url), 'utf8'));
+const { repository } = workspacePackage(readFileSync(CARGO_TOML, 'utf8'));
 
 test.describe('Footer', () => {
   test.beforeEach(async ({ page, tasksServer }) => {
@@ -17,7 +18,7 @@ test.describe('Footer', () => {
       await expect(footer.locator('#footer-brand')).toHaveText('Agentic Task Manager (atm)');
       await expect(footer.locator('#footer-brand #footer-logo svg')).toBeVisible();
       await expect(footer).toContainText(/Agentic Task Manager \(atm\)\s*© \d{4} Hakan Serce · MIT License/);
-      await expect(footer.locator('#footer-github')).toHaveAttribute('href', plugin.repository);
+      await expect(footer.locator('#footer-github')).toHaveAttribute('href', repository as string);
     }
   });
 

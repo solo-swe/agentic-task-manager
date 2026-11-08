@@ -4,16 +4,15 @@
 
 <h1 align="center">Agentic Task Manager</h1>
 
-A **Claude Code plugin** that gives any project file-based task management with a live HTML dashboard. Agents decompose requirements into granular tasks, execute them in a loop, and humans watch progress in real time.
+**atm** gives any project file-based task management for AI agents, with a live HTML dashboard. Agents decompose requirements into granular tasks, execute them in a loop, and humans watch progress in real time.
 
-**One command to install. Nothing to set up beyond Python 3. Works with any language.**
+**One program to install. Nothing else to set up. Works with any language.**
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-> [!IMPORTANT]
-> **0.32.0 is the plugin's last release.** From 0.33.0, atm comes as the `atm` command (Homebrew, or a download for
-> macOS, Linux and Windows), and later as a macOS app, and installs its own skills into Claude Code and other agents.
-> Your projects and tasks stay as they are. See [Moving to the atm CLI](#moving-to-the-atm-cli).
+> [!NOTE]
+> **Used the Claude Code plugin (0.32.0 and before)?** atm is now the `atm` command, with its own skills. Your
+> projects and tasks stay as they are: see [Moving from the plugin](#moving-from-the-plugin).
 
 ---
 
@@ -22,8 +21,8 @@ A **Claude Code plugin** that gives any project file-based task management with 
 - **The data lives with the project.** Tasks are a file in your repository (`.agentic-task-manager/`), versioned with
   your code by your own version control: branches, pull requests and history work for tasks as they do for code
   ([Project files](#project-files)).
-- **One skill install.** Installing the plugin is all it takes: no service, no account, no database. It needs only
-  Python 3, which macOS and Linux already have ([Prerequisites](#prerequisites)).
+- **One install.** The `atm` program is all it takes: no service, no account, no database, no runtime to install
+  ([Installation](#installation)). It brings the dashboard and the agents' skills with it.
 - **Actions through agents.** Every change to the tasks is made by an agent running a skill, or by `atm`, the command
   the skills use; never by editing the files by hand. That keeps the file valid, locked and merged task by task
   ([Running agents in parallel](#running-agents-in-parallel)).
@@ -36,11 +35,11 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 1. **Decompose requirements into tasks** - Point the agent at your PRD, use cases, ADRs, or just describe what you need. It creates a `tasks.json` file with granular, dependency-aware tasks.
 
-2. **Execute tasks one by one** - The agent picks up a task, marks it in-progress, implements it, verifies it, and marks it done (or asks for a review, or asks you a question when it can't go on without a decision). Every change goes through `atm`, the plugin's command, which writes `tasks.json` immediately.
+2. **Execute tasks one by one** - The agent picks up a task, marks it in-progress, implements it, verifies it, and marks it done (or asks for a review, or asks you a question when it can't go on without a decision). Every change goes through `atm`, which writes `tasks.json` immediately.
 
 3. **Loop through all tasks** - "Ralph Wiggum mode" 🫠 - the agent continuously picks up the next available task and works through the entire backlog while you watch.
 
-4. **Push and get CI green** - `/atm:push` pushes the work straight to your main branch or through a pull request, watches CI and fixes what fails.
+4. **Push and get CI green** - `/atm-push` pushes the work straight to your main branch or through a pull request, watches CI and fixes what fails.
 
 5. **Follow an agile Software Development Process along the way** - Either start going right away and use Kanban with the dashboard, or use a more structured agile SDL with a backlog, sprint planning, tracking, etc
 
@@ -60,21 +59,19 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 ## Quick Start
 
-### Install the plugin
+### Install atm and its skills
 
-In Claude Code (terminal or VS Code), add the marketplace and install the `atm` plugin:
-
-```
-/plugin marketplace add solo-swe/agentic-task-manager
-/plugin install atm@solo-swe-plugins
+```bash
+brew install solo-swe/tap/atm     # or a download: see Installation
+atm agents install                # the skills, where Claude Code reads them
 ```
 
-Then run `/reload-plugins` so the skills load (no restart needed).
+Then start a new Claude Code session (terminal or VS Code), so it lists the skills.
 
 ### Create tasks
 
 ```
-/atm:create-tasks
+/atm-create-tasks
 ```
 
 The agent searches your project for requirement documents (PRD, use cases, ADRs, roadmap) and decomposes them into granular tasks. If it can't find any, it asks you where to look or lets you describe requirements directly.
@@ -84,12 +81,12 @@ Tasks go to `.agentic-task-manager/tasks.json` in your project.
 ### Start the dashboard
 
 ```
-/atm:serve --open
+/atm-serve --open
 ```
 
 This starts a small local server in the background and opens the dashboard in your browser. One dashboard shows all
 your projects: switch with the arrow next to the title, or open **All projects** for an overview of what each one is
-doing and what needs you. It refreshes every 5 seconds, so it stays live while agents work. `/atm:serve stop` stops
+doing and what needs you. It refreshes every 5 seconds, so it stays live while agents work. `/atm-serve stop` stops
 it; it otherwise keeps running after you close Claude Code.
 
 ### Execute tasks
@@ -97,26 +94,26 @@ it; it otherwise keeps running after you close Claude Code.
 Do a single task:
 
 ```
-/atm:do-task T-001
+/atm-do-task T-001
 ```
 
 Or let the agent pick the next available task:
 
 ```
-/atm:do-task
+/atm-do-task
 ```
 
 Or loop through everything:
 
 ```
-/atm:loop-tasks
+/atm-loop-tasks
 ```
 
 ---
 
-## Moving to the atm CLI
+## Moving from the plugin
 
-0.32.0 is the last version of atm as a Claude Code plugin. The next one, 0.33.0, is the `atm` command on its own: one
+0.32.0 was the last version of atm as a Claude Code plugin. From 0.33.0, atm is the `atm` command on its own: one
 program, rewritten in Rust, with nothing else to install (no Python). It brings the dashboard and the skills with it,
 and installs the skills where your agents read them: Claude Code first, and other agents' shared folder
 (`~/.agents/skills`) as they are supported. A macOS app follows. Why, and the plan:
@@ -129,14 +126,15 @@ its address; every `atm` command and option.
 `atm-close-sprint`, `atm-push` and `atm-serve` instead of `/atm:do-task` and the rest, and they need the `atm` command
 on your PATH. Asking in your own words ("loop the tasks") works as before.
 
-**Moving, once 0.33.0 is out:**
+**Moving:**
 
 1. Install the CLI: `brew install solo-swe/tap/atm` on macOS or Linux, or download your platform's archive from the
    [releases](https://github.com/solo-swe/agentic-task-manager/releases) and put `atm` on your PATH. Check it with
    `atm --version`.
 2. Install the skills: `atm agents install`. It prints every folder it writes; `atm agents status` shows what is
    installed where.
-3. Stop the plugin's dashboard server (`/atm:serve stop`), then remove the plugin and its marketplace in Claude Code:
+3. Stop the plugin's dashboard server (`/atm:serve stop`, the plugin's skill), then remove the plugin and its
+   marketplace in Claude Code:
    ```
    /plugin uninstall atm@solo-swe-plugins
    /plugin marketplace remove solo-swe-plugins
@@ -152,75 +150,72 @@ Updates come with `brew upgrade` (or a new download), and `atm agents install` a
 
 ### Prerequisites
 
-- [Claude Code](https://claude.com/code) (CLI or VS Code extension)
-- **Python 3.9 or newer** (`python3`). The skills run a small helper script (`plugin/scripts/atm.py`) that moves task
-  files and serves the dashboard. The libraries it uses come with the plugin, so there is nothing to install. On macOS,
-  `python3` comes with the Command Line Tools (the same install that provides `git`). macOS and Linux are supported.
+- An agent harness: [Claude Code](https://claude.com/code) (CLI or VS Code extension) today; others through their
+  shared skills folder as they are supported (T-413)
+- `git`, for the project's history (atm runs it for commits and merges)
 
-### Method 1: Via marketplace (recommended)
+atm runs on macOS (arm64, x86_64), Linux (x86_64, arm64) and Windows (x86_64).
 
-This repo is its own marketplace (`solo-swe-plugins`) containing the `atm` plugin:
+### Homebrew (macOS, Linux)
 
-```
-/plugin marketplace add solo-swe/agentic-task-manager
-/plugin install atm@solo-swe-plugins
+```bash
+brew install solo-swe/tap/atm
 ```
 
-Then run `/reload-plugins` to load the skills. To get a new version later:
+`brew upgrade` gets a new version.
 
-```
-/plugin marketplace update solo-swe-plugins
-/reload-plugins
-```
+### A download
 
-No restart is needed. The dashboard comes with the plugin, so this updates it too: a running dashboard server
-restarts on the new version by itself (at the next tool call, or the next session), and the open dashboard offers a
-**Reload**. Its version label opens what's new.
+Every [release](https://github.com/solo-swe/agentic-task-manager/releases) has an archive per platform
+(`atm-<version>-<target>.tar.gz`, `.zip` for Windows) and `SHA256SUMS`. Check the archive against it, unpack it and
+put `atm` on your PATH. The macOS builds are signed and notarized.
 
-**Installed it before 0.21.0?** The marketplace was called `hakanserce-plugins` and lived at
-`hakanserce/agentic-task-manager`. Remove it and add it again under its new name:
+### The skills
 
-```
-/plugin marketplace remove hakanserce-plugins
-/plugin marketplace add solo-swe/agentic-task-manager
-/plugin install atm@solo-swe-plugins
-/reload-plugins
+```bash
+atm agents install       # link this version's skills into ~/.claude/skills
+atm agents status        # what is installed where, and whether it matches this atm
+atm agents uninstall     # remove exactly what install wrote
 ```
 
-### Method 2: Local development
+`--copy` copies instead of linking, `--project` writes them into this project's `.claude/skills/` (for a team that
+commits them). Nothing installs them but you: run `atm agents install` again after an upgrade.
 
-Clone and load directly:
+After an upgrade, the next `/atm-serve` (`atm service start`) restarts a running dashboard server on the new version,
+and the open dashboard offers a **Reload**; its version label opens what's new.
+
+### From source
 
 ```bash
 git clone https://github.com/solo-swe/agentic-task-manager.git
-cd your-project
-claude --plugin-dir /path/to/agentic-task-manager/plugin
+cd agentic-task-manager/dashboard && pnpm install --frozen-lockfile && pnpm run build && cd ..
+cargo install --path crates/atm-cli
 ```
 
 ### Verify installation
 
-Type `/atm:` in Claude Code - you should see seven skills in autocomplete:
+`atm version` prints the version. In Claude Code, type `/atm-`: you should see seven skills in autocomplete:
 
-- `/atm:create-tasks`
-- `/atm:plan-sprint`
-- `/atm:close-sprint`
-- `/atm:do-task`
-- `/atm:loop-tasks`
-- `/atm:push`
-- `/atm:serve`
+- `/atm-create-tasks`
+- `/atm-plan-sprint`
+- `/atm-close-sprint`
+- `/atm-do-task`
+- `/atm-loop-tasks`
+- `/atm-push`
+- `/atm-serve`
 
 ---
 
 ## Skills Reference
 
-### `/atm:create-tasks`
+### `/atm-create-tasks`
 
 **Decompose requirements into tasks.**
 
 ```
-/atm:create-tasks                          # Auto-detect requirements
-/atm:create-tasks docs/PRD.md              # Use specific file
-/atm:create-tasks Build a REST API with    # Describe requirements directly
+/atm-create-tasks                          # Auto-detect requirements
+/atm-create-tasks docs/PRD.md              # Use specific file
+/atm-create-tasks Build a REST API with    # Describe requirements directly
   user auth, CRUD for posts, and pagination
 ```
 
@@ -242,13 +237,13 @@ Type `/atm:` in Claude Code - you should see seven skills in autocomplete:
 - `**/TODO.md`, `**/BACKLOG.md`
 - `README.md`
 
-### `/atm:do-task`
+### `/atm-do-task`
 
 **Execute a single task.**
 
 ```
-/atm:do-task T-005     # Execute a specific task
-/atm:do-task           # Auto-pick the next available task
+/atm-do-task T-005     # Execute a specific task
+/atm-do-task           # Auto-pick the next available task
 ```
 
 **What it does:**
@@ -261,30 +256,30 @@ Type `/atm:` in Claude Code - you should see seven skills in autocomplete:
 6. Only then ends it: `atm task state <id> done --note "<outcome>"`, or `atm task state <id> in_review` when a review is asked for, or
    `atm task state <id> blocked --on user --question "..."` when it can't go on without your decision. A task is never marked done with its work
    uncommitted; one marked done by mistake goes back with `atm task state <id> todo --reason "..."`
-7. Reports what was done and what's now unblocked, and suggests `/atm:push` when there are unpushed commits
+7. Reports what was done and what's now unblocked, and suggests `/atm-push` when there are unpushed commits
 
 **Task selection** (when auto-picking): a task of the active sprint (any task, in a project without sprints): to-do,
 all dependencies done, not claimed by another agent; the most urgent priority first, then the lowest task ID.
 
-### `/atm:loop-tasks`
+### `/atm-loop-tasks`
 
 **Loop through all available tasks. Ralph Wiggum mode.** 🫠
 
 ```
-/atm:loop-tasks                           # The active sprint's tasks (all tasks, without sprints)
-/atm:loop-tasks --sprint "Ada Lovelace"   # Another sprint's tasks
-/atm:loop-tasks --tasks T-4,T-7           # These tasks, in this order
-/atm:loop-tasks --all                     # Active sprint, planned sprints, then the backlog
-/atm:loop-tasks --backlog                 # Tasks in no sprint
-/atm:loop-tasks --continue                # On to the next planned sprint when this one is finished
-/atm:loop-tasks --type test               # Only test tasks
-/atm:loop-tasks --max 5                   # Stop after 5 tasks
-/atm:loop-tasks --pause                   # Ask before each task
-/atm:loop-tasks --no-commit               # Skip auto-commit
-/atm:loop-tasks --push                    # Git commit + push after each
-/atm:loop-tasks --batch-push              # Commit each, push at the end
-/atm:loop-tasks --push-every 3            # Commit each, push every 3
-/atm:loop-tasks --dry-run                 # Preview execution order
+/atm-loop-tasks                           # The active sprint's tasks (all tasks, without sprints)
+/atm-loop-tasks --sprint "Ada Lovelace"   # Another sprint's tasks
+/atm-loop-tasks --tasks T-4,T-7           # These tasks, in this order
+/atm-loop-tasks --all                     # Active sprint, planned sprints, then the backlog
+/atm-loop-tasks --backlog                 # Tasks in no sprint
+/atm-loop-tasks --continue                # On to the next planned sprint when this one is finished
+/atm-loop-tasks --type test               # Only test tasks
+/atm-loop-tasks --max 5                   # Stop after 5 tasks
+/atm-loop-tasks --pause                   # Ask before each task
+/atm-loop-tasks --no-commit               # Skip auto-commit
+/atm-loop-tasks --push                    # Git commit + push after each
+/atm-loop-tasks --batch-push              # Commit each, push at the end
+/atm-loop-tasks --push-every 3            # Commit each, push every 3
+/atm-loop-tasks --dry-run                 # Preview execution order
 ```
 
 **Flags:**
@@ -295,7 +290,7 @@ all dependencies done, not claimed by another agent; the most urgent priority fi
 | `--tasks <T-1,T-5>` | These tasks, in this order                                                                                                      |
 | `--all`             | Every task: the active sprint, the planned ones in order, then the backlog                                                      |
 | `--backlog`         | Only tasks in no sprint                                                                                                         |
-| `--continue`        | When the sprint is finished, go on to the next planned one; the loop never closes a sprint (`/atm:close-sprint` does, with you) |
+| `--continue`        | When the sprint is finished, go on to the next planned one; the loop never closes a sprint (`/atm-close-sprint` does, with you) |
 | `--type <type>`     | Only tasks of a specific type (feature, test, etc.)                                                                             |
 | `--max <N>`         | Stop after N completed tasks                                                                                                    |
 | `--dry-run`         | Preview execution order without doing anything                                                                                  |
@@ -306,7 +301,7 @@ all dependencies done, not claimed by another agent; the most urgent priority fi
 | `--push-every <N>`  | `git commit` after each, `git push` every N tasks                                                                               |
 | `--no-watch`        | With a push flag: don't watch CI after the last push either                                                                     |
 
-Pushes go through [`/atm:push`](#atmpush): those in the middle of the loop don't wait for CI (`--no-watch`); the last
+Pushes go through [`/atm-push`](#atm-push): those in the middle of the loop don't wait for CI (`--no-watch`); the last
 one watches CI and fixes failures.
 
 **Commit message format:** `feat(T-001): Short task name`
@@ -315,7 +310,7 @@ one watches CI and fixes failures.
 session, or run `atm` yourself (`atm task edit T-005 --priority P0`, `atm task state T-007 skipped --reason '…'`), and the loop picks
 it up with its next task.
 
-### `/atm:plan-sprint`
+### `/atm-plan-sprint`
 
 **Plan a sprint with you.** A sprint is a named set of tasks the agents work through next; tasks in no sprint are
 the backlog.
@@ -325,38 +320,38 @@ the backlog.
 2. Agrees with you on the sprint: a new or planned one, its name, goal, release and due date
 3. Goes through the candidates with you: what to pull in from the backlog, what to push back, and tasks whose
    dependencies come later
-4. Starts it when you say so; `/atm:loop-tasks` then works through it
+4. Starts it when you say so; `/atm-loop-tasks` then works through it
 
 It proposes and you decide: nothing is moved, started or dated without your yes, and new tasks go through
-`/atm:create-tasks`.
+`/atm-create-tasks`.
 
-### `/atm:close-sprint`
+### `/atm-close-sprint`
 
 **Close a sprint with you.**
 
 1. Reviews what the sprint got done with you: the done tasks and their outcomes (follow-ups go through
-   `/atm:create-tasks`)
+   `/atm-create-tasks`)
 2. Decides with you what happens to each unfinished task: carried over (the default), back to the backlog, or skipped
 3. Chooses with you where carried tasks go: the next planned sprint, another one, or a new one
-4. Closes it, which keeps the sprint's report (done, carried, added mid-sprint), and offers `/atm:plan-sprint` for the
+4. Closes it, which keeps the sprint's report (done, carried, added mid-sprint), and offers `/atm-plan-sprint` for the
    next one
 
-### `/atm:push`
+### `/atm-push`
 
 **Push the work and get CI green.**
 
 ```
-/atm:push                    # push (or open/update the PR), watch CI, fix failures
-/atm:push --draft            # open the PR as a draft
-/atm:push --no-watch         # push and open the PR, don't watch CI
-/atm:push --no-verify        # skip the local verify before pushing
-/atm:push --max-rounds 5     # allow up to 5 rounds of CI fixes (default 3)
+/atm-push                    # push (or open/update the PR), watch CI, fix failures
+/atm-push --draft            # open the PR as a draft
+/atm-push --no-watch         # push and open the PR, don't watch CI
+/atm-push --no-verify        # skip the local verify before pushing
+/atm-push --max-rounds 5     # allow up to 5 rounds of CI fixes (default 3)
 ```
 
 It follows the project's **workflow**: `direct` (push straight to the base branch) or `pull-request` (push a feature
 branch and open or update its PR). Your project's `CLAUDE.md` comes first if it says how to push; otherwise the
 workflow saved in `tasks.json` (`atm project workflow` shows it, `atm project workflow set direct|pull-request` changes it); if there
-is none yet, `/atm:push` asks once and saves your answer.
+is none yet, `/atm-push` asks once and saves your answer.
 
 **What it does:**
 
@@ -372,21 +367,21 @@ is none yet, `/atm:push` asks once and saves your answer.
 **Never, without asking you:** skip or weaken a test, raise a budget, edit the CI workflow to pass, force-push or
 rewrite pushed history, or merge the PR. Without `gh` or a GitHub remote it only pushes.
 
-### `/atm:serve`
+### `/atm-serve`
 
 **Run the dashboard server, one for all your projects.**
 
 ```
-/atm:serve              # start it (or show the one already running), and give this project's address
-/atm:serve --open       # start it and open the browser
-/atm:serve --all        # the overview of all projects
-/atm:serve status       # is it running, and where?
-/atm:serve stop         # stop it
+/atm-serve              # start it (or show the one already running), and give this project's address
+/atm-serve --open       # start it and open the browser
+/atm-serve --all        # the overview of all projects
+/atm-serve status       # is it running, and where?
+/atm-serve stop         # stop it
 ```
 
 The server runs in the background on `localhost`, port 8765 or the next free port, and keeps running after the
-session ends. It serves the dashboard that comes with the plugin, so updating the plugin updates it: the server
-restarts on the new version by itself. It shows every project atm has run in (see [All your projects](#all-your-projects)).
+session ends. It serves the dashboard built into atm, so upgrading atm updates it: the next `/atm-serve` restarts
+the server on the new version. It shows every project atm has run in (see [All your projects](#all-your-projects)).
 
 ---
 
@@ -423,12 +418,11 @@ atm keeps everything in one folder at the root of your project (the top of the g
 └── .lock/                 # the write lock - not committed
 ```
 
-The dashboard isn't in your project at all: it comes with the plugin and is served by `/atm:serve` for all your
-projects.
+The dashboard isn't in your project at all: it is built into atm and served by `/atm-serve` for all your projects.
 
 **Upgrading from an earlier version:** projects that keep `tasks.json` in `docs/` (or the project root) are moved
 automatically the first time any atm skill runs. The move uses `git mv`, so history is kept; the old
-`tasks-dashboard.html` is removed from git. The change is staged for you to commit - `/atm:loop-tasks` commits it on
+`tasks-dashboard.html` is removed from git. The change is staged for you to commit - `/atm-loop-tasks` commits it on
 its own (`chore: move atm files to .agentic-task-manager/`) before its first task. Projects set up by 0.10.0–0.14.0
 had their own copy of the dashboard and their own server; atm deletes the copy and stops that server the next time
 it runs there (both were never committed).
@@ -440,7 +434,7 @@ it runs there (both were never committed).
 ### tasks.json format
 
 `tasks.json` is plain, indented JSON you can read, and review in a diff like any file. Nobody edits it directly:
-agents, and you, change it through `atm` (see [atm-cli's commands](#atm-clis-commands)), which locks it, checks it
+agents, and you, change it through `atm` (see [atm's commands](#atms-commands)), which locks it, checks it
 against the project's vocabularies and keeps the timestamps and actors right.
 
 ```json
@@ -523,7 +517,7 @@ and estimates; files without them still work (`updated_at` is used instead). Old
 `last_failure` fields are still read.
 
 **Vocabularies.** A project can name its own statuses, phases, task types, priorities and labels in `meta`
-(`/atm:create-tasks` asks you). Each status has a **kind** - `todo`, `active`, `review`, `blocked`, `done` or
+(`/atm-create-tasks` asks you). Each status has a **kind** - `todo`, `active`, `review`, `blocked`, `done` or
 `skipped` - and atm and the dashboard work by kind, so `awaiting_user` and `awaiting_agent` can both be review
 statuses, say. **About** in the dashboard shows the vocabularies a project uses.
 
@@ -568,7 +562,7 @@ them, and `atm db unarchive <id>` brings one back. The dashboard loads the archi
 
 The dashboard is a single self-contained HTML file, served by atm for all your projects. It reads each project's
 `tasks.json` from the server and renders an interactive view. Task text, Help and What's new are rendered with
-[CompMD](https://compmd.hakanserce.com/) (Markdown with components), which comes with the plugin and is served by the
+[CompMD](https://compmd.hakanserce.com/) (Markdown with components), which is built into atm and served by the
 same local server, loaded the first time a page shows Markdown; nothing is fetched from anywhere else.
 
 ### Features
@@ -582,28 +576,28 @@ same local server, loaded the first time a page shows Markdown; nothing is fetch
 - **Priorities, labels and stages** - Each card shows its priority, its labels as small chips, and its stage once done: **PR #12** (linking to the pull request) or **Merged**
 - **Views** - Tabs for the Dependency Graph, Kanban Board, Task List, Agents and Progress; the view fills the rest of the window and the selected tab is kept in the URL
 - **Dependency graph** - Interactive SVG graph with topological layout. Tasks outside the search and filters are hidden or, if you choose, greyed out. Opens at a readable scale centered on the active task; drag to pan, Ctrl/⌘ + scroll (or pinch) to zoom, zoom/fit/1:1 buttons, keyboard shortcuts (`+` `-` `0` `F`, arrows) when focused, and a clickable minimap when the graph doesn't fit. Filtering and auto-refresh keep your zoom level
-- **Kanban board** - To Do / In Progress / In Review / Blocked (when used) / Done columns, the same in every workflow; to-do cards show whether they're ready or what they wait on, and **Next up** marks the task `/atm:loop-tasks` will pick next. In Review cards say how long they have waited; Blocked cards say whether they wait on you or an agent, for how long, and how many questions. In a pull-request project, Done is split into In PR (per pull request), Done and Merged. Optional swimlanes per phase
+- **Kanban board** - To Do / In Progress / In Review / Blocked (when used) / Done columns, the same in every workflow; to-do cards show whether they're ready or what they wait on, and **Next up** marks the task `/atm-loop-tasks` will pick next. In Review cards say how long they have waited; Blocked cards say whether they wait on you or an agent, for how long, and how many questions. In a pull-request project, Done is split into In PR (per pull request), Done and Merged. Optional swimlanes per phase
 - **Task List** - Task cards, color-coded by status and type, with dependency links
 - **Agents** - A timeline with a lane per agent (🤖) or person (👤) and a bar per task (start to completion or to the review request, colored by type; work in progress runs to now). A green mark at the end of a bar means someone else completed it, usually a reviewer. Zoom with the buttons, Ctrl/⌘ + scroll or "last hour" presets, drag to move in time, or pick a range on the overview; **Live** keeps it at the current time. Tasks outside the search and filters are greyed out. Agents are recorded by `atm` since 0.12.0; older tasks show as "Unattributed"
-- **Progress** - Burndown chart (remaining vs. scope, with a forecast) and per-phase completion estimates in agent working time; click a phase to focus the chart. Agent utilisation compares agent work time with calendar time (24/7) and working time (8 h, Monday to Friday), overall and per agent. Estimates are most accurate with `started_at`/`completed_at`, which `/atm:do-task` and `/atm:loop-tasks` write since 0.7.0
+- **Progress** - Burndown chart (remaining vs. scope, with a forecast) and per-phase completion estimates in agent working time; click a phase to focus the chart. Agent utilisation compares agent work time with calendar time (24/7) and working time (8 h, Monday to Friday), overall and per agent. Estimates are most accurate with `started_at`/`completed_at`, which `/atm-do-task` and `/atm-loop-tasks` write since 0.7.0
 - **Saved view per project** - Filters and search, the tab, each tab's options (Kanban, Progress focus, graph hide/grey out) and the zoom of the graph and the Agents timeline come back when you reopen the dashboard. Each project keeps its own (by `meta.id` in `tasks.json`); **Reset view** clears it. A `#view=` link still opens that tab
 - **Light and dark mode** - Follows your system by default; switch between System, Light and Dark in the menu at the top right
 - **Themes** - Default, Nord, Solarized, Catppuccin, Tokyo Night, Ayu, Night Owl, Gruvbox, Noctis, Sublime Material and High contrast, each in light and dark, checked for readable contrast (see [docs/theme-validation.md](docs/theme-validation.md)). Theme and mode are remembered per browser
 - **Live claims** - In-progress tasks show which agent works on them, on which branch, and since when
 - **Auto-refresh** - On by default every 5s; the toggle and interval (in the menu next to the reload button) are remembered per browser. A poll that finds `tasks.json` unchanged transfers and redraws nothing (`304 Not Modified`)
 - **The archive** - The header counts the archived tasks, and the footer says when `tasks.json` has grown big enough to archive. The archive is loaded only for the Progress tab, the activity details and **Include archived**
-- **What's new, Help and About** - The version next to the title opens the release notes (a "new" marker appears after an upgrade); the footer's **Help** explains the dashboard, and **About** shows the plugin and the project's vocabularies and workflow
+- **What's new, Help and About** - The version next to the title opens the release notes (a "new" marker appears after an upgrade); the footer's **Help** explains the dashboard, and **About** shows atm's version and the project's vocabularies and workflow
 - **Manual reload** - Click reload button for instant refresh
 
 ### Starting the dashboard
 
-Run `/atm:serve --open` (see [Skills Reference](#atmserve)). The dashboard needs atm's server: it loads the list of
+Run `/atm-serve --open` (see [Skills Reference](#atm-serve)). The dashboard needs atm's server: it loads the list of
 projects and their files from it, so opening the HTML file another way doesn't work.
 
 ### Watching live progress
 
 1. Start the dashboard (auto-refresh is on by default, every 5s)
-2. In another terminal, start Claude Code and run `/atm:loop-tasks`
+2. In another terminal, start Claude Code and run `/atm-loop-tasks`
 3. Watch tasks move from todo → in_progress → done in real time
 
 ---
@@ -611,20 +605,20 @@ projects and their files from it, so opening the HTML file another way doesn't w
 ## Git Push Strategies
 
 **Workflows.** A project pushes its work in one of two ways, saved in `tasks.json` (`atm workflow set
-direct|pull-request`; `/atm:create-tasks` and `/atm:push` ask once): **direct** pushes to the main branch,
+direct|pull-request`; `/atm-create-tasks` and `/atm-push` ask once): **direct** pushes to the main branch,
 **pull-request** pushes a branch and opens or updates its pull request. Your project's `CLAUDE.md` comes first if it
-says how to push. Either way, `/atm:push` watches CI and fixes failures; see [`/atm:push`](#atmpush).
+says how to push. Either way, `/atm-push` watches CI and fixes failures; see [`/atm-push`](#atm-push).
 
-The `/atm:loop-tasks` skill supports flexible git strategies (its pushes go through `/atm:push`):
+The `/atm-loop-tasks` skill supports flexible git strategies (its pushes go through `/atm-push`):
 
 | Strategy              | Command                          | When to use                           |
 | --------------------- | -------------------------------- | ------------------------------------- |
-| Commit only (default) | `/atm:loop-tasks`                | Local history, push manually later    |
-| No git                | `/atm:loop-tasks --no-commit`    | You want full manual control          |
-| Commit + push         | `/atm:loop-tasks --push`         | Real-time backup, CI after every task |
-| Batch push            | `/atm:loop-tasks --batch-push`   | Clean remote history, single CI run   |
-| Periodic push         | `/atm:loop-tasks --push-every 5` | Balance: CI every 5 tasks             |
-| Human-in-the-loop     | `/atm:loop-tasks --pause --push` | Review each task before pushing       |
+| Commit only (default) | `/atm-loop-tasks`                | Local history, push manually later    |
+| No git                | `/atm-loop-tasks --no-commit`    | You want full manual control          |
+| Commit + push         | `/atm-loop-tasks --push`         | Real-time backup, CI after every task |
+| Batch push            | `/atm-loop-tasks --batch-push`   | Clean remote history, single CI run   |
+| Periodic push         | `/atm-loop-tasks --push-every 5` | Balance: CI every 5 tasks             |
+| Human-in-the-loop     | `/atm-loop-tasks --pause --push` | Review each task before pushing       |
 
 ---
 
@@ -632,7 +626,7 @@ The `/atm:loop-tasks` skill supports flexible git strategies (its pushes go thro
 
 ### Ask the agents
 
-You can use natural language to trigger the plugin skills: just say let's plan a sprint for instance, instead of /atm:plan-sprint. If they don't understand mention atm and ask them to read the skills once. Or ask for your agent to help fix, if you need to fix something with the tasks or project.
+You can use natural language to trigger atm's skills: just say let's plan a sprint for instance, instead of /atm-plan-sprint. If they don't understand mention atm and ask them to read the skills once. Or ask for your agent to help fix, if you need to fix something with the tasks or project.
 
 For instance, if you restructured your project and all file references are now stale, just ask the agent to go through each task and fix the references. With a project with hundreds of tasks, this takes only a minute or two.
 
@@ -658,7 +652,7 @@ to:
 
 - Skip a task that's no longer needed (`atm task state <id> skipped --reason '…'`)
 - Block a task so the agent doesn't pick it up (`atm task state <id> blocked --on user --question '…'`)
-- Add new tasks mid-loop (`/atm:create-tasks`)
+- Add new tasks mid-loop (`/atm-create-tasks`)
 - Change a task's description or dependencies (`atm task edit <id> --description … --add-dep …`)
 
 ### Multiple agents
@@ -669,7 +663,7 @@ See [Running agents in parallel](#running-agents-in-parallel).
 
 ## Running agents in parallel
 
-You can run several `/atm:loop-tasks` (or `/atm:do-task`) sessions on one project at the same time. atm makes sure
+You can run several `/atm-loop-tasks` (or `/atm-do-task`) sessions on one project at the same time. atm makes sure
 they don't take the same task or overwrite each other's changes to `tasks.json`.
 
 **Recommended setup: one git worktree per agent.** Agents that edit code in the same folder step on each other's
@@ -677,14 +671,14 @@ files and builds, which atm can't prevent. Give each agent its own worktree and 
 
 ```bash
 git worktree add ../myproject-agent2 -b agent2
-cd ../myproject-agent2 && claude      # then /atm:loop-tasks
+cd ../myproject-agent2 && claude      # then /atm-loop-tasks
 ```
 
 Merge each branch back as usual (or open a PR per branch).
 
 **What atm guarantees**
 
-- **One writer at a time.** Every status change goes through the plugin's helper (`atm`), which takes a lock,
+- **One writer at a time.** Every status change goes through `atm`, which takes a lock,
   re-reads `tasks.json`, changes one task and writes the file atomically. The dashboard and other agents never see a
   half-written file, and two changes never overwrite each other.
 - **Claims.** `atm loop next --claim` picks the next task and claims it in one step. Claims record the agent (each Claude
@@ -695,7 +689,7 @@ Merge each branch back as usual (or open a PR per branch).
   answered from any worktree: the one where the task waits picks the answer up with its next atm command. The
   dashboard shows every worktree's tasks and claims on the project's board, before anything merges.
 - **Leases.** A claim lasts two hours (`"lease_minutes"` in `tasks.json`'s `meta` changes the length). Every atm
-  command the agent runs renews it, and so does the plugin's hook after each tool call. A long command (a full test suite, a build) runs after
+  command the agent runs renews it. A long command (a full test suite, a build) runs after
   `atm claim hold <id>` in the same shell (`atm claim hold T-1 && npm test`): atm runs nothing, it keeps the claim
   alive while that shell runs. If an agent crashes, its task goes back to
   `todo` when the lease runs out, with a failure note saying whose lease expired.
@@ -713,12 +707,10 @@ Merge each branch back as usual (or open a PR per branch).
 - Agents on **different machines or clones** don't see each other's claims; they may start the same task, and the
   merge driver then reconciles the statuses.
 
-### atm-cli's commands
+### atm's commands
 
-`atm` (atm-cli) is the command the skills run, and you can too: run it from the project. Claude Code puts the
-plugin's `bin/atm` on its Bash tool's PATH; in your own terminal, use the full path
-(`~/.claude/plugins/cache/solo-swe-plugins/atm/<version>/bin/atm`) or an alias. Every command takes `--json`, and
-`atm help` lists them all.
+`atm` is the command the skills run, and you can too: run it from the project. Every command takes `--json`, and
+`atm help` lists them all; `atm completion` turns on shell completion.
 
 | Command                                                                                                   | What it does                                                                                                                                                                              |
 | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -741,16 +733,14 @@ plugin's `bin/atm` on its Bash tool's PATH; in your own terminal, use the full p
 | `atm project list \| add [PATH] \| remove <id\|PATH> \| prune`                                                 | The projects the dashboard lists                                                                                                                                                          |
 | `atm vcs repository [URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm db init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
 
-The design is in [docs/v4/atm-cli.md](docs/v4/atm-cli.md).
-
 The full analysis (scenarios, failure modes, the alternatives considered) is in
 [docs/parallel-agents-design.md](docs/parallel-agents-design.md).
 
-**Fewer permission prompts.** The skills run plain `atm …` and pre-approve the commands they use while they run
-(their `allowed-tools`, one command at a time), so you don't need to do anything for them. That approval ends with
-your next message, though: if you also want atm's reads approved when you ask Claude for something outside a skill
-("what's the status?"), add rules for them to your project's `.claude/settings.json` (or `~/.claude/settings.json`);
-they keep working across plugin upgrades:
+**Fewer permission prompts.** The skills run plain `atm …`, and Claude Code's copies (`atm agents install`)
+pre-approve the commands they use while they run (their `allowed-tools`, one command at a time), so you don't need to
+do anything for them. That approval ends with your next message, though: if you also want atm's reads approved when
+you ask Claude for something outside a skill ("what's the status?"), add rules for them to your project's
+`.claude/settings.json` (or `~/.claude/settings.json`); they keep working across upgrades:
 
 ```json
 {
@@ -769,31 +759,17 @@ decide, and an agent should have to ask before it runs one.
 
 ```
 agentic-task-manager/
-├── .claude-plugin/
-│   └── marketplace.json         # Self-hosted marketplace config
-├── plugin/                      # The plugin (the only part that ships)
-│   ├── .claude-plugin/
-│   │   └── plugin.json          # Plugin manifest (version source of truth)
-│   ├── skills/
-│   │   ├── create-tasks/SKILL.md      # /atm:create-tasks
-│   │   ├── do-task/SKILL.md           # /atm:do-task
-│   │   ├── loop-tasks/SKILL.md        # /atm:loop-tasks
-│   │   ├── push/SKILL.md              # /atm:push
-│   │   └── serve/SKILL.md             # /atm:serve
-│   ├── scripts/
-│   │   ├── atm                  # Helper launcher: checks for Python 3.9+, runs atm.py
-│   │   ├── atm.py               # The helper (built from atm-cli/)
-│   │   └── vendor/              # Typer and Click, which its command line uses
-│   ├── templates/
-│   │   ├── tasks.json           # Example tasks.json schema
-│   │   └── tasks-dashboard.html # Dashboard (build output of dashboard/, served by atm serve)
-│   └── CLAUDE.md                # Plugin context for Claude Code
-├── dashboard/                   # Dashboard source: Svelte 5 + TypeScript (development only)
+├── Cargo.toml                   # The Rust workspace; atm's version
+├── crates/                      # atm, one crate per layer (atm-cli is the `atm` binary)
+├── skills/atm-*/SKILL.md        # The skills, embedded in atm (`atm agents install`)
+├── docs/agent/                  # What `atm docs <topic>` prints for agents
+├── dashboard/                   # The dashboard: Svelte 5 + TypeScript, built into dist/ and embedded in atm
+├── tests/scripts/               # The CLI suite, run against the binary
+├── packaging/                   # The release: signing, the Homebrew formula, the public skills repo
 ├── .agentic-task-manager/       # This repo's own atm task list (we dogfood atm)
-├── docs/                        # Requirements, designs and plans
-├── .githooks/pre-commit         # Rebuilds the dashboard when its sources are committed
-├── .github/workflows/ci.yml     # Lint, unit, build-freshness and e2e checks
-├── CLAUDE.md                    # Development notes for Claude Code
+├── docs/                        # Requirements, designs, plans, ADRs and the coding guides
+├── .github/workflows/           # CI, the release, the Homebrew formula and the skills export
+├── AGENTS.md                    # Development notes for agents
 ├── README.md                    # This file
 └── LICENSE                      # MIT
 ```
@@ -802,36 +778,39 @@ agentic-task-manager/
 
 ## Development
 
-The dashboard is developed in `dashboard/` (Svelte 5, TypeScript, Vite) and built into a **single self-contained HTML
-file** at `plugin/templates/tasks-dashboard.html`. That file is committed, because the plugin installs straight from
-git with no build step.
+atm is Rust (`crates/`, the [Rust guide](docs/guides/rust.md)); the dashboard is Svelte 5, TypeScript and Vite
+(`dashboard/`, the [Svelte guide](docs/guides/svelte.md)), built into a **single self-contained HTML file**
+(`dashboard/dist/tasks-dashboard.html`, never committed) that the binary embeds, so build it before `cargo build`.
+[AGENTS.md](AGENTS.md) has the details.
 
-It uses [pnpm](https://pnpm.io/installation) (installed with its standalone installer, not through corepack):
+The dashboard uses [pnpm](https://pnpm.io/installation) (installed with its standalone installer, not through
+corepack):
 
 ```bash
 cd dashboard
-pnpm install --frozen-lockfile   # also enables the pre-commit hook (git core.hooksPath = .githooks)
-pnpm run dev                     # Vite dev server
-pnpm run verify                  # check + unit tests with coverage + build + e2e - run before committing
+pnpm install --frozen-lockfile
+pnpm run build                   # the page atm embeds
+cd .. && cargo build             # atm, with it
+cd dashboard
+pnpm run dev                     # Vite dev server, on this checkout's atm
+pnpm run verify                  # check + unit tests with coverage + build + the CLI suite + e2e
 ```
 
-| Script                                 | What it does                                                                                  |
-| -------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm run build`                       | Builds `plugin/templates/tasks-dashboard.html`; the version meta tag comes from `plugin.json` |
-| `pnpm test` / `pnpm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib`              |
-| `pnpm run test:e2e`                    | Build, then the Playwright regression suite (`tests/e2e/`)                                    |
-| `pnpm run check`                       | Version consistency, svelte-check, ESLint, Prettier                                           |
+| Script                                 | What it does                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `pnpm run build`                       | Builds `dist/tasks-dashboard.html` and CompMD's runtime; the version comes from `Cargo.toml` |
+| `pnpm test` / `pnpm run test:coverage` | Vitest unit and component tests (`tests/unit/`), 90% line threshold on `src/lib`      |
+| `pnpm run test:scripts`                | Builds atm, then the CLI suite against it (`tests/scripts/`)                          |
+| `pnpm run test:e2e`                    | Build, then the Playwright regression suite (`tests/e2e/`)                            |
+| `pnpm run check`                       | Release notes, svelte-check, ESLint, Prettier                                         |
 
 **Tests.** e2e specs play atm serve's API with fixtures from `tests/fixtures/` as each project's `tasks.json`, and
 fail on any external request.
 They run against the build, with strict screenshot baselines per platform; CI runs them in the pinned Playwright
 container and generates any missing Linux baselines for you to commit.
 
-**Build artifact.** Never edit `plugin/templates/tasks-dashboard.html` by hand. The pre-commit hook rebuilds and stages
-it when dashboard sources change, and CI fails if the committed file doesn't match a fresh build.
-
-**Releasing.** Bump `version` in both `plugin/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`
-(`pnpm run check` enforces that they match) and rebuild, so running dashboard servers restart on the new dashboard.
+**Releasing.** Bump `version` in `Cargo.toml`, with entries in `CHANGELOG.md` and `WHATS-NEW.md`
+(`pnpm run check` enforces them); [packaging/README.md](packaging/README.md) has the rest.
 
 ---
 

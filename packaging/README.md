@@ -17,7 +17,8 @@ through Tauri's updater (T-483; agentic-status-bar, not a Tauri app, uses Sparkl
 
 ## A release
 
-1. The release PR is merged to `main`; the version is in `Cargo.toml` and the plugin's files (`check-versions.mjs`).
+1. The release PR is merged to `main`; the version is in `Cargo.toml`, with its `CHANGELOG.md` and `WHATS-NEW.md` entries
+   (`check-versions.mjs`).
 2. `packaging/release.sh 0.33.0 --push` tags `v0.33.0` and pushes the tag.
 3. `.github/workflows/release.yml` builds atm for macOS (arm64, x86_64), Linux (x86_64, arm64, on Ubuntu 22.04 for an
    older glibc) and Windows (x86_64), signs and notarizes the macOS builds, and drafts a GitHub release with

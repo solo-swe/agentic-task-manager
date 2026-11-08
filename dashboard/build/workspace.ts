@@ -1,6 +1,6 @@
 // What the dashboard's build reads from outside dashboard/ about atm itself (T-477): its version, name, author,
 // licence and links, from the Rust workspace's Cargo.toml (`[workspace.package]`), and the release notes, at the
-// repository's root. Nothing here is read from plugin/, which goes with T-454.
+// repository's root.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 

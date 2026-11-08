@@ -51,7 +51,7 @@ export const logoPage = (svg) => ({
 });
 
 /** The social preview's dashboard (T-279): the built dashboard on a demo project, at a fixed time */
-export const DASHBOARD = here('../plugin/templates/tasks-dashboard.html');
+export const DASHBOARD = here('../dashboard/dist/tasks-dashboard.html');
 export const DEMO = here('demo-tasks.json');
 export const DEMO_NOW = '2026-03-10T15:00:00Z';
 /** The demo's agents at work, as atm's claims.json lists them */

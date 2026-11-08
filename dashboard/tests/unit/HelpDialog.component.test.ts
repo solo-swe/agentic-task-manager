@@ -42,7 +42,7 @@ describe('HelpDialog', () => {
     expect(overlay()).toHaveClass('open');
     expect(dialog.querySelector('.compmd')).toHaveAttribute('data-compmd', 'ready');
     expect(heading(dialog, 'Statuses and kinds')?.tagName).toBe('H2');
-    expect(dialog).toHaveTextContent('/atm:loop-tasks');
+    expect(dialog).toHaveTextContent('/atm-loop-tasks');
     expect(location.search).toBe('?help');
     // Headings have no IDs: an element with the ID "help" would make the browser jump to it on "#help"
     expect(document.getElementById('help')).toBeNull();

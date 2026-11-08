@@ -180,7 +180,7 @@ test.describe('Project tab', () => {
     delete data.meta!.description;
     await openDashboard(page, tasksServer, data, { tab: 'project' });
     await expect(page.locator('#project-repository')).toHaveText('Not set: atm repository set <url>');
-    await expect(page.locator('#project-workflow')).toHaveText('Not set: /atm:push asks the first time');
+    await expect(page.locator('#project-workflow')).toHaveText('Not set: /atm-push asks the first time');
 
     await page.locator('#task-search').fill('T-1');
     await expect(page.locator('#project-types [data-type="feature"]')).toHaveText('Feature 3');

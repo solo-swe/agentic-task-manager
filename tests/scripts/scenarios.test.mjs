@@ -13,7 +13,7 @@
 //     "git": { "staged": ["path", ...] }    `git diff --cached --name-status` lines, e.g. "R docs/a .agentic-task-manager/a"
 //   }
 // }
-// Strings in args, env and expect may use {root} (the project's real path), {version} (the plugin version) and
+// Strings in args, env and expect may use {root} (the project's real path), {version} (atm's version) and
 // {build} (the shipped dashboard's build ID); setup only {version} and {build}.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

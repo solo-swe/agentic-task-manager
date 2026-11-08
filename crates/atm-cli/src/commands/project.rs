@@ -177,12 +177,12 @@ pub fn status_lines(status: &StatusReport) -> Vec<String> {
         if !pending.is_empty() {
             let ids: Vec<String> = pending.iter().map(text).collect();
             lines.push(format!(
-                "  waiting for the sprint review: {} (/atm:close-sprint)",
+                "  waiting for the sprint review: {} (/atm-close-sprint)",
                 ids.join(", ")
             ));
         }
     } else if status.has_sprints {
-        lines.push("sprint: none active (plan one with /atm:plan-sprint)".into());
+        lines.push("sprint: none active (plan one with /atm-plan-sprint)".into());
     }
     let stranded = r
         .get("open_in_closed_sprints")

@@ -27,7 +27,7 @@ export default defineConfig({
       // Dev server: reload the whole page on component changes. In-place component swaps can miss changes to the
       // shared dashboard state; a reload restores everything from storage anyway.
       compilerOptions: { hmr: false },
-      // Its fallback page becomes plugin/templates/tasks-dashboard.html (build/finish-page.ts, after the build)
+      // Its fallback page becomes dist/tasks-dashboard.html (build/finish-page.ts, after the build)
       adapter: adapter({ pages: PAGES, assets: PAGES, fallback: 'index.html', strict: false }),
       output: { bundleStrategy: 'inline' },
       // The dashboard keeps its own state in location.hash (T-429 moves the views to routes)

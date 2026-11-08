@@ -1,5 +1,5 @@
 {
-  "_comment": "The status kinds and the default vocabularies (docs/v4/data-model.md §2-3): one source for atm-cli and the dashboard. atm-cli/build.py generates .generated/atm-cli/atm/common/vocabularies.py and .generated/dashboard/vocabularies.ts from it (docs/layered-architecture.md §4).",
+  "_comment": "The status kinds and the default vocabularies (docs/v4/data-model.md §2-3): one source for atm (crates/atm-common/src/vocabulary.rs embeds it) and the dashboard (dashboard/build/generate.ts writes .generated/dashboard/vocabularies.ts from it; docs/layered-architecture.md §4).",
   "kinds": ["todo", "active", "review", "blocked", "done", "skipped"],
   "statuses": [
     { "id": "todo", "label": "To Do", "kind": "todo" },
