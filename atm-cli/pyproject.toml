@@ -7,7 +7,6 @@ authors = [{ name = "Hakan Serce" }]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0,<9.0",
     "ruff>=0.8,<0.15",
     "mypy>=1.8,<1.12",
     "typer>=0.9,<0.16",
@@ -20,7 +19,6 @@ dev = [
 
 [dependency-groups]
 dev = [
-    "pytest>=7.0,<9.0",
     "ruff>=0.8,<0.15",
     "mypy>=1.8,<1.12",
     "transitions>=0.9.3",
