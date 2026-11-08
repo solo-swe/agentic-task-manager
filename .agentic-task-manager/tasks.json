@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-454"
       ],
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:18:39Z",
+      "updated_at": "2026-11-08T08:29:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19946,6 +19946,11 @@
           "from": "2026-11-08T07:56:10Z",
           "to": "2026-11-08T08:08:49Z",
           "on": "user"
+        },
+        {
+          "from": "2026-11-08T08:18:39Z",
+          "to": "2026-11-08T08:29:24Z",
+          "on": "user"
         }
       ],
       "notes": [
@@ -19954,17 +19959,17 @@
           "kind": "answer",
           "text": "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test? → Approved: add the dependencies (tauri 2.12.5, tauri-build, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript, @tauri-apps/cli and @tauri-apps/api 2.12.4).; OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later? → No: the app is part of cargo build/test. A separate backlog task reviews and refactors the CI jobs from what we learned.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:29:24Z",
+          "kind": "answer",
+          "text": "cargo deny: allow the licences BSD-2-Clause (Inflector, via specta) and MPL-2.0 (cssparser, cssparser-macros, dtoa-short, selectors via tauri-utils; option-ext via dirs) in deny.toml? → Yes: allow BSD-2-Clause and MPL-2.0.; cargo deny: ignore five “unmaintained” advisories (no vulnerability, no fixed version): paste (RUSTSEC-2024-0436, via specta), proc-macro-error (RUSTSEC-2024-0370, via gtk on Linux), zbus_names, zvariant, zvariant_derive (RUSTSEC-2026-0370/0371/0372, via the single-instance plugin on Linux), each with its reason in deny.toml? → Yes: ignore all five unmaintained advisories, each with its reason in deny.toml.",
+          "by": "claude:34798264"
         }
       ],
-      "started_at": "2026-11-08T08:09:15Z",
-      "started_by": "claude:34798264",
       "commit": "f148c2e96fe442aacf103b7a78ce3621690d3f5c",
-      "waiting_on": "user",
-      "questions": [
-        "cargo deny: allow the licences BSD-2-Clause (Inflector, via specta) and MPL-2.0 (cssparser, cssparser-macros, dtoa-short, selectors via tauri-utils; option-ext via dirs) in deny.toml?",
-        "cargo deny: ignore five “unmaintained” advisories (no vulnerability, no fixed version): paste (RUSTSEC-2024-0436, via specta), proc-macro-error (RUSTSEC-2024-0370, via gtk on Linux), zbus_names, zvariant, zvariant_derive (RUSTSEC-2026-0370/0371/0372, via the single-instance plugin on Linux), each with its reason in deny.toml?"
-      ],
-      "blocked_at": "2026-11-08T08:18:39Z"
+      "started_at": "2026-11-08T08:29:24Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-456",

@@ -15,7 +15,9 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   IPC only; the dashboard talks to the app from T-457. `cargo build`/`test` build the app too: CI's Linux job installs
   WebKitGTK, and the e2e binary and the release build only the CLI (`-p atm-cli`). New dependencies (approved):
   `tauri`, `tauri-build`, `tauri-plugin-single-instance`, `tauri-specta`, `specta`, `specta-typescript`, and
-  `@tauri-apps/cli` (the icons, from `branding/atm-logo.png`).
+  `@tauri-apps/cli` (the icons, from `branding/atm-logo.png`). `deny.toml` allows BSD-2-Clause and MPL-2.0 and
+  ignores five "unmaintained" advisories of the app's tree (`paste`, `proc-macro-error`, `zbus_names`, `zvariant`,
+  `zvariant_derive`; no vulnerability), each with its reason (approved).
 
 ### Fixed
 - **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
