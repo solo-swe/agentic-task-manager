@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 487,
+    "next_id": 488,
     "labels": [
       {
         "id": "architecture",
@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-454"
       ],
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T07:56:10Z",
+      "updated_at": "2026-11-08T08:08:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19941,14 +19941,21 @@
         }
       ],
       "sprint": "The atm app",
-      "started_at": "2026-11-08T07:55:27Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test?",
-        "OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later?"
+      "blocks": [
+        {
+          "from": "2026-11-08T07:56:10Z",
+          "to": "2026-11-08T08:08:49Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-08T07:56:10Z"
+      "notes": [
+        {
+          "at": "2026-11-08T08:08:49Z",
+          "kind": "answer",
+          "text": "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test? → Approved: add the dependencies (tauri 2.12.5, tauri-build, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript, @tauri-apps/cli and @tauri-apps/api 2.12.4).; OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later? → No: the app is part of cargo build/test. A separate backlog task reviews and refactors the CI jobs from what we learned.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-456",
@@ -21289,7 +21296,7 @@
       "description": "Since T-478 the e2e fixture runs the binary (`tests/e2e/helpers.ts`, `target/debug/atm`). `pnpm run test:e2e:visual` and `test:e2e:visual:update` run Playwright in a Linux container with the checkout mounted, so on a Mac they run the macOS binary, and every visual test fails with `target/debug/atm: 1: Syntax error: \"(\" unexpected`. CI is fine: its visual job downloads the `atm-linux` artifact.\n\n## Change\n- Give the helper a way to use another binary (for example an `ATM_E2E_BIN` variable, defaulting to `target/debug/atm`).\n- Make the Docker scripts use a Linux atm built for this checkout without fetching anything new into the container, for example a Linux build in its own target folder (a `cargo` container or `cross`, with approval if it adds a tool), or CI's `atm-linux` artifact of the branch's run as `AGENTS.md` describes for baselines.\n- `AGENTS.md`'s screenshot section says what to run.\n\n## Tests\n`pnpm run test:e2e:visual` passes on a Mac with Docker running.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21297,7 +21304,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T07:56:28Z",
+      "updated_at": "2026-11-08T08:08:49Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
@@ -21310,13 +21317,21 @@
         }
       ],
       "sprint": "The atm app",
-      "started_at": "2026-11-08T07:56:13Z",
-      "started_by": "claude:34798264",
-      "waiting_on": "user",
-      "questions": [
-        "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1)."
+      "blocks": [
+        {
+          "from": "2026-11-08T07:56:28Z",
+          "to": "2026-11-08T08:08:49Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-08T07:56:28Z"
+      "notes": [
+        {
+          "at": "2026-11-08T08:08:49Z",
+          "kind": "answer",
+          "text": "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1). → (1): build it in the official rust:1.99.0 image, pinned by digest, into target/linux/.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-486",
@@ -21360,6 +21375,31 @@
           "by": "claude:34798264"
         }
       ]
+    },
+    {
+      "id": "T-487",
+      "name": "Review and refactor the CI jobs from what the Rust port taught us",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Go through `.github/workflows/` with the user and propose changes, based on what CI did during *The Rust port* and the first releases. Each change is agreed first: editing CI is the user's call.\n\n## What to look at\n- **What runs when:** pushes to a release branch run nothing unless dispatched (`gh workflow run CI --ref <branch>`); a PR runs again after every push. Is that still the right trade?\n- **Time and caching:** a run takes about 4–5 minutes. Look at the cargo and pnpm caches, the jobs that build the dashboard and atm more than once (Rust ×3, `atm for the e2e suite`, Playwright), and whether artifacts could be shared instead.\n- **The app (T-455 onwards)** is part of `cargo build`/`test`, so the Linux job needs the webview's system packages and Windows builds against WebView2. See what that adds to each job, and whether the e2e binary and the release should build only `-p atm-cli`.\n- **Windows:** the suite runs only partly there (T-480, T-482), and the stress test fails (T-481). Decide what the Windows job checks until those are done.\n- **macOS:** the stress test hit lock timeouts twice (T-481). Is that a slow runner or a real bug?\n- **Screenshots:** CI makes missing Linux baselines, and the local scripts get a Linux atm (T-485). Check that the two use the same binary and the same steps.\n- **Runner images:** `ubuntu-latest` moves to Ubuntu 26 (CI's annotation); the e2e binary is built on 22.04 for an older glibc. Pin the images we depend on.\n- **Required checks:** the ruleset names jobs by their display names (`Rust (ubuntu-latest)`, …), so renaming a job breaks merges. Keep the names in one place, or test that `.github/rulesets/main.json` matches `ci.yml` (`ci-workflow.test.ts`).\n- **Release workflows:** `release.yml`, `homebrew.yml` and `skills.yml` worked first time for 0.32.0 and 0.33.0. Note anything worth keeping in `packaging/README.md`.\n\n## Outcome\nThe agreed changes in the workflows, `ci-workflow.test.ts` and `AGENTS.md`'s CI section, with `docs/security-architecture.md` updated if a permission or secret changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        ".github/rulesets/main.json",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-08T08:09:05Z",
+      "updated_at": "2026-11-08T08:09:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "with": "user"
     }
   ]
 }
