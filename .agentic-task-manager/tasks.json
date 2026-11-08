@@ -1016,8 +1016,10 @@
       },
       {
         "id": "The atm app",
-        "state": "planned",
-        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging"
+        "state": "active",
+        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging",
+        "release": "0.34.0",
+        "start": "2026-11-08T07:36:18Z"
       }
     ],
     "releases": [
@@ -1217,6 +1219,10 @@
       },
       {
         "id": "0.32.0",
+        "state": "planned"
+      },
+      {
+        "id": "0.34.0",
         "state": "planned"
       }
     ],
@@ -21283,12 +21289,19 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T06:53:32Z",
+      "updated_at": "2026-11-08T07:36:17Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
         "T-478"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T07:36:17Z"
+        }
+      ],
+      "sprint": "The atm app"
     },
     {
       "id": "T-486",
@@ -21309,9 +21322,16 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T07:06:02Z",
-      "updated_at": "2026-11-08T07:06:02Z",
+      "updated_at": "2026-11-08T07:36:17Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce"
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T07:36:17Z"
+        }
+      ],
+      "sprint": "The atm app"
     }
   ]
 }
