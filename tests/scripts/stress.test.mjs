@@ -16,9 +16,13 @@ const tasks = {
   tasks: ids.map((id) => ({ id, name: id, phase: 0, type: 'feature', status: 'todo', dependencies: [] })),
 };
 
+// 16 agents queue for one lock; on Windows, where starting git and atm is several times slower, the queue outlasts
+// atm's 10 s wait, so there it waits longer (decided with Hakan, T-480): this test is about correctness, not speed
+const LOCK_WAIT = process.platform === 'win32' ? { ATM_LOCK_TIMEOUT: '60' } : {};
+
 function atm(args, cwd, agent) {
   return new Promise((resolve) => {
-    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent } });
+    const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent, ...LOCK_WAIT } });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
