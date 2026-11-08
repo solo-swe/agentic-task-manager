@@ -3,8 +3,8 @@
 How the `atm` binary reaches users ([better-way-to-distribute-atm.md](../docs/better-way-to-distribute-atm.md) §1):
 release builds on a tag, the macOS ones signed and notarized, every one with its checksum; the Homebrew formula in
 `solo-swe/homebrew-tap` (the tap agentic-status-bar publishes to), so users install and update with
-`brew install solo-swe/tap/atm` and `brew upgrade`. The app (T-455 onwards) brings its own updates, as
-agentic-status-bar does.
+`brew install solo-swe/tap/atm` and `brew upgrade`. The app (T-455 onwards) brings its own updates,
+through Tauri's updater (T-483; agentic-status-bar, not a Tauri app, uses Sparkle).
 
 ## What's here
 
