@@ -545,6 +545,18 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
     Ok(set)
 }
 
+/// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
+#[must_use]
+pub fn default_base(cwd: &std::path::Path) -> String {
+    let root = atm_db::jsongit::paths::project_root(cwd);
+    atm_db::git::git(
+        &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        &root,
+    )
+    .and_then(|r| r.split_once('/').map(|(_, branch)| branch.to_string()))
+    .unwrap_or_else(|| "main".into())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -23,7 +23,6 @@ atm-common = { path = "crates/atm-common" }
 atm-db = { path = "crates/atm-db" }
 atm-vcs = { path = "crates/atm-vcs" }
 atm-lib = { path = "crates/atm-lib" }
-atm-boot = { path = "crates/atm-boot" }
 atm-api = { path = "crates/atm-api" }
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)

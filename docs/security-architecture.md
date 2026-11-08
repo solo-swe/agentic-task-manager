@@ -696,7 +696,7 @@ can call. T-461 reviews the finished app; until then the skeleton keeps to the T
 - **The dashboard server's policy** (I13) for the window's page: `default-src 'none'`, scripts only by hash (Tauri adds
   the hashes of the bundled page's inline scripts) plus CompMD's runtime, frames only CompMD's, `connect-src` only
   Tauri's IPC, no base, forms or framing.
-- **The commands read only the user's registry** (`atm project list`'s data), through atm-boot, as `atm serve` does;
+- **The commands read only the user's registry** (`atm project list`'s data), through atm-lib's `Workspaces`, as `atm serve` does;
   nothing is written yet.
 - **Its dependencies** (approved): Tauri 2.12.5 (2.11.1 or later, CVE-2026-42184), the single-instance plugin, and
   tauri-specta with specta, pre-releases pinned exactly. The CLI's release doesn't include them (`-p atm-cli`).

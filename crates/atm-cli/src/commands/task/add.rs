@@ -3,10 +3,11 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::components::suggest_components;
 use atm_common::py::py_str;
 use atm_common::{Error, Result, Task, Vocabulary};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::changes::add_task_note;
 use atm_lib::edit::add_new_tasks;
 use clap::Args;
@@ -192,7 +193,7 @@ pub fn add(args: AddArgs, ctx: Context, cwd: &Path) -> Result<()> {
         };
         vec![entry(args, description)]
     };
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let added = add_new_tasks(&mut project, &entries)?;
     if ctx.json {
         print_json(&Value::Array(
@@ -231,7 +232,7 @@ pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
         return Ok(());
     }
     let actor = agent_identity(args.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let task = add_task_note(&mut project, &args.task_id, &args.text)?;
     let notes = task
         .get("notes")

@@ -9,7 +9,9 @@ use atm_common::Shown;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
-use atm_boot::{dashboard_id, migrate_folder, open_project, pid_alive, pid_exists, signal_process};
+use atm_lib::Project;
+
+use crate::process::{pid_alive, pid_exists, signal_process};
 use atm_common::dashboard::{
     PAGE, SCAN_PORTS, SERVER_LOG, SERVER_RECORD, home_id, page_tags, parse_version, whoami,
 };
@@ -36,7 +38,7 @@ const REAP_WAIT: Duration = Duration::from_secs(2);
 /// # Errors
 /// When there is no task data at all.
 pub fn doctor(files: bool, ctx: Context, cwd: &Path) -> Result<u8> {
-    let result = check_project(&open_project(cwd)?, files)?;
+    let result = check_project(&Project::open(cwd)?, files)?;
     let (errors, warnings) = (&result.errors, &result.warnings);
     if ctx.json {
         print_json(&json!({"errors": errors, "warnings": warnings}));
@@ -224,7 +226,7 @@ fn ensure_server(home: &Path, port: u64) -> Result<(Map<String, Value>, bool)> {
 fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
     let mut project = None;
     if !overview {
-        let migration = migrate_folder(cwd, false)?;
+        let migration = super::db::maintenance(cwd)?.migrate(false)?;
         for line in &migration.lines {
             if line != "Nothing to migrate." {
                 println!("{line}");
@@ -235,7 +237,7 @@ fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
                 "no tasks.json to serve. Run /atm-create-tasks first.",
             ));
         }
-        let (id, shown) = dashboard_id(cwd)?;
+        let (id, shown) = Project::open(cwd)?.join_default_workspace()?;
         if shown {
             project = Some(id);
         } else {

@@ -22,8 +22,14 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   has (its paths, `db init`'s merge driver, migrations, the lock test hook, the merge driver itself). atm-lib's
   `Workspaces` and `Workspace` (over atm-db's `workspaces/<id>.json` and `recent.json`) list a workspace's projects
   with their summaries, worktrees and logos, search them, and add and remove them; atm-api's project list and search
-  call them, the summary cache moved with them. atm-boot's openers only delegate now (T-492 removes it). Nothing users
-  see changes.
+  call them, the summary cache moved with them. Nothing users see changes.
+- **The atm-boot crate is removed** (T-492, ADR-003 §4): the CLI, the REST API and the app depend on atm-lib and
+  atm-common only. The `atm db` commands, `atm project config` and `atm _lock-test` go through
+  `project.store_maintenance()`; registering is `project.join_default_workspace()` (the hook's,
+  `join_default_workspace_if_needed()`); the actor and `default_base` are atm-lib's (`actor`, `code`); the pid and
+  signal helpers are the CLI's (`process.rs`); `hook_project` is gone. `tests/scripts/layers.test.mjs` checks each
+  crate's `Cargo.toml` against the layer rule. `docs/layered-architecture.md`, the Rust guide, porting-to-rust.md and
+  AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
 - **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one

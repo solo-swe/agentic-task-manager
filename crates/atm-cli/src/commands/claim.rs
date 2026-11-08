@@ -5,11 +5,14 @@ use std::io::{IsTerminal, Read};
 use std::path::Path;
 use std::process::Stdio;
 
-use atm_boot::{agent_identity, hook_project, open_project, process_started, session_identity};
 use atm_common::py::{py_str, py_str_opt, truthy};
 use atm_common::time::{format_iso, now, parse_iso, real_now};
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::{agent_identity, session_identity};
 use atm_lib::claims::{expire_claims, renew_due_claims, renew_lease};
+
+use crate::process::process_started;
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
 
@@ -107,7 +110,7 @@ pub(crate) fn format_duration(seconds: i64) -> String {
 }
 
 fn list(ctx: Context, cwd: &Path) -> Result<()> {
-    let live = expire_claims(&mut open_project(cwd)?)?.claims;
+    let live = expire_claims(&mut Project::open(cwd)?)?.claims;
     if ctx.json {
         print_json(&Value::Array(live));
         return Ok(());
@@ -174,8 +177,12 @@ fn auto_heartbeat(agent: Option<&str>, cwd: &Path) {
         }
         _ => agent_identity(agent, cwd),
     };
-    if let Some(mut project) = hook_project(folder, actor) {
-        let _ = renew_due_claims(&mut project);
+    // A folder without a task file has no claims to renew: it is left alone, as every error here is
+    if let Ok(project) = Project::open(folder)
+        && project.store().list_tasks().is_ok()
+    {
+        project.join_default_workspace_if_needed();
+        let _ = renew_due_claims(&mut project.with_actor(Some(actor)));
     }
 }
 
@@ -207,7 +214,7 @@ fn heartbeat(
         ));
     };
     let actor = agent_identity(agent, cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let claim = renew_lease(&mut project, task_id, true)?.claim;
     if ctx.json {
         print_json(&claim);
@@ -254,7 +261,7 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
         return Ok(());
     }
     let actor = agent_identity(args.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor.clone()));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor.clone()));
     // Renewed now, refused before anything else when it isn't the actor's
     let renewed = renew_lease(&mut project, &args.task_id, true)?;
     let interval = args
@@ -324,7 +331,7 @@ pub fn watch(args: &WatchArgs, cwd: &Path) {
         if clock() >= args.until || process_started(args.shell) != Some(args.started) {
             return;
         }
-        let renewed = open_project(cwd).and_then(|project| {
+        let renewed = Project::open(cwd).and_then(|project| {
             renew_lease(
                 &mut project.with_actor(Some(args.agent.clone())),
                 &args.task_id,

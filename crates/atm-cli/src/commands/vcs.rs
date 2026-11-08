@@ -2,9 +2,10 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project, open_vcs};
 use atm_common::py::py_str;
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::code::{
     commit_task, folder_changes, get_repository, record_commit, record_merge, record_pr,
     repository_paths, set_repository,
@@ -122,15 +123,16 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let mut project =
-                open_project(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
-            let vcs = open_vcs(cwd);
+                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+            let vcs = project.vcs();
+            let vcs = vcs.as_ref();
             if let Some(rev) = record {
                 if !file.is_empty() || !dir.is_empty() || message.is_some() {
                     return Err(Error::Invalid(
                         "--record records an existing commit: no --file, --dir or --message".into(),
                     ));
                 }
-                let result = record_commit(&mut project, Some(&vcs), &task_id, &rev)?;
+                let result = record_commit(&mut project, vcs, &task_id, &rev)?;
                 if ctx.json {
                     let mut shown = json!({"task": result["task"], "commit": result["commit"], "recorded": true});
                     if !result["hint"].is_null() {
@@ -152,21 +154,15 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 }
                 return Ok(());
             }
-            let mut files = repository_paths(Some(&vcs), &file, cwd)?;
+            let mut files = repository_paths(vcs, &file, cwd)?;
             if !dir.is_empty() {
-                for f in folder_changes(&project, Some(&vcs), &task_id, &dir, cwd)? {
+                for f in folder_changes(&project, vcs, &task_id, &dir, cwd)? {
                     if !files.contains(&f) {
                         files.push(f);
                     }
                 }
             }
-            let result = commit_task(
-                &mut project,
-                Some(&vcs),
-                &task_id,
-                &files,
-                message.as_deref(),
-            )?;
+            let result = commit_task(&mut project, vcs, &task_id, &files, message.as_deref())?;
             if ctx.json {
                 print_json(&result);
                 return Ok(());
@@ -208,7 +204,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let mut project =
-                open_project(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
             let recorded = record_pr(&mut project, &ids, number, &url)?;
             if ctx.json {
                 print_json(&json!({"tasks": recorded, "pr": {"number": number, "url": url}}));
@@ -226,7 +222,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let mut project =
-                open_project(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
             let result = record_merge(&mut project, pr, at.as_deref())?;
             if ctx.json {
                 print_json(&result);
@@ -270,7 +266,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let mut project =
-                open_project(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+                Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
             let Some(url) = url else {
                 if let Some(old) = old {
                     return Err(Error::Invalid(format!(

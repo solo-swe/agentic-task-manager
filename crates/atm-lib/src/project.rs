@@ -107,6 +107,31 @@ impl Project {
         atm_vcs::open(root, &settings.vcs).ok()
     }
 
+    /// List it in the `default` workspace, which every project atm meets joins (refreshing its entry), and say the ID
+    /// it has there (`meta.id`, or another when that one is taken) and whether it is listed (`meta.dashboard.listed`).
+    ///
+    /// # Errors
+    /// A project given its store (no folder), the task folder's checks, the state folder's lock or file.
+    pub fn join_default_workspace(&self) -> Result<(String, bool)> {
+        let root = self.root().ok_or_else(|| {
+            atm_common::Error::Invalid("a project without a folder joins no workspace".into())
+        })?;
+        let paths = atm_db::jsongit::paths::find_paths(root)?;
+        atm_db::registry::register(&paths, true)?;
+        Ok(atm_db::registry::registered_id(&paths))
+    }
+
+    /// The harness hook's cheap way into `default` (after every tool call): one read of the workspace's file, and
+    /// joining it, without waiting for the lock, only when the project isn't in it yet or was last seen a day ago.
+    /// Never fails: the hook must not disturb a tool call.
+    pub fn join_default_workspace_if_needed(&self) {
+        if let Some(root) = self.root()
+            && let Ok(paths) = atm_db::jsongit::paths::find_paths(root)
+        {
+            let _ = atm_db::registry::register_if_needed(&paths);
+        }
+    }
+
     /// What only its store has (the JSON-in-git store's merge driver, migrations and file locations), or none for a
     /// store without such things.
     #[must_use]

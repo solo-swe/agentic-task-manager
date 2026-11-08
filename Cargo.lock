@@ -261,7 +261,6 @@ dependencies = [
 name = "atm-api"
 version = "0.33.0"
 dependencies = [
- "atm-boot",
  "atm-common",
  "atm-lib",
  "axum",
@@ -273,8 +272,8 @@ dependencies = [
 name = "atm-app"
 version = "0.33.0"
 dependencies = [
- "atm-boot",
  "atm-common",
+ "atm-lib",
  "serde",
  "serde_json",
  "specta",
@@ -286,28 +285,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "atm-boot"
-version = "0.33.0"
-dependencies = [
- "atm-common",
- "atm-db",
- "atm-lib",
- "atm-vcs",
- "serde_json",
- "sysinfo",
-]
-
-[[package]]
 name = "atm-cli"
 version = "0.33.0"
 dependencies = [
  "atm-api",
- "atm-boot",
  "atm-common",
  "atm-lib",
  "clap",
  "clap_complete",
  "serde_json",
+ "sysinfo",
  "windows-sys 0.61.2",
 ]
 
@@ -339,6 +326,7 @@ dependencies = [
  "atm-db",
  "atm-vcs",
  "serde_json",
+ "sysinfo",
 ]
 
 [[package]]

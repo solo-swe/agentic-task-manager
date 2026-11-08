@@ -1,5 +1,5 @@
 //! The `atm` binary: the command tree of docs/improving-atm-cli-ergonomics.md, parsed with clap, rendered as text or
-//! `--json`, with atm's exit codes. Its commands call atm-lib through atm-boot, never the store.
+//! `--json`, with atm's exit codes. Its commands call atm-lib (which opens the project), never the store.
 //!
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md (§5 lists the slices in the order they come), the Python
 //! atm being the spec until the switch (tests/scripts, run with `ATM_IMPL=rust`). This file holds only the root of
@@ -10,6 +10,7 @@
 #![allow(clippy::doc_markdown)]
 
 mod commands;
+mod process;
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -189,8 +190,8 @@ fn renew_own_claims(args: &[OsString], cwd: &Path) {
     if as_someone_else {
         return;
     }
-    if let Ok(project) = atm_boot::open_project(cwd) {
-        let actor = atm_boot::agent_identity(None, cwd);
+    if let Ok(project) = atm_lib::Project::open(cwd) {
+        let actor = atm_lib::actor::agent_identity(None, cwd);
         // No project here, or one atm can't read: the command says so itself
         let _ = atm_lib::claims::renew_due_claims(&mut project.with_actor(Some(actor)));
     }
@@ -354,7 +355,9 @@ fn run(args: &[OsString]) -> u8 {
             commands::meta::version(ctx);
             Ok(0)
         }
-        Command::LockTest { seconds } => atm_boot::hold_lock_for_test(&cwd, seconds).map(|()| 0),
+        Command::LockTest { seconds } => commands::db::maintenance(&cwd)
+            .and_then(|m| m.hold_lock_for_test(seconds))
+            .map(|()| 0),
         Command::ClaimWatch(args) => {
             commands::claim::watch(&args, &cwd);
             Ok(0)

@@ -6,16 +6,16 @@ use serde::Serialize;
 use specta::Type;
 use tauri::State;
 
-/// What every command shares: the user's one registry of projects, opened when the app starts.
+/// What every command shares: the user's workspaces, opened when the app starts.
 pub struct AppState {
-    registry: atm_boot::Registry,
+    workspaces: atm_lib::Workspaces,
 }
 
 impl AppState {
-    /// The app's state on the registry `registry`.
+    /// The app's state on `workspaces`.
     #[must_use]
-    pub fn new(registry: atm_boot::Registry) -> Self {
-        Self { registry }
+    pub fn new(workspaces: atm_lib::Workspaces) -> Self {
+        Self { workspaces }
     }
 }
 
@@ -76,15 +76,15 @@ pub fn version() -> String {
 #[tauri::command]
 #[specta::specta]
 pub async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectEntry>, AppError> {
-    projects(&state.registry)
+    projects(&state.workspaces)
 }
 
-/// The registry's projects, as entries.
+/// The `default` workspace's projects, as entries.
 ///
 /// # Errors
-/// The registry's lock or file.
-pub fn projects(registry: &atm_boot::Registry) -> Result<Vec<ProjectEntry>, AppError> {
-    let listed = registry.list_projects()?;
+/// The state folder's lock or the workspace's file.
+pub fn projects(workspaces: &atm_lib::Workspaces) -> Result<Vec<ProjectEntry>, AppError> {
+    let listed = workspaces.default_workspace().list_projects()?;
     let text = |entry: &serde_json::Value, key: &str| {
         entry
             .get(key)

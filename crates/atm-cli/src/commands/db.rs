@@ -3,13 +3,12 @@
 
 use std::path::Path;
 
-use atm_boot::{
-    merge_versions, migrate_folder, open_project, open_vcs, register_project, set_up_store,
-};
 use atm_common::py::py_str;
 use atm_common::{Error, Result};
+use atm_lib::Project;
 use atm_lib::archive::{ArchiveRequest, archive_finished, unarchive_tasks};
 use atm_lib::code::ensure_repository;
+use atm_lib::maintenance::{StoreMaintenance, merge_versions};
 use atm_lib::settings::{ensure_project_id, init_meta};
 use clap::Subcommand;
 use serde_json::{Value, json};
@@ -57,6 +56,16 @@ pub enum DbCommand {
     },
 }
 
+/// The store operations of the project at or above `cwd` (`project.store_maintenance()`).
+///
+/// # Errors
+/// The project can't be opened, or its store has no such operations.
+pub(crate) fn maintenance(cwd: &Path) -> Result<StoreMaintenance> {
+    Project::open(cwd)?
+        .store_maintenance()
+        .ok_or_else(|| Error::Invalid("this project's store has no task files to maintain".into()))
+}
+
 /// "T-1, T-2 and 3 more": the first `limit` IDs.
 fn describe_ids(ids: &[Value], limit: usize) -> String {
     let shown: Vec<String> = ids.iter().take(limit).map(py_str).collect();
@@ -98,7 +107,7 @@ fn archive(
         keep_days,
         dry_run: ctx.dry_run,
     };
-    let result = archive_finished(&mut open_project(cwd)?, &request)?;
+    let result = archive_finished(&mut Project::open(cwd)?, &request)?;
     let (ids, dropped, kept) = (&result.moved, &result.duplicates_dropped, &result.kept);
     let (tasks_kb, archive_kb) = (result.sizes.0 / 1024, result.sizes.1 / 1024);
     if ctx.json {
@@ -149,7 +158,7 @@ fn unarchive(ctx: Context, cwd: &Path, ids: &[String]) -> Result<()> {
         println!("[dry-run] would unarchive {}", ids.join(", "));
         return Ok(());
     }
-    let result = unarchive_tasks(&mut open_project(cwd)?, ids)?;
+    let result = unarchive_tasks(&mut Project::open(cwd)?, ids)?;
     if ctx.json {
         print_json(&json!({"restored": result.restored, "moves_back": result.moves_back}));
         return Ok(());
@@ -173,7 +182,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
         println!("[dry-run] would give tasks.json a meta.id and register the merge driver");
         return Ok(());
     }
-    let mut project = open_project(cwd)?;
+    let mut project = Project::open(cwd)?;
     if let Some(meta_file) = meta_file.filter(|m| !m.is_empty()) {
         let new = std::fs::read_to_string(cwd.join(meta_file))
             .ok()
@@ -185,7 +194,7 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
         };
         let (created, keys) = init_meta(&mut project, &new)?;
         // The task data as it is now
-        project = open_project(cwd)?;
+        project = Project::open(cwd)?;
         if !ctx.json {
             let keys = if keys.is_empty() {
                 "-".to_string()
@@ -201,11 +210,11 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
         }
     }
     let project_id = ensure_project_id(&mut project)?;
-    let vcs = open_vcs(cwd);
-    let repository = ensure_repository(&mut project, Some(&vcs))?;
+    let vcs = project.vcs();
+    let repository = ensure_repository(&mut project, vcs.as_ref())?;
     // The dashboard lists every project atm runs in
-    register_project(cwd)?;
-    let setup = set_up_store(cwd)?;
+    project.join_default_workspace()?;
+    let setup = maintenance(cwd)?.set_up()?;
     if ctx.json {
         print_json(&json!({
             "project_id": project_id,
@@ -253,7 +262,7 @@ pub fn run(command: DbCommand, ctx: Context, cwd: &Path) -> Result<u8> {
                 );
                 return Ok(0);
             }
-            let migration = migrate_folder(cwd, true)?;
+            let migration = maintenance(cwd)?.migrate(true)?;
             if ctx.json {
                 print_json(&Value::Object(migration.result));
             } else {

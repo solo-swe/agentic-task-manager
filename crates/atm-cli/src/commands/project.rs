@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use atm_boot::open_project;
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
+use atm_lib::Project;
 use atm_lib::query::Filters;
 use atm_lib::status::{StatusReport, status_report};
 use clap::Subcommand;
@@ -80,7 +80,7 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 component,
                 ..Filters::default()
             };
-            let status = status_report(&open_project(cwd)?, &filters)?;
+            let status = status_report(&Project::open(cwd)?, &filters)?;
             if ctx.json {
                 print_json(&status.report);
             } else {
@@ -100,7 +100,7 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
         ProjectCommand::Remove { target } => settings::projects("remove", Some(&target), ctx, cwd),
         ProjectCommand::Prune => settings::projects("prune", None, ctx, cwd),
         ProjectCommand::Summary => {
-            print_json(&atm_lib::summary::project_summary(&open_project(cwd)?)?);
+            print_json(&atm_lib::summary::project_summary(&Project::open(cwd)?)?);
             Ok(())
         }
     }

@@ -2,9 +2,10 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::py::{py_str, py_str_opt, truthy};
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::changes::next_task_for;
 use atm_lib::loop_rules::Selection;
 use clap::{Args, Subcommand};
@@ -105,7 +106,7 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
         task_type: args.type_,
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let result = next_task_for(
         &mut project,
         &sel,

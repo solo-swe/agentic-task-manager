@@ -41,8 +41,9 @@ crates/
   atm-db/               the store interface; jsongit (files, lock, merge, migrations, claims store); memory
   atm-vcs/              the version-control interface; git (running git, reading HEAD)
   atm-lib/              the domain: tasks and their states, claims, the loop, sprints, releases, components,
-                        archive, settings, projects, documents, agents (installing the skills)
-  atm-boot/             opening a project or the registry: picks the store and the vcs, the actor
+                        archive, settings, projects, documents, agents (installing the skills); opening a
+                        project (on the store and vcs factories), the workspaces, the actor (atm-boot's, until
+                        T-492 removed it)
   atm-api/              the REST routes `atm serve` serves (axum), the page and its assets, read-only
   atm-cli/              the `atm` binary: clap, renderers (text, --json), exit codes, `serve`, `docs`
 app/                    the Tauri app: src-tauri/ (its commands map to atm-lib), the window on dashboard/
@@ -63,8 +64,8 @@ atm-cli/                the Python atm, until the switch (§5), then removed
   and the handlers, with its area's text renderers beside them. `main.rs` holds only the root `Cli`, the global
   options, the dispatch and the exit codes. The Python CLI is split the same way (`atm-cli/atm/cli/commands/`).
 - **One crate per layer.** A crate can use only what its `Cargo.toml` declares, so the layer rule
-  ([layered-architecture.md](layered-architecture.md) §2) is the compiler's: `atm-api` and `atm-cli` depend on
-  `atm-lib` and `atm-boot`; `atm-api` never on `atm-cli`, and `atm-cli` on `atm-api` only to enter the server
+  ([layered-architecture.md](layered-architecture.md) §2) is the compiler's: `atm-api`, `atm-cli` and the app depend
+  on `atm-lib` and `atm-common` only (`tests/scripts/layers.test.mjs`); `atm-api` never on `atm-cli`, and `atm-cli` on `atm-api` only to enter the server
   (`atm _serve`, the process `atm service` starts: one binary), its commands never using it; `atm-lib` never on `atm-db`'s jsongit module (it takes the store
   interface); only `atm-db` and `atm-vcs` run git. `build.py`'s import check retires with Python.
 - **Nothing built is committed.** `plugin/scripts/atm.py` and `plugin/templates/tasks-dashboard.html` were committed

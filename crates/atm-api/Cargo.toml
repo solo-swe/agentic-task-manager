@@ -10,7 +10,6 @@ publish.workspace = true
 [dependencies]
 atm-common.workspace = true
 atm-lib.workspace = true
-atm-boot.workspace = true
 axum.workspace = true
 tokio.workspace = true
 serde_json.workspace = true

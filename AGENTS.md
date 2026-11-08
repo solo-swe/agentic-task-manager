@@ -95,8 +95,9 @@ Commands (run in `dashboard/`):
 
 ## atm (`Cargo.toml`, `crates/`)
 atm ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)): one crate per layer
-(`docs/layered-architecture.md`) under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`,
-`atm-cli`, whose binary is `atm`), so the compiler checks the layer rule; the toolchain pinned in
+(`docs/layered-architecture.md`) under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-api`,
+`atm-cli`, whose binary is `atm`), so the compiler checks the layer rule (the front ends, `atm-api`, `atm-cli` and
+the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain pinned in
 `rust-toolchain.toml`, atm's version the workspace's.
 - `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, `cargo deny check`
   (from the repository root; `pnpm run build` in `dashboard/` first, as atm embeds the dashboard).

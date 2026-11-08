@@ -21602,7 +21602,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §1 and §4, step 2.\n\n## Change\n- **The project's settings file**, `.agentic-task-manager/settings.json` (`store`, `vcs`; json-git and git without one), read before any store is chosen.\n- **Factories:** `atm_db::open(folder, store)` and `atm_vcs::open(folder, vcs)`. Finding a project from a folder (walking up, a linked worktree's main copy) moves behind the store's factory.\n- **atm-lib:**\n  - `Project::open(cwd)`;\n  - `Project::with_store(store, vcs)` for tests;\n  - `project.store_maintenance()` (merge driver, migrations, paths; `None` for a store without them);\n  - the actor.\n- **`Workspaces`** (over atm-db's `workspaces/<id>.json` and `recent.json`, under the state folder's lock) and **`Workspace`**:\n  - its projects, with summaries, worktrees and logos, a broken one listed as missing (F18);\n  - search across them;\n  - add, remove and prune;\n  - the summary cache, moved from atm-api's `Projects`.\n  - A new project atm meets goes into `default`.\n\natm-api's `Projects` calls these instead of its own loop; nothing users see changes.\n\n## Tests\natm-lib's unit tests on the in-memory store through `with_store`; the scenarios and `serve.test.mjs` unchanged and passing.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-490"
       ],
@@ -21613,7 +21613,7 @@
         "crates/atm-api/src/routes.rs"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:28:35Z",
+      "updated_at": "2026-11-08T10:38:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21624,7 +21624,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T10:28:35Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "48a86859daa8c4445663182baa269c56c4694491",
+      "completed_at": "2026-11-08T10:38:49Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T10:38:49Z",
+          "kind": "outcome",
+          "text": "settings.json + `atm_db::open`/`atm_vcs::open` factories; `Project::open`, `store_maintenance()`; atm-lib `Workspaces`/`Workspace` (listing, search, add/remove/prune, summary cache, `recent.json`); atm-api routes use them; boot only delegates. The actor stays in boot until T-492 moves it. Suite 584 pass.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-492",
@@ -21638,7 +21649,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §4, step 3.\n\n## Change\n- The CLI, the API and the app depend on atm-lib (and atm-common) only. The `atm db` group's store operations go through `project.store_maintenance()`.\n- The pid and signal helpers move into the CLI. `hook_project` and what only it used are deleted.\n- `crates/atm-boot/` is removed.\n- Update `docs/layered-architecture.md` (§1, §3, §5.1, §11.2) and AGENTS.md's crate list to the new layers. The layer check (which crate may depend on which) is updated so a front end can't reach atm-db or atm-vcs.\n\n## Tests\nEverything passes unchanged: cargo test, the CLI suite and e2e.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-491"
       ],
@@ -21652,16 +21663,18 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:38:53Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-08T10:18:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:38:53Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-493",

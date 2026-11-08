@@ -31,7 +31,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .manage(AppState::new(atm_boot::open_registry()))
+        .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
         .setup(move |app| {
             commands.mount_events(app);
@@ -91,7 +91,7 @@ mod tests {
     #[test]
     fn an_empty_registry_lists_no_projects() {
         let home = scratch("empty");
-        assert_eq!(projects(&atm_boot::open_registry_at(&home)), Ok(vec![]));
+        assert_eq!(projects(&atm_lib::Workspaces::at(&home)), Ok(vec![]));
     }
 
     #[test]
@@ -116,7 +116,7 @@ mod tests {
     fn the_main_windows_capability_lets_it_call_the_commands() {
         let home = scratch("ipc");
         let app = tauri::test::mock_builder()
-            .manage(AppState::new(atm_boot::open_registry_at(&home)))
+            .manage(AppState::new(atm_lib::Workspaces::at(&home)))
             .invoke_handler(tauri::generate_handler![version, list_projects])
             .build(context())
             .expect("the mock app");

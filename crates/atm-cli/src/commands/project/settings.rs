@@ -3,12 +3,13 @@
 
 use std::path::Path;
 
-use atm_boot::{default_base, open_project, open_registry, task_paths};
 use atm_common::py::{py_str, truthy};
 use atm_common::{Error, Result};
+use atm_lib::code::default_base;
 use atm_lib::settings::{
     WorkflowChange, get_logo, get_workflow, set_logo, set_workflow, unset_logo,
 };
+use atm_lib::{Project, Workspaces};
 use clap::Args;
 use serde_json::{Map, Value, json};
 
@@ -38,7 +39,7 @@ fn dry(ctx: Context, what: &str) -> bool {
 /// # Errors
 /// A task folder that fails its checks.
 pub fn config(ctx: Context, cwd: &Path) -> Result<()> {
-    let paths = task_paths(cwd)?;
+    let paths = crate::commands::db::maintenance(cwd)?.task_paths()?;
     if ctx.json {
         print_json(&paths);
         return Ok(());
@@ -140,7 +141,7 @@ pub fn workflow(args: WorkflowArgs, ctx: Context, cwd: &Path) -> Result<()> {
         args.trailers.as_deref(),
         &["forbid", "require", "none"],
     )?;
-    let mut project = open_project(cwd)?;
+    let mut project = Project::open(cwd)?;
     let current = if args.action.is_none() {
         get_workflow(&project)?
     } else {
@@ -186,7 +187,7 @@ pub fn logo(action: Option<&str>, path: Option<&str>, ctx: Context, cwd: &Path) 
     {
         return Ok(());
     }
-    let mut project = open_project(cwd)?;
+    let mut project = Project::open(cwd)?;
     match action {
         None => {
             if let Some(path) = path {
@@ -272,7 +273,7 @@ fn damaged_notice(result: &Value) {
 /// # Errors
 /// What the registry refuses (no such project, a folder without tasks.json, one that opted out), its lock or file.
 pub fn projects(action: &str, target: Option<&str>, ctx: Context, cwd: &Path) -> Result<()> {
-    let registry = open_registry();
+    let registry = Workspaces::open().default_workspace();
     match action {
         "add" => {
             if dry(
