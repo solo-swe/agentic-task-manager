@@ -50,11 +50,15 @@ atm's own rules for the atm app, the desktop distribution proposed in
   ([compmd-rendering-design.md](../compmd-rendering-design.md)).
 - **Strict CSP for the shell:** the dashboard server's policy ([security-architecture.md](../security-architecture.md)
   I13: own scripts by hash, no remote or inline scripts, `frame-src` only CompMD's sandbox frames), with `connect-src`
-  only for Tauri IPC. No `frame-ancestors`: Tauri puts the policy on every HTML file it serves, CompMD's frames too
-  (T-502).
-- **`cargo tauri dev` is not the built app:** it serves the page from the CLI's own server (`http://127.0.0.1:1430`),
-  under `devCsp` (the same policy with that origin, and the CLI's live-reload socket; a test keeps the two in step).
-  What the built app does is checked with `cargo run -p atm-app` (`tauri://localhost`) or a bundle.
+  only for Tauri IPC and CompMD's folder (it fetches its WebAssembly). What Tauri does to the policy (T-502):
+  - it puts it on **every HTML file** it serves, CompMD's frames too, so there is no `frame-ancestors`;
+  - it adds a nonce to `style-src`, which makes the browser ignore `'unsafe-inline'` (every `style` attribute
+    refused): `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written;
+  - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus the
+    CLI's own server (`http://127.0.0.1:1430`, which `cargo tauri dev` serves the page from) and its live-reload
+    socket. A test keeps the two in step; the app's tests check the policy Tauri serves (its asset resolver).
+- **Check the app in a window, both ways:** `cargo tauri dev` (the CLI's server) and `cargo run -p atm-app`
+  (`tauri://localhost`, as the bundle), before a task that changes the window is done.
 
 ## Platform features
 

@@ -26,20 +26,21 @@
         "frame-src": "tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/",
         "style-src": "'unsafe-inline'",
         "img-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost",
+        "connect-src": "ipc: http://ipc.localhost tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/",
         "base-uri": "'none'",
         "form-action": "'none'"
       },
       "devCsp": {
         "default-src": "'none'",
-        "script-src": "'wasm-unsafe-eval' http://127.0.0.1:1430/assets/compmd/",
-        "frame-src": "http://127.0.0.1:1430/assets/compmd/",
+        "script-src": "'wasm-unsafe-eval' tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/ http://127.0.0.1:1430/assets/compmd/",
+        "frame-src": "tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/ http://127.0.0.1:1430/assets/compmd/",
         "style-src": "'unsafe-inline'",
         "img-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost ws://127.0.0.1:1430/__tauri_cli",
+        "connect-src": "ipc: http://ipc.localhost tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/ http://127.0.0.1:1430/assets/compmd/ ws://127.0.0.1:1430/__tauri_cli",
         "base-uri": "'none'",
         "form-action": "'none'"
       },
+      "dangerousDisableAssetCspModification": ["style-src"],
       "freezePrototype": true
     }
   },

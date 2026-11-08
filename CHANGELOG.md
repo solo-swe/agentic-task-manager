@@ -111,9 +111,13 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 - **Mermaid diagrams in the app** (T-502): no diagram drew in the app's window. Tauri puts the window's CSP on every
   HTML file it serves, CompMD's sandbox frames included, and its `frame-ancestors 'none'` refused them in the page.
   The app's CSP no longer has `frame-ancestors` (its one window is its own); a test now checks what Tauri serves
-  for CompMD's frames, not only `tauri.conf.json`. `cargo tauri dev` serves the page from the CLI's own server
-  (`http://127.0.0.1:1430`), which the app's CSP refused CompMD's scripts from: it now has a `devCsp`, the same policy
-  with that origin and the CLI's live-reload socket, kept in step by a test.
+  for CompMD's frames, not only `tauri.conf.json`.
+- **Markdown and the layout in the app** (T-502): CompMD couldn't fetch its WebAssembly (`connect-src` allowed only
+  Tauri's IPC), so task text showed as raw Markdown; it now also allows CompMD's folder. Tauri added a nonce to
+  `style-src`, which made WebKit ignore `'unsafe-inline'` and refuse every `style` attribute (the footer wasn't
+  pinned); `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written. Debug builds (`cargo run`,
+  `cargo tauri dev`) use a `devCsp`: the same policy plus the CLI's dev server (`http://127.0.0.1:1430`) and its
+  live-reload socket, kept in step by a test. A test checks the policy Tauri serves the page with.
 - **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
   macOS `target/debug/atm` inside the Linux Playwright container since T-478, and every test failed. They now first
   run `pnpm run build:atm-linux`, which builds the CLI in the official `rust:1.99.0-bookworm` image (pinned by digest,

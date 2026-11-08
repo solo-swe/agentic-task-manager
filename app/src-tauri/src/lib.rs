@@ -188,39 +188,37 @@ mod tests {
             );
         }
         assert_eq!(csp["img-src"], json!("'self' data:"));
-        assert_eq!(csp["connect-src"], json!("ipc: http://ipc.localhost"));
+        // Tauri's IPC, and CompMD fetching its WebAssembly from its folder (T-502)
+        assert_eq!(
+            csp["connect-src"],
+            json!(
+                "ipc: http://ipc.localhost tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/"
+            )
+        );
         // No frame-ancestors (T-502): Tauri puts this policy on every HTML file, CompMD's frames too, which it would
         // refuse in the page; the app's one window is its own, so it protected nothing
         assert!(csp.get("frame-ancestors").is_none());
         assert_eq!(csp["form-action"], json!("'none'"));
         assert_eq!(conf["app"]["security"]["freezePrototype"], json!(true));
         assert_eq!(conf["app"]["withGlobalTauri"], json!(false));
-        // `cargo tauri dev` serves the page from the CLI's own server (T-502), so its policy (devCsp) is this one with
-        // that origin for the app's, and the CLI's live-reload socket; nothing else
+        // Tauri leaves style-src as written: its nonce there makes the browser ignore 'unsafe-inline' (T-502)
+        assert_eq!(
+            conf["app"]["security"]["dangerousDisableAssetCspModification"],
+            json!(["style-src"])
+        );
+        // Every debug build (`cargo run`, `cargo tauri dev`) uses devCsp (T-502): this policy, plus the CLI's own
+        // server, which `cargo tauri dev` serves the page from, and its live-reload socket; nothing else
         let dev = &conf["app"]["security"]["devCsp"];
         let server = "http://127.0.0.1:1430/assets/compmd/";
-        let as_dev = |directive: &str| {
-            let words: Vec<&str> = csp[directive]
-                .as_str()
-                .expect("a directive")
-                .split_whitespace()
-                .filter(|w| !w.ends_with("localhost/assets/compmd/"))
-                .collect();
-            if csp[directive]
-                .as_str()
-                .is_some_and(|d| d.contains("localhost/assets/compmd/"))
-            {
-                [words, vec![server]].concat().join(" ")
-            } else {
-                words.join(" ")
+        for (directive, value) in csp.as_object().expect("the csp") {
+            let value = value.as_str().expect("a directive");
+            let mut expected = value.to_owned();
+            if value.contains("localhost/assets/compmd/") {
+                expected = format!("{expected} {server}");
             }
-        };
-        for (directive, _) in csp.as_object().expect("the csp") {
-            let expected = if directive == "connect-src" {
-                format!("{} ws://127.0.0.1:1430/__tauri_cli", as_dev(directive))
-            } else {
-                as_dev(directive)
-            };
+            if directive == "connect-src" {
+                expected = format!("{expected} ws://127.0.0.1:1430/__tauri_cli");
+            }
             assert_eq!(dev[directive], json!(expected), "devCsp {directive}");
         }
         assert_eq!(
@@ -603,5 +601,37 @@ mod tests {
                 "{frame}: {csp}"
             );
         }
+    }
+
+    /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
+    /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` fetches its
+    /// `WebAssembly` from its folder
+    #[test]
+    fn the_page_is_served_with_a_policy_it_works_under() {
+        let app = tauri::test::mock_builder()
+            .build(context())
+            .expect("the mock app");
+        let page = app
+            .asset_resolver()
+            .get("tasks-dashboard.html".into())
+            .expect("the dashboard's page in the app's files");
+        let csp = page.csp_header.unwrap_or_default();
+        let shown: String = csp
+            .split_whitespace()
+            .filter(|w| !w.starts_with("'sha256-"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let directive = |name: &str| {
+            csp.split(';')
+                .map(str::trim)
+                .find(|d| d.starts_with(&format!("{name} ")))
+                .unwrap_or_default()
+                .to_owned()
+        };
+        assert!(!directive("style-src").contains("'nonce-"), "{shown}");
+        assert!(
+            directive("connect-src").contains("tauri://localhost/assets/compmd/"),
+            "{shown}"
+        );
     }
 }
