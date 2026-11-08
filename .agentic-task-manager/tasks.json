@@ -22584,7 +22584,7 @@
       "description": "Part 2 of the switch (split from T-454), ready to land with it: `tests/scripts/` runs only against the Rust binary (no `ATM_IMPL`, no expected-failures list; `expectRust` becomes `expect`), the Python-only tests go (`build.test.mjs`, `vendor.test.mjs`, `tests/lib/`), `pnpm run dev`'s API is `atm _serve`, the e2e fixture calls the Rust `atm`; CI's Python jobs go and the Rust suite runs on Windows too (scenarios without `sh`).\n\nPrepared on a branch, merged with T-454.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-477"
       ],
@@ -22594,7 +22594,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-07T08:32:44Z",
+      "updated_at": "2026-11-08T01:48:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22605,7 +22605,17 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-07T08:32:44Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T01:48:51Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T01:48:51Z",
+          "kind": "outcome",
+          "text": "Done on `dev/0.33.0-switch` (the suite, the dev server and e2e on the Rust atm only; lands with T-454); the dev server on Rust is also here.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-479",
