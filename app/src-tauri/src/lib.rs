@@ -268,6 +268,77 @@ mod tests {
         );
     }
 
+    /// Each read command, its arguments, and what the plain function behind it answers (for a state folder made by
+    /// `a_state_with_a_project`); `list_projects` last, as it opens `work`
+    fn expected_answers(workspaces: &atm_lib::Workspaces) -> Vec<(&'static str, Value, Value)> {
+        let at = json!({"workspace": "work", "project": "abcd1234"});
+        let with = |extra: Value| {
+            let mut args = at.clone();
+            if let (Some(args), Some(extra)) = (args.as_object_mut(), extra.as_object()) {
+                args.extend(extra.clone());
+            }
+            args
+        };
+        vec![
+            ("version", json!({}), json!(atm_common::VERSION)),
+            ("list_workspaces", json!({}), workspaces_of(workspaces)),
+            (
+                "search",
+                json!({"workspace": "work", "q": "needle"}),
+                search_in(workspaces, "work", "needle").expect("search"),
+            ),
+            (
+                "project_tasks",
+                with(json!({"filters": {"status": ["todo"]}})),
+                tasks_of(
+                    workspaces,
+                    "work",
+                    "abcd1234",
+                    TaskFilters {
+                        status: vec!["todo".into()],
+                        ..TaskFilters::default()
+                    },
+                )
+                .expect("tasks"),
+            ),
+            (
+                "claims",
+                at.clone(),
+                claims_of(workspaces, "work", "abcd1234").expect("claims"),
+            ),
+            (
+                "worktrees",
+                at.clone(),
+                worktrees_of(workspaces, "work", "abcd1234").expect("worktrees"),
+            ),
+            (
+                "document",
+                with(json!({"path": "README.md"})),
+                document_of(workspaces, "work", "abcd1234", "README.md").expect("document"),
+            ),
+            (
+                "file",
+                with(json!({"path": "pixel.png"})),
+                serde_json::to_value(
+                    file_of(workspaces, "work", "abcd1234", "pixel.png").expect("file"),
+                )
+                .expect("json"),
+            ),
+            (
+                "logo",
+                at.clone(),
+                serde_json::to_value(logo_of(workspaces, "work", "abcd1234").expect("logo"))
+                    .expect("json"),
+            ),
+            ("unsubscribe", json!({"id": 99}), json!(false)),
+            (
+                "list_projects",
+                json!({"workspace": "work"}),
+                projects_of(workspaces, "work").expect("projects"),
+            ),
+        ]
+    }
+
     /// Through the app's own context, so its capability is what lets the window call them
     #[test]
     #[cfg_attr(
@@ -306,76 +377,10 @@ mod tests {
             headers: tauri::http::HeaderMap::default(),
             invoke_key: tauri::test::INVOKE_KEY.to_string(),
         };
-        let at = json!({"workspace": "work", "project": "abcd1234"});
-        let with = |extra: Value| {
-            let mut args = at.clone();
-            if let (Some(args), Some(extra)) = (args.as_object_mut(), extra.as_object()) {
-                args.extend(extra.clone());
-            }
-            args
-        };
         // Each command reaches its atm-lib call: it answers what the plain function does. `work` is opened first, as
         // list_projects (last) opens it
         workspaces.opened("work").expect("recent.json");
-        let calls = [
-            ("version", json!({}), json!(atm_common::VERSION)),
-            ("list_workspaces", json!({}), workspaces_of(&workspaces)),
-            (
-                "search",
-                json!({"workspace": "work", "q": "needle"}),
-                search_in(&workspaces, "work", "needle").expect("search"),
-            ),
-            (
-                "project_tasks",
-                with(json!({"filters": {"status": ["todo"]}})),
-                tasks_of(
-                    &workspaces,
-                    "work",
-                    "abcd1234",
-                    TaskFilters {
-                        status: vec!["todo".into()],
-                        ..TaskFilters::default()
-                    },
-                )
-                .expect("tasks"),
-            ),
-            (
-                "claims",
-                at.clone(),
-                claims_of(&workspaces, "work", "abcd1234").expect("claims"),
-            ),
-            (
-                "worktrees",
-                at.clone(),
-                worktrees_of(&workspaces, "work", "abcd1234").expect("worktrees"),
-            ),
-            (
-                "document",
-                with(json!({"path": "README.md"})),
-                document_of(&workspaces, "work", "abcd1234", "README.md").expect("document"),
-            ),
-            (
-                "file",
-                with(json!({"path": "pixel.png"})),
-                serde_json::to_value(
-                    file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("file"),
-                )
-                .expect("json"),
-            ),
-            (
-                "logo",
-                at.clone(),
-                serde_json::to_value(logo_of(&workspaces, "work", "abcd1234").expect("logo"))
-                    .expect("json"),
-            ),
-            ("unsubscribe", json!({"id": 99}), json!(false)),
-            (
-                "list_projects",
-                json!({"workspace": "work"}),
-                projects_of(&workspaces, "work").expect("projects"),
-            ),
-        ];
-        for (command, args, expected) in calls {
+        for (command, args, expected) in expected_answers(&workspaces) {
             let answer = tauri::test::get_ipc_response(
                 &window,
                 request(command, &args, "tauri://localhost"),

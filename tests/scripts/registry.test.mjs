@@ -31,15 +31,15 @@ describe('project registry', () => {
     const linked = path.join(tempDir('atm-wt-'), 'second');
     try {
       git(['worktree', 'add', '-q', '-b', 'second', linked], root);
-      const r = runAtm(['project', 'add', '--json'], linked, { ATM_HOME: home });
+      const r = runAtm(['workspace', 'add-project', '--json'], linked, { ATM_HOME: home });
       assert.equal(r.code, 0, r.stderr);
       assert.deepEqual(
         registry(home).projects.map((p) => [p.id, p.path]),
         [['abcd1234', root]],
       );
       // Adding the main worktree too doesn't make a second entry
-      const again = runAtm(['project', 'add'], root, { ATM_HOME: home });
-      assert.match(again.stdout, /^Already registered: abcd1234/);
+      const again = runAtm(['workspace', 'add-project'], root, { ATM_HOME: home });
+      assert.match(again.stdout, /^Already in default: abcd1234/);
       assert.equal(registry(home).projects.length, 1);
     } finally {
       git(['worktree', 'remove', '--force', linked], root);
@@ -121,7 +121,7 @@ describe('project registry', () => {
           : path.join(home, '.local/share/com.solo-swe.atm');
       const env = { HOME: home, ATM_HOME: '', XDG_DATA_HOME: '' };
       try {
-        const r = runAtm(['project', 'list', '--json'], home, env);
+        const r = runAtm(['workspace', 'projects', '--json'], home, env);
         assert.equal(r.code, 0, r.stderr);
         assert.deepEqual(
           JSON.parse(r.stdout).projects.map((p) => p.id),
@@ -131,7 +131,7 @@ describe('project registry', () => {
         assert.ok(fs.existsSync(path.join(state, 'skills')), 'the rest moved as it was');
         assert.match(fs.readFileSync(path.join(legacy, 'MOVED.txt'), 'utf8'), /com\.solo-swe\.atm/);
         // Again: nothing moves twice
-        assert.equal(runAtm(['project', 'list'], home, env).code, 0);
+        assert.equal(runAtm(['workspace', 'projects'], home, env).code, 0);
         assert.deepEqual(fs.readdirSync(legacy), ['MOVED.txt']);
       } finally {
         removeDir(home);
@@ -145,7 +145,9 @@ describe('project registry', () => {
       makeProject({ files: { '.agentic-task-manager/tasks.json': tasks(`0000000${i}`, `P${i}`) } }),
     );
     try {
-      const results = await Promise.all(roots.map((root) => startAtm(['project', 'add'], root, { ATM_HOME: home })));
+      const results = await Promise.all(
+        roots.map((root) => startAtm(['workspace', 'add-project'], root, { ATM_HOME: home })),
+      );
       for (const r of results) assert.equal(r.code, 0, r.stderr);
       const ids = registry(home)
         .projects.map((p) => p.id)

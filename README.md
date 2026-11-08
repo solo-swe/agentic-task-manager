@@ -394,9 +394,11 @@ projects the dashboard opens on it.
 
 - **The list:** `workspaces/default.json` in atm's state folder: `~/Library/Application Support/com.solo-swe.atm/` on
   macOS, `~/.local/share/com.solo-swe.atm/` on Linux, `%APPDATA%\com.solo-swe.atm\` on Windows (set `ATM_STATE_DIR` to
-  keep it elsewhere; atm moves an older `~/.agentic-task-manager/` there the first time). `atm project list` lists the
-  projects, `atm project add [path]` adds one, `atm project remove <id|path>` removes one, and `atm project prune`
-  drops those whose folder is gone.
+  keep it elsewhere; atm moves an older `~/.agentic-task-manager/` there the first time). `atm workspace projects`
+  lists the projects, `atm workspace add-project [<w>] [<folder>]` adds one, `atm workspace remove-project [<w>]
+  <id|path>` removes one, and `atm workspace prune` drops those whose folder is gone.
+- **Workspaces:** more lists than `default`, each `workspaces/<w>.json` (`atm workspace create|delete|rename`, `atm
+  workspace list`). A project can be in several. The dashboard opens the one opened last, and switches between them.
 - **Opting out:** a project with `"dashboard": { "listed": false }` in its `tasks.json` meta isn't listed.
 - **What the server exposes:** it listens on `127.0.0.1` only and answers only requests addressed to `localhost`. For
   each listed project it serves just three files from `.agentic-task-manager/`: `tasks.json`, `claims.json` and
@@ -732,7 +734,7 @@ Merge each branch back as usual (or open a PR per branch).
 | `atm claim list`, `atm claim heartbeat <id>`                                                                        | Who works on what, with time left on each lease; extend your claim's lease                                                                                                                |
 | `atm db init`                                                                                                | Register the `tasks.json` merge driver (the skills do this automatically)                                                                                                                 |
 | `atm service [start\|stop\|status] [--open] [--all]`                                                        | The dashboard server, one for all your projects                                                                                                                                           |
-| `atm project list \| add [PATH] \| remove <id\|PATH> \| prune`                                                 | The projects the dashboard lists                                                                                                                                                          |
+| `atm workspace list \| create \| delete \| rename \| projects \| add-project \| remove-project \| prune`        | The workspaces, named lists of the projects the dashboard shows (`default` always there)                                                                                                  |
 | `atm vcs repository [URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm db init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
 
 The full analysis (scenarios, failure modes, the alternatives considered) is in

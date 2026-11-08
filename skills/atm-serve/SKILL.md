@@ -42,7 +42,8 @@ atm service <action> [--open] [--all] [--port N] [--dir PATH]
 The helper:
 - moves an old `docs/tasks.json` (or `tasks.json` in the root) into `.agentic-task-manager/` first, and cleans up
   after older versions (a project's own copy of the dashboard and its own server);
-- adds the project to the dashboard's list of projects (`atm project list` shows them);
+- adds the project to the `default` workspace, the dashboard's list of projects (`atm workspace projects` shows
+  them; `atm workspace list` lists the workspaces, when the user has made others);
 - serves the dashboard on `localhost` in a background process that keeps running after this session ends. The
   dashboard comes with atm, so updating atm updates it: a server still on an older version is restarted on this one.
 
@@ -55,6 +56,7 @@ Relay the helper's output. After a successful `start`, add:
 > **Dashboard:** <the URL it printed>
 >
 > It shows all your projects: switch with the arrow next to the title, or open **All projects** for the overview.
+> With several workspaces, it opens the one opened last; switch with the workspace button next to the arrow.
 > It refreshes itself every 5 seconds, so you can watch an agent work through tasks with `/atm-loop-tasks`.
 > The server keeps running in the background; stop it with `/atm-serve stop`.
 

@@ -72,7 +72,7 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
       continue;
     }
     try {
-      execFileSync(ATM, ['project', 'add', project], { env, stdio: 'pipe' });
+      execFileSync(ATM, ['workspace', 'add-project', 'default', project], { env, stdio: 'pipe' });
     } catch (e) {
       log(`  atm: can't list ${dir}: ${String((e as { stderr?: Buffer }).stderr ?? e).trim()}`);
     }

@@ -20043,7 +20043,7 @@
       "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [
         "T-456"
       ],
@@ -20054,7 +20054,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T11:04:28Z",
+      "updated_at": "2026-11-08T11:19:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20065,7 +20065,22 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T11:04:28Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "3403ff608dc5a36c66ac4bf2ee1f71057d8d70dd",
+      "waiting_on": "user",
+      "questions": [
+        "The IPC transport needs `@tauri-apps/api` (Tauri’s own JS package, MIT/Apache-2.0, at the version matching tauri 2.12.x) as a dashboard dependency: the generated `.generated/app/bindings.ts` imports `@tauri-apps/api/core`, and the Playwright tests on mocked IPC use `@tauri-apps/api/mocks`. OK to add it (pnpm, pinned in the lockfile)?",
+        "The app window: one window per workspace (ADR-003 §5) or one window that switches, for now? I would start with one window that opens the last opened workspace and switches in place, and add per-workspace windows with the deep links (T-459)."
+      ],
+      "blocked_at": "2026-11-08T11:19:13Z",
+      "notes": [
+        {
+          "at": "2026-11-08T11:19:24Z",
+          "kind": "note",
+          "text": "Done in 3403ff6: `/w/<w>` addresses and pages, `/` opens the last workspace, the switcher (2+ workspaces), default on v1 and others on v2 routes. Left: an IPC `Fetch` mapping the v2 routes to the app’s commands (images as blob URLs), the app’s dashboard build, Playwright on mocked IPC. Once: serve.test.mjs symlink test got ECONNRESET right after start (passed on rerun).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-458",
@@ -20143,7 +20158,7 @@
       "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-456",
         "T-452"
@@ -20154,16 +20169,25 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T11:19:54Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T11:19:29Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "The cask bundles `atm` and puts it on PATH, as does the `atm` formula: should the cask `conflicts_with formula: \"atm\"` (one or the other; the cask’s atm replaces the formula’s), or should the cask depend on the formula and not bundle its own?",
+        "One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives?",
+        "Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done."
+      ],
+      "blocked_at": "2026-11-08T11:19:54Z"
     },
     {
       "id": "T-461",
@@ -21712,7 +21736,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §3, step 6.\n\n## Commands\n```text\natm workspace list | create <w> | delete <w> | rename <w> <new>\natm workspace projects [<w>]\natm workspace add-project [<w>] [<folder>] | remove-project [<w>] <project> | prune [<w>]\n```\n- They default to `default`, and `add-project` to the current folder.\n- `atm project list|add|remove|prune` go.\n- `atm serve` serves every workspace: it opens the only one, or the last opened.\n\n## Agents read these\nThe `atm-serve` skill and `docs/agent/` change, so follow AGENTS.md's checklist: the written skill review in `docs/security-architecture.md` §3.3.\n\n## Tests\nScenarios for each command, `default`'s refusal to be deleted, and a project in two workspaces.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-492"
       ],
@@ -21724,16 +21748,18 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T11:19:55Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-08T10:18:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T11:19:55Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

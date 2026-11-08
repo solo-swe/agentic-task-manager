@@ -1,28 +1,28 @@
 [
   {
-    "name": "projects lists nothing at first",
+    "name": "workspace projects lists nothing at first",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
       }
     },
-    "args": ["project", "list"],
+    "args": ["workspace", "projects"],
     "expect": {
-      "stdout": "No projects registered. `atm project add [PATH]` adds one; atm adds a project when it runs there.\n",
+      "stdout": "No projects in default. `atm workspace add-project` adds this folder's; atm adds a project when it runs there.\n",
       "files": { ".atm-home/workspaces/default.json": false }
     }
   },
   {
-    "name": "projects add registers the current project",
+    "name": "workspace add-project adds the current project to default",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
       }
     },
-    "args": ["project", "add"],
+    "args": ["workspace", "add-project"],
     "env": { "ATM_NOW": "2026-01-01T00:00:00Z" },
     "expect": {
-      "stdout": "Added: abcd1234  Demo  {root}\n",
+      "stdout": "Added to default: abcd1234  Demo  {root}\n",
       "files": {
         ".atm-home/workspaces/default.json": {
           "version": 1,
@@ -85,31 +85,31 @@
     "expect": { "files": { ".atm-home/workspaces/default.json": false } }
   },
   {
-    "name": "projects add PATH from another folder, then it is already registered",
+    "name": "workspace add-project FOLDER from another folder, then it is already there",
     "setup": {
       "files": {
         "app/.agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
       },
-      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" project add app"]]
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default app"]]
     },
-    "args": ["project", "add", "{root}/app"],
-    "expect": { "stdout": "Already registered: abcd1234  Demo  {root}/app\n" }
+    "args": ["workspace", "add-project", "default", "{root}/app"],
+    "expect": { "stdout": "Already in default: abcd1234  Demo  {root}/app\n" }
   },
   {
     "name": "a project without meta.id or meta.project gets a path-based id and the folder's name",
     "setup": { "files": { "plain/.agentic-task-manager/tasks.json": { "tasks": [] } } },
-    "args": ["project", "add", "plain", "--json"],
+    "args": ["workspace", "add-project", "default", "plain", "--json"],
     "env": { "ATM_NOW": "2026-01-01T00:00:00Z" },
     "expect": { "stdoutIncludes": ["\"result\": \"added\"", "\"name\": \"plain\"", "\"id\": \"p"] }
   },
   {
-    "name": "projects add refuses a folder without tasks.json",
+    "name": "workspace add-project refuses a folder without tasks.json",
     "setup": { "files": { "empty/README.md": "nothing here\n" } },
-    "args": ["project", "add", "empty"],
+    "args": ["workspace", "add-project", "default", "empty"],
     "expect": { "exit": 1, "stderrIncludes": ["no tasks.json in", "Run /atm-create-tasks there first."] }
   },
   {
-    "name": "projects add refuses a project that opted out",
+    "name": "workspace add-project refuses a project that opted out",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
@@ -118,7 +118,7 @@
         }
       }
     },
-    "args": ["project", "add"],
+    "args": ["workspace", "add-project"],
     "expect": {
       "exit": 1,
       "stderrIncludes": ["opts out of the dashboard"],
@@ -126,7 +126,7 @@
     }
   },
   {
-    "name": "projects marks a project whose folder is gone, from a projects.json renamed into place (ADR-003)",
+    "name": "workspace projects marks a project whose folder is gone, from a projects.json renamed into place (ADR-003)",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] },
@@ -144,14 +144,14 @@
         }
       }
     },
-    "args": ["project", "list"],
+    "args": ["workspace", "projects"],
     "expect": {
       "stdout": "0ld0ne00  Gone  /nonexistent/atm-test/gone  (not found)\n",
       "files": { ".atm-home/projects.json": false, ".atm-home/workspaces/default.json": true }
     }
   },
   {
-    "name": "projects --json lists entries with missing",
+    "name": "workspace projects --json lists entries with missing",
     "setup": {
       "files": {
         ".atm-home/workspaces/default.json": {
@@ -168,7 +168,7 @@
         }
       }
     },
-    "args": ["project", "list", "--json"],
+    "args": ["workspace", "projects", "--json"],
     "expect": {
       "json": {
         "projects": [
@@ -186,7 +186,7 @@
     }
   },
   {
-    "name": "projects prune drops projects that are gone",
+    "name": "workspace prune drops projects that are gone",
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] },
@@ -204,14 +204,14 @@
         }
       }
     },
-    "args": ["project", "prune"],
+    "args": ["workspace", "prune"],
     "expect": {
-      "stdout": "Removed: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
+      "stdout": "Removed from default: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
       "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
     }
   },
   {
-    "name": "projects remove by id",
+    "name": "workspace remove-project by id, in default",
     "setup": {
       "files": {
         ".atm-home/workspaces/default.json": {
@@ -228,23 +228,23 @@
         }
       }
     },
-    "args": ["project", "remove", "0ld0ne00"],
+    "args": ["workspace", "remove-project", "0ld0ne00"],
     "expect": {
-      "stdout": "Removed: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
+      "stdout": "Removed from default: 0ld0ne00  Gone  /nonexistent/atm-test/gone\n",
       "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
     }
   },
   {
-    "name": "projects remove by path",
+    "name": "workspace remove-project by path",
     "setup": {
       "files": {
         "app/.agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
       },
-      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" project add app"]]
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project default app"]]
     },
-    "args": ["project", "remove", "app"],
+    "args": ["workspace", "remove-project", "default", "app"],
     "expect": {
-      "stdout": "Removed: abcd1234  Demo  {root}/app\n",
+      "stdout": "Removed from default: abcd1234  Demo  {root}/app\n",
       "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
     }
   },
@@ -255,30 +255,136 @@
         ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
       }
     },
-    "args": ["project", "add"],
+    "args": ["workspace", "add-project"],
     "env": { "ATM_STATE_DIR": "{root}/.state" },
     "expect": {
       "files": { ".state/workspaces/default.json": true, ".atm-home/workspaces/default.json": false }
     }
   },
   {
-    "name": "projects remove refuses an unknown project",
-    "args": ["project", "remove", "nope"],
-    "expect": { "exit": 1, "stderrIncludes": ["no registered project nope"] }
+    "name": "workspace remove-project refuses an unknown project",
+    "args": ["workspace", "remove-project", "nope"],
+    "expect": { "exit": 1, "stderrIncludes": ["no project nope in the workspace default"] }
   },
   {
-    "name": "an unreadable registry is moved aside and replaced",
+    "name": "an unreadable workspace file is moved aside and replaced",
     "setup": { "files": { ".atm-home/workspaces/default.json": "{ not json" } },
-    "args": ["project", "list"],
+    "args": ["workspace", "projects"],
     "env": { "ATM_NOW": "2026-01-01T00:00:00Z" },
     "expect": {
       "stdoutIncludes": [
-        "The project list (workspaces/default.json) was unreadable: moved it to {root}/.atm-home/workspaces/default.json.damaged-20260101T000000Z"
+        "The workspace default (workspaces/default.json) was unreadable: moved it to {root}/.atm-home/workspaces/default.json.damaged-20260101T000000Z"
       ],
       "files": {
         ".atm-home/workspaces/default.json.damaged-20260101T000000Z": "{ not json",
         ".atm-home/workspaces/default.json": { "version": 1, "projects": [] }
       }
     }
+  },
+  {
+    "name": "workspace list has default, always; create makes one, and saying it again changes nothing",
+    "setup": {
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create client-work"]]
+    },
+    "args": ["workspace", "list"],
+    "expect": {
+      "stdout": "default      0 projects  (opened last)\nclient-work  0 projects\n",
+      "files": { ".atm-home/workspaces/client-work.json": { "version": 1, "projects": [] } }
+    }
+  },
+  {
+    "name": "workspace create says when it is there already, and refuses an ID that isn't one",
+    "setup": {
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create work"]]
+    },
+    "args": ["workspace", "create", "work"],
+    "expect": { "stdout": "There is a workspace work already.\n" }
+  },
+  {
+    "name": "workspace create refuses a name that isn't a workspace ID",
+    "args": ["workspace", "create", "../up"],
+    "expect": { "exit": 2, "stderrIncludes": ["isn't a workspace ID"], "files": { ".atm-home/workspaces": false } }
+  },
+  {
+    "name": "a project in two workspaces: added to each, removed from one, still in the other",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create work"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project work"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace remove-project default abcd1234"]
+      ]
+    },
+    "args": ["workspace", "projects", "work"],
+    "expect": {
+      "stdout": "abcd1234  Demo  {root}\n",
+      "files": { ".atm-home/workspaces/default.json": { "version": 1, "projects": [] } }
+    }
+  },
+  {
+    "name": "workspace rename moves its file; the last opened follows it",
+    "setup": {
+      "files": { ".atm-home/recent.json": { "workspace": "work" } },
+      "commands": [["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create work"]]
+    },
+    "args": ["workspace", "rename", "work", "client"],
+    "expect": {
+      "stdout": "Renamed the workspace work to client.\n",
+      "files": {
+        ".atm-home/workspaces/work.json": false,
+        ".atm-home/workspaces/client.json": { "version": 1, "projects": [] },
+        ".atm-home/recent.json": { "workspace": "client" }
+      }
+    }
+  },
+  {
+    "name": "workspace delete removes its file, never its projects",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "id": "abcd1234", "project": "Demo" }, "tasks": [] }
+      },
+      "commands": [
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create work"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace add-project work"]
+      ]
+    },
+    "args": ["workspace", "delete", "work"],
+    "expect": {
+      "stdout": "Deleted the workspace work; its projects are where they were.\n",
+      "files": { ".atm-home/workspaces/work.json": false, ".agentic-task-manager/tasks.json": true }
+    }
+  },
+  {
+    "name": "default can't be deleted or renamed, and no other can take its name",
+    "setup": {
+      "commands": [
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace create work"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace delete default 2> deleted.txt; true"],
+        ["sh", "-c", "ATM_HOME=\"$PWD/.atm-home\" \"$ATM\" workspace rename default x 2> renamed.txt; true"]
+      ]
+    },
+    "args": ["workspace", "rename", "work", "default"],
+    "expect": {
+      "exit": 1,
+      "stderrIncludes": ["the default workspace keeps its name, and no other can take it"],
+      "files": {
+        "deleted.txt": "atm: the default workspace is always there: it can't be deleted\n",
+        "renamed.txt": "atm: the default workspace keeps its name, and no other can take it\n",
+        ".atm-home/workspaces/work.json": true
+      }
+    }
+  },
+  {
+    "name": "a workspace that isn't there is refused, naming the list",
+    "args": ["workspace", "projects", "nope"],
+    "expect": { "exit": 1, "stderrIncludes": ["no workspace nope (see `atm workspace list`)"] }
+  },
+  {
+    "name": "the project list commands are gone (ADR-003 §3)",
+    "args": ["project", "list"],
+    "expect": { "exit": 2, "stderrIncludes": ["unrecognized subcommand 'list'"] }
   }
 ]

@@ -510,7 +510,7 @@ impl FileRegistry {
     pub fn remove_project(&self, target: &str, cwd: &Path) -> Result<Value> {
         if target.is_empty() {
             return Err(Error::Failed {
-                message: "remove needs a project ID or path (see `atm project list`)".into(),
+                message: "remove needs a project ID or path (see `atm workspace projects`)".into(),
                 code: 2,
             });
         }
@@ -543,7 +543,8 @@ impl FileRegistry {
         drop(held);
         let removed = removed.ok_or_else(|| {
             Error::failed(format!(
-                "no registered project {target} (see `atm project list`)"
+                "no project {target} in the workspace {} (see `atm workspace projects`)",
+                self.workspace
             ))
         })?;
         Ok(json!({"removed": removed, "damaged": damaged}))
@@ -585,6 +586,65 @@ impl FileRegistry {
         }
         drop(held);
         Ok(made)
+    }
+
+    /// Delete the workspace's file (its projects stay where they are, and in the other workspaces that list them).
+    ///
+    /// # Errors
+    /// `default` (always there), no such workspace, the state folder's lock or the file.
+    pub fn delete(&self) -> Result<()> {
+        if self.workspace == DEFAULT_WORKSPACE {
+            return Err(Error::Refused(
+                "the default workspace is always there: it can't be deleted".into(),
+            ));
+        }
+        let held = self.locked()?;
+        let file = self.file();
+        if !valid_workspace_id(&self.workspace) || !file.is_file() {
+            return Err(self.unknown());
+        }
+        std::fs::remove_file(&file).map_err(|e| Error::failed(format!("{}: {e}", file.shown())))?;
+        drop(held);
+        Ok(())
+    }
+
+    /// Rename the workspace to `new` (its file moves; its projects keep their IDs).
+    ///
+    /// # Errors
+    /// `default` on either side, an invalid or taken new ID, no such workspace, the state folder's lock or the file.
+    pub fn rename(&self, new: &str) -> Result<()> {
+        if self.workspace == DEFAULT_WORKSPACE || new == DEFAULT_WORKSPACE {
+            return Err(Error::Refused(
+                "the default workspace keeps its name, and no other can take it".into(),
+            ));
+        }
+        if !valid_workspace_id(new) {
+            return Err(Error::Invalid(format!(
+                "{new:?} isn't a workspace ID (letters, digits, '.', '_' and '-')"
+            )));
+        }
+        let held = self.locked()?;
+        let file = self.file();
+        if !valid_workspace_id(&self.workspace) || !file.is_file() {
+            return Err(self.unknown());
+        }
+        let target = workspace_file(&self.home, new);
+        if target.exists() {
+            return Err(Error::Invalid(format!(
+                "there is a workspace {new} already"
+            )));
+        }
+        std::fs::rename(&file, &target)
+            .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))?;
+        drop(held);
+        Ok(())
+    }
+
+    fn unknown(&self) -> Error {
+        Error::NotFound(format!(
+            "no workspace {} (see `atm workspace list`)",
+            self.workspace
+        ))
     }
 }
 

@@ -715,6 +715,20 @@ commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `proj
   with notify 8.2.1 and its debouncer 0.7.0 (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
   or project changed, on that subscription's channel; the page reads again through the commands.
 
+**The `atm workspace` commands (T-493, ADR-003 §3).** `atm project list|add|remove|prune` are replaced by
+`atm workspace list|create|delete|rename|projects|add-project|remove-project|prune`. New files in the state folder:
+`workspaces/<w>.json` (a workspace's list, as `default.json` was) and `recent.json` (T-456). A workspace ID is a file
+name, checked before any path is made from it (letters, digits, `.`, `_` and `-`, not starting with `.`, at most 64:
+`valid_workspace_id`; `workspace create ../up` is refused, a scenario checks it). Every write is under the state
+folder's lock; `default` can't be deleted or renamed, and no workspace can take its name. Deleting a workspace removes
+only its file, never a project's.
+- **Skill and `docs/agent/` changed** (`skills/atm-serve/SKILL.md`, `docs/agent/commands.md`). No API key is used for
+  the agent sandbox, so this written review takes the live run's place: the serve skill names `atm workspace projects`
+  instead of `atm project list` and says the dashboard opens the last opened workspace; `atm docs commands` lists the
+  two reads and says the other workspace commands are the user's to decide. Nothing new to run, fetch or install. The
+  skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
+  list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

@@ -237,7 +237,7 @@ describe('serve', () => {
       tasks: [],
     });
     const port = ports();
-    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     removeDir(gone);
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = `http://localhost:${port}/api/projects`;
@@ -421,7 +421,7 @@ describe('serve', () => {
       meta: { id: 'eeee5555', project: 'Linked' },
       tasks: [task('L', 'todo')],
     });
-    assert.equal(atm(['project', 'add'], linked).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], linked).code, 0);
     const elsewhere = path.join(atmHome, 'archive.json');
     fs.writeFileSync(elsewhere, JSON.stringify(archive));
     fs.symlinkSync(elsewhere, path.join(linked, '.agentic-task-manager/tasks-archive.json'));
@@ -657,7 +657,7 @@ describe('serve', () => {
       { meta: { id: 'logo0005', project: 'Big' }, tasks: [] },
       { 'logo.png': 'x'.repeat(513 * 1024) },
     );
-    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], withLogo).code, 0);
     const base = `http://localhost:${port}`;
@@ -724,7 +724,7 @@ describe('serve', () => {
     cleanups.push(() => removeDir(elsewhere));
     fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
     fs.symlinkSync(elsewhere, path.join(root, 'linked'));
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const base = `http://localhost:${port}/api/v1/projects/docs0001`;
@@ -827,7 +827,7 @@ describe('serve', () => {
     fs.writeFileSync(path.join(sub, 'local.md'), '# Ignored by the submodule\n');
     fs.writeFileSync(path.join(sub, 'new.md'), '# Not committed yet\n');
     fs.writeFileSync(path.join(sub, 'id_rsa'), 'nope');
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const get = (file) =>
@@ -1393,7 +1393,7 @@ describe('serve', () => {
       tasks: [],
     });
     const port = ports();
-    assert.equal(atm(['project', 'add'], bad).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], bad).code, 0);
     fs.writeFileSync(path.join(bad, '.agentic-task-manager/tasks.json'), '['.repeat(100000) + ']'.repeat(100000));
     assert.equal(atm(['service', '--port', String(port)], good).code, 0);
     const r = await fetch(`http://localhost:${port}/api/projects`);
@@ -1418,10 +1418,10 @@ describe('serve', () => {
       meta: { id: 'abcd1234', project: 'Copy' },
       tasks: [{ id: 'T-1', name: 'x', phase: 0, type: 'feature', status: 'todo' }],
     });
-    assert.equal(atm(['project', 'add'], first).code, 0);
-    assert.equal(atm(['project', 'add'], second).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], first).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], second).code, 0);
     assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
-    const listed = JSON.parse(atm(['project', 'list', '--json'], first).stdout);
+    const listed = JSON.parse(atm(['workspace', 'projects', '--json'], first).stdout);
     const ids = listed.projects.map((p) => p.id);
     assert.equal(new Set(ids).size, 2, ids.join(', '));
     assert.ok(ids.includes('abcd1234'));
@@ -1502,7 +1502,7 @@ describe('serve', () => {
       meta: { id: 'bbbb2222', project: 'Blog' },
       tasks: Array.from({ length: 205 }, (_, i) => task(`B-${i + 1}`, { name: 'Write a post' })),
     });
-    for (const p of [shop, blog]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [shop, blog]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], shop).code, 0);
     const search = async (q, extra = '') =>
@@ -1561,7 +1561,7 @@ describe('serve', () => {
         task('T-3', { dependencies: ['T-2'] }),
       ],
     });
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = (query = '') => `http://localhost:${port}/api/v1/projects/cccc3333/tasks${query}`;
@@ -1610,7 +1610,7 @@ describe('serve', () => {
       meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
       tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
     });
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     // Every atm command still refuses it
     assert.notEqual(atm(['task', 'list'], root).code, 0);
     const port = ports();

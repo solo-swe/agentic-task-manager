@@ -32,6 +32,7 @@ use commands::{
     sprint::SprintCommand,
     task::TaskCommand,
     vcs::VcsCommand,
+    workspace::WorkspaceCommand,
 };
 use serde_json::json;
 
@@ -85,6 +86,9 @@ enum Command {
     /// Sprint management
     #[command(subcommand)]
     Sprint(SprintCommand),
+    /// The workspaces: named lists of projects the dashboard shows
+    #[command(subcommand)]
+    Workspace(WorkspaceCommand),
     /// The task files' maintenance
     #[command(subcommand)]
     Db(DbCommand),
@@ -315,6 +319,7 @@ fn run(args: &[OsString]) -> u8 {
         Command::Task(command) => commands::task::run(command, ctx, &cwd).map(|()| 0),
         Command::Project(command) => commands::project::run(command, ctx, &cwd).map(|()| 0),
         Command::Sprint(command) => commands::sprint::run(command, ctx, &cwd).map(|()| 0),
+        Command::Workspace(command) => commands::workspace::run(command, ctx, &cwd).map(|()| 0),
         Command::Release(command) => commands::release::run(command, ctx, &cwd).map(|()| 0),
         Command::Component(command) => commands::component::run(command, ctx, &cwd).map(|()| 0),
         Command::Loop(command) => commands::loop_::run(command, ctx, &cwd),

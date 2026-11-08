@@ -32,6 +32,13 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **`atm workspace`** (T-493, ADR-003 §3): `list` (each with its project count; the last opened marked), `create`,
+  `delete` and `rename` (`default` can't be deleted or renamed, and no workspace can take its name), `projects [<w>]`,
+  `add-project [<w>] [<folder>]`, `remove-project [<w>] <project>` and `prune [<w>]`, each defaulting to `default`.
+  A project can be in several workspaces. **`atm project list|add|remove|prune` are removed**: use
+  `atm workspace projects|add-project|remove-project|prune`. The `atm-serve` skill names the new commands, and its
+  Claude Code pre-approvals narrow to the two reads (`atm workspace list`, `atm workspace projects`); `atm docs
+  commands` lists them. The dev server adds its projects with `atm workspace add-project`.
 - **Workspaces in the dashboard** (T-457, ADR-003 §5): addresses `/w/<w>/…` (`/w/<w>/projects/<id>/<tab>`,
   `/w/<w>/board`, …; without `/w/<w>`, `default`'s, so every link so far still opens), and `/` opens the workspace
   opened last. A workspace switcher sits next to the project selector when there is more than one. The dashboard reads

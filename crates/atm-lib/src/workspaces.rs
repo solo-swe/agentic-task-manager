@@ -93,6 +93,48 @@ impl Workspaces {
         ))
     }
 
+    /// Make workspace `id`, with no projects. Whether it was made (false: it was there already).
+    ///
+    /// # Errors
+    /// An invalid ID, the state folder's lock or the file.
+    pub fn create(&self, id: &str) -> Result<bool> {
+        FileRegistry::workspace(&self.home, id).create()
+    }
+
+    /// Delete workspace `id`; its projects stay where they are, and in the other workspaces that list them.
+    ///
+    /// # Errors
+    /// `default`, no such workspace, the state folder's lock or the file.
+    pub fn delete(&self, id: &str) -> Result<()> {
+        FileRegistry::workspace(&self.home, id).delete()?;
+        self.forget(id);
+        Ok(())
+    }
+
+    /// Rename workspace `id` to `new`; the last opened follows it.
+    ///
+    /// # Errors
+    /// `default` on either side, an invalid or taken new ID, no such workspace, the state folder's lock or the file.
+    pub fn rename(&self, id: &str, new: &str) -> Result<()> {
+        FileRegistry::workspace(&self.home, id).rename(new)?;
+        self.forget(id);
+        if read_recent(&self.home)
+            .get("workspace")
+            .and_then(Value::as_str)
+            == Some(id)
+        {
+            self.set_recent(new, None)?;
+        }
+        Ok(())
+    }
+
+    fn forget(&self, id: &str) {
+        self.opened
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(id);
+    }
+
     /// The `default` workspace, which every project atm meets joins.
     ///
     /// # Panics
@@ -585,6 +627,53 @@ mod tests {
         assert_eq!(workspaces.ids(), vec!["default".to_string(), "work".into()]);
         assert_eq!(workspaces.get("work").unwrap().id(), "work");
         assert!(workspaces.get("..").is_none());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    #[test]
+    fn workspaces_are_made_renamed_and_deleted_but_default_stays() {
+        let home = state("manage");
+        let workspaces = Workspaces::at(&home);
+        assert!(workspaces.create("work").unwrap());
+        workspaces.opened("work").unwrap();
+        workspaces.rename("work", "client").unwrap();
+        assert_eq!(
+            workspaces.ids(),
+            vec!["default".to_string(), "client".into()]
+        );
+        assert_eq!(workspaces.recent(), "client");
+        assert!(workspaces.get("work").is_none());
+        assert!(matches!(
+            workspaces.rename("client", "default"),
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            workspaces.rename("default", "x"),
+            Err(Error::Refused(_))
+        ));
+        assert!(matches!(
+            workspaces.rename("nope", "x"),
+            Err(Error::NotFound(_))
+        ));
+        assert!(workspaces.create("other").unwrap());
+        assert!(matches!(
+            workspaces.rename("client", "other"),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            workspaces.rename("client", "../x"),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            workspaces.delete("default"),
+            Err(Error::Refused(_))
+        ));
+        workspaces.delete("client").unwrap();
+        assert!(matches!(
+            workspaces.delete("client"),
+            Err(Error::NotFound(_))
+        ));
+        assert_eq!(workspaces.recent(), "default");
         std::fs::remove_dir_all(&home).unwrap();
     }
 

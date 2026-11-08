@@ -1,15 +1,14 @@
-//! `atm project config|workflow|logo` and the dashboard's list of projects (`atm project list|add|remove|prune`), as
-//! the Python atm's `cli/commands/project.py` has them.
+//! `atm project config|workflow|logo`, as the Python atm's `cli/commands/project.py` has them.
 
 use std::path::Path;
 
 use atm_common::py::{py_str, truthy};
 use atm_common::{Error, Result};
+use atm_lib::Project;
 use atm_lib::code::default_base;
 use atm_lib::settings::{
     WorkflowChange, get_logo, get_workflow, set_logo, set_workflow, unset_logo,
 };
-use atm_lib::{Project, Workspaces};
 use clap::Args;
 use serde_json::{Map, Value, json};
 
@@ -245,112 +244,6 @@ pub fn logo(action: Option<&str>, path: Option<&str>, ctx: Context, cwd: &Path) 
                 print_json(&json!({"logo": relative}));
             } else {
                 println!("Logo set: {relative}");
-            }
-        }
-    }
-    Ok(())
-}
-
-fn describe_entry(entry: &Value) -> String {
-    format!(
-        "{}  {}  {}",
-        py_str(&entry["id"]),
-        py_str(&entry["name"]),
-        py_str(&entry["path"])
-    )
-}
-
-fn damaged_notice(result: &Value) {
-    if let Some(damaged) = result["damaged"].as_str() {
-        println!(
-            "The project list (workspaces/default.json) was unreadable: moved it to {damaged} and started an empty one."
-        );
-    }
-}
-
-/// `atm project list|add|remove|prune`: the projects the dashboard shows.
-///
-/// # Errors
-/// What the registry refuses (no such project, a folder without tasks.json, one that opted out), its lock or file.
-pub fn projects(action: &str, target: Option<&str>, ctx: Context, cwd: &Path) -> Result<()> {
-    let registry = Workspaces::open().default_workspace();
-    match action {
-        "add" => {
-            if dry(
-                ctx,
-                &format!(
-                    "add {} to the dashboard's projects",
-                    target.unwrap_or("this folder")
-                ),
-            ) {
-                return Ok(());
-            }
-            let result = registry.add_project(target, cwd)?;
-            if ctx.json {
-                print_json(&result);
-                return Ok(());
-            }
-            damaged_notice(&result);
-            let verb = if result["result"] == "added" {
-                "Added"
-            } else {
-                "Already registered"
-            };
-            println!("{verb}: {}", describe_entry(&result["project"]));
-        }
-        "remove" => {
-            let target = target.unwrap_or_default();
-            if dry(
-                ctx,
-                &format!("remove {target} from the dashboard's projects"),
-            ) {
-                return Ok(());
-            }
-            let result = registry.remove_project(target, cwd)?;
-            if ctx.json {
-                print_json(&result);
-            } else {
-                println!("Removed: {}", describe_entry(&result["removed"]));
-            }
-        }
-        "prune" => {
-            if dry(ctx, "drop the projects whose folder is gone") {
-                return Ok(());
-            }
-            let result = registry.prune()?;
-            if ctx.json {
-                print_json(&result);
-                return Ok(());
-            }
-            damaged_notice(&result);
-            let removed = result["removed"].as_array().cloned().unwrap_or_default();
-            if removed.is_empty() {
-                println!("Nothing to prune: every registered project is there.");
-            }
-            for e in &removed {
-                println!("Removed: {}", describe_entry(e));
-            }
-        }
-        _ => {
-            let result = registry.list_projects()?;
-            if ctx.json {
-                print_json(&result);
-                return Ok(());
-            }
-            damaged_notice(&result);
-            let listed = result["projects"].as_array().cloned().unwrap_or_default();
-            if listed.is_empty() {
-                println!(
-                    "No projects registered. `atm project add [PATH]` adds one; atm adds a project when it runs there."
-                );
-            }
-            for e in &listed {
-                let missing = if e["missing"] == true {
-                    "  (not found)"
-                } else {
-                    ""
-                };
-                println!("{}{missing}", describe_entry(e));
             }
         }
     }

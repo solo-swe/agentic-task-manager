@@ -1,5 +1,5 @@
-//! `atm project`: the project (status here; config, workflow, logo and the dashboard's list of projects in
-//! `project/settings.rs`), as the Python atm's `cli/commands/project.py` has them.
+//! `atm project`: the project (status here; config, workflow and logo in `project/settings.rs`), as the Python atm's
+//! `cli/commands/project.py` has them. The lists of projects are `atm workspace`'s (ADR-003 §3).
 
 use std::path::Path;
 
@@ -42,20 +42,6 @@ pub enum ProjectCommand {
         /// set: the image (SVG, PNG, WebP or ICO), relative to here
         path: Option<String>,
     },
-    /// List the projects the dashboard shows.
-    List,
-    /// Add a project to the dashboard's list.
-    Add {
-        /// The project's folder (default: here)
-        target: Option<String>,
-    },
-    /// Remove a project from the dashboard's list.
-    Remove {
-        /// The project's ID or path
-        target: String,
-    },
-    /// Drop the projects whose folder is gone from the dashboard's list.
-    Prune,
     /// The project's summary, as the dashboard's overview gets it (JSON).
     #[command(hide = true)]
     Summary,
@@ -95,10 +81,6 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
         ProjectCommand::Logo { action, path } => {
             settings::logo(action.as_deref(), path.as_deref(), ctx, cwd)
         }
-        ProjectCommand::List => settings::projects("list", None, ctx, cwd),
-        ProjectCommand::Add { target } => settings::projects("add", target.as_deref(), ctx, cwd),
-        ProjectCommand::Remove { target } => settings::projects("remove", Some(&target), ctx, cwd),
-        ProjectCommand::Prune => settings::projects("prune", None, ctx, cwd),
         ProjectCommand::Summary => {
             print_json(&atm_lib::summary::project_summary(&Project::open(cwd)?)?);
             Ok(())
