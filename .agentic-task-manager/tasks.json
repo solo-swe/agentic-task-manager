@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-454"
       ],
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:08:49Z",
+      "updated_at": "2026-11-08T08:09:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19955,7 +19955,9 @@
           "text": "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test? → Approved: add the dependencies (tauri 2.12.5, tauri-build, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript, @tauri-apps/cli and @tauri-apps/api 2.12.4).; OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later? → No: the app is part of cargo build/test. A separate backlog task reviews and refactors the CI jobs from what we learned.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-08T08:09:15Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-456",

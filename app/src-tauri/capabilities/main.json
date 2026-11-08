@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "The main window: the app's own commands, nothing else (no core or plugin APIs until a task needs one)",
+  "windows": ["main"],
+  "permissions": ["allow-version", "allow-list-projects"]
+}

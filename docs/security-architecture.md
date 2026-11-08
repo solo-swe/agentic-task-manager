@@ -687,6 +687,20 @@ Rust binary only, installed from a release (above). What that changes:
   e2e suite (411 pass). The screenshots are CI's this time: the local Docker scripts need a Linux atm since T-478
   (T-485).
 
+**The app's skeleton (T-455, `app/src-tauri/`).** A new entry point: the app's IPC commands, which the window's pages
+can call. T-461 reviews the finished app; until then the skeleton keeps to the Tauri guide:
+- **Only the window's own pages call commands.** Each command is in the app's manifest (`build.rs`), so it needs a
+  permission; the one capability (`capabilities/main.json`) gives the main window's local pages `version` and
+  `list_projects`, and no core or plugin API. A page from anywhere else, CompMD's sandbox frames included, is refused
+  (`the_main_windows_capability_lets_it_call_the_commands`).
+- **The dashboard server's policy** (I13) for the window's page: `default-src 'none'`, scripts only by hash (Tauri adds
+  the hashes of the bundled page's inline scripts) plus CompMD's runtime, frames only CompMD's, `connect-src` only
+  Tauri's IPC, no base, forms or framing.
+- **The commands read only the user's registry** (`atm project list`'s data), through atm-boot, as `atm serve` does;
+  nothing is written yet.
+- **Its dependencies** (approved): Tauri 2.12.5 (2.11.1 or later, CVE-2026-42184), the single-instance plugin, and
+  tauri-specta with specta, pre-releases pinned exactly. The CLI's release doesn't include them (`-p atm-cli`).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

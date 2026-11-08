@@ -47,7 +47,8 @@ jobs:
         working-directory: dashboard
       - run: pnpm run build
         working-directory: dashboard
-      - run: cargo build --release --locked --target ${{ matrix.target }}
+      # The CLI only: the app is released on its own (T-460)
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p atm-cli
 
       - name: Import the Developer ID certificate
         if: runner.os == 'macOS'

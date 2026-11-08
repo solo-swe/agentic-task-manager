@@ -1,7 +1,8 @@
 # atm in Rust (T-415, docs/porting-to-rust.md): one crate per layer (docs/layered-architecture.md), so the compiler
 # checks the layer rule. The rules: docs/guides/rust.md.
 [workspace]
-members = ["crates/*"]
+# The CLI's layers, and the atm app (T-455) on the same ones
+members = ["crates/*", "app/src-tauri"]
 resolver = "3"
 
 [workspace.package]
@@ -42,6 +43,15 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros
 # Windows only (T-480, approved): atm's own standard handles made non-inheritable before it starts a background
 # process, so the caller's pipes close when atm exits. Already in the tree through tokio and sysinfo
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
+# The atm app (T-455, docs/guides/tauri.md; approved): Tauri 2.11.1 or later (CVE-2026-42184), one instance, and its
+# commands' TypeScript types generated with tauri-specta. specta's crates are pre-releases, so pinned exactly
+serde = { version = "1", features = ["derive"] }
+tauri = "2.12.5"
+tauri-build = "2.7.4"
+tauri-plugin-single-instance = "2.5.5"
+specta = { version = "=2.0.0-rc.26", features = ["derive"] }
+tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
+specta-typescript = "=0.0.13"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

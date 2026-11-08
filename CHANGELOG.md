@@ -6,6 +6,17 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Added
+- **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one
+  instance (opening it again focuses its window), the user's registry of projects in its state, two commands
+  (`version`, `list_projects`) mapping to atm, their TypeScript types generated with tauri-specta
+  (`.generated/app/bindings.ts`), errors as one tagged enum, and a capability that lets only the main window's own
+  pages call them. The window shows the built dashboard under the dashboard server's policy, with `connect-src` for
+  IPC only; the dashboard talks to the app from T-457. `cargo build`/`test` build the app too: CI's Linux job installs
+  WebKitGTK, and the e2e binary and the release build only the CLI (`-p atm-cli`). New dependencies (approved):
+  `tauri`, `tauri-build`, `tauri-plugin-single-instance`, `tauri-specta`, `specta`, `specta-typescript`, and
+  `@tauri-apps/cli` (the icons, from `branding/atm-logo.png`).
+
 ### Fixed
 - **A release whose tasks merge in several PRs is released** (T-486): `atm vcs pushed --pr N` releases a planned
   release once every one of its tasks is merged, in that PR or an earlier one, with `released_at` its last merge;

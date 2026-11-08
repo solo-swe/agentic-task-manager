@@ -6,6 +6,10 @@ with Homebrew or a release download ([packaging/README.md](packaging/README.md))
 
 ## Layout
 - `crates/` — atm, one crate per layer (below); the binary is `atm-cli`'s `atm`
+- `app/src-tauri/` — the atm app (Tauri, T-455 onwards; the [Tauri guide](docs/guides/tauri.md)), a workspace member
+  on the same layers, so `cargo build` and `cargo test` build it too (on Linux with WebKitGTK's development
+  packages, as CI installs them). Its window shows the built dashboard (`dashboard/dist/`); its commands' TypeScript
+  types are written by its tests to `.generated/app/bindings.ts`
 - `skills/atm-*/SKILL.md` — the skills, their one source, portable to any agent harness (`name` and `description`
   only, a version check first, detail from `atm docs`; T-441), embedded in atm, which `atm agents install` writes
   where harnesses read them. Claude Code's pre-approved commands for each are in `skills/claude-code.json`
