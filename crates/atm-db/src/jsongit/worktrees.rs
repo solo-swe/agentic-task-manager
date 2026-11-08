@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::py::strip;
 use serde_json::{Value, json};
 
@@ -17,9 +19,8 @@ pub fn worktrees(root: &Path) -> Vec<Value> {
     if !git_dir.is_dir() {
         return Vec::new();
     }
-    let mut found = vec![
-        json!({"path": root.display().to_string(), "branch": head_branch(&git_dir), "main": true}),
-    ];
+    let mut found =
+        vec![json!({"path": root.shown(), "branch": head_branch(&git_dir), "main": true})];
     let linked = git_dir.join("worktrees");
     let mut names: Vec<String> = std::fs::read_dir(&linked)
         .map(|entries| {
@@ -44,7 +45,7 @@ pub fn worktrees(root: &Path) -> Vec<Value> {
             continue;
         };
         if path.is_dir() {
-            found.push(json!({"path": path.display().to_string(), "branch": head_branch(&admin), "main": false}));
+            found.push(json!({"path": path.shown(), "branch": head_branch(&admin), "main": false}));
         }
     }
     found

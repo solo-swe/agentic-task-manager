@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { ATM, baseEnv, git, makeProject, removeDir, runAtm, tempDir } from './helpers.mjs';
+import { ATM, baseEnv, git, makeProject, removeDir, runAtm, shown, tempDir } from './helpers.mjs';
 
 const T0 = '2026-05-01T10:00:00Z';
 const at = (minutes) => new Date(Date.parse(T0) + minutes * 60_000).toISOString().replace(/\.\d+Z$/, 'Z');
@@ -218,7 +218,7 @@ describe('claims', () => {
         live.map((c) => [c.task, c.agent, c.branch, c.worktree]),
         [
           ['T-001', 'alice', 'main', root],
-          ['T-002', 'bob', 'agent-2', wt],
+          ['T-002', 'bob', 'agent-2', shown(wt)],
         ],
       );
     } finally {

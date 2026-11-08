@@ -63,14 +63,14 @@ pub fn logo_file(root: &Path, relative: &str) -> Result<(PathBuf, &'static str)>
             "{relative}: a logo is an SVG, PNG, WebP or ICO image"
         )));
     };
-    let real_root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let real_root = atm_common::pathtext::canonical(root).unwrap_or_else(|_| root.to_path_buf());
     let joined = real_root.join(relative);
     // A missing file can't be resolved: its folder decides whether it is inside
-    let full = std::fs::canonicalize(&joined).unwrap_or_else(|_| {
+    let full = atm_common::pathtext::canonical(&joined).unwrap_or_else(|_| {
         let normal = normalize(&joined);
         match (normal.parent(), normal.file_name()) {
             (Some(parent), Some(name)) => {
-                std::fs::canonicalize(parent).map_or(normal.clone(), |p| p.join(name))
+                atm_common::pathtext::canonical(parent).map_or(normal.clone(), |p| p.join(name))
             }
             _ => normal,
         }

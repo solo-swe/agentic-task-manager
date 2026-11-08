@@ -6,6 +6,8 @@
 //! breaks the lock when its owner is provably gone (same host, process not running) or it is older than a minute.
 
 use std::path::{Path, PathBuf};
+
+use atm_common::Shown;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use std::{fs, io};
@@ -172,7 +174,7 @@ impl Drop for Lock {
 }
 
 fn io_error(path: &Path) -> impl Fn(io::Error) -> Error + '_ {
-    move |e| Error::failed(format!("{}: {e}", path.display()))
+    move |e| Error::failed(format!("{}: {e}", path.shown()))
 }
 
 /// Take the lock of `directory` (creating the folder if needed), waiting for it up to `timeout` seconds
@@ -197,10 +199,19 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
                 if Instant::now() >= deadline {
                     return Err(Error::failed(format!(
                         "timed out waiting for the lock {} (held by {})",
-                        lock.display(),
+                        lock.shown(),
                         describe_owner(owner.as_ref())
                     )));
                 }
+                std::thread::sleep(LOCK_POLL);
+            }
+            // Windows refuses a folder whose last holder is still removing it (its delete pending): the lock is
+            // about to be free, so try again
+            Err(e)
+                if cfg!(windows)
+                    && e.kind() == io::ErrorKind::PermissionDenied
+                    && Instant::now() < deadline =>
+            {
                 std::thread::sleep(LOCK_POLL);
             }
             Err(e) => return Err(io_error(&lock)(e)),

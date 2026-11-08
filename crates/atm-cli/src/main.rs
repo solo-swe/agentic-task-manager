@@ -293,8 +293,9 @@ fn run(args: &[OsString]) -> u8 {
         json: cli.json,
         dry_run: cli.dry_run,
     };
+    // On Windows the real, long form (no 8.3 short names), as the project's root is: atm-common's `pathtext::real`
     let cwd = match std::env::current_dir() {
-        Ok(cwd) => cwd,
+        Ok(cwd) => atm_common::pathtext::real(&cwd),
         Err(e) => {
             report(&format!("can't read the current folder: {e}"), 1, as_json);
             return 1;

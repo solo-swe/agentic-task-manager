@@ -1,3 +1,0 @@
-[
-  "merge.test.mjs > merge driver (real git merges) > atm db init registers the driver and .gitattributes; it is idempotent"
-]

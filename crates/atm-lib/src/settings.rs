@@ -238,7 +238,8 @@ fn relative_to(path: &Path, base: &Path) -> String {
 pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String> {
     let relative = match root_of(project) {
         Some(root) => {
-            let real_root = std::fs::canonicalize(&root).unwrap_or(root);
+            // atm-common's `canonical`: on Windows without `\\?\`, so it compares with the paths under it
+            let real_root = atm_common::pathtext::canonical(&root).unwrap_or(root);
             let relative = relative_to(&normalize(&cwd.join(path)), &real_root);
             logo_file(&real_root, &relative)?;
             relative

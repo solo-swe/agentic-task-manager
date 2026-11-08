@@ -4,6 +4,8 @@
 //! record in the user's atm folder, its pid); the server itself is atm-api's, run as `atm _serve <home> <port>`.
 
 use std::path::{Path, PathBuf};
+
+use atm_common::Shown;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
@@ -129,7 +131,7 @@ struct ServerLock(PathBuf);
 
 impl ServerLock {
     fn take(home: &Path) -> Result<Self> {
-        ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.display())))?;
+        ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
         let lock = home.join(SERVER_LOCK);
         let deadline = Instant::now() + SERVER_LOCK_WAIT;
         loop {
@@ -148,7 +150,7 @@ impl ServerLock {
                     }
                     std::thread::sleep(POLL);
                 }
-                Err(e) => return Err(Error::failed(format!("{}: {e}", lock.display()))),
+                Err(e) => return Err(Error::failed(format!("{}: {e}", lock.shown()))),
             }
         }
         let _ = std::fs::write(
@@ -172,10 +174,10 @@ fn start_server(home: &Path, port: u64) -> Result<Map<String, Value>> {
         .create(true)
         .append(true)
         .open(&log_path)
-        .map_err(|e| Error::failed(format!("{}: {e}", log_path.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", log_path.shown())))?;
     let errors = log
         .try_clone()
-        .map_err(|e| Error::failed(format!("{}: {e}", log_path.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", log_path.shown())))?;
     let own_binary = std::env::current_exe()
         .map_err(|e| Error::failed(format!("can't find atm's own binary: {e}")))?;
     let mut command = std::process::Command::new(own_binary);
@@ -187,13 +189,7 @@ fn start_server(home: &Path, port: u64) -> Result<Map<String, Value>> {
         .stdin(Stdio::null())
         .stdout(log)
         .stderr(errors);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
-    let mut child = command
-        .spawn()
+    let mut child = crate::commands::detach::spawn_detached(&mut command)
         .map_err(|e| Error::failed(format!("can't start the dashboard server: {e}")))?;
     let deadline = Instant::now() + START_WAIT;
     while Instant::now() < deadline {
@@ -210,7 +206,7 @@ fn start_server(home: &Path, port: u64) -> Result<Map<String, Value>> {
     }
     Err(Error::failed(format!(
         "the dashboard server did not start; see {}",
-        log_path.display()
+        log_path.shown()
     )))
 }
 
@@ -395,7 +391,7 @@ fn outdated(record: &Map<String, Value>) -> bool {
     let theirs_root = text("plugin_root");
     if !theirs_root.is_empty() {
         let own = std::env::current_exe()
-            .map(|p| p.display().to_string())
+            .map(|p| p.shown())
             .unwrap_or_default();
         if real_path(&theirs_root) != real_path(&own) {
             return false;

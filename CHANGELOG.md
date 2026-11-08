@@ -23,6 +23,22 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   rebuild of the page) are gone.
 - **`pnpm run dev`'s REST API is the Rust atm** (T-478): `atm _serve` from `target/debug/` (`cargo build` first),
   restarted when the binary is rebuilt; `dev-api.test.mjs` runs it from a copy of the binary.
+- **The suite runs only against the binary** (T-478, lands with T-454): no `ATM_IMPL`, `--rust` or
+  `rust-expected-failures.json` (the last expected failure, the merge driver's command, now expects the binary's
+  path); `expectRust` became `expect`; the Python-only tests went (`build`, `vendor`, `lib` with `tests/lib/`,
+  `test_architecture`, `bin`, and the two tests of the plugin folder in `serve.test.mjs`); `run.mjs` always runs each
+  file in its own process with a watchdog, and prints a failing file's TAP even with `--quiet`. The e2e fixture runs
+  the binary (`pnpm run test:e2e` builds it; CI's e2e job takes one built on Ubuntu 22.04). CI's Python jobs are gone,
+  and the benchmark runs against the binary. The suite on Windows is T-480's (40 failures on CI's first run there).
+
+### Fixed
+- **atm on Windows** (T-480): paths in atm's output and files use `/` and the real, long form of each folder (never an
+  8.3 short name), so a file under the project is never "outside the repository" (atm-common's `pathtext`: `Shown`,
+  `real`, `canonical`); `HOME` is the home folder when set, as on Unix; text files are LF in every checkout (a root
+  `.gitattributes`); and `atm service` and `atm claim hold` start their background process without the caller's
+  pipes (`windows-sys`, the one `unsafe` in atm, approved), so the shell that ran them doesn't wait for it. The lock
+  retries a folder Windows still has pending delete. On CI's Windows runner the suite went from 40 failures to a
+  handful; it stays off there until T-482 (the `claim hold` watcher, serve, the dev server) and T-481 (stress).
 
 ### Added
 - **The public skills repo, `solo-swe/skills`** (T-453, [ADR-002](docs/adr/ADR-002-atm-public-skills-repo.md)):

@@ -9,6 +9,8 @@
 //! touched. Harnesses are a table: Claude Code for now; another is one more entry (T-413).
 
 use std::fs;
+
+use atm_common::Shown;
 use std::path::{Path, PathBuf};
 
 use atm_common::home::{absolute, atm_home, ensure_home, in_home, write_text_atomic};
@@ -114,18 +116,18 @@ fn entry_path(entry: &serde_json::Map<String, Value>) -> &str {
 
 fn write_record(mut entries: Vec<serde_json::Map<String, Value>>) -> Result<()> {
     let home = atm_home();
-    ensure_home(&home).map_err(|e| Error::failed(format!("can't make {}: {e}", home.display())))?;
+    ensure_home(&home).map_err(|e| Error::failed(format!("can't make {}: {e}", home.shown())))?;
     entries.sort_by(|a, b| entry_path(a).cmp(entry_path(b)));
     let installed: Vec<Value> = entries.into_iter().map(Value::Object).collect();
     write_text_atomic(
         &record_path(),
         &(to_json(&json!({"installed": installed})) + "\n"),
     )
-    .map_err(|e| Error::failed(format!("can't write {}: {e}", record_path().display())))
+    .map_err(|e| Error::failed(format!("can't write {}: {e}", record_path().shown())))
 }
 
 fn io(path: &Path) -> impl Fn(std::io::Error) -> Error + '_ {
-    move |e| Error::failed(format!("{}: {e}", path.display()))
+    move |e| Error::failed(format!("{}: {e}", path.shown()))
 }
 
 fn write_skill(folder: &Path, text: &str) -> Result<()> {
@@ -219,7 +221,7 @@ pub fn install_skills(
                 write_skill(&source, &text)?;
             }
             let path = folder.join(name);
-            let key = path.display().to_string();
+            let key = path.shown();
             let mut how = if copy || scope == "project" || !h.links {
                 "copy"
             } else {
@@ -271,7 +273,8 @@ pub fn install_skills(
 pub fn uninstall_skills(harness: Option<&str>, project_dir: Option<&Path>) -> Result<Vec<String>> {
     let wanted: Vec<&str> = harnesses(harness)?.into_iter().map(|h| h.id).collect();
     let project =
-        project_dir.map(|p| format!("{}{}", absolute(p).display(), std::path::MAIN_SEPARATOR));
+        // `/`: the paths recorded are as atm shows them, on every platform
+        project_dir.map(|p| format!("{}/", absolute(p).shown()));
     let mut removed = Vec::new();
     let mut kept = Vec::new();
     for entry in read_record() {
@@ -324,7 +327,7 @@ pub fn skills_status(project_dir: Option<&Path>, version: &str) -> Vec<Value> {
                 .iter()
                 .map(|(name, core)| {
                     let path = folder.join(name);
-                    let key = path.display().to_string();
+                    let key = path.shown();
                     let entry = record.iter().find(|e| entry_path(e) == key);
                     let state = if !lexists(&path) {
                         "missing"
@@ -351,7 +354,7 @@ pub fn skills_status(project_dir: Option<&Path>, version: &str) -> Vec<Value> {
                 "label": h.label,
                 "detected": in_home(h.detect).is_dir(),
                 "scope": scope,
-                "folder": folder.display().to_string(),
+                "folder": folder.shown(),
                 "version": version,
                 "skills": skills,
             }));

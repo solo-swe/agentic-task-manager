@@ -12,6 +12,8 @@ mod pages;
 mod routes;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
+
+use atm_common::Shown;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -266,7 +268,7 @@ pub fn serve(home: &Path, first_port: u16) -> Result<(), String> {
             });
         }
         let plugin_root = std::env::current_exe()
-            .map(|p| p.display().to_string())
+            .map(|p| p.shown())
             .unwrap_or_default();
         let record = json!({
             "pid": std::process::id(),

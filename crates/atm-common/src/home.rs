@@ -5,10 +5,14 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// The user's home folder (`HOME`, or the platform's own), or None when there isn't one.
+/// The user's home folder (`HOME`, or the platform's own), or None when there isn't one. `HOME` comes first on
+/// Windows too, where Rust's own reads only `USERPROFILE` (Git for Windows sets `HOME` to the same folder).
 #[must_use]
 pub fn home_dir() -> Option<PathBuf> {
-    std::env::home_dir()
+    std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(PathBuf::from)
+        .or_else(std::env::home_dir)
 }
 
 /// `~/<rest>` as a path: in the home folder, or the text as it is when there is none.

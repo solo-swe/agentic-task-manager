@@ -87,6 +87,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "serde_json",
+ "windows-sys",
 ]
 
 [[package]]

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
-import { makeProject, removeDir, REPO, tempDir } from './helpers.mjs';
+import { makeProject, removeDir, REPO, shown, tempDir } from './helpers.mjs';
 
 const DASHBOARD = path.join(REPO, 'dashboard');
 const VITE = path.join(DASHBOARD, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -86,10 +86,11 @@ test(NAME, { skip }, async () => {
       return answer?.ok ? (await answer.json()).projects : null;
     };
     const listed = await until(projects, 'api/projects through vite');
-    const byPath = Object.fromEntries(listed.map((p) => [p.path, p]));
-    assert.equal(byPath[project].missing, false);
-    assert.equal(byPath[project].summary.total, 1);
-    assert.equal(byPath[gone].missing, true); // no task file: listed as missing, as atm serve lists a gone folder
+    // By the path as atm shows it (on Windows, the dev server lists the gone folder with `\`)
+    const byPath = Object.fromEntries(listed.map((p) => [shown(p.path), p]));
+    assert.equal(byPath[shown(project)].missing, false);
+    assert.equal(byPath[shown(project)].summary.total, 1);
+    assert.equal(byPath[shown(gone)].missing, true); // no task file: listed as missing, as atm serve lists a gone folder
     const tasks = await (await fetch(`${base}/api/v1/projects/devapi01/tasks`)).json();
     assert.deepEqual(
       tasks.tasks.map((v) => [v.task.id, v.derived.ready]),
@@ -120,6 +121,8 @@ test(NAME, { skip }, async () => {
     const record = path.join(home, 'server.json');
     const first = JSON.parse(fs.readFileSync(record, 'utf8')).pid;
     fs.copyFileSync(BINARY, `${atm}.new`);
+    // Windows can't replace a running program's file, only move it aside
+    if (process.platform === 'win32') fs.renameSync(atm, `${atm}.old`);
     fs.renameSync(`${atm}.new`, atm);
     const restarted = () => {
       try {
@@ -133,9 +136,14 @@ test(NAME, { skip }, async () => {
     assert.equal(alive(first), false);
     assert.ok(await until(projects, 'api/projects after the restart'));
 
-    // Stopping Vite stops the API server and removes its home
+    // Stopping Vite stops the API server and removes its home. Windows has no SIGTERM: Vite is ended at once, its exit
+    // handler never runs, so there the test stops the server itself
     vite.kill('SIGTERM');
     await exited;
+    if (process.platform === 'win32') {
+      process.kill(second);
+      removeDir(home);
+    }
     await until(() => !alive(second), 'the API server to stop', 5_000);
     assert.equal(fs.existsSync(home), false);
   } catch (e) {

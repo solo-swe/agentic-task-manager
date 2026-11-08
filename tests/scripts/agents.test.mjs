@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { REPO, makeProject, removeDir, runAtm, tempDir } from './helpers.mjs';
+import { REPO, makeProject, removeDir, runAtm, shown, tempDir } from './helpers.mjs';
 
 const SKILLS = fs
   .readdirSync(path.join(REPO, 'skills'), { withFileTypes: true })
@@ -43,7 +43,7 @@ describe('atm agents', () => {
         const text = skillText(link);
         assert.match(text, new RegExp(`^---\\nname: ${name}\\n`));
         assert.ok(text.includes(`\nallowed-tools: ${ALLOWED[name]}\n---\n`), name);
-        assert.match(r.stdout, new RegExp(`installed: ${link} \\(link\\)`));
+        assert.match(r.stdout, new RegExp(`installed: ${shown(link)} \\(link\\)`));
       }
       assert.match(r.stdout, new RegExp(`${SKILLS.length} written, 0 unchanged`));
 
@@ -69,7 +69,7 @@ describe('atm agents', () => {
       assert.equal(stale.find((s) => s.skill === SKILLS[0]).state, 'stale');
       assert.equal(stale.find((s) => s.skill === SKILLS[1]).state, 'copied');
       const fix = t.agents(['install', '--copy']);
-      assert.match(fix.stdout, new RegExp(`updated: ${one} \\(copy\\)`));
+      assert.match(fix.stdout, new RegExp(`updated: ${shown(one)} \\(copy\\)`));
       assert.match(fix.stdout, /1 written, 6 unchanged/);
     } finally {
       t.done();
@@ -86,7 +86,7 @@ describe('atm agents', () => {
 
       const r = t.agents(['install']);
       assert.equal(r.code, 1);
-      assert.match(r.stderr, new RegExp(`left alone: ${mine} is there already, and atm didn't put it there`));
+      assert.match(r.stderr, new RegExp(`left alone: ${shown(mine)} is there already, and atm didn't put it there`));
       assert.equal(skillText(mine), 'my own\n');
       assert.ok(fs.lstatSync(path.join(t.skills, 'atm-do-task')).isSymbolicLink());
       assert.equal(
@@ -114,7 +114,7 @@ describe('atm agents', () => {
       assert.equal(r.code, 0, r.stderr);
       const copy = path.join(t.cwd, '.claude/skills/atm-do-task');
       assert.ok(fs.statSync(copy).isDirectory() && !fs.lstatSync(copy).isSymbolicLink());
-      assert.match(r.stdout, new RegExp(`installed: ${copy} \\(copy\\)`));
+      assert.match(r.stdout, new RegExp(`installed: ${shown(copy)} \\(copy\\)`));
       const status = JSON.parse(t.agents(['status', '--project', '--json']).stdout);
       assert.deepEqual(
         status.map((h) => h.scope),

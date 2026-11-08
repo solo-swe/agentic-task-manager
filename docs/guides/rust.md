@@ -9,7 +9,10 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 - **Pinned toolchain** in `rust-toolchain.toml`. Upgrades happen in their own commit.
 - **Edition 2024**, set once in `[workspace.package]`.
 - **Lints** are set in the workspace `Cargo.toml` and inherited with `[lints] workspace = true`:
-  - `unsafe_code` is forbidden;
+  - `unsafe_code` is forbidden. The one exception, approved (T-480): `atm-cli`'s `commands/detach.rs` calls the
+    Windows API (`windows-sys`) so a background process doesn't inherit the caller's pipes; atm-cli therefore states
+    the workspace's lints itself, with `unsafe_code` denied, and that module alone allows it, each call with a
+    `// SAFETY:` comment. Anything else unsafe is proposed first;
   - `clippy::all` and `clippy::pedantic` are on, with the few noisy pedantic lints allowed there, never in code;
   - warnings fail CI.
 - `#[allow(...)]` in code needs a short reason next to it.

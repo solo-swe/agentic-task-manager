@@ -89,7 +89,7 @@ Commands (run in `dashboard/`):
 - `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
 - `pnpm run check` — svelte-check, ESLint, Prettier
 - `pnpm run build:cli` — build `plugin/scripts/atm.py` from `atm-cli/` (see below)
-- `pnpm run test:scripts` — atm-cli's test suite (see below)
+- `pnpm run test:scripts` — atm's test suite (builds the binary; see below)
 - `pnpm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
 - `pnpm run verify` — everything above (needs Docker for the screenshots)
 
@@ -116,28 +116,21 @@ changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 refuses an import the layer rule forbids, with no exceptions. atm-lib's public surface, for other tools, is two
 modules: `atm.lib` (`atm/lib/__init__.py`, its `__all__`) and `atm.boot` (`open_project`, `open_memory_project`,
 `open_registry`). Their names and signatures are frozen in `tests/lib/public-surface.json`: a change fails
-`test_public.py` until that list is updated, and goes in the changelog. atm-lib's
-unit tests are in `tests/lib/` (`unittest`, on the in-memory store; run by `pnpm run test:scripts`).
+`test_public.py` until that list is updated, and goes in the changelog. Nothing tests the Python atm any more
+(T-478); it goes with T-454.
 
-Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `pnpm run test:scripts`) drive the built atm-cli
-through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of
-`scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
-git merges). CI runs the suite with Python 3.9 and a current version.
-
-## The Rust port (`Cargo.toml`, `crates/`)
-atm is being ported to Rust ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)):
-one crate per layer under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`,
-whose binary is `atm`), the toolchain pinned in `rust-toolchain.toml`, the workspace's version the plugin's
-(`check-versions.mjs` checks it). Until the switch the Python atm is the spec: the same suite runs against the
-binary.
+## atm in Rust (`Cargo.toml`, `crates/`)
+atm ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)): one crate per layer
+under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`, whose binary is
+`atm`), the toolchain pinned in `rust-toolchain.toml`, atm's version the workspace's.
 - `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, `cargo deny check`
-  (from the repository root).
-- `pnpm run test:scripts:rust` in `dashboard/` (or `node tests/scripts/run.mjs --rust` after `cargo build`): the suite
-  against the Rust `atm`. The tests it doesn't pass yet are in `tests/scripts/rust-expected-failures.json`; the run
-  fails on any other failure, and on a listed test that passes: take it out of the list in the change that makes it
-  pass. `--write-expected` rewrites the list from a run, never to hide a failure.
-- `pnpm run test:e2e:rust` in `dashboard/`: the e2e suite with the Rust `atm` giving the fixture its task views and
-  summaries (`ATM_IMPL=rust`, as the scripts suite).
+  (from the repository root; `pnpm run build` in `dashboard/` first, as atm embeds the dashboard).
+- Tests (`tests/scripts/`, `pnpm run test:scripts` in `dashboard/`, or `node tests/scripts/run.mjs` after
+  `cargo build`) drive the binary exactly as users run it, each file in its own process with a watchdog. Prefer
+  data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of `scenarios.test.mjs`); use
+  `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency, git merges). CI runs the
+  suite on Linux and macOS, and on Windows once T-482 is done.
+- The e2e suite's fixture gets its task views and summaries from the binary too (`pnpm run test:e2e` builds it).
 
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the

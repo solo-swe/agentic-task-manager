@@ -30,12 +30,14 @@ const HEAD_BYTES: usize = 16384;
 /// The `CompMD` runtime's folder under the server's assets.
 pub const COMPMD_ASSETS: &str = "/assets/compmd/";
 
-/// A short ID of an atm folder: its real path, hashed. The server gives it in whoami and its record, so the CLI can
-/// tell its own folder's servers from another folder's without the path going over HTTP.
+/// A short ID of an atm folder: its real path as atm shows it (with `/`, on Windows too), hashed. The server gives it
+/// in whoami and its record, so the CLI can tell its own folder's servers from another folder's without the path
+/// going over HTTP.
 #[must_use]
 pub fn home_id(home: &Path) -> String {
-    let real = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
-    sha256_hex(real.display().to_string().as_bytes())[..16].to_string()
+    use crate::pathtext::Shown;
+    let real = crate::pathtext::canonical(home).unwrap_or_else(|_| home.to_path_buf());
+    sha256_hex(real.shown().as_bytes())[..16].to_string()
 }
 
 /// The `content` of the `<meta name="…">` tag in `head`, "" without one.

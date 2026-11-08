@@ -11,7 +11,6 @@ import path from 'node:path';
 import { after, describe, test } from 'node:test';
 import {
   ATM,
-  IMPL,
   PLUGIN_BUILD,
   PLUGIN_VERSION,
   REPO,
@@ -20,14 +19,12 @@ import {
   makeProject,
   removeDir,
   runAtm,
+  shown,
   tempDir,
 } from './helpers.mjs';
 import { pageCsp } from '../../dashboard/tests/e2e/csp.mjs';
 
 const TASKS = { meta: { id: 'abcd1234', project: 'Serve' }, tasks: [] };
-// Tests of the Python plugin's own folder (a copy of plugin/ whose files they delete or rebuild): they run the Python
-// atm whatever ATM_IMPL says, so the Rust run (T-443) skips them; the Rust atm embeds its dashboard
-const PLUGIN_ONLY = IMPL === 'rust' && 'tests the Python plugin’s own folder, not the Rust atm';
 // A different range per run: ports of the previous run can still be in TIME_WAIT, and the server deliberately doesn't
 // use SO_REUSEADDR (on macOS it would let it share a port another server is listening on).
 // Below 32768, where Linux starts handing out ports to outgoing connections (32768–60999; macOS from 49152): the
@@ -112,7 +109,12 @@ function rawGet(port, urlPath, host) {
 }
 
 /** The ID a server gives for its atm folder (common/dashboard.py home_id): the folder's real path, hashed */
-const homeId = (dir) => createHash('sha256').update(fs.realpathSync(dir)).digest('hex').slice(0, 16);
+// As atm-common's `home_id`: the real path as atm shows it, hashed
+const homeId = (dir) =>
+  createHash('sha256')
+    .update(shown(fs.realpathSync.native(dir)))
+    .digest('hex')
+    .slice(0, 16);
 
 describe('serve', () => {
   test('start, reuse, status, stop', async () => {
@@ -1096,26 +1098,15 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
-  test('/assets/ serves the plugin’s CompMD runtime, read-only: plain names, .js, .wasm and .html, no symlinks (T-284)', async () => {
-    // A copy of the plugin, so a symlink and a stray file can be put in its asset folder
-    const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
-    fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
-    cleanups.push(() => removeDir(path.dirname(plugin)));
-    const [version] = fs.readdirSync(path.join(plugin, 'assets/compmd'));
-    const folder = path.join(plugin, 'assets/compmd', version);
-    const secret = path.join(tempDir('atm-secret-'), 'secret.js');
-    fs.writeFileSync(secret, 'secret()');
-    cleanups.push(() => removeDir(path.dirname(secret)));
-    fs.symlinkSync(secret, path.join(folder, 'linked.js'));
-    fs.symlinkSync(path.dirname(secret), path.join(folder, 'linked-dir'));
-    fs.writeFileSync(path.join(folder, 'notes.txt'), 'not an asset');
+  test('/assets/ serves the CompMD runtime atm embeds, read-only: plain names, .js, .wasm and .html (T-284)', async () => {
+    // What the build made and atm embedded (crates/atm-api/build.rs leaves out symlinks and other kinds of files)
+    const [version] = fs.readdirSync(path.join(REPO, 'dashboard/dist/assets/compmd'));
+    const folder = path.join(REPO, 'dashboard/dist/assets/compmd', version);
     const atmHome = home();
     const root = project();
     const port = ports();
-    // The atm under test: the Python plugin's copy, or the Rust atm, which serves what it embedded from the build
-    // (the planted files above aren't in it: they must be refused all the same)
     const run = (args) =>
-      spawnSync(IMPL === 'rust' ? ATM : path.join(plugin, 'scripts/atm'), args, {
+      spawnSync(ATM, args, {
         cwd: root,
         encoding: 'utf8',
         env: { ...baseEnv(), ATM_HOME: atmHome },
@@ -1642,48 +1633,10 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
-  test(
-    'the dashboard is served from memory: deleting the plugin folder later changes nothing',
-    { skip: PLUGIN_ONLY },
-    async () => {
-      // A copy of the plugin, so its dashboard file can be deleted (as Claude Code removes old plugin versions)
-      const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
-      fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
-      cleanups.push(() => removeDir(path.dirname(plugin)));
-      const atmHome = home();
-      const root = project();
-      const port = ports();
-      const run = (args) =>
-        spawnSync(path.join(plugin, 'scripts/atm'), args, {
-          cwd: root,
-          encoding: 'utf8',
-          env: { ...baseEnv(), ATM_HOME: atmHome },
-        });
-      assert.equal(run(['service', '--port', String(port)]).status, 0);
-      fs.rmSync(path.join(plugin, 'templates/tasks-dashboard.html'));
-      const page = await fetch(`http://localhost:${port}/`);
-      assert.equal(page.status, 200);
-      assert.match(await page.text(), /atm-dashboard-version/);
-      run(['service', 'stop']);
-    },
-  );
-
-  /** Stamps `version` and `build` into the dashboard of the plugin copy at `plugin`, as a rebuild would. */
-  function stamp(plugin, version, build) {
-    const page = path.join(plugin, 'templates/tasks-dashboard.html');
-    fs.writeFileSync(
-      page,
-      fs
-        .readFileSync(page, 'utf8')
-        .replace(/(name="atm-dashboard-version" content=")[^"]*/, `$1${version}`)
-        .replace(/(name="atm-dashboard-build" content=")[^"]*/, `$1${build}`),
-    );
-  }
-
-  /** For the Rust run, another install's atm as a stand-in: `service --port P` starts a server that answers as an atm
-   * server of `version` and `build` (whoami, the page's build tag), records itself in ATM_HOME as atm does, and stops
-   * on SIGTERM; anything else does nothing. (The copied Python plugin's server doesn't start on CI's macOS runners.) */
-  function standIn(version, build) {
+  /** Another install's atm, as a stand-in: `service --port P` starts a server that answers as an atm server of
+   * `version` and `build` (whoami, the page's build tag), records itself in ATM_HOME as atm does, and stops on
+   * SIGTERM; anything else does nothing. */
+  function pluginAt(version, build = 'old-build') {
     const server = `
       const fs = require('fs'), http = require('http'), path = require('path');
       const { PORT, VERSION, BUILD, HOME_ID, ATM_HOME } = process.env;
@@ -1729,29 +1682,6 @@ describe('serve', () => {
     };
   }
 
-  /** A copy of the plugin whose dashboard claims to be `version` (and `build`), as another install would be. */
-  function pluginAt(version, build = 'old-build') {
-    if (IMPL === 'rust') return standIn(version, build);
-    const plugin = path.join(tempDir('atm-plugin-'), 'plugin');
-    fs.cpSync(path.join(REPO, 'plugin'), plugin, { recursive: true });
-    cleanups.push(() => removeDir(path.dirname(plugin)));
-    stamp(plugin, version, build);
-    const run = (args, cwd, atmHome) => {
-      const r = spawnSync(path.join(plugin, 'scripts/atm'), args, {
-        cwd,
-        encoding: 'utf8',
-        env: { ...baseEnv(), ATM_HOME: atmHome },
-      });
-      // A server that didn't start says why in its log: the assertion on the exit code shows it (`status, 0, stderr`)
-      if (r.status !== 0) {
-        const log = path.join(atmHome, 'server.log');
-        r.stderr += fs.existsSync(log) ? `\nserver.log:\n${fs.readFileSync(log, 'utf8')}` : '';
-      }
-      return r;
-    };
-    run.plugin = plugin;
-    return run;
-  }
   /** That a run of another install's atm worked, with its stderr (and the server's log) when it didn't */
   const succeeded = (r) => assert.equal(r.status, 0, r.stderr);
 
@@ -1787,29 +1717,6 @@ describe('serve', () => {
     assert.equal((await whoami(port)).build, await pageBuild(port));
     atm(['service', 'stop'], root);
   });
-
-  test(
-    'serve --refresh restarts a server whose own dashboard was rebuilt under the same version',
-    { skip: PLUGIN_ONLY },
-    async () => {
-      const atmHome = home();
-      const root = project();
-      const port = ports();
-      const install = pluginAt(PLUGIN_VERSION, 'first-build');
-      succeeded(install(['service', '--port', String(port)], root, atmHome));
-      const old = await whoami(port);
-      assert.equal(old.build, 'first-build');
-      stamp(install.plugin, PLUGIN_VERSION, 'second-build');
-      const refreshed = install(['service', '--refresh'], root, atmHome);
-      assert.equal(refreshed.status, 0, refreshed.stderr);
-      assert.match(refreshed.stdout, /restarted/);
-      const now = await whoami(port);
-      assert.notEqual(now.pid, old.pid);
-      assert.equal(now.build, 'second-build');
-      assert.equal(await pageBuild(port), 'second-build');
-      install(['service', 'stop'], root, atmHome);
-    },
-  );
 
   test('serve --refresh restarts a server with an older dashboard, on the same port', async () => {
     const atmHome = home();

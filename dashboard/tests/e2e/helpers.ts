@@ -94,14 +94,15 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
-/** This checkout's atm-cli */
-const ATM = path.resolve(import.meta.dirname, '../../../plugin/scripts/atm.py');
-/** This checkout's Rust atm (`cargo build`), which the suite runs with ATM_IMPL=rust, as tests/scripts does (T-469) */
-const RUST_ATM = path.resolve(import.meta.dirname, '../../../target/debug/atm');
+/** This checkout's atm (`cargo build` first), as tests/scripts runs it (T-478) */
+const ATM = path.resolve(
+  import.meta.dirname,
+  `../../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`,
+);
 
-/** The command line that runs atm with `args`: the Python atm, or the Rust one with ATM_IMPL=rust */
+/** The command line that runs atm with `args` */
 function atm(args: string[]): string[] {
-  return process.env.ATM_IMPL === 'rust' ? [RUST_ATM, ...args] : ['python3', ATM, ...args];
+  return [ATM, ...args];
 }
 
 /** What atm serve would list as the summary of a project holding `body` as its tasks.json: atm-cli's own
