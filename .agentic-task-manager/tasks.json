@@ -21562,7 +21562,7 @@
       "description": "The release exports `skills/` to a public skills repo, tagged with atm's version, so `npx skills add <owner>/<repo>` works ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §6). The repo's name and owner are Hakan's call: ask before creating anything outside this repository.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-441",
         "T-452"
@@ -21571,16 +21571,18 @@
         "packaging/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T01:09:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The Rust port"
+      "sprint": "The Rust port",
+      "started_at": "2026-11-08T01:09:04Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-454",
