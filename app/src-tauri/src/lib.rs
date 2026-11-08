@@ -4,13 +4,14 @@
 //! edited by hand). The window may call only the commands its capability lists (`capabilities/main.json`).
 
 pub mod commands;
+pub mod links;
 
 use tauri::Manager;
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
-    list_workspaces, logo, project_tasks, search, subscribe_project, subscribe_workspace,
-    unsubscribe, version, worktrees,
+    list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
+    subscribe_workspace, unsubscribe, version, worktrees,
 };
 
 /// The app's commands, for Tauri and for the TypeScript types (each also in `build.rs`'s manifest and the main
@@ -33,23 +34,30 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         unsubscribe,
         agents_status,
         connect_agents,
+        subscribe_links,
     ])
 }
 
-/// Start the app: one instance (opening it again focuses the running window), the user's registry in its state.
+/// Bring the main window to the front (opened again, or by a link).
+fn focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+/// Start the app: one instance (opening it again focuses the running window), the user's registry in its state, the
+/// `atm://` links it is opened with sent to its page (T-459).
 ///
 /// # Panics
 /// When Tauri can't start (no window system, a broken build).
 pub fn run() {
     let commands = commands();
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // First, so a second instance stops before it sets anything up
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            focus(app);
         }))
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
@@ -57,8 +65,20 @@ pub fn run() {
             commands.mount_events(app);
             Ok(())
         })
-        .run(context())
+        .build(context())
         .expect("the atm app");
+    app.run(|app, event| {
+        // macOS hands the app the links it is opened with (the scheme is in Info.plist), started by one or running
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Opened { urls } = event {
+            let state = app.state::<AppState>();
+            if urls.iter().any(|url| state.links().open(url.as_str())) {
+                focus(app);
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        let _ = (app, event);
+    });
 }
 
 /// The app's context (`tauri.conf.json`, the capabilities, the dashboard's files), made once: it can be generated only

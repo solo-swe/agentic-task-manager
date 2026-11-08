@@ -20109,7 +20109,7 @@
       "description": "A button (Claude Code for now, from the harness table) that calls the same atm-lib code as `atm agents install` through a Tauri command, shows what it wrote where, and the status. Never runs on its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-457",
         "T-450"
@@ -20119,7 +20119,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:54:08Z",
+      "updated_at": "2026-11-08T18:59:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20130,7 +20130,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T18:54:08Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "4a8e2846a62ff5810493dfc037683e7e2f9c8b6d",
+      "completed_at": "2026-11-08T18:59:08Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:59:08Z",
+          "kind": "outcome",
+          "text": "`agents_status` and `connect_agents` app commands over atm-lib’s skills_status/install_skills; footer button (app only) opens the `?agents` dialog; connects only on click and lists paths written/refused; browser shows `atm agents install`. Unit 1237, e2e 419.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-459",
@@ -20143,7 +20154,7 @@
       "description": "`atm://projects/<id>[/<tab>]?task=…&doc=…` opens the app at that page, parsed by the dashboard's address code (T-429's `lib/address.ts`), never fetched or run.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-457"
       ],
@@ -20152,16 +20163,18 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T18:59:20Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:59:20Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-460",
@@ -21325,7 +21338,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-460"
       ],
@@ -21336,7 +21349,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-08T01:23:30Z",
+      "updated_at": "2026-11-08T18:59:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21345,7 +21358,16 @@
           "from": "2026-11-08T01:21:48Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:59:09Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard?",
+        "The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in?",
+        "Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone."
+      ],
+      "blocked_at": "2026-11-08T18:59:19Z"
     },
     {
       "id": "T-484",

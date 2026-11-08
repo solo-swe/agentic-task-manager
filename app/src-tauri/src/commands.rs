@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::links::Links;
 use atm_lib::Workspaces;
 use atm_lib::query::Filters;
 use atm_lib::workspaces::{Member, Workspace};
@@ -31,6 +32,8 @@ pub struct AppState {
     workspaces: Workspaces,
     subscriptions: Mutex<HashMap<u32, Watcher>>,
     next: AtomicU32,
+    /// The deep links the app was opened with (T-459)
+    links: Links,
 }
 
 impl AppState {
@@ -41,7 +44,14 @@ impl AppState {
             workspaces,
             subscriptions: Mutex::new(HashMap::new()),
             next: AtomicU32::new(1),
+            links: Links::default(),
         }
+    }
+
+    /// Its deep links.
+    #[must_use]
+    pub fn links(&self) -> &Links {
+        &self.links
     }
 
     /// Its workspaces.
@@ -521,6 +531,20 @@ pub async fn connect_agents(harness: String) -> Result<Json, AppError> {
     Ok(Json(
         json!({"written": installed.written, "refused": installed.refused}),
     ))
+}
+
+/// Be told on `channel` the dashboard address of each `atm://` link the app is opened with (T-459); the answer is the
+/// one it was started with, if any.
+///
+/// # Errors
+/// None: a `Result`, as every async command with state is.
+#[tauri::command]
+#[specta::specta]
+pub async fn subscribe_links(
+    state: State<'_, AppState>,
+    channel: Channel<String>,
+) -> Result<Option<String>, AppError> {
+    Ok(state.links.subscribe(channel))
 }
 
 /// End a subscription. Whether there was one.

@@ -18,6 +18,7 @@
     "allow-subscribe-project",
     "allow-unsubscribe",
     "allow-agents-status",
-    "allow-connect-agents"
+    "allow-connect-agents",
+    "allow-subscribe-links"
   ]
 }

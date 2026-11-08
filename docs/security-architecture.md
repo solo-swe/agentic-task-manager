@@ -738,6 +738,15 @@ calls only `agents_status`, a read (`app.spec.ts` checks the calls). The main wi
 from anywhere else is refused (`the_main_windows_capability_lets_it_call_the_commands`). atm serve has no such route:
 the browser's dialog gives the command to run. T-461 reviews it with the rest of the app.
 
+**The app's deep links (T-459).** A new entry point: any program or page can open an `atm://` link. A link is only
+ever an address for the dashboard's router: `app/src-tauri/src/links.rs` turns `atm://<path>?<query>` into
+`/<path>?<query>` only when the path is one of the dashboard's pages (`projects`, `board`, `progress`, `agents`, `w`),
+without `.` or `..` segments, empty segments, a fragment, or a character outside an address's (a link over 4 KB is
+refused); the page then navigates to it only if `isPagePath` says it is one of its own (`lib/api/links.ts`). Nothing
+is fetched, read or run because of a link: it chooses which page shows, as typing the address would. The link's
+address reaches the page on its own channel (`subscribe_links`, in the main window's capability). Tests:
+`links.rs`'s, `tests/unit/links.test.ts`, `app.spec.ts` "deep links". T-461 reviews it with the rest of the app.
+
 **The app's DMG and cask (T-460).** A new release artifact and a new way onto users' PATH:
 - **Signed and notarized as the CLI is**, with the same secrets, read only in the macOS jobs (I20): Tauri's bundler
   signs every binary in `atm.app` (the bundled `atm` CLI too, hardened runtime) and notarizes the app;

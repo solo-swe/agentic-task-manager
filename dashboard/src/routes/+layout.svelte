@@ -24,6 +24,8 @@
   import { page } from '$app/state';
   import App from '../App.svelte';
   import { addressOf, legacyParams } from '../lib/address';
+  import { inApp } from '../lib/api/http';
+  import { listenForLinks } from '../lib/api/links';
   import { arrived, navigate, useRouter, type EntryState } from '../lib/navigation';
   import { dashboard } from '../lib/state.svelte';
 
@@ -43,7 +45,11 @@
     if (legacyParams(location.hash) || addressOf(location) !== shown) navigate(addressOf(location), { replace: true });
   }
 
-  onMount(settle);
+  onMount(() => {
+    settle();
+    // In the atm app, its atm:// links open their page here (T-459)
+    if (inApp) void listenForLinks((address) => navigate(address)).catch((e) => console.error('Deep links:', e));
+  });
 
   afterNavigate(({ type }) => {
     arrived();

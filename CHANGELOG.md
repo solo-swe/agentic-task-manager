@@ -32,6 +32,12 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **The app's deep links** (T-459): `atm://projects/<id>[/<tab>]?task=…&doc=…` (and `atm://w/<w>/…`, `atm://board`, …)
+  open the app at that page, whether the link starts it or it is running. The scheme is in the app's `Info.plist`;
+  macOS hands the app its links (`RunEvent::Opened`, no plugin), `app/src-tauri/src/links.rs` checks each is one of
+  the dashboard's pages (no other scheme, path, `..`, fragment or character an address doesn't hold) and sends its
+  address on the page's channel (`subscribe_links`; the link that started the app waits for it). The page goes there
+  only if it is one of its own pages (`lib/api/links.ts`): an address for its router, never fetched or run.
 - **The app's "Connect your agents" button** (T-458): in the atm app, the footer's *Connect your agents* opens a
   dialog (`?agents`) with each harness atm knows (Claude Code), whether it is found and connected, and a button that
   runs the same atm-lib code as `atm agents install` for it (the new `connect_agents` command, with `agents_status`),

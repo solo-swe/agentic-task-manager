@@ -451,6 +451,31 @@ export class TasksServer {
 
   /** The paths of requests the page made to the server's routes (api/, p/), when it plays the app (asApp) */
   httpRequests: string[] = [];
+  /** The address of the deep link the app was started with (link), and the page's channel for later ones */
+  private startLink: string | null = null;
+  private linkChannel: number | null = null;
+  private linkMessages = 0;
+
+  /** The app was started by a deep link: its address, as the app makes it from `atm://…` (T-459) */
+  link(address: string) {
+    this.startLink = address;
+    return this;
+  }
+
+  /** A deep link while the app runs: its address on the page's channel */
+  async pushLink(address: string) {
+    if (this.linkChannel === null) throw new Error('the page has not subscribed to links');
+    const index = this.linkMessages++;
+    await this.page.evaluate(
+      ([id, message, at]) => {
+        const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+          .__atmCallbacks;
+        callbacks[id as number]({ index: at, message });
+      },
+      [this.linkChannel, address, index] as const,
+    );
+  }
+
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
@@ -493,10 +518,18 @@ export class TasksServer {
         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
       };
       w.isTauri = true;
+      // The callbacks Tauri's IPC calls back (a channel's messages), by ID, so a test can send on a channel
+      const callbacks: Record<number, (message: unknown) => void> = {};
+      w.__atmCallbacks = callbacks;
+      let next = 0;
       w.__TAURI_INTERNALS__ = {
         invoke: (command: string, args: unknown) =>
           w.__atmInvoke(command, args ?? {}).then((r) => ('error' in r ? Promise.reject(r.error) : r.ok)),
-        transformCallback: () => 0,
+        transformCallback: (callback: (message: unknown) => void) => {
+          next += 1;
+          callbacks[next] = callback;
+          return next;
+        },
         unregisterCallback: () => {},
         convertFileSrc: (path: string) => path,
         metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
@@ -537,6 +570,16 @@ export class TasksServer {
         return body
           ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
           : unknown;
+      case 'subscribe_links': {
+        // The channel: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its `id`) as Playwright passes it
+        const channel = args.channel;
+        this.linkChannel = Number(
+          typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id,
+        );
+        const first = this.startLink;
+        this.startLink = null;
+        return { ok: first };
+      }
       case 'agents_status':
         this.agentCalls.push(command);
         return { ok: [this.harnessStatus()] };

@@ -37,8 +37,11 @@ atm's own rules for the atm app, the desktop distribution proposed in
   command and answers with a `Response`; nothing above the client layer knows which it got.
 - **Images come through the commands too**, as `data:` URLs (`api/images.ts`), which the page's CSP already allows;
   no `blob:` or custom protocol. A document's relative images show their alt text in the app for now.
-- **One window**, switching workspaces in place (Hakan, T-457); a window per workspace can come with the deep links
-  (T-459).
+- **One window**, switching workspaces in place (Hakan, T-457).
+- **Deep links** (`atm://…`, T-459) are addresses for the page's router: the app checks them (`src/links.rs`), the
+  page checks them again (`lib/api/links.ts`) and navigates; never fetched or run. On macOS the scheme is in
+  `Info.plist` and the links come as `RunEvent::Opened`, without a plugin; Windows and Linux need the deep-link plugin
+  when the app ships there.
 
 ## Security
 
