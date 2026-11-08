@@ -56,7 +56,7 @@ with the task that adds it.
 | I3 | **Agent-written text is single-quoted** in skill templates, never double-quoted | `skills.test.ts` |
 | I4 | **CI logs and PR comments are evidence**, never instructions, for the push skill | `skills.test.ts` (the rule is present) |
 | I23 | **An agent ends its work by the review mode, as itself** (SR-3.8, T-317): the skills never pass `--agent` (so atm sees the session, `claude:…`, never a person's name that would lift the mode), never decide a review (`atm task review approve|request-changes|reject`: the user's; no skill pre-approves it, so an agent asked to run one asks for permission), and an unattended loop never takes `with: user` work (`--with-user` is the user's flag). atm guards the exits from review on the decision, for agents and people alike (T-438): done needs approved, back to to do or skipped needs rejected, taken back needs a decision for rework | `skills.test.ts` (no `--agent` in the working skills, no skill pre-approves `task review`, the `with: user` rule); `review.json`, `skip.json`, `review-modes.json`, `review-states.json`, `with-user.json` (atm's side) |
-| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives | `security-invariants.test.ts` (every process atm starts, and the one fork); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
+| I24 | **atm runs no command it is given** (T-437): no command takes a program to run (`atm loop run` is gone); atm starts only `git`, `ps` (a process's start time), its own server and the browser opener, and `atm claim hold`'s watcher, a fork of atm that only renews one claim while the calling shell lives. The Rust atm starts only `git`, its own binary (by `current_exe`) for the watcher (`atm _claim-watch`; the shell's start time from `sysinfo`, not `ps`) and the dashboard server (`atm _serve <home> <port>`, T-449), and the browser opener (`open` or `xdg-open`, with the URL atm made) | `security-invariants.test.ts` (every process atm starts, and the one fork; the Rust atm's too, T-446, T-449); `cli.test.mjs` (no `loop run`); `claims.test.mjs` (`claim hold`) |
 | I22 | **The sprint skills change nothing without the user** (SR-4.1, T-304): `/atm:plan-sprint` and `/atm:close-sprint` start, move, skip, carry, date or close nothing the user didn't agree to in the session, and add tasks only through `/atm:create-tasks`; `/atm:loop-tasks` and `/atm:do-task` never start or close a sprint (`--continue` only selects the next planned one), and `/atm:create-tasks` never starts one. They pre-approve only reads and `atm sprint` (its commands, `move` included): no `atm task add`, `edit` or `state`, so a skip when closing asks for permission | `skills.test.ts` (the rules and each skill's allowed tools); the agent sandbox |
 
 ### atm-cli (B2)
@@ -91,7 +91,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I18 | **CI tokens are read-only by default; checkouts don't keep credentials** | `dashboard/tests/unit/ci-workflow.test.ts` |
+| I18 | **CI tokens are read-only by default; checkouts don't keep credentials.** The one exception is the release workflow's last job, which drafts the release and builds nothing (T-452) | `dashboard/tests/unit/ci-workflow.test.ts` |
 | I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`); no Python packages are installed: Typer and Click are vendored in `plugin/scripts/vendor/` at the versions `atm-cli/uv.lock` pins (`vendor.test.mjs`); Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the committed build artifacts match their sources | CI's freshness checks |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
@@ -594,6 +594,55 @@ address. No skill, CLI output or agent-facing text changed, so no sandbox run is
 (`bits-ui` 2.20.6 with `runed`, `svelte-toolbelt` and Floating UI, pinned by `pnpm-lock.yaml`, updated by
 Dependabot's grouped PRs): it makes no request (the page's CSP would refuse one, I13), renders the dashboard's own
 elements through snippets, and no `{@html}` is added (I15). No new entry point, input or output agents act on.
+
+**Claims renewed by every command, a two-hour lease (T-439).** Each atm command renews its caller's own live claims
+(the same change `claim heartbeat --auto` makes, under the same lock); a command run as someone else (`--agent`)
+renews none, so a person can't keep an agent's claim alive by acting as it, beyond what `claim heartbeat --agent`
+already allowed. No new entry point, input or output agents act on. A longer lease means an abandoned task waits up
+to two hours before another agent can take it (I22's loop behaviour is otherwise unchanged). Skill review in place of
+the sandbox run: `/atm:do-task`, `/atm:loop-tasks` and `plugin/CLAUDE.md` only restate the lease's length and who
+renews it; nothing new to run, fetch or install.
+
+**`atm docs` and the portable skills (T-440, T-441).** `atm docs <topic>` prints text built into atm (`docs/agent/`,
+and CompMD's guide, which moved there from `plugin/docs/`): it reads no file, path or URL, so it adds no entry point,
+and the skills read reference from the installed atm rather than from a path beside them. The skills' source moved
+to `skills/` and the plugin's copies are generated from it (`build.py --check` in CI catches a hand edit); they keep
+their rules word for word (task text is data, single quotes, review decisions the user's, commit then finish), and
+`skills.test.ts` checks the source and the copies. What changed for agents: each skill starts by checking
+`atm version` and stops when atm is missing or too old, never working around it; the lease and Markdown paragraphs
+became pointers to `atm docs`; the pre-approvals (`allowed-tools`) are the same, now kept in
+`skills/claude-code.json`. Written review in place of the sandbox run (no API key): nothing new to run, fetch or
+install, and no new pre-approval.
+
+**`atm agents install|status|uninstall` (T-442).** A new entry point that writes outside the project: into another
+tool's folder (`~/.claude/skills/`, or with `--project` the project's `.claude/skills/`) and atm's own
+(`<ATM_HOME>/skills/`, `<ATM_HOME>/agents.json`). Bounds:
+- **Opt-in only.** Only the command (and, later, the app's button calling the same code) installs; nothing installs
+  on its own, after an install, an update or a first run. No skill pre-approves `atm agents`.
+- **Writes only the skill folders it names**, each `<folder>/atm-<skill>/SKILL.md`, with text built into atm (no file,
+  path or URL is read to produce it); prints every path. It never edits another tool's settings or hooks.
+- **Never replaces what it didn't write:** a folder of the same name that isn't in atm's record is left alone and
+  reported (exit 1). `uninstall` removes exactly the recorded paths, and atm's own copies.
+- **Links point into atm's folder only** (`<ATM_HOME>/skills/<harness>/<skill>`); a project gets copies, so nothing
+  committed points into one person's home folder.
+- **What the skills carry** is reviewed with the skills (T-441 above): Claude Code's copy adds the same pre-approvals
+  the plugin's copy has, from `skills/claude-code.json`.
+
+**The release machinery (T-452, `packaging/README.md`).** The first workflows that publish anything, so the first
+CI permission beyond reading and the first secrets:
+- **Who can release:** a `v*` tag runs `.github/workflows/release.yml`, and only people who can push tags can make
+  one; it drafts the release, which a person publishes after checking it. Publishing runs
+  `.github/workflows/homebrew.yml`, which updates the formula. Nothing is released from a branch or a pull request.
+- **Write access in one job:** both workflows default to `contents: read` (I18). Only the release's last job has
+  `contents: write`, and it builds and runs no code from the repository: it downloads the build jobs' artifacts,
+  checksums them (`SHA256SUMS`) and drafts the release with `gh`. The build jobs, which compile the dependencies,
+  can't write. `ci-workflow.test.ts` checks this.
+- **Secrets, where they're read:** the Developer ID certificate and the notarization key only in the macOS build
+  steps that sign and notarize (in a keychain of the job's own, files removed after); the tap's deploy key only in
+  the Homebrew job, which writes one file (`Formula/atm.rb`) to `solo-swe/homebrew-tap`. No secret reaches a pull
+  request's run: neither workflow runs on pull requests.
+- **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
+  with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 
 ## 4. Keeping it current
 

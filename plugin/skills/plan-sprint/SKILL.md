@@ -6,12 +6,20 @@ description: >
   "plan a sprint", "plan the next sprint", "what goes into the next sprint", "start a sprint", or "sprint planning".
 allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint:*), Bash(atm task list:*), Bash(atm task details:*), Bash(atm task deps:*)
 ---
+<!-- Generated from skills/atm-plan-sprint/SKILL.md by atm-cli/build.py: edit that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). -->
 
 # Plan a Sprint
 
 You plan a sprint **with the user**, in the conversation: you show where things stand and propose; the user
 decides. A sprint is a named set of tasks the agents work through next (`/atm:loop-tasks` takes the active sprint's
 tasks); tasks in no sprint are the **backlog**.
+
+(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write
+`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
+
+**First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
+0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 **Never read or edit `tasks.json` or `tasks-archive.json` directly** (no Read, cat, grep, jq or scripts on them):
 every read and every change goes through `atm`.
@@ -32,9 +40,6 @@ From the project root, run atm-cli, the plugin's `atm` command:
 ```bash
 atm db migrate
 ```
-
-(The plugin's `bin/` is on your PATH while the plugin is enabled. If the shell says `atm: command not found`, write
-`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
 
 Relay what it prints, except "Nothing to migrate.". It turns a project's phases into sprints the first time it runs
 with this version: say so if it did, and that none of them is active yet. If it exits with code 127, Python 3.9 or

@@ -62,6 +62,9 @@
         "Usage: atm [OPTIONS] COMMAND [ARGS]...",
         "atm --dir PATH <command> runs as if started in PATH."
       ]
+    },
+    "expectRust": {
+      "stdoutIncludes": ["Usage: atm [OPTIONS] <COMMAND>", "atm --dir PATH <command> runs as if started in PATH."]
     }
   }
 ]

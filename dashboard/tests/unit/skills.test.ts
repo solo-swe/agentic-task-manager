@@ -1,5 +1,6 @@
 // @vitest-environment node
-// The skills' frontmatter (plugin/skills/*/SKILL.md): what a skill pre-approves runs without a permission prompt
+// The skills: their one source in skills/ (portable, T-441), and the Claude Code plugin's copies in plugin/skills/,
+// generated from it by atm-cli/build.py, whose frontmatter says what a skill pre-approves (runs without a prompt)
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -30,6 +31,39 @@ describe('skills pre-approve no command runner (T-220, docs/security-review.md F
       }
     });
   }
+});
+
+describe('the portable skills (skills/, T-441): one copy for every harness', () => {
+  const SOURCE = new URL('../../../skills/', import.meta.url);
+  const sources = readdirSync(SOURCE, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => ({ name: d.name, text: readFileSync(new URL(`${d.name}/SKILL.md`, SOURCE), 'utf8') }));
+  const claudeCode = JSON.parse(readFileSync(new URL('claude-code.json', SOURCE), 'utf8'))['allowed-tools'];
+
+  it('the same seven as the plugin, each named atm-<name>', () => {
+    expect(sources.map((s) => s.name).sort()).toEqual(skills.map((s) => `atm-${s.name}`).sort());
+    expect(Object.keys(claudeCode).sort()).toEqual(sources.map((s) => s.name).sort());
+  });
+
+  for (const { name, text } of sources) {
+    it(`${name}: the portable core only, a version check first, nothing a single harness reads`, () => {
+      // Frontmatter: name and description; Claude Code's pre-approvals live in skills/claude-code.json
+      expect(text).toMatch(new RegExp(`^---\\nname: ${name}\\ndescription: >\\n(?:  .*\\n)+---\\n`));
+      expect(text).toMatch(/\*\*First, check atm:\*\* run `atm version`/);
+      expect(text).not.toMatch(/CLAUDE_SKILL_DIR|CLAUDE_PLUGIN_ROOT|\$ARGUMENTS|\/atm:[a-z]|allowed-tools/);
+      // Single quotes for agent-written text, as in the plugin's copies
+      expect(text.split('\n').filter((line) => /(--(note|question|answer|reason|title|agent)) "/.test(line))).toEqual(
+        [],
+      );
+    });
+  }
+
+  for (const { name, text } of skills)
+    it(`plugin/skills/${name}: generated from skills/atm-${name}, with its pre-approvals and the plugin's own atm`, () => {
+      expect(text).toContain(`<!-- Generated from skills/atm-${name}/SKILL.md by atm-cli/build.py`);
+      expect(text.split('---')[1]).toContain(`allowed-tools: ${claudeCode[`atm-${name}`]}`);
+      expect(text).toContain('"${CLAUDE_SKILL_DIR}/../../bin/atm"');
+    });
 });
 
 describe('agent-written text is single-quoted in the templates (T-222, docs/security-review.md F3)', () => {

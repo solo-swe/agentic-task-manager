@@ -1,7 +1,7 @@
 // The archive notice (D-5.4): atm's own suggestion to archive (atm-cli's archive_hint, DM-5.3), which the API sends
 // with the tasks (T-372), so the dashboard and the agents agree on when tasks.json has grown too big. The dashboard
 // only words it.
-import type { ArchiveHint } from './generated/types';
+import type { ArchiveHint } from '$generated/types';
 
 function formatSize(bytes: number): string {
   return bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : `${Math.floor(bytes / 1024)} KB`;

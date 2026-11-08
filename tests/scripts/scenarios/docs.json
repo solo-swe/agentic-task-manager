@@ -1,0 +1,45 @@
+[
+  {
+    "name": "atm docs lists the topics with what each covers, anywhere (no project needed)",
+    "setup": { "files": {} },
+    "args": ["docs"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": [
+        "rules ",
+        "what an agent always does, and never does, with atm",
+        "commands ",
+        "states ",
+        "claims ",
+        "tasks "
+      ]
+    }
+  },
+  {
+    "name": "--json: the topics with their summaries",
+    "setup": { "files": {} },
+    "args": ["docs", "--json"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["\"topic\": \"rules\"", "\"summary\": \"which agent works on which task, and how long\""]
+    }
+  },
+  {
+    "name": "a topic prints its reference, as Markdown",
+    "setup": { "files": {} },
+    "args": ["docs", "claims"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": ["# Claims: which agent works on which task, and how long", "atm claim hold <id> && <command>"]
+    }
+  },
+  {
+    "name": "an unknown topic is a usage error that lists the topics",
+    "setup": { "files": {} },
+    "args": ["docs", "nope"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["no topic 'nope' (atm docs lists them: claims, commands, compmd, rules, states, tasks)"]
+    }
+  }
+]

@@ -30,7 +30,8 @@ function holdLock(root, seconds, env = {}) {
   const child = spawn(ATM, ['_lock-test', String(seconds)], { cwd: root, env: { ...process.env, ...env } });
   let stderr = '';
   child.stderr.on('data', (d) => (stderr += d));
-  const done = new Promise((resolve) => child.on('exit', (code) => resolve({ code, stderr })));
+  // `close`, not `exit`: all of stderr is read by then
+  const done = new Promise((resolve) => child.on('close', (code) => resolve({ code, stderr })));
   return { child, done };
 }
 
@@ -110,7 +111,9 @@ describe('lock', () => {
     try {
       const holder = holdLock(root, 30);
       const owner = path.join(lockDir(root), 'owner.json');
-      while (!fs.existsSync(owner)) await new Promise((r) => setTimeout(r, 20));
+      // until the holder has the lock, or has exited without it (then the assertion below says so)
+      while (!fs.existsSync(owner) && holder.child.exitCode === null) await new Promise((r) => setTimeout(r, 20));
+      assert.ok(fs.existsSync(owner), `the holder exited without taking the lock: ${holder.child.exitCode}`);
       holder.child.kill('SIGTERM');
       await holder.done;
       assert.equal(fs.existsSync(lockDir(root)), false);

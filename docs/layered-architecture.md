@@ -42,7 +42,7 @@ flowchart TD
     subgraph Shared[" "]
         direction LR
         Common["common<br/><i>JSON Schema, Python model,<br/>vocabularies, errors, helpers</i>"]
-        TSTypes["Generated TS types<br/><i>dashboard/src/lib/generated/</i>"]
+        TSTypes["Generated TS types<br/><i>.generated/dashboard/</i>"]
     end
 
     Dashboard -- "HTTP only" --> API
@@ -367,13 +367,16 @@ unions):
   `additionalProperties` of one type, and any of these that may be null: `"type": [T, "null"]` or `anyOf` with
   `{"type": "null"}`, generated as `Optional[...]` and `T | null`; T-382), and every object type is defined in
   `$defs` or is a file's own type;
-- **TypeScript** for the Dashboard (`dashboard/src/lib/generated/types.ts`, formatted as Prettier wants it), which
-  `src/lib/types.ts` builds on;
-- **Python** `TypedDict`s (`atm-cli/atm/common/types.py`, the functional form, since keys such as `from` are
-  keywords), so `atm.py` stays standard-library only;
+- **TypeScript** for the Dashboard (`.generated/dashboard/types.ts`, formatted as Prettier wants it, imported as
+  `$generated/types`), which `src/lib/types.ts` builds on;
+- **Python** `TypedDict`s (`.generated/atm-cli/atm/common/types.py`, the functional form, since keys such as `from`
+  are keywords), so `atm.py` stays standard-library only;
 - **the kinds and the default vocabularies** (statuses, types, priorities, the default priority) as data,
-  `atm-cli/atm/common/schema/vocabularies.json`, generated into `common/vocabularies.py` and
-  `dashboard/src/lib/generated/vocabularies.ts`: atm-cli's `model.py` and the dashboard's `vocab.ts` keep no copy;
+  `atm-cli/atm/common/schema/vocabularies.json`, generated into `.generated/atm-cli/atm/common/vocabularies.py` and
+  `.generated/dashboard/vocabularies.ts`: atm-cli's `model.py` and the dashboard's `vocab.ts` keep no copy;
+- **where they go:** `.generated/` at the repository's root, never committed (`atm-cli/build.py` writes it; the
+  dashboard's scripts and `tests/scripts/run.mjs` run it first). Only what the plugin ships is committed
+  (`plugin/scripts/atm.py`, `plugin/skills/`), since users install the plugin from git;
 - **checks:** the Python validators (`check_*` in `model.py`) stay hand-written (the standard library has no schema
   validator); the test suite validates every fixture, every scenario's output and every API response against the
   schemas, so code and schemas can't drift;

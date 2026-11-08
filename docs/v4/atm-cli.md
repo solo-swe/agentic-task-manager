@@ -47,7 +47,8 @@ atm-cli/
     vcs/          # interface.py (Vcs) and git.py (git as the code's version control)
     lib/          # atm-lib: every business action and query; __init__.py is its public surface
     boot/         # opening a project (picks the store and the vcs), the actor, what only the JSON-in-git store has
-    cli/          # argparse (main.py) and one module per area of commands, rendering text and --json
+    cli/          # the command tree (Typer): app.py its root, commands/<group>.py one module per
+                  # top-level command (task, db, project, ...), rendering text and --json; main.py the entry
     api/          # the REST API: server.py, the server process (its routes), run by plugin/scripts/atm-serve
 ```
 

@@ -5,6 +5,7 @@ import { svelteTesting } from '@testing-library/svelte/vite';
 import { changelogModule } from './build/changelog.ts';
 import { compmd } from '@compmd/vite';
 import { compmdModule } from './build/compmd.ts';
+import { GENERATED } from './build/generated.ts';
 import { helpModule } from './build/help.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
 
@@ -25,6 +26,8 @@ export default defineConfig({
     helpModule(help),
     pluginInfoModule(pluginJson, changelog),
   ],
+  // vite.config.ts's SvelteKit alias, without SvelteKit
+  resolve: { alias: { $generated: GENERATED } },
   test: {
     environment: 'jsdom',
     include: ['tests/unit/**/*.test.ts'],

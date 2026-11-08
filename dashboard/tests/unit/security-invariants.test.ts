@@ -36,7 +36,7 @@ describe('security invariants (docs/security-architecture.md)', () => {
     );
     // os.fork starts no program: atm's own watcher (`atm claim hold`), which only renews a claim
     expect(filesIn('atm-cli/atm', '.py').filter((file) => /os\.fork\(/.test(read(file)))).toEqual([
-      'atm-cli/atm/cli/claims.py',
+      'atm-cli/atm/cli/commands/claim.py',
     ]);
     expect(starts.sort()).toEqual(
       [
@@ -47,6 +47,32 @@ describe('security invariants (docs/security-architecture.md)', () => {
         'cli/serve.py: [opener',
         'cli/serve.py: server_command(home',
       ].sort(),
+    );
+  });
+
+  it('I24 in the Rust atm: it starts only git, itself (the claim’s watcher, the dashboard server) and the browser opener (T-446, T-449)', () => {
+    // Every place that starts a process, and the program it starts; the shell's start time comes from sysinfo, not ps
+    const starts = filesIn('crates', '.rs').flatMap((file) =>
+      [...read(file).matchAll(/Command::new\(\s*([^\s,)]+)/g)].map(
+        (call) => `${file.replace(/^crates\//, '')}: ${call[1]}`,
+      ),
+    );
+    expect(starts.sort()).toEqual(
+      [
+        'atm-cli/src/commands/claim.rs: own_binary',
+        'atm-cli/src/commands/maintenance.rs: own_binary',
+        'atm-cli/src/commands/maintenance.rs: opener',
+        'atm-db/src/git.rs: "git"',
+        'atm-vcs/src/lib.rs: "git"',
+      ].sort(),
+    );
+    // The watcher and the server are started with atm's own path, never one from the command line or a task; the
+    // browser opener is `open` or `xdg-open`, with the URL atm made
+    for (const file of ['claim.rs', 'maintenance.rs']) {
+      expect(read(`crates/atm-cli/src/commands/${file}`)).toContain('let own_binary = std::env::current_exe()');
+    }
+    expect(read('crates/atm-cli/src/commands/maintenance.rs')).toMatch(
+      /let opener = if cfg!\(target_os = "macos"\) \{\s*"open"\s*\} else \{\s*"xdg-open"\s*\};/,
     );
   });
 

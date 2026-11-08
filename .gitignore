@@ -11,9 +11,15 @@ Thumbs.db
 
 # Node (if used for testing)
 node_modules/
+# pnpm's package cache, which the Docker screenshot scripts' `pnpm install` leaves at the mounted checkout's root
+/.pnpm-store/
 
 # Build artifacts
 mnt/
+# What atm-cli/build.py generates for the build and the dashboard (what the plugin ships is committed)
+/.generated/
+# Rust (T-443): cargo's builds
+/target/
 
 # Python bytecode (tests/lib imports atm-cli's modules as a package)
 __pycache__/

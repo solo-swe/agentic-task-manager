@@ -2,6 +2,12 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.32.0] - 2026-11-06
+
+- This is the last version of atm as a Claude Code plugin: next, atm comes as its own program and puts its skills into your agents.
+- To switch, follow "Moving to the atm CLI" in atm's README; your projects, tasks and dashboard carry over as they are.
+- An agent keeps its task while it works, even in tools without atm's hooks: anything it asks atm renews its claim.
+
 ## [0.31.0] - 2026-11-06
 
 - atm's commands are grouped by what they act on, and one command moves a task to any state: fewer to remember.

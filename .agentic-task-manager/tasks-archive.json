@@ -1,6 +1,6 @@
 {
   "meta": {
-    "archived_at": "2026-11-06T05:52:31Z"
+    "archived_at": "2026-11-07T01:05:40Z"
   },
   "tasks": [
     {
@@ -2041,6 +2041,803 @@
       ],
       "components": [
         "docs"
+      ]
+    },
+    {
+      "id": "T-062",
+      "name": "Helper launcher and twin runtimes skeleton",
+      "type": "infra",
+      "description": "### The launcher\nCreate `plugin/scripts/atm` (POSIX sh, executable):\n- if `python3` ≥ 3.9 is on `PATH`, run `atm.py`;\n- else if `node` ≥ 18, run `atm.mjs`;\n- else print what to install and exit `127`.\n\n`ATM_RUNTIME=python|node` forces one (used by tests; an error if that runtime is missing).\n\n### The two runtimes\nCreate `plugin/scripts/atm.py` (stdlib only) and `plugin/scripts/atm.mjs` (Node built-ins only), with:\n- argument parsing and `--help`;\n- `version`: prints the plugin version read from `../.claude-plugin/plugin.json`;\n- `paths --json`: prints the project root (git top level, or cwd), the task dir, the `tasks.json` path, the dashboard path, and the legacy location if any (`.agentic-task-manager/` first, then `docs/tasks.json`, then `tasks.json` in the root).\n\n**Identical output from both.** Keep the two files structured the same way (same function names and order), so they are easy to keep equal.\n",
+      "requirements": [
+        "FR-8.1",
+        "FR-6.10",
+        "NFR-2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "plugin/scripts/atm",
+        "plugin/scripts/atm.py",
+        "plugin/scripts/atm.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:22Z",
+      "started_at": "2026-10-23T16:45:00Z",
+      "completed_at": "2026-10-23T16:46:13Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-063",
+      "name": "Conformance test suite for both runtimes, in CI",
+      "type": "test",
+      "description": "### The runner\nCreate `tests/scripts/` at the repo root: a **dependency-free Node runner** (`node:test`) that runs every scenario against the launcher once with `ATM_RUNTIME=python` and once with `ATM_RUNTIME=node`.\n\n### Scenarios\n- Scenarios are data (`tests/scripts/scenarios/*.json`: setup files, an optional `git init`, the command, the expected exit code, stdout/JSON, and the expected files afterwards), so they are **language-neutral**.\n- Helpers create temp dirs and repos.\n- Cover T-062's `version` and `paths` (each location, legacy detection, git vs non-git).\n\n### Wiring\n- Add `npm run test:scripts` in `dashboard/package.json` (runs `node ../tests/scripts/run.mjs`) and include it in `npm run verify`.\n- CI: a new `scripts` job with a matrix of (python 3.9, node 18) and (python 3.13, node 24) running the suite.\n- Document it in the root `CLAUDE.md` (layout, commands, *change both implementations together*).\n",
+      "requirements": [
+        "FR-8.1a",
+        "NFR-2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-062"
+      ],
+      "files": [
+        "tests/scripts/run.mjs",
+        "tests/scripts/scenarios/",
+        "dashboard/package.json",
+        ".github/workflows/ci.yml",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:22Z",
+      "started_at": "2026-10-23T16:46:29Z",
+      "completed_at": "2026-10-23T16:47:59Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "dashboard",
+        "cli",
+        "ci",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-064",
+      "name": "`atm migrate`: automatic move to .agentic-task-manager/",
+      "type": "feature",
+      "description": "**Both runtimes.** `atm migrate [--json]`:\n\n### Moving\n- If `.agentic-task-manager/tasks.json` exists and a legacy file too: move nothing and print a warning (exit 0).\n- If only a legacy `tasks.json` exists (`docs/` or the root): create the folder, and `git mv` it when tracked (a plain move otherwise).\n- The legacy `tasks-dashboard.html` next to it: `git rm --cached` if tracked, then delete.\n\n### Setting up\n- Always ensure `.agentic-task-manager/.gitignore` contains `tasks-dashboard.html`, `.server.json`, `claims.json`, `.lock/` (idempotent; preserve user lines).\n- Copy the plugin's `templates/tasks-dashboard.html` into the folder if missing or older (compare the `atm-dashboard-version` meta numerically; shared helper `ensure_dashboard`).\n- Print one line describing what moved (or nothing to do). **Never commits.**\n\n### Tests\nConformance scenarios: tracked/untracked, `docs/` and root legacy, both locations present, already migrated (idempotent), a non-git directory, `.gitignore` merging.\n",
+      "requirements": [
+        "FR-1.1",
+        "FR-1.2",
+        "FR-1.3",
+        "FR-1.4",
+        "FR-1.7"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-063"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "plugin/scripts/atm.mjs",
+        "tests/scripts/scenarios/migrate-*.json"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:22Z",
+      "started_at": "2026-10-23T16:48:25Z",
+      "completed_at": "2026-10-23T16:51:42Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-065",
+      "name": "`atm serve` in Python: start/stop/status",
+      "type": "feature",
+      "description": "`atm.py` `serve [start|stop|status] [--open] [--port N]`.\n\n### start\n- Run the `migrate` checks' `ensure_dashboard`.\n- Spawn a **detached child** (a new session, stdio to `.agentic-task-manager/.server.log`) running a stdlib `http.server` bound to `127.0.0.1`, which serves the folder **by absolute path** (it works after the launching shell's cwd is deleted) and answers `GET /__atm/whoami` with `{project folder, pid, runtime}`.\n- Port: `--port`, or 8000, else the next free port up to 8099.\n- Record `{pid, port, folder, runtime, started_at}` in `.agentic-task-manager/.server.json`.\n- If a record exists and `whoami` at that port answers with this folder: report its URL instead of starting.\n- A stale record (the pid is gone, or a `whoami` mismatch): remove it and start.\n\n### stop\n**Only kill the pid if `whoami` confirms** it is this folder's server, then remove the record; otherwise just clean the record and say so.\n\n### status\nRunning (URL, pid, uptime) or not running.\n\n### Output\n- The URL `http://localhost:PORT/tasks-dashboard.html`; `--open` opens it (`open` / `xdg-open`).\n- The server survives the parent process exiting.\n",
+      "requirements": [
+        "FR-6.1",
+        "FR-6.2",
+        "FR-6.3",
+        "FR-6.4",
+        "FR-6.5",
+        "FR-6.6",
+        "FR-6.7",
+        "FR-6.8"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-064"
+      ],
+      "files": [
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:23Z",
+      "started_at": "2026-10-23T16:52:08Z",
+      "completed_at": "2026-10-23T16:53:32Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-066",
+      "name": "`atm serve` in Node, plus serve tests for both",
+      "type": "feature",
+      "description": "### Node\nThe `atm.mjs` equivalent of T-065:\n- a `node:http` static server with correct content types for `.html` / `.json`;\n- a detached child via `spawn({detached:true, stdio:[ignore, log, log]}).unref()`;\n- the same `whoami` endpoint, record format and output.\n\n### Conformance tests\nFor both runtimes, with a temp project and a test port range (to avoid 8000):\n- start, then status reports it, and the dashboard and `tasks.json` are served;\n- a second start reuses it;\n- a port in use moves to the next port;\n- a stale record (a fake pid) is cleaned;\n- stop **refuses to kill a pid whose `whoami` doesn't match** (spawn an unrelated sleeping process and record its pid);\n- serving keeps working after the launching cwd is removed;\n- stop leaves no process.\n\n**Always stop servers in test teardown.**\n",
+      "requirements": [
+        "FR-6.1",
+        "FR-6.3",
+        "FR-6.4",
+        "FR-6.5",
+        "FR-6.6",
+        "FR-6.10"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-065"
+      ],
+      "files": [
+        "plugin/scripts/atm.mjs",
+        "tests/scripts/serve.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:23Z",
+      "started_at": "2026-10-23T16:53:45Z",
+      "completed_at": "2026-10-23T16:56:22Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli",
+        "api"
+      ]
+    },
+    {
+      "id": "T-067",
+      "name": "`/atm:serve` skill; retire serve-dashboard.sh",
+      "type": "feature",
+      "description": "### The skill\n`plugin/skills/serve/SKILL.md`:\n- parses `start` (default) | `stop` | `status` and `--open`;\n- runs `${CLAUDE_SKILL_DIR}/../../scripts/atm serve ...` from the project root and relays the URL or status;\n- mentions that it **keeps running after the session**, and how to stop it.\n\n### Clean up\n- Delete `plugin/scripts/serve-dashboard.sh` (replace references).\n- create-tasks Step 5: suggest `/atm:serve` instead of the `python3 -m http.server` command.\n",
+      "requirements": [
+        "FR-6.1",
+        "FR-6.8",
+        "FR-6.9"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-066"
+      ],
+      "files": [
+        "plugin/skills/serve/SKILL.md",
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/scripts/serve-dashboard.sh"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:23Z",
+      "started_at": "2026-10-23T16:56:27Z",
+      "completed_at": "2026-10-23T16:57:47Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli",
+        "skills"
+      ]
+    },
+    {
+      "id": "T-068",
+      "name": "Skills use .agentic-task-manager/ and migrate automatically",
+      "type": "feature",
+      "description": "**Every skill** (create-tasks, do-task, loop-tasks, update-dashboard, serve) starts by running `atm migrate` and relays its one-line report; then it uses `atm paths --json` instead of its own location search.\n\n### Per skill\n- **create-tasks:** creates `.agentic-task-manager/` (via migrate) and writes `tasks.json` there.\n- **loop-tasks:** if migrate moved something and committing is on, commit only the moved/removed paths and `.gitignore` as `chore: move atm files to .agentic-task-manager/`, before the first task. Other skills say the move is staged.\n- **update-dashboard:** uses the `ensure_dashboard` behaviour (or an `atm` command) and still prints the release notes.\n- **`plugin/CLAUDE.md`:** the new location; the dashboard isn't committed.\n",
+      "requirements": [
+        "FR-1.1",
+        "FR-1.3",
+        "FR-1.4",
+        "FR-1.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-064",
+        "T-067"
+      ],
+      "files": [
+        "plugin/skills/create-tasks/SKILL.md",
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/update-dashboard/SKILL.md",
+        "plugin/CLAUDE.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:23Z",
+      "started_at": "2026-10-23T16:57:52Z",
+      "completed_at": "2026-10-23T17:00:45Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "skills"
+      ]
+    },
+    {
+      "id": "T-069",
+      "name": "README: new folder, /atm:serve, /reload-plugins update steps",
+      "type": "docs",
+      "description": "### README\n- Install/update steps use `/plugin marketplace update hakanserce-plugins`, then `/reload-plugins`.\n- **Remove every *restart Claude Code* instruction** (currently around the install and update sections).\n- Document `.agentic-task-manager/`: what's committed (`tasks.json`) and what's ignored (dashboard, server state, claims).\n- Automatic migration from `docs/`.\n- `/atm:serve [stop|status] [--open]`.\n- The runtime requirement (Python 3.9+ or Node 18+).\n\n### FR-7.2\nAdd a line to the release task's checklist in the PR description, asking the maintainer to confirm a fresh install works with `/reload-plugins` (it can't be done from inside a session).\n",
+      "requirements": [
+        "FR-7.1",
+        "FR-7.2",
+        "FR-1.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-068"
+      ],
+      "files": [
+        "README.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:24Z",
+      "started_at": "2026-10-23T17:00:50Z",
+      "completed_at": "2026-10-23T17:02:16Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "skills",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-070",
+      "name": "Release 0.10.0",
+      "type": "docs",
+      "description": "### Changelog `[0.10.0]`\n- *Added*: `/atm:serve`, the `.agentic-task-manager/` folder with automatic migration, the runtime launcher.\n- *Changed*: the dashboard is no longer committed; update with `/reload-plugins`.\n\n### Release\n- Bump `plugin.json` and `marketplace.json` to **0.10.0**, and rebuild the dashboard.\n- `npm run verify` and the scripts suite green.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-069"
+      ],
+      "files": [
+        "plugin/CHANGELOG.md",
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:24Z",
+      "started_at": "2026-10-23T17:02:26Z",
+      "completed_at": "2026-10-23T17:05:38Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-071",
+      "name": "Dogfood: move this repo's tasks into .agentic-task-manager/",
+      "type": "infra",
+      "description": "**Last task of phase 10.**\n\n### Steps\n1. Run `plugin/scripts/atm migrate` in this repo: `docs/tasks.json` moves to `.agentic-task-manager/tasks.json` (`git mv`), and `docs/tasks-dashboard.html` leaves git.\n2. Update the root `CLAUDE.md` (`docs/` now holds plans only; the task list is in `.agentic-task-manager/`), and any dev script or doc that points at `docs/tasks.json`.\n3. Mark this task done **in the new file**.\n\n> **Note:** the installed 0.9.0 skills only look in `docs/`, so phases 11–12 need the 0.10.0 plugin installed (merge, `/plugin marketplace update`, `/reload-plugins`) before looping on.\n",
+      "requirements": [
+        "FR-1.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-070"
+      ],
+      "files": [
+        ".agentic-task-manager/tasks.json",
+        ".agentic-task-manager/.gitignore",
+        "docs/tasks.json",
+        "docs/tasks-dashboard.html",
+        "CLAUDE.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:24Z",
+      "started_at": "2026-10-23T17:05:46Z",
+      "completed_at": "2026-10-23T17:07:00Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 10",
+      "sprint_history": [
+        {
+          "sprint": "Phase 10",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-072",
+      "name": "Lock directory and atomic writes",
+      "type": "feature",
+      "description": "`atm.py`, per design §4 *The lock*.\n\n### The lock\n- **Acquire** = `mkdir <dir>/.lock`, and write `owner.json` `{host, pid, acquired_at}`; retry every 50 ms, up to 10 s.\n- **Break the lock only if** the owner is on this host and the pid is gone, or it is older than 60 s.\n- **Release** removes it (also on exceptions and signals).\n\n### Atomic write\nWrite a temp file in the same dir, `fsync`, rename over the target, and `fsync` the dir where supported.\n\nExpose a `with_lock(path, fn)` context helper and reuse `write_json_atomic`.\n\n### Tests\n`tests/scripts/lock.test.mjs`, driving small atm commands or a hidden `_lock-test` command:\n- mutual exclusion between processes;\n- a stale lock from a dead pid is broken;\n- a live foreign lock times out with a clear error.\n",
+      "requirements": [
+        "FR-8.1"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-071"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "tests/scripts/lock.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:24Z",
+      "started_at": "2026-10-23T22:57:23Z",
+      "completed_at": "2026-10-23T22:59:21Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-073",
+      "name": "`atm start|done|fail|release` status commands",
+      "type": "feature",
+      "description": "`atm.py`. **Under the tasks lock:** re-read `tasks.json`, validate that the task exists and the transition is legal:\n- **start:** `todo` → `in_progress`; sets `started_at` and `updated_at`;\n- **done:** `in_progress` → `done`; sets `completed_at`;\n- **fail:** `in_progress` → `todo`, with a `last_failure` note;\n- **release:** `in_progress` → `todo`.\n\nWrite atomically, preserving key order and 2-space formatting (**unchanged tasks byte-identical**). Clear exit codes and messages.\n\nScenarios for each transition, illegal transitions, an unknown id, and a missing file.\n",
+      "requirements": [
+        "FR-8.1",
+        "FR-8.2"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-072"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "tests/scripts/scenarios/status-*.json"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:24Z",
+      "started_at": "2026-10-23T22:59:47Z",
+      "completed_at": "2026-10-23T23:01:06Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-074",
+      "name": "Claims with leases: store, heartbeat, claims, expiry",
+      "type": "feature",
+      "description": "`atm.py`.\n\n### The claims file\n- `$(git rev-parse --git-common-dir)/atm/claims.json` (fallback `.agentic-task-manager/claims-store.json` outside git), guarded by its own lock dir.\n- A claim = `{task, agent, branch, worktree, claimed_at, lease_expires_at}`, where `agent` is `CLAUDE_SESSION_ID` or the `ATM_AGENT` env, else `host:pid`.\n- Lease: 30 min by default (`meta.lease_minutes` overrides).\n\n### Commands\n- `start` takes a claim, and **fails if another live claim holds the task**.\n- `done` / `fail` / `release` drop it.\n- `heartbeat <id>` extends it (only for the holder).\n- `claims [--json]` lists live claims with the time left.\n- Any command first **expires stale leases**: the task goes back to `todo` with `last_failure: 'lease expired (agent X)'`.\n\nAfter every change, write the gitignored snapshot `.agentic-task-manager/claims.json` for the dashboard.\n\n### Tests\nIncluding two worktrees of one repo seeing each other's claims, and lease expiry with an injectable clock (`ATM_NOW`).\n",
+      "requirements": [
+        "FR-8.4",
+        "FR-8.5"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-073"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "tests/scripts/claims.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:25Z",
+      "started_at": "2026-10-23T23:01:31Z",
+      "completed_at": "2026-10-23T23:06:54Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-075",
+      "name": "`atm next --claim` with the loop's selection rule",
+      "type": "feature",
+      "description": "`atm.py`: `atm next [--phase N] [--type T] [--claim] [--json]`:\n- the **lowest phase, then lowest id** among todo tasks whose dependencies are all done and that have no live claim;\n- with `--claim`, start and claim it **in the same lock section**;\n- prints the task (JSON with `--json`), or exits `3` with *\"no task available\"* (distinguishing *blocked* from *all done*).\n\nConformance scenarios mirroring the dashboard's *Next up* rule (`dashboard/src/lib/kanban.ts`), so both agree.\n",
+      "requirements": [
+        "FR-8.3"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-074"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "tests/scripts/scenarios/next-*.json"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:25Z",
+      "started_at": "2026-10-23T23:06:59Z",
+      "completed_at": "2026-10-23T23:09:05Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-076",
+      "name": "Concurrency stress test",
+      "type": "test",
+      "description": "`tests/scripts/stress.test.mjs`:\n- a 40-task project;\n- spawn **16 concurrent workers** that loop `atm next --claim`, then `atm done`, until none are left;\n- assert **every task done exactly once** and no claim double-granted (each worker logs what it got);\n- in parallel, a reader polls `tasks.json` and `claims.json` every few ms and asserts it always parses;\n- run in a temp git repo with two worktrees (workers split across them).\n\nKeep the test under ~30 s.\n",
+      "requirements": [
+        "FR-8.10"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-075"
+      ],
+      "files": [
+        "tests/scripts/stress.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:25Z",
+      "started_at": "2026-10-23T23:09:22Z",
+      "completed_at": "2026-10-23T23:12:22Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-077",
+      "name": "tasks.json merge driver and `atm init`",
+      "type": "feature",
+      "description": "`atm.py`.\n\n### `atm merge-driver %O %A %B`\nMerges **task by task** (design option E):\n- the union of tasks by id;\n- the same id changed on one side takes that side;\n- changed on both: the status takes the furthest along (`todo` < `in_progress` < `done`; an explicit `blocked` / `skipped` wins over `todo`), and timestamps take the newest;\n- definition fields (`name`, `description`, deps, `files`, `phase`, `type`, `requirements`) changed differently on both sides = **a conflict** (exit 1, leave a conflict-marker-free file, plus a report on stderr);\n- new tasks on both sides with colliding ids: keep both, renumber theirs to the next free id, and rewrite dependencies that point to it within their new tasks.\n\nWrites the result to `%A` in the standard format.\n\n### `atm init`\nAdds `tasks.json merge=atm` to `.agentic-task-manager/.gitattributes` and sets git config `merge.atm.name` / `driver` (pointing at the launcher by absolute path). Idempotent.\n",
+      "requirements": [
+        "FR-8.6"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-073"
+      ],
+      "files": [
+        "plugin/scripts/atm.py"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:25Z",
+      "started_at": "2026-10-23T23:12:44Z",
+      "completed_at": "2026-10-23T23:15:50Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-078",
+      "name": "Merge driver tests from the design's experiments",
+      "type": "test",
+      "description": "`tests/scripts/merge.test.mjs`: in temp repos with `atm init`, reproduce the design doc's experiments with a **real `git merge`**:\n- adjacent status changes (clean);\n- finishing adjacent tasks (clean);\n- the same task claimed on both branches (a clean merge, status `in_progress`, the newest timestamp);\n- both sides append a task (both kept, renumbered, deps rewritten);\n- the same task's description edited differently (the merge fails and reports it).\n\nPlus unit scenarios for the driver directly.\n",
+      "requirements": [
+        "FR-8.6",
+        "FR-8.10"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-077"
+      ],
+      "files": [
+        "tests/scripts/merge.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:25Z",
+      "started_at": "2026-10-23T23:16:29Z",
+      "completed_at": "2026-10-23T23:18:04Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-079",
+      "name": "Skills use atm for every status change; commit hygiene",
+      "type": "feature",
+      "description": "### do-task and loop-tasks\n- Get work **only** via `atm next --claim` (or `atm start <id>`); finish with `atm done`, `atm fail` on failure, and `atm heartbeat` roughly every 10 minutes on long tasks.\n- **Never edit** `status` / `started_at` / `completed_at` by hand (state the 6 agent rules from design §4).\n- Commit `.agentic-task-manager/tasks.json` plus **exactly the files the agent changed** for this task (tracked by the agent; `git add <paths>`), never `git add -A` / `git add .`.\n\n### create-tasks\nRuns `atm init`.\n\nRemove the now-obsolete manual timestamp instructions.\n",
+      "requirements": [
+        "FR-8.2",
+        "FR-8.3",
+        "FR-8.7"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-075",
+        "T-077"
+      ],
+      "files": [
+        "plugin/skills/do-task/SKILL.md",
+        "plugin/skills/loop-tasks/SKILL.md",
+        "plugin/skills/create-tasks/SKILL.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:26Z",
+      "started_at": "2026-10-23T23:18:13Z",
+      "completed_at": "2026-10-23T23:20:40Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "skills"
+      ]
+    },
+    {
+      "id": "T-080",
+      "name": "Dashboard shows live claims",
+      "type": "feature",
+      "description": "### Loading\nLoad `./claims.json` alongside `tasks.json` on every (auto-)refresh; a missing file or a 404 means **no claims** (no error shown).\n\n### Showing\n- `src/lib/claims.ts`: parse, keep the live ones, map by task id.\n- In-progress task cards and Kanban cards show the agent (short form), the branch, and *\"claimed 12 m ago\"*.\n- The detail panel shows the full claim and the lease expiry.\n\n### Tests\n- Extend the e2e `tasksServer` fixture to route `claims.json` (default 404; can serve an object).\n- Unit tests for `claims.ts` (90% coverage), component/e2e tests.\n- Update screenshots if the card layout changes.\n",
+      "requirements": [
+        "FR-8.8"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-074"
+      ],
+      "files": [
+        "dashboard/src/lib/claims.ts",
+        "dashboard/src/lib/load.ts",
+        "dashboard/src/components/TaskCard.svelte",
+        "dashboard/src/components/KanbanCard.svelte",
+        "dashboard/src/components/DetailPanel.svelte",
+        "dashboard/tests/e2e/helpers.ts",
+        "dashboard/tests/unit/claims.test.ts",
+        "dashboard/tests/e2e/claims.spec.ts"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:26Z",
+      "started_at": "2026-10-23T23:20:50Z",
+      "completed_at": "2026-10-23T23:24:26Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-081",
+      "name": "Remote claims via refs/atm/claims (P2)",
+      "type": "feature",
+      "description": "`atm.py`: **opt-in** with `meta.coordination = 'remote'`.\n\n### Behaviour\n- Claiming also runs `git push origin <HEAD sha>:refs/atm/claims/<id>` and **only proceeds if accepted** (rejected = someone else holds it; roll back the local claim).\n- `done` / `fail` / `release` / expiry push a deletion (best-effort, logged on failure).\n- `atm claims --remote` lists remote claim refs (`git ls-remote`).\n\n### Tests\nTests with a local bare repo as `origin` and two clones.\n\n> Skip if it can't be done cheaply; record the reason.\n",
+      "requirements": [
+        "FR-8.11"
+      ],
+      "use_cases": [],
+      "status": "skipped",
+      "dependencies": [
+        "T-075"
+      ],
+      "files": [
+        "plugin/scripts/atm.py",
+        "tests/scripts/remote.test.mjs"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:41Z",
+      "skip_reason": "Not cheap enough for this round: a safe version needs create-only pushes (--force-with-lease), leases on the remote (claim commits carrying the expiry, heartbeats that push, clearing expired refs) so a crashed machine can't block a task forever, and a network round-trip inside the lock. Open question for the maintainer (design §6 Q3: remote claims now or later); revisit when multi-machine work is needed.",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "skipped_at": "2026-10-23T23:25:02Z",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "cli"
+      ]
+    },
+    {
+      "id": "T-082",
+      "name": "README: Running agents in parallel",
+      "type": "docs",
+      "description": "A README section, *Running agents in parallel*:\n- **the problem** in two sentences;\n- **recommended setup**: one worktree + branch per agent from one clone (`git worktree add ../proj-agent2 -b agent2`), run `/atm:loop-tasks` in each;\n- **what atm guarantees**: single writer with lock, claims shared across worktrees, leases, merge driver;\n- **what it doesn't**: same files edited in one working tree; different machines without remote claims;\n- the agent rules;\n- the atm commands for humans;\n- remote claims, if T-081 shipped.\n\nLink `docs/parallel-agents-design.md`.\n",
+      "requirements": [
+        "FR-8.9"
+      ],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-079",
+        "T-080"
+      ],
+      "files": [
+        "README.md"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:41Z",
+      "started_at": "2026-10-23T23:25:02Z",
+      "completed_at": "2026-10-23T23:26:57Z",
+      "labels": [
+        "architecture"
+      ],
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-083",
+      "name": "Release 0.11.0",
+      "type": "docs",
+      "description": "Changelog **[0.11.0]** (parallel agents: atm helper, claims with leases, merge driver, commit hygiene, claims on the dashboard). Bump to 0.11.0, rebuild. **All suites green.**\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-076",
+        "T-078",
+        "T-082"
+      ],
+      "files": [
+        "plugin/CHANGELOG.md",
+        "plugin/.claude-plugin/plugin.json",
+        ".claude-plugin/marketplace.json",
+        "plugin/templates/tasks-dashboard.html"
+      ],
+      "created_at": "2026-10-23T16:41:18Z",
+      "updated_at": "2026-10-25T21:40:41Z",
+      "started_at": "2026-10-23T23:27:07Z",
+      "completed_at": "2026-10-23T23:28:34Z",
+      "updated_by": "claude:e5ea9db0",
+      "sprint": "Phase 11",
+      "sprint_history": [
+        {
+          "sprint": "Phase 11",
+          "from": "2026-10-23T16:41:18Z"
+        }
+      ],
+      "components": [
+        "dashboard"
       ]
     }
   ]

@@ -16,10 +16,10 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 
 ## Crates and modules
 
-- **Layer rules** come from [layered-architecture.md](../layered-architecture.md): the layers are `common`, `db`,
-  `vcs`, `lib`, `boot`, `cli` and `api`, each importing only what that document allows; the CLI and the REST API are
-  two front ends that never depend on each other. cargo-deny checks this, as `atm-cli/build.py` does for the Python
-  modules today.
+- **One crate per layer**, under `crates/` ([porting-to-rust.md](../porting-to-rust.md) §2): `atm-common`, `atm-db`,
+  `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api` and `atm-cli`, each depending only on what
+  [layered-architecture.md](../layered-architecture.md) allows; the CLI and the REST API are two front ends: the API never
+  depends on the CLI, and the CLI on the API only to enter the server (`atm _serve`, in the one `atm` binary). A crate can use only what its `Cargo.toml` declares, so the compiler checks the layer rule.
 - **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`.
 - **Visibility:** `pub` only for the crate's API; `pub(crate)` for the rest.
 - **IDs are newtypes** (`TaskId`, `SprintId`, `ProjectId`, …), never bare `String` in APIs.
@@ -40,7 +40,8 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 
 - **Library crates** (atm-lib and the layers under it) define typed error enums with `thiserror`, one per crate or
   per area, with variants callers can act on.
-- **Binaries** (`atm`, `atm-serve`, the app's `main`) may use `anyhow` to add context at the top level.
+- **Binaries** (`atm`, which also runs `atm serve`, and the app's `main`) may use `anyhow` to add context at the top
+  level.
 - **No `unwrap`** outside tests. **`expect`** only for a proven invariant, with a message saying why it can't fail,
   e.g. `expect("task IDs are non-empty by construction")`.
 - Errors are safe to print to agents and to log: no credentials, no file contents beyond what the user asked for
@@ -49,8 +50,8 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 ## Async
 
 - `common`, `db`, `vcs` and `lib` stay synchronous and do no hidden I/O beyond their interfaces.
-- The REST API (`api`) may be async; the runtime and web framework are an open question in
-  [porting-to-rust.md](../porting-to-rust.md) §6. Once decided, record it there and follow it.
+- The REST API (`atm-api`) is async: `axum` on `tokio` ([porting-to-rust.md](../porting-to-rust.md) §3), as is the
+  app (Tauri). Nothing below them is.
 
 ## Logging
 

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 439,
+    "next_id": 480,
     "labels": [
       {
         "id": "architecture",
@@ -877,10 +877,87 @@
       },
       {
         "id": "CLI ergonomics",
-        "state": "active",
+        "state": "closed",
         "goal": "The atm2 Typer CLI: every command group on atm-lib, shell completion, infra commands kept apart, and the cutover to `atm`; the T-417 regressions fixed",
         "release": "0.31.0",
-        "start": "2026-11-05T10:35:06Z"
+        "start": "2026-11-05T10:35:06Z",
+        "end": "2026-11-06T19:58:07Z",
+        "report": {
+          "done": [
+            "T-418",
+            "T-419",
+            "T-420",
+            "T-421",
+            "T-422",
+            "T-423",
+            "T-424",
+            "T-425",
+            "T-427",
+            "T-428",
+            "T-429",
+            "T-430",
+            "T-431",
+            "T-432",
+            "T-433",
+            "T-434",
+            "T-435",
+            "T-437",
+            "T-438"
+          ],
+          "carried": [],
+          "added": [
+            "T-427",
+            "T-428",
+            "T-429",
+            "T-430",
+            "T-431",
+            "T-432",
+            "T-433",
+            "T-434",
+            "T-435",
+            "T-437",
+            "T-438"
+          ]
+        }
+      },
+      {
+        "id": "Rust and distribution",
+        "state": "closed",
+        "goal": "Finalize the designs for distributing atm as an app (T-426), multi-harness support (T-413) and the Rust port (T-415), and break them into tasks",
+        "start": "2026-11-06T20:03:49Z",
+        "end": "2026-11-07T00:36:53Z",
+        "report": {
+          "done": [
+            "T-415",
+            "T-426",
+            "T-439",
+            "T-440",
+            "T-441",
+            "T-442",
+            "T-443"
+          ],
+          "carried": [],
+          "added": [
+            "T-439",
+            "T-440",
+            "T-441",
+            "T-442",
+            "T-443"
+          ]
+        },
+        "release": "0.32.0"
+      },
+      {
+        "id": "The Rust port",
+        "state": "active",
+        "goal": "atm as one Rust binary: the slices of porting-to-rust.md §5, the release machinery, and the switch from Python",
+        "release": "0.32.0",
+        "start": "2026-11-07T00:37:18Z"
+      },
+      {
+        "id": "The atm app",
+        "state": "planned",
+        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging"
       }
     ],
     "releases": [
@@ -1071,6 +1148,15 @@
       },
       {
         "id": "0.31.0",
+        "state": "released",
+        "pr": {
+          "number": 37,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+        },
+        "released_at": "2026-11-06T19:54:27Z"
+      },
+      {
+        "id": "0.32.0",
         "state": "planned"
       }
     ],
@@ -1144,806 +1230,9 @@
         ]
       }
     ],
-    "archived": 61
+    "archived": 83
   },
   "tasks": [
-    {
-      "id": "T-062",
-      "name": "Helper launcher and twin runtimes skeleton",
-      "type": "infra",
-      "description": "### The launcher\nCreate `plugin/scripts/atm` (POSIX sh, executable):\n- if `python3` ≥ 3.9 is on `PATH`, run `atm.py`;\n- else if `node` ≥ 18, run `atm.mjs`;\n- else print what to install and exit `127`.\n\n`ATM_RUNTIME=python|node` forces one (used by tests; an error if that runtime is missing).\n\n### The two runtimes\nCreate `plugin/scripts/atm.py` (stdlib only) and `plugin/scripts/atm.mjs` (Node built-ins only), with:\n- argument parsing and `--help`;\n- `version`: prints the plugin version read from `../.claude-plugin/plugin.json`;\n- `paths --json`: prints the project root (git top level, or cwd), the task dir, the `tasks.json` path, the dashboard path, and the legacy location if any (`.agentic-task-manager/` first, then `docs/tasks.json`, then `tasks.json` in the root).\n\n**Identical output from both.** Keep the two files structured the same way (same function names and order), so they are easy to keep equal.\n",
-      "requirements": [
-        "FR-8.1",
-        "FR-6.10",
-        "NFR-2"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "plugin/scripts/atm",
-        "plugin/scripts/atm.py",
-        "plugin/scripts/atm.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:22Z",
-      "started_at": "2026-10-23T16:45:00Z",
-      "completed_at": "2026-10-23T16:46:13Z",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-063",
-      "name": "Conformance test suite for both runtimes, in CI",
-      "type": "test",
-      "description": "### The runner\nCreate `tests/scripts/` at the repo root: a **dependency-free Node runner** (`node:test`) that runs every scenario against the launcher once with `ATM_RUNTIME=python` and once with `ATM_RUNTIME=node`.\n\n### Scenarios\n- Scenarios are data (`tests/scripts/scenarios/*.json`: setup files, an optional `git init`, the command, the expected exit code, stdout/JSON, and the expected files afterwards), so they are **language-neutral**.\n- Helpers create temp dirs and repos.\n- Cover T-062's `version` and `paths` (each location, legacy detection, git vs non-git).\n\n### Wiring\n- Add `npm run test:scripts` in `dashboard/package.json` (runs `node ../tests/scripts/run.mjs`) and include it in `npm run verify`.\n- CI: a new `scripts` job with a matrix of (python 3.9, node 18) and (python 3.13, node 24) running the suite.\n- Document it in the root `CLAUDE.md` (layout, commands, *change both implementations together*).\n",
-      "requirements": [
-        "FR-8.1a",
-        "NFR-2"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-062"
-      ],
-      "files": [
-        "tests/scripts/run.mjs",
-        "tests/scripts/scenarios/",
-        "dashboard/package.json",
-        ".github/workflows/ci.yml",
-        "CLAUDE.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:22Z",
-      "started_at": "2026-10-23T16:46:29Z",
-      "completed_at": "2026-10-23T16:47:59Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "dashboard",
-        "cli",
-        "ci",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-064",
-      "name": "`atm migrate`: automatic move to .agentic-task-manager/",
-      "type": "feature",
-      "description": "**Both runtimes.** `atm migrate [--json]`:\n\n### Moving\n- If `.agentic-task-manager/tasks.json` exists and a legacy file too: move nothing and print a warning (exit 0).\n- If only a legacy `tasks.json` exists (`docs/` or the root): create the folder, and `git mv` it when tracked (a plain move otherwise).\n- The legacy `tasks-dashboard.html` next to it: `git rm --cached` if tracked, then delete.\n\n### Setting up\n- Always ensure `.agentic-task-manager/.gitignore` contains `tasks-dashboard.html`, `.server.json`, `claims.json`, `.lock/` (idempotent; preserve user lines).\n- Copy the plugin's `templates/tasks-dashboard.html` into the folder if missing or older (compare the `atm-dashboard-version` meta numerically; shared helper `ensure_dashboard`).\n- Print one line describing what moved (or nothing to do). **Never commits.**\n\n### Tests\nConformance scenarios: tracked/untracked, `docs/` and root legacy, both locations present, already migrated (idempotent), a non-git directory, `.gitignore` merging.\n",
-      "requirements": [
-        "FR-1.1",
-        "FR-1.2",
-        "FR-1.3",
-        "FR-1.4",
-        "FR-1.7"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-063"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "plugin/scripts/atm.mjs",
-        "tests/scripts/scenarios/migrate-*.json"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:22Z",
-      "started_at": "2026-10-23T16:48:25Z",
-      "completed_at": "2026-10-23T16:51:42Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-065",
-      "name": "`atm serve` in Python: start/stop/status",
-      "type": "feature",
-      "description": "`atm.py` `serve [start|stop|status] [--open] [--port N]`.\n\n### start\n- Run the `migrate` checks' `ensure_dashboard`.\n- Spawn a **detached child** (a new session, stdio to `.agentic-task-manager/.server.log`) running a stdlib `http.server` bound to `127.0.0.1`, which serves the folder **by absolute path** (it works after the launching shell's cwd is deleted) and answers `GET /__atm/whoami` with `{project folder, pid, runtime}`.\n- Port: `--port`, or 8000, else the next free port up to 8099.\n- Record `{pid, port, folder, runtime, started_at}` in `.agentic-task-manager/.server.json`.\n- If a record exists and `whoami` at that port answers with this folder: report its URL instead of starting.\n- A stale record (the pid is gone, or a `whoami` mismatch): remove it and start.\n\n### stop\n**Only kill the pid if `whoami` confirms** it is this folder's server, then remove the record; otherwise just clean the record and say so.\n\n### status\nRunning (URL, pid, uptime) or not running.\n\n### Output\n- The URL `http://localhost:PORT/tasks-dashboard.html`; `--open` opens it (`open` / `xdg-open`).\n- The server survives the parent process exiting.\n",
-      "requirements": [
-        "FR-6.1",
-        "FR-6.2",
-        "FR-6.3",
-        "FR-6.4",
-        "FR-6.5",
-        "FR-6.6",
-        "FR-6.7",
-        "FR-6.8"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-064"
-      ],
-      "files": [
-        "plugin/scripts/atm.py"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:23Z",
-      "started_at": "2026-10-23T16:52:08Z",
-      "completed_at": "2026-10-23T16:53:32Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-066",
-      "name": "`atm serve` in Node, plus serve tests for both",
-      "type": "feature",
-      "description": "### Node\nThe `atm.mjs` equivalent of T-065:\n- a `node:http` static server with correct content types for `.html` / `.json`;\n- a detached child via `spawn({detached:true, stdio:[ignore, log, log]}).unref()`;\n- the same `whoami` endpoint, record format and output.\n\n### Conformance tests\nFor both runtimes, with a temp project and a test port range (to avoid 8000):\n- start, then status reports it, and the dashboard and `tasks.json` are served;\n- a second start reuses it;\n- a port in use moves to the next port;\n- a stale record (a fake pid) is cleaned;\n- stop **refuses to kill a pid whose `whoami` doesn't match** (spawn an unrelated sleeping process and record its pid);\n- serving keeps working after the launching cwd is removed;\n- stop leaves no process.\n\n**Always stop servers in test teardown.**\n",
-      "requirements": [
-        "FR-6.1",
-        "FR-6.3",
-        "FR-6.4",
-        "FR-6.5",
-        "FR-6.6",
-        "FR-6.10"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-065"
-      ],
-      "files": [
-        "plugin/scripts/atm.mjs",
-        "tests/scripts/serve.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:23Z",
-      "started_at": "2026-10-23T16:53:45Z",
-      "completed_at": "2026-10-23T16:56:22Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli",
-        "api"
-      ]
-    },
-    {
-      "id": "T-067",
-      "name": "`/atm:serve` skill; retire serve-dashboard.sh",
-      "type": "feature",
-      "description": "### The skill\n`plugin/skills/serve/SKILL.md`:\n- parses `start` (default) | `stop` | `status` and `--open`;\n- runs `${CLAUDE_SKILL_DIR}/../../scripts/atm serve ...` from the project root and relays the URL or status;\n- mentions that it **keeps running after the session**, and how to stop it.\n\n### Clean up\n- Delete `plugin/scripts/serve-dashboard.sh` (replace references).\n- create-tasks Step 5: suggest `/atm:serve` instead of the `python3 -m http.server` command.\n",
-      "requirements": [
-        "FR-6.1",
-        "FR-6.8",
-        "FR-6.9"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-066"
-      ],
-      "files": [
-        "plugin/skills/serve/SKILL.md",
-        "plugin/skills/create-tasks/SKILL.md",
-        "plugin/scripts/serve-dashboard.sh"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:23Z",
-      "started_at": "2026-10-23T16:56:27Z",
-      "completed_at": "2026-10-23T16:57:47Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli",
-        "skills"
-      ]
-    },
-    {
-      "id": "T-068",
-      "name": "Skills use .agentic-task-manager/ and migrate automatically",
-      "type": "feature",
-      "description": "**Every skill** (create-tasks, do-task, loop-tasks, update-dashboard, serve) starts by running `atm migrate` and relays its one-line report; then it uses `atm paths --json` instead of its own location search.\n\n### Per skill\n- **create-tasks:** creates `.agentic-task-manager/` (via migrate) and writes `tasks.json` there.\n- **loop-tasks:** if migrate moved something and committing is on, commit only the moved/removed paths and `.gitignore` as `chore: move atm files to .agentic-task-manager/`, before the first task. Other skills say the move is staged.\n- **update-dashboard:** uses the `ensure_dashboard` behaviour (or an `atm` command) and still prints the release notes.\n- **`plugin/CLAUDE.md`:** the new location; the dashboard isn't committed.\n",
-      "requirements": [
-        "FR-1.1",
-        "FR-1.3",
-        "FR-1.4",
-        "FR-1.5"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-064",
-        "T-067"
-      ],
-      "files": [
-        "plugin/skills/create-tasks/SKILL.md",
-        "plugin/skills/do-task/SKILL.md",
-        "plugin/skills/loop-tasks/SKILL.md",
-        "plugin/skills/update-dashboard/SKILL.md",
-        "plugin/CLAUDE.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:23Z",
-      "started_at": "2026-10-23T16:57:52Z",
-      "completed_at": "2026-10-23T17:00:45Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "skills"
-      ]
-    },
-    {
-      "id": "T-069",
-      "name": "README: new folder, /atm:serve, /reload-plugins update steps",
-      "type": "docs",
-      "description": "### README\n- Install/update steps use `/plugin marketplace update hakanserce-plugins`, then `/reload-plugins`.\n- **Remove every *restart Claude Code* instruction** (currently around the install and update sections).\n- Document `.agentic-task-manager/`: what's committed (`tasks.json`) and what's ignored (dashboard, server state, claims).\n- Automatic migration from `docs/`.\n- `/atm:serve [stop|status] [--open]`.\n- The runtime requirement (Python 3.9+ or Node 18+).\n\n### FR-7.2\nAdd a line to the release task's checklist in the PR description, asking the maintainer to confirm a fresh install works with `/reload-plugins` (it can't be done from inside a session).\n",
-      "requirements": [
-        "FR-7.1",
-        "FR-7.2",
-        "FR-1.5"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-068"
-      ],
-      "files": [
-        "README.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:24Z",
-      "started_at": "2026-10-23T17:00:50Z",
-      "completed_at": "2026-10-23T17:02:16Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-070",
-      "name": "Release 0.10.0",
-      "type": "docs",
-      "description": "### Changelog `[0.10.0]`\n- *Added*: `/atm:serve`, the `.agentic-task-manager/` folder with automatic migration, the runtime launcher.\n- *Changed*: the dashboard is no longer committed; update with `/reload-plugins`.\n\n### Release\n- Bump `plugin.json` and `marketplace.json` to **0.10.0**, and rebuild the dashboard.\n- `npm run verify` and the scripts suite green.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-069"
-      ],
-      "files": [
-        "plugin/CHANGELOG.md",
-        "plugin/.claude-plugin/plugin.json",
-        ".claude-plugin/marketplace.json",
-        "plugin/templates/tasks-dashboard.html"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:24Z",
-      "started_at": "2026-10-23T17:02:26Z",
-      "completed_at": "2026-10-23T17:05:38Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-071",
-      "name": "Dogfood: move this repo's tasks into .agentic-task-manager/",
-      "type": "infra",
-      "description": "**Last task of phase 10.**\n\n### Steps\n1. Run `plugin/scripts/atm migrate` in this repo: `docs/tasks.json` moves to `.agentic-task-manager/tasks.json` (`git mv`), and `docs/tasks-dashboard.html` leaves git.\n2. Update the root `CLAUDE.md` (`docs/` now holds plans only; the task list is in `.agentic-task-manager/`), and any dev script or doc that points at `docs/tasks.json`.\n3. Mark this task done **in the new file**.\n\n> **Note:** the installed 0.9.0 skills only look in `docs/`, so phases 11–12 need the 0.10.0 plugin installed (merge, `/plugin marketplace update`, `/reload-plugins`) before looping on.\n",
-      "requirements": [
-        "FR-1.6"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-070"
-      ],
-      "files": [
-        ".agentic-task-manager/tasks.json",
-        ".agentic-task-manager/.gitignore",
-        "docs/tasks.json",
-        "docs/tasks-dashboard.html",
-        "CLAUDE.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:24Z",
-      "started_at": "2026-10-23T17:05:46Z",
-      "completed_at": "2026-10-23T17:07:00Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 10",
-      "sprint_history": [
-        {
-          "sprint": "Phase 10",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "docs"
-      ]
-    },
-    {
-      "id": "T-072",
-      "name": "Lock directory and atomic writes",
-      "type": "feature",
-      "description": "`atm.py`, per design §4 *The lock*.\n\n### The lock\n- **Acquire** = `mkdir <dir>/.lock`, and write `owner.json` `{host, pid, acquired_at}`; retry every 50 ms, up to 10 s.\n- **Break the lock only if** the owner is on this host and the pid is gone, or it is older than 60 s.\n- **Release** removes it (also on exceptions and signals).\n\n### Atomic write\nWrite a temp file in the same dir, `fsync`, rename over the target, and `fsync` the dir where supported.\n\nExpose a `with_lock(path, fn)` context helper and reuse `write_json_atomic`.\n\n### Tests\n`tests/scripts/lock.test.mjs`, driving small atm commands or a hidden `_lock-test` command:\n- mutual exclusion between processes;\n- a stale lock from a dead pid is broken;\n- a live foreign lock times out with a clear error.\n",
-      "requirements": [
-        "FR-8.1"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-071"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "tests/scripts/lock.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:24Z",
-      "started_at": "2026-10-23T22:57:23Z",
-      "completed_at": "2026-10-23T22:59:21Z",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-073",
-      "name": "`atm start|done|fail|release` status commands",
-      "type": "feature",
-      "description": "`atm.py`. **Under the tasks lock:** re-read `tasks.json`, validate that the task exists and the transition is legal:\n- **start:** `todo` → `in_progress`; sets `started_at` and `updated_at`;\n- **done:** `in_progress` → `done`; sets `completed_at`;\n- **fail:** `in_progress` → `todo`, with a `last_failure` note;\n- **release:** `in_progress` → `todo`.\n\nWrite atomically, preserving key order and 2-space formatting (**unchanged tasks byte-identical**). Clear exit codes and messages.\n\nScenarios for each transition, illegal transitions, an unknown id, and a missing file.\n",
-      "requirements": [
-        "FR-8.1",
-        "FR-8.2"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-072"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "tests/scripts/scenarios/status-*.json"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:24Z",
-      "started_at": "2026-10-23T22:59:47Z",
-      "completed_at": "2026-10-23T23:01:06Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-074",
-      "name": "Claims with leases: store, heartbeat, claims, expiry",
-      "type": "feature",
-      "description": "`atm.py`.\n\n### The claims file\n- `$(git rev-parse --git-common-dir)/atm/claims.json` (fallback `.agentic-task-manager/claims-store.json` outside git), guarded by its own lock dir.\n- A claim = `{task, agent, branch, worktree, claimed_at, lease_expires_at}`, where `agent` is `CLAUDE_SESSION_ID` or the `ATM_AGENT` env, else `host:pid`.\n- Lease: 30 min by default (`meta.lease_minutes` overrides).\n\n### Commands\n- `start` takes a claim, and **fails if another live claim holds the task**.\n- `done` / `fail` / `release` drop it.\n- `heartbeat <id>` extends it (only for the holder).\n- `claims [--json]` lists live claims with the time left.\n- Any command first **expires stale leases**: the task goes back to `todo` with `last_failure: 'lease expired (agent X)'`.\n\nAfter every change, write the gitignored snapshot `.agentic-task-manager/claims.json` for the dashboard.\n\n### Tests\nIncluding two worktrees of one repo seeing each other's claims, and lease expiry with an injectable clock (`ATM_NOW`).\n",
-      "requirements": [
-        "FR-8.4",
-        "FR-8.5"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-073"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "tests/scripts/claims.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:25Z",
-      "started_at": "2026-10-23T23:01:31Z",
-      "completed_at": "2026-10-23T23:06:54Z",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-075",
-      "name": "`atm next --claim` with the loop's selection rule",
-      "type": "feature",
-      "description": "`atm.py`: `atm next [--phase N] [--type T] [--claim] [--json]`:\n- the **lowest phase, then lowest id** among todo tasks whose dependencies are all done and that have no live claim;\n- with `--claim`, start and claim it **in the same lock section**;\n- prints the task (JSON with `--json`), or exits `3` with *\"no task available\"* (distinguishing *blocked* from *all done*).\n\nConformance scenarios mirroring the dashboard's *Next up* rule (`dashboard/src/lib/kanban.ts`), so both agree.\n",
-      "requirements": [
-        "FR-8.3"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-074"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "tests/scripts/scenarios/next-*.json"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:25Z",
-      "started_at": "2026-10-23T23:06:59Z",
-      "completed_at": "2026-10-23T23:09:05Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-076",
-      "name": "Concurrency stress test",
-      "type": "test",
-      "description": "`tests/scripts/stress.test.mjs`:\n- a 40-task project;\n- spawn **16 concurrent workers** that loop `atm next --claim`, then `atm done`, until none are left;\n- assert **every task done exactly once** and no claim double-granted (each worker logs what it got);\n- in parallel, a reader polls `tasks.json` and `claims.json` every few ms and asserts it always parses;\n- run in a temp git repo with two worktrees (workers split across them).\n\nKeep the test under ~30 s.\n",
-      "requirements": [
-        "FR-8.10"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-075"
-      ],
-      "files": [
-        "tests/scripts/stress.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:25Z",
-      "started_at": "2026-10-23T23:09:22Z",
-      "completed_at": "2026-10-23T23:12:22Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-077",
-      "name": "tasks.json merge driver and `atm init`",
-      "type": "feature",
-      "description": "`atm.py`.\n\n### `atm merge-driver %O %A %B`\nMerges **task by task** (design option E):\n- the union of tasks by id;\n- the same id changed on one side takes that side;\n- changed on both: the status takes the furthest along (`todo` < `in_progress` < `done`; an explicit `blocked` / `skipped` wins over `todo`), and timestamps take the newest;\n- definition fields (`name`, `description`, deps, `files`, `phase`, `type`, `requirements`) changed differently on both sides = **a conflict** (exit 1, leave a conflict-marker-free file, plus a report on stderr);\n- new tasks on both sides with colliding ids: keep both, renumber theirs to the next free id, and rewrite dependencies that point to it within their new tasks.\n\nWrites the result to `%A` in the standard format.\n\n### `atm init`\nAdds `tasks.json merge=atm` to `.agentic-task-manager/.gitattributes` and sets git config `merge.atm.name` / `driver` (pointing at the launcher by absolute path). Idempotent.\n",
-      "requirements": [
-        "FR-8.6"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-073"
-      ],
-      "files": [
-        "plugin/scripts/atm.py"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:25Z",
-      "started_at": "2026-10-23T23:12:44Z",
-      "completed_at": "2026-10-23T23:15:50Z",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-078",
-      "name": "Merge driver tests from the design's experiments",
-      "type": "test",
-      "description": "`tests/scripts/merge.test.mjs`: in temp repos with `atm init`, reproduce the design doc's experiments with a **real `git merge`**:\n- adjacent status changes (clean);\n- finishing adjacent tasks (clean);\n- the same task claimed on both branches (a clean merge, status `in_progress`, the newest timestamp);\n- both sides append a task (both kept, renumbered, deps rewritten);\n- the same task's description edited differently (the merge fails and reports it).\n\nPlus unit scenarios for the driver directly.\n",
-      "requirements": [
-        "FR-8.6",
-        "FR-8.10"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-077"
-      ],
-      "files": [
-        "tests/scripts/merge.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:25Z",
-      "started_at": "2026-10-23T23:16:29Z",
-      "completed_at": "2026-10-23T23:18:04Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-079",
-      "name": "Skills use atm for every status change; commit hygiene",
-      "type": "feature",
-      "description": "### do-task and loop-tasks\n- Get work **only** via `atm next --claim` (or `atm start <id>`); finish with `atm done`, `atm fail` on failure, and `atm heartbeat` roughly every 10 minutes on long tasks.\n- **Never edit** `status` / `started_at` / `completed_at` by hand (state the 6 agent rules from design §4).\n- Commit `.agentic-task-manager/tasks.json` plus **exactly the files the agent changed** for this task (tracked by the agent; `git add <paths>`), never `git add -A` / `git add .`.\n\n### create-tasks\nRuns `atm init`.\n\nRemove the now-obsolete manual timestamp instructions.\n",
-      "requirements": [
-        "FR-8.2",
-        "FR-8.3",
-        "FR-8.7"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-075",
-        "T-077"
-      ],
-      "files": [
-        "plugin/skills/do-task/SKILL.md",
-        "plugin/skills/loop-tasks/SKILL.md",
-        "plugin/skills/create-tasks/SKILL.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:26Z",
-      "started_at": "2026-10-23T23:18:13Z",
-      "completed_at": "2026-10-23T23:20:40Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "skills"
-      ]
-    },
-    {
-      "id": "T-080",
-      "name": "Dashboard shows live claims",
-      "type": "feature",
-      "description": "### Loading\nLoad `./claims.json` alongside `tasks.json` on every (auto-)refresh; a missing file or a 404 means **no claims** (no error shown).\n\n### Showing\n- `src/lib/claims.ts`: parse, keep the live ones, map by task id.\n- In-progress task cards and Kanban cards show the agent (short form), the branch, and *\"claimed 12 m ago\"*.\n- The detail panel shows the full claim and the lease expiry.\n\n### Tests\n- Extend the e2e `tasksServer` fixture to route `claims.json` (default 404; can serve an object).\n- Unit tests for `claims.ts` (90% coverage), component/e2e tests.\n- Update screenshots if the card layout changes.\n",
-      "requirements": [
-        "FR-8.8"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-074"
-      ],
-      "files": [
-        "dashboard/src/lib/claims.ts",
-        "dashboard/src/lib/load.ts",
-        "dashboard/src/components/TaskCard.svelte",
-        "dashboard/src/components/KanbanCard.svelte",
-        "dashboard/src/components/DetailPanel.svelte",
-        "dashboard/tests/e2e/helpers.ts",
-        "dashboard/tests/unit/claims.test.ts",
-        "dashboard/tests/e2e/claims.spec.ts"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:26Z",
-      "started_at": "2026-10-23T23:20:50Z",
-      "completed_at": "2026-10-23T23:24:26Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-081",
-      "name": "Remote claims via refs/atm/claims (P2)",
-      "type": "feature",
-      "description": "`atm.py`: **opt-in** with `meta.coordination = 'remote'`.\n\n### Behaviour\n- Claiming also runs `git push origin <HEAD sha>:refs/atm/claims/<id>` and **only proceeds if accepted** (rejected = someone else holds it; roll back the local claim).\n- `done` / `fail` / `release` / expiry push a deletion (best-effort, logged on failure).\n- `atm claims --remote` lists remote claim refs (`git ls-remote`).\n\n### Tests\nTests with a local bare repo as `origin` and two clones.\n\n> Skip if it can't be done cheaply; record the reason.\n",
-      "requirements": [
-        "FR-8.11"
-      ],
-      "use_cases": [],
-      "status": "skipped",
-      "dependencies": [
-        "T-075"
-      ],
-      "files": [
-        "plugin/scripts/atm.py",
-        "tests/scripts/remote.test.mjs"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:41Z",
-      "skip_reason": "Not cheap enough for this round: a safe version needs create-only pushes (--force-with-lease), leases on the remote (claim commits carrying the expiry, heartbeats that push, clearing expired refs) so a crashed machine can't block a task forever, and a network round-trip inside the lock. Open question for the maintainer (design §6 Q3: remote claims now or later); revisit when multi-machine work is needed.",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "skipped_at": "2026-10-23T23:25:02Z",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "cli"
-      ]
-    },
-    {
-      "id": "T-082",
-      "name": "README: Running agents in parallel",
-      "type": "docs",
-      "description": "A README section, *Running agents in parallel*:\n- **the problem** in two sentences;\n- **recommended setup**: one worktree + branch per agent from one clone (`git worktree add ../proj-agent2 -b agent2`), run `/atm:loop-tasks` in each;\n- **what atm guarantees**: single writer with lock, claims shared across worktrees, leases, merge driver;\n- **what it doesn't**: same files edited in one working tree; different machines without remote claims;\n- the agent rules;\n- the atm commands for humans;\n- remote claims, if T-081 shipped.\n\nLink `docs/parallel-agents-design.md`.\n",
-      "requirements": [
-        "FR-8.9"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-079",
-        "T-080"
-      ],
-      "files": [
-        "README.md"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:41Z",
-      "started_at": "2026-10-23T23:25:02Z",
-      "completed_at": "2026-10-23T23:26:57Z",
-      "labels": [
-        "architecture"
-      ],
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "docs"
-      ]
-    },
-    {
-      "id": "T-083",
-      "name": "Release 0.11.0",
-      "type": "docs",
-      "description": "Changelog **[0.11.0]** (parallel agents: atm helper, claims with leases, merge driver, commit hygiene, claims on the dashboard). Bump to 0.11.0, rebuild. **All suites green.**\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-076",
-        "T-078",
-        "T-082"
-      ],
-      "files": [
-        "plugin/CHANGELOG.md",
-        "plugin/.claude-plugin/plugin.json",
-        ".claude-plugin/marketplace.json",
-        "plugin/templates/tasks-dashboard.html"
-      ],
-      "created_at": "2026-10-23T16:41:18Z",
-      "updated_at": "2026-10-25T21:40:41Z",
-      "started_at": "2026-10-23T23:27:07Z",
-      "completed_at": "2026-10-23T23:28:34Z",
-      "updated_by": "claude:e5ea9db0",
-      "sprint": "Phase 11",
-      "sprint_history": [
-        {
-          "sprint": "Phase 11",
-          "from": "2026-10-23T16:41:18Z"
-        }
-      ],
-      "components": [
-        "dashboard"
-      ]
-    },
     {
       "id": "T-084",
       "name": "Faceted filter counts (logic)",
@@ -20008,7 +19297,7 @@
         "docs/improving-atm-cli-ergonomics.md"
       ],
       "created_at": "2026-11-04T09:46:12Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20064,32 +19353,48 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-413",
-      "name": "Implement multi-harness support for the ATM plugin",
+      "name": "Support the harnesses beyond Claude Code through atm agents install",
       "type": "feature",
       "priority": "P1",
       "labels": [
         "atm-cli",
-        "dashboard"
+        "distribution"
       ],
-      "description": "Implement multi-harness support for the ATM plugin, so it works under Open Code (and other hosts) in addition to Claude Code.\n\n## Overview\n\nThe ATM plugin's core is already harness-agnostic: `atm-cli/` is pure Python stdlib, `plugin/scripts/atm` is a shell launcher, and `dashboard/` is a single-file HTML served over HTTP by `atm serve`. Only the top layer — the `.claude-plugin/` manifest, `plugin/CLAUDE.md`, and Claude Code skill frontmatter — is host-specific.\n\nThe goal is to split the plugin into three layers so any harness can register the same skill bodies:\n\n- **Layer 1 — core (harness-agnostic):** `plugin/scripts/`, `atm-cli/`, `dashboard/`\n- **Layer 2 — skill bodies (harness-neutral):** `plugin/skills/*/SKILL.md`\n- **Layer 3 — adapters (per harness):** `.claude-plugin/` (Claude Code), `plugin/open-code/` (Open Code), `plugin/<harness>/` (future)\n\n## Diagram: three-layer split\n\n```mermaid\ngraph TD\n    subgraph L3[\"Layer 3 — harness adapters (thin)\"]\n        CC[Claude Code<br/>.claude-plugin/<br/>plugin/CLAUDE.md]\n        OC[Open Code<br/>plugin/open-code/]\n        CU[Cursor / Zed / …<br/>plugin/<harness>/]\n    end\n\n    subgraph L2[\"Layer 2 — skill bodies (harness-neutral)\"]\n        SD[do-task / plan-sprint /<br/>close-sprint / loop-tasks /<br/>push / serve / create-tasks<br/>plugin/skills/*/SKILL.md]\n    end\n\n    subgraph L1[\"Layer 1 — core (harness-agnostic)\"]\n        CLI[atm CLI<br/>atm-cli/ + plugin/scripts/<br/>pure Python stdlib 3.9+]\n        DS[Dashboard server<br/>atm serve → localhost:8765<br/>single-file HTML]\n        TD[Task data<br/>.agentic-task-manager/tasks.json<br/>plain JSON]\n    end\n\n    CC --> SD\n    OC --> SD\n    CU --> SD\n    SD --> CLI\n    SD --> DS\n    SD --> TD\n```\n\n## Diagram: data flow\n\n```mermaid\nsequenceDiagram\n    participant H as Harness (Open Code / Claude Code)\n    participant S as Skill body\n    participant A as atm CLI\n    participant T as tasks.json\n    participant D as Dashboard server\n    participant B as Browser\n\n    H->>S: invoke /atm:do-task\n    S->>A: atm next --claim\n    A->>T: read & lock task\n    T-->>A: task JSON\n    A-->>S: task under \"task\"\n    S->>S: implement the work\n    S->>A: atm commit <id> --file <paths>\n    A->>T: write tasks.json + commit\n    S->>A: atm done <id> --note '...'\n    A->>T: mark done, drop claim\n    D->>T: poll tasks.json (every 5s)\n    D->>B: serve dashboard HTML\n```\n\n## What to build\n\n1. `plugin/skills.json` — harness-neutral skill manifest (single source of truth: ids, names, triggers, `atm` commands, bodies)\n2. `plugin/open-code/manifest.json` — Open Code skill registration\n3. `plugin/open-code/install.sh` — copies skills to `~/.opencode/skills/`, puts `plugin/scripts/` on PATH\n4. `plugin/open-code/skills/*.opencode.md` — thin wrappers that `include` the shared `SKILL.md` bodies and declare tool permissions\n5. Split `plugin/skills/*/SKILL.md` frontmatter out of the harness-neutral body (keep Claude Code `allowed-tools` in the Claude Code adapter)\n6. `docs/multi-harness-support.md` — written; keep it in sync as the adapter evolves\n7. Verify `npm run verify` (dashboard) and `npm run test:scripts` (atm-cli) stay green\n\n## Reference\n\n- `docs/multi-harness-support.md` — full design, file layout, `skills.json` example, Open Code adapter, standalone usage, conventions, quick-start checklist\n\n## Files\n\n- `docs/multi-harness-support.md` (reference)\n- `plugin/skills.json` (new)\n- `plugin/open-code/manifest.json` (new)\n- `plugin/open-code/install.sh` (new)\n- `plugin/open-code/skills/*.opencode.md` (new)\n- `plugin/skills/*/SKILL.md` (split frontmatter from body)",
+      "description": "Make atm work in the harnesses beyond Claude Code through the model agreed in [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) (T-426): one set of portable skills, placed by `atm agents install`. No per-harness adapters: the earlier design ([multi-harness-support.md](docs/multi-harness-support.md): `plugin/open-code/`, `install.sh`, `skills.json`) is not built.\n\nThe harnesses: Codex CLI, Cursor, Gemini CLI, GitHub Copilot (VS Code and CLI), OpenCode, Windsurf (Devin) and Goose. What their documentation said on 2026-11-06 is in the distribution doc's §5 and sources; check it again before relying on it.\n\n## For each harness\n- **Install:** `atm agents install --harness <h>` puts the skills where it reads them (`~/.agents/skills/` for all of these); the skills show up and can be invoked by name (`atm-do-task`, …).\n- **Links or copies:** whether it follows the symlinks atm writes. Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have known bugs: confirm that atm copies for them, and whether any other harness needs copies.\n- **Duplicates:** whether it lists atm's skills twice, from `~/.agents/skills/` and `~/.claude/skills/` (expected in Cursor, OpenCode, Goose and VS Code Copilot), and that `atm agents status` says so.\n- **A task end to end:** `/atm-do-task` on a sample project: the skill checks `atm --version`, claims a task, keeps the claim alive through atm's own renewal ([porting-to-rust.md](docs/porting-to-rust.md) §4) and `atm claim hold` for a long command, commits and finishes it.\n- **Permissions:** how the harness asks before running `atm` commands, and whether the skills' instructions need anything for it (Claude Code's pre-approvals are `allowed-tools`, which only Claude Code reads).\n\n## Outcome\n- A support table in the distribution doc (§5): per harness, verified or not, links or copies, duplicates, known issues, with the version tried.\n- Fixes to `atm agents` where a harness needs one (its folder, copying, detection), each with a test.\n- A plugin for a harness only if users need something a skill can't do there (the distribution doc §6); proposed to Hakan first, never built here.\n- `docs/multi-harness-support.md` replaced by a pointer to the distribution doc, or removed.\n\n## Depends on\nThe tasks that build the thin skills, `atm docs` and `atm agents install|status|uninstall` (the distribution rollout's steps 1 to 3), once they exist.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
-      "dependencies": [],
+      "dependencies": [
+        "T-440",
+        "T-441",
+        "T-442"
+      ],
       "files": [
-        "docs/multi-harness-support.md"
+        "docs/multi-harness-support.md",
+        "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-04T19:51:37Z",
+      "updated_at": "2026-11-06T20:53:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "components": [
         "cli",
         "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z",
+          "to": "2026-11-06T20:53:41Z"
+        }
+      ],
+      "related": [
+        "T-415"
       ]
     },
     {
@@ -20105,7 +19410,7 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T06:39:31Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20131,7 +19436,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-415",
@@ -20142,7 +19448,7 @@
         "[Rust guide](docs/guides/rust.md)"
       ],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-412",
         "T-414",
@@ -20155,13 +19461,37 @@
         "docs/guides/rust.md"
       ],
       "created_at": "2026-11-05T07:03:15Z",
-      "updated_at": "2026-11-06T09:30:13Z",
+      "updated_at": "2026-11-08T02:42:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "cli"
       ],
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:31:56Z",
+      "started_by": "claude:34798264",
+      "commit": "3b839f72e1e7831c3f2d5ddbc67aeb942056154b",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/porting-to-rust.md` (crates per layer, axum, side-by-side port, no plugin after the switch); implementation: T-443 (this sprint), T-444–T-454 (The Rust port).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
     },
     {
       "id": "T-416",
@@ -20218,7 +19548,7 @@
         "docs/modernizing-build-approach.md"
       ],
       "created_at": "2026-11-05T08:15:16Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20244,7 +19574,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-418",
@@ -20263,7 +19594,7 @@
         "atm-cli/atm/lib/state.py"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20282,7 +19613,7 @@
       "commit": "c6e4a035563accf4eaf4569b2ed3020c932d91a2",
       "completed_at": "2026-11-06T05:52:19Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T05:52:19Z",
@@ -20294,7 +19625,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-419",
@@ -20313,7 +19645,7 @@
         "tests/scripts/lib.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "related": [
@@ -20335,7 +19667,7 @@
       "commit": "8e723bf361cf0252bdc1fc58789568b7f67fdd43",
       "completed_at": "2026-11-06T06:09:13Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:09:13Z",
@@ -20347,7 +19679,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-420",
@@ -20367,7 +19700,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20386,7 +19719,7 @@
       "commit": "62461cacfaf13cea9223ffe955048e59a72ad9c2",
       "completed_at": "2026-11-06T06:12:14Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:12:14Z",
@@ -20398,7 +19731,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-421",
@@ -20422,7 +19756,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20441,7 +19775,7 @@
       "commit": "53e3ae4fda8a84318cd072ee86392335801b9949",
       "completed_at": "2026-11-06T06:23:02Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:23:02Z",
@@ -20453,7 +19787,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-422",
@@ -20472,7 +19807,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20509,11 +19844,12 @@
       "commit": "76efd8362db52fea30d6b209606f7112eba4efd7",
       "completed_at": "2026-11-06T07:48:35Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-423",
@@ -20535,7 +19871,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20554,7 +19890,7 @@
       "commit": "484d0731b25f7f256a349cadbcd2bfd79c2c9f1a",
       "completed_at": "2026-11-06T06:26:10Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:26:10Z",
@@ -20566,7 +19902,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-424",
@@ -20589,7 +19926,7 @@
         "tests/scripts/atm2.test.mjs"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -20609,7 +19946,7 @@
       "commit": "ddc314219483b7d9b5e714710aa1572996736818",
       "completed_at": "2026-11-06T06:34:37Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:34:37Z",
@@ -20621,7 +19958,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-425",
@@ -20652,7 +19990,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-05T10:27:26Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20691,11 +20029,12 @@
       "commit": "41010298a5fb1e27b9c3ad865432f53f7f3b80f2",
       "completed_at": "2026-11-06T10:00:28Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-426",
@@ -20710,7 +20049,7 @@
         "[Tauri guide](docs/guides/tauri.md)"
       ],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/better-way-to-distribute-atm.md",
@@ -20718,7 +20057,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-05T10:29:01Z",
-      "updated_at": "2026-11-06T05:34:03Z",
+      "updated_at": "2026-11-08T02:42:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "with": "user",
@@ -20731,7 +20070,31 @@
         "docs",
         "skills",
         "cli"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:02:02Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:04:28Z",
+      "started_by": "claude:34798264",
+      "commit": "74b97ab676923133270fe8462d66e8eb412eb31d",
+      "completed_at": "2026-11-06T20:53:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T20:53:42Z",
+          "kind": "outcome",
+          "text": "Design agreed in `docs/better-way-to-distribute-atm.md`; implementation: T-439–T-442 (this sprint), T-450, T-452–T-453 (The Rust port), T-455–T-461 (The atm app); other harnesses in T-413 (backlog).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
     },
     {
       "id": "T-427",
@@ -20757,7 +20120,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20807,11 +20170,12 @@
       "commit": "ef2b13e4b79d1541027f8b313048ab1dbc802f85",
       "completed_at": "2026-11-06T07:14:41Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-428",
@@ -20839,7 +20203,7 @@
         "plugin/templates/tasks-dashboard.html"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20885,11 +20249,12 @@
       "commit": "b9ea51babc476f2bf66eae8a62db5e2c2a24d96c",
       "completed_at": "2026-11-06T15:56:29Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-429",
@@ -20918,7 +20283,7 @@
         "tests/scripts/serve.test.mjs"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20961,11 +20326,12 @@
       "commit": "4763f3d9dd78af158f1c64dadbd0b42249b47778",
       "completed_at": "2026-11-06T18:06:43Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-430",
@@ -20989,7 +20355,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21008,7 +20374,7 @@
       "commit": "df9544e901f29432700dcff2e2875a167a898e16",
       "completed_at": "2026-11-06T16:06:57Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T16:06:57Z",
@@ -21020,7 +20386,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-431",
@@ -21044,7 +20411,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21090,11 +20457,12 @@
       "commit": "38f19fdf37f6784e8ec132f58cf732423c62a1d7",
       "completed_at": "2026-11-06T18:26:08Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-432",
@@ -21118,7 +20486,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21137,7 +20505,7 @@
       "commit": "ba95e68dfafdfc0186ffaafeae4ff201920e5188",
       "completed_at": "2026-11-06T16:15:54Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T16:15:54Z",
@@ -21149,7 +20517,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-433",
@@ -21174,7 +20543,7 @@
         "dashboard/tests/unit/no-hardcoded-colours.test.ts"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21220,11 +20589,12 @@
       "commit": "cce41a89a58955707ef51b72616d21b48cf9d8a1",
       "completed_at": "2026-11-06T18:35:53Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-434",
@@ -21247,7 +20617,7 @@
         "dashboard/tests/unit/"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21266,7 +20636,7 @@
       "commit": "a7b1629e6df725c3f8c283a7602b323acaa110d4",
       "completed_at": "2026-11-06T18:40:20Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T18:40:20Z",
@@ -21278,7 +20648,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-435",
@@ -21299,7 +20670,7 @@
         "docs/dashboard-logic-inventory.md"
       ],
       "created_at": "2026-11-06T05:33:45Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:58:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21318,7 +20689,7 @@
       "commit": "bad89e5e9347bdc8093682137fba7b857c1bdb1a",
       "completed_at": "2026-11-06T06:40:59Z",
       "completed_by": "claude:34798264",
-      "sprint_review": "pending",
+      "sprint_review": "reviewed",
       "notes": [
         {
           "at": "2026-11-06T06:40:59Z",
@@ -21336,7 +20707,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-436",
@@ -21407,7 +20779,7 @@
         "tests/scripts/claims.test.mjs"
       ],
       "created_at": "2026-11-06T08:24:13Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21441,7 +20813,8 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
-      }
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
     },
     {
       "id": "T-438",
@@ -21474,7 +20847,7 @@
         "tests/scripts/scenarios/review-states.json"
       ],
       "created_at": "2026-11-06T09:30:13Z",
-      "updated_at": "2026-11-06T18:50:28Z",
+      "updated_at": "2026-11-06T19:56:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21510,6 +20883,1887 @@
       "pr": {
         "number": 37,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/37"
+      },
+      "merged_at": "2026-11-06T19:54:27Z"
+    },
+    {
+      "id": "T-439",
+      "name": "Claims renewed by atm itself, and a longer lease without hooks",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "So nothing depends on the Claude Code plugin's hooks ([porting-to-rust.md](docs/porting-to-rust.md) §4), in the Python atm:\n\n## Change\n- Every atm command an agent runs renews that agent's live claims (as `atm claim heartbeat` does), under the lock it already takes. Reads renew too; a command run with `--agent` for someone else renews nothing.\n- The default lease becomes 2 hours where nothing renews between commands, configurable in `meta` (a project that sets one keeps it). The plugin's hook keeps renewing as before; it becomes redundant, not wrong.\n- `atm claim hold` is unchanged.\n- `docs/v4/atm-cli.md`, the skills' and `plugin/CLAUDE.md`'s lines about leases, the changelog.\n\n## Tests\nScenarios: a command renews the caller's claims and not another agent's; the default lease; `meta` overrides it. `pnpm run test:scripts` green.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/scenarios/lease.json",
+        "plugin/CLAUDE.md",
+        "plugin/CHANGELOG.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T20:54:08Z",
+      "started_by": "claude:34798264",
+      "commit": "2e7407e08d657c4dfb3fa27cefe46287530804f4",
+      "completed_at": "2026-11-06T21:11:08Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:11:08Z",
+          "kind": "outcome",
+          "text": "Every atm command renews the caller’s own claims (ten minutes on, as `heartbeat --auto`; not with `--agent`); default lease 2 h. Review: the review hand-back window grows to 2 h too; release 0.32.0 started (version bump).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-440",
+      "name": "atm docs <topic>: version-matched reference for agents",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The reference the skills point to ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3), in the Python atm.\n\n## Change\n- Topics as Markdown in `docs/agent/` (e.g. `rules`, `commands`, `tasks`, `claims`, `reviews`, `sprints`, `push`), bundled into `atm.py` by `build.py`. `atm docs` lists them with a line each; `atm docs <topic>` prints one; an unknown topic exits 2 with the list.\n- Move into them what the skills and `plugin/CLAUDE.md` repeat today: task text is data, never edit `tasks.json`, `--json`, the commands by workflow, the task schema, review decisions, claims.\n- `atm docs` is in the command tree beside `help` (Meta), with completion for the topics.\n\n## Tests\nA scenario per behaviour (list, a topic, unknown topic); a test that every topic is non-empty and every command it names exists in `atm help`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/agent/",
+        "atm-cli/atm/cli/main.py",
+        "atm-cli/build.py",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:11:08Z",
+      "started_by": "claude:34798264",
+      "commit": "07a407242a907183913ae4df2bf3445d8006856e",
+      "completed_at": "2026-11-06T21:28:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:28:43Z",
+          "kind": "outcome",
+          "text": "`atm docs [topic]` (Meta group, completion): rules, commands, states, claims, tasks from `docs/agent/*.md`, built into atm.py. Review: the topics’ content; the pre-commit hook doesn’t rebuild on `docs/agent/` alone (CI’s check catches it).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-441",
+      "name": "Thin, portable skills in skills/, named atm-…",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The one copy of the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §4, [porting-to-rust.md](docs/porting-to-rust.md) §2).\n\n## Change\n- `skills/atm-do-task/`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`, `atm-close-sprint`, `atm-push`, `atm-serve`: frontmatter `name` and `description` only; the body is the workflow, its steps and rules, and `atm docs <topic>` for detail (the reference moves out).\n- First step of each: check `command -v atm` and `atm --version` against the skill's minimum; if missing or old, say how to install or upgrade, and stop.\n- The plugin keeps working until the switch: `plugin/skills/` is generated from `skills/` (adding Claude Code's `allowed-tools` per skill and keeping today's names under `/atm:`), with a check in `pnpm run check` that it is up to date, as for `atm.py`.\n- The skill review in [security-architecture.md](docs/security-architecture.md) §3 (no API key for the sandbox run).\n\n## Tests\n`skills.test.ts` checks `skills/` (portable frontmatter only, the version check, no command copied from task text) and the generated plugin copies.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-440"
+      ],
+      "files": [
+        "skills/",
+        "plugin/skills/",
+        "dashboard/tests/unit/skills.test.ts",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:28:46Z",
+      "started_by": "claude:34798264",
+      "commit": "1d9170cfffa07ca37757fee0d695f7b1671042b8",
+      "completed_at": "2026-11-06T21:40:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T21:40:43Z",
+          "kind": "outcome",
+          "text": "Source in `skills/atm-*` (portable frontmatter, version check, `/atm-` links, pointers to `atm docs`); plugin copies generated by build.py (allowed-tools from `skills/claude-code.json`, `/atm:` links, bin fallback); CompMD guide is `atm docs compmd`. Review: the thinned paragraphs in do-task and loop-tasks.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-442",
+      "name": "atm agents install|status|uninstall, for Claude Code",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "Installing the skills ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §3, §5), in the Python atm, **for Claude Code only**; built so other harnesses are an entry in a table later (T-413).\n\n## Change\n- `atm agents install [--harness claude] [--project] [--copy]`: writes the skills of this atm's version to `~/.agentic-task-manager/skills/` and links them into `~/.claude/skills/` (or the project's `.claude/skills/` with `--project`), Claude Code's copy with `allowed-tools`; `--copy` copies instead. Idempotent; prints every path it wrote.\n- `atm agents status`: per harness in the table (Claude Code for now), where atm's skills are (linked, copied, missing, stale) and their version.\n- `atm agents uninstall`: removes exactly what install wrote, nothing else.\n- Harnesses are a table (name, how to detect it, its folders, link or copy, extra frontmatter), so adding `~/.agents/skills/` and the others later touches only the table.\n- Opt-in only: never run by atm on its own. The new entry point (writing into another tool's folder) in [security-architecture.md](docs/security-architecture.md).\n\n## Tests\n`tests/scripts/agents.test.mjs` on a temporary home: install, status, re-install (no change), copy mode, uninstall leaves nothing, a stale link reported.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-441"
+      ],
+      "files": [
+        "atm-cli/atm/lib/",
+        "atm-cli/atm/cli/main.py",
+        "tests/scripts/agents.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "started_at": "2026-11-06T21:40:43Z",
+      "started_by": "claude:34798264",
+      "commit": "9d55d0f8621a1317adc9ec2f8ac22ff8dd1464fd",
+      "completed_at": "2026-11-06T22:00:29Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-06T22:00:29Z",
+          "kind": "outcome",
+          "text": "`atm agents install|status|uninstall` (Claude Code; harness table in `lib/agents.py`): links from `~/.claude/skills`, copies with `--copy`/`--project`, record in `agents.json`, never replaces a folder it didn’t write. Review: the security entry; opt-in only.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-443",
+      "name": "Rust workspace skeleton, CI on three platforms, and ATM_IMPL in the suite",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "rust"
+      ],
+      "description": "Step 1 of [porting-to-rust.md](docs/porting-to-rust.md) §5, following the [Rust guide](docs/guides/rust.md).\n\n## Change\n- `Cargo.toml` (workspace: edition 2024, lints, `[workspace.dependencies]`), `rust-toolchain.toml`, `deny.toml`; the crates of §2 (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`) with their allowed dependencies only; `atm version` from the binary (the plugin's version).\n- `tests/scripts` runs against the Rust binary when `ATM_IMPL=rust` (the launcher it uses picks it); an expected-failures list (by scenario file and test) that a test checks only shrinks.\n- CI: a Rust job on macOS, Linux and Windows (fmt, clippy, tests, cargo-deny, the suite with `ATM_IMPL=rust` and its expected failures); pinned as the CI rules in `AGENTS.md` say.\n- `AGENTS.md`: how to build and test the Rust side.\n\n## Tests\nThe crates' unit tests; `atm version` passes its scenario under `ATM_IMPL=rust`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "rust-toolchain.toml",
+        "deny.toml",
+        "crates/",
+        "tests/scripts/run.mjs",
+        ".github/workflows/ci.yml",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "Rust and distribution",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "Rust and distribution",
+      "commit": "0d58d44e5ec33ab4aa2e61ddaf0257abffedf5b7",
+      "notes": [
+        {
+          "at": "2026-11-06T23:11:34Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-06T23:11:44Z",
+          "kind": "outcome",
+          "text": "Cargo workspace (7 crates, toolchain 1.99, cargo-deny), CI `rust` job on Linux/macOS/Windows, the suite against the binary with `run.mjs --rust` (per-file watchdog; 566 expected failures in `rust-expected-failures.json`); fixed `lock.test.mjs` polling forever when the holder exits",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-06T23:11:39Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-06T23:11:44Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-444",
+      "name": "Rust: the model, reading the store, task details",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 2, split in four: this, then `task list`, `task deps` and `project status`). Follows the [Rust guide](docs/guides/rust.md); the Python atm is the spec (§1: `--json` identical, text the same or better, exit codes identical).\n\n## Change\n- `atm-common`: the model the reads need (task, sprint, release, component, the vocabularies and kinds from `atm-cli/atm/common/schema/vocabularies.json`, the errors), with `serde` keeping atm's key order (§3).\n- `atm-db`: reading `.agentic-task-manager/tasks.json` and `tasks-archive.json` as the Python store does (`db/jsongit/`: finding the folder, refusing symlinks, the in-memory upgrades of older files), behind a store interface.\n- `atm-lib`: the reads `task details` uses (`lib/tasks.py`'s `show_tasks`).\n- `atm-boot`: opening a project from the current directory or `--dir`.\n- `atm-cli`: the layout the later slices fill: `src/main.rs` with only the root `Cli` (clap derive), the global options (`-j/--json`, `--dir`, anywhere on the line as today), the dispatch and the exit codes; `src/commands/<group>.rs` per top-level command (`task` here; `version` moves to `meta.rs`); `task details <id>...` as text and `--json`, with Python's error messages (unknown task, no task file).\n\n## Tests\nUnit tests in the crates; the `task details` scenarios (and the error and global-option ones it makes pass) leave `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-443"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T00:39:33Z",
+      "started_by": "claude:34798264",
+      "commit": "c837b055dda04b5591b923163205724aa66b2085",
+      "completed_at": "2026-11-07T01:05:35Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:05:35Z",
+          "kind": "outcome",
+          "text": "Model and vocabulary checks (`atm-common`), strict read of `tasks.json` and the archive behind a `Store` trait plus a memory store (`atm-db`), `show_tasks` (`atm-lib`), `open_project` (`atm-boot`), `task details` text and `--json` with the `main.rs` + `commands/` layout (`atm-cli`); 9 tests off the expected list",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-445",
+      "name": "Rust: the write path: the lock folder, the change transaction, the claims store",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 3, split in four: this, then the task states, `task review` and `loop next`): the store's write path, which every later slice writes through.\n\n## Change\n- `atm-db`: the task folder's **lock** as the Python atm has it (`db/jsongit/lock.py`): a lock folder with `owner.json`, waited for up to `ATM_LOCK_TIMEOUT`, broken when its owner is dead or it is over a minute old, released on exit and on SIGTERM; the same folder, so the Python and the Rust atm can run against one project during the switch (`lock.test.mjs`, and `atm _lock-test`). `porting-to-rust.md` §3 says `std::fs::File::lock`: correct it to the lock folder.\n- `atm-db`: the **claims store** (`db/jsongit/claims.py`): where it is (shared by a clone's worktrees), reading it, writing it atomically.\n- `atm-db`: the **change transaction** (`JsonGitStore.change`, `db/working.py`): under the lock, read `tasks.json` and the claims store, let the change run, write only what changed (`tasks.json` only when its text changed, with the archive first when tasks move into it), atomically, as `to_json` + newline.\n- `atm-lib`: the change's actor and time (`ATM_NOW`, `ATM_AGENT` / the session) as later slices need them.\n\n## Tests\nUnit tests for the lock (two holders, a dead owner, an old lock, the timeout) and for writing only what changed; `lock.test.mjs` leaves `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-444",
+        "T-462"
+      ],
+      "files": [
+        "crates/",
+        "docs/porting-to-rust.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:20:33Z",
+      "started_by": "claude:34798264",
+      "commit": "37863f5e3b95a49fe8551ea96c05b7bab7ddbf71",
+      "completed_at": "2026-11-07T01:30:27Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:30:27Z",
+          "kind": "outcome",
+          "text": "The write path in Rust: the lock folder (Python’s protocol, SIGTERM-safe via `signal-hook`, owner checks via `sysinfo`), the claims store and its snapshot, the change transaction (`Store::change`, `Working`), `atm _lock-test`; `lock.test.mjs` passes (6 off the list); porting doc §3 corrected",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-446",
+      "name": "Rust: claims, claim hold's watcher and the renewal",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 4 of [porting-to-rust.md](docs/porting-to-rust.md) §5: the claims store, `claim list|heartbeat|hold`, the renewal by every command and the lease of §4. The watcher is the binary started detached (`atm _claim-watch`), following the shell by pid and start time (`sysinfo`, proposed to Hakan first as a new dependency); invariant I24's check moves to the Rust code.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-445",
+        "T-439",
+        "T-467"
+      ],
+      "files": [
+        "crates/",
+        "dashboard/tests/unit/security-invariants.test.ts"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:27:14Z",
+      "started_by": "claude:34798264",
+      "commit": "1f5189cc84db09e934fbf59093b6bf04e6b4bd7b",
+      "completed_at": "2026-11-07T02:33:39Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:33:39Z",
+          "kind": "outcome",
+          "text": "Rust `claim list|heartbeat|hold` (watcher = `atm _claim-watch`, detached, following the shell by pid and start time via sysinfo) and renewal by every command; I24 check covers Rust; 15 tests left the list (340 left). The registry listing in `heartbeat --auto` waits for T-472.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-447",
+      "name": "Rust: task add and task note",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 5, split in four: this, then `task edit`, the `sprint` group, and the `release`, `component` and `project` groups), on T-445's write path.\n\n## Change\n- `task add` (`lib/edit.py`'s `add_new_tasks`): one task from options, or many from `--json-file` (a list, or `{\"tasks\": [...]}`), placeholder IDs (`new-1`) replaced by the next IDs in the project's pattern and followed in dependencies; the whole file refused, nothing written, for an unknown type or priority, an invalid label, an unknown or closed sprint, a dependency that doesn't exist or a cycle; `created_by`, timestamps, the components a task's files suggest (SR-2.7); text and `--json` as in Python.\n- `task note <id> <text>`: a note on a task, whatever its status, at most 500 characters.\n\n## Tests\nThe `task add` and `task note` scenarios (`add.json`, `notes.json`, …) and `add.test.mjs` (eight agents adding at once) leave `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-445",
+        "T-465"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:04:13Z",
+      "started_by": "claude:34798264",
+      "commit": "7c66afdc9aa552036bb6a57abfcab23d0fc8062d",
+      "completed_at": "2026-11-07T02:20:52Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:20:52Z",
+          "kind": "outcome",
+          "text": "Rust `task add` (options or `--json-file`, placeholders, all-or-nothing checks, cycles, components) and `task note`; 23 tests left the expected-failures list (402 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-448",
+      "name": "Rust: atm-vcs and the vcs group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 6, split in three: this, then the merge driver, and the `db` group with `doctor`): `atm-vcs`, running git (the Python atm's `vcs/git.py`), and the `vcs` group (`lib/code.py`, `cli/commands/vcs.py`).\n\n## Change\n- `atm-vcs`: the version control behind a project (checked-out branch, user name, default base, remote URL, the files a commit stages, refusing whatever would stage more than the files named).\n- `vcs commit <id> --file … [--dir …]` (the task's files plus the store's, the workflow's commit template and trailers, the commit recorded on the task, refusing a file in another agent's claimed task), `vcs pr <id>… --number --url`, `vcs pushed --pr N --at` (merges recorded, a planned release released when all its tasks are merged), `vcs repository [URL] [--from]` (the web address from a remote, PR links moved); text and `--json` as in Python.\n\n## Tests\nThe `commit`, `pr`, `pushed` and `repository` scenarios and `git.test.mjs` leave `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-447",
+        "T-470",
+        "T-471",
+        "T-472",
+        "T-473",
+        "T-474"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:26:02Z",
+      "started_by": "claude:34798264",
+      "commit": "6740581b7a9d610f52ba0d25f8b49e9e30b8ac08",
+      "completed_at": "2026-11-07T03:35:13Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:35:13Z",
+          "kind": "outcome",
+          "text": "Rust `atm-vcs` and `vcs commit|pr|pushed|repository`; split with T-475 (merge driver) and T-476 (db group, doctor); 31 tests left the list (163 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-449",
+      "name": "Rust: atm serve itself: the server, its record, the registry, the page and its headers",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7a of [porting-to-rust.md](docs/porting-to-rust.md) §5 (step 7, split in three: this, then the read API and the project's files): `atm serve` itself, in `atm-api` on axum/tokio (§3), as the Python atm's `cli/serve.py` and `api/server.py` run it.\n\n## Change\n- `atm serve start|stop|status` and `atm service [--refresh] [--port] [--open] [--all] [--dir]`: one detached server per user (`ATM_HOME`), started as the `atm` binary itself, its record (pid, port, build, version) in `ATM_HOME`, a busy port moving to the next, a stale record cleaned up, `stop` ending only the recorded server (SIGTERM, then SIGKILL), two starts at once starting one server, `--refresh` restarting an older or rebuilt dashboard on the same port; `/__atm/whoami`.\n- The **registry** of projects (`db/registry.py`, `projects.json`): adding a project when a command runs in it, IDs from `meta.id` (another when it is taken), `meta.dashboard.listed`.\n- The **Host check** (DNS rebinding), `[::1]` and `127.0.0.1` both, and the security headers and CSP of [security-architecture.md](docs/security-architecture.md) I12–I13.\n- The dashboard page, from `plugin/templates/tasks-dashboard.html`, embedded at build and served from memory at each of its paths (T-429's routes); CompMD's runtime from `plugin/assets/compmd/`, at `/assets/`, read-only.\n- New dependencies: `axum` and `tokio` (named in §3).\n\n## Tests\nThe `serve.test.mjs` tests about the server's lifecycle, the page, the headers and the Host check leave `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-444",
+        "T-464",
+        "T-448",
+        "T-475",
+        "T-476"
+      ],
+      "files": [
+        "crates/atm-api/",
+        "crates/atm-cli/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T01:55:09Z",
+          "kind": "handoff",
+          "text": "Not started: `atm serve start` runs the folder’s migration first (`migrate_folder`, `atm db migrate`), which is T-448’s, so T-449 now depends on T-448. Split into T-449 (the server), T-468 (read API), T-469 (files, search, e2e).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T03:59:54Z",
+          "kind": "handoff",
+          "text": "Not started: it adds `axum` and `tokio`, new dependencies that need the user’s approval first.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T04:33:51Z",
+          "kind": "outcome",
+          "text": "The server: `atm service start|stop|status|--refresh` and `atm _serve` on axum/tokio, page and CompMD assets embedded, Host check, headers and CSP, `/__atm/whoami`. 18 tests left the expected list (49 remain, the read API’s and the files’, T-468/T-469). atm-cli now depends on atm-api, only for `_serve`; the docs say so.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-07T04:06:36Z",
+      "started_by": "claude:34798264",
+      "commit": "9add4c39a3cb9c671881f764843da6d1ed937bcf",
+      "completed_at": "2026-11-07T04:33:51Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-450",
+      "name": "Rust: atm agents and atm docs, with the skills embedded",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "Slice 8 of [porting-to-rust.md](docs/porting-to-rust.md) §5: `atm agents install|status|uninstall` (Claude Code only, the harness table as in Python) and `atm docs`, with `skills/` and `docs/agent/` embedded in the binary; `agents.test.mjs` and the docs scenarios pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-440",
+        "T-442",
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:08:32Z",
+      "started_by": "claude:34798264",
+      "commit": "9deaa6be9e2b71414953495a9f4a651d24c1aef6",
+      "completed_at": "2026-11-07T01:14:11Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:14:11Z",
+          "kind": "outcome",
+          "text": "`atm agents install|status|uninstall` (`atm-lib` agents, `commands/agents.rs`) and `atm docs` (`commands/meta.rs`) in Rust; `build.rs` embeds `skills/` and `docs/agent/`; `agents.test.mjs`, the docs scenarios and the first docs test pass (10 off the list); the second docs test waits for the whole command tree",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-451",
+      "name": "Rust: completion, help text, and clap's text changes for approval",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 9 of [porting-to-rust.md](docs/porting-to-rust.md) §5: shell completion (`clap_complete`, proposed first as a new dependency, with atm's value completers), `atm help`, and every place where the Rust text output or command structure differs from Python's: listed for Hakan, kept only with his approval (§1), the scenarios updated for those. Done together with Hakan.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-446",
+        "T-448",
+        "T-449",
+        "T-450",
+        "T-469"
+      ],
+      "files": [
+        "crates/atm-cli/",
+        "tests/scripts/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "with": "user",
+      "started_at": "2026-11-07T05:35:56Z",
+      "started_by": "claude:34798264",
+      "commit": "89014417867b6870518c25072be1517c789da57c",
+      "completed_at": "2026-11-07T06:12:57Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T06:12:57Z",
+          "kind": "outcome",
+          "text": "Decided with Hakan: clap’s help and usage-error wording behind `atm:` and `--json`, everyday-first order, `atm help` a command, bare `atm` exits 0; completion is clap_complete’s dynamic engine with atm’s values (`atm completion <shell>`). Fixed `meta: null` written by `vcs pushed`. Only the merge-launcher test is left on the expected list.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-452",
+      "name": "Release machinery: signed binaries, the Homebrew formula, the release script",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "How the CLI reaches users ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §1): release builds for macOS (arm64, x86_64, signed and notarized), Linux and Windows on a tag, with checksums; the Homebrew formula and a release script in `packaging/`. CI changes pinned as `AGENTS.md` says; distribution entries in the security doc.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-443"
+      ],
+      "files": [
+        "packaging/",
+        ".github/workflows/",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "blocks": [
+        {
+          "from": "2026-11-07T01:14:29Z",
+          "to": "2026-11-07T01:24:48Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-07T01:24:48Z",
+          "kind": "answer",
+          "text": "macOS signing and notarization need an Apple Developer ID (a Developer ID Application certificate and a notarytool login) stored as repository secrets: do you have one, and which secret names should the release workflow read? Or release unsigned macOS builds for now? → Yes: Hakan has an Apple Developer ID. Sign and notarize the macOS builds, reading the same secrets as solo-swe/agentic-status-bar’s release workflow (look its names up there).; Publishing a release on a tag needs a new workflow with `contents: write` (CI is read-only today): OK to add `.github/workflows/release.yml` with that permission, scoped to that one job? → Yes: a separate workflow for `v*` tag releases, with `contents: write` for that job only.; The Homebrew formula needs a tap repository: create `solo-swe/homebrew-tap` (users run `brew install solo-swe/tap/atm`), or another name? The release workflow would also need a token that can push to it. → Use the Homebrew tap solo-swe/agentic-status-bar already publishes to, and in-app updates the way that project does them; follow its release setup.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T01:35:44Z",
+          "kind": "outcome",
+          "text": "`release.yml` (v* tags: 5 targets, macOS signed and notarized, draft release with `SHA256SUMS`; only the drafting job can write), `homebrew.yml` (on publish: `Formula/atm.rb` in solo-swe/homebrew-tap), `packaging/` scripts and README (the secrets to add); tests for the formula, release.sh and the workflows’ hardening; security doc I18 and §3. Not run end to end until the secrets are set and a tag is pushed",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-07T01:30:37Z",
+      "started_by": "claude:34798264",
+      "commit": "6c4b4d0a04f06621a301a01dcae32c1fdac5a377",
+      "completed_at": "2026-11-07T01:35:44Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-453",
+      "name": "Generate the public skills repo at release",
+      "type": "infra",
+      "priority": "P3",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The release exports `skills/` to a public skills repo, tagged with atm's version, so `npx skills add <owner>/<repo>` works ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §6). The repo's name and owner are Hakan's call: ask before creating anything outside this repository.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-441",
+        "T-452"
+      ],
+      "files": [
+        "packaging/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-454",
+      "name": "The switch: remove atm-cli/, plugin/ and build.py (0.33.0)",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "[porting-to-rust.md](docs/porting-to-rust.md) §5, §6, the last part of the switch (split into T-477, T-478, T-479 and this, with Hakan): remove `atm-cli/`, `plugin/` and `build.py` in one change, landing in 0.33.0, after 0.32.0 (the plugin's last release, T-479).\n\n## Before it lands\n- A real release exists: the formula in `solo-swe/homebrew-tap` and the signed release binaries (T-452's machinery, with the release secrets and the tap's deploy key in place).\n- CI is green for the Rust atm on Linux, macOS and Windows (T-478), and the last expected failure is gone (the merge driver's path: the test then expects the `atm` binary).\n- T-477 has moved out of `plugin/` and `atm-cli/` everything the workspace and the dashboard build from.\n\n## Change\n- Delete `atm-cli/`, `plugin/` (with `.claude-plugin/marketplace.json`) and `build.py`; T-478's suite and CI land with it.\n- `AGENTS.md`, the README and the docs say how atm is installed (the formula, the app) and how plugin users move.\n\nReviewed with Hakan before it lands.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-451",
+        "T-452",
+        "T-477",
+        "T-478",
+        "T-479"
+      ],
+      "files": [
+        "atm-cli/",
+        "plugin/",
+        "AGENTS.md",
+        "README.md",
+        "docs/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-07T06:21:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-06T20:53:32Z",
+          "to": "2026-11-07T06:21:00Z"
+        }
+      ],
+      "review": "blocker",
+      "notes": [
+        {
+          "at": "2026-11-07T06:21:09Z",
+          "kind": "handoff",
+          "text": "Split with Hakan into T-477 (move what Rust and the dashboard need), T-478 (suite, dev and e2e on Rust only), T-479 (0.32.0, the plugin’s last release: the move note) and this, the removal, in the backlog for 0.33.0, after a real release and green CI.",
+          "by": "claude:34798264"
+        }
+      ]
+    },
+    {
+      "id": "T-455",
+      "name": "The atm app's skeleton (Tauri)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app"
+      ],
+      "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-454"
+      ],
+      "files": [
+        "app/",
+        "Cargo.toml"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-456",
+      "name": "The app's commands over atm-lib, and live changes through channels",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app"
+      ],
+      "description": "The commands the dashboard needs, each a thin mapping to an atm-lib call ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2): projects, a project's tasks (the v1 view), claims, worktrees, documents and files, search; a Tauri channel per subscription for changes (a file watcher), with `unsubscribe`. Command-wiring tests on Tauri's mock runtime.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-455"
+      ],
+      "files": [
+        "app/src-tauri/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-457",
+      "name": "The dashboard's IPC transport",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`) and an IPC one (the app), picked at start; the app's build of the dashboard. A test that each REST route and its Tauri command return the same data; Playwright on mocked Tauri IPC over an in-memory project for the app.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-456"
+      ],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/tests/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-458",
+      "name": "The app's \"Connect your agents\" button",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "A button (Claude Code for now, from the harness table) that calls the same atm-lib code as `atm agents install` through a Tauri command, shows what it wrote where, and the status. Never runs on its own.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-457",
+        "T-450"
+      ],
+      "files": [
+        "app/",
+        "dashboard/src/lib/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-459",
+      "name": "The app's deep links (atm://…)",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "app"
+      ],
+      "description": "`atm://projects/<id>[/<tab>]?task=…&doc=…` opens the app at that page, parsed by the dashboard's address code (T-429's `lib/address.ts`), never fetched or run.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-457"
+      ],
+      "files": [
+        "app/",
+        "dashboard/src/lib/address.ts"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-460",
+      "name": "macOS packaging: notarized DMG and the Homebrew cask",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-456",
+        "T-452"
+      ],
+      "files": [
+        "packaging/",
+        "app/",
+        ".github/workflows/"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-461",
+      "name": "Security review of the app",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "security"
+      ],
+      "description": "[security-architecture.md](docs/security-architecture.md): the app's capabilities, its CSP, the IPC commands as entry points, deep links, the skills button writing into Claude Code's folder, signing and notarization; invariants and their checks where they apply.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-458",
+        "T-459",
+        "T-460"
+      ],
+      "files": [
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-06T20:53:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-06T20:53:32Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-462",
+      "name": "Rust: task list, its filters and --derived",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-444's model and store.\n\n## Change\n- `atm-lib`: the queries of `lib/query.py` that `task list` uses (`list_matching`, `Filters`, the views), and what atm derives for a task: its kind, `ready`, `waiting_for` (an archived dependency counts as done), the effective priority and review mode (`effective_review`, from the task, its components and `meta.review`), `archived`.\n- `atm-cli` (`commands/task.rs`): `task list` with every filter the Python command has (`--status`, `--sprint`/`--backlog`, `--type`, `--priority`, `--label`, `--ready`, `--blocked`, `--in-pr`, `--archived`, `--with-user`, …) and `--derived`, text and `--json` identical to Python's.\n\n## Tests\nUnit tests for the derived fields; the `task list` scenarios (`query.json` and the others that list) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:14:30Z",
+      "started_by": "claude:34798264",
+      "commit": "126ea026e36479f850267b7895d909cc78690f77",
+      "completed_at": "2026-11-07T01:20:27Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:20:27Z",
+          "kind": "outcome",
+          "text": "`task list` with every filter and `--derived` in Rust (`atm-lib` `query.rs`, the rules in `atm-common` `rules.rs`, the archive kept in order); 14 off the expected list; `--tolerant` refused until T-449, which now covers the tolerant read",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-463",
+      "name": "Rust: task deps",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task deps <id>`, a task's dependency chain (`lib/query.py`'s `task_dependencies`: what it waits for, what waits for it, archived tasks counted as done), text and `--json` identical to Python's, in `commands/task.rs`.\n\n## Tests\nUnit tests for the chain; the `task deps` scenarios leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-444"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:35:51Z",
+      "started_by": "claude:34798264",
+      "commit": "8b9df8715434cacda4dc9a3aabf59c9e2399015b",
+      "completed_at": "2026-11-07T01:38:07Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:38:07Z",
+          "kind": "outcome",
+          "text": "`task deps` in Rust (`task_dependencies` in `atm-lib` `query.rs`, `commands/task.rs`): waits for, waited on by, archived ones marked; 7 off the expected list",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-464",
+      "name": "Rust: project status",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 2d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `project status`, the overview (`lib/query.py`'s `status_report` and `project_summary`): the active sprint and its goal, the counts by status, sprint, type and label, what waits for review, is blocked or waits on dependencies, what's next by the loop's rule, the archive hint and the file sizes; text and `--json` identical to Python's, in `commands/project.rs`. `atm serve`'s `api/projects` (T-449) reuses the summary.\n\n## Tests\nUnit tests for the report; the `project status` scenarios (`status.json` and the others that read it) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-462"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T00:51:41Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T00:51:41Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:38:14Z",
+      "started_by": "claude:34798264",
+      "commit": "cc3d2509feee7175f258e42868fceee8c9e33dcf",
+      "completed_at": "2026-11-07T01:47:12Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T01:47:12Z",
+          "kind": "outcome",
+          "text": "`project status` in Rust (`atm-lib` `status.rs`, `commands/project.rs`), with the loop rules it needs (`loop_rules.rs`: selection, order, `next_task` and its reasons) and the archive hint (`atm-common` `archive.rs`); 16 off the expected list",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-465",
+      "name": "Rust: the task states and task state",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-445's write path: the states of [task-states.md](docs/task-states.md) as enums with a transition table checked with `match`, and its guards as functions (dependencies, review modes, resolutions, `--status` of the right kind); the notes and timestamps each transition writes (`lib/state.py`, `lib/status.py`); claiming on start and dropping the claim on finish; `task state <id> <state>` with all its options (`--note`, `--reason`, `--on`, `--question`, `--answer`, `--resolution`, `--duplicate-of`, `--commit`, `--status`), text and `--json` as in Python.\n\n## Tests\nProperty tests of the transition table against task-states.md; the `task state` scenarios (`block.json`, `unblock.json`, `reopen.json`, `skip.json`, `resolution.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-445"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T01:55:10Z",
+      "started_by": "claude:34798264",
+      "commit": "0b37bbfe3832f31ae3b3d9822451ceb0459de73c",
+      "completed_at": "2026-11-07T02:04:06Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:04:06Z",
+          "kind": "outcome",
+          "text": "`task state` in Rust: the state machine (`atm-lib` `state.rs`, an exhaustive test of every kind × command against task-states.md instead of proptest, which needs no new dependency), the status changes with claims and worktree records (`changes.rs`, `leases.rs`), the task edits (`atm-common` `edits.rs`), the actor (`atm-boot`); 79 off the expected list",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-466",
+      "name": "Rust: task review approve|request-changes|reject",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3c of [porting-to-rust.md](docs/porting-to-rust.md) §5: a review's decisions (T-438): `task review approve <id> [--note]`, `request-changes <id> --reason`, `reject <id> --reason`, each leaving the task in review with its `review_state` and opening one way out of it, as `lib/status.py` has them; text and `--json` as in Python.\n\n## Tests\nThe review scenarios (`review.json`, `review-states.json`, `review-modes.json`) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-465"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:20:57Z",
+      "started_by": "claude:34798264",
+      "commit": "380530e2a90138657118319de1d3384896479bc0",
+      "completed_at": "2026-11-07T02:23:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:23:41Z",
+          "kind": "outcome",
+          "text": "Rust `task review approve|request-changes|reject` on the T-465 state machine; 5 tests left the expected-failures list (397 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-467",
+      "name": "Rust: loop next and --claim",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 3d of [porting-to-rust.md](docs/porting-to-rust.md) §5: `loop next` (`lib/loop.py`): the selections (`--sprint`, `--tasks`, `--all`, `--backlog`, `--with-user`, `--type`), the loop's order (active sprint, planned sprints, backlog; priority, then natural ID order), tasks handed back from review first, expired claims released, the reasons when nothing is ready (exit code 3), and `--claim` starting and claiming in one step; text and `--json` as in Python.\n\n## Tests\nThe `loop next` scenarios (`next.json`, `selections.json`, `with-user.json`, `lease.json`) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-465"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:21:53Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:21:53Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T01:47:06Z",
+          "kind": "note",
+          "text": "The selection, the loop order and `next_task` with its reasons are ported already (T-464, `atm-lib` `loop_rules.rs`, with tests): this slice adds `loop next` itself, `--claim` on the write path (T-445), expired claims and the resolutions from other worktrees.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-07T02:27:10Z",
+          "kind": "outcome",
+          "text": "Rust `loop next` with all selections and `--claim` (start and claim in one change); 42 tests left the expected-failures list (355 left), the 16-agent stress test among them.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-07T02:23:45Z",
+      "started_by": "claude:34798264",
+      "commit": "3cda06556599e2120d32c89fb8a32722a71b360e",
+      "completed_at": "2026-11-07T02:27:10Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-468",
+      "name": "Rust: atm serve's read API: projects, tasks, claims, worktrees",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7b of [porting-to-rust.md](docs/porting-to-rust.md) §5, on T-449's server: the routes the dashboard polls, as [multi-project-api.md](docs/multi-project-api.md) has them and the Python atm's `api/server.py` serves them.\n\n## Change\n- `api/projects`: each project's summary (`lib/query.py`'s `project_summary`: counts by kind, the active sprint and recent ones, working and next, the board, stats, the git branch and latest PR, the logo), an opted-out project left out, a missing or unreadable one listed as missing.\n- `api/v1/projects/<id>/tasks`: the tasks with what atm derives, filtered, with ETags and 304s; the **tolerant read** (`load_tasks_tolerant`, T-377), and with it `atm task list --derived --tolerant` (which the Rust `task list` refuses until now, T-462).\n- `p/<id>/claims.json` and `worktrees.json` (a project's git worktrees, their changed tasks, their claims); everything else 404 or 405.\n\n## Tests\nThe `serve.test.mjs` tests about these routes leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-449"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:54:50Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "notes": [
+        {
+          "at": "2026-11-07T05:08:31Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-07T05:23:15Z",
+          "kind": "outcome",
+          "text": "The read API: `/api/projects` with each project’s summary, `/api/v1/projects/<id>/tasks` (tolerant read, filters, ETags), `/p/<id>/claims.json`, `worktrees.json` and `logo`; `project summary` and `task list --derived --tolerant`. 28 tests left the expected list (22 remain). `service stop` is now robust to a missed process check under load.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-07T05:08:42Z",
+      "started_by": "claude:34798264",
+      "commit": "48e9702fb6379e203c3bca44f39d240075646d28",
+      "completed_at": "2026-11-07T05:23:15Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-469",
+      "name": "Rust: atm serve's project files: the document viewer, the logo, search",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 7c of [porting-to-rust.md](docs/porting-to-rust.md) §5: the last of `atm serve`.\n\n## Change\n- The document viewer's routes (`lib/documents.py`, T-392): a project's documents and files, read-only, with their checks (inside the project, not ignored or hidden, not a key file, a size cap, no symlinks), files in a git submodule by its own rules (T-408).\n- `p/<id>/logo`: the project's logo with its type; none, outside or too large is 404 (`db/jsongit/logo.py`).\n- `api/search`: every word, in any field or the project's name, case-insensitive, read-only, capped (T-258).\n\n## Tests\nThe rest of `serve.test.mjs` leaves `tests/scripts/rust-expected-failures.json`, and the dashboard's e2e suite (`pnpm run test:e2e`) passes against the Rust `atm serve`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-468"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T01:54:50Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T01:54:50Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T05:23:21Z",
+      "started_by": "claude:34798264",
+      "commit": "b29db318f1f7ce90c3e7e66dcc14dffa39302dd9",
+      "completed_at": "2026-11-07T05:31:28Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T05:31:28Z",
+          "kind": "outcome",
+          "text": "Documents and files for the viewer (path checks, ignored and key files, size caps, submodules), `/api/search`; the logo came with T-468. All of `serve.test.mjs` passes against Rust (19 tests left on the list, T-451’s help text and the merge launcher path). The e2e suite passes with `ATM_IMPL=rust` (`pnpm run test:e2e:rust`, 411 tests).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-470",
+      "name": "Rust: task edit",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `task edit <id>` (`lib/edit.py`'s `edit_existing_task`) with all its options: `--name`, `--description` / `--description-file`, `--type`, `--priority`, `--sprint` / `--backlog` (with `sprint_history`), `--release`, `--review`, `--with`, `--add-dep` / `--remove-dep` (refusing cycles), `--add-label` / `--remove-label`, `--add-file` / `--remove-file`, `--add-component` / `--remove-component`, `--add-requirement` / `--remove-requirement`, `--add-use-case` / `--remove-use-case`, `--related`; what changed, in words, as in Python, and `--json`.\n\n## Tests\nThe `task edit` scenarios (`edit.json`, `with-user.json`, `components.json`, …) leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:33:44Z",
+      "started_by": "claude:34798264",
+      "commit": "729ccdd5ceebdf6ddbfe2332f51ff143721bfd76",
+      "completed_at": "2026-11-07T02:37:53Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T02:37:53Z",
+          "kind": "outcome",
+          "text": "Rust `task edit` with every option, all-or-nothing checks and the changed fields in words; Click-style `No such option`; 22 tests left the list (318 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-471",
+      "name": "Rust: the sprint group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `sprint list|add|edit|start|close|delete|move|backlog` (`lib/sprints.py`): names (generated, `people` or `time`), goals, releases and due dates, one active sprint, closing with its report and the unfinished tasks carried to the next sprint, a new one or the backlog (`--carry-to`, `--reviewed`), moving tasks with their `sprint_history`; text and `--json` as in Python.\n\n## Tests\nThe sprint scenarios (`sprints.json`, `sprint-commands.json`, `sprint-close.json`, `sprints-delete.json`, `review-modes.json`) and `sprints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T02:37:58Z",
+      "started_by": "claude:34798264",
+      "commit": "dcf5892e000512a3ba9b438aef808c0dd03116a7",
+      "completed_at": "2026-11-07T03:05:02Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:05:02Z",
+          "kind": "outcome",
+          "text": "Rust `sprint list|add|edit|start|close|delete|move|backlog`; time names in local time with `jiff` (approved by Hakan); Click-style `Missing argument`; 47 tests left the list (271 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-472",
+      "name": "Rust: the release group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5d of [porting-to-rust.md](docs/porting-to-rust.md) §5 (split in three: this, then the `component` group, and the rest of `project` with the registry of projects): `release list|add|edit|archive|notes` (`lib/releases.py`, `cli/commands/release.py`).\n\n## Change\n- `release list` (open releases with their tasks by kind and stage; a task's release is its own, else its sprint's; `--all` with the archived ones), `add` (ID, name, target date, `--released-at`, `--pr` giving it every task of those pull requests, in both files), `edit` (empty values remove a field), `archive`, `notes` (done tasks by type in the project's order with their outcome notes, what isn't done yet); text and `--json` as in Python.\n\n## Tests\nThe `releases.json` scenarios leave `tests/scripts/rust-expected-failures.json`.\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-447"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T02:05:18Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T02:05:18Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:05:07Z",
+      "started_by": "claude:34798264",
+      "commit": "bd06bbaab8d501379efb8ae8959f1d479f380a22",
+      "completed_at": "2026-11-07T03:11:03Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:11:03Z",
+          "kind": "outcome",
+          "text": "Rust `release list|add|edit|archive|notes`; split with T-473 (components) and T-474 (project config, workflow, logo, registry); 13 tests left the list (258 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-473",
+      "name": "Rust: the component group",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5e of [porting-to-rust.md](docs/porting-to-rust.md) §5: `component list|add|edit` (`lib/components.py`, `cli/commands/component.py`): globs (`--path`, `--add-path`), `--label` and `--review` (empty removes them), `--from-label` turning a label into the component on every task (archived ones too), `--assign` giving it to the tasks its globs match; the checks (IDs, a component already there, a label no task has, `--assign` without a glob); text and `--json` as in Python.\n\n## Tests\nThe `components.json` scenarios leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-472"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:06:37Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:06:37Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:11:08Z",
+      "started_by": "claude:34798264",
+      "commit": "da11c774da50728b3aebd1b87a955cea45e1b5dd",
+      "completed_at": "2026-11-07T03:16:35Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:16:35Z",
+          "kind": "outcome",
+          "text": "Rust `component list|add|edit` with `--from-label` and `--assign` over both files; Click-style usage line after an unknown option; 16 tests left the list (242 left).",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-474",
+      "name": "Rust: project config, workflow, logo and the registry",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 5f of [porting-to-rust.md](docs/porting-to-rust.md) §5: the rest of `project` (`cli/commands/project.py`, `lib/settings.py`): `config`, `workflow [set]`, `logo`, and the dashboard's list of projects, the registry `projects.json` (`project list|add|remove|prune`, a project that opts out with `meta.dashboard.listed: false`); `claim heartbeat --auto` lists the project on the dashboard as in Python (once, then only reads the registry until a day has passed); text and `--json` as in Python.\n\n## Tests\nThe `workflow.json`, `projects.json`, `logo.json` and `repository.json` scenarios and `registry.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-472"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:06:37Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:06:37Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:16:39Z",
+      "started_by": "claude:34798264",
+      "commit": "928fef235f6033ed020715ddb563cdd301c3f2fa",
+      "completed_at": "2026-11-07T03:25:57Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:25:57Z",
+          "kind": "outcome",
+          "text": "Rust `project config|workflow|logo|list|add|remove|prune`, the registry in atm-db (SHA-1 IDs, damaged file moved aside, main worktree), the hook listing; 48 tests left the list (194 left). `db init|migrate` and `vcs repository` tests wait for their own slices.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-475",
+      "name": "Rust: the merge driver",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6b of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db merge-driver` (`db/jsongit/merge.py`): tasks.json merged task by task (both branches' additions kept, theirs renumbered with their dependencies following; notes, blocks, reviews and related merged as Python merges them; sprints and releases by their own rules; a real conflict stops with where), with property tests and the same fixtures as Python's.\n\n## Tests\nThe merge-driver scenarios and `merge.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-448"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:28:15Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:28:15Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:35:22Z",
+      "started_by": "claude:34798264",
+      "commit": "41023d0e128cb8663d334ec769837b7f0f9369d0",
+      "completed_at": "2026-11-07T03:40:42Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:40:42Z",
+          "kind": "outcome",
+          "text": "Rust merge driver (`db merge-driver`) with seeded property tests; 7 tests left the list (156 left). The real-git merge tests need `db init`, in T-476.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-476",
+      "name": "Rust: the db group and doctor",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Slice 6c of [porting-to-rust.md](docs/porting-to-rust.md) §5: `db migrate` (legacy locations moved and staged, phases into sprints, older leftovers cleaned up, the project listed on the dashboard), `db init` (`--meta-file`, the merge driver registered, `meta.repository` from origin), `db archive|unarchive` (thresholds, `--sprint`, the hint), and `doctor` (`lib/edit.py`'s `check_data`: errors and warnings, `--files`); text and `--json` as in Python.\n\n## Tests\nThe `migrate`, `init`, `archive`, `hints`, `doctor`/`check` scenarios and `hints.test.mjs` leave `tests/scripts/rust-expected-failures.json`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-448"
+      ],
+      "files": [
+        "crates/"
+      ],
+      "created_at": "2026-11-07T03:28:15Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T03:28:15Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "started_at": "2026-11-07T03:40:48Z",
+      "started_by": "claude:34798264",
+      "commit": "b646c18a9e0c2d7991271ae1639b40d40b4a60eb",
+      "completed_at": "2026-11-07T03:59:46Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-07T03:59:46Z",
+          "kind": "outcome",
+          "text": "Ported `db migrate|init|archive|unarchive` and `doctor`; 89 tests left the expected-failures list (67 remain). `db init` registers the Rust binary as the merge driver, so the test expecting Python’s launcher stays listed until the switch.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
+      }
+    },
+    {
+      "id": "T-477",
+      "name": "Before the switch: move what Rust and the dashboard need out of plugin/ and atm-cli/",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "rust",
+        "distribution"
+      ],
+      "description": "Part 1 of the switch ([porting-to-rust.md](docs/porting-to-rust.md) §5, split from T-454): nothing the Rust workspace or the dashboard builds from may live in `plugin/` or `atm-cli/`, so that T-454 can delete them.\n\n## Change\n- The JSON Schemas and `vocabularies.json` (`atm-cli/atm/common/schema/`) to a folder of their own (e.g. `schema/`), read by `atm-common`'s `build.rs` and the dashboard's generation.\n- The dashboard's build output and CompMD's runtime: where the Rust crates embed them from (not `plugin/templates/`, `plugin/assets/`); the page is built before the binary (§2: nothing built is committed).\n- The changelog and What's New (`plugin/CHANGELOG.md`, `plugin/WHATS-NEW.md`) and the version's source (the workspace's `Cargo.toml` instead of `plugin.json`), with `check-versions.mjs` and the dashboard's readers.\n- `build.py`'s generation for the dashboard (the TypeScript types and vocabularies in `.generated/dashboard/`) as a Node script in `dashboard/`.\n\nThe Python atm keeps working until T-454 (it may read the moved files from their new places).\n\n## Tests\n`pnpm run verify`'s checks and the e2e suite pass; the suite passes against both implementations.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "atm-cli/",
+        "plugin/",
+        "dashboard/",
+        "crates/"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-07T06:20:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-478",
+      "name": "Before the switch: the suite, the dev server and e2e on the Rust atm only",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "rust"
+      ],
+      "description": "Part 2 of the switch (split from T-454), ready to land with it: `tests/scripts/` runs only against the Rust binary (no `ATM_IMPL`, no expected-failures list; `expectRust` becomes `expect`), the Python-only tests go (`build.test.mjs`, `vendor.test.mjs`, `tests/lib/`), `pnpm run dev`'s API is `atm _serve`, the e2e fixture calls the Rust `atm`; CI's Python jobs go and the Rust suite runs on Windows too (scenarios without `sh`).\n\nPrepared on a branch, merged with T-454.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-477"
+      ],
+      "files": [
+        "tests/",
+        "dashboard/",
+        ".github/workflows/"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-07T06:20:49Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port"
+    },
+    {
+      "id": "T-479",
+      "name": "The plugin's last release (0.32.0): how plugin users move to the CLI",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "0.32.0 is the Claude Code plugin's last release (decided with Hakan): its What's New, changelog and README say that the next version comes as the `atm` CLI (the Homebrew formula, the release binaries) and the app, and how a plugin user moves: install the CLI, `atm agents install`, remove the plugin; the skills are `atm-…` then, not `/atm:`. Reviewed with Hakan before the release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "plugin/WHATS-NEW.md",
+        "plugin/CHANGELOG.md",
+        "README.md"
+      ],
+      "created_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-08T02:42:13Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-07T06:20:49Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "with": "user",
+      "started_at": "2026-11-08T01:49:52Z",
+      "started_by": "claude:34798264",
+      "commit": "4bad16e64ed14e6a0c1a9ba6f8771fce88d25fd1",
+      "review_requested_at": "2026-11-08T01:51:08Z",
+      "notes": [
+        {
+          "at": "2026-11-08T01:51:08Z",
+          "kind": "review",
+          "text": "Draft: README notice at the top and a \"Moving to the atm CLI\" section after Quick Start; What’s New 0.32.0 (two bullets); CHANGELOG 0.32.0 paragraph. Check the moving steps and the wording.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T02:34:37Z",
+          "kind": "note",
+          "text": "Approved: Approved in the session; \"macOS, Linux and Windows\" is enough.",
+          "by": "Hakan Serce"
+        },
+        {
+          "at": "2026-11-08T02:34:44Z",
+          "kind": "outcome",
+          "text": "README notice and \"Moving to the atm CLI\", What’s New and CHANGELOG for 0.32.0, the plugin’s last release; approved by Hakan.",
+          "by": "claude:34798264"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-08T01:51:08Z",
+          "to": "2026-11-08T02:34:37Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-08T02:34:44Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 39,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/39"
       }
     }
   ]

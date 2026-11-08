@@ -16,7 +16,8 @@ function startAtm(args, cwd, env) {
   const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ...env } });
   let stderr = '';
   child.stderr.on('data', (d) => (stderr += d));
-  return new Promise((resolve) => child.on('exit', (code) => resolve({ code, stderr })));
+  // `close`, not `exit`: all of stderr is read by then
+  return new Promise((resolve) => child.on('close', (code) => resolve({ code, stderr })));
 }
 
 describe('project registry', () => {

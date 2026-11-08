@@ -70,16 +70,13 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
-    const r = spawnSync(
-      'python3',
-      [ATM, 'task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])],
-      {
-        cwd: dir,
-        encoding: 'utf8',
-        maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-        env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
-      },
-    );
+    const [program, ...args] = atm(['task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])]);
+    const r = spawnSync(program, args, {
+      cwd: dir,
+      encoding: 'utf8',
+      maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
+      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+    });
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
     let data: unknown = null;
@@ -99,6 +96,13 @@ export const FIXTURE_PROJECT = 'fixture';
 
 /** This checkout's atm-cli */
 const ATM = path.resolve(import.meta.dirname, '../../../plugin/scripts/atm.py');
+/** This checkout's Rust atm (`cargo build`), which the suite runs with ATM_IMPL=rust, as tests/scripts does (T-469) */
+const RUST_ATM = path.resolve(import.meta.dirname, '../../../target/debug/atm');
+
+/** The command line that runs atm with `args`: the Python atm, or the Rust one with ATM_IMPL=rust */
+function atm(args: string[]): string[] {
+  return process.env.ATM_IMPL === 'rust' ? [RUST_ATM, ...args] : ['python3', ATM, ...args];
+}
 
 /** What atm serve would list as the summary of a project holding `body` as its tasks.json: atm-cli's own
  * (`atm project summary`), so the dashboard's Next up is tested against atm's rule, not a copy of it (T-321) */
@@ -107,7 +111,8 @@ function atmSummary(body: string): Record<string, unknown> {
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
-    const r = spawnSync('python3', [ATM, 'project', 'summary'], {
+    const [program, ...args] = atm(['project', 'summary']);
+    const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
       env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },

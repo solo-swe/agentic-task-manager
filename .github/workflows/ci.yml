@@ -83,6 +83,43 @@ jobs:
       - name: Benchmark atm-cli
         run: node tests/scripts/bench.mjs --cli --check
 
+  # The Rust port (T-443, docs/porting-to-rust.md §5): the workspace on the three platforms atm's CLI ships for. The
+  # runners' rustup installs the toolchain rust-toolchain.toml pins (no third-party action). The suite runs against
+  # the binary with its expected failures (tests/scripts/rust-expected-failures.json) on Linux and macOS; on Windows
+  # once the port gets there (its scenarios need sh)
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup show active-toolchain
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+      - run: cargo build --locked
+      # Licences, advisories, bans and sources of every dependency (cargo-deny at a pinned version, from crates.io)
+      - name: cargo-deny
+        if: runner.os == 'Linux'
+        run: |
+          cargo install cargo-deny --locked --version 0.20.2
+          cargo deny check
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: runner.os != 'Windows'
+        with:
+          node-version: 24
+      - name: The suite against the Rust atm
+        if: runner.os != 'Windows'
+        run: node tests/scripts/run.mjs --rust
+
   e2e:
     name: Playwright regression suite
     runs-on: ubuntu-latest

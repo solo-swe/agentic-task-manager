@@ -17,7 +17,11 @@ const task = (id, status = 'todo', deps = []) => ({
   status,
   dependencies: deps,
 });
-const TASKS = { meta: { project: 'Claims' }, tasks: [task('T-001'), task('T-002'), task('T-003', 'todo', ['T-001'])] };
+// A 30-minute lease, so the times below read easily; the default (two hours, T-439) has a test of its own
+const TASKS = {
+  meta: { project: 'Claims', lease_minutes: 30 },
+  tasks: [task('T-001'), task('T-002'), task('T-003', 'todo', ['T-001'])],
+};
 
 const tasksOf = (root) => JSON.parse(fs.readFileSync(path.join(root, '.agentic-task-manager/tasks.json'), 'utf8'));
 const statusOf = (root, id) => tasksOf(root).tasks.find((t) => t.id === id);
@@ -116,6 +120,33 @@ describe('claims', () => {
       runAtm(['claim', 'heartbeat', '--auto'], root, as('alice', 15));
       assert.equal(store().claims['T-001'].lease_expires_at, at(40));
       assert.equal(fs.readFileSync(path.join(root, '.agentic-task-manager/tasks.json'), 'utf8'), before);
+    } finally {
+      removeDir(root);
+    }
+  });
+
+  test('every atm command an agent runs renews its claims, ten minutes on; not one run as someone else (T-439)', () => {
+    // The default lease: two hours, as nothing renews between commands in a harness without atm's hooks
+    const root = repo({ ...TASKS, meta: { project: 'Claims' } });
+    const claims = () => JSON.parse(fs.readFileSync(path.join(root, '.git/atm/claims.json'), 'utf8')).claims;
+    try {
+      runAtm(['task', 'state', 'T-001', 'in_progress'], root, as('alice'));
+      runAtm(['task', 'state', 'T-002', 'in_progress'], root, as('bob'));
+      assert.equal(claims()['T-001'].lease_expires_at, at(120));
+      // Five minutes on, a read leaves it alone (nothing written)
+      assert.equal(runAtm(['task', 'list'], root, as('alice', 5)).code, 0);
+      assert.deepEqual([claims()['T-001'].lease_expires_at, claims()['T-001'].renewed_at], [at(120), undefined]);
+      // Fifteen minutes on, any command renews the caller's claims, and only theirs
+      assert.equal(runAtm(['project', 'status'], root, as('alice', 15)).code, 0);
+      assert.deepEqual([claims()['T-001'].lease_expires_at, claims()['T-001'].renewed_at], [at(135), at(15)]);
+      assert.equal(claims()['T-002'].lease_expires_at, at(120));
+      // A command run as someone else (--agent) renews nobody's
+      const note = runAtm(['task', 'note', 'T-001', 'checked', '--agent', 'alice'], root, as('bob', 40));
+      assert.equal(note.code, 0, note.stderr);
+      assert.deepEqual([claims()['T-001'].lease_expires_at, claims()['T-002'].lease_expires_at], [at(135), at(120)]);
+      // A failing command still renews: the agent is at work
+      assert.notEqual(runAtm(['task', 'details', 'T-404'], root, as('bob', 45)).code, 0);
+      assert.equal(claims()['T-002'].lease_expires_at, at(165));
     } finally {
       removeDir(root);
     }

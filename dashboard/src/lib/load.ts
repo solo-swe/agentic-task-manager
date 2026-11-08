@@ -2,7 +2,7 @@
 // tasks from api/v1/projects/<id>/tasks, and its other files from p/<id>/. The requests go through the client layer,
 // api/http.ts; this module reads what they return.
 import { browserFetch, fetchFile, v1TasksUrl, type Fetch, type Validators } from './api/http';
-import type { ArchiveHint, ProjectBoard, ProjectSummary } from './generated/types';
+import type { ArchiveHint, ProjectBoard, ProjectSummary } from '$generated/types';
 import type { Task, TasksFile } from './types';
 
 export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
@@ -11,7 +11,7 @@ export const DEFAULT_PROJECT_NAME = 'Task Dashboard';
 export const PROJECTS_URL = '/api/projects';
 
 // A project's summary, as the server computes it (api.schema.json, generated: T-382)
-export type { BoardCard, ProjectBoard, ProjectSummary, SprintNumbers } from './generated/types';
+export type { BoardCard, ProjectBoard, ProjectSummary, SprintNumbers } from '$generated/types';
 
 export type BoardColumnId = keyof ProjectBoard;
 

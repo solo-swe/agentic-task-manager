@@ -1,0 +1,49 @@
+# atm in Rust (T-415, docs/porting-to-rust.md): one crate per layer (docs/layered-architecture.md), so the compiler
+# checks the layer rule. The rules: docs/guides/rust.md.
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+# The plugin's version (plugin/.claude-plugin/plugin.json); dashboard/scripts/check-versions.mjs checks they agree
+version = "0.32.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+repository = "https://github.com/solo-swe/agentic-task-manager"
+publish = false
+
+[workspace.dependencies]
+atm-common = { path = "crates/atm-common" }
+atm-db = { path = "crates/atm-db" }
+atm-vcs = { path = "crates/atm-vcs" }
+atm-lib = { path = "crates/atm-lib" }
+atm-boot = { path = "crates/atm-boot" }
+atm-api = { path = "crates/atm-api" }
+clap = { version = "4.5", features = ["derive"] }
+# Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
+clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+# JSON as atm writes it (docs/porting-to-rust.md §3): keys in the order they come, so a task prints as it is stored
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+# The lock (T-445): the host name and whether a lock's owner still runs; `claim hold`'s watcher follows its shell with it
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+# The lock is released when atm is stopped with SIGTERM, as the Python atm releases it (Unix only)
+signal-hook = "0.4"
+# The local time zone (TZ, /etc/localtime, the system's tz database), for sprints named by the time (T-471)
+jiff = "0.2"
+# `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

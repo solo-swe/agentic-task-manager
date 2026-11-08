@@ -1,0 +1,107 @@
+name: Release
+
+# Push a tag like v0.33.0 (packaging/release.sh) to build atm for every platform, sign and notarize the macOS builds,
+# and attach them, with their checksums, to a draft GitHub release. Publishing the draft updates the Homebrew formula
+# (homebrew.yml). The secrets it needs are listed in packaging/README.md.
+on:
+  push:
+    tags: ["v*"]
+
+# Read-only, as CI is (docs/security-architecture.md I18): only the job that drafts the release, which builds nothing,
+# can write, and only the repository's contents (its releases)
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: macos-latest, target: aarch64-apple-darwin }
+          - { os: macos-latest, target: x86_64-apple-darwin }
+          # The oldest supported Ubuntu, so the binary runs on systems with an older glibc too
+          - { os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The toolchain rust-toolchain.toml pins, with the target
+      - run: rustup target add ${{ matrix.target }}
+      - name: The tag is the workspace's version
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          grep -qx "version = \"$version\"" Cargo.toml || { echo "Cargo.toml isn't at $version"; exit 1; }
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Import the Developer ID certificate
+        if: runner.os == 'macOS'
+        env:
+          CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+      - name: Sign and notarize
+        if: runner.os == 'macOS'
+        env:
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+          IDENTITY: Developer ID Application
+          NOTARY_KEY: ${{ runner.temp }}/notary.p8
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+        run: |
+          printf '%s' "$NOTARY_KEY_P8" | base64 --decode > "$NOTARY_KEY"
+          sh packaging/sign-macos.sh target/${{ matrix.target }}/release/atm
+          rm "$NOTARY_KEY"
+
+      - name: Package
+        shell: bash
+        run: |
+          name="atm-${GITHUB_REF_NAME#v}-${{ matrix.target }}"
+          mkdir -p dist
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp "target/${{ matrix.target }}/release/atm.exe" dist/
+            (cd dist && 7z a "$name.zip" atm.exe > /dev/null && rm atm.exe)
+          else
+            tar -czf "dist/$name.tar.gz" -C "target/${{ matrix.target }}/release" atm
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Draft the GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum atm-* > SHA256SUMS
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/* --draft --generate-notes
+          --title "atm ${GITHUB_REF_NAME#v}" --repo "$GITHUB_REPOSITORY"

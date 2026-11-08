@@ -15,7 +15,8 @@ function atm(args, cwd, agent) {
     const child = spawn(ATM, args, { cwd, env: { ...baseEnv(), ATM_AGENT: agent } });
     let stderr = '';
     child.stderr.on('data', (d) => (stderr += d));
-    child.on('exit', (code) => resolve({ code, stderr }));
+    // `close`, not `exit`: all of stderr is read by then
+    child.on('close', (code) => resolve({ code, stderr }));
   });
 }
 

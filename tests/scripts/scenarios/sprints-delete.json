@@ -262,6 +262,13 @@
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
     },
     "args": ["sprint", "delete"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: Missing argument 'NAME'.", "Usage: atm sprint delete"] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: Missing argument 'NAME'.", "Usage: atm sprint delete"] },
+    "expectRust": {
+      "stderrIncludes": [
+        "atm: the following required arguments were not provided:",
+        "<NAME>",
+        "Usage: atm sprint delete"
+      ]
+    }
   }
 ]

@@ -6,11 +6,19 @@ description: >
   "do task T-xxx", "work on task", "implement task", "pick a task", or "next task".
 allowed-tools: Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*), Bash(atm db unarchive:*)
 ---
+<!-- Generated from skills/atm-do-task/SKILL.md by atm-cli/build.py: edit that file and run `pnpm run build:cli` in dashboard/ (the pre-commit hook does it too). -->
 
 # Do a Single Task
 
 You are a task execution agent. You pick up one task from `tasks.json`,
 implement it, verify it, and mark it done.
+
+(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write
+`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
+
+**First, check atm:** run `atm version`. If the shell can't find `atm`, or it prints a version older than
+0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
+around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
 **Never read or edit `tasks.json` or `tasks-archive.json` directly** (no Read, cat, grep, jq or scripts on them):
 every read and every change goes through `atm`, which knows the archive, the project's vocabulary and the locking.
@@ -33,9 +41,6 @@ From the project root, run atm-cli, the plugin's `atm` command:
 ```bash
 atm db migrate
 ```
-
-(The plugin's `bin/` is on your PATH while the plugin is enabled. If the shell says `atm: command not found`, write
-`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)
 
 It keeps the project's `.agentic-task-manager/` folder in order:
 - an old `docs/tasks.json` (or `tasks.json` in the project root) is moved into `.agentic-task-manager/`; the move is
@@ -61,7 +66,7 @@ kinds: `todo`, `active` (in progress), `review`, `blocked`, `done` and `skipped`
 `awaiting_user` and `awaiting_agent`, both `review`), pass `--status <id>` with the one whose name or label fits;
 otherwise atm uses the first one listed.
 
-If `$ARGUMENTS` specifies a task ID (e.g., `T-005` or `T-P1-03`), run `atm task state <id> in_progress --json`; the JSON has the task
+If `the user's request` specifies a task ID (e.g., `T-005` or `T-P1-03`), run `atm task state <id> in_progress --json`; the JSON has the task
 under `"task"`, in full. It refuses, with a message,
 when the task isn't to do, when a dependency isn't done yet (it lists them), or when another agent has claimed it
 (exit code 4). Report the message and stop:
@@ -121,12 +126,11 @@ Use the `files` array as hints for which files to create or modify, but also cre
 any additional files that are needed. Keep a list of every file you create, change or delete: Step 7 commits
 exactly those.
 
-Your claim has a lease (30 minutes by default); if it runs out, the task goes back to `todo` for others. The plugin's
-hook renews it after each of your tool calls, so you don't need to (`atm claim heartbeat $TASK_ID` does it by hand). A
-command that runs for many minutes (a full test suite, a build, waiting on CI), especially one you leave running in
-the background, makes no tool calls: start it in the same Bash call after `atm claim hold $TASK_ID`, as
-`atm claim hold $TASK_ID && <command>`. `claim hold` runs nothing: it leaves a watcher that renews your claim while
-that shell lives (four hours at most), and returns at once; the command is yours, with its own permission check.
+Your claim lasts while you work: every atm command you run renews it (`atm docs claims`). A command that runs for many
+minutes (a full test suite, a build, waiting on CI) runs no atm command: start it in the same shell after
+`atm claim hold $TASK_ID`, as `atm claim hold $TASK_ID && <command>`. `claim hold` runs nothing: it leaves a watcher
+that renews your claim while that shell lives, and returns at once; the command is yours, with its own permission
+check.
 
 While you work:
 - **A later task needs to change** (what you built changes its scope, its files or its dependencies): update it with
@@ -144,12 +148,7 @@ While you work:
   characters; put longer text in a file in the repository).
 
 Notes, questions, answers and reasons (`--note`, `--question`, `--answer`, `--reason`, `atm task note`) show on the
-dashboard as Markdown: put paths, commands and identifiers in `` `code` `` and use `*italics*` or `**bold**` where
-they help; keep them short, without headings. The dashboard renders task text with CompMD (tables, task lists,
-` ```mermaid ` diagrams, the task's own data as `md.data.task`); `/atm:create-tasks` lists what renders, and the
-plugin's `"${CLAUDE_SKILL_DIR}/../../docs/compmd-llms.txt"` has the rest. Never fetch it from the web. Link files and
-documents with relative links from the project root (`docs/x.md#routes`, `src/app.ts#L40`), and a requirement or a
-place in a document with a text fragment (`docs/x.md#:~:text=SR%2D2.1`): `/atm:create-tasks` says how.
+dashboard as Markdown, short, without headings: `atm docs tasks` says how task text renders and links files.
 
 **Quote that text in single quotes** (`` --note 'Ran `npm test`' ``), never double quotes: inside double quotes the shell
 runs backticks and `$(…)`, so a note mentioning `` `npm test` `` would run it, and text copied from a task could run
@@ -267,7 +266,7 @@ back to to do. Never change its status by editing `tasks.json`.
 ("tasks.json is … KB with … finished tasks; `atm db archive` would move …"; with `--json`, a `suggest.archive` object).
 If one of them said so during this task, archive now, after the task's commit (never in the middle of a task):
 
-1. Skip this step if the project's instructions (e.g. its `CLAUDE.md`) say not to archive automatically, or if the
+1. Skip this step if the project's instructions (its `AGENTS.md`, `CLAUDE.md` or similar) say not to archive automatically, or if the
    hint's `"auto"` is `false` (`atm project status --json`, under `suggest.archive`: the project set `meta.archive.auto`
    to false); then only relay the hint to the user.
 2. `atm db archive` moves finished tasks to `.agentic-task-manager/tasks-archive.json` (recent ones and those in an open

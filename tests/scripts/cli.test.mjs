@@ -5,7 +5,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { makeProject, removeDir, runAtm } from './helpers.mjs';
+import { IMPL, makeProject, removeDir, runAtm } from './helpers.mjs';
+
+// The Rust atm's help and usage errors are clap's (T-451): its usage lines and wording, where Python's are Click's
+const RUST = IMPL === 'rust';
+/** The command names a help's Commands section lists, in its order */
+const commandsOf = (help) =>
+  help
+    .split('Commands:\n')[1]
+    .split('\n\n')[0]
+    .split('\n')
+    .map((line) => /^ {2}(\S+)/.exec(line)?.[1])
+    .filter(Boolean);
+/** The start of the error for a command atm doesn't have */
+const noSuchCommand = (name) => (RUST ? `^atm: unrecognized subcommand '${name}'` : `^atm: No such command '${name}'`);
 
 const ENV = { ATM_AGENT: 'alice', ATM_NOW: '2026-11-05T10:00:00Z', COLUMNS: '120' };
 const atm = (args, cwd, env = {}) => runAtm(args, cwd, { ...ENV, ...env });
@@ -35,20 +48,16 @@ function inProject(setup, body) {
 }
 
 describe('the command tree', () => {
-  test('--help lists the everyday commands first; maintenance, then help and version, after them', () => {
+  test('--help lists the everyday commands first; maintenance, then help, docs and version, after them', () => {
     inProject(SETUP, (root) => {
       const help = atm(['--help'], root);
       assert.equal(help.code, 0, help.stderr);
-      // The command names, in the order the Commands section lists them (plain Click help: no rich panels)
-      const listed = help.stdout
-        .split('Commands:\n')[1]
-        .split('\n')
-        .map((line) => /^ {2}(\S+)/.exec(line)?.[1])
-        .filter(Boolean);
-      assert.deepEqual(listed, [
+      // The command names, in the order the Commands section lists them (plain Click help: no rich panels); the Rust
+      // atm's maintenance has `completion` too (Python's completion is Typer's --install-completion)
+      assert.deepEqual(commandsOf(help.stdout), [
         ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'],
-        ...['db', 'doctor', 'service'],
-        ...['help', 'version'],
+        ...['db', 'doctor', 'service', ...(RUST ? ['completion'] : []), 'agents'],
+        ...['help', 'docs', 'version'],
       ]);
     });
   });
@@ -81,7 +90,7 @@ describe('the command tree', () => {
       for (const old of ['start', 'done', 'show', 'list', 'sprints', 'check', 'serve', 'commit']) {
         const r = atm([old, 'T-1'], root);
         assert.equal(r.code, 2, `${old}: ${r.stdout}`);
-        assert.match(r.stderr, new RegExp(`^atm: No such command '${old}'`));
+        assert.match(r.stderr, new RegExp(noSuchCommand(old)));
       }
       assert.match(tasksOf(root), /"status": "todo"/);
     });
@@ -133,11 +142,19 @@ describe('options that go anywhere, and errors', () => {
       assert.equal(text.code, 2);
       assert.equal(
         text.stderr,
-        "atm: Missing argument 'TASK_ID'.\nUsage: atm task state [OPTIONS] TASK_ID NEXT_STATE\n",
+        RUST
+          ? 'atm: the following required arguments were not provided:\n  <TASK_ID>\n  <NEXT_STATE>\n\n' +
+              "Usage: atm task state <TASK_ID> <NEXT_STATE>\n\nFor more information, try '--help'.\n"
+          : "atm: Missing argument 'TASK_ID'.\nUsage: atm task state [OPTIONS] TASK_ID NEXT_STATE\n",
       );
       const json = atm(['task', 'state', '--json'], root);
       assert.equal(json.code, 2);
-      assert.deepEqual(JSON.parse(json.stderr), { error: "Missing argument 'TASK_ID'.", code: 2 });
+      assert.deepEqual(JSON.parse(json.stderr), {
+        error: RUST
+          ? 'the following required arguments were not provided: <TASK_ID> <NEXT_STATE>'
+          : "Missing argument 'TASK_ID'.",
+        code: 2,
+      });
     });
   });
 
@@ -147,27 +164,29 @@ describe('options that go anywhere, and errors', () => {
       const marker = path.join(root, 'ran');
       const r = atm(['loop', 'run', 'T-1', '--', 'touch', marker], root);
       assert.equal(r.code, 2);
-      assert.match(r.stderr, /^atm: No such command 'run'/);
+      assert.match(r.stderr, new RegExp(noSuchCommand('run')));
       assert.equal(fs.existsSync(marker), false);
-      const loop = atm(['loop', '--help'], root);
-      assert.deepEqual(
-        loop.stdout
-          .split('Commands:\n')[1]
-          .split('\n')
-          .map((line) => /^ {2}(\S+)/.exec(line)?.[1])
-          .filter(Boolean),
-        ['next'],
-      );
+      assert.deepEqual(commandsOf(atm(['loop', '--help'], root).stdout), ['next']);
     });
   });
 });
 
-/** What the shell would offer after `line` (fish's format: one `value<TAB>help` per line). */
+/** What the shell would offer after `line` (fish's format: one `value<TAB>help` per line): Typer's protocol for the
+ * Python atm, clap_complete's (`COMPLETE=fish atm -- <the line's words>`) for the Rust one */
 function complete(line, cwd) {
-  const env = { _ATM_COMPLETE: 'complete_fish', _TYPER_COMPLETE_FISH_ACTION: 'get-args', _TYPER_COMPLETE_ARGS: line };
-  const result = atm([], cwd, env);
+  const result = RUST
+    ? atm(['--', ...line.split(' ')], cwd, { COMPLETE: 'fish' })
+    : atm([], cwd, {
+        _ATM_COMPLETE: 'complete_fish',
+        _TYPER_COMPLETE_FISH_ACTION: 'get-args',
+        _TYPER_COMPLETE_ARGS: line,
+      });
   assert.equal(result.code, 0, result.stderr);
-  return result.stdout.split('\n').filter(Boolean);
+  // clap_complete offers the command's options too on an empty word; these tests are about atm's values
+  return result.stdout
+    .split('\n')
+    .filter(Boolean)
+    .filter((c) => !(RUST && c.startsWith('-')));
 }
 
 describe('shell completion', () => {

@@ -4,15 +4,26 @@ This repo is a Claude Code plugin marketplace (`.claude-plugin/marketplace.json`
 Only `plugin/` is shipped to users. `plugin/CLAUDE.md` is the plugin's own context file — don't put dev notes there.
 
 ## Layout
-- `plugin/skills/*/SKILL.md` — the `/atm:*` skills
+- `skills/atm-*/SKILL.md` — the skills, their one source, portable to any agent harness (`name` and `description`
+  only, a version check first, detail from `atm docs`; T-441). Claude Code's pre-approved commands for each are in
+  `skills/claude-code.json`
+- `plugin/skills/*/SKILL.md` — the `/atm:*` skills as the Claude Code plugin ships them: **generated** from `skills/`
+  by `atm-cli/build.py` (with `allowed-tools`, `/atm:` links and the plugin's own `bin/atm`); never edit them by hand
 - `plugin/templates/tasks-dashboard.html` — the dashboard, served by `atm service` (one server per user, for all
   projects; routes in `docs/multi-project-api.md`)
 - `plugin/scripts/atm` — atm-cli, the `atm` command the skills call (launcher for `atm.py`, see below)
 - `atm-cli/` — atm-cli's source modules and the build that writes `plugin/scripts/atm.py` (dev only, not shipped)
 - `dashboard/` — Svelte 5 + TypeScript source for the dashboard (dev only, not shipped)
+- `.generated/` — what `atm-cli/build.py` generates for the build and the dashboard (the data model's types, the
+  vocabularies, `atm docs`' topics and the skills as Python modules in `.generated/atm-cli/atm/`; the TypeScript in
+  `.generated/dashboard/`, imported as `$generated/…`). **Never committed** (gitignored): `pnpm install` in
+  `dashboard/`, the dashboard's scripts and `tests/scripts/run.mjs` write it, or `pnpm run generate`. What the plugin
+  ships is generated too but committed (`plugin/scripts/atm.py`, `plugin/skills/`): users install from git
 - `tests/scripts/` — tests for atm-cli (dev only)
 - `.agentic-task-manager/tasks.json` — this repo's own task list; we dogfood atm here (`/atm:serve` shows it)
 - `docs/` — requirements, designs and plans the tasks were created from
+- `docs/agent/` — the reference `atm docs <topic>` prints for agents (one topic per file, first line
+  `# <Title>: <summary>`), built into `atm.py` by `atm-cli/build.py`; the skills point to it rather than repeat it
 - `docs/adr/` — architecture decisions, one per file (`ADR-NNN-<title>.md`: status, context, decision, consequences);
   a decision that changes one is a new ADR that replaces it
 - `docs/guides/` — the coding guides: [Svelte](docs/guides/svelte.md) (the dashboard), [Rust](docs/guides/rust.md)
@@ -82,14 +93,16 @@ Commands (run in `dashboard/`):
 atm-cli is the `atm` command the skills run (earlier docs call it "the helper"). `plugin/scripts/atm` is a POSIX sh
 launcher that runs `atm.py` with Python 3.9+ (or explains that Python is needed). atm-cli uses the standard library
 and three vendored libraries, nothing installed: `transitions` (the task state machine; `atm-cli/vendored/`, bundled
-into `atm.py`) and Typer with Click (the command tree, `atm-cli/atm/cli/main.py`; copied as they are into
+into `atm.py`) and Typer with Click (the command tree: its root in `atm-cli/atm/cli/app.py`, one module per top-level command in
+`atm-cli/atm/cli/commands/`, the entry in `cli/main.py`; copied as they are into
 `plugin/scripts/vendor/`, which `atm.py` puts first on its import path; versions as `atm-cli/uv.lock` pins them,
 `tests/scripts/vendor.test.mjs`). It must stay compatible with Python 3.9, the version macOS's Command Line Tools
 ship. Python is the plugin's one runtime requirement; why there is a single implementation is in
 `docs/helper-runtime-proposal.md`.
 
 **Edit the modules in `atm-cli/atm/`, never `plugin/scripts/atm.py`.** That file is a **committed build artifact**:
-`atm-cli/build.py` concatenates the modules in dependency order (its `MODULES` list; a module imports only from
+`atm-cli/build.py` concatenates the modules, those it generates into `.generated/atm-cli/atm/` too, in dependency
+order (its `MODULES` list; a module imports only from
 earlier ones, and no two modules may define the same top-level name). The pre-commit hook rebuilds it when `atm-cli/`
 changes, and CI fails if it is stale. Design: `docs/v4/atm-cli.md`.
 
@@ -106,6 +119,21 @@ Tests (`tests/scripts/`, run with `node tests/scripts/run.mjs` or `pnpm run test
 through the launcher, exactly as users run it. Prefer data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of
 `scenarios.test.mjs`); use `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency,
 git merges). CI runs the suite with Python 3.9 and a current version.
+
+## The Rust port (`Cargo.toml`, `crates/`)
+atm is being ported to Rust ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)):
+one crate per layer under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`, `atm-cli`,
+whose binary is `atm`), the toolchain pinned in `rust-toolchain.toml`, the workspace's version the plugin's
+(`check-versions.mjs` checks it). Until the switch the Python atm is the spec: the same suite runs against the
+binary.
+- `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, `cargo deny check`
+  (from the repository root).
+- `pnpm run test:scripts:rust` in `dashboard/` (or `node tests/scripts/run.mjs --rust` after `cargo build`): the suite
+  against the Rust `atm`. The tests it doesn't pass yet are in `tests/scripts/rust-expected-failures.json`; the run
+  fails on any other failure, and on a listed test that passes: take it out of the list in the change that makes it
+  pass. `--write-expected` rewrites the list from a run, never to hide a failure.
+- `pnpm run test:e2e:rust` in `dashboard/`: the e2e suite with the Rust `atm` giving the fixture its task views and
+  summaries (`ATM_IMPL=rust`, as the scripts suite).
 
 ## Testing conventions
 - e2e specs import `test`/`expect` from `tests/e2e/helpers.ts`. `tasks.json` is never served from disk: use the
@@ -137,6 +165,10 @@ git merges). CI runs the suite with Python 3.9 and a current version.
   locally, `--trace on` while looking into a failure.
 
 ## CI
+- **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): `packaging/release.sh <version> --push`
+  on `main` tags `v<version>`; `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
+  release; publishing it runs `.github/workflows/homebrew.yml`, which updates `Formula/atm.rb` in
+  `solo-swe/homebrew-tap`. Its secrets are listed in the README.
 - **Workflow:** `pull-request` (also in `tasks.json` `meta.workflow`, so `/atm:push` knows): work happens on a
   release branch (e.g. `dev/v4`) and reaches `main` through **one combined PR per release branch**.
 - **Linux screenshot baselines:** made locally with `pnpm run test:e2e:visual:update` (Docker), normally. As a

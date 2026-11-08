@@ -11,12 +11,16 @@ is `db.jsongit.store`, in the db layer), and an import the rule doesn't allow is
 layers' folders. The rule has no exceptions (the migration's ratchet, atm-cli/layers.json, went with its last step).
 
 It generates the data model's types too (docs/layered-architecture.md §4): from the JSON Schemas in
-atm-cli/atm/common/schema/, the Python TypedDicts in atm-cli/atm/common/types.py and the TypeScript interfaces in
-dashboard/src/lib/generated/types.ts. One generator, in the standard library, for both languages.
+atm-cli/atm/common/schema/, the Python TypedDicts in .generated/atm-cli/atm/common/types.py and the TypeScript
+interfaces in .generated/dashboard/types.ts. One generator, in the standard library, for both languages. Everything it
+generates for itself or the dashboard goes into .generated/ (gitignored; GENERATED_DIR below); what the plugin ships
+(plugin/scripts/atm.py, plugin/skills/) is committed, as users install the plugin from git.
 
-Usage: python3 atm-cli/build.py           write the generated types and plugin/scripts/atm.py (only if they changed)
-       python3 atm-cli/build.py --check   exit 1 if any of them is not what the sources build
-       python3 atm-cli/build.py --output F   write the build to F instead (the generated types are left alone)
+Usage: python3 atm-cli/build.py           write .generated/, the plugin's skills and plugin/scripts/atm.py (only
+                                          what changed)
+       python3 atm-cli/build.py --generated   write .generated/ only
+       python3 atm-cli/build.py --check   write .generated/; exit 1 if what the plugin ships is not what the sources build
+       python3 atm-cli/build.py --output F   write .generated/, and the build to F instead
 Design: docs/v4/atm-cli.md, section 2.
 """
 
@@ -31,8 +35,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.join(HERE, "atm")
 TARGET = os.path.join(os.path.dirname(HERE), "plugin", "scripts", "atm.py")
 SCHEMA_DIR = os.path.join(PACKAGE, "common", "schema")
-PY_TYPES = os.path.join(PACKAGE, "common", "types.py")
-TS_TYPES = os.path.join(os.path.dirname(HERE), "dashboard", "src", "lib", "generated", "types.ts")
+# What the build generates for itself and the dashboard, never committed (.gitignore): .generated/atm-cli/atm/ holds
+# the generated modules, beside the package's own folders (the build, and tests/lib/support.py, read both), and
+# .generated/dashboard/ the dashboard's generated TypeScript ($generated in dashboard/vite.config.ts)
+GENERATED_DIR = os.path.join(os.path.dirname(HERE), ".generated")
+GENERATED_PACKAGE = os.path.join(GENERATED_DIR, "atm-cli", "atm")
+PY_TYPES = os.path.join(GENERATED_PACKAGE, "common", "types.py")
+TS_TYPES = os.path.join(GENERATED_DIR, "dashboard", "types.ts")
 # Dependency order: a module may only import from modules before it. A dotted name is a module in a layer's folder.
 MODULES = [
     "common.errors",
@@ -45,6 +54,7 @@ MODULES = [
     "common.components",
     "common.sprint_names",
     "common.repository",
+    "common.skills",
     "host.git",
     "db.interface",
     "vcs.interface",
@@ -79,23 +89,28 @@ MODULES = [
     "lib.settings",
     "lib.worktrees",
     "lib.documents",
+    "lib.agents",
     "boot.identity",
     "boot.open",
     "boot.jsongit",
     "cli.render",
-    "cli.query",
-    "cli.status",
-    "cli.claims",
-    "cli.edit",
-    "cli.components",
-    "cli.sprints",
-    "cli.releases",
-    "cli.archive",
-    "cli.code",
-    "cli.projects",
-    "cli.settings",
     "cli.store",
     "cli.serve",
+    "cli.agent_docs",
+    "cli.app",
+    # One module per top-level command, in the order they register (the help's order is cli/app.py's HELP_ORDER)
+    "cli.commands.task",
+    "cli.commands.loop",
+    "cli.commands.claim",
+    "cli.commands.vcs",
+    "cli.commands.db",
+    "cli.commands.release",
+    "cli.commands.component",
+    "cli.commands.project",
+    "cli.commands.sprint",
+    "cli.commands.maintenance",
+    "cli.commands.agents",
+    "cli.commands.meta",
     "cli.main",
     "api.server",
 ]
@@ -172,6 +187,8 @@ def top_level_names(tree):
 
 def read_module(name):
     path = os.path.join(PACKAGE, module_file(name))
+    if not os.path.exists(path):
+        path = os.path.join(GENERATED_PACKAGE, module_file(name))
     with open(path, encoding="utf-8") as f:
         source = f.read()
     tree = ast.parse(source, path)
@@ -537,7 +554,7 @@ def generated_python(types):
 
 
 VOCABULARIES = os.path.join(SCHEMA_DIR, "vocabularies.json")
-PY_VOCABULARIES = os.path.join(PACKAGE, "common", "vocabularies.py")
+PY_VOCABULARIES = os.path.join(GENERATED_PACKAGE, "common", "vocabularies.py")
 TS_VOCABULARIES = os.path.join(os.path.dirname(TS_TYPES), "vocabularies.ts")
 VOCABULARY_NAMES = (  # key in vocabularies.json -> the constant's name in both languages
     ("kinds", "KINDS"),
@@ -594,8 +611,122 @@ def generated_typescript_vocabularies(data):
     return "\n".join(lines) + "\n"
 
 
+AGENT_DOCS_DIR = os.path.join(os.path.dirname(HERE), "docs", "agent")
+PY_AGENT_DOCS = os.path.join(GENERATED_PACKAGE, "cli", "agent_docs.py")
+TOPIC_NAME = re.compile(r"[a-z][a-z0-9-]*")
+
+
+def agent_docs():
+    """`atm docs`' topics (T-440), from docs/agent/<topic>.md: {topic: (summary, text)}. Each file starts with
+    `# <Title>: <summary>`, the line `atm docs` lists."""
+    topics = {}
+    for file in sorted(os.listdir(AGENT_DOCS_DIR)):
+        name, ext = os.path.splitext(file)
+        if ext != ".md":
+            continue
+        if not TOPIC_NAME.fullmatch(name):
+            raise BuildError(f"docs/agent/{file}: a topic's name is lowercase letters, digits and -")
+        with open(os.path.join(AGENT_DOCS_DIR, file), encoding="utf-8") as f:
+            text = f.read()
+        first = text.split("\n", 1)[0]
+        if not first.startswith("# ") or ": " not in first:
+            raise BuildError(f"docs/agent/{file}: the first line is `# <Title>: <summary>`")
+        topics[name] = (first[2:].split(": ", 1)[1].strip(), text.rstrip("\n") + "\n")
+    if not topics:
+        raise BuildError("docs/agent/ has no topics")
+    # CompMD's own guide for language models, pinned at the version the dashboard renders with (its first line says
+    # which): what task text may contain
+    with open(os.path.join(AGENT_DOCS_DIR, "compmd-llms.txt"), encoding="utf-8") as f:
+        topics["compmd"] = (
+            "CompMD, the Markdown task text renders as: its guide for agents (what renders: atm docs tasks)",
+            f.read().rstrip("\n") + "\n",
+        )
+    return dict(sorted(topics.items()))
+
+
+def generated_python_agent_docs(topics):
+    lines = [
+        '"""`atm docs` topics, reference for agents that matches this version of atm (T-440): generated from',
+        f'docs/agent/*.md by atm-cli/build.py. Don\'t edit it: change those files and run {GENERATED_HOW}"""',
+        "",
+        "# topic -> (summary, Markdown)",
+        "AGENT_DOCS = {",
+    ]
+    for name, (summary, text) in topics.items():
+        lines.append(f"    {json.dumps(name)}: ({json.dumps(summary, ensure_ascii=False)}, {json.dumps(text, ensure_ascii=False)}),")
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
+SKILLS_DIR = os.path.join(os.path.dirname(HERE), "skills")
+PLUGIN_SKILLS_DIR = os.path.join(os.path.dirname(HERE), "plugin", "skills")
+PLUGIN_CHECK = "**First, check atm:**"
+PLUGIN_FALLBACK = (
+    "(With the atm plugin, its `bin/` is on your PATH. If the shell says `atm: command not found`, write\n"
+    '`"${CLAUDE_SKILL_DIR}/../../bin/atm"` instead of `atm`, here and in every later command.)\n\n'
+)
+SKILL_FILE = re.compile(r"---\nname: (atm-[a-z-]+)\ndescription: >\n((?:  [^\n]*\n)+)---\n(.*)", re.S)
+
+
+def plugin_skills():
+    """The Claude Code plugin's copies of the skills (T-441), from the one source in skills/: each under its name without
+    `atm-` (the plugin adds the `/atm:` namespace), with Claude Code's pre-approved commands from skills/claude-code.json,
+    and its links to the other skills as `/atm:<name>`. {path: text}."""
+    with open(os.path.join(SKILLS_DIR, "claude-code.json"), encoding="utf-8") as f:
+        allowed = json.load(f)["allowed-tools"]
+    names = sorted(d for d in os.listdir(SKILLS_DIR) if os.path.isdir(os.path.join(SKILLS_DIR, d)))
+    short = "|".join(re.escape(n[len("atm-"):]) for n in names)
+    link = re.compile(rf"(?<![\w/.-])/atm-({short})\b")
+    files = {}
+    for name in names:
+        source = os.path.join("skills", name, "SKILL.md")
+        with open(os.path.join(SKILLS_DIR, name, "SKILL.md"), encoding="utf-8") as f:
+            match = SKILL_FILE.fullmatch(f.read())
+        if not match or match.group(1) != name:
+            raise BuildError(f"{source}: starts with a frontmatter of `name: {name}` and `description: >` only")
+        if name not in allowed:
+            raise BuildError(f"skills/claude-code.json: no allowed-tools for {name}")
+        front = f"---\nname: {name[len('atm-'):]}\ndescription: >\n{match.group(2)}allowed-tools: {allowed[name]}\n---\n"
+        note = f"<!-- Generated from {source} by atm-cli/build.py: edit that file and run {GENERATED_HOW} -->\n"
+        body = link.sub(r"/atm:\1", match.group(3))
+        if PLUGIN_CHECK not in body:
+            raise BuildError(f"{source}: no '{PLUGIN_CHECK}' paragraph (the version check every skill starts with)")
+        # The plugin brings its own atm: where its bin/ isn't on PATH, the skill finds it beside itself
+        body = body.replace(PLUGIN_CHECK, PLUGIN_FALLBACK + PLUGIN_CHECK, 1)
+        files[os.path.join(PLUGIN_SKILLS_DIR, name[len("atm-"):], "SKILL.md")] = front + note + body
+    extra = set(allowed) - set(names)
+    if extra:
+        raise BuildError(f"skills/claude-code.json: no skill named {', '.join(sorted(extra))}")
+    return files
+
+
+PY_SKILLS = os.path.join(GENERATED_PACKAGE, "common", "skills.py")
+
+
+def generated_python_skills():
+    """The skills, built into atm.py (T-442): what `atm agents install` writes is the version that runs."""
+    with open(os.path.join(SKILLS_DIR, "claude-code.json"), encoding="utf-8") as f:
+        allowed = json.load(f)["allowed-tools"]
+    lines = [
+        '"""The agent skills (skills/atm-*/SKILL.md), built into atm for `atm agents install` (T-442), and Claude Code\'s',
+        f'pre-approved commands for each (skills/claude-code.json): generated by atm-cli/build.py. Don\'t edit it: change',
+        f'those files and run {GENERATED_HOW}"""',
+        "",
+        "# skill name -> SKILL.md, the portable core",
+        "SKILLS = {",
+    ]
+    for name in sorted(d for d in os.listdir(SKILLS_DIR) if os.path.isdir(os.path.join(SKILLS_DIR, d))):
+        with open(os.path.join(SKILLS_DIR, name, "SKILL.md"), encoding="utf-8") as f:
+            lines.append(f"    {json.dumps(name)}: {json.dumps(f.read(), ensure_ascii=False)},")
+    lines += ["}", "", "# skill name -> Claude Code's allowed-tools", "CLAUDE_CODE_ALLOWED_TOOLS = {"]
+    lines += [f"    {json.dumps(name)}: {json.dumps(tools)}," for name, tools in sorted(allowed.items())]
+    lines.append("}")
+    return "\n".join(lines) + "\n"
+
+
 def generated_files():
-    """The files generated from the schemas and the vocabularies, by path."""
+    """The files generated into .generated/ from the schemas, the vocabularies, the agents' reference and the skills,
+    by path: the build's own inputs and the dashboard's, never committed."""
     types = schema_types()
     vocabularies = vocabulary_data()
     return {
@@ -603,6 +734,8 @@ def generated_files():
         TS_TYPES: generated_typescript(types),
         PY_VOCABULARIES: generated_python_vocabularies(vocabularies),
         TS_VOCABULARIES: generated_typescript_vocabularies(vocabularies),
+        PY_AGENT_DOCS: generated_python_agent_docs(agent_docs()),
+        PY_SKILLS: generated_python_skills(),
     }
 
 
@@ -614,21 +747,35 @@ def read_text(path):
         return None
 
 
+def write_text(path, content):
+    """Write a file only when it changes, in one step: several test processes may build at once, and none may read
+    half a file."""
+    if read_text(path) == content:
+        return
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    partial = f"{path}.{os.getpid()}.tmp"
+    with open(partial, "w", encoding="utf-8") as f:
+        f.write(content)
+    os.replace(partial, path)
+
+
 def main(argv):
     try:
-        generated = generated_files()
+        # .generated/ is always written: the build reads its modules from there
+        for path, content in generated_files().items():
+            write_text(path, content)
+        if "--generated" in argv:
+            return 0
+        shipped = plugin_skills()
         if "--check" not in argv and "--output" not in argv:
-            for path, content in generated.items():
-                if read_text(path) != content:
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    with open(path, "w", encoding="utf-8") as f:
-                        f.write(content)
+            for path, content in shipped.items():
+                write_text(path, content)
         text = build()
     except BuildError as e:
         sys.stderr.write(f"build.py: {e}\n")
         return 1
     if "--check" in argv:
-        for path, content in generated.items():
+        for path, content in shipped.items():
             if read_text(path) != content:
                 sys.stderr.write(
                     f"build.py: {os.path.relpath(path, os.path.dirname(HERE))} is stale. Run `pnpm run build:cli` in "
