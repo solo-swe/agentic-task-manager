@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 481,
+    "next_id": 482,
     "labels": [
       {
         "id": "architecture",
@@ -22668,7 +22668,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-07T23:09:20Z",
-      "updated_at": "2026-11-08T00:19:40Z",
+      "updated_at": "2026-11-08T00:30:27Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22691,7 +22691,32 @@
       ],
       "started_at": "2026-11-07T23:46:53Z",
       "started_by": "claude:34798264",
-      "commit": "ce9057556211d7aa5d54f79b88a74da8515f3873"
+      "commit": "254dbdfd3ff450e85d1dbf4ea3028e7c0ef59040"
+    },
+    {
+      "id": "T-481",
+      "name": "Windows: the stress test (16 agents in two worktrees) fails",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Found in T-480 on `dev/0.33.0-switch`. `tests/scripts/stress.test.mjs` (16 concurrent agents in two worktrees) fails on CI's Windows runner and passes on Linux and macOS.\n\n## What CI showed\n- With atm's 10 s lock wait: agents time out waiting for the lock (`timed out waiting for the lock …/wt2/.agentic-task-manager/.lock`).\n- With the test's lock wait raised to 60 s on Windows (decided with Hakan, `ATM_LOCK_TIMEOUT`): the test fails after 29 s, with the cleanup's `EPERM` on the test's folder, which hides the assertion underneath: some process still has the folder open.\n\n## To find\n- What still holds the folder: an atm process that outlives the test (a `claim hold` watcher not ending with its shell on Windows is a suspect: the same `EPERM` shows in `claims.test.mjs`'s watcher test), or a slow exit.\n- Whether the lock is slow on Windows (git and process starts there are several times slower), and whether agents queue longer than they should.\n\n## Done when\nThe test passes on CI's Windows runner, ideally at atm's default lock wait.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "tests/scripts/stress.test.mjs",
+        "crates/atm-db/src/jsongit/lock.rs"
+      ],
+      "created_at": "2026-11-08T00:38:28Z",
+      "updated_at": "2026-11-08T00:38:33Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli"
+      ]
     }
   ]
 }
