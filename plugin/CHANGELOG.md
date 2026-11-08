@@ -9,6 +9,13 @@ The dashboard comes with the plugin: updating the plugin updates it everywhere.
 The sprint *Rust and distribution*: the groundwork for atm as an app that installs its own skills
 (`docs/better-way-to-distribute-atm.md`) and for the Rust port (`docs/porting-to-rust.md`).
 
+**The plugin's last release** (T-479). 0.33.0 is the Rust `atm` CLI on its own (`brew install solo-swe/tap/atm`, or
+the release archives for macOS, Linux and Windows), with the dashboard and the skills embedded; the Claude Code plugin,
+its marketplace entry and the Python atm are retired. To move: install the CLI, run `atm agents install` (the skills
+as `atm-do-task`, `atm-loop-tasks`, … in `~/.claude/skills/`, no longer `/atm:…`), stop the plugin's server
+(`atm service stop`), then `/plugin uninstall atm@solo-swe-plugins` and `/plugin marketplace remove solo-swe-plugins`.
+Task files, commands and options are unchanged. The README's "Moving to the atm CLI" has the steps.
+
 ### Changed
 - **Claims last without the plugin's hooks** (T-439): every atm command an agent runs renews its live claims once
   their last renewal is ten minutes old (as `claim heartbeat --auto` does; a command with `--agent` renews nobody's),

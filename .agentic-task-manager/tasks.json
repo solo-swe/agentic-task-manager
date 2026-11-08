@@ -22585,7 +22585,7 @@
       "description": "0.32.0 is the Claude Code plugin's last release (decided with Hakan): its What's New, changelog and README say that the next version comes as the `atm` CLI (the Homebrew formula, the release binaries) and the app, and how a plugin user moves: install the CLI, `atm agents install`, remove the plugin; the skills are `atm-…` then, not `/atm:`. Reviewed with Hakan before the release.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "plugin/WHATS-NEW.md",
@@ -22593,9 +22593,9 @@
         "README.md"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-07T06:20:49Z",
+      "updated_at": "2026-11-08T01:49:52Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The Rust port",
@@ -22603,7 +22603,9 @@
         }
       ],
       "sprint": "The Rust port",
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-08T01:49:52Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

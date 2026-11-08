@@ -10,6 +10,11 @@ A **Claude Code plugin** that gives any project file-based task management with 
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
+> [!IMPORTANT]
+> **0.32.0 is the plugin's last release.** From 0.33.0, atm comes as the `atm` command (Homebrew, or a download for
+> macOS, Linux and Windows), and later as a macOS app, and installs its own skills into Claude Code and other agents.
+> Your projects and tasks stay as they are. See [Moving to the atm CLI](#moving-to-the-atm-cli).
+
 ---
 
 ## Tenets
@@ -106,6 +111,40 @@ Or loop through everything:
 ```
 /atm:loop-tasks
 ```
+
+---
+
+## Moving to the atm CLI
+
+0.32.0 is the last version of atm as a Claude Code plugin. The next one, 0.33.0, is the `atm` command on its own: one
+program, rewritten in Rust, with nothing else to install (no Python). It brings the dashboard and the skills with it,
+and installs the skills where your agents read them: Claude Code first, and other agents' shared folder
+(`~/.agents/skills`) as they are supported. A macOS app follows. Why, and the plan:
+[docs/better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md).
+
+**What stays the same:** your projects' `.agentic-task-manager/` folders, tasks, sprints and history; the dashboard and
+its address; every `atm` command and option.
+
+**What changes:** the skills are called `atm-do-task`, `atm-loop-tasks`, `atm-create-tasks`, `atm-plan-sprint`,
+`atm-close-sprint`, `atm-push` and `atm-serve` instead of `/atm:do-task` and the rest, and they need the `atm` command
+on your PATH. Asking in your own words ("loop the tasks") works as before.
+
+**Moving, once 0.33.0 is out:**
+
+1. Install the CLI: `brew install solo-swe/tap/atm` on macOS or Linux, or download your platform's archive from the
+   [releases](https://github.com/solo-swe/agentic-task-manager/releases) and put `atm` on your PATH. Check it with
+   `atm --version`.
+2. Install the skills: `atm agents install`. It prints every folder it writes; `atm agents status` shows what is
+   installed where.
+3. Stop the plugin's dashboard server (`/atm:serve stop`), then remove the plugin and its marketplace in Claude Code:
+   ```
+   /plugin uninstall atm@solo-swe-plugins
+   /plugin marketplace remove solo-swe-plugins
+   ```
+4. Start a new Claude Code session, so it lists the new skills, and `atm service start --open` (or ask for the
+   dashboard) to bring it back.
+
+Updates come with `brew upgrade` (or a new download), and `atm agents install` again updates the skills.
 
 ---
 
