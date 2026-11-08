@@ -25,6 +25,12 @@ const TEST_HOME = tempDir('atm-home-');
 process.on('exit', () => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
 /** The environment without this machine's agent identity, so every test decides who the agent is. */
+// Git for Windows turns LF into CRLF in the working trees it checks out (core.autocrlf): every git the tests run, theirs
+// and atm's, keeps files as written, as on Unix (T-480)
+process.env.GIT_CONFIG_COUNT = '1';
+process.env.GIT_CONFIG_KEY_0 = 'core.autocrlf';
+process.env.GIT_CONFIG_VALUE_0 = 'false';
+
 export function baseEnv() {
   const env = { ...process.env, ATM_HOME: TEST_HOME };
   delete env.CLAUDE_CODE_SESSION_ID;

@@ -19,6 +19,7 @@ import {
   makeProject,
   removeDir,
   runAtm,
+  shown,
   tempDir,
 } from './helpers.mjs';
 import { pageCsp } from '../../dashboard/tests/e2e/csp.mjs';
@@ -108,7 +109,12 @@ function rawGet(port, urlPath, host) {
 }
 
 /** The ID a server gives for its atm folder (common/dashboard.py home_id): the folder's real path, hashed */
-const homeId = (dir) => createHash('sha256').update(fs.realpathSync(dir)).digest('hex').slice(0, 16);
+// As atm-common's `home_id`: the real path as atm shows it, hashed
+const homeId = (dir) =>
+  createHash('sha256')
+    .update(shown(fs.realpathSync.native(dir)))
+    .digest('hex')
+    .slice(0, 16);
 
 describe('serve', () => {
   test('start, reuse, status, stop', async () => {

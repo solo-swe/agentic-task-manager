@@ -205,6 +205,15 @@ pub fn lock(directory: &Path, timeout: Option<f64>) -> Result<Lock> {
                 }
                 std::thread::sleep(LOCK_POLL);
             }
+            // Windows refuses a folder whose last holder is still removing it (its delete pending): the lock is
+            // about to be free, so try again
+            Err(e)
+                if cfg!(windows)
+                    && e.kind() == io::ErrorKind::PermissionDenied
+                    && Instant::now() < deadline =>
+            {
+                std::thread::sleep(LOCK_POLL);
+            }
             Err(e) => return Err(io_error(&lock)(e)),
         }
     }
