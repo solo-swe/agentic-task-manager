@@ -15,6 +15,15 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   becomes `workspaces/default.json`, renamed in place when found. The `dirs` crate (approved, already in the tree)
   finds the folder; a test checks the app's identifier is atm-common's `APP_ID`. The tests, the e2e fixture and the
   dev server use `ATM_STATE_DIR`, and the suite drops an inherited one.
+- **Projects open through atm-lib, on store and version-control factories** (T-491, ADR-003 §1 and §4): a project's
+  `.agentic-task-manager/settings.json` (`store`, `vcs`; `json-git` and `git` without one) is read before any store
+  is chosen, and a store or vcs atm doesn't know is refused. `atm_db::open` and `atm_vcs::open` build them;
+  `Project::open` and `open_tolerant` use them, and `project.store_maintenance()` has what only the JSON-in-git store
+  has (its paths, `db init`'s merge driver, migrations, the lock test hook, the merge driver itself). atm-lib's
+  `Workspaces` and `Workspace` (over atm-db's `workspaces/<id>.json` and `recent.json`) list a workspace's projects
+  with their summaries, worktrees and logos, search them, and add and remove them; atm-api's project list and search
+  call them, the summary cache moved with them. atm-boot's openers only delegate now (T-492 removes it). Nothing users
+  see changes.
 
 ### Added
 - **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one

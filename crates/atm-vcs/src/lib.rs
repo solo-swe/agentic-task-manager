@@ -114,6 +114,23 @@ fn relative_to(path: &Path, base: &Path) -> String {
     }
 }
 
+/// The version controls atm knows, by the name a project's settings file gives them (ADR-003 §4).
+pub const VCS_KINDS: [&str; 1] = ["git"];
+
+/// The version control `kind` (a project's settings say which) of the working copy at `root`.
+///
+/// # Errors
+/// A kind atm doesn't know.
+pub fn open(root: &Path, kind: &str) -> Result<GitVcs> {
+    if !VCS_KINDS.contains(&kind) {
+        return Err(Error::Invalid(format!(
+            "the version control {kind:?} isn't one atm knows ({})",
+            VCS_KINDS.join(", ")
+        )));
+    }
+    Ok(GitVcs::new(root))
+}
+
 /// Git as a project's version control, at its working copy's root.
 #[derive(Debug, Clone)]
 pub struct GitVcs {

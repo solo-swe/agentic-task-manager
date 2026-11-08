@@ -13,6 +13,7 @@ pub mod documents;
 pub mod edit;
 pub mod leases;
 pub mod loop_rules;
+pub mod maintenance;
 pub mod project;
 pub mod query;
 pub mod releases;
@@ -22,6 +23,8 @@ pub mod state;
 pub mod status;
 pub mod summary;
 pub mod tasks;
+pub mod workspaces;
 pub mod worktrees;
 
 pub use project::Project;
+pub use workspaces::{Workspace, Workspaces};

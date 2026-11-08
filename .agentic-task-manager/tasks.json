@@ -21602,7 +21602,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §1 and §4, step 2.\n\n## Change\n- **The project's settings file**, `.agentic-task-manager/settings.json` (`store`, `vcs`; json-git and git without one), read before any store is chosen.\n- **Factories:** `atm_db::open(folder, store)` and `atm_vcs::open(folder, vcs)`. Finding a project from a folder (walking up, a linked worktree's main copy) moves behind the store's factory.\n- **atm-lib:**\n  - `Project::open(cwd)`;\n  - `Project::with_store(store, vcs)` for tests;\n  - `project.store_maintenance()` (merge driver, migrations, paths; `None` for a store without them);\n  - the actor.\n- **`Workspaces`** (over atm-db's `workspaces/<id>.json` and `recent.json`, under the state folder's lock) and **`Workspace`**:\n  - its projects, with summaries, worktrees and logos, a broken one listed as missing (F18);\n  - search across them;\n  - add, remove and prune;\n  - the summary cache, moved from atm-api's `Projects`.\n  - A new project atm meets goes into `default`.\n\natm-api's `Projects` calls these instead of its own loop; nothing users see changes.\n\n## Tests\natm-lib's unit tests on the in-memory store through `with_store`; the scenarios and `serve.test.mjs` unchanged and passing.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-490"
       ],
@@ -21613,16 +21613,18 @@
         "crates/atm-api/src/routes.rs"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:28:35Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-08T10:18:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:28:35Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-492",

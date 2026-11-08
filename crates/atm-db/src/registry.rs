@@ -145,12 +145,11 @@ fn empty_registry() -> Value {
 
 /// The registry and, when its file was unreadable, where it was moved (`default.json.damaged-<time>`; an empty
 /// registry replaces it). Called holding the registry's lock.
-fn read_registry(home: &Path) -> Result<(Value, Option<String>)> {
-    let path = registry_file(home);
+fn read_registry(path: &Path) -> Result<(Value, Option<String>)> {
     if !path.exists() {
         return Ok((empty_registry(), None));
     }
-    let data = read_json(&path);
+    let data = read_json(path);
     let usable = data
         .as_ref()
         .and_then(|d| d.get("projects"))
@@ -167,17 +166,15 @@ fn read_registry(home: &Path) -> Result<(Value, Option<String>)> {
         .filter(|c| *c != '-' && *c != ':')
         .collect();
     let damaged = format!("{}.damaged-{stamp}", path.shown());
-    std::fs::rename(&path, &damaged)
-        .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))?;
+    std::fs::rename(path, &damaged).map_err(|e| Error::failed(format!("{}: {e}", path.shown())))?;
     Ok((empty_registry(), Some(damaged)))
 }
 
-fn write_registry(home: &Path, registry: &Value) -> Result<()> {
-    let path = registry_file(home);
+fn write_registry(path: &Path, registry: &Value) -> Result<()> {
     if let Some(folder) = path.parent() {
         ensure_home(folder).map_err(|e| Error::failed(format!("{}: {e}", folder.shown())))?;
     }
-    write_text_atomic(&path, &(to_json(registry) + "\n"))
+    write_text_atomic(path, &(to_json(registry) + "\n"))
         .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))
 }
 
@@ -258,10 +255,11 @@ pub fn register(paths: &Paths, wait: bool) -> Result<Option<&'static str>> {
         Err(_) if !wait => return Ok(Some("busy")),
         Err(e) => return Err(e),
     };
-    let (mut registry, _) = read_registry(&home)?;
+    let file = registry_file(&home);
+    let (mut registry, _) = read_registry(&file)?;
     let result = update_entry(&mut registry, &path, &meta);
     if !matches!(result, "unchanged" | "unlisted") {
-        write_registry(&home, &registry)?;
+        write_registry(&file, &registry)?;
     }
     drop(held);
     Ok(Some(result))
@@ -348,11 +346,34 @@ fn expand_home(path: &str) -> PathBuf {
     }
 }
 
-/// The registry, the state folder's `workspaces/default.json`. Each method holds the registry's lock while it reads
-/// and writes, and says where an unreadable file was moved (`damaged`).
+/// The workspace every project atm meets joins, which always exists (ADR-003 §1).
+pub const DEFAULT_WORKSPACE: &str = "default";
+/// The folder of the workspaces' files in the state folder.
+pub const WORKSPACES_DIR: &str = "workspaces";
+
+/// A workspace ID is a file name and a key in URLs: letters, digits, `.`, `_` and `-`, not starting with `.`.
+#[must_use]
+pub fn valid_workspace_id(id: &str) -> bool {
+    valid_project_id(id) && !id.starts_with('.')
+}
+
+/// A workspace's file in the state folder `home`: `workspaces/<id>.json` (`default`'s renamed from `projects.json`
+/// first, [`registry_file`]).
+#[must_use]
+pub fn workspace_file(home: &Path, id: &str) -> PathBuf {
+    if id == DEFAULT_WORKSPACE {
+        return registry_file(home);
+    }
+    home.join(WORKSPACES_DIR).join(format!("{id}.json"))
+}
+
+/// A workspace's list of projects, its file in the state folder (`workspaces/<id>.json`; the `default` one is the
+/// registry). Each method holds the state folder's lock while it reads and writes, and says where an unreadable file
+/// was moved (`damaged`).
 #[derive(Debug, Clone)]
 pub struct FileRegistry {
     home: PathBuf,
+    workspace: String,
 }
 
 impl Default for FileRegistry {
@@ -362,25 +383,48 @@ impl Default for FileRegistry {
 }
 
 impl FileRegistry {
-    /// The registry of atm's state folder.
+    /// The registry (the `default` workspace) of atm's state folder.
     #[must_use]
     pub fn new() -> Self {
-        Self { home: state_dir() }
+        Self::at(&state_dir())
     }
 
-    /// The registry of the state folder `home` (the server's, given on its command line).
+    /// The registry (the `default` workspace) of the state folder `home` (the server's, given on its command line).
     #[must_use]
     pub fn at(home: &Path) -> Self {
+        Self::workspace(home, DEFAULT_WORKSPACE)
+    }
+
+    /// The workspace `id` of the state folder `home` (a valid ID: [`valid_workspace_id`]).
+    #[must_use]
+    pub fn workspace(home: &Path, id: &str) -> Self {
         Self {
             home: home.to_path_buf(),
+            workspace: id.to_string(),
         }
+    }
+
+    /// Its ID.
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.workspace
+    }
+
+    /// Whether its file is there (`default` always counts as there).
+    #[must_use]
+    pub fn exists(&self) -> bool {
+        self.workspace == DEFAULT_WORKSPACE || self.file().is_file()
+    }
+
+    fn file(&self) -> PathBuf {
+        workspace_file(&self.home, &self.workspace)
     }
 
     /// The entries as the file has them now, without the lock (the server reads them on every request): those with
     /// a `path`.
     #[must_use]
     pub fn entries(&self) -> Vec<Value> {
-        let registry = read_json(&registry_file(&self.home)).unwrap_or(Value::Null);
+        let registry = read_json(&self.file()).unwrap_or(Value::Null);
         registry
             .get("projects")
             .and_then(Value::as_array)
@@ -396,7 +440,7 @@ impl FileRegistry {
     /// The file's size and modification time, null while there is none: it changes when the list does.
     #[must_use]
     pub fn stamp(&self) -> Value {
-        let Ok(meta) = std::fs::metadata(registry_file(&self.home)) else {
+        let Ok(meta) = std::fs::metadata(self.file()) else {
             return Value::Null;
         };
         let mtime = meta
@@ -419,9 +463,9 @@ impl FileRegistry {
     /// The registry's lock or file.
     pub fn list_projects(&self) -> Result<Value> {
         let held = self.locked()?;
-        let (registry, damaged) = read_registry(&self.home)?;
+        let (registry, damaged) = read_registry(&self.file())?;
         if damaged.is_some() {
-            write_registry(&self.home, &registry)?;
+            write_registry(&self.file(), &registry)?;
         }
         drop(held);
         let projects: Vec<Value> = entries(&registry)
@@ -448,9 +492,9 @@ impl FileRegistry {
             )));
         }
         let held = self.locked()?;
-        let (mut registry, damaged) = read_registry(&self.home)?;
+        let (mut registry, damaged) = read_registry(&self.file())?;
         let result = update_entry(&mut registry, &path, &meta);
-        write_registry(&self.home, &registry)?;
+        write_registry(&self.file(), &registry)?;
         drop(held);
         let project = position(&registry, &text(&path))
             .map_or(Value::Null, |at| entries(&registry)[at].clone());
@@ -481,7 +525,7 @@ impl FileRegistry {
             candidates.push(text(&main_worktree(&paths.root)));
         }
         let held = self.locked()?;
-        let (mut registry, damaged) = read_registry(&self.home)?;
+        let (mut registry, damaged) = read_registry(&self.file())?;
         let matches = |e: &Value, key: &str| {
             e.get(key)
                 .and_then(Value::as_str)
@@ -492,7 +536,7 @@ impl FileRegistry {
             .position(|e| matches(e, "id") || matches(e, "path"));
         let removed = at.map(|at| entries_mut(&mut registry).remove(at));
         if removed.is_some() || damaged.is_some() {
-            write_registry(&self.home, &registry)?;
+            write_registry(&self.file(), &registry)?;
         }
         drop(held);
         let removed = removed.ok_or_else(|| {
@@ -509,16 +553,81 @@ impl FileRegistry {
     /// The registry's lock or file.
     pub fn prune(&self) -> Result<Value> {
         let held = self.locked()?;
-        let (mut registry, damaged) = read_registry(&self.home)?;
+        let (mut registry, damaged) = read_registry(&self.file())?;
         let (gone, kept): (Vec<Value>, Vec<Value>) =
             entries(&registry).iter().cloned().partition(is_missing);
         if !gone.is_empty() || damaged.is_some() {
             *entries_mut(&mut registry) = kept;
-            write_registry(&self.home, &registry)?;
+            write_registry(&self.file(), &registry)?;
         }
         drop(held);
         Ok(json!({"removed": gone, "damaged": damaged}))
     }
+
+    /// Make the workspace's file, with no projects, unless it is there already. Whether it made it.
+    ///
+    /// # Errors
+    /// An invalid ID, the state folder's lock or the file.
+    pub fn create(&self) -> Result<bool> {
+        if !valid_workspace_id(&self.workspace) {
+            return Err(Error::Invalid(format!(
+                "{:?} isn't a workspace ID (letters, digits, '.', '_' and '-')",
+                self.workspace
+            )));
+        }
+        let held = self.locked()?;
+        let file = self.file();
+        let made = !file.exists();
+        if made {
+            write_registry(&file, &empty_registry())?;
+        }
+        drop(held);
+        Ok(made)
+    }
+}
+
+/// The IDs of the workspaces in the state folder `home`, sorted, `default` first and always there.
+#[must_use]
+pub fn workspace_ids(home: &Path) -> Vec<String> {
+    let mut ids: Vec<String> = std::fs::read_dir(home.join(WORKSPACES_DIR))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            name.strip_suffix(".json").map(String::from)
+        })
+        .filter(|id| valid_workspace_id(id) && id != DEFAULT_WORKSPACE)
+        .collect();
+    ids.sort();
+    ids.insert(0, DEFAULT_WORKSPACE.into());
+    ids
+}
+
+/// What was opened last, in the state folder: `recent.json`.
+pub const RECENT_FILE: &str = "recent.json";
+
+/// What `recent.json` says (`{workspace, projects: {<workspace>: <project id>}}`), an empty object without one.
+#[must_use]
+pub fn read_recent(home: &Path) -> Map<String, Value> {
+    read_json(&home.join(RECENT_FILE))
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+/// Write `recent.json`, atomically, under the state folder's lock.
+///
+/// # Errors
+/// The state folder's lock or the file.
+pub fn write_recent(home: &Path, recent: &Map<String, Value>) -> Result<()> {
+    ensure_home(home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
+    let held = lock(home, None)?;
+    let file = home.join(RECENT_FILE);
+    let written = write_text_atomic(&file, &(to_json(&Value::Object(recent.clone())) + "\n"))
+        .map_err(|e| Error::failed(format!("{}: {e}", file.shown())));
+    drop(held);
+    written
 }
 
 #[cfg(test)]

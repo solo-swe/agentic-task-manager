@@ -4,22 +4,18 @@
 
 use std::path::Path;
 
-use atm_common::Shown;
-
 use atm_common::Result;
 use atm_db::JsonGitStore;
-use atm_db::jsongit::paths::{DASHBOARD_FILE, check_task_folder, find_paths, legacy_files};
+use atm_db::jsongit::paths::{check_task_folder, find_paths};
 use atm_lib::Project;
+use atm_lib::maintenance::StoreMaintenance;
 
 /// The project at or above `cwd`, on the JSON-in-git store. Nothing is read until the project's data is asked for.
 ///
 /// # Errors
 /// When the project's task folder fails its checks (a symlink, or one leading outside the project).
 pub fn open_project(cwd: &Path) -> Result<Project> {
-    let paths = find_paths(cwd)?;
-    // The folder's checks run on every open, so a file linked after the paths were found is refused too
-    check_task_folder(&paths.root, &paths.dir)?;
-    Ok(Project::new(Box::new(JsonGitStore::new(paths))))
+    Project::open(cwd)
 }
 
 /// The project at or above `cwd`, its task file read as far as it can be read, saying what is wrong instead of
@@ -28,9 +24,7 @@ pub fn open_project(cwd: &Path) -> Result<Project> {
 /// # Errors
 /// When the project's task folder fails its checks (a symlink, or one leading outside the project).
 pub fn open_project_tolerant(cwd: &Path) -> Result<Project> {
-    let paths = find_paths(cwd)?;
-    check_task_folder(&paths.root, &paths.dir)?;
-    Ok(Project::new(Box::new(JsonGitStore::tolerant(paths))))
+    Project::open_tolerant(cwd)
 }
 
 /// `atm project config`: where the project's task files are (the JSON-in-git store's own locations): root, dir,
@@ -39,22 +33,7 @@ pub fn open_project_tolerant(cwd: &Path) -> Result<Project> {
 /// # Errors
 /// When the project's task folder fails its checks (a symlink, or one leading outside the project).
 pub fn task_paths(cwd: &Path) -> Result<serde_json::Value> {
-    let paths = find_paths(cwd)?;
-    let text = |p: &Path| p.shown();
-    let legacy = legacy_files(&paths.root).map(|l| {
-        serde_json::json!({
-            "tasks": text(&l.tasks),
-            "dashboard": l.dashboard.as_deref().map(text),
-        })
-    });
-    Ok(serde_json::json!({
-        "root": text(&paths.root),
-        "dir": text(&paths.dir),
-        "tasks": text(&paths.tasks),
-        "tasks_exists": paths.tasks.is_file(),
-        "dashboard": text(&paths.dir.join(DASHBOARD_FILE)),
-        "legacy": legacy,
-    }))
+    StoreMaintenance::at(cwd).task_paths()
 }
 
 /// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
@@ -75,7 +54,7 @@ pub fn default_base(cwd: &Path) -> String {
 /// # Errors
 /// A version that isn't task data, or a result that can't be written.
 pub fn merge_versions(base: &Path, ours: &Path, theirs: &Path) -> Result<Vec<String>> {
-    atm_db::jsongit::merge::merge_files(base, ours, theirs)
+    atm_lib::maintenance::merge_versions(base, ours, theirs)
 }
 
 /// List the project at or above `cwd` on the dashboard, by its folder (every command that sets a project up does).
@@ -98,14 +77,7 @@ pub fn dashboard_id(cwd: &Path) -> Result<(String, bool)> {
     Ok(atm_db::registry::registered_id(&paths))
 }
 
-/// What `atm db init` set up in the store's working copy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SetUp {
-    /// Whether the project is in a git repository.
-    pub git: bool,
-    /// Whether `.gitattributes` gained the merge driver's line (staged).
-    pub gitattributes_added: bool,
-}
+pub use atm_lib::maintenance::{Migration, SetUp};
 
 /// `atm db init`: set the store up in its working copy: in git, the merge driver for the task files (registered in
 /// the clone, `.gitattributes` staged).
@@ -113,24 +85,7 @@ pub struct SetUp {
 /// # Errors
 /// The task folder's checks, a `.gitattributes` that can't be written.
 pub fn set_up_store(cwd: &Path) -> Result<SetUp> {
-    let paths = find_paths(cwd)?;
-    let git = open_vcs(cwd).in_repository();
-    let gitattributes_added = git && atm_db::jsongit::setup::ensure_merge_driver(&paths)?;
-    Ok(SetUp {
-        git,
-        gitattributes_added,
-    })
-}
-
-/// What `atm db migrate` did: its result, the same in words, and whether there is a task file now.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Migration {
-    /// What it did (see [`atm_db::jsongit::migrate::migrate`]).
-    pub result: serde_json::Map<String, serde_json::Value>,
-    /// The same, a line each.
-    pub lines: Vec<String>,
-    /// Whether the project has a task file now.
-    pub tasks_exists: bool,
+    StoreMaintenance::at(cwd).set_up()
 }
 
 /// `atm db migrate` (and `atm service`, before it shows a project): bring the task folder at or above `cwd` up to
@@ -139,18 +94,7 @@ pub struct Migration {
 /// # Errors
 /// The task folder's checks, a file that can't be moved, read or written.
 pub fn migrate_folder(cwd: &Path, register_it: bool) -> Result<Migration> {
-    let paths = find_paths(cwd)?;
-    let result = atm_db::jsongit::migrate::migrate(&paths)?;
-    let tasks_exists = paths.tasks.is_file();
-    if register_it && tasks_exists {
-        atm_db::registry::register(&paths, true)?;
-    }
-    let lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
-    Ok(Migration {
-        result,
-        lines,
-        tasks_exists,
-    })
+    StoreMaintenance::at(cwd).migrate(register_it)
 }
 
 /// The version control of the project at or above `cwd`: git, at the project's root.
@@ -291,24 +235,7 @@ pub fn agent_identity(agent: Option<&str>, cwd: &Path) -> String {
 /// # Errors
 /// When the lock can't be taken in time, or the log can't be written.
 pub fn hold_lock_for_test(cwd: &Path, seconds: f64) -> Result<()> {
-    use std::io::Write;
-    let dir = find_paths(cwd)?.dir;
-    let log = dir.join(".lock-test.log");
-    let append = |line: String| -> Result<()> {
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&log)
-            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.shown())))?;
-        writeln!(file, "{line}")
-            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.shown())))
-    };
-    let held = atm_db::jsongit::lock::lock(&dir, None)?;
-    append(format!("acquire {}", std::process::id()))?;
-    std::thread::sleep(std::time::Duration::from_secs_f64(seconds.max(0.0)));
-    append(format!("release {}", std::process::id()))?;
-    drop(held);
-    Ok(())
+    StoreMaintenance::at(cwd).hold_lock_for_test(seconds)
 }
 
 #[cfg(test)]

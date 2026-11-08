@@ -6,6 +6,7 @@ pub mod git;
 pub mod interface;
 pub mod jsongit;
 pub mod memory;
+pub mod open;
 pub mod registry;
 pub mod working;
 
@@ -15,3 +16,4 @@ mod test_dir;
 pub use interface::Store;
 pub use jsongit::JsonGitStore;
 pub use memory::MemoryStore;
+pub use open::{Opened, ProjectSettings, open};

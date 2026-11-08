@@ -5,28 +5,21 @@
 //! so a poll of something unchanged gets a 304. One project's broken files never break the list of all projects
 //! (docs/security-review.md F18).
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::path::Path;
 
-use atm_boot::{open_project, open_project_tolerant};
 use atm_common::py::to_json;
 use atm_common::sha1::sha1_hex;
-use atm_common::time::{format_iso, now, now_iso};
-use atm_lib::Project;
-use atm_lib::archive::{project_stamp, task_snapshot};
+use atm_common::time::now_iso;
+use atm_lib::archive::task_snapshot;
 use atm_lib::query::{Filters, list_claims};
-use atm_lib::settings::get_logo;
-use atm_lib::summary::project_summary;
-use atm_lib::worktrees::{working_copies, worktree_copies};
+use atm_lib::workspaces::{MAX_SERVED_BYTES, Workspace, Workspaces, file_stamp, too_large};
+use atm_lib::worktrees::worktree_copies;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use serde_json::{Value, json};
 
 use super::{send, send_conditional, send_error};
 
-/// Task data the server will read into memory and send (a big project's archive is a few MB).
-const MAX_SERVED_BYTES: u64 = 100_000_000;
 /// A logo is the project's own file, which could be an SVG with a script: it is shown as an image, never run.
 const LOGO_HEADERS: [(&str, &str); 3] = [
     (
@@ -37,49 +30,23 @@ const LOGO_HEADERS: [(&str, &str); 3] = [
     ("Cache-Control", "no-cache"),
 ];
 
-/// The registered projects, and each one's summary, computed again only when its task data or claims changed, or the
-/// day did (the completions count by day).
+/// The projects the server shows: the `default` workspace's, through atm-lib (its summaries cached there).
 pub struct Projects {
-    registry: atm_boot::Registry,
-    summaries: Mutex<HashMap<String, (Value, Value)>>,
+    workspace: Workspace,
 }
 
 impl Projects {
-    /// The projects of the atm folder `home`.
+    /// The projects of the state folder `home`.
+    #[must_use]
     pub fn new(home: &Path) -> Self {
         Self {
-            registry: atm_boot::open_registry_at(home),
-            summaries: Mutex::new(HashMap::new()),
+            workspace: Workspaces::at(home).default_workspace(),
         }
     }
 
     fn find(&self, id: &str) -> Option<Value> {
-        self.registry
-            .entries()
-            .into_iter()
-            .find(|e| e.get("id").and_then(Value::as_str) == Some(id))
+        self.workspace.find(id)
     }
-}
-
-fn folder(entry: &Value) -> PathBuf {
-    PathBuf::from(entry["path"].as_str().unwrap_or_default())
-}
-
-/// The project's store stamp (`{tasks, archive, claims, head, copies}`), or none when it is missing or refused.
-fn data_stamp(entry: &Value) -> Option<Value> {
-    let project = open_project(&folder(entry)).ok()?;
-    let stamp = project_stamp(&project);
-    (!stamp["tasks"].is_null()).then_some(stamp)
-}
-
-/// What the summary depends on: the task data, the claims, the day, and the checked-out branch (on the card).
-fn summary_stamp(stamp: &Value) -> Value {
-    json!([
-        stamp["tasks"],
-        stamp["claims"],
-        &format_iso(now())[..10],
-        stamp["head"]
-    ])
 }
 
 /// A strong `ETag` from what a response depends on.
@@ -87,104 +54,13 @@ fn etag(parts: &Value) -> String {
     format!("\"{}\"", &sha1_hex(to_json(parts).as_bytes())[..16])
 }
 
-/// `[size, nanosecond mtime]` of a file, null if it doesn't exist.
-fn file_stamp(path: &Path) -> Value {
-    let Ok(meta) = std::fs::metadata(path) else {
-        return Value::Null;
-    };
-    let mtime = meta
-        .modified()
-        .ok()
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |d| d.as_nanos());
-    json!([meta.len(), mtime.to_string()])
-}
-
-/// The file and content type of a registered project's logo (`meta.logo`, or one found), if it has one.
-fn project_logo(entry: &Value) -> Option<(PathBuf, &'static str)> {
-    let project = open_project_tolerant(&folder(entry)).ok()?;
-    let (found, _) = get_logo(&project).ok()?;
-    found.map(|logo| (logo.file, logo.content_type))
-}
-
-fn summary(projects: &Projects, entry: &Value, stamp: &Value) -> Value {
-    let key = entry["path"].as_str().unwrap_or_default().to_string();
-    let mut cache = projects
-        .summaries
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    if let Some((cached, summary)) = cache.get(&key)
-        && cached == stamp
-    {
-        return summary.clone();
-    }
-    // An unreadable tasks.json or an unusable vocabulary: listed as missing
-    let summary = open_project(&folder(entry))
-        .and_then(|p| project_summary(&p))
-        .unwrap_or(Value::Null);
-    cache.insert(key, (stamp.clone(), summary.clone()));
-    summary
-}
-
 /// `/api/projects`: every registered project, with its summary. The `ETag` changes with the registry, and with each
 /// project's task data, claims, worktrees, logo and the day.
 fn api_projects(projects: &Projects, request: &HeaderMap) -> Response {
-    let entries = projects.registry.entries();
-    let stamps: Vec<Option<Value>> = entries
-        .iter()
-        .map(|e| data_stamp(e).map(|s| summary_stamp(&s)))
-        .collect();
-    let opened = |e: &Value| open_project(&folder(e)).ok();
-    let trees: Vec<Value> = entries
-        .iter()
-        .zip(&stamps)
-        .map(|(e, s)| {
-            let list = s
-                .as_ref()
-                .and_then(|_| opened(e))
-                .map(|p: Project| working_copies(&p))
-                .unwrap_or_default();
-            Value::Array(list)
-        })
-        .collect();
-    let logos: Vec<Option<(PathBuf, &str)>> = entries
-        .iter()
-        .zip(&stamps)
-        .map(|(e, s)| s.as_ref().and_then(|_| project_logo(e)))
-        .collect();
-    let logo_stamps: Vec<Value> = logos
-        .iter()
-        .map(|l| l.as_ref().map_or(Value::Null, |(file, _)| file_stamp(file)))
-        .collect();
-    let tag = etag(&json!([
-        projects.registry.stamp(),
-        stamps,
-        trees,
-        logo_stamps
-    ]));
+    let listing = projects.workspace.listing();
+    let tag = etag(&listing.stamp);
     let body = || {
-        let list: Vec<Value> = entries
-            .iter()
-            .zip(&stamps)
-            .zip(trees.iter().zip(&logos))
-            .map(|((entry, stamp), (tree, logo))| {
-                let summary = stamp
-                    .as_ref()
-                    .map_or(Value::Null, |s| summary(projects, entry, s));
-                let shown = !summary.is_null();
-                json!({
-                    "id": entry.get("id"),
-                    "name": entry.get("name"),
-                    "path": entry["path"],
-                    "missing": !shown,
-                    "summary": summary,
-                    "worktrees": if shown { tree.clone() } else { json!([]) },
-                    // Relative to the dashboard, like the project's files; a new one shows as a new ETag
-                    "logo": (logo.is_some() && shown)
-                        .then(|| format!("p/{}/logo", atm_common::py::py_str_opt(entry.get("id")))),
-                })
-            })
-            .collect();
+        let list = listing.projects();
         to_json(&json!({"generated_at": now_iso(), "projects": list})).into_bytes()
     };
     send_conditional(request, &tag, body, "application/json", &[])
@@ -269,13 +145,10 @@ fn api_v1_tasks(projects: &Projects, id: &str, query: &str, request: &HeaderMap)
     let Some(entry) = projects.find(id) else {
         return send_error(StatusCode::NOT_FOUND, "unknown project");
     };
-    let Some(stamp) = data_stamp(&entry) else {
+    let Some(stamp) = Workspace::data_stamp(&entry) else {
         return send_error(StatusCode::NOT_FOUND, "not found");
     };
-    if stamp["tasks"][0]
-        .as_u64()
-        .is_some_and(|size| size > MAX_SERVED_BYTES)
-    {
+    if too_large(&stamp) {
         // Each request reads the whole task data into memory: a runaway file is refused, not served
         return send_error(
             StatusCode::PAYLOAD_TOO_LARGE,
@@ -296,8 +169,8 @@ fn api_v1_tasks(projects: &Projects, id: &str, query: &str, request: &HeaderMap)
             &[],
         );
     }
-    let snapshot = open_project_tolerant(&folder(&entry))
-        .and_then(|p| task_snapshot(&p, &task_filters(query)));
+    let snapshot =
+        Workspace::project_tolerant(&entry).and_then(|p| task_snapshot(&p, &task_filters(query)));
     match snapshot {
         Ok(snapshot) => {
             let mut body = json!({"generated_at": now_iso()});
@@ -329,15 +202,15 @@ fn project_file(projects: &Projects, id: &str, name: &str, request: &HeaderMap) 
     let Some(entry) = projects.find(id) else {
         return send_error(StatusCode::NOT_FOUND, "unknown project");
     };
-    let Some(stamp) = data_stamp(&entry) else {
+    let Some(stamp) = Workspace::data_stamp(&entry) else {
         return send_error(StatusCode::NOT_FOUND, "not found");
     };
-    let opened = || open_project(&folder(&entry));
+    let opened = || Workspace::project(&entry);
     match name {
         "logo" => {
             // The project's logo (the store checks it is inside the project and small enough): kept by the browser,
             // asked for again each time (no-cache), a 304 while it is unchanged
-            let Some((file, kind)) = project_logo(&entry) else {
+            let Some((file, kind)) = Workspace::logo(&entry) else {
                 return send_error(StatusCode::NOT_FOUND, "no logo");
             };
             let stamp = file_stamp(&file);
@@ -369,56 +242,16 @@ fn project_file(projects: &Projects, id: &str, name: &str, request: &HeaderMap) 
     }
 }
 
-/// Characters of a search query that count.
-const SEARCH_QUERY_CAP: usize = 200;
-/// Task IDs per project in a search's answer.
-const SEARCH_RESULTS_CAP: usize = 200;
-
 /// `/api/search?q=`: per project, the IDs of the working tasks (not the archive) in which every word of the query
 /// appears, case-insensitively, as the dashboard's own search finds them; the project's name counts as part of every
 /// task's text. Read-only, like every route; `{}` for an empty query.
 fn api_search(projects: &Projects, query: &str) -> Response {
-    let given = parse_query(query);
-    let q: String = given
-        .iter()
+    let q = parse_query(query)
+        .into_iter()
         .find(|(n, _)| n == "q")
-        .map(|(_, v)| v.chars().take(SEARCH_QUERY_CAP).collect())
+        .map(|(_, v)| v)
         .unwrap_or_default();
-    let mut results = serde_json::Map::new();
-    if q.split_whitespace().next().is_none() {
-        return send(
-            StatusCode::OK,
-            to_json(&json!(results)).into_bytes(),
-            "application/json",
-            None,
-            &[],
-        );
-    }
-    for entry in projects.registry.entries() {
-        let Some(stamp) = data_stamp(&entry) else {
-            continue;
-        };
-        if stamp["tasks"][0]
-            .as_u64()
-            .is_some_and(|size| size > MAX_SERVED_BYTES)
-        {
-            continue;
-        }
-        let name = entry
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or_default();
-        let ids = open_project(&folder(&entry))
-            .and_then(|p| atm_lib::query::search_tasks(&p, &q, name))
-            .unwrap_or_default();
-        if !ids.is_empty() {
-            let id = atm_common::py::py_str_opt(entry.get("id"));
-            results.insert(
-                id,
-                json!(ids.into_iter().take(SEARCH_RESULTS_CAP).collect::<Vec<_>>()),
-            );
-        }
-    }
+    let results = projects.workspace.search(&q);
     send(
         StatusCode::OK,
         to_json(&json!(results)).into_bytes(),
@@ -453,15 +286,18 @@ fn api_v1_file(
     let Some(entry) = projects.find(id) else {
         return send_error(StatusCode::NOT_FOUND, "unknown project");
     };
-    if data_stamp(&entry).is_none() {
+    let Some(vcs) = Workspace::project(&entry)
+        .ok()
+        .filter(|_| Workspace::data_stamp(&entry).is_some())
+        .and_then(|p| p.vcs())
+    else {
         return send_error(StatusCode::NOT_FOUND, "not found");
-    }
+    };
     let path = parse_query(query)
         .into_iter()
         .find(|(n, _)| n == "path")
         .map(|(_, v)| v)
         .unwrap_or_default();
-    let vcs = atm_boot::open_vcs(&folder(&entry));
     let stamp = match atm_lib::documents::document_stamp(Some(&vcs), &path) {
         Ok(stamp) => stamp,
         Err(e) => return file_error(&e),
