@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 494,
+    "next_id": 496,
     "labels": [
       {
         "id": "architecture",
@@ -20043,7 +20043,7 @@
       "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-456"
       ],
@@ -20054,7 +20054,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T11:19:24Z",
+      "updated_at": "2026-11-08T18:00:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20064,21 +20064,26 @@
         }
       ],
       "sprint": "The atm app",
-      "started_at": "2026-11-08T11:04:28Z",
-      "started_by": "claude:34798264",
       "commit": "3403ff608dc5a36c66ac4bf2ee1f71057d8d70dd",
-      "waiting_on": "user",
-      "questions": [
-        "The IPC transport needs `@tauri-apps/api` (Tauri’s own JS package, MIT/Apache-2.0, at the version matching tauri 2.12.x) as a dashboard dependency: the generated `.generated/app/bindings.ts` imports `@tauri-apps/api/core`, and the Playwright tests on mocked IPC use `@tauri-apps/api/mocks`. OK to add it (pnpm, pinned in the lockfile)?",
-        "The app window: one window per workspace (ADR-003 §5) or one window that switches, for now? I would start with one window that opens the last opened workspace and switches in place, and add per-workspace windows with the deep links (T-459)."
-      ],
-      "blocked_at": "2026-11-08T11:19:13Z",
       "notes": [
         {
           "at": "2026-11-08T11:19:24Z",
           "kind": "note",
           "text": "Done in 3403ff6: `/w/<w>` addresses and pages, `/` opens the last workspace, the switcher (2+ workspaces), default on v1 and others on v2 routes. Left: an IPC `Fetch` mapping the v2 routes to the app’s commands (images as blob URLs), the app’s dashboard build, Playwright on mocked IPC. Once: serve.test.mjs symlink test got ECONNRESET right after start (passed on rerun).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:00:57Z",
+          "kind": "answer",
+          "text": "The IPC transport needs `@tauri-apps/api` (Tauri’s own JS package, MIT/Apache-2.0, at the version matching tauri 2.12.x) as a dashboard dependency: the generated `.generated/app/bindings.ts` imports `@tauri-apps/api/core`, and the Playwright tests on mocked IPC use `@tauri-apps/api/mocks`. OK to add it (pnpm, pinned in the lockfile)? → Yes: add @tauri-apps/api (Hakan, 2026-11-08).; The app window: one window per workspace (ADR-003 §5) or one window that switches, for now? I would start with one window that opens the last opened workspace and switches in place, and add per-workspace windows with the deep links (T-459). → One window for now, switching workspaces in place; per-workspace windows can come with deep links (T-459).",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-08T11:19:13Z",
+          "to": "2026-11-08T18:00:57Z",
+          "on": "user"
         }
       ]
     },
@@ -20169,7 +20174,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T11:19:54Z",
+      "updated_at": "2026-11-08T18:00:57Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20187,7 +20192,15 @@
         "One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives?",
         "Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done."
       ],
-      "blocked_at": "2026-11-08T11:19:54Z"
+      "blocked_at": "2026-11-08T11:19:54Z",
+      "notes": [
+        {
+          "at": "2026-11-08T18:00:57Z",
+          "kind": "note",
+          "text": "Hakan: ship in 0.34.0; leaning to the cask depending on the atm formula (downsides sent: the app’s built-in atm-lib and the formula’s CLI can drift apart, it clashes with the T-483 updater, the DMG still bundles atm for non-brew users). Universal vs per-arch: comparison sent, recommended universal DMG with per-arch CLI. Waiting on his pick.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-461",
@@ -21736,7 +21749,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §3, step 6.\n\n## Commands\n```text\natm workspace list | create <w> | delete <w> | rename <w> <new>\natm workspace projects [<w>]\natm workspace add-project [<w>] [<folder>] | remove-project [<w>] <project> | prune [<w>]\n```\n- They default to `default`, and `add-project` to the current folder.\n- `atm project list|add|remove|prune` go.\n- `atm serve` serves every workspace: it opens the only one, or the last opened.\n\n## Agents read these\nThe `atm-serve` skill and `docs/agent/` change, so follow AGENTS.md's checklist: the written skill review in `docs/security-architecture.md` §3.3.\n\n## Tests\nScenarios for each command, `default`'s refusal to be deleted, and a project in two workspaces.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-492"
       ],
@@ -21748,7 +21761,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T11:19:55Z",
+      "updated_at": "2026-11-08T11:29:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21759,6 +21772,81 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T11:19:55Z",
+      "started_by": "claude:34798264",
+      "commit": "71b8219f165568c7cc5d84139c07f43fbf095a14",
+      "completed_at": "2026-11-08T11:29:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T11:29:41Z",
+          "kind": "outcome",
+          "text": "`atm workspace list|create|delete|rename|projects|add-project|remove-project|prune` (default can’t go or be renamed); `atm project list|add|remove|prune` removed. atm-serve skill, `atm docs commands`, README updated; skill pre-approvals narrowed to the two reads; written skill review in security §3. Also fixed T-456’s app IPC test, which failed clippy after fmt. Suite 596, unit 1228.",
+          "by": "claude:34798264"
+        }
+      ]
+    },
+    {
+      "id": "T-494",
+      "name": "The Sprint filter in the address as repeated sprint= parameters",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "dashboard"
+      ],
+      "description": "A sprint whose name holds a comma (\"Library, gallery and blog\") couldn't be chosen: the address wrote the selection comma-separated (`?sprint=a,b`), reading it back split the name into unknown ones, and the filter fell back to All tasks.\n\n## Change\n- `dashboard/src/lib/sprint-param.ts`: write one `sprint=` parameter per value (`params.append`), read them with `getAll`, as HTML forms and atm's own v1 tasks route (`status=…&status=…`) do. `all`, `active` and `backlog` stay keywords.\n- Old comma-separated links are not read any more (Hakan's call).\n- Remove the longest-match parsing added while looking into it.\n\n## Tests\n- `dashboard/tests/unit/sprint-param.test.ts`: keep the round-trip test of a name with a comma, alone and with others; update the cases written as `a,b`.\n- Update any e2e spec that asserts or opens `?sprint=a,b`; the sprints area specs pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/sprint-param.ts",
+        "dashboard/tests/unit/sprint-param.test.ts",
+        "dashboard/tests/e2e/"
+      ],
+      "created_at": "2026-11-08T18:09:43Z",
+      "updated_at": "2026-11-08T18:09:43Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T18:09:43Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-495",
+      "name": "atm serve answers SvelteKit's _app/version.json",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "dashboard"
+      ],
+      "description": "SvelteKit checks `/_app/version.json` for a new deployment whenever the tab regains focus; atm serve answered 404, logged in the browser's console.\n\n## Change\n- `crates/atm-api/src/lib.rs`: `GET /_app/version.json` answers `{\"version\": <the page's version>}`, the page's own version tag, so SvelteKit never sees a new one (atm's reload offer stays whoami's).\n- `docs/multi-project-api.md` §2 and `docs/security-architecture.md` I11 list the route; `CHANGELOG.md` under Fixed.\n\n## Tests\n`tests/scripts/serve.test.mjs` (the dashboard's pages test): 200, and the version is whoami's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-api/src/lib.rs",
+        "tests/scripts/serve.test.mjs",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md",
+        "CHANGELOG.md"
+      ],
+      "created_at": "2026-11-08T18:09:43Z",
+      "updated_at": "2026-11-08T18:09:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T18:09:43Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:09:50Z",
       "started_by": "claude:34798264"
     }
   ]

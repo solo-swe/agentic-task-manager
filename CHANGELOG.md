@@ -68,6 +68,9 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `zvariant_derive`; no vulnerability), each with its reason (approved).
 
 ### Fixed
+- **No more 404 for `/_app/version.json` in the browser's console** (T-495): SvelteKit checks it for a new deployment
+  when the tab regains focus; atm serve now answers it with the page's own version (`{"version": …}`), so it never
+  sees one (atm's reload offer stays whoami's).
 - **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
   macOS `target/debug/atm` inside the Linux Playwright container since T-478, and every test failed. They now first
   run `pnpm run build:atm-linux`, which builds the CLI in the official `rust:1.99.0-bookworm` image (pinned by digest,

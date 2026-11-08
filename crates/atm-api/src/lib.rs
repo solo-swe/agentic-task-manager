@@ -7,6 +7,9 @@
 //!
 //! Part of atm's Rust port (T-415): docs/porting-to-rust.md, docs/layered-architecture.md, docs/guides/rust.md.
 
+/// Where the page's framework looks for a new deployment of it (`_app/version.json`, `SvelteKit`'s `appDir`)
+const APP_VERSION: &str = "/_app/version.json";
+
 mod assets;
 mod pages;
 /// The read API's routes: public so the app's tests can check its commands answer the same (ADR-003 §5).
@@ -146,6 +149,17 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
     }
     if let Some(rest) = path.strip_prefix(assets::PREFIX) {
         return assets::serve(rest, request.headers());
+    }
+    if path == APP_VERSION {
+        // SvelteKit's own check for a new deployment (when the tab regains focus): the page's version is atm's
+        // (vite.config.ts `version.name`), and atm's own whoami decides when to offer a reload
+        return send(
+            StatusCode::OK,
+            to_json(&json!({"version": served.version})).into_bytes(),
+            "application/json",
+            None,
+            &[],
+        );
     }
     if path == WHOAMI {
         let info = json!({

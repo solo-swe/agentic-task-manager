@@ -31,6 +31,7 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6) | yes |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
+| `GET /_app/version.json` | `{"version": …}`, the page's own version: SvelteKit's check for a new deployment, which it makes when the tab regains focus (atm's reload offer comes from whoami) | no |
 | `GET /api/v2/workspaces` | the workspaces (§2.8) | no |
 | `GET /api/v2/workspaces/<w>/projects` | that workspace's projects with their summaries (§3); opens it | yes |
 | `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |

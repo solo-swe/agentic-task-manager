@@ -1126,6 +1126,11 @@ describe('serve', () => {
       assert.equal(r.headers.get('content-security-policy'), policy, p);
       assert.equal(await r.text(), body, p);
     }
+    // SvelteKit's check for a new deployment (when the tab regains focus) gets the page's own version: no 404
+    const version = await fetch(`http://localhost:${port}/_app/version.json`);
+    assert.equal(version.status, 200);
+    const whoami = await (await fetch(`http://localhost:${port}/__atm/whoami`)).json();
+    assert.deepEqual(await version.json(), { version: whoami.version });
     // A project's files are never served under its page's path, nor anything deeper than a tab
     for (const p of [
       '/projects/abcd1234/tasks.json',
