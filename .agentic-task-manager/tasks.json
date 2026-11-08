@@ -20841,7 +20841,7 @@
         "app",
         "distribution"
       ],
-      "description": "The app checks for, downloads and installs its own updates, as agentic-status-bar does ([packaging/README.md](packaging/README.md)).\n\n## Change\n- Tauri's updater plugin, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with an updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.",
+      "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20855,9 +20855,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-08T01:21:48Z",
+      "updated_at": "2026-11-08T01:23:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
