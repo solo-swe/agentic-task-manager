@@ -15,7 +15,7 @@ the demo project or the pages in `generate.mjs`, then regenerate.
 
 ## The social preview's inputs
 
-- **The dashboard:** the built one, `plugin/templates/tasks-dashboard.html` (run `pnpm run build` first), served the
+- **The dashboard:** the built one, `dashboard/dist/tasks-dashboard.html` (run `pnpm run build` first), served the
   demo project from a page route the way the e2e tests serve their fixtures, on the Kanban board, at a fixed time
   (`DEMO_NOW`), with the demo's two agents as live claims; in the dark theme for the dark card and in light for the
   light one. So the card shows the real product, and follows its changes when regenerated.

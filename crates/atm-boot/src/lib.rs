@@ -4,6 +4,8 @@
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::Result;
 use atm_db::JsonGitStore;
 use atm_db::jsongit::paths::{DASHBOARD_FILE, check_task_folder, find_paths, legacy_files};
@@ -38,7 +40,7 @@ pub fn open_project_tolerant(cwd: &Path) -> Result<Project> {
 /// When the project's task folder fails its checks (a symlink, or one leading outside the project).
 pub fn task_paths(cwd: &Path) -> Result<serde_json::Value> {
     let paths = find_paths(cwd)?;
-    let text = |p: &Path| p.display().to_string();
+    let text = |p: &Path| p.shown();
     let legacy = legacy_files(&paths.root).map(|l| {
         serde_json::json!({
             "tasks": text(&l.tasks),
@@ -297,9 +299,9 @@ pub fn hold_lock_for_test(cwd: &Path, seconds: f64) -> Result<()> {
             .create(true)
             .append(true)
             .open(&log)
-            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.display())))?;
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.shown())))?;
         writeln!(file, "{line}")
-            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.display())))
+            .map_err(|e| atm_common::Error::failed(format!("{}: {e}", log.shown())))
     };
     let held = atm_db::jsongit::lock::lock(&dir, None)?;
     append(format!("acquire {}", std::process::id()))?;

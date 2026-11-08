@@ -44,11 +44,11 @@
         {#if g.sprint?.goal}<span class="list-group-goal" title={g.sprint.goal}>{g.sprint.goal}</span>{/if}
         {#if g.sprint?.state === 'closed' && counts.total > counts.done}
           <span class="scope-leftovers list-group-leftovers"
-            >{counts.total - counts.done} open after closing · move them with <code>/atm:plan-sprint</code></span
+            >{counts.total - counts.done} open after closing · move them with <code>/atm-plan-sprint</code></span
           >
         {/if}
         {#if groupBy === 'sprint' && g.key === BACKLOG}
-          <span class="list-group-hint">plan them into a sprint with <code>/atm:plan-sprint</code></span>
+          <span class="list-group-hint">plan them into a sprint with <code>/atm-plan-sprint</code></span>
         {/if}
       </header>
     {/if}

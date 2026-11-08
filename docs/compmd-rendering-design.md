@@ -59,9 +59,10 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
   as they are doesn't work: `@compmd/sandbox` imports `@compmd/render` by package name, which a browser can't
   resolve without an import map. It is an app build, not library mode, which would inline the WebAssembly as a
   `data:` URL that `connect-src 'self'` refuses; with `base: './'` the glue finds the `.wasm` beside the module.
-  The files are committed build artifacts, like `tasks-dashboard.html`. `npm run check` (so CI) builds them again
-  into a temporary folder and fails unless every file matches (`scripts/check-compmd-assets.mjs`); the pre-commit
-  hook and CI's workflow are unchanged.
+  Since T-477 they are build output in `dashboard/dist/assets/compmd/<version>/`, never committed, like
+  `tasks-dashboard.html`: the Rust atm embeds them, so CI and the release build them before the binary (the
+  freshness check of the committed copy, `scripts/check-compmd-assets.mjs`, went with it). The build copies them into
+  `plugin/assets/` for the Python atm until T-454. The paths below are the Python atm's.
 - **Route.** atm serve serves `plugin/assets/` at `/assets/` (REST API layer, `api/server.py`; it reads plugin files,
   not task data, so it doesn't go through atm-lib): GET and HEAD only; the path normalized and required to stay
   under the folder (`..`, absolute paths and encoded separators refused); regular files only, no symlinks; content
@@ -78,7 +79,7 @@ What was checked: `@compmd/processor` and `@compmd/render` 0.3.0 as published on
   inside the served module. The module is loaded once per page, on the first panel open, and kept; a failure is kept
   too.
 - **Dev and tests.** The dev server forwards `/assets/` to the real API (`build/dev-api.ts`, with `api/`, `p/` and
-  `__atm/`); the e2e static server (`tests/e2e/serve.mjs`) serves `plugin/assets/` beside the page by the same
+  `__atm/`); the e2e static server (`tests/e2e/serve.mjs`) serves `dist/assets/` beside the page by the same
   rules, so the e2e suite loads the real module under the real CSP.
 
 ### The page's CSP

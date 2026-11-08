@@ -2,13 +2,12 @@ import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { RECENT_RELEASES } from '../../build/changelog';
 import { parseChangelog } from '../../src/lib/changelog';
+import { readVersion, WHATS_NEW } from '../../build/workspace';
 import { expect, openDashboard, test } from './helpers';
 
-const pluginVersion: string = JSON.parse(
-  readFileSync(new URL('../../../plugin/.claude-plugin/plugin.json', import.meta.url), 'utf8'),
-).version;
+const pluginVersion = readVersion();
 // What's new shows the short notes for users, not the changelog
-const entries = parseChangelog(readFileSync(new URL('../../../plugin/WHATS-NEW.md', import.meta.url), 'utf8'));
+const entries = parseChangelog(readFileSync(WHATS_NEW, 'utf8'));
 
 const chip = (page: Page) => page.locator('#version-chip');
 const overlay = (page: Page) => page.locator('#whats-new-overlay');
@@ -53,7 +52,7 @@ test.describe("What's new", () => {
     await expect(older).toHaveText('all release notes');
     await expect(older).toHaveAttribute(
       'href',
-      'https://github.com/solo-swe/agentic-task-manager/blob/main/plugin/WHATS-NEW.md',
+      'https://github.com/solo-swe/agentic-task-manager/blob/main/WHATS-NEW.md',
     );
     await expect(older).toHaveAttribute('target', '_blank');
     await expect(older).toHaveAttribute('rel', 'noopener noreferrer');

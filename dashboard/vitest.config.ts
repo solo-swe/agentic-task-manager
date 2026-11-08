@@ -8,23 +8,21 @@ import { compmdModule } from './build/compmd.ts';
 import { GENERATED } from './build/generated.ts';
 import { helpModule } from './build/help.ts';
 import { pluginInfoModule } from './build/plugin-info.ts';
+import { CARGO_TOML, CHANGELOG, WHATS_NEW } from './build/workspace.ts';
 
-const changelog = fileURLToPath(new URL('../plugin/CHANGELOG.md', import.meta.url));
-const whatsNew = fileURLToPath(new URL('../plugin/WHATS-NEW.md', import.meta.url));
 const help = fileURLToPath(new URL('../docs/help.md', import.meta.url));
-const pluginJson = fileURLToPath(new URL('../plugin/.claude-plugin/plugin.json', import.meta.url));
 
 export default defineConfig({
   plugins: [
     // The components without SvelteKit (its options are vite.config.ts's, T-428): the same preprocessing
     svelte({ configFile: false, preprocess: vitePreprocess() }),
     svelteTesting(),
-    changelogModule(whatsNew),
+    changelogModule(WHATS_NEW),
     compmdModule(),
     // `virtual:compmd`, as the served runtime has it (compmd.config.json): tests process texts with the same packs
     compmd(),
     helpModule(help),
-    pluginInfoModule(pluginJson, changelog),
+    pluginInfoModule(CARGO_TOML, CHANGELOG),
   ],
   // vite.config.ts's SvelteKit alias, without SvelteKit
   resolve: { alias: { $generated: GENERATED } },

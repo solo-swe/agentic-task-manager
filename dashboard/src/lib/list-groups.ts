@@ -1,5 +1,5 @@
 // The List tab's groups (T-323): by sprint, the planning view (the active sprint, the planned ones in order, the
-// backlog, then the closed ones, most recent first), by label or by component, the way /atm:plan-sprint groups the
+// backlog, then the closed ones, most recent first), by label or by component, the way /atm-plan-sprint groups the
 // backlog, or none.
 import { componentLabel, componentOrder, taskComponents, type Component } from './components';
 import { BACKLOG } from './filters';

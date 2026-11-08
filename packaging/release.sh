@@ -21,7 +21,7 @@ case "$version" in
 esac
 [ -z "$push" ] || [ "$push" = "--push" ] || fail "unknown option $push (only --push)"
 
-# The workspace's version is the plugin's (dashboard/scripts/check-versions.mjs checks they agree)
+# atm's version: the workspace's
 cargo_version=$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)
 [ "$cargo_version" = "$version" ] || fail "Cargo.toml says $cargo_version, not $version"
 

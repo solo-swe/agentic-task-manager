@@ -1,0 +1,60 @@
+name: Skills
+
+# When a release is published (releases start as drafts, release.yml), put its atm skills into solo-swe/skills, the
+# public skills repo our apps share (docs/adr/ADR-002-atm-public-skills-repo.md): only the skills/atm-* folders and
+# the README's atm section (packaging/skills-export.sh), tagged atm-v<version>. Run it by hand with a tag to export an
+# existing release. Needs SKILLS_DEPLOY_KEY (packaging/README.md); without it, it says so and does nothing.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.33.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    # Pre-releases aren't what users should get
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      # The release's own skills: the tagged commit's
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - name: Export atm's skills to solo-swe/skills
+        env:
+          DEPLOY_KEY: ${{ secrets.SKILLS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::notice::SKILLS_DEPLOY_KEY isn't set: the skills aren't exported (packaging/README.md)"
+            exit 0
+          fi
+          version="${TAG#v}"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/skills-key"
+          chmod 600 "$RUNNER_TEMP/skills-key"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/skills-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone git@github.com:solo-swe/skills.git "$RUNNER_TEMP/skills"
+          sh packaging/skills-export.sh "$version" "$RUNNER_TEMP/skills"
+          cd "$RUNNER_TEMP/skills"
+          git add skills README.md
+          if git diff --cached --quiet; then
+            echo "The skills are already at atm $version"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "atm $version"
+          fi
+          # The tag marks which atm the skills came with; it isn't moved once made
+          if ! git rev-parse -q --verify "refs/tags/atm-v$version" > /dev/null; then
+            git tag "atm-v$version"
+          fi
+          git push origin HEAD "refs/tags/atm-v$version"
+          rm "$RUNNER_TEMP/skills-key"

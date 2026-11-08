@@ -29,7 +29,7 @@ fn meta_mut(document: &mut Value) -> &mut Map<String, Value> {
 }
 
 /// `atm db init --meta-file`: merge `new`'s keys into `meta` (project, description, vocabularies, ...), creating the
-/// task data when there is none, so `/atm:create-tasks` never writes the file itself. The vocabularies are checked
+/// task data when there is none, so `/atm-create-tasks` never writes the file itself. The vocabularies are checked
 /// before anything is written; `meta.id` is kept. Returns (created, the keys set, sorted).
 ///
 /// # Errors
@@ -121,7 +121,7 @@ pub struct WorkflowChange {
     pub base: Option<String>,
     /// Run the project's verify before pushing.
     pub verify: Option<bool>,
-    /// CI fix rounds before `/atm:push` stops.
+    /// CI fix rounds before `/atm-push` stops.
     pub max_rounds: Option<i64>,
     /// The commit message's template.
     pub commit_template: Option<String>,
@@ -238,7 +238,8 @@ fn relative_to(path: &Path, base: &Path) -> String {
 pub fn set_logo(project: &mut Project, path: &str, cwd: &Path) -> Result<String> {
     let relative = match root_of(project) {
         Some(root) => {
-            let real_root = std::fs::canonicalize(&root).unwrap_or(root);
+            // atm-common's `canonical`: on Windows without `\\?\`, so it compares with the paths under it
+            let real_root = atm_common::pathtext::canonical(&root).unwrap_or(root);
             let relative = relative_to(&normalize(&cwd.join(path)), &real_root);
             logo_file(&real_root, &relative)?;
             relative

@@ -13,6 +13,8 @@ pub mod worktrees;
 
 use std::cell::OnceCell;
 
+use atm_common::Shown;
+
 use atm_common::home::write_text_atomic;
 use atm_common::py::to_json;
 use atm_common::{Error, Result, Task, Vocabulary};
@@ -110,13 +112,13 @@ impl JsonGitStore {
             return Ok(());
         }
         write_text_atomic(&self.paths.tasks, &text)
-            .map_err(|e| Error::failed(format!("{}: {e}", self.paths.tasks.display())))
+            .map_err(|e| Error::failed(format!("{}: {e}", self.paths.tasks.shown())))
     }
 
     fn write_archive(&self, archive: &Value) -> Result<()> {
         let file = self.paths.archive();
         write_text_atomic(&file, &(to_json(archive) + "\n"))
-            .map_err(|e| Error::failed(format!("{}: {e}", file.display())))
+            .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
     }
 }
 
@@ -134,7 +136,7 @@ impl JsonGitStore {
         let size = std::fs::metadata(&self.paths.tasks).map_or(0, |m| m.len());
         let root = self.paths.root.clone();
         let here = Here {
-            worktree: Some(root.display().to_string()),
+            worktree: Some(root.shown()),
             branch: checked_out_branch(&root),
         };
         let paths = self.paths.clone();
@@ -234,13 +236,13 @@ impl Store for JsonGitStore {
         if self.exists() {
             return Err(Error::failed(format!(
                 "{} exists already",
-                self.paths.tasks.display()
+                self.paths.tasks.shown()
             )));
         }
         std::fs::create_dir_all(folder)
-            .map_err(|e| Error::failed(format!("{}: {e}", folder.display())))?;
+            .map_err(|e| Error::failed(format!("{}: {e}", folder.shown())))?;
         write_text_atomic(&self.paths.tasks, &(to_json(document) + "\n"))
-            .map_err(|e| Error::failed(format!("{}: {e}", self.paths.tasks.display())))?;
+            .map_err(|e| Error::failed(format!("{}: {e}", self.paths.tasks.shown())))?;
         self.loaded = OnceCell::new();
         Ok(())
     }
@@ -248,8 +250,8 @@ impl Store for JsonGitStore {
     fn raw(&self) -> Result<Raw> {
         if !self.exists() {
             return Err(Error::failed(format!(
-                "no tasks.json in {}. Run /atm:create-tasks first.",
-                self.paths.dir.display()
+                "no tasks.json in {}. Run /atm-create-tasks first.",
+                self.paths.dir.shown()
             )));
         }
         let document = files::read_json(&self.paths.tasks)

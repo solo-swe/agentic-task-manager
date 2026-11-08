@@ -13,7 +13,7 @@ export interface KanbanCard {
   task: Task;
   /** Only for todo-kind tasks */
   readiness?: Readiness;
-  /** The task /atm:loop-tasks would pick next (atm's answer, BoardOptions.nextUp) */
+  /** The task /atm-loop-tasks would pick next (atm's answer, BoardOptions.nextUp) */
   nextUp: boolean;
 }
 

@@ -14,43 +14,21 @@ const filesIn = (dir: string, ext: string): string[] =>
 const read = (file: string) => readFileSync(join(REPO, file), 'utf8');
 
 describe('security invariants (docs/security-architecture.md)', () => {
-  it('I5: atm-cli never runs a shell or evaluates code', () => {
-    const modules = filesIn('atm-cli/atm', '.py');
-    expect(modules.length).toBeGreaterThan(10);
-    const offending = modules.flatMap((file) =>
+  it('I5: atm never runs a shell', () => {
+    const sources = filesIn('crates', '.rs');
+    expect(sources.length).toBeGreaterThan(10);
+    // A shell by name anywhere a process is started or given its arguments
+    const offending = sources.flatMap((file) =>
       read(file)
         .split('\n')
         .map((line, i) => ({ line, at: `${file}:${i + 1}` }))
-        .filter(({ line }) => /shell\s*=\s*True|os\.system\(|os\.popen\(|os\.exec\w*\(|\beval\(|\bexec\(/.test(line))
+        .filter(({ line }) => /Command::new\(\s*"(sh|bash|zsh|cmd|cmd\.exe|powershell|pwsh)"/.test(line))
         .map(({ at, line }) => `${at}: ${line.trim()}`),
     );
     expect(offending).toEqual([]);
   });
 
-  it('I24: atm-cli runs no command it is given: only git, ps, its own server and the browser opener (T-437)', () => {
-    // Every place that starts a process, and the program it starts (the first element of its argument list)
-    const starts = filesIn('atm-cli/atm', '.py').flatMap((file) =>
-      [...read(file).matchAll(/subprocess\.(run|Popen|call|check_call|check_output)\(\s*([^\s,)]+)/g)].map(
-        (call) => `${file.replace(/^atm-cli\/atm\//, '')}: ${call[2]}`,
-      ),
-    );
-    // os.fork starts no program: atm's own watcher (`atm claim hold`), which only renews a claim
-    expect(filesIn('atm-cli/atm', '.py').filter((file) => /os\.fork\(/.test(read(file)))).toEqual([
-      'atm-cli/atm/cli/commands/claim.py',
-    ]);
-    expect(starts.sort()).toEqual(
-      [
-        'common/core.py: ["ps"',
-        'host/git.py: ["git"]',
-        'host/git.py: ["git"]',
-        'host/git.py: ["git"]',
-        'cli/serve.py: [opener',
-        'cli/serve.py: server_command(home',
-      ].sort(),
-    );
-  });
-
-  it('I24 in the Rust atm: it starts only git, itself (the claim’s watcher, the dashboard server) and the browser opener (T-446, T-449)', () => {
+  it('I24: it starts only git, itself (the claim’s watcher, the dashboard server) and the browser opener (T-446, T-449)', () => {
     // Every place that starts a process, and the program it starts; the shell's start time comes from sysinfo, not ps
     const starts = filesIn('crates', '.rs').flatMap((file) =>
       [...read(file).matchAll(/Command::new\(\s*([^\s,)]+)/g)].map(

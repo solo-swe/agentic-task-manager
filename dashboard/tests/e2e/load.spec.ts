@@ -54,14 +54,14 @@ test.describe('loading tasks.json', () => {
     const error = page.locator('#load-error');
     await expect(error).toContainText('Failed to load tasks.json');
     await expect(error).toContainText('HTTP 404');
-    await expect(error).toContainText('/atm:serve');
+    await expect(error).toContainText('/atm-serve');
     await expect(error).toContainText('atm serve --open');
   });
 
   test('says how to add a project when none is registered', async ({ page, tasksServer }) => {
     tasksServer.noProjects();
     await page.goto('/');
-    await expect(page.locator('#no-projects')).toContainText('/atm:create-tasks');
+    await expect(page.locator('#no-projects')).toContainText('/atm-create-tasks');
     await expect(page.locator('#no-projects')).toContainText('atm projects add <path>');
   });
 

@@ -1,5 +1,4 @@
-// Shared helpers for the atm script tests. Tests run the helper through its launcher (plugin/scripts/atm), as the
-// skills do.
+// Shared helpers for the atm script tests. Tests run this checkout's atm binary, as users and agents do.
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,19 +6,17 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-/** Which atm the suite runs (T-443): the Python one through its launcher, or with ATM_IMPL=rust the Rust binary
- * (`cargo build` first; ATM_RUST_BIN names another build, e.g. a release one) */
-export const IMPL = process.env.ATM_IMPL === 'rust' ? 'rust' : 'python';
+/** The atm the suite runs: this checkout's (`cargo build` first; ATM_RUST_BIN names another build, e.g. a release
+ * one) */
 export const ATM =
-  IMPL === 'rust'
-    ? process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm')
-    : path.join(REPO, 'plugin/scripts/atm');
-export const PLUGIN_VERSION = JSON.parse(
-  fs.readFileSync(path.join(REPO, 'plugin/.claude-plugin/plugin.json'), 'utf8'),
-).version;
-/** The shipped dashboard's build ID (<meta name="atm-dashboard-build">) */
+  process.env.ATM_RUST_BIN || path.join(REPO, 'target/debug', process.platform === 'win32' ? 'atm.exe' : 'atm');
+/** atm's version: the Rust workspace's (Cargo.toml's [workspace.package]) */
+export const PLUGIN_VERSION = /\[workspace\.package\][^[]*?\nversion = "([^"]+)"/.exec(
+  fs.readFileSync(path.join(REPO, 'Cargo.toml'), 'utf8'),
+)?.[1];
+/** The built dashboard's build ID (<meta name="atm-dashboard-build">; `pnpm run build` in dashboard/ writes it) */
 export const PLUGIN_BUILD = /<meta name="atm-dashboard-build" content="([^"]*)"/.exec(
-  fs.readFileSync(path.join(REPO, 'plugin/templates/tasks-dashboard.html'), 'utf8'),
+  fs.readFileSync(path.join(REPO, 'dashboard/dist/tasks-dashboard.html'), 'utf8'),
 )?.[1];
 
 /** atm's user folder (ATM_HOME: the project registry, the server record) for tests that don't pick their own, so no
@@ -28,6 +25,12 @@ const TEST_HOME = tempDir('atm-home-');
 process.on('exit', () => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
 /** The environment without this machine's agent identity, so every test decides who the agent is. */
+// Git for Windows turns LF into CRLF in the working trees it checks out (core.autocrlf): every git the tests run, theirs
+// and atm's, keeps files as written, as on Unix (T-480)
+process.env.GIT_CONFIG_COUNT = '1';
+process.env.GIT_CONFIG_KEY_0 = 'core.autocrlf';
+process.env.GIT_CONFIG_VALUE_0 = 'false';
+
 export function baseEnv() {
   const env = { ...process.env, ATM_HOME: TEST_HOME };
   delete env.CLAUDE_CODE_SESSION_ID;
@@ -53,9 +56,15 @@ export function git(args, cwd) {
   return result.stdout.trim();
 }
 
-/** A fresh temporary directory (real path, so it matches what the scripts report on macOS). */
+/** A path as atm prints it: `/` between its parts on every platform (T-480), where Node's path.join gives `\` on
+ * Windows. */
+export const shown = (p) => (process.platform === 'win32' ? p.replace(/\\/g, '/') : p);
+
+/** A fresh temporary directory, as atm writes its path: the real path (macOS's /var is /private/var), and on Windows
+ * the long names (never `RUNNER~1`) with `/` between the parts (T-480). Node's fs takes `/` on Windows too. */
 export function tempDir(prefix = 'atm-test-') {
-  return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  return process.platform === 'win32' ? fs.realpathSync.native(dir).replace(/\\/g, '/') : fs.realpathSync(dir);
 }
 
 /**
@@ -99,5 +108,7 @@ export function fill(value, vars) {
 }
 
 export function removeDir(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
+  // Windows refuses to remove a file a process still has open (EPERM, EBUSY) while one that just ended lets go: a few
+  // tries apart
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 }

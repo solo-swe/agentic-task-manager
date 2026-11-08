@@ -1,5 +1,5 @@
 // Velocity (T-323, SR-7.4): how many tasks each closed sprint got done, the last few in order, from each sprint's
-// report (what /atm:close-sprint recorded) or, without one, its tasks done.
+// report (what /atm-close-sprint recorded) or, without one, its tasks done.
 import type { SprintModel } from './sprints';
 import type { Task } from './types';
 import { kindOf, type Vocabulary } from './vocab';

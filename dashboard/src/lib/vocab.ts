@@ -1,7 +1,7 @@
 // A project's vocabularies (docs/v4/data-model.md §2-3): statuses with kinds, phases, types and priorities, from
 // tasks.json meta, each falling back to the defaults when absent. The dashboard is lenient where atm-cli is strict: a
 // list it can't use is replaced by the default rather than reported. The kinds and the defaults are common's, the same
-// data atm-cli uses (atm-cli/atm/common/schema/vocabularies.json, generated into $generated/vocabularies.ts, T-367).
+// data atm-cli uses (crates/atm-common/schema/vocabularies.json, generated into $generated/vocabularies.ts, T-367).
 import * as common from '$generated/vocabularies';
 import type { StatusKind } from '$generated/vocabularies';
 import type { TasksFile } from './types';

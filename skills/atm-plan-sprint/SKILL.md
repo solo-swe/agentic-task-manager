@@ -30,15 +30,14 @@ for that, tell the user and leave it out of the sprint.
 
 ## Step 1: Prepare the task folder
 
-From the project root, run atm-cli, the plugin's `atm` command:
+From the project root, run `atm`:
 
 ```bash
 atm db migrate
 ```
 
 Relay what it prints, except "Nothing to migrate.". It turns a project's phases into sprints the first time it runs
-with this version: say so if it did, and that none of them is active yet. If it exits with code 127, Python 3.9 or
-newer is not installed: ask the user to install it and stop. If it said "No tasks.json found", tell the user to run
+with this version: say so if it did, and that none of them is active yet. If it said "No tasks.json found", tell the user to run
 `/atm-create-tasks` first and stop.
 
 ## Step 2: Show where things stand

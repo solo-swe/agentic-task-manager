@@ -16,19 +16,17 @@ node_modules/
 
 # Build artifacts
 mnt/
-# What atm-cli/build.py generates for the build and the dashboard (what the plugin ships is committed)
+# What dashboard/build/generate.ts generates from the schemas (never committed)
 /.generated/
 # Rust (T-443): cargo's builds
 /target/
-
-# Python bytecode (tests/lib imports atm-cli's modules as a package)
-__pycache__/
 
 # Claude local state
 .claude/
 
 # Dashboard dev project
 dashboard/node_modules/
+# What `pnpm run build` makes for atm to embed (T-477): the page and CompMD's runtime
 dashboard/dist/
 dashboard/test-results/
 dashboard/playwright-report/

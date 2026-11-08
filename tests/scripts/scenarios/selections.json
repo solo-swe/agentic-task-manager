@@ -35,7 +35,7 @@
     "args": ["loop", "next"],
     "expect": {
       "exit": 3,
-      "stdout": "No task available: no active sprint: plan one with /atm:plan-sprint, or run with --all.\n"
+      "stdout": "No task available: no active sprint: plan one with /atm-plan-sprint, or run with --all.\n"
     }
   },
   {
@@ -242,7 +242,7 @@
       }
     },
     "args": ["project", "status"],
-    "expect": { "stdoutIncludes": ["sprint: none active (plan one with /atm:plan-sprint)\n"] }
+    "expect": { "stdoutIncludes": ["sprint: none active (plan one with /atm-plan-sprint)\n"] }
   },
   {
     "name": "add sets release, components, review and related",

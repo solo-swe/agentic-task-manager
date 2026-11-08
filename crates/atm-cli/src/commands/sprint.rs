@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::task::{list_lines, view_row};
 use super::{Context, print_json};
 
-const NONE_ACTIVE: &str = "No sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint.";
+const NONE_ACTIVE: &str = "No sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm-plan-sprint.";
 
 /// The sprint commands.
 #[derive(Debug, Subcommand)]

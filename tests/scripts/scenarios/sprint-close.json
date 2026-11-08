@@ -47,7 +47,7 @@
     "args": ["sprint", "close", "Now", "--carry-to", "Next"],
     "env": { "ATM_NOW": "2026-05-10T18:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
-      "stdout": "Closed the sprint “Now”: 2 done, 1 carried to “Next” (T-2), 1 added mid-sprint.\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm:plan-sprint.\n",
+      "stdout": "Closed the sprint “Now”: 2 done, 1 carried to “Next” (T-2), 1 added mid-sprint.\nNo sprint is active now: start the next one (atm sprint start <name>), or plan one with /atm-plan-sprint.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {

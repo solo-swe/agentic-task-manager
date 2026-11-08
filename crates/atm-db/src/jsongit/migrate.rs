@@ -7,6 +7,8 @@ mod phases;
 
 use std::path::Path;
 
+use atm_common::Shown;
+
 use atm_common::archive::archive_hint;
 use atm_common::home::write_text_atomic;
 use atm_common::py::{to_json, truthy};
@@ -38,7 +40,7 @@ const OLD_SERVER_LOG: &str = ".server.log";
 const WITH_USER_MIGRATION: &str = "interactive-label";
 
 fn failed(path: &Path, e: &std::io::Error) -> Error {
-    Error::failed(format!("{}: {e}", path.display()))
+    Error::failed(format!("{}: {e}", path.shown()))
 }
 
 fn write_json(path: &Path, value: &Value) -> Result<()> {
@@ -121,7 +123,7 @@ fn clean_up_old_dashboard(paths: &Paths) -> Result<Option<Value>> {
         let info = record.get("port").and_then(Value::as_u64).and_then(whoami);
         let pid = record.get("pid").and_then(Value::as_u64);
         if let (Some(info), Some(pid)) = (info, pid) {
-            let folder = task_dir.display().to_string();
+            let folder = task_dir.shown();
             if info.get("folder").and_then(Value::as_str) == Some(folder.as_str())
                 && info.get("pid").and_then(Value::as_u64) == Some(pid)
                 && terminate(pid)
@@ -491,11 +493,11 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
         if let Some(dashboard) = text("removed_dashboard") {
             line += "; removed ";
             line += &dashboard;
-            line += " (the dashboard now comes with the plugin: /atm:serve)";
+            line += " (the dashboard now comes with atm: /atm-serve)";
         }
         lines.push(line + ".");
     } else if !paths.tasks.is_file() {
-        lines.push("No tasks.json found. Run /atm:create-tasks to create one.".into());
+        lines.push("No tasks.json found. Run /atm-create-tasks to create one.".into());
     }
     if let Some(cleaned) = r.get("cleaned_up").filter(|c| truthy(c)) {
         let mut line = "Removed this project's old dashboard files".to_string();
@@ -504,9 +506,7 @@ pub fn describe_migration(r: &Map<String, Value>, paths: &Paths) -> Vec<String> 
             line += &atm_common::py::py_str(pid);
             line += ")";
         }
-        lines.push(
-            line + ": one dashboard for all your projects now comes with the plugin (/atm:serve).",
-        );
+        lines.push(line + ": one dashboard for all your projects now comes with atm (/atm-serve).");
     }
     let count = |key: &str| r.get(key).and_then(Value::as_u64).unwrap_or(0);
     let filled = count("finish_times_filled");

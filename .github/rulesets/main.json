@@ -23,8 +23,9 @@
         "strict_required_status_checks_policy": true,
         "required_status_checks": [
           { "context": "Lint, unit tests, build freshness" },
-          { "context": "atm helper (Python 3.9)" },
-          { "context": "atm helper (Python 3.13)" },
+          { "context": "Rust (ubuntu-latest)" },
+          { "context": "Rust (macos-latest)" },
+          { "context": "Rust (windows-latest)" },
           { "context": "Playwright regression suite" }
         ]
       }

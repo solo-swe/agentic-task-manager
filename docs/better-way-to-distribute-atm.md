@@ -123,7 +123,8 @@ updates them), and are **symlinked** into each harness's folder:
   something a skill can't do, each pointing at the same skills.
 - **Nothing installs the binary but the user** (no install hook that downloads executables).
 - **Discoverability:** a public skills repo, generated from `skills/` at each release, so
-  `npx skills add <owner>/<repo>` works; it leads to "install atm" first.
+  `npx skills add solo-swe/skills` works; it leads to "install atm" first. `solo-swe/skills` is shared by our apps,
+  each release writing only its own skills ([ADR-002](adr/ADR-002-atm-public-skills-repo.md), T-453).
 
 ## 7. Security
 

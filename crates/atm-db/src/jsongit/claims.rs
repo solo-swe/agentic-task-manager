@@ -5,6 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
+use atm_common::Shown;
+
 use atm_common::home::write_text_atomic;
 use atm_common::py::to_json;
 use atm_common::time::now_iso;
@@ -118,10 +120,10 @@ pub fn read_store(paths: &Paths) -> Map<String, Value> {
 /// When a file can't be written.
 pub fn write_store(paths: &Paths, store: &Map<String, Value>) -> Result<()> {
     let dir = claims_dir(paths);
-    std::fs::create_dir_all(&dir).map_err(|e| Error::failed(format!("{}: {e}", dir.display())))?;
+    std::fs::create_dir_all(&dir).map_err(|e| Error::failed(format!("{}: {e}", dir.shown())))?;
     let file = claims_store_path(paths);
     write_text_atomic(&file, &(to_json(&Value::Object(store.clone())) + "\n"))
-        .map_err(|e| Error::failed(format!("{}: {e}", file.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))?;
     write_claims_snapshot(paths, store.get("claims"))
 }
 
@@ -145,7 +147,7 @@ pub fn write_claims_snapshot(paths: &Paths, claims: Option<&Value>) -> Result<()
         &file,
         &(to_json(&json!({"generated_at": now_iso(), "claims": list})) + "\n"),
     )
-    .map_err(|e| Error::failed(format!("{}: {e}", file.display())))
+    .map_err(|e| Error::failed(format!("{}: {e}", file.shown())))
 }
 
 #[cfg(test)]

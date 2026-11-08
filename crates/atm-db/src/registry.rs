@@ -7,6 +7,8 @@
 
 use std::path::{Path, PathBuf};
 
+use atm_common::Shown;
+
 use atm_common::home::{atm_home, ensure_home, write_text_atomic};
 use atm_common::py::to_json;
 use atm_common::sha1::sha1_hex;
@@ -33,7 +35,7 @@ fn valid_project_id(id: &str) -> bool {
 }
 
 fn text(path: &Path) -> String {
-    path.display().to_string()
+    path.shown()
 }
 
 fn entries(registry: &Value) -> &[Value] {
@@ -147,16 +149,16 @@ fn read_registry(home: &Path) -> Result<(Value, Option<String>)> {
         .chars()
         .filter(|c| *c != '-' && *c != ':')
         .collect();
-    let damaged = format!("{}.damaged-{stamp}", path.display());
+    let damaged = format!("{}.damaged-{stamp}", path.shown());
     std::fs::rename(&path, &damaged)
-        .map_err(|e| Error::failed(format!("{}: {e}", path.display())))?;
+        .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))?;
     Ok((empty_registry(), Some(damaged)))
 }
 
 fn write_registry(home: &Path, registry: &Value) -> Result<()> {
     let path = home.join(REGISTRY_FILE);
     write_text_atomic(&path, &(to_json(registry) + "\n"))
-        .map_err(|e| Error::failed(format!("{}: {e}", path.display())))
+        .map_err(|e| Error::failed(format!("{}: {e}", path.shown())))
 }
 
 fn position(registry: &Value, path: &str) -> Option<usize> {
@@ -216,7 +218,7 @@ fn registered_folder(paths: &Paths) -> Option<(PathBuf, Map<String, Value>)> {
 
 fn home() -> Result<PathBuf> {
     let home = atm_home();
-    ensure_home(&home).map_err(|e| Error::failed(format!("{}: {e}", home.display())))?;
+    ensure_home(&home).map_err(|e| Error::failed(format!("{}: {e}", home.shown())))?;
     Ok(home)
 }
 
@@ -309,8 +311,8 @@ fn resolve_project(target: Option<&str>, cwd: &Path) -> Result<(PathBuf, Map<Str
         .or_else(|| project_meta(&paths.root))
         .ok_or_else(|| {
             Error::failed(format!(
-                "no tasks.json in {}. Run /atm:create-tasks there first.",
-                path.join(TASK_DIR).display()
+                "no tasks.json in {}. Run /atm-create-tasks there first.",
+                path.join(TASK_DIR).shown()
             ))
         })?;
     Ok((path, meta))
@@ -387,7 +389,7 @@ impl FileRegistry {
 
     fn locked(&self) -> Result<crate::jsongit::lock::Lock> {
         ensure_home(&self.home)
-            .map_err(|e| Error::failed(format!("{}: {e}", self.home.display())))?;
+            .map_err(|e| Error::failed(format!("{}: {e}", self.home.shown())))?;
         lock(&self.home, None)
     }
 
@@ -422,7 +424,7 @@ impl FileRegistry {
         if !listed(&meta) {
             return Err(Error::failed(format!(
                 "{} opts out of the dashboard (meta.dashboard.listed is false)",
-                path.display()
+                path.shown()
             )));
         }
         let held = self.locked()?;

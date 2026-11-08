@@ -12,7 +12,7 @@
     <strong>Failed to load tasks.json</strong><br />
     <span style="color:var(--text-muted)"
       >{dashboard.loadError}<br /><br />The dashboard is served by atm. Start it from a project with
-      <code style="color:var(--text)">/atm:serve</code>
+      <code style="color:var(--text)">/atm-serve</code>
       (or <code style="color:var(--text)">atm serve --open</code>), and open the address it prints.</span
     >
   </div>

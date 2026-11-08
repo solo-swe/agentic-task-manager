@@ -179,7 +179,7 @@ function localTimeZone(): string {
   }
 }
 
-/** Where atm serve serves this build's CompMD: plugin/assets/compmd/<version>/, at /assets/compmd/<version>/ (§2):
+/** Where atm serve serves this build's CompMD: dist/assets/compmd/<version>/ (embedded in atm), at /assets/compmd/<version>/ (§2):
  * the path vite.compmd.config.ts builds it for, from which @compmd/vite gives its frames' and modules' URLs */
 export function compmdAssetUrl(file: string, origin = location.origin): string {
   return new URL(`/assets/compmd/${compmdVersion}/${file}`, origin).href;

@@ -1,7 +1,7 @@
 // @vitest-environment node
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { readPluginVersion, setDashboardVersion } from '../../build/inject-version.ts';
+import { setDashboardVersion } from '../../build/inject-version.ts';
+import { readVersion } from '../../build/workspace.ts';
 
 const meta = (v: string) => `<meta name="atm-dashboard-version" content="${v}">`;
 
@@ -15,9 +15,8 @@ describe('setDashboardVersion', () => {
   });
 });
 
-describe('readPluginVersion', () => {
-  it('reads the version from the real plugin.json', () => {
-    const path = fileURLToPath(new URL('../../../plugin/.claude-plugin/plugin.json', import.meta.url));
-    expect(readPluginVersion(path)).toMatch(/^\d+\.\d+\.\d+$/);
+describe('readVersion', () => {
+  it("reads the version from the real Cargo.toml's [workspace.package]", () => {
+    expect(readVersion()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });

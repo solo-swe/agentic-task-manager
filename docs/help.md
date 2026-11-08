@@ -146,7 +146,7 @@ A task's files and the documents it refers to open in the **document viewer**, a
 
 ## Workflows and stages
 
-A project pushes its work in one of two ways (**About** shows which; `/atm:push` asks the first time):
+A project pushes its work in one of two ways (**About** shows which; `/atm-push` asks the first time):
 
 - **direct** — commits go straight to the main branch.
 - **pull-request** — work goes to a branch and reaches the main branch through a pull request.
@@ -167,13 +167,15 @@ Agents tab. A task that depends on an archived one shows it as "archived, done".
 
 ## The skills
 
-Run these in Claude Code:
+`atm agents install` puts them where your agents read them. Ask for them by name (`/atm-loop-tasks` in Claude
+Code), or in your own words ("loop the tasks"):
 
-- `/atm:create-tasks` — turn your requirements into tasks.
-- `/atm:do-task` — do one task: the next available one, or the one you name.
-- `/atm:loop-tasks` — keep doing tasks until none is left.
-- `/atm:push` — push the work (or open its pull request), watch CI and fix what fails.
-- `/atm:serve` — start or stop this dashboard's server, one for all your projects.
+- `atm-create-tasks` — turn your requirements into tasks.
+- `atm-plan-sprint` and `atm-close-sprint` — plan a sprint with you, and close it with you.
+- `atm-do-task` — do one task: the next available one, or the one you name.
+- `atm-loop-tasks` — keep doing tasks until none is left.
+- `atm-push` — push the work (or open its pull request), watch CI and fix what fails.
+- `atm-serve` — start or stop this dashboard's server, one for all your projects.
 
 ## Running agents in parallel
 

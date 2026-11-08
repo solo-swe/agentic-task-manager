@@ -24,8 +24,8 @@ describe('build ID', () => {
     expect(() => buildId('<html></html>')).toThrow(/atm-dashboard-build meta tag not found/);
   });
 
-  it('the shipped dashboard carries its own build ID', () => {
-    const html = readFileSync(new URL('../../../plugin/templates/tasks-dashboard.html', import.meta.url), 'utf8');
+  it('the built dashboard carries its own build ID', () => {
+    const html = readFileSync(new URL('../../dist/tasks-dashboard.html', import.meta.url), 'utf8');
     const id = /<meta name="atm-dashboard-build" content="([0-9a-f]{12})"/.exec(html)?.[1];
     expect(id).toBe(buildId(html));
   });

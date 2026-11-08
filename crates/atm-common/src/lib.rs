@@ -10,6 +10,7 @@ pub mod edits;
 pub mod error;
 pub mod home;
 pub mod ids;
+pub mod pathtext;
 pub mod py;
 pub mod repository;
 pub mod rules;
@@ -22,10 +23,10 @@ pub mod vocabulary;
 
 pub use error::{Error, Result};
 pub use ids::TaskId;
+pub use pathtext::Shown;
 pub use vocabulary::{Kind, Vocabulary};
 
-/// atm's version: the workspace's, which is the plugin's (`plugin/.claude-plugin/plugin.json`, checked by
-/// `dashboard/scripts/check-versions.mjs`).
+/// atm's version: the workspace's, its one source (the dashboard is stamped with it).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// The project's task folder, at its root.

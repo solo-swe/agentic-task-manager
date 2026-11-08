@@ -11,18 +11,15 @@
 //     "stdout": "exact text", "json": <value parsed from stdout>, "stdoutIncludes": ["..."], "stderrIncludes": ["..."],
 //     "files": { "path": "exact text" | <JSON value> | true (exists) | false (absent) },
 //     "git": { "staged": ["path", ...] }    `git diff --cached --name-status` lines, e.g. "R docs/a .agentic-task-manager/a"
-//   },
-//   "expectRust": { ... }    optional: what replaces keys of `expect` for the Rust atm (ATM_IMPL=rust), where its text
-//                            is clap's, not Click's (T-451: the help's layout and the usage errors' wording); it
-//                            becomes `expect` at the switch (T-454)
+//   }
 // }
-// Strings in args, env and expect may use {root} (the project's real path), {version} (the plugin version) and
+// Strings in args, env and expect may use {root} (the project's real path), {version} (atm's version) and
 // {build} (the shipped dashboard's build ID); setup only {version} and {build}.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
-import { IMPL, PLUGIN_BUILD, PLUGIN_VERSION, REPO, fill, git, makeProject, removeDir, runAtm } from './helpers.mjs';
+import { PLUGIN_BUILD, PLUGIN_VERSION, REPO, fill, git, makeProject, removeDir, runAtm } from './helpers.mjs';
 
 const dir = path.join(REPO, 'tests/scripts/scenarios');
 const scenarios = fs
@@ -53,7 +50,7 @@ describe('scenarios', () => {
       const root = makeProject(fill(s.setup, { root: '{root}', version: PLUGIN_VERSION, build: PLUGIN_BUILD }));
       try {
         const vars = { root, version: PLUGIN_VERSION, build: PLUGIN_BUILD };
-        const e = fill({ ...s.expect, ...(IMPL === 'rust' ? s.expectRust : {}) }, vars);
+        const e = fill(s.expect, vars);
         // Each scenario has its own ATM_HOME, .atm-home in the project, so `expect.files` can check the registry
         const env = { ATM_HOME: path.join(root, '.atm-home'), ...fill(s.env || {}, vars) };
         const r = runAtm(fill(s.args, vars), path.join(root, s.cwd || '.'), env);

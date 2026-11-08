@@ -48,7 +48,7 @@ pub struct NextArgs {
 /// The loop's commands.
 #[derive(Debug, Subcommand)]
 pub enum LoopCommand {
-    /// The task /atm:loop-tasks works on next (exit code 3 if there is none).
+    /// The task /atm-loop-tasks works on next (exit code 3 if there is none).
     Next(NextArgs),
 }
 

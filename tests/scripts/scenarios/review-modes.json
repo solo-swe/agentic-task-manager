@@ -119,7 +119,7 @@
     "expect": {
       "stdoutIncludes": ["Closed the sprint “Now”: 1 done."],
       "files": {
-        "err.txt": "atm: T-1 waits for the end-of-sprint review: review it with the user (/atm:close-sprint), then close with --reviewed\n",
+        "err.txt": "atm: T-1 waits for the end-of-sprint review: review it with the user (/atm-close-sprint), then close with --reviewed\n",
         "sprints.txt": "Now · active: 1 task (done 1); 1 waiting for the sprint review\nbacklog: 0 tasks (atm sprint backlog)\n",
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -170,7 +170,7 @@
     "args": ["project", "status"],
     "expect": {
       "stdoutIncludes": [
-        "sprint: Now (active): 1 of 1 done\n  waiting for the sprint review: T-1 (/atm:close-sprint)\n"
+        "sprint: Now (active): 1 of 1 done\n  waiting for the sprint review: T-1 (/atm-close-sprint)\n"
       ]
     }
   }

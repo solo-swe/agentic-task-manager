@@ -16,7 +16,7 @@ reached, or something needs the user.
 0.32.0, atm isn't installed or is too old: tell the user to install or upgrade atm, and stop. Never work
 around a missing atm. `atm docs` lists atm's reference for agents (`atm docs rules`, `atm docs commands`, …).
 
-`atm` is atm-cli, the plugin's command. Never read or edit `tasks.json`
+Never read or edit `tasks.json`
 directly: `atm` reads and records everything.
 
 ## Arguments

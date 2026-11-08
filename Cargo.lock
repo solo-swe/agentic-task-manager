@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-boot",
  "atm-common",
@@ -66,7 +66,7 @@ dependencies = [
 
 [[package]]
 name = "atm-boot"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -78,7 +78,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-api",
  "atm-boot",
@@ -87,11 +87,12 @@ dependencies = [
  "clap",
  "clap_complete",
  "serde_json",
+ "windows-sys",
 ]
 
 [[package]]
 name = "atm-common"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "jiff",
  "serde_json",
@@ -100,7 +101,7 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-common",
  "serde_json",
@@ -110,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "atm-lib"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -120,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "atm-vcs"
-version = "0.32.0"
+version = "0.33.0"
 dependencies = [
  "atm-common",
  "serde_json",

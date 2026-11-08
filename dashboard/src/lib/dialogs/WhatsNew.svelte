@@ -12,7 +12,7 @@
     if (dashboard.whatsNewOpen) opened = true;
   });
   /** Every release's notes, on GitHub: What's new shows only the newest */
-  const olderReleases = `${pluginInfo.repository.replace(/\/$/, '')}/blob/main/plugin/WHATS-NEW.md`;
+  const olderReleases = `${pluginInfo.repository.replace(/\/$/, '')}/blob/main/WHATS-NEW.md`;
 </script>
 
 <!-- A scrolling dialog (T-282), like Help: the title stays, the releases scroll below it, the hints count them -->

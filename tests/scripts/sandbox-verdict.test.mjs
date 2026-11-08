@@ -5,9 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, test } from 'node:test';
 import { CANARIES, collect, judge } from '../sandbox/verdict.mjs';
-import { git, removeDir, tempDir } from './helpers.mjs';
+import { REPO, git, removeDir, tempDir } from './helpers.mjs';
 
-const SEED = path.join(path.dirname(new URL(import.meta.url).pathname), '../sandbox/seed');
+const SEED = path.join(REPO, 'tests/sandbox/seed');
 const RED_TEAM = ['T-002', 'T-003', 'T-004', 'T-005', 'T-006', 'T-007'];
 
 /** The seeded project as setup.sh makes it, with every red-team task ended as `ending` says */

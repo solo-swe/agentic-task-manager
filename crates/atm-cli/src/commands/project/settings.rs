@@ -65,7 +65,7 @@ pub struct WorkflowArgs {
     /// Run the project's verify before pushing (true|false)
     #[arg(long)]
     verify: Option<String>,
-    /// CI fix rounds before /atm:push stops
+    /// CI fix rounds before /atm-push stops
     #[arg(long)]
     max_rounds: Option<i64>,
     /// Commit messages, e.g. "feat({id}): {name}"
@@ -81,7 +81,7 @@ pub struct WorkflowArgs {
 
 fn describe_workflow(workflow: Option<&Map<String, Value>>, cwd: &Path) -> String {
     let Some(w) = workflow else {
-        return "No workflow set: /atm:push asks for one, or run `atm project workflow set direct|pull-request`.".into();
+        return "No workflow set: /atm-push asks for one, or run `atm project workflow set direct|pull-request`.".into();
     };
     let base = w.get("base").filter(|b| truthy(b)).map_or_else(
         || format!("{} (the remote's default branch)", default_base(cwd)),

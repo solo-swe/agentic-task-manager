@@ -53,7 +53,7 @@ them; `--sprint` may be given more than once). Pass the selection, as given, to 
 loop stops (`/atm-plan-sprint` plans one; `--all` or `--backlog` work without one). `--phase <N>` is gone: phases are
 sprints now (`atm db migrate` names each after its phase, "Phase N" when it had no name), so use `--sprint` instead.
 
-**Pushing goes through `/atm-push`** (the plugin's push skill: it follows the project's workflow, `direct` or
+**Pushing goes through `/atm-push`** (atm's push skill: it follows the project's workflow, `direct` or
 `pull-request`, opens or updates the PR, records it on the tasks, and watches CI). Pushes in the middle of the loop
 run it as `/atm-push --no-watch`, so the loop isn't held up by CI; the **last** push (at the end of the loop) runs
 `/atm-push`, which watches CI and fixes failures, unless the loop has `--no-watch`.
@@ -69,7 +69,7 @@ review, so there is nothing to ask.
 
 Before anything else (also for `--dry-run`):
 
-From the project root, run atm-cli, the plugin's `atm` command:
+From the project root, run `atm`:
 
 ```bash
 atm db migrate
@@ -81,8 +81,7 @@ It keeps the project's `.agentic-task-manager/` folder in order:
 - the project is added to the dashboard's list of projects (one dashboard, served by `/atm-serve`, shows them all);
 - what older versions left there is cleaned up (the project's own copy of the dashboard and its own server).
 
-Relay what it prints, except "Nothing to migrate.". If it exits with code 127, Python 3.9 or newer is not installed:
-atm needs it, so ask the user to install it and stop.
+Relay what it prints, except "Nothing to migrate.".
 
 If it said "No tasks.json found", tell the user to run `/atm-create-tasks` and stop.
 

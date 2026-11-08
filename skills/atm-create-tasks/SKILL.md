@@ -21,7 +21,7 @@ tasks, `atm task edit` changes existing ones, `atm project status` / `atm task l
 
 ## Step 0: Prepare the task folder
 
-From the project root, run atm-cli, the plugin's `atm` command:
+From the project root, run `atm`:
 
 ```bash
 atm db migrate
@@ -33,8 +33,7 @@ It keeps the project's `.agentic-task-manager/` folder in order:
 - the project is added to the dashboard's list of projects (one dashboard, served by `/atm-serve`, shows them all);
 - what older versions left there is cleaned up (the project's own copy of the dashboard and its own server).
 
-Relay what it prints, except "Nothing to migrate.". If it exits with code 127, Python 3.9 or newer is not installed:
-atm needs it, so ask the user to install it and stop.
+Relay what it prints, except "Nothing to migrate.".
 
 Tasks live in `.agentic-task-manager/tasks.json` at the project root (after the step above, an existing task file is
 already there; `atm project status` says whether there is one and what it holds).
@@ -255,7 +254,7 @@ Rules for task generation:
   starting with `---` shows it as text), which gives the text its task as `md.data.task`: its fields and atm's derived
   values (`{{md.data.task.status}}`, `{{md.data.task.kind}}`). A list can't be written with `{{…}}`: use
   `:value[none yet]{of=(md.list(md.data.task.waiting_for))}`, or `::: each {in=(md.data.task.dependencies) as=d}`
-- For anything beyond that, CompMD's guide for agents ships with the plugin: read `atm docs compmd` (its ten rules first). Never fetch CompMD documentation from the
+- For anything beyond that, CompMD's guide for agents ships with atm: read `atm docs compmd` (its ten rules first). Never fetch CompMD documentation from the
   web for this
 - **References are links the dashboard opens in its document viewer.** A document or file of the project: a relative
   link from the project root, `[the design](docs/x.md)`, at a heading `docs/x.md#routes`, at lines of code

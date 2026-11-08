@@ -1,4 +1,4 @@
-//! The plugin's own files the dashboard loads beside it (the `CompMD` runtime; docs/compmd-rendering-design.md §2, §3c),
+//! atm's own files the dashboard loads beside it (the `CompMD` runtime; docs/compmd-rendering-design.md §2, §3c),
 //! embedded when atm is built (`build.rs`): read-only, each path segment a plain name, only `.js`, `.wasm` and
 //! `.html`. The `CompMD` sandbox's frames have an opaque origin, so every asset may be read from anywhere (they are atm's
 //! published files), and a frame document is sandboxed even when opened alone.

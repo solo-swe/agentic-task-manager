@@ -1,6 +1,7 @@
 //! `atm project status`: the overview (the Python atm's `lib/query.py` `status_report`): the active sprint, the counts,
 //! what is in progress, in review, blocked or waiting, the next task by the loop's rule, the files' sizes and hints.
 
+use atm_common::Shown;
 use atm_common::archive::{archive_hint, open_in_closed_sprints};
 use atm_common::py::{dumps, py_str, py_str_opt, truthy};
 use atm_common::rules::unfinished_dependencies;
@@ -193,7 +194,7 @@ pub fn status_report(project: &Project, scope: &Filters) -> Result<StatusReport>
         .collect();
     let here = store
         .working_copy()
-        .map_or(Value::Null, |p| Value::String(p.display().to_string()));
+        .map_or(Value::Null, |p| Value::String(p.shown()));
     for record in claims
         .get("waiting")
         .and_then(Value::as_object)

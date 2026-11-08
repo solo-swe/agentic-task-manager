@@ -86,7 +86,7 @@ export function formatAddress(params: URLSearchParams): string {
   return parts.length ? `${path}?${parts.join('&')}` : path;
 }
 
-/** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (api/server.py PAGE_PATH):
+/** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
  * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/board`, `/progress`, `/agents` */
 export const PAGE_PATH = /^\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?$/;
 

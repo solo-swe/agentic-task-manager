@@ -2,6 +2,7 @@
 //! its claim and the records shared by a clone's worktrees (completed, waiting, resolved) change together or not at
 //! all. The transitions themselves are [`crate::state`]'s; the lease rules [`crate::leases`]'.
 
+use atm_common::Shown;
 use atm_common::archive::archive_hint;
 use atm_common::py::{repr_str, truthy};
 use atm_common::rules::unfinished_dependencies;
@@ -390,10 +391,7 @@ pub fn todo_command(project: &Project, task_id: &str, failing: bool) -> Result<C
             .get("waiting")
             .and_then(|w| w.get(task_id))
             .filter(|r| r.is_object());
-        let here = project
-            .store()
-            .working_copy()
-            .map(|p| p.display().to_string());
+        let here = project.store().working_copy().map(Shown::shown);
         if in_claims {
             kind = Some(Kind::Active); // the claim's holder check says whose it is
         } else if let Some(record) =

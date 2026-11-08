@@ -153,7 +153,7 @@ fn the_active_sprint_is_the_default_and_reasons_say_why_nothing_is_ready() {
             .next(&Selection::default(), empty_store(), false)
             .1
             .as_deref(),
-        Some("no active sprint: plan one with /atm:plan-sprint, or run with --all")
+        Some("no active sprint: plan one with /atm-plan-sprint, or run with --all")
     );
 }
 

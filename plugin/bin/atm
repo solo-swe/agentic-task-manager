@@ -1,5 +1,0 @@
-#!/bin/sh
-# atm on the Bash tool's PATH: Claude Code puts a plugin's bin/ there while the plugin is enabled, so skills run plain
-# `atm` and their permission rules (Bash(atm task state:*), …) survive upgrades. The launcher itself stays in scripts/
-# (the tasks.json merge driver registered in each clone points at it). It execs, as that one does (`atm claim hold`).
-exec "$(cd "$(dirname "$0")/../scripts" && pwd)/atm" "$@"

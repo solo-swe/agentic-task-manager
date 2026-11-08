@@ -21,5 +21,15 @@ clap.workspace = true
 clap_complete.workspace = true
 serde_json.workspace = true
 
-[lints]
-workspace = true
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+
+# The workspace's lints, but `unsafe_code` denied rather than forbidden: one Windows-only function (`detach.rs`, T-480)
+# calls the Windows API, with its own `#[allow]`. A `forbid` can't be allowed anywhere, and Cargo doesn't let a crate
+# change one entry of the workspace's lints, so they are all here
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

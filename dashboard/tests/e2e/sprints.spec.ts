@@ -125,10 +125,10 @@ test.describe('scope bar (T-323)', () => {
     await openDashboard(page, tasksServer, data);
     await expect(page.locator('#scope-done')).toHaveText('All 3 tasks done');
     await expect(page.locator('#scope-hint')).toHaveText(
-      'Close it with /atm:close-sprint · release 1.0 is ready to ship',
+      'Close it with /atm-close-sprint · release 1.0 is ready to ship',
     );
     await expect(page.locator('#scope-bar')).toContainText(
-      'More work? Pull from the backlog (1 task) with /atm:plan-sprint',
+      'More work? Pull from the backlog (1 task) with /atm-plan-sprint',
     );
   });
 
@@ -142,7 +142,7 @@ test.describe('scope bar (T-323)', () => {
     await openDashboard(page, tasksServer, data);
     await expect(page.locator('#scope-trigger')).toHaveText('All tasks');
     await expect(page.locator('#scope-hint')).toHaveText(
-      /^No active sprint\s·\slast: Ada Lovelace, closed .+\s·\snext planned: Alan Turing \(0 tasks\)\s·\sstart\s+it with \/atm:plan-sprint$/,
+      /^No active sprint\s·\slast: Ada Lovelace, closed .+\s·\snext planned: Alan Turing \(0 tasks\)\s·\sstart\s+it with \/atm-plan-sprint$/,
     );
     await expect(page.locator('.filter-chip[data-filter="sprint"]')).toHaveCount(0);
 
@@ -178,7 +178,7 @@ test.describe('scope bar (T-323)', () => {
     await expect(page.locator('.list-group-header').first()).toContainText('Ada Lovelace');
     await expect(page.locator('.list-group-header').first()).toContainText('3 tasks · 0 of 3 done');
     await expect(page.locator('.list-group[data-group=":backlog"] .list-group-hint')).toHaveText(
-      'plan them into a sprint with /atm:plan-sprint',
+      'plan them into a sprint with /atm-plan-sprint',
     );
     // A group names the sprint, so its cards don't
     await expect(page.locator('.task-card-sprint')).toHaveCount(0);

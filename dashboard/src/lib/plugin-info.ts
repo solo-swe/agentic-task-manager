@@ -1,6 +1,6 @@
 import info from 'virtual:atm-plugin-info';
 
-/** The plugin's name, author, licence and links, from plugin.json at build time (see build/plugin-info.ts). */
+/** atm's name, author, licence and links, from Cargo.toml at build time (see build/plugin-info.ts). */
 export interface PluginInfo {
   /** The short name, `atm` */
   name: string;

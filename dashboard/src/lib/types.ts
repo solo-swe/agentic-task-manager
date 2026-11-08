@@ -9,7 +9,7 @@ export type Status = KnownStatus | (string & {});
 export type KnownTaskType = 'feature' | 'bugfix' | 'bug' | 'test' | 'infra' | 'docs' | 'refactor' | 'polish';
 export type TaskType = KnownTaskType | (string & {});
 
-/** A task: its fields come from common's schema (atm-cli/atm/common/schema/task.schema.json, generated into
+/** A task: its fields come from common's schema (crates/atm-common/schema/task.schema.json, generated into
  * $generated/types.ts). The dashboard reads two of them more narrowly than the file allows, as it always has: a task
  * from before sprints has a `phase`, and a missing description reads as empty. */
 export interface Task extends StoredTask {

@@ -1,18 +1,18 @@
 // Minimal static server for e2e tests. The built dashboard is served at its pages' paths (/, /projects/<id>/<tab>, …;
-// T-429), with the security headers atm serve sends (T-226), and the plugin's asset folder at /assets/ (the CompMD
-// runtime, its sandbox's frames and packs) as atm serve serves it; tasks.json is always supplied per test via
-// page.route.
+// T-429), with the security headers atm serve sends (T-226), and the build's asset folder (dist/assets/) at /assets/
+// (the CompMD runtime, its sandbox's frames and packs) as atm serve serves it; tasks.json is always supplied per test
+// via page.route.
 import { createServer } from 'node:http';
 import { lstat, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { pageCsp } from './csp.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const ASSETS = root + '../plugin/assets/';
-const PAGE = root + '../plugin/templates/tasks-dashboard.html';
-// As atm serve's (atm-cli/atm/api/server.py PAGE_PATH)
+const ASSETS = root + 'dist/assets/';
+const PAGE = root + 'dist/tasks-dashboard.html';
+// As atm serve's (atm-api's pages.rs)
 const PAGE_PATH = /^\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?$/;
-// As atm serve's asset route (atm-cli/atm/api/server.py asset_file): plain names, known extensions, no symlinks; every
+// As atm serve's asset route (atm-api's assets.rs): plain names, known extensions, no symlinks; every
 // asset readable cross-origin (the sandbox's frames have an opaque origin), a frame document sandboxed
 const ASSET = /^\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm|html))$/;
 const ASSET_TYPES = {

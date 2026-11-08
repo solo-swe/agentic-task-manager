@@ -461,8 +461,8 @@
       }
     },
     "args": ["component", "edit", "cli", "--path", "x/**"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --path", "Usage: atm component edit"] },
-    "expectRust": {
+    "expect": {
+      "exit": 2,
       "stderrIncludes": ["atm: unexpected argument '--path' found", "Usage: atm component edit"]
     }
   },
@@ -470,7 +470,6 @@
     "name": "components: add's options are refused when listing (T-324)",
     "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
     "args": ["component", "list", "--from-label", "x"],
-    "expect": { "exit": 2, "stderrIncludes": ["atm: No such option: --from-label"] },
-    "expectRust": { "stderrIncludes": ["atm: unexpected argument '--from-label' found"] }
+    "expect": { "exit": 2, "stderrIncludes": ["atm: unexpected argument '--from-label' found"] }
   }
 ]

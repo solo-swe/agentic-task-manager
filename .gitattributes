@@ -1,0 +1,3 @@
+# Text files are LF in every checkout, Windows' too (T-480): atm embeds and prints them as they are in the
+# repository, and the tests compare with them. Binary files (screenshots, the logo's PNGs) git detects itself.
+* text=auto eol=lf

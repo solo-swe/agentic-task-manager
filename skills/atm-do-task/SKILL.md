@@ -31,7 +31,7 @@ Every command takes `--json`.
 
 ## Step 1: Prepare the task folder
 
-From the project root, run atm-cli, the plugin's `atm` command:
+From the project root, run `atm`:
 
 ```bash
 atm db migrate
@@ -43,8 +43,7 @@ It keeps the project's `.agentic-task-manager/` folder in order:
 - the project is added to the dashboard's list of projects (one dashboard, served by `/atm-serve`, shows them all);
 - what older versions left there is cleaned up (the project's own copy of the dashboard and its own server).
 
-Relay what it prints, except "Nothing to migrate.". If it exits with code 127, Python 3.9 or newer is not installed:
-atm needs it, so ask the user to install it and stop.
+Relay what it prints, except "Nothing to migrate.".
 
 If it said "No tasks.json found", tell the user:
 > No tasks.json found. Run `/atm-create-tasks` first to generate tasks from your requirements.

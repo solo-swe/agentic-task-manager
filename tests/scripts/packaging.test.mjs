@@ -51,6 +51,48 @@ describe('packaging', () => {
     }
   });
 
+  // ADR-002: the public skills repo is shared; atm's release changes only atm's part of it
+  test('the skills export replaces atm’s skills and README section, and leaves another app’s alone', () => {
+    const dir = tempDir('atm-skills-repo-');
+    try {
+      git(['init', '-q'], dir);
+      const other = path.join(dir, 'skills/other-thing');
+      fs.mkdirSync(other, { recursive: true });
+      fs.writeFileSync(path.join(other, 'SKILL.md'), 'another app’s skill\n');
+      const gone = path.join(dir, 'skills/atm-gone');
+      fs.mkdirSync(gone, { recursive: true });
+      fs.writeFileSync(path.join(gone, 'SKILL.md'), 'a skill atm no longer has\n');
+      fs.writeFileSync(
+        path.join(dir, 'README.md'),
+        '# Skills\n\n<!-- other:begin -->\n## other\n<!-- other:end -->\n\n<!-- atm:begin -->\n## atm\nold\n<!-- atm:end -->\n',
+      );
+
+      const r = run('skills-export.sh', ['1.2.3', dir]);
+      assert.equal(r.status, 0, r.stderr);
+      const ours = fs.readdirSync(path.join(REPO, 'skills')).filter((n) => n.startsWith('atm-'));
+      for (const name of ours)
+        assert.equal(
+          fs.readFileSync(path.join(dir, 'skills', name, 'SKILL.md'), 'utf8'),
+          fs.readFileSync(path.join(REPO, 'skills', name, 'SKILL.md'), 'utf8'),
+          name,
+        );
+      assert.equal(fs.existsSync(gone), false, 'a skill atm dropped goes');
+      assert.equal(fs.readFileSync(path.join(other, 'SKILL.md'), 'utf8'), 'another app’s skill\n');
+      assert.ok(!fs.existsSync(path.join(dir, 'skills/claude-code.json')), 'Claude Code’s pre-approvals stay here');
+      const readme = fs.readFileSync(path.join(dir, 'README.md'), 'utf8');
+      assert.match(readme, /<!-- other:begin -->\n## other\n<!-- other:end -->/);
+      assert.match(readme, /<!-- atm:begin -->\n## atm\n[\s\S]*version 1\.2\.3[\s\S]*<!-- atm:end -->/);
+      assert.doesNotMatch(readme, /\nold\n/);
+
+      // Again: the same files, one atm section
+      assert.equal(run('skills-export.sh', ['1.2.3', dir]).status, 0);
+      assert.equal(fs.readFileSync(path.join(dir, 'README.md'), 'utf8'), readme);
+      assert.equal(run('skills-export.sh', ['not-a-version', dir]).status, 1);
+    } finally {
+      removeDir(dir);
+    }
+  });
+
   test('release.sh tags only the version Cargo.toml has, on a clean main that is pushed', () => {
     const origin = tempDir('atm-origin-');
     const root = tempDir('atm-release-');

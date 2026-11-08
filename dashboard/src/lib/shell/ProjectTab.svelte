@@ -160,7 +160,7 @@
               </div>
             {/if}
           {:else}
-            <span class="muted">Not set: <code>/atm:push</code> asks the first time</span>
+            <span class="muted">Not set: <code>/atm-push</code> asks the first time</span>
           {/if}
         </dd>
         <dt>People</dt>

@@ -106,7 +106,10 @@ describe('lock', () => {
     }
   });
 
-  test('a holder stopped with SIGTERM releases the lock', async () => {
+  // Windows has no SIGTERM (Node ends the process at once): there the lock stays, and the next atm breaks it, its
+  // owner gone (the test above)
+  const noSigterm = process.platform === 'win32' && 'Windows has no SIGTERM';
+  test('a holder stopped with SIGTERM releases the lock', { skip: noSigterm }, async () => {
     const root = project();
     try {
       const holder = holdLock(root, 30);
