@@ -92,7 +92,8 @@
   // The menu is Bits UI's (T-431): the arrows, Home, End and typing move, Enter chooses, Escape or a click outside
   // closes, and focus goes back to the button. Each choice is a radio item, keyed as its data-scope
   let menuOpen = $state(false);
-  const keyOf = (values: string[]) => values.join(',') || 'all';
+  // A choice is one value (or none, All tasks): its key is that value, never split (a sprint's name may hold a comma)
+  const keyOf = (values: string[]) => values[0] ?? 'all';
   /** The choices by key, as the menu lists them, for the radio group's value */
   const chosen = $derived(
     [...(active ? [[ACTIVE]] : []), ...planned.map((s) => [s.id]), [BACKLOG], [], ...closed.map((s) => [s.id])].find(
@@ -100,7 +101,7 @@
     ),
   );
   function choose(key: string) {
-    dashboard.setSprintScope(key === 'all' ? [] : key.split(','));
+    dashboard.setSprintScope(key === 'all' ? [] : [key]);
   }
 </script>
 

@@ -68,6 +68,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `zvariant_derive`; no vulnerability), each with its reason (approved).
 
 ### Fixed
+- **A sprint whose name holds a comma can be chosen** (T-494): the Sprint filter in the address was a comma-separated
+  list (`?sprint=a,b`), so "Library, gallery and blog" read back as two unknown sprints and the filter fell back to
+  All tasks. It is now one `sprint=` per value (`?sprint=Foundations&sprint=backlog`), as HTML forms send a list;
+  older links with commas no longer select several sprints. The scope menu also split its choice's key on commas;
+  each choice is one value now (`ScopeBar.svelte`).
 - **No more 404 for `/_app/version.json` in the browser's console** (T-495): SvelteKit checks it for a new deployment
   when the tab regains focus; atm serve now answers it with the page's own version (`{"version": …}`), so it never
   sees one (atm's reload offer stays whoami's).

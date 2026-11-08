@@ -21796,7 +21796,7 @@
       "description": "A sprint whose name holds a comma (\"Library, gallery and blog\") couldn't be chosen: the address wrote the selection comma-separated (`?sprint=a,b`), reading it back split the name into unknown ones, and the filter fell back to All tasks.\n\n## Change\n- `dashboard/src/lib/sprint-param.ts`: write one `sprint=` parameter per value (`params.append`), read them with `getAll`, as HTML forms and atm's own v1 tasks route (`status=…&status=…`) do. `all`, `active` and `backlog` stay keywords.\n- Old comma-separated links are not read any more (Hakan's call).\n- Remove the longest-match parsing added while looking into it.\n\n## Tests\n- `dashboard/tests/unit/sprint-param.test.ts`: keep the round-trip test of a name with a comma, alone and with others; update the cases written as `a,b`.\n- Update any e2e spec that asserts or opens `?sprint=a,b`; the sprints area specs pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/sprint-param.ts",
@@ -21804,16 +21804,18 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-08T18:09:43Z",
-      "updated_at": "2026-11-08T18:09:43Z",
+      "updated_at": "2026-11-08T18:10:34Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-08T18:09:43Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:10:34Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-495",
@@ -21826,7 +21828,7 @@
       "description": "SvelteKit checks `/_app/version.json` for a new deployment whenever the tab regains focus; atm serve answered 404, logged in the browser's console.\n\n## Change\n- `crates/atm-api/src/lib.rs`: `GET /_app/version.json` answers `{\"version\": <the page's version>}`, the page's own version tag, so SvelteKit never sees a new one (atm's reload offer stays whoami's).\n- `docs/multi-project-api.md` §2 and `docs/security-architecture.md` I11 list the route; `CHANGELOG.md` under Fixed.\n\n## Tests\n`tests/scripts/serve.test.mjs` (the dashboard's pages test): 200, and the version is whoami's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-api/src/lib.rs",
@@ -21836,7 +21838,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T18:09:43Z",
-      "updated_at": "2026-11-08T18:09:50Z",
+      "updated_at": "2026-11-08T18:10:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21847,7 +21849,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T18:09:50Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "336a8ed5bedc2ebb68b95d2886e0056a3cf98f2b",
+      "completed_at": "2026-11-08T18:10:34Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:10:34Z",
+          "kind": "outcome",
+          "text": "`GET /_app/version.json` answers the page’s version; serve test checks it against whoami; docs and changelog updated.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }

@@ -72,7 +72,7 @@ export function addressParams(address: string): URLSearchParams {
 }
 
 /** The address for `params`: the page as a path, the rest as the query, a flag without "=" (`?about`). Slashes,
- * colons and commas stay readable (`?doc=docs/x.md:L40`, `?sprint=a,b`). */
+ * colons and commas stay readable (`?doc=docs/x.md:L40`, `?sprint=Library,%20gallery`). */
 export function formatAddress(params: URLSearchParams): string {
   const view = params.get('view');
   const project = params.get('project');
