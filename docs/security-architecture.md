@@ -639,8 +639,10 @@ CI permission beyond reading and the first secrets:
   can't write. `ci-workflow.test.ts` checks this.
 - **Secrets, where they're read:** the Developer ID certificate and the notarization key only in the macOS build
   steps that sign and notarize (in a keychain of the job's own, files removed after); the tap's deploy key only in
-  the Homebrew job, which writes one file (`Formula/atm.rb`) to `solo-swe/homebrew-tap`. No secret reaches a pull
-  request's run: neither workflow runs on pull requests.
+  the Homebrew job, which writes one file (`Formula/atm.rb`) to `solo-swe/homebrew-tap`; the skills repo's deploy key
+  only in the Skills job (`.github/workflows/skills.yml`, T-453), which writes `skills/atm-*` and the README's atm
+  section to `solo-swe/skills` from the published release's own tag, and tags `atm-v<version>`. No secret reaches a
+  pull request's run: none of these workflows runs on pull requests.
 - **What users install** is checksummed in the formula, from the release's `SHA256SUMS`; the macOS binaries are signed
   with the Developer ID (hardened runtime) and notarized. Actions are pinned by SHA (I19).
 

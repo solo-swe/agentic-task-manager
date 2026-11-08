@@ -172,7 +172,9 @@ binary.
 - **Releases of the CLI** (T-452, [packaging/README.md](packaging/README.md)): `packaging/release.sh <version> --push`
   on `main` tags `v<version>`; `.github/workflows/release.yml` builds, signs and notarizes, and drafts the GitHub
   release; publishing it runs `.github/workflows/homebrew.yml`, which updates `Formula/atm.rb` in
-  `solo-swe/homebrew-tap`. Its secrets are listed in the README.
+  `solo-swe/homebrew-tap`, and `.github/workflows/skills.yml`, which exports the skills to `solo-swe/skills`, the public
+  skills repo our apps share ([ADR-002](docs/adr/ADR-002-atm-public-skills-repo.md)). Their secrets are listed in the
+  README.
 - **Workflow:** `pull-request` (also in `tasks.json` `meta.workflow`, so `/atm:push` knows): work happens on a
   release branch (e.g. `dev/v4`) and reaches `main` through **one combined PR per release branch**.
 - **Linux screenshot baselines:** made locally with `pnpm run test:e2e:visual:update` (Docker), normally. As a

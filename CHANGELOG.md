@@ -24,6 +24,13 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
 - **`pnpm run dev`'s REST API is the Rust atm** (T-478): `atm _serve` from `target/debug/` (`cargo build` first),
   restarted when the binary is rebuilt; `dev-api.test.mjs` runs it from a copy of the binary.
 
+### Added
+- **The public skills repo, `solo-swe/skills`** (T-453, [ADR-002](docs/adr/ADR-002-atm-public-skills-repo.md)):
+  publishing a release runs `.github/workflows/skills.yml`, which puts the release's `skills/atm-*` (the portable core)
+  and a README section into `solo-swe/skills`, the repo our apps share, and tags it `atm-v<version>`, so
+  `npx skills add solo-swe/skills` finds them. `packaging/skills-export.sh` changes only atm's part; the workflow
+  needs `SKILLS_DEPLOY_KEY` and, without it, says so and does nothing.
+
 ## [0.32.0] - 2026-11-06
 
 The sprint *Rust and distribution*: the groundwork for atm as an app that installs its own skills

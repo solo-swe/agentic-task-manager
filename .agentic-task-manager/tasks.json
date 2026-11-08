@@ -21571,7 +21571,7 @@
         "packaging/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T01:09:04Z",
+      "updated_at": "2026-11-08T01:09:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21582,7 +21582,8 @@
       ],
       "sprint": "The Rust port",
       "started_at": "2026-11-08T01:09:04Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "a942df441261b66c678aa06812ee750c8df55ca5"
     },
     {
       "id": "T-454",
