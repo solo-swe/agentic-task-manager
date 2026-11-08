@@ -125,6 +125,76 @@ mod tests {
         );
     }
 
+    /// I25 (T-461): the main window's capability allows exactly the app's own commands (the manifest in build.rs), one
+    /// permission each, and no core or plugin API
+    #[test]
+    fn the_capability_allows_exactly_the_apps_commands() {
+        let build = include_str!("../build.rs");
+        let list = build
+            .split_once(".commands(&[")
+            .and_then(|(_, rest)| rest.split_once("])"))
+            .map(|(list, _)| list)
+            .expect("build.rs's command list");
+        let mut commands: Vec<String> = list
+            .split(',')
+            .map(|c| c.trim().trim_matches('"').to_string())
+            .filter(|c| !c.is_empty())
+            .collect();
+        commands.sort();
+        let capability: Value = serde_json::from_str(include_str!("../capabilities/main.json"))
+            .expect("capabilities/main.json");
+        assert_eq!(capability["windows"], json!(["main"]));
+        let mut allowed: Vec<String> = capability["permissions"]
+            .as_array()
+            .expect("permissions")
+            .iter()
+            .map(|p| p.as_str().expect("a permission").to_string())
+            .collect();
+        allowed.sort();
+        let expected: Vec<String> = commands
+            .iter()
+            .map(|c| format!("allow-{}", c.replace('_', "-")))
+            .collect();
+        assert_eq!(allowed, expected);
+        assert!(
+            capability.get("remote").is_none(),
+            "no remote URL may call commands"
+        );
+    }
+
+    /// I26 (T-461): the window's CSP is the dashboard server's (I13): no remote, inline or evaluated script, frames only
+    /// `CompMD`'s, images only the app's own or `data:`, connections only to Tauri's IPC; no global Tauri object
+    #[test]
+    fn the_windows_csp_is_strict() {
+        let conf: Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        let csp = &conf["app"]["security"]["csp"];
+        assert_eq!(csp["default-src"], json!("'none'"));
+        let script = csp["script-src"].as_str().expect("script-src");
+        for word in script.split_whitespace() {
+            assert!(
+                word == "'wasm-unsafe-eval'" || word.ends_with("localhost/assets/compmd/"),
+                "script-src {word}"
+            );
+        }
+        for word in csp["frame-src"]
+            .as_str()
+            .expect("frame-src")
+            .split_whitespace()
+        {
+            assert!(
+                word.ends_with("localhost/assets/compmd/"),
+                "frame-src {word}"
+            );
+        }
+        assert_eq!(csp["img-src"], json!("'self' data:"));
+        assert_eq!(csp["connect-src"], json!("ipc: http://ipc.localhost"));
+        assert_eq!(csp["frame-ancestors"], json!("'none'"));
+        assert_eq!(csp["form-action"], json!("'none'"));
+        assert_eq!(conf["app"]["security"]["freezePrototype"], json!(true));
+        assert_eq!(conf["app"]["withGlobalTauri"], json!(false));
+    }
+
     /// The state folder is named by atm-common's identifier, and the app's must be the same (ADR-003 §2)
     #[test]
     fn the_apps_identifier_is_atms() {

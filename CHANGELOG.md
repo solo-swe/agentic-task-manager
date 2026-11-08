@@ -32,6 +32,12 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **The app's security review** (T-461): `docs/security-architecture.md` gains boundary B7 (the app's window and its
+  `atm://` links) and invariants I25–I29 (the capability is exactly the app's commands, the window's strict CSP, the
+  commands are atm serve's reads, a deep link is only an address, the shipped app is the reviewed build with one
+  `atm` on PATH), each with its check; two new checks in the app's tests
+  (`the_capability_allows_exactly_the_apps_commands`, `the_windows_csp_is_strict`), and a by-hand checklist for the
+  first signed DMG (§5).
 - **The app's deep links** (T-459): `atm://projects/<id>[/<tab>]?task=…&doc=…` (and `atm://w/<w>/…`, `atm://board`, …)
   open the app at that page, whether the link starts it or it is running. The scheme is in the app's `Info.plist`;
   macOS hands the app its links (`RunEvent::Opened`, no plugin), `app/src-tauri/src/links.rs` checks each is one of

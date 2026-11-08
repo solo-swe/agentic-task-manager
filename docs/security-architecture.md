@@ -27,6 +27,7 @@ this document is what changes with the code.
 | A web page in the user's browser | no | HTTP requests to `localhost` |
 | Another local user or process | no | the server's port, files in atm's state folder (`ATM_STATE_DIR`, T-490) |
 | An outside contributor, CI output | no | PRs, CI logs, review comments the push skill reads |
+| Another program, or a web page, opening a link | no | `atm://` links the app is opened with (T-459) |
 | The supply chain | partly | npm, crates.io, GitHub Actions, the CI container, the release and Homebrew tap |
 
 **Trust boundaries** (where untrusted input enters):
@@ -39,6 +40,7 @@ this document is what changes with the code.
 | B4 | task data → dashboard rendering | names, Markdown, links, logos; every project's card fields in `api/projects` (`board`: names, types, labels, agents, times, T-257), rendered as text on the All projects board like a project's own cards (I15, T-259) |
 | B5 | local machine → atm's runtime files | the state folder (the platform's app data folder, or `ATM_STATE_DIR`; made owner-only, 0700, as `ATM_HOME` was), the server's port |
 | B6 | contributors and CI → repository → users | workflows, artifacts, dependencies, the build artifacts users run |
+| B7 | the app's window → the app (IPC), and the world → the app (`atm://` links) | every command call from the window's page (task text rendered in it is B4's); every link another program opens |
 
 The threats per boundary (STRIDE, with likelihood and impact) are in `docs/security-review.md` §2.4; new ones are
 added here, in §4.
@@ -96,6 +98,16 @@ with the task that adds it.
 | I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`) and `cargo build --locked` exactly `Cargo.lock`, its crates checked by `cargo deny`; Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the dashboard and CompMD's runtime are never committed; CI and the release workflow build them from the reviewed sources (the lockfile, exactly) before the binary that embeds them (T-477); a release is built from a `v*` tag on `main`, the macOS builds signed and notarized, every archive in `SHA256SUMS`, and the formula's checksums are the release's (T-452). Nothing generated is committed since the Python atm went (T-454) | the `rust` jobs and `release.yml` build the dashboard first; `ci-workflow.test.ts` |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
+
+### The atm app (B7)
+
+| # | Invariant | Enforced by |
+|---|---|---|
+| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands` |
+| I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and CompMD's runtime, frames only CompMD's, images only the app's own or `data:` (the app's logos come as `data:`, T-457), connections only to Tauri's IPC; `freezePrototype`, no global Tauri object | `the_windows_csp_is_strict`; the e2e `cspGuard` on `app.spec.ts` (the page as in the app, under the server's CSP) |
+| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12); the commands write nothing but the last opened workspace (`list_projects`, as its route) and, on the user's click only, the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write) | `each_command_answers_what_its_rest_route_does`; `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests |
+| I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links" |
+| I29 | **The app users run is the reviewed build, with one `atm` on PATH**: the DMG is built on a `v*` tag in the release workflow's `app-macos` job (read-only token, the dashboard built from the lockfile first), signed and notarized (the app and its bundled CLI by Tauri's bundler, the DMG by `notarize-dmg.sh`, stapled), its checksum in `SHA256SUMS`; the cask links the app's own CLI and `conflicts_with` the formula; it installs nothing into agent harnesses | `release.yml` (`ci-workflow.test.ts`'s checks of every workflow); `packaging.test.mjs` "the Homebrew cask…" |
 
 ## 3. Verifying it
 
@@ -779,3 +791,15 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
 - Those still **to build** rely on review until their tasks add the checks: I5 and I15 (T-234), I1's red-team run
   (T-235), I18 and I19 (T-230), I21 (T-231). I9 stays a review item.
 - A release is every PR to `main` (§3).
+- **The app (T-461, 2026-11-08):** boundary B7 and invariants I25–I29, each with its check, from the entries of
+  T-455 to T-460 in §3. Still open, by design or for later:
+  - **By hand, on the first signed DMG** (0.34.0's tag): it opens without a Gatekeeper warning, offline too
+    (stapled); `spctl -a -vv atm.app` says "Notarized Developer ID"; `atm` from the cask runs and is the app's
+    (`readlink $(which atm)`); `open 'atm://projects/<id>/list'` opens that page, running or not; `open
+    'atm://api/projects'` and `open 'atm://projects/../x'` change nothing; the window's DevTools are off in the release
+    build; Connect your agents writes only under `~/.claude/skills` and `atm agents status` agrees.
+  - **In-app updates** (T-483) will add an entry point that downloads and installs code: its own review when it lands
+    (blocked on the plugin, the key and the Homebrew choice).
+  - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.
+  - **Accepted**: in the app a document's relative images show their alt text (T-457), and a reload on a deep page
+    has no fallback page yet; neither reaches anything outside the window.

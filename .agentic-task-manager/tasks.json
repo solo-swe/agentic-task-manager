@@ -20154,7 +20154,7 @@
       "description": "`atm://projects/<id>[/<tab>]?task=…&doc=…` opens the app at that page, parsed by the dashboard's address code (T-429's `lib/address.ts`), never fetched or run.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-457"
       ],
@@ -20163,7 +20163,7 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:59:20Z",
+      "updated_at": "2026-11-08T19:04:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20174,7 +20174,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T18:59:20Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "03e7a44ef361e5faf0d7e02684f3e299745f166f",
+      "completed_at": "2026-11-08T19:04:45Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T19:04:45Z",
+          "kind": "outcome",
+          "text": "`atm://` links on macOS without a plugin (Info.plist scheme, `RunEvent::Opened`); `links.rs` checks them into dashboard addresses, `subscribe_links` channel (start link waits), page re-checks with `isPagePath` before navigating. Not run in a real app yet (needs a bundle + `open atm://…`). Unit 1240, e2e 420.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-460",
