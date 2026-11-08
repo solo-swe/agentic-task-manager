@@ -6,7 +6,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
-The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin's last release).
+## [0.33.0] - 2026-11-08
+
+The Rust atm, without the plugin: the first release that is only the `atm` binary (`brew install solo-swe/tap/atm`, or
+a release's archives), with the dashboard and the skills embedded. 0.32.0 was the plugin's last release; plugin users
+move as its entry and the README's "Moving from the plugin" say (T-484, the release).
 
 ### Removed
 - **The Claude Code plugin and the Python atm** (T-454): `plugin/` (the `/atm:*` skills' generated copies, the

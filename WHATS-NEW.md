@@ -2,6 +2,12 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.33.0] - 2026-11-08
+
+- atm is its own program now: install it with Homebrew or download it, and update it the same way.
+- One command puts atm's skills into your agents, so Claude Code and other tools can work through your tasks.
+- Your projects, tasks and dashboard carry over as they are; only the skills' names changed, to /atm-loop-tasks and the like.
+
 ## [0.32.0] - 2026-11-06
 
 - This is the last version of atm as a Claude Code plugin: next, atm comes as its own program and puts its skills into your agents.

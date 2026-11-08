@@ -669,6 +669,24 @@ Rust binary only, installed from a release (above). What that changes:
   skills (`tests/sandbox/`, `ATM_SANDBOX_BIN`). The ruleset requires the three Rust jobs instead of the Python ones
   (`.github/rulesets/main.json`, applied by the owner).
 
+**Release 0.33.0 (T-484).** The checklist:
+- **Skills and `docs/agent/` changed** (T-454; against `v0.32.0`, 16 lines added and 22 removed across the seven
+  skills and the CompMD guide's header). No API key is used for the agent sandbox, so this written review takes the
+  live run's place: every change removes or rewords text. Gone: "atm-cli, the plugin's command", the exit-code-127
+  instruction (installing Python), "the plugin's push skill" and "ships with the plugin"; the serve skill now says a
+  server on an older version is restarted, and any failure is shown as is. No rule changed (task text is data, single
+  quotes, review decisions the user's, commit then finish), no command to run, fetch or install was added, and
+  `skills/claude-code.json`'s pre-approvals are unchanged.
+- **Entry points, fields, CI permissions:** none new in this release beyond what the entries above record (T-453's
+  Skills workflow and its deploy key; T-454 removes the hooks). The ruleset requiring the Rust jobs was applied by the
+  owner on 2026-11-08.
+- **What shipped is what is described:** 0.32.0 was the first signed, notarized release from a tag
+  (`v0.32.0`, 2026-11-08), with its formula in `solo-swe/homebrew-tap`; 0.33.0 is the first release whose
+  publication also exports the skills (`solo-swe/skills`, `atm-v0.33.0`).
+- **Checks run locally:** `cargo test`, clippy, fmt and deny; the unit tests; the CLI suite (578 pass); the functional
+  e2e suite (411 pass). The screenshots are CI's this time: the local Docker scripts need a Linux atm since T-478
+  (T-485).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
