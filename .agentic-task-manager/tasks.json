@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 483,
+    "next_id": 484,
     "labels": [
       {
         "id": "architecture",
@@ -20831,6 +20831,40 @@
         "cli",
         "ci"
       ]
+    },
+    {
+      "id": "T-483",
+      "name": "The app's in-app updates (Tauri updater)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "The app checks for, downloads and installs its own updates, as agentic-status-bar does ([packaging/README.md](packaging/README.md)).\n\n## Change\n- Tauri's updater plugin, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with an updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-460"
+      ],
+      "files": [
+        "app/",
+        "packaging/",
+        ".github/workflows/release.yml",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-08T01:21:48Z",
+      "updated_at": "2026-11-08T01:21:48Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T01:21:48Z"
+        }
+      ],
+      "sprint": "The atm app"
     }
   ]
 }
