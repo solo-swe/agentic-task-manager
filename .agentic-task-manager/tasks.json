@@ -21487,13 +21487,13 @@
       "description": "A design proposal, as an ADR, for a **workspace**: a set of projects atm works on, of which there may be several (usually one; others for tests, or work and personal projects).\n\n## Why\nThe logic that works across projects (the project list with summaries, worktrees and logos; search across projects; skipping a broken project) lives in atm-api's HTTP routes, and the app (T-456) needs the same. atm-lib knows only one project; the registry is concrete in atm-db; boot is a bag of openers and JSON-in-git helpers ([layered-architecture.md](docs/layered-architecture.md) §3.2, §5.1, §11.2).\n\n## The ADR\n- Research: how atm's layers handle one project and many today; what the registry, `ATM_HOME`, `atm service`, the dashboard's routes and the app assume; how other tools model workspaces.\n- Propose the workspace: what it is and holds, how one is chosen (default, `ATM_HOME`, a flag), the API's place for it (`api/v<N>/workspace/…`), the layers that own it, and how boot gets simpler.\n- Diagrams in Mermaid. Options with trade-offs, a recommendation, consequences and a migration plan.\n\nReviewed with Hakan; T-456 waits for it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/adr/ADR-003-workspaces.md"
       ],
       "created_at": "2026-11-08T09:20:34Z",
-      "updated_at": "2026-11-08T10:17:23Z",
+      "updated_at": "2026-11-08T10:17:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21506,9 +21506,8 @@
       "with": "user",
       "started_at": "2026-11-08T09:20:41Z",
       "started_by": "claude:34798264",
-      "commit": "905b9ebb9756890e076de9592c2178522c3810e6",
+      "commit": "fa9c3cedab3dfe8c8500071aa37b0b997e8b805e",
       "review_requested_at": "2026-11-08T09:25:33Z",
-      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-08T09:25:33Z",
@@ -21521,9 +21520,23 @@
           "kind": "note",
           "text": "Approved: Approved in Crit after one round (the task folder is the store’s, not the model’s)",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T10:17:24Z",
+          "kind": "outcome",
+          "text": "ADR-003 accepted: workspaces in the state folder (platform app data, ATM_STATE_DIR), no project index, no boot (settings file + factories in atm-db and atm-vcs), atm workspace commands, api/v2/workspaces, a six-step migration.",
+          "by": "claude:34798264"
         }
       ],
-      "reviewed_at": "2026-11-08T10:17:23Z"
+      "reviews": [
+        {
+          "from": "2026-11-08T09:25:33Z",
+          "to": "2026-11-08T10:17:23Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-08T10:17:24Z",
+      "completed_by": "claude:34798264"
     }
   ]
 }
