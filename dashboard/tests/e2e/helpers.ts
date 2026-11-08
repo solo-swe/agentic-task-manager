@@ -53,7 +53,7 @@ const viewCache = new Map<string, string>();
  * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
  * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
  */
-function asTaskViews(body: string, archive: string | null = null, archived = false): string {
+export function asTaskViews(body: string, archive: string | null = null, archived = false): string {
   const key = JSON.stringify([body, archive, archived]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
@@ -445,6 +445,81 @@ export class TasksServer {
     this.worktreesBody =
       worktrees === null ? null : JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', worktrees });
     return this;
+  }
+
+  /** The paths of requests the page made to the server's routes (api/, p/), when it plays the app (asApp) */
+  httpRequests: string[] = [];
+
+  /**
+   * Play the atm app instead of atm serve (T-457): the page runs as in Tauri's window (`isTauri`, Tauri's IPC
+   * internals mocked, as `@tauri-apps/api/mocks` does), and the app's commands answer from the same data as the routes
+   * (the default workspace's projects, their tasks as atm's views, claims, worktrees, search, logos). Requests the page
+   * still makes to the server's routes are recorded in `httpRequests`: the app has none to answer them.
+   */
+  async asApp() {
+    this.page.on('request', (r) => {
+      const { pathname } = new URL(r.url());
+      if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
+    });
+    await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
+      this.answerCommand(command, args),
+    );
+    await this.page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown> & {
+        __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
+      };
+      w.isTauri = true;
+      w.__TAURI_INTERNALS__ = {
+        invoke: (command: string, args: unknown) =>
+          w.__atmInvoke(command, args ?? {}).then((r) => ('error' in r ? Promise.reject(r.error) : r.ok)),
+        transformCallback: () => 0,
+        unregisterCallback: () => {},
+        convertFileSrc: (path: string) => path,
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
+      };
+    });
+    return this;
+  }
+
+  /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
+  private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+    const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
+    const views = (text: string) => {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      delete parsed.generated_at;
+      return parsed;
+    };
+    const project = String(args.project ?? '');
+    const body = project === this.projectId ? this.body : this.others.get(project)?.body;
+    switch (command) {
+      case 'list_workspaces':
+        return { ok: { workspaces: [{ id: 'default', projects: this.projectList().length }], recent: 'default' } };
+      case 'list_projects':
+        return { ok: { projects: this.projectList() } };
+      case 'search':
+        return { ok: this.search(String(args.q ?? '')) };
+      case 'project_tasks': {
+        if (!body) return unknown;
+        const archived = (args.filters as { archived?: boolean } | undefined)?.archived;
+        if (archived)
+          return this.archiveBody === null || project !== this.projectId
+            ? { error: { kind: 'not_found', message: 'not found' } }
+            : { ok: views(asTaskViews(body, this.archiveBody, true)) };
+        return { ok: views(asTaskViews(body, project === this.projectId ? this.archiveBody : null)) };
+      }
+      case 'claims':
+        return body ? { ok: { claims: this.claimsBody ? JSON.parse(this.claimsBody).claims : [] } } : unknown;
+      case 'worktrees':
+        return body
+          ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
+          : unknown;
+      case 'logo': {
+        const svg = this.logos.get(project);
+        return svg ? { ok: { content_type: 'image/svg+xml', data: [...Buffer.from(svg)] } } : { ok: null };
+      }
+      default:
+        return { error: { kind: 'not_found', message: `no command ${command}` } };
+    }
   }
 
   /** Register another project, served under p/<id>/ (a fixture by name or inline tasks), with an optional summary

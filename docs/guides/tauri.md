@@ -30,6 +30,16 @@ atm's own rules for the atm app, the desktop distribution proposed in
   subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
 
+## The dashboard in the window
+
+- **One transport switch** (`dashboard/src/lib/api/http.ts` `browserFetch`): in the app (`isTauri()`), the dashboard's
+  own requests go to `api/ipc.ts`'s `ipcFetch`, which maps each URL (the v1 routes as `default`'s, the v2 ones) to its
+  command and answers with a `Response`; nothing above the client layer knows which it got.
+- **Images come through the commands too**, as `data:` URLs (`api/images.ts`), which the page's CSP already allows;
+  no `blob:` or custom protocol. A document's relative images show their alt text in the app for now.
+- **One window**, switching workspaces in place (Hakan, T-457); a window per workspace can come with the deep links
+  (T-459).
+
 ## Security
 
 - **Capabilities are least privilege:** each window gets only the commands and plugin permissions it uses.
@@ -53,6 +63,7 @@ atm's own rules for the atm app, the desktop distribution proposed in
 - **Domain behaviour** is tested in atm-lib, not through Tauri.
 - **Command wiring** gets tests with Tauri's mock runtime: each command reaches the right atm-lib call, and errors
   serialize as expected.
-- **End to end:** the UI runs under Playwright with mocked Tauri IPC (`@tauri-apps/api/mocks`) backed by an in-memory
-  project (`open_memory_project`) or recorded fixtures. WebDriver (`tauri-driver`) doesn't support macOS. The real app
+- **End to end:** the UI runs under Playwright with mocked Tauri IPC (`tests/e2e/helpers.ts` `asApp()`, the internals
+  `@tauri-apps/api/mocks` sets, backed by the e2e fixture's data and atm's own task views; `tests/e2e/app.spec.ts`),
+  and the transport's mapping has unit tests on `@tauri-apps/api/mocks` (`tests/unit/ipc.test.ts`). WebDriver (`tauri-driver`) doesn't support macOS. The real app
   is checked with a manual QA checklist.

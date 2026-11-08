@@ -32,6 +32,13 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **The dashboard's IPC transport** (T-457): in the atm app the dashboard reads through the app's commands, not HTTP.
+  `browserFetch` picks it at start (`isTauri()`); `lib/api/ipc.ts`'s `ipcFetch` maps the dashboard's URLs (v1 as
+  `default`'s, v2) to `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`, `document`,
+  `file` and `logo`, errors to their HTTP statuses; logos come as `data:` URLs (`lib/api/images.ts`). One window,
+  switching workspaces in place. New dependency: `@tauri-apps/api` 2.12.4 (approved). Tests: `tests/unit/ipc.test.ts`
+  (on `@tauri-apps/api/mocks`) and `tests/e2e/app.spec.ts` (the page as in Tauri's window, the fixture answering the
+  commands, no HTTP request made).
 - **`atm workspace`** (T-493, ADR-003 §3): `list` (each with its project count; the last opened marked), `create`,
   `delete` and `rename` (`default` can't be deleted or renamed, and no workspace can take its name), `projects [<w>]`,
   `add-project [<w>] [<folder>]`, `remove-project [<w>] <project>` and `prune [<w>]`, each defaulting to `default`.

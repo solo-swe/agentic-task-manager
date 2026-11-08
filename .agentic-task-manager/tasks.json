@@ -20043,7 +20043,7 @@
       "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-456"
       ],
@@ -20054,7 +20054,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:00:57Z",
+      "updated_at": "2026-11-08T18:14:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20085,7 +20085,9 @@
           "to": "2026-11-08T18:00:57Z",
           "on": "user"
         }
-      ]
+      ],
+      "started_at": "2026-11-08T18:14:54Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-458",
@@ -21796,7 +21798,7 @@
       "description": "A sprint whose name holds a comma (\"Library, gallery and blog\") couldn't be chosen: the address wrote the selection comma-separated (`?sprint=a,b`), reading it back split the name into unknown ones, and the filter fell back to All tasks.\n\n## Change\n- `dashboard/src/lib/sprint-param.ts`: write one `sprint=` parameter per value (`params.append`), read them with `getAll`, as HTML forms and atm's own v1 tasks route (`status=…&status=…`) do. `all`, `active` and `backlog` stay keywords.\n- Old comma-separated links are not read any more (Hakan's call).\n- Remove the longest-match parsing added while looking into it.\n\n## Tests\n- `dashboard/tests/unit/sprint-param.test.ts`: keep the round-trip test of a name with a comma, alone and with others; update the cases written as `a,b`.\n- Update any e2e spec that asserts or opens `?sprint=a,b`; the sprints area specs pass.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/sprint-param.ts",
@@ -21804,7 +21806,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-08T18:09:43Z",
-      "updated_at": "2026-11-08T18:10:34Z",
+      "updated_at": "2026-11-08T18:14:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21815,7 +21817,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T18:10:34Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "5e8e2d9c0b14fab5d83cdd820a44f17cf5cd73ce",
+      "completed_at": "2026-11-08T18:14:45Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:14:45Z",
+          "kind": "outcome",
+          "text": "Repeated `sprint=` parameters in the address (write `append`, read `getAll`), old comma links dropped; also fixed the scope menu, which split its choice key on commas (`ScopeBar.svelte`). New e2e: a comma-named sprint picked, still picked after reload. Unit 1229, e2e 415.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-495",

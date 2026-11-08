@@ -4,13 +4,19 @@
 // ESLint rule (eslint.config.js) keeps `fetch` out of every other module. URLs are from the server's root, since the
 // page is served at several paths (/projects/<id>/…, T-429).
 
+import { isTauri } from '@tauri-apps/api/core';
+import { ipcFetch } from './ipc';
 import { workspacePrefix } from './workspace';
 
 /** How the dashboard makes a request: the browser's fetch, or a test's */
 export type Fetch = typeof fetch;
 
-/** The browser's fetch, the default transport */
-export const browserFetch: Fetch = (input, init) => fetch(input, init);
+/** Whether the dashboard runs in the atm app (Tauri's window), picked once at start: its requests are then the app's
+ * commands (api/ipc.ts), not HTTP */
+export const inApp = typeof window !== 'undefined' && isTauri();
+
+/** The transport: the browser's fetch to atm serve, or in the app the IPC one */
+export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : fetch(input, init));
 
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
