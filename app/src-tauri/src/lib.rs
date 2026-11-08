@@ -195,6 +195,39 @@ mod tests {
         assert_eq!(csp["form-action"], json!("'none'"));
         assert_eq!(conf["app"]["security"]["freezePrototype"], json!(true));
         assert_eq!(conf["app"]["withGlobalTauri"], json!(false));
+        // `cargo tauri dev` serves the page from the CLI's own server (T-502), so its policy (devCsp) is this one with
+        // that origin for the app's, and the CLI's live-reload socket; nothing else
+        let dev = &conf["app"]["security"]["devCsp"];
+        let server = "http://127.0.0.1:1430/assets/compmd/";
+        let as_dev = |directive: &str| {
+            let words: Vec<&str> = csp[directive]
+                .as_str()
+                .expect("a directive")
+                .split_whitespace()
+                .filter(|w| !w.ends_with("localhost/assets/compmd/"))
+                .collect();
+            if csp[directive]
+                .as_str()
+                .is_some_and(|d| d.contains("localhost/assets/compmd/"))
+            {
+                [words, vec![server]].concat().join(" ")
+            } else {
+                words.join(" ")
+            }
+        };
+        for (directive, _) in csp.as_object().expect("the csp") {
+            let expected = if directive == "connect-src" {
+                format!("{} ws://127.0.0.1:1430/__tauri_cli", as_dev(directive))
+            } else {
+                as_dev(directive)
+            };
+            assert_eq!(dev[directive], json!(expected), "devCsp {directive}");
+        }
+        assert_eq!(
+            dev.as_object().map(serde_json::Map::len),
+            csp.as_object().map(serde_json::Map::len),
+            "devCsp has the same directives"
+        );
     }
 
     /// The state folder is named by atm-common's identifier, and the app's must be the same (ADR-003 §2)

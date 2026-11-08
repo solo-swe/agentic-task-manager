@@ -20781,10 +20781,10 @@
       "labels": [
         "app"
       ],
-      "description": "In the app, a ```mermaid block never draws. Tauri puts the window's CSP on every HTML file it serves, CompMD's frame documents (`assets/compmd/<v>/compmd/strict.html`) included, and that policy had `frame-ancestors 'none'` (copied from `atm serve`'s page policy), so the frame was refused in the page. Missed because the e2e app mode serves the files from the Node test server, and the CSP test read `tauri.conf.json` rather than what Tauri serves.\n\n## Change\n- `frame-ancestors` out of the app's CSP (`app/src-tauri/tauri.conf.json`): the app's one window is its own, so it protects nothing there. Config only, no code.\n- A test on what Tauri serves (its asset resolver): CompMD's frame document comes without `frame-ancestors`; the strict-CSP test updated.\n- `docs/security-architecture.md` (I26) says why.\n\n## Check\nBy hand in the real window: a task with a diagram draws it. If the frame's scripts are still refused (it has an opaque origin; Tauri answers with the app's origin), decide the next step with Hakan.",
+      "description": "In the app, a ```mermaid block never draws. Tauri puts the window's CSP on every HTML file it serves, CompMD's frame documents (`assets/compmd/<v>/compmd/strict.html`) included, and that policy had `frame-ancestors 'none'` (copied from `atm serve`'s page policy), so the frame was refused in the page. Missed because the e2e app mode serves the files from the Node test server, and the CSP test read `tauri.conf.json` rather than what Tauri serves.\n\n## Change\n- `frame-ancestors` out of the app's CSP (`app/src-tauri/tauri.conf.json`): the app's one window is its own, so it protects nothing there. Config only, no code.\n- A test on what Tauri serves (its asset resolver): CompMD's frame document comes without `frame-ancestors`; the strict-CSP test updated.\n- `docs/security-architecture.md` (I26) says why.\n\n## Check\nBy hand in the real window (`cargo tauri dev`): the diagrams below draw, in this task's details and in Help. If the frame's scripts are still refused (it has an opaque origin; Tauri answers with the app's origin), decide the next step with Hakan.\n\n**Found 2026-11-08 (Hakan, `cargo tauri dev`):** with `frame-ancestors` gone, Help still shows nothing where a diagram is, not even its code: the frame loads but its scripts don't run.\n\n## Test diagrams\n\nA flowchart:\n\n```mermaid {alt=\"Draft, then review, then done\"}\nflowchart LR\n  a[Draft] --> b[Review]\n  b --> c{Approved?}\n  c -- yes --> d[Done]\n  c -- no --> a\n```\n\nA sequence diagram:\n\n```mermaid {alt=\"The page asks the app, the app asks atm-lib\"}\nsequenceDiagram\n  participant Page\n  participant App\n  participant Lib as atm-lib\n  Page->>App: project_tasks\n  App->>Lib: Member::tasks\n  Lib-->>App: tasks\n  App-->>Page: tasks\n```\n\nA state diagram:\n\n```mermaid {alt=\"A task's states\"}\nstateDiagram-v2\n  [*] --> todo\n  todo --> in_progress\n  in_progress --> in_review\n  in_review --> done\n  in_progress --> blocked\n  blocked --> todo\n  done --> [*]\n```\n\nOne Mermaid can't read: it should show its code (the fallback), never nothing:\n\n```mermaid\nflowchart LR\n  a -->\n  ((((\n```\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [],
       "files": [
         "app/src-tauri/tauri.conf.json",
@@ -20793,7 +20793,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T22:32:25Z",
-      "updated_at": "2026-11-08T22:32:28Z",
+      "updated_at": "2026-11-08T23:00:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20807,7 +20807,18 @@
         "docs"
       ],
       "started_at": "2026-11-08T22:32:28Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "7beb9c0a5506ae703bbe3bf52447e8dd0a604d14",
+      "review_requested_at": "2026-11-08T22:33:39Z",
+      "review_state": "waiting",
+      "notes": [
+        {
+          "at": "2026-11-08T22:33:39Z",
+          "kind": "review",
+          "text": "Config only: frame-ancestors out of the app CSP. Check in the real window: open a task with a mermaid block (cargo run -p atm-app after pnpm run build in dashboard/); the diagram should draw. If it stays code or blank, the frame scripts are refused (opaque origin vs Tauri ACAO): decide the next step together.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }

@@ -30,6 +30,16 @@
         "base-uri": "'none'",
         "form-action": "'none'"
       },
+      "devCsp": {
+        "default-src": "'none'",
+        "script-src": "'wasm-unsafe-eval' http://127.0.0.1:1430/assets/compmd/",
+        "frame-src": "http://127.0.0.1:1430/assets/compmd/",
+        "style-src": "'unsafe-inline'",
+        "img-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost ws://127.0.0.1:1430/__tauri_cli",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      },
       "freezePrototype": true
     }
   },

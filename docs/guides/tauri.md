@@ -50,7 +50,11 @@ atm's own rules for the atm app, the desktop distribution proposed in
   ([compmd-rendering-design.md](../compmd-rendering-design.md)).
 - **Strict CSP for the shell:** the dashboard server's policy ([security-architecture.md](../security-architecture.md)
   I13: own scripts by hash, no remote or inline scripts, `frame-src` only CompMD's sandbox frames), with `connect-src`
-  only for Tauri IPC.
+  only for Tauri IPC. No `frame-ancestors`: Tauri puts the policy on every HTML file it serves, CompMD's frames too
+  (T-502).
+- **`cargo tauri dev` is not the built app:** it serves the page from the CLI's own server (`http://127.0.0.1:1430`),
+  under `devCsp` (the same policy with that origin, and the CLI's live-reload socket; a test keeps the two in step).
+  What the built app does is checked with `cargo run -p atm-app` (`tauri://localhost`) or a bundle.
 
 ## Platform features
 
