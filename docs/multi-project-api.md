@@ -31,7 +31,16 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6) | yes |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
+| `GET /api/v2/workspaces` | the workspaces (§2.8) | no |
+| `GET /api/v2/workspaces/<w>/projects` | that workspace's projects with their summaries (§3); opens it | yes |
+| `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |
+| `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
 | anything else | `404` | |
+
+The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/…`) are the `default` workspace's
+(ADR-003 §5), until the dashboard has moved to the v2 ones (T-457).
 
 - `<id>` is a project id from `/api/projects` (§3.1). An unknown id gets `404` with `{"error": "unknown project"}`.
 - Only those names are answered for a project: `claims.json` and `worktrees.json`, computed through atm-lib, and
@@ -182,6 +191,23 @@ document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help`
 query. The paths are `PAGE_PATH` in `api/server.py` (a tab is lowercase letters; nothing deeper than a tab), any other
 path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
 old parameters from its hash and moves to the new address.
+
+### 2.8 `api/v2/workspaces`: the workspaces (ADR-003, T-456)
+
+```json
+{"generated_at": "2026-11-08T12:00:00Z", "workspaces": [{"id": "default", "projects": 3}, {"id": "work", "projects": 1}], "recent": "work"}
+```
+
+- `workspaces`: every workspace in the state folder (§5), `default` first and always there, with how many projects
+  it lists; `recent`: the one opened last (`recent.json`), else `default`.
+- **Opening a workspace** is reading its `projects`: the server records it as the last opened, the one write a read
+  makes (a choice of view, never task data; written only when it changes). `/` will open it (T-457).
+- A workspace's routes answer as the v1 ones do, for its own projects: an unknown workspace gets `404` with
+  `{"error": "unknown workspace"}`, an unknown project `{"error": "unknown project"}`. A project's ID is unique within
+  a workspace; its logo is at `api/v2/workspaces/<w>/projects/<id>/logo` (in `default`, `p/<id>/logo`).
+- The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
+  `project_tasks`, `claims`, `worktrees`, `document`, `file` and `logo`, and `subscribe_workspace`,
+  `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md).
 
 ## 3. `GET /api/projects`
 

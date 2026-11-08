@@ -7,13 +7,30 @@ pub mod commands;
 
 use tauri::Manager;
 
-use commands::{AppState, list_projects, version};
+use commands::{
+    AppState, claims, document, file, list_projects, list_workspaces, logo, project_tasks, search,
+    subscribe_project, subscribe_workspace, unsubscribe, version, worktrees,
+};
 
-/// The app's commands, for Tauri and for the TypeScript types.
+/// The app's commands, for Tauri and for the TypeScript types (each also in `build.rs`'s manifest and the main
+/// window's capability).
 #[must_use]
 pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
-    tauri_specta::Builder::<tauri::Wry>::new()
-        .commands(tauri_specta::collect_commands![version, list_projects])
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        version,
+        list_workspaces,
+        list_projects,
+        search,
+        project_tasks,
+        claims,
+        worktrees,
+        document,
+        file,
+        logo,
+        subscribe_workspace,
+        subscribe_project,
+        unsubscribe,
+    ])
 }
 
 /// Start the app: one instance (opening it again focuses the running window), the user's registry in its state.
@@ -49,9 +66,13 @@ fn context<R: tauri::Runtime>() -> tauri::Context<R> {
 
 #[cfg(test)]
 mod tests {
-    use super::commands::{AppError, projects};
+    use super::commands::{
+        AppError, TaskFilters, claims_of, document_of, file_of, logo_of, projects_of, search_in,
+        tasks_of, workspaces_of, worktrees_of,
+    };
     use super::*;
-    use std::path::PathBuf;
+    use serde_json::{Value, json};
+    use std::path::{Path, PathBuf};
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("atm-app-{name}-{}", std::process::id()));
@@ -74,8 +95,9 @@ mod tests {
             .expect("the bindings");
         let text = std::fs::read_to_string(&path).expect("the bindings file");
         assert!(
-            text.contains("listProjects")
-                && text.contains("ProjectEntry")
+            text.contains("listWorkspaces")
+                && text.contains("subscribeProject")
+                && text.contains("TaskFilters")
                 && text.contains("AppError")
         );
     }
@@ -89,9 +111,148 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_registry_lists_no_projects() {
+    fn an_empty_state_folder_has_only_default_with_no_projects() {
         let home = scratch("empty");
-        assert_eq!(projects(&atm_lib::Workspaces::at(&home)), Ok(vec![]));
+        let workspaces = atm_lib::Workspaces::at(&home);
+        assert_eq!(
+            workspaces_of(&workspaces),
+            json!({"workspaces": [{"id": "default", "projects": 0}], "recent": "default"})
+        );
+        assert_eq!(
+            projects_of(&workspaces, "default"),
+            Ok(json!({"projects": []}))
+        );
+        assert_eq!(
+            projects_of(&workspaces, "nope"),
+            Err(AppError::NotFound("unknown workspace".into()))
+        );
+    }
+
+    /// A 1×1 PNG.
+    const PIXEL: [u8; 67] = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    /// A state folder whose `default` and `work` workspaces list one project (a git repository with a task, a
+    /// document, an image and a logo).
+    fn a_state_with_a_project(name: &str) -> PathBuf {
+        let home = scratch(name);
+        let root = home.join("project");
+        let task_dir = root.join(".agentic-task-manager");
+        std::fs::create_dir_all(&task_dir).expect("the task folder");
+        let tasks = json!({
+            "meta": {"id": "abcd1234", "project": "App", "logo": "logo.png"},
+            "tasks": [{"id": "T-1", "name": "Find the needle", "status": "todo",
+                       "created_at": "2026-11-08T10:00:00Z", "updated_at": "2026-11-08T10:00:00Z"}],
+        });
+        std::fs::write(task_dir.join("tasks.json"), tasks.to_string()).expect("tasks.json");
+        std::fs::write(root.join("README.md"), "# App\n\nA needle.\n").expect("README.md");
+        std::fs::write(root.join("pixel.png"), PIXEL).expect("pixel.png");
+        std::fs::write(root.join("logo.png"), PIXEL).expect("logo.png");
+        let git = |args: &[&str]| {
+            let done = std::process::Command::new("git")
+                .args(args)
+                .current_dir(&root)
+                .output()
+                .expect("git");
+            assert!(done.status.success(), "git {args:?}");
+        };
+        git(&["init", "-q"]);
+        git(&["add", "-A"]);
+        let list = json!({"version": 1, "projects": [
+            {"id": "abcd1234", "name": "App", "path": root.to_string_lossy()}
+        ]});
+        let folder = home.join("workspaces");
+        std::fs::create_dir_all(&folder).expect("the workspaces folder");
+        for w in ["default", "work"] {
+            std::fs::write(folder.join(format!("{w}.json")), list.to_string())
+                .expect("a workspace");
+        }
+        home
+    }
+
+    /// What the REST API answers for `path?query`: its status, and its body (as JSON, without `generated_at`, when
+    /// it is JSON).
+    fn rest(home: &Path, path: &str, query: &str) -> (u16, Value, Vec<u8>) {
+        let projects = atm_api::routes::Projects::new(home);
+        let response =
+            atm_api::routes::serve(&projects, path, query, &axum::http::HeaderMap::new());
+        let status = response.status().as_u16();
+        let bytes =
+            tauri::async_runtime::block_on(axum::body::to_bytes(response.into_body(), usize::MAX))
+                .expect("the body")
+                .to_vec();
+        let mut body: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        if let Some(map) = body.as_object_mut() {
+            map.remove("generated_at");
+        }
+        (status, body, bytes)
+    }
+
+    /// ADR-003 §5: each read the app's commands make answers what its REST route does
+    #[test]
+    fn each_command_answers_what_its_rest_route_does() {
+        let home = a_state_with_a_project("agree");
+        let workspaces = atm_lib::Workspaces::at(&home);
+        let v2 = "/api/v2/workspaces/work";
+        let p = "/api/v2/workspaces/work/projects/abcd1234";
+        let ok = |(status, body, _): (u16, Value, Vec<u8>)| {
+            assert_eq!(status, 200, "{body}");
+            body
+        };
+
+        assert_eq!(
+            ok(rest(&home, "/api/v2/workspaces", "")),
+            workspaces_of(&workspaces)
+        );
+        let listed = projects_of(&workspaces, "work").expect("the projects");
+        assert_eq!(listed["projects"][0]["missing"], json!(false), "{listed}");
+        assert_eq!(ok(rest(&home, &format!("{v2}/projects"), "")), listed);
+        let found = search_in(&workspaces, "work", "needle").expect("the search");
+        assert_eq!(found, json!({"abcd1234": ["T-1"]}));
+        assert_eq!(ok(rest(&home, &format!("{v2}/search"), "q=needle")), found);
+        let filters = TaskFilters {
+            status: vec!["todo".into()],
+            ..TaskFilters::default()
+        };
+        let tasks = tasks_of(&workspaces, "work", "abcd1234", filters).expect("the tasks");
+        assert_eq!(ok(rest(&home, &format!("{p}/tasks"), "status=todo")), tasks);
+        assert_eq!(
+            ok(rest(&home, &format!("{p}/claims"), "")),
+            claims_of(&workspaces, "work", "abcd1234").expect("the claims")
+        );
+        assert_eq!(
+            ok(rest(&home, &format!("{p}/worktrees"), "")),
+            worktrees_of(&workspaces, "work", "abcd1234").expect("the worktrees")
+        );
+        assert_eq!(
+            ok(rest(&home, &format!("{p}/documents"), "path=README.md")),
+            document_of(&workspaces, "work", "abcd1234", "README.md").expect("the document")
+        );
+        let (status, _, bytes) = rest(&home, &format!("{p}/files"), "path=pixel.png");
+        let image = file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("the image");
+        assert_eq!((status, bytes), (200, image.data));
+        let (status, _, bytes) = rest(&home, &format!("{p}/logo"), "");
+        let logo = logo_of(&workspaces, "work", "abcd1234")
+            .expect("the logo")
+            .expect("a logo");
+        assert_eq!((status, bytes), (200, logo.data));
+
+        // Refusals agree too
+        assert_eq!(rest(&home, "/api/v2/workspaces/nope/projects", "").0, 404);
+        assert_eq!(
+            tasks_of(&workspaces, "work", "ffff0000", TaskFilters::default()),
+            Err(AppError::NotFound("unknown project".into()))
+        );
+        assert_eq!(
+            rest(&home, &format!("{v2}/projects/ffff0000/tasks"), "").0,
+            404
+        );
+        std::fs::remove_dir_all(&home).expect("clean up");
     }
 
     #[test]
@@ -114,39 +275,138 @@ mod tests {
         ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
     )]
     fn the_main_windows_capability_lets_it_call_the_commands() {
-        let home = scratch("ipc");
+        let home = a_state_with_a_project("ipc");
+        let workspaces = atm_lib::Workspaces::at(&home);
         let app = tauri::test::mock_builder()
             .manage(AppState::new(atm_lib::Workspaces::at(&home)))
-            .invoke_handler(tauri::generate_handler![version, list_projects])
+            .invoke_handler(tauri::generate_handler![
+                version,
+                list_workspaces,
+                list_projects,
+                search,
+                project_tasks,
+                claims,
+                worktrees,
+                document,
+                file,
+                logo,
+                unsubscribe,
+            ])
             .build(context())
             .expect("the mock app");
         let window = tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
             .build()
             .expect("a window");
-        let request = |command: &str, url: &str| tauri::webview::InvokeRequest {
+        let request = |command: &str, args: &Value, url: &str| tauri::webview::InvokeRequest {
             cmd: command.into(),
             callback: tauri::ipc::CallbackFn(0),
             error: tauri::ipc::CallbackFn(1),
             url: url.parse().expect("a URL"),
-            body: tauri::ipc::InvokeBody::default(),
+            body: tauri::ipc::InvokeBody::Json(args.clone()),
             headers: tauri::http::HeaderMap::default(),
             invoke_key: tauri::test::INVOKE_KEY.to_string(),
         };
-        for (command, expected) in [
-            ("version", serde_json::json!(atm_common::VERSION)),
-            ("list_projects", serde_json::json!([])),
-        ] {
-            let answer =
-                tauri::test::get_ipc_response(&window, request(command, "tauri://localhost"))
-                    .expect(command);
+        let at = json!({"workspace": "work", "project": "abcd1234"});
+        let with = |extra: Value| {
+            let mut args = at.clone();
+            if let (Some(args), Some(extra)) = (args.as_object_mut(), extra.as_object()) {
+                args.extend(extra.clone());
+            }
+            args
+        };
+        // Each command reaches its atm-lib call: it answers what the plain function does. `work` is opened first, as
+        // list_projects (last) opens it
+        workspaces.opened("work").expect("recent.json");
+        let calls = [
+            ("version", json!({}), json!(atm_common::VERSION)),
+            ("list_workspaces", json!({}), workspaces_of(&workspaces)),
+            (
+                "search",
+                json!({"workspace": "work", "q": "needle"}),
+                search_in(&workspaces, "work", "needle").expect("search"),
+            ),
+            (
+                "project_tasks",
+                with(json!({"filters": {"status": ["todo"]}})),
+                tasks_of(
+                    &workspaces,
+                    "work",
+                    "abcd1234",
+                    TaskFilters {
+                        status: vec!["todo".into()],
+                        ..TaskFilters::default()
+                    },
+                )
+                .expect("tasks"),
+            ),
+            (
+                "claims",
+                at.clone(),
+                claims_of(&workspaces, "work", "abcd1234").expect("claims"),
+            ),
+            (
+                "worktrees",
+                at.clone(),
+                worktrees_of(&workspaces, "work", "abcd1234").expect("worktrees"),
+            ),
+            (
+                "document",
+                with(json!({"path": "README.md"})),
+                document_of(&workspaces, "work", "abcd1234", "README.md").expect("document"),
+            ),
+            (
+                "file",
+                with(json!({"path": "pixel.png"})),
+                serde_json::to_value(
+                    file_of(&workspaces, "work", "abcd1234", "pixel.png").expect("file"),
+                )
+                .expect("json"),
+            ),
+            (
+                "logo",
+                at.clone(),
+                serde_json::to_value(logo_of(&workspaces, "work", "abcd1234").expect("logo"))
+                    .expect("json"),
+            ),
+            ("unsubscribe", json!({"id": 99}), json!(false)),
+            (
+                "list_projects",
+                json!({"workspace": "work"}),
+                projects_of(&workspaces, "work").expect("projects"),
+            ),
+        ];
+        for (command, args, expected) in calls {
+            let answer = tauri::test::get_ipc_response(
+                &window,
+                request(command, &args, "tauri://localhost"),
+            )
+            .expect(command);
             assert_eq!(
-                answer.deserialize::<serde_json::Value>().expect("json"),
-                expected
+                answer.deserialize::<Value>().expect("json"),
+                expected,
+                "{command}"
             );
             // A page from anywhere else, CompMD's sandbox frames included, gets nothing (docs/guides/tauri.md)
-            let refused =
-                tauri::test::get_ipc_response(&window, request(command, "https://example.com"));
+            let refused = tauri::test::get_ipc_response(
+                &window,
+                request(command, &args, "https://example.com"),
+            );
             assert!(refused.is_err(), "{command} answered a remote page");
         }
+        // An error is atm's kind, with its message
+        let missing = tauri::test::get_ipc_response(
+            &window,
+            request(
+                "claims",
+                &json!({"workspace": "nope", "project": "x"}),
+                "tauri://localhost",
+            ),
+        )
+        .expect_err("no such workspace");
+        assert_eq!(
+            missing,
+            json!({"kind": "not_found", "message": "unknown workspace"})
+        );
+        std::fs::remove_dir_all(&home).expect("clean up");
     }
 }

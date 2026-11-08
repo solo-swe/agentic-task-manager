@@ -1,7 +1,21 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the app's own commands, nothing else (no core or plugin APIs until a task needs one)",
+  "description": "The main window: the app's own commands, all reads (and their subscriptions), nothing else (no core or plugin APIs until a task needs one)",
   "windows": ["main"],
-  "permissions": ["allow-version", "allow-list-projects"]
+  "permissions": [
+    "allow-version",
+    "allow-list-workspaces",
+    "allow-list-projects",
+    "allow-search",
+    "allow-project-tasks",
+    "allow-claims",
+    "allow-worktrees",
+    "allow-document",
+    "allow-file",
+    "allow-logo",
+    "allow-subscribe-workspace",
+    "allow-subscribe-project",
+    "allow-unsubscribe"
+  ]
 }

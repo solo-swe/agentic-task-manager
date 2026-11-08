@@ -16,7 +16,8 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 - **Commands are thin mappings to atm-lib**, one per atm-lib function ([layered-architecture.md](../layered-architecture.md)
   §5.1). They hold no domain logic: no validation, no queries, no business rules.
-- Commands are `async` and receive the one opened project registry from `tauri::State`.
+- Commands are `async` and receive the user's `Workspaces`, opened once, from `tauri::State`. They mirror the REST
+  API's v2 routes and answer the same, which a test checks per read (ADR-003 §5).
 - Arguments and results are serde DTOs. Errors are typed and serialized as a tagged enum the UI can match on, never as
   plain strings.
 - **TypeScript types are generated** with `tauri-specta`: commands and DTOs are exported to a generated file that the
@@ -25,7 +26,8 @@ atm's own rules for the atm app, the desktop distribution proposed in
 ## Streams
 
 - **One `tauri::ipc::Channel` per subscription** for live data, delivering messages in order, and an `unsubscribe`
-  command to end it.
+  command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
+  subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
 
 ## Security
@@ -39,8 +41,8 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 ## Platform features
 
-- Platform features (notifications, files, …) are host services: traits in atm-lib's `boot` layer, implemented in the
-  app with Tauri plugins.
+- Platform features (notifications, files, …) are host services: traits in atm-lib, implemented in the app with Tauri
+  plugins.
 - Any new plugin is a new dependency and is proposed to the user first ([Rust guide](rust.md)).
 - Installing the agent skills is the same code as `atm agents install`
   ([better-way-to-distribute-atm.md](../better-way-to-distribute-atm.md) §4); the app's button calls it, never a second

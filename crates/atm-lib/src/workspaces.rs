@@ -5,19 +5,22 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use atm_common::Result;
 use atm_common::home::state_dir;
 use atm_common::time::{format_iso, now};
+use atm_common::{Error, Result};
 use atm_db::registry::{DEFAULT_WORKSPACE, FileRegistry, read_recent, workspace_ids, write_recent};
 use serde_json::{Map, Value, json};
 
 use crate::Project;
-use crate::archive::project_stamp;
+use crate::archive::{project_stamp, task_snapshot};
+use crate::documents::{read_document, read_image};
+use crate::query::{Filters, list_claims};
 use crate::settings::get_logo;
 use crate::summary::project_summary;
 use crate::worktrees::working_copies;
+use crate::worktrees::worktree_copies;
 
 /// Task data atm will read into memory to show (a big project's archive is a few MB).
 pub const MAX_SERVED_BYTES: u64 = 100_000_000;
@@ -26,10 +29,10 @@ pub const SEARCH_QUERY_CAP: usize = 200;
 /// Task IDs per project in a search's answer.
 pub const SEARCH_RESULTS_CAP: usize = 200;
 
-/// The workspaces of a state folder.
-#[derive(Debug, Clone)]
+/// The workspaces of a state folder. Each one is opened once and kept (with its summary cache) while it exists.
 pub struct Workspaces {
     home: PathBuf,
+    opened: Mutex<HashMap<String, Arc<Workspace>>>,
 }
 
 impl Workspaces {
@@ -44,7 +47,14 @@ impl Workspaces {
     pub fn at(home: &Path) -> Self {
         Self {
             home: home.to_path_buf(),
+            opened: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The folder their files are in: it changes when one is made, removed or its list changes.
+    #[must_use]
+    pub fn folder(&self) -> PathBuf {
+        self.home.join(atm_db::registry::WORKSPACES_DIR)
     }
 
     /// Their IDs, `default` first.
@@ -53,18 +63,44 @@ impl Workspaces {
         workspace_ids(&self.home)
     }
 
+    /// `{workspaces: [{id, projects: how many}], recent: the one opened last}`.
+    #[must_use]
+    pub fn summary(&self) -> Value {
+        let list: Vec<Value> = self
+            .ids()
+            .iter()
+            .filter_map(|id| self.get(id))
+            .map(|w| json!({"id": w.id(), "projects": w.entries().len()}))
+            .collect();
+        json!({"workspaces": list, "recent": self.recent()})
+    }
+
     /// The workspace `id`, if there is one.
     #[must_use]
-    pub fn get(&self, id: &str) -> Option<Workspace> {
+    pub fn get(&self, id: &str) -> Option<Arc<Workspace>> {
         let registry = FileRegistry::workspace(&self.home, id);
-        (atm_db::registry::valid_workspace_id(id) && registry.exists())
-            .then(|| Workspace::new(registry))
+        if !atm_db::registry::valid_workspace_id(id) || !registry.exists() {
+            return None;
+        }
+        let mut opened = self
+            .opened
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some(Arc::clone(
+            opened
+                .entry(id.to_string())
+                .or_insert_with(|| Arc::new(Workspace::new(registry))),
+        ))
     }
 
     /// The `default` workspace, which every project atm meets joins.
+    ///
+    /// # Panics
+    /// Never: `default` is always there.
     #[must_use]
-    pub fn default_workspace(&self) -> Workspace {
-        Workspace::new(FileRegistry::at(&self.home))
+    pub fn default_workspace(&self) -> Arc<Workspace> {
+        self.get(DEFAULT_WORKSPACE)
+            .expect("default is always there")
     }
 
     /// The workspace opened last, if it is still there; else `default`.
@@ -76,6 +112,19 @@ impl Workspaces {
             .filter(|id| self.get(id).is_some())
             .unwrap_or(DEFAULT_WORKSPACE)
             .to_string()
+    }
+
+    /// Workspace `id` was opened (in the dashboard or the app): remember it, writing only when it wasn't already the
+    /// last opened, so a poll doesn't rewrite the file.
+    ///
+    /// # Errors
+    /// The state folder's lock or `recent.json`.
+    pub fn opened(&self, id: &str) -> Result<()> {
+        let recent = read_recent(&self.home);
+        if recent.get("workspace").and_then(Value::as_str) == Some(id) {
+            return Ok(());
+        }
+        self.set_recent(id, None)
     }
 
     /// The project opened last in workspace `id`, if any.
@@ -149,11 +198,91 @@ impl Listing<'_> {
                     "missing": !shown,
                     "summary": summary,
                     "worktrees": if shown { tree.clone() } else { json!([]) },
+                    // Relative to the dashboard, like the project's files; a new one shows as a new ETag
                     "logo": (logo.is_some() && shown)
-                        .then(|| format!("p/{}/logo", atm_common::py::py_str_opt(entry.get("id")))),
+                        .then(|| self.workspace.logo_route(&atm_common::py::py_str_opt(entry.get("id")))),
                 })
             })
             .collect()
+    }
+}
+
+/// One of a workspace's projects, found by its ID with its data there: what each read about one project (the REST
+/// API's routes, the app's commands) is answered from, so both answer the same.
+pub struct Member {
+    /// Its entry in the workspace (`id`, `name`, `path`, …).
+    pub entry: Value,
+    /// Its store's stamp (`{tasks, archive, claims, head, copies}`), for `ETag`s.
+    pub stamp: Value,
+}
+
+impl Member {
+    /// The project, opened.
+    ///
+    /// # Errors
+    /// As [`Project::open`].
+    pub fn project(&self) -> Result<Project> {
+        Workspace::project(&self.entry)
+    }
+
+    /// Its tasks the filters keep, each with its derived values, and in the same snapshot its meta and how big its
+    /// task data is; read tolerantly (a malformed task file is shown with what is wrong with it, T-377).
+    ///
+    /// # Errors
+    /// `TooLarge` for task data over [`MAX_SERVED_BYTES`]; a filter naming no such sprint or release; an unreadable
+    /// task file.
+    pub fn tasks(&self, filters: &Filters) -> Result<Value> {
+        if too_large(&self.stamp) {
+            return Err(Error::TooLarge(format!(
+                "larger than {} MB",
+                MAX_SERVED_BYTES / 1_000_000
+            )));
+        }
+        task_snapshot(&Workspace::project_tolerant(&self.entry)?, filters)
+    }
+
+    /// The claims of all its worktrees, from the shared claims store.
+    #[must_use]
+    pub fn claims(&self) -> Vec<Value> {
+        self.project().map(|p| list_claims(&p)).unwrap_or_default()
+    }
+
+    /// Its working copies, main first, and the tasks that differ in the others.
+    #[must_use]
+    pub fn worktrees(&self) -> Vec<Value> {
+        self.project()
+            .map(|p| worktree_copies(&p))
+            .unwrap_or_default()
+    }
+
+    /// Its logo's file and content type, if it has one.
+    #[must_use]
+    pub fn logo(&self) -> Option<(PathBuf, &'static str)> {
+        Workspace::logo(&self.entry)
+    }
+
+    /// The document at `path` in its working copy, as the viewer shows it.
+    ///
+    /// # Errors
+    /// A path that is malformed, not there, too large or one atm doesn't show.
+    pub fn document(&self, path: &str) -> Result<Value> {
+        read_document(self.project()?.vcs().as_ref(), path)
+    }
+
+    /// The image at `path` in its working copy, and its content type.
+    ///
+    /// # Errors
+    /// As [`Member::document`], and a file that isn't an image.
+    pub fn image(&self, path: &str) -> Result<(Vec<u8>, &'static str)> {
+        read_image(self.project()?.vcs().as_ref(), path)
+    }
+
+    /// The folders to watch for its data to change.
+    #[must_use]
+    pub fn watch_folders(&self) -> Vec<PathBuf> {
+        self.project()
+            .map(|p| p.store().watch_folders())
+            .unwrap_or_default()
     }
 }
 
@@ -209,6 +338,17 @@ impl Workspace {
         self.registry.id()
     }
 
+    /// Where its project `id`'s logo is served, relative to the dashboard: `p/<id>/logo` in `default` (the v1
+    /// address), `api/v2/workspaces/<w>/projects/<id>/logo` in another.
+    #[must_use]
+    pub fn logo_route(&self, id: &str) -> String {
+        if self.id() == DEFAULT_WORKSPACE {
+            format!("p/{id}/logo")
+        } else {
+            format!("api/v2/workspaces/{}/projects/{id}/logo", self.id())
+        }
+    }
+
     /// Its projects' entries as its file has them now (read without the lock, on every request).
     #[must_use]
     pub fn entries(&self) -> Vec<Value> {
@@ -259,6 +399,39 @@ impl Workspace {
         let project = Self::project_tolerant(entry).ok()?;
         let (found, _) = get_logo(&project).ok()?;
         found.map(|logo| (logo.file, logo.content_type))
+    }
+
+    /// Its project `id`, there and readable: where a request about one project starts.
+    ///
+    /// # Errors
+    /// `NotFound`: "unknown project" when it has no such project, "not found" when the project's task data is missing
+    /// or refused.
+    pub fn member(&self, id: &str) -> Result<Member> {
+        let entry = self
+            .find(id)
+            .ok_or_else(|| Error::NotFound("unknown project".into()))?;
+        let stamp = Self::data_stamp(&entry).ok_or_else(|| Error::NotFound("not found".into()))?;
+        Ok(Member { entry, stamp })
+    }
+
+    /// The folders to watch for its list to change: its file's, and each listed project's.
+    #[must_use]
+    pub fn watch_folders(&self) -> Vec<PathBuf> {
+        let mut folders: Vec<PathBuf> = self
+            .registry
+            .file()
+            .parent()
+            .map(Path::to_path_buf)
+            .into_iter()
+            .collect();
+        for entry in self.entries() {
+            if let Ok(project) = Self::project(&entry) {
+                folders.extend(project.store().watch_folders());
+            }
+        }
+        folders.sort();
+        folders.dedup();
+        folders
     }
 
     fn summary(&self, entry: &Value, stamp: &Value) -> Value {

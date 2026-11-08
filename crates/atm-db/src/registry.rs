@@ -416,7 +416,9 @@ impl FileRegistry {
         self.workspace == DEFAULT_WORKSPACE || self.file().is_file()
     }
 
-    fn file(&self) -> PathBuf {
+    /// Its file.
+    #[must_use]
+    pub fn file(&self) -> PathBuf {
         workspace_file(&self.home, &self.workspace)
     }
 

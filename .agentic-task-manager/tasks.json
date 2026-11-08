@@ -19990,7 +19990,7 @@
       "description": "The app's commands and the REST API's v2 routes, both thin over atm-lib's `Workspaces`, `Workspace` and `Project` ([ADR-003](docs/adr/ADR-003-workspaces.md) §5; [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2).\n\n## Routes and commands\n| v2 route | App command |\n|---|---|\n| `GET /api/v2/workspaces` (with the last opened) | `list_workspaces` |\n| `GET /api/v2/workspaces/<w>/projects` | `list_projects(w)` |\n| `GET /api/v2/workspaces/<w>/search?q=` | `search(w, q)` |\n| `GET /api/v2/workspaces/<w>/projects/<p>/tasks` | `project_tasks(w, p, filters)` |\n| `…/projects/<p>/documents`, `files`, `claims`, `worktrees`, `logo` | `document`, `file`, `claims`, `worktrees`, `logo` |\n\n- Opening a workspace records it as the last opened (`recent.json`): the one write, a choice of view (the security review covers it).\n- v1 and `/p/<p>/…` stay, as the `default` workspace.\n\n## Live changes\nA Tauri channel per subscription (a workspace's list or a project), with `unsubscribe`. A file watcher on what the store reports for the project: the `notify` crate 8.2.1 and `notify-debouncer-full` 0.7.0 (approved, with CC0-1.0 in `deny.toml`). Watch folders, not files; debounce.\n\n## Tests\n- Command wiring on Tauri's mock runtime.\n- One test per read that the REST route and the command return the same data.\n- `docs/security-architecture.md` updated for the new routes and commands.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-455",
         "T-492"
@@ -20001,7 +20001,7 @@
         "deny.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T10:18:27Z",
+      "updated_at": "2026-11-08T10:49:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20018,7 +20018,9 @@
           "text": "Paused before any code: the multi-project reads need a home first. Workspaces are designed in T-489 (ADR-003). notify 8.2.1 and notify-debouncer-full 0.7.0 are approved, with CC0-1.0 in deny.toml.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-08T10:49:23Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-457",
@@ -21649,7 +21651,7 @@
       "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §4, step 3.\n\n## Change\n- The CLI, the API and the app depend on atm-lib (and atm-common) only. The `atm db` group's store operations go through `project.store_maintenance()`.\n- The pid and signal helpers move into the CLI. `hook_project` and what only it used are deleted.\n- `crates/atm-boot/` is removed.\n- Update `docs/layered-architecture.md` (§1, §3, §5.1, §11.2) and AGENTS.md's crate list to the new layers. The layer check (which crate may depend on which) is updated so a front end can't reach atm-db or atm-vcs.\n\n## Tests\nEverything passes unchanged: cargo test, the CLI suite and e2e.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-491"
       ],
@@ -21663,7 +21665,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:38:53Z",
+      "updated_at": "2026-11-08T10:49:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21674,7 +21676,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T10:38:53Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "1da3dd60d9d5c223dfacb30efe040f87ebcc0067",
+      "completed_at": "2026-11-08T10:49:18Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T10:49:18Z",
+          "kind": "outcome",
+          "text": "atm-boot removed; CLI, API and app depend on atm-lib + atm-common only (new `tests/scripts/layers.test.mjs` checks the Cargo.toml files). `store_maintenance()` for db/config/lock-test, `join_default_workspace()` for registering (the hook keeps its cheap path), actor in `atm_lib::actor`, pid helpers in `atm-cli/src/process.rs`, `hook_project` gone. Suite 584 pass, e2e 411 pass.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-493",

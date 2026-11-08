@@ -53,6 +53,9 @@ tauri-plugin-single-instance = "2.5.5"
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
+# The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced
+notify = "8.2.1"
+notify-debouncer-full = "0.7.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

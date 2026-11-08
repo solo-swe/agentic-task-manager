@@ -302,6 +302,25 @@ impl Store for JsonGitStore {
         worktrees::worktrees(&self.paths.root)
     }
 
+    fn watch_folders(&self) -> Vec<std::path::PathBuf> {
+        let relative = self.relative_tasks();
+        let mut folders = vec![
+            self.paths.dir.clone(),
+            crate::jsongit::claims::claims_dir(&self.paths),
+        ];
+        for tree in worktrees::worktrees(&self.paths.root) {
+            if let Some(path) = tree.get("path").and_then(Value::as_str)
+                && let Some(dir) = std::path::Path::new(path).join(&relative).parent()
+            {
+                folders.push(dir.to_path_buf());
+            }
+        }
+        folders.sort();
+        folders.dedup();
+        folders.retain(|f| f.is_dir());
+        folders
+    }
+
     fn copy_tasks(&self, folder: &str) -> Vec<Value> {
         let data = read_json(&std::path::Path::new(folder).join(self.relative_tasks()));
         data.as_ref()

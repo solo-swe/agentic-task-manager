@@ -32,9 +32,14 @@ tauri-plugin-single-instance.workspace = true
 specta.workspace = true
 tauri-specta.workspace = true
 specta-typescript.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
+# The agreement test: each command answers what its REST route does (ADR-003 §5)
+atm-api.workspace = true
+axum.workspace = true
 
 [lints]
 workspace = true

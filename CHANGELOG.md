@@ -32,6 +32,16 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **Workspaces in the REST API, and the app's commands over them** (T-456, ADR-003 §5): `GET /api/v2/workspaces`
+  (the workspaces, how many projects each lists, the last opened) and, per workspace, `…/<w>/projects` (which records
+  it as the last opened in `recent.json`, only when that changes), `…/<w>/search` and
+  `…/<w>/projects/<p>/tasks|documents|files|claims|worktrees|logo`. The v1 routes and `/p/<p>/…` are the `default`
+  workspace's, unchanged. The app's commands mirror them (`list_workspaces`, `list_projects`, `search`,
+  `project_tasks`, `claims`, `worktrees`, `document`, `file`, `logo`), through the same atm-lib reads (`Workspace`,
+  `Member`), and a test checks each command answers what its route does. Live changes: `subscribe_workspace` and
+  `subscribe_project` send on a channel when the folders the store reports change (`Store::watch_folders`; notify
+  8.2.1 and notify-debouncer-full 0.7.0, approved, CC0-1.0 allowed in `deny.toml`), `unsubscribe` ends one. The main
+  window's capability lists exactly these commands; the commands' JSON answers are typed `Json` for TypeScript.
 - **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one
   instance (opening it again focuses its window), the user's registry of projects in its state, two commands
   (`version`, `list_projects`) mapping to atm, their TypeScript types generated with tauri-specta

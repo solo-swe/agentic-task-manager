@@ -1032,6 +1032,70 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
+  test('v2 (ADR-003 §5): the workspaces, each one’s projects, search and project routes; v1 is the default workspace', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project(TASKS);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const json = async (p) => {
+      const r = await fetch(`http://localhost:${port}${p}`);
+      return [r.status, await r.json()];
+    };
+    const same = ({ generated_at, ...rest }) => rest;
+
+    let [status, body] = await json('/api/v2/workspaces');
+    assert.equal(status, 200);
+    assert.deepEqual(same(body), { workspaces: [{ id: 'default', projects: 1 }], recent: 'default' });
+
+    // A second workspace listing the same project (the `atm workspace` commands come with T-493)
+    const folder = path.join(atmHome, 'workspaces');
+    fs.copyFileSync(path.join(folder, 'default.json'), path.join(folder, 'work.json'));
+    [, body] = await json('/api/v2/workspaces');
+    assert.deepEqual(
+      body.workspaces.map((w) => w.id),
+      ['default', 'work'],
+    );
+
+    // v1 is the default workspace's v2
+    assert.deepEqual(same((await json('/api/v2/workspaces/default/projects'))[1]), same((await json('/api/projects'))[1]));
+
+    // Opening a workspace's list records it as the last opened
+    [status, body] = await json('/api/v2/workspaces/work/projects');
+    assert.equal(status, 200);
+    assert.deepEqual(
+      body.projects.map((p) => [p.id, p.missing]),
+      [['abcd1234', false]],
+    );
+    assert.equal((await json('/api/v2/workspaces'))[1].recent, 'work');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(atmHome, 'recent.json'), 'utf8')).workspace, 'work');
+
+    // A project's routes answer as v1's do
+    const pairs = [
+      ['/api/v1/projects/abcd1234/tasks', '/api/v2/workspaces/work/projects/abcd1234/tasks'],
+      ['/p/abcd1234/claims.json', '/api/v2/workspaces/work/projects/abcd1234/claims'],
+      ['/p/abcd1234/worktrees.json', '/api/v2/workspaces/work/projects/abcd1234/worktrees'],
+      ['/api/search?q=serve', '/api/v2/workspaces/work/search?q=serve'],
+    ];
+    for (const [v1, v2] of pairs) {
+      const [a, b] = [await json(v1), await json(v2)];
+      assert.equal(b[0], 200, v2);
+      assert.deepEqual(same(b[1]), same(a[1]), v2);
+    }
+
+    const error = async (p) => {
+      const [s, b] = await json(p);
+      return [s, b.error];
+    };
+    assert.deepEqual(await error('/api/v2/workspaces/nope/projects'), [404, 'unknown workspace']);
+    assert.deepEqual(await error('/api/v2/workspaces/..%2Fx/projects'), [404, 'unknown workspace']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/ffff0000/tasks'), [404, 'unknown project']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/tasks.json'), [404, 'not found']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/logo'), [404, 'no logo']);
+    assert.deepEqual(await error('/api/v2/workspaces/work'), [404, 'not found']);
+    atm(['service', 'stop'], root);
+  });
+
   test("the dashboard's pages (T-429): the same page, with its CSP, at each of its paths; nothing else under them", async () => {
     const atm = atmIn(home());
     const root = project(TASKS);

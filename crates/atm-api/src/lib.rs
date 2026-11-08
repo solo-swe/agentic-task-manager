@@ -9,7 +9,8 @@
 
 mod assets;
 mod pages;
-mod routes;
+/// The read API's routes: public so the app's tests can check its commands answer the same (ADR-003 §5).
+pub mod routes;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener, TcpStream};
 

@@ -6,7 +6,21 @@
 //! (`STATUS_ENTRYPOINT_NOT_FOUND`); the linker embeds it in every executable of the crate instead.
 
 fn main() {
-    let manifest = tauri_build::AppManifest::new().commands(&["version", "list_projects"]);
+    let manifest = tauri_build::AppManifest::new().commands(&[
+        "version",
+        "list_workspaces",
+        "list_projects",
+        "search",
+        "project_tasks",
+        "claims",
+        "worktrees",
+        "document",
+        "file",
+        "logo",
+        "subscribe_workspace",
+        "subscribe_project",
+        "unsubscribe",
+    ]);
     let mut attributes = tauri_build::Attributes::new().app_manifest(manifest);
     let msvc = std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|env| env == "msvc");
     if msvc {
