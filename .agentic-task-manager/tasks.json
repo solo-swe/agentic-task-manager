@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 503,
+    "next_id": 504,
     "labels": [
       {
         "id": "architecture",
@@ -20793,7 +20793,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T22:32:25Z",
-      "updated_at": "2026-11-08T23:08:36Z",
+      "updated_at": "2026-11-08T23:18:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20808,7 +20808,7 @@
       ],
       "started_at": "2026-11-08T22:32:28Z",
       "started_by": "claude:34798264",
-      "commit": "c227ed7a28f57ffbd1ced86931b9dd840199355a",
+      "commit": "356846d6544f1c897ecd62c4bf56952bae246e6a",
       "review_requested_at": "2026-11-08T22:33:39Z",
       "review_state": "waiting",
       "notes": [
@@ -20818,6 +20818,48 @@
           "text": "Config only: frame-ancestors out of the app CSP. Check in the real window: open a task with a mermaid block (cargo run -p atm-app after pnpm run build in dashboard/); the diagram should draw. If it stays code or blank, the frame scripts are refused (opaque origin vs Tauri ACAO): decide the next step together.",
           "by": "claude:34798264"
         }
+      ]
+    },
+    {
+      "id": "T-503",
+      "name": "The app serves CompMD's folder as atm serve does (Tauri's response hook)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "Build the proposal of [CompMD in the atm app](docs/tauri-compmd-design.md#3-proposal-the-app-serves-compmds-folder-as-atm-serve-does), once Hakan has reviewed the document. Mermaid diagrams in the app need it (T-502).\n\n## Steps (§3.5)\n1. **A check first:** with the hook in place, does WebKit let the opaque-origin frame load its modules from `tauri://localhost` with `Access-Control-Allow-Origin: *`? Checked by hand with Hakan in `cargo run -p atm-app`. If it doesn't, stop and go back to the document (§3.5, step 3).\n2. **The change (§3.1):**\n   - one rule for CompMD's files' headers in `atm-common`, used by `atm-api`'s `assets.rs` and by the app;\n   - the main window built in `setup` from its config entry, with `on_web_resource_request`;\n   - the hook changes only responses under `/assets/compmd/`;\n   - the page's policy back to I13's parity (`frame-ancestors 'none'` again).\n3. **Development (§3.3):** settle with Hakan which way (`cargo run -p atm-app` for CompMD's output, or `devUrl` to the Vite dev server).\n\n## Tests (§3.4)\nThe hook's rule; `atm serve` and the app using the one function; the tests on what Tauri serves; by hand in a window, both builds, with T-502's test diagrams and Help.\n\n## Docs\n`docs/security-architecture.md` I26 (the frames' headers in the app), `docs/guides/tauri.md`, the design document's status.",
+      "requirements": [
+        "[CompMD in the atm app, §3](docs/tauri-compmd-design.md#3-proposal-the-app-serves-compmds-folder-as-atm-serve-does)"
+      ],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-common/src/assets.rs",
+        "crates/atm-api/src/assets.rs",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/tauri.conf.json",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md",
+        "docs/tauri-compmd-design.md"
+      ],
+      "created_at": "2026-11-08T23:19:40Z",
+      "updated_at": "2026-11-08T23:19:40Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T23:19:40Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "docs"
+      ],
+      "related": [
+        "T-502"
       ]
     }
   ]
