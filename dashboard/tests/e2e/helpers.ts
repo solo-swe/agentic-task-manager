@@ -94,11 +94,13 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
-/** This checkout's atm (`cargo build` first), as tests/scripts runs it (T-478) */
-const ATM = path.resolve(
-  import.meta.dirname,
-  `../../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`,
-);
+/**
+ * This checkout's atm (`cargo build` first), as tests/scripts runs it (T-478), or `ATM_E2E_BIN`: the Docker screenshot
+ * scripts run a Linux build of it there (`pnpm run build:atm-linux`, into `target/linux/`; T-485)
+ */
+const ATM = process.env.ATM_E2E_BIN
+  ? path.resolve(process.env.ATM_E2E_BIN)
+  : path.resolve(import.meta.dirname, `../../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`);
 
 /** The command line that runs atm with `args` */
 function atm(args: string[]): string[] {

@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [
         "T-454"
       ],
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:09:15Z",
+      "updated_at": "2026-11-08T08:18:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19957,7 +19957,14 @@
         }
       ],
       "started_at": "2026-11-08T08:09:15Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "f148c2e96fe442aacf103b7a78ce3621690d3f5c",
+      "waiting_on": "user",
+      "questions": [
+        "cargo deny: allow the licences BSD-2-Clause (Inflector, via specta) and MPL-2.0 (cssparser, cssparser-macros, dtoa-short, selectors via tauri-utils; option-ext via dirs) in deny.toml?",
+        "cargo deny: ignore five “unmaintained” advisories (no vulnerability, no fixed version): paste (RUSTSEC-2024-0436, via specta), proc-macro-error (RUSTSEC-2024-0370, via gtk on Linux), zbus_names, zvariant, zvariant_derive (RUSTSEC-2026-0370/0371/0372, via the single-instance plugin on Linux), each with its reason in deny.toml?"
+      ],
+      "blocked_at": "2026-11-08T08:18:39Z"
     },
     {
       "id": "T-456",
@@ -21298,7 +21305,7 @@
       "description": "Since T-478 the e2e fixture runs the binary (`tests/e2e/helpers.ts`, `target/debug/atm`). `pnpm run test:e2e:visual` and `test:e2e:visual:update` run Playwright in a Linux container with the checkout mounted, so on a Mac they run the macOS binary, and every visual test fails with `target/debug/atm: 1: Syntax error: \"(\" unexpected`. CI is fine: its visual job downloads the `atm-linux` artifact.\n\n## Change\n- Give the helper a way to use another binary (for example an `ATM_E2E_BIN` variable, defaulting to `target/debug/atm`).\n- Make the Docker scripts use a Linux atm built for this checkout without fetching anything new into the container, for example a Linux build in its own target folder (a `cargo` container or `cross`, with approval if it adds a tool), or CI's `atm-linux` artifact of the branch's run as `AGENTS.md` describes for baselines.\n- `AGENTS.md`'s screenshot section says what to run.\n\n## Tests\n`pnpm run test:e2e:visual` passes on a Mac with Docker running.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21306,7 +21313,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T08:08:49Z",
+      "updated_at": "2026-11-08T08:18:47Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
@@ -21333,7 +21340,9 @@
           "text": "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1). → (1): build it in the official rust:1.99.0 image, pinned by digest, into target/linux/.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-08T08:18:47Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-486",

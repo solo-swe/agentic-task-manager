@@ -86,7 +86,8 @@ Commands (run in `dashboard/`):
 - `pnpm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
 - `pnpm test` / `pnpm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `pnpm run test:e2e` — build, then the Playwright e2e suite without the screenshots
-- `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
+- `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines), against a
+  Linux atm that `pnpm run build:atm-linux` builds first (in the pinned Rust image, into `target/linux/`)
 - `pnpm run check` — the release notes' entries (`scripts/check-versions.mjs`), svelte-check, ESLint, Prettier
 - `pnpm run test:scripts` — atm's test suite (builds the binary; see below)
 - `pnpm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
@@ -127,7 +128,10 @@ atm ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides
   regenerated once a sprint, in the release task. `pnpm run verify` runs everything, the screenshots too.
 - **Screenshots** (`visual.spec.ts`) have **Linux baselines only**, made and checked in the pinned Playwright
   container, the same as CI's; on macOS the tests skip. With Docker running: `pnpm run test:e2e:visual` compares,
-  `pnpm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). They are of
+  `pnpm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). Both first
+  build a Linux atm for the fixture (`pnpm run build:atm-linux`: the official `rust` image at the pinned toolchain,
+  pinned by digest, into `target/linux/`; the Playwright container runs it as `ATM_E2E_BIN`), as CI's e2e job runs its
+  `atm-linux` build; bump that image's digest with the toolchain (T-485). They are of
   parts (a panel, a menu, a card, a theme's Kanban column) rather than whole pages, so one change touches few; a
   few dozen differing pixels pass (anti-aliasing), a real change doesn't.
 - A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are

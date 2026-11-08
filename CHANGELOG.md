@@ -18,6 +18,10 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `@tauri-apps/cli` (the icons, from `branding/atm-logo.png`).
 
 ### Fixed
+- **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
+  macOS `target/debug/atm` inside the Linux Playwright container since T-478, and every test failed. They now first
+  run `pnpm run build:atm-linux`, which builds the CLI in the official `rust:1.99.0-bookworm` image (pinned by digest,
+  approved) into `target/linux/`, and the fixture takes it from `ATM_E2E_BIN`.
 - **A release whose tasks merge in several PRs is released** (T-486): `atm vcs pushed --pr N` releases a planned
   release once every one of its tasks is merged, in that PR or an earlier one, with `released_at` its last merge;
   before, only the tasks of PR N counted, so a sprint that reached `main` in two PRs (0.32.0: #39, then #40) stayed
