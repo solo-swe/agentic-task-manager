@@ -129,7 +129,7 @@ under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-
   `cargo build`) drive the binary exactly as users run it, each file in its own process with a watchdog. Prefer
   data-driven scenarios in `tests/scripts/scenarios/*.json` (format at the top of `scenarios.test.mjs`); use
   `*.test.mjs` with `helpers.mjs` for things scenarios can't express (servers, concurrency, git merges). CI runs the
-  suite on Linux and macOS, and on Windows once T-480 is done.
+  suite on Linux and macOS, and on Windows once T-482 is done.
 - The e2e suite's fixture gets its task views and summaries from the binary too (`pnpm run test:e2e` builds it).
 
 ## Testing conventions

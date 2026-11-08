@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 482,
+    "next_id": 483,
     "labels": [
       {
         "id": "architecture",
@@ -21611,7 +21611,7 @@
         "docs/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-07T23:09:25Z",
+      "updated_at": "2026-11-08T00:46:13Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22668,7 +22668,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-07T23:09:20Z",
-      "updated_at": "2026-11-08T00:30:27Z",
+      "updated_at": "2026-11-08T00:38:46Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -22691,7 +22691,7 @@
       ],
       "started_at": "2026-11-07T23:46:53Z",
       "started_by": "claude:34798264",
-      "commit": "254dbdfd3ff450e85d1dbf4ea3028e7c0ef59040"
+      "commit": "e2e124b77cb701df90c03af4f2c02c42c0145729"
     },
     {
       "id": "T-481",
@@ -22716,6 +22716,37 @@
       "updated_by": "claude:34798264",
       "components": [
         "cli"
+      ]
+    },
+    {
+      "id": "T-482",
+      "name": "Windows: the rest of the suite (claim hold watcher, serve, dev server), and the suite back in Windows CI",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Left over from T-480 (on `dev/0.33.0-switch`). T-480 took the suite on CI's Windows runner from 40 failures and two hanging files to a handful; CI's Windows job runs `cargo test` but not the suite until this task.\n\n## Still failing (CI run 42429818032, before T-480's last push)\n- `claims.test.mjs`: `claim hold`'s watcher doesn't end with its shell on Windows (its folder can't be removed afterwards, `EPERM`). The watcher follows its shell by process ID; under Git's `sh` (MSYS) the Windows parent of `atm.exe` may not be the shell. Likely also what keeps T-481's folder busy.\n- `serve.test.mjs`: still runs into the watchdog (400 s on Windows); `start, reuse, status, stop` failed on the home ID (fixed in T-480's last push, `home_id` hashes the shown path: not yet seen on CI).\n- `claims.test.mjs` `worktrees of one clone share claims`: path spelling (fixed in T-480's last push, not yet seen on CI).\n- `dev-api.test.mjs`: the dev server's test on Windows (the API server's restart after a rebuild, and its stop when Vite is ended at once).\n- `stress.test.mjs`: T-481 (skipped on Windows until then).\n\n## Done when\nThe suite passes on CI's Windows runner, and `.github/workflows/ci.yml` runs it there again (the `if` on the suite step goes).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-481"
+      ],
+      "files": [
+        "tests/scripts/",
+        "crates/atm-cli/src/commands/claim.rs",
+        "dashboard/build/dev-api.ts",
+        ".github/workflows/ci.yml"
+      ],
+      "created_at": "2026-11-08T00:45:52Z",
+      "updated_at": "2026-11-08T00:45:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "cli",
+        "ci"
       ]
     }
   ]

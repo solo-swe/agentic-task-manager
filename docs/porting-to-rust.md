@@ -121,7 +121,7 @@ becomes redundant (§6).
   (`ATM_IMPL=rust` picks the Rust binary), and CI runs both on macOS, Linux and Windows (Python on its current
   matrix). A scenario that Rust doesn't pass yet is listed, by file, in one expected-failures list that only shrinks.
   At the switch (T-478, with T-454) the list was empty: the suite runs only against the binary, and the Python-only
-  tests went. On Windows it runs once T-480 makes it pass there.
+  tests went. On Windows it runs once T-482 makes it pass there.
 - **Slices, not layers** ([layered-architecture.md](layered-architecture.md) §9): each step ports one area through
   every crate it needs, with its scenarios. The order:
   1. the workspace skeleton: crates, lints, cargo-deny, CI on three platforms, `atm version`, the suite's

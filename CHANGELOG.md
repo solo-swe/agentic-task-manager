@@ -36,7 +36,9 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   8.3 short name), so a file under the project is never "outside the repository" (atm-common's `pathtext`: `Shown`,
   `real`, `canonical`); `HOME` is the home folder when set, as on Unix; text files are LF in every checkout (a root
   `.gitattributes`); and `atm service` and `atm claim hold` start their background process without the caller's
-  pipes (`windows-sys`, the one `unsafe` in atm, approved), so the shell that ran them doesn't wait for it.
+  pipes (`windows-sys`, the one `unsafe` in atm, approved), so the shell that ran them doesn't wait for it. The lock
+  retries a folder Windows still has pending delete. On CI's Windows runner the suite went from 40 failures to a
+  handful; it stays off there until T-482 (the `claim hold` watcher, serve, the dev server) and T-481 (stress).
 
 ## [0.32.0] - 2026-11-06
 
