@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 484,
+    "next_id": 485,
     "labels": [
       {
         "id": "architecture",
@@ -21120,6 +21120,46 @@
         }
       ],
       "sprint": "The atm app"
+    },
+    {
+      "id": "T-484",
+      "name": "Release 0.33.0: atm as the Rust CLI only",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "distribution"
+      ],
+      "description": "The first release without the plugin: `dev/0.33.0` to `main`, tagged, built, signed and published, with the formula and the first export of the skills to `solo-swe/skills`. The release process is in [packaging/README.md](packaging/README.md).\n\n## On `dev/0.33.0`\n- **Version:** `0.33.0` in `Cargo.toml` (`[workspace.package]`), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.33.0] - <date>`: T-453, T-454, T-477, T-478, T-480, and how plugin users move.\n- **WHATS-NEW.md:** a `## [0.33.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): atm is now its own program (Homebrew or a download), its skills go into your agents with one command, and your projects and dashboard carry over.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): the skills and `docs/agent/` changed, so do a written review of the skills in §3.3 instead of the live sandbox run. Check that the T-454 entry describes what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.33.0` to `main`. The ruleset's required checks (the three Rust jobs, lint and unit tests, Playwright) must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.33.0 --push` on an up-to-date `main`; watch the Release run.\n- Check the draft (six assets: five archives and `SHA256SUMS`), then publish it.\n- Watch the Homebrew and Skills workflows. This is the Skills workflow's first run: check `solo-swe/skills` for the `skills/atm-*` folders and the `atm-v0.33.0` tag.\n- Check `brew upgrade solo-swe/tap/atm` gives 0.33.0, and that `atm agents install` writes the skills.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-453",
+        "T-454",
+        "T-477",
+        "T-478",
+        "T-480"
+      ],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-08T06:48:11Z",
+      "updated_at": "2026-11-08T06:48:11Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The Rust port",
+          "from": "2026-11-08T06:48:11Z"
+        }
+      ],
+      "sprint": "The Rust port",
+      "with": "user"
     }
   ]
 }
