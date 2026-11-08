@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-454"
       ],
@@ -19931,7 +19931,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:36:48Z",
+      "updated_at": "2026-11-08T08:52:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19965,11 +19965,19 @@
           "kind": "answer",
           "text": "cargo deny: allow the licences BSD-2-Clause (Inflector, via specta) and MPL-2.0 (cssparser, cssparser-macros, dtoa-short, selectors via tauri-utils; option-ext via dirs) in deny.toml? → Yes: allow BSD-2-Clause and MPL-2.0.; cargo deny: ignore five “unmaintained” advisories (no vulnerability, no fixed version): paste (RUSTSEC-2024-0436, via specta), proc-macro-error (RUSTSEC-2024-0370, via gtk on Linux), zbus_names, zvariant, zvariant_derive (RUSTSEC-2026-0370/0371/0372, via the single-instance plugin on Linux), each with its reason in deny.toml? → Yes: ignore all five unmaintained advisories, each with its reason in deny.toml.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:52:35Z",
+          "kind": "outcome",
+          "text": "The Tauri skeleton in `app/src-tauri/`: single instance, the registry in state, `version` and `list_projects` with tauri-specta types (`.generated/app/bindings.ts`), a least-privilege capability (tested: remote pages refused), the dashboard CSP with IPC-only `connect-src`. In cargo build/test on all three platforms (CI run 42464218268 green); the IPC test is ignored on Windows until T-482. deny.toml exceptions approved.",
+          "by": "claude:34798264"
         }
       ],
-      "commit": "97aa3496f2465bbe7697a77469042eb9bdf65747",
+      "commit": "4ccf25125753601c9087d0c3912b4325ac1a4bab",
       "started_at": "2026-11-08T08:29:24Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T08:52:35Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-456",
