@@ -1,15 +1,18 @@
 import { browserFetch } from './api/http';
+import { apiWorkspace, DEFAULT_WORKSPACE, setApiWorkspace } from './api/workspace';
 import { loadClaims, type ClaimMap } from './claims';
 import {
   DEFAULT_PROJECT_NAME,
   loadArchive,
   loadProjects,
   loadTasks,
+  loadWorkspaces,
   newBuildReady,
   serverBuild,
   type LoadedTasks,
   type ProjectEntry,
   type Validators,
+  type WorkspaceEntry,
 } from './load';
 import { compareVersions } from './changelog';
 import { projectComponents } from './components';
@@ -58,7 +61,7 @@ import {
   type OverviewTab,
   type Route,
 } from './routes';
-import { addressParams, formatAddress } from './address';
+import { addressParams, formatAddress, withWorkspace, workspaceOf } from './address';
 import type { BoardScope } from './allboard';
 import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
@@ -94,6 +97,10 @@ function releaseNotesUnseen(): boolean {
 }
 
 export class DashboardState {
+  /** The workspace shown (ADR-003 §5): its address's `/w/<w>`, else `default` */
+  workspace = $state(workspaceOf(currentAddress()));
+  /** The workspaces the server has (api/v2/workspaces); `default` alone until they load, or from an older server */
+  workspaces = $state.raw<WorkspaceEntry[]>([{ id: DEFAULT_WORKSPACE, projects: 0 }]);
   /** The projects the server lists (api/projects) */
   projects = $state.raw<ProjectEntry[]>([]);
   /** True once the project list has loaded */
@@ -356,6 +363,16 @@ export class DashboardState {
   /** Re-fetch the project list and decide the page from the URL; returns the project to load, or null for a page
    * without one (the overview, how to add a project, an unknown project). */
   private async refreshProjects(): Promise<string | null> {
+    // Another workspace: its own projects, from its own routes; a project of the same ID there is another project
+    const workspace = workspaceOf(currentAddress());
+    if (workspace !== apiWorkspace()) {
+      setApiWorkspace(workspace);
+      this.#projectsValidators = undefined;
+      this.projects = [];
+      this.projectSources = [];
+      this.projectId = null;
+    }
+    this.workspace = workspace;
     const result = await loadProjects(browserFetch, this.#projectsValidators);
     if (!result.unchanged) {
       this.#projectsValidators = result.validators;
@@ -444,7 +461,7 @@ export class DashboardState {
       setPref('overviewTab', overviewTab);
     }
     const route = routeFor(this.projects, address);
-    if (JSON.stringify(route) !== JSON.stringify(this.route)) {
+    if (workspaceOf(address) !== this.workspace || JSON.stringify(route) !== JSON.stringify(this.route)) {
       // Another page: a task opened on the Omniboard closes with it
       if (this.peeking) {
         this.peeking = false;
@@ -485,7 +502,25 @@ export class DashboardState {
     this.newVersionReady = false;
   }
 
+  /** The workspaces; on the first load, `/` (no workspace, no page named) opens the last opened one (ADR-003 §5) */
+  private async refreshWorkspaces() {
+    const { workspaces, recent } = await loadWorkspaces();
+    this.workspaces = workspaces;
+    if (this.projectsLoaded) return;
+    const params = addressParams(currentAddress());
+    const landing = !params.has('workspace') && !params.has('project') && !params.has('overview');
+    if (landing && recent !== DEFAULT_WORKSPACE) navigate(withWorkspace(currentAddress(), recent), { replace: true });
+  }
+
+  /** Show workspace `id` (the switcher): its landing page, a new history entry */
+  openWorkspace(id: string) {
+    if (id !== this.workspace) navigate(withWorkspace(currentAddress(), id));
+  }
+
   private async fetchAndApply() {
+    // The first load waits, as `/` may go to another workspace; a poll doesn't
+    if (this.projectsLoaded) void this.refreshWorkspaces();
+    else await this.refreshWorkspaces();
     const project = await this.refreshProjects();
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
     if (project === null) {

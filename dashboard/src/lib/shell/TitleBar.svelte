@@ -10,6 +10,7 @@
   import ProjectSelector from './ProjectSelector.svelte';
   import RefreshMenu from './RefreshMenu.svelte';
   import SettingsMenu from './SettingsMenu.svelte';
+  import WorkspaceSelector from './WorkspaceSelector.svelte';
 
   interface Props {
     title: string;
@@ -46,6 +47,7 @@
       {#if project}<ProjectLogo {project} size={26} />{/if}
       <h1 id="dashboard-title">{title}</h1>
       {#if selector}<ProjectSelector />{/if}
+      <WorkspaceSelector />
       {#if version}
         <button
           class="version-chip"

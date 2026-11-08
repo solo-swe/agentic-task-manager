@@ -185,6 +185,7 @@ text the page reads, never a file it looks up.
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
 | `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`) |
+| `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
 document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
@@ -200,8 +201,10 @@ old parameters from its hash and moves to the new address.
 
 - `workspaces`: every workspace in the state folder (§5), `default` first and always there, with how many projects
   it lists; `recent`: the one opened last (`recent.json`), else `default`.
-- **Opening a workspace** is reading its `projects`: the server records it as the last opened, the one write a read
-  makes (a choice of view, never task data; written only when it changes). `/` will open it (T-457).
+- **Opening a workspace** is reading its `projects` (`api/projects` for `default`): the server records it as the last
+  opened, the one write a read makes (a choice of view, never task data; written only when it changes). The
+  dashboard's `/` opens it (T-457), and a switcher next to the project selector lists the workspaces when there is
+  more than one. The dashboard reads `default` from the v1 routes and any other workspace from its v2 ones.
 - A workspace's routes answer as the v1 ones do, for its own projects: an unknown workspace gets `404` with
   `{"error": "unknown workspace"}`, an unknown project `{"error": "unknown project"}`. A project's ID is unique within
   a workspace; its logo is at `api/v2/workspaces/<w>/projects/<id>/logo` (in `default`, `p/<id>/logo`).

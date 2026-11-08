@@ -365,6 +365,8 @@ pub fn serve(projects: &Projects, path: &str, query: &str, request: &HeaderMap) 
     // The v1 routes: the default workspace's
     let default = projects.workspaces.default_workspace();
     if path == "/api/projects" {
+        // The dashboard reads `default`'s list here: opening it, as `…/default/projects` would
+        let _ = projects.workspaces.opened(default.id());
         return api_projects(&default, request);
     }
     if path == "/api/search" {

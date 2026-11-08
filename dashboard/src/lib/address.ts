@@ -4,6 +4,7 @@
 //   /projects                  the overview's project cards; /board, /progress, /agents its other tabs
 //   /projects/<id>[/<tab>]     a project, on a tab (kanban, list, graph, progress, agents, project)
 //   ?sprint=…&task=T-1&doc=docs/x.md:L40&about    the Sprint filter, a task's details, a document, a dialog
+//   /w/<w>/…                   any of these in workspace <w> (ADR-003 §5); without it, `default` (every link so far)
 //
 // The page's state is read and written as parameters with the names the hash used before (`project`, `overview`,
 // `view`, then the query's own), so the helpers that change one (tabs.ts, dialogs.ts, …) don't need to know which
@@ -20,10 +21,12 @@ export function isOverviewTab(value: unknown): value is OverviewTab {
 }
 
 /** Parameters in the path, not the query */
-const PATH_KEYS = ['project', 'overview', 'view'];
+const PATH_KEYS = ['workspace', 'project', 'overview', 'view'];
 /** Parameters an old `#…` link may hold (the hash routes before T-429) */
-const LEGACY_KEYS = [...PATH_KEYS, 'sprint', 'doc', 'about', 'help'];
+const LEGACY_KEYS = ['project', 'overview', 'view', 'sprint', 'doc', 'about', 'help'];
 const PROJECTS = 'projects';
+/** The workspace an address without `/w/<w>` is in */
+const DEFAULT_WORKSPACE = 'default';
 
 function decode(segment: string): string | null {
   try {
@@ -40,7 +43,12 @@ export function addressParams(address: string): URLSearchParams {
   const path = (q >= 0 ? address.slice(0, q) : address).split('#')[0];
   const query = q >= 0 ? address.slice(q + 1).split('#')[0] : '';
   const params = new URLSearchParams();
-  const segments = path.split('/').filter(Boolean).map(decode);
+  let segments = path.split('/').filter(Boolean).map(decode);
+  // /w/<w>/…: the page in workspace <w>
+  if (segments[0] === 'w' && segments[1]) {
+    if (segments[1] !== DEFAULT_WORKSPACE) params.set('workspace', segments[1]);
+    segments = segments.slice(2);
+  }
   if (segments.every((s): s is string => s !== null && s !== '')) {
     const [first, id, tab, ...rest] = segments;
     if (first === PROJECTS && id === undefined) {
@@ -56,6 +64,7 @@ export function addressParams(address: string): URLSearchParams {
   }
   for (const [key, value] of new URLSearchParams(query)) {
     // The landing page may name a tab (an old link's `#view=list`), any other page in its path
+    // The workspace is the path's alone
     if (key === 'view' ? !params.has('project') && !params.has('overview') : !PATH_KEYS.includes(key))
       params.append(key, value);
   }
@@ -67,17 +76,21 @@ export function addressParams(address: string): URLSearchParams {
 export function formatAddress(params: URLSearchParams): string {
   const view = params.get('view');
   const project = params.get('project');
-  let path = '/';
+  const workspace = params.get('workspace');
+  const prefix = workspace && workspace !== DEFAULT_WORKSPACE ? `/w/${encodeURIComponent(workspace)}` : '';
+  let path = prefix || '/';
   let pathView = false;
   if (project) {
-    path = `/${PROJECTS}/${encodeURIComponent(project)}` + (view ? `/${encodeURIComponent(view)}` : '');
+    path = `${prefix}/${PROJECTS}/${encodeURIComponent(project)}` + (view ? `/${encodeURIComponent(view)}` : '');
     pathView = true;
   } else if (params.has('overview')) {
-    path = '/' + (view && isOverviewTab(view) ? view : PROJECTS);
+    path = `${prefix}/` + (view && isOverviewTab(view) ? view : PROJECTS);
     pathView = true;
   }
   const parts = [...params]
-    .filter(([key]) => !(key === 'project' || key === 'overview' || (key === 'view' && pathView)))
+    .filter(
+      ([key]) => !(key === 'workspace' || key === 'project' || key === 'overview' || (key === 'view' && pathView)),
+    )
     .map(([key, value]) =>
       value === ''
         ? encodeURIComponent(key)
@@ -87,8 +100,30 @@ export function formatAddress(params: URLSearchParams): string {
 }
 
 /** The dashboard's page paths, as `src/routes/` has them and `atm serve` answers them (atm-api's pages.rs):
- * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/board`, `/progress`, `/agents` */
-export const PAGE_PATH = /^\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?$/;
+ * `/`, `/projects`, `/projects/<id>`, `/projects/<id>/<tab>`, `/board`, `/progress`, `/agents`, each also under
+ * `/w/<w>` (and `/w/<w>` itself) */
+export const PAGE_PATH = /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?)?$/;
+
+/** The workspace an address is in: its `/w/<w>`, else `default` */
+export function workspaceOf(address: string): string {
+  return addressParams(address).get('workspace') || DEFAULT_WORKSPACE;
+}
+
+/** `address` in workspace `id`: the same page and query (the project and task cleared, as they are another
+ * workspace's) */
+export function withWorkspace(address: string, id: string): string {
+  const params = addressParams(address);
+  if (workspaceOf(address) !== id) {
+    params.delete('project');
+    params.delete('task');
+    params.delete('doc');
+    params.delete('sprint');
+    if (!params.has('overview')) params.delete('view');
+  }
+  params.delete('workspace');
+  if (id !== DEFAULT_WORKSPACE) params.set('workspace', id);
+  return formatAddress(params);
+}
 
 export function isPagePath(pathname: string): boolean {
   return PAGE_PATH.test(pathname);

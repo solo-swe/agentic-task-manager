@@ -19990,7 +19990,7 @@
       "description": "The app's commands and the REST API's v2 routes, both thin over atm-lib's `Workspaces`, `Workspace` and `Project` ([ADR-003](docs/adr/ADR-003-workspaces.md) §5; [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2).\n\n## Routes and commands\n| v2 route | App command |\n|---|---|\n| `GET /api/v2/workspaces` (with the last opened) | `list_workspaces` |\n| `GET /api/v2/workspaces/<w>/projects` | `list_projects(w)` |\n| `GET /api/v2/workspaces/<w>/search?q=` | `search(w, q)` |\n| `GET /api/v2/workspaces/<w>/projects/<p>/tasks` | `project_tasks(w, p, filters)` |\n| `…/projects/<p>/documents`, `files`, `claims`, `worktrees`, `logo` | `document`, `file`, `claims`, `worktrees`, `logo` |\n\n- Opening a workspace records it as the last opened (`recent.json`): the one write, a choice of view (the security review covers it).\n- v1 and `/p/<p>/…` stay, as the `default` workspace.\n\n## Live changes\nA Tauri channel per subscription (a workspace's list or a project), with `unsubscribe`. A file watcher on what the store reports for the project: the `notify` crate 8.2.1 and `notify-debouncer-full` 0.7.0 (approved, with CC0-1.0 in `deny.toml`). Watch folders, not files; debounce.\n\n## Tests\n- Command wiring on Tauri's mock runtime.\n- One test per read that the REST route and the command return the same data.\n- `docs/security-architecture.md` updated for the new routes and commands.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-455",
         "T-492"
@@ -20001,7 +20001,7 @@
         "deny.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T10:49:23Z",
+      "updated_at": "2026-11-08T11:04:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20017,10 +20017,19 @@
           "kind": "handoff",
           "text": "Paused before any code: the multi-project reads need a home first. Workspaces are designed in T-489 (ADR-003). notify 8.2.1 and notify-debouncer-full 0.7.0 are approved, with CC0-1.0 in deny.toml.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T11:04:24Z",
+          "kind": "outcome",
+          "text": "v2 routes (`/api/v2/workspaces…`; v1 = default) and 13 app commands over atm-lib `Workspace`/`Member`; agreement test per read; notify watcher behind channels (`Store::watch_folders`). JSON answers typed `Json` (numbers as number, specta-typescript 0.0.13 has no bigint option). Known limits: a workspace subscription watches the projects listed when it started; `.git/HEAD` (branch switch) is not watched. Suite 587, e2e 411, deny ok.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-08T10:49:23Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "4918c5da0e922e04b3a541f8caa673fe4b5f6ed5",
+      "completed_at": "2026-11-08T11:04:24Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-457",
@@ -20034,7 +20043,7 @@
       "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-456"
       ],
@@ -20045,7 +20054,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T10:18:36Z",
+      "updated_at": "2026-11-08T11:04:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20054,7 +20063,9 @@
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T11:04:28Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-458",

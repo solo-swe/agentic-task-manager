@@ -37,7 +37,11 @@ function atmDependencies(file) {
 describe('layers', () => {
   test('each crate depends only on the atm crates its layer may use', () => {
     // The reading finds what is there (else the rule would pass on nothing)
-    assert.deepEqual(atmDependencies(path.join(REPO, 'crates/atm-lib/Cargo.toml')), ['atm-common', 'atm-db', 'atm-vcs']);
+    assert.deepEqual(atmDependencies(path.join(REPO, 'crates/atm-lib/Cargo.toml')), [
+      'atm-common',
+      'atm-db',
+      'atm-vcs',
+    ]);
     for (const [crate, allowed] of Object.entries(ALLOWED)) {
       for (const name of atmDependencies(path.join(REPO, crate, 'Cargo.toml')))
         assert.ok(allowed.includes(name), `${crate} may not depend on ${name}`);

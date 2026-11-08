@@ -4,6 +4,8 @@
 // ESLint rule (eslint.config.js) keeps `fetch` out of every other module. URLs are from the server's root, since the
 // page is served at several paths (/projects/<id>/…, T-429).
 
+import { workspacePrefix } from './workspace';
+
 /** How the dashboard makes a request: the browser's fetch, or a test's */
 export type Fetch = typeof fetch;
 
@@ -13,25 +15,50 @@ export const browserFetch: Fetch = (input, init) => fetch(input, init);
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
 
+/** A project's own route in the current workspace: `default`'s v1 one, or another workspace's v2 one */
+function projectRoute(project: string, route: string): string {
+  const prefix = workspacePrefix();
+  const id = encodeURIComponent(project);
+  return prefix ? `${prefix}/projects/${id}/${route}` : `/api/v1/projects/${id}/${route}`;
+}
+
 /** Where a project's file is served */
 export function projectFileUrl(project: string, file: ProjectFile): string {
-  return `/p/${encodeURIComponent(project)}/${file}`;
+  const prefix = workspacePrefix();
+  return prefix
+    ? `${prefix}/projects/${encodeURIComponent(project)}/${file.replace(/\.json$/, '')}`
+    : `/p/${encodeURIComponent(project)}/${file}`;
 }
 
 /** A project's tasks with what atm derives for them, and its meta (GET api/v1/projects/<id>/tasks, T-364) */
 export function v1TasksUrl(project: string): string {
-  return `/api/v1/projects/${encodeURIComponent(project)}/tasks`;
+  return projectRoute(project, 'tasks');
 }
 
 /** A file of the project for the document viewer: what it is, and the CompMD document to render (T-392) */
 export function v1DocumentUrl(project: string, path: string): string {
-  return `/api/v1/projects/${encodeURIComponent(project)}/documents?path=${encodeURIComponent(path)}`;
+  return `${projectRoute(project, 'documents')}?path=${encodeURIComponent(path)}`;
 }
 
 /** An image file of the project, its bytes, for an <img> (T-392) */
 export function v1FileUrl(project: string, path: string): string {
-  return `/api/v1/projects/${encodeURIComponent(project)}/files?path=${encodeURIComponent(path)}`;
+  return `${projectRoute(project, 'files')}?path=${encodeURIComponent(path)}`;
 }
+
+/** The current workspace's projects, with their summaries (api/projects for `default`) */
+export function projectsUrl(): string {
+  const prefix = workspacePrefix();
+  return prefix ? `${prefix}/projects` : '/api/projects';
+}
+
+/** Search across the current workspace's projects (api/search for `default`) */
+export function searchUrl(): string {
+  const prefix = workspacePrefix();
+  return prefix ? `${prefix}/search` : '/api/search';
+}
+
+/** The workspaces, and the one opened last (docs/multi-project-api.md §2.8) */
+export const WORKSPACES_URL = '/api/v2/workspaces';
 
 /** What the server said identifies this version of a file, sent back to ask "has it changed?" */
 export interface Validators {

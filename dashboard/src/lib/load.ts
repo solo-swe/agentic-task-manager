@@ -1,13 +1,24 @@
 // Loading from atm serve's API (docs/multi-project-api.md): the registered projects from api/projects, each project's
 // tasks from api/v1/projects/<id>/tasks, and its other files from p/<id>/. The requests go through the client layer,
 // api/http.ts; this module reads what they return.
-import { browserFetch, fetchFile, v1TasksUrl, type Fetch, type Validators } from './api/http';
+import {
+  browserFetch,
+  fetchFile,
+  projectsUrl,
+  searchUrl,
+  v1TasksUrl,
+  WORKSPACES_URL,
+  type Fetch,
+  type Validators,
+} from './api/http';
+import { DEFAULT_WORKSPACE } from './api/workspace';
 import type { ArchiveHint, ProjectBoard, ProjectSummary } from '$generated/types';
 import type { Task, TasksFile } from './types';
 
 export { fetchProjectFile, projectFileUrl, type ProjectFile, type Validators } from './api/http';
 
 export const DEFAULT_PROJECT_NAME = 'Task Dashboard';
+/** The `default` workspace's projects (another workspace's: api/http.ts projectsUrl) */
 export const PROJECTS_URL = '/api/projects';
 
 // A project's summary, as the server computes it (api.schema.json, generated: T-382)
@@ -71,9 +82,10 @@ export function problemCount(problems: readonly string[], tasks: readonly Task[]
   return problems.length + tasks.reduce((n, t) => n + (t.derived?.problems?.length ?? 0), 0);
 }
 
-/** A project's logo, as api/projects gives it: p/<id>/logo, relative to the server's root (where the dashboard was
- * before its pages had paths, T-429); the dashboard uses it from the root, /p/<id>/logo */
-const LOGO_URL = /^p\/[^/?#:]+\/logo$/;
+/** A project's logo, as api/projects gives it: p/<id>/logo (another workspace's,
+ * api/v2/workspaces/<w>/projects/<id>/logo), relative to the server's root (where the dashboard was before its pages
+ * had paths, T-429); the dashboard uses it from the root, /p/<id>/logo */
+const LOGO_URL = /^(?:p\/[^/?#:]+|api\/v2\/workspaces\/[^/?#:]+\/projects\/[^/?#:]+)\/logo$/;
 
 const isProject = (p: unknown): p is ProjectEntry =>
   !!p && typeof p === 'object' && typeof (p as ProjectEntry).id === 'string' && !!(p as ProjectEntry).id;
@@ -86,7 +98,7 @@ export type ProjectsResult =
  * back to the id. Rejects with "HTTP <status>" for error responses and with the JSON error for invalid content.
  */
 export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Validators): Promise<ProjectsResult> {
-  const file = await fetchFile(PROJECTS_URL, fetchFn, since);
+  const file = await fetchFile(projectsUrl(), fetchFn, since);
   if (file.unchanged) return file;
   const list = (JSON.parse(file.text) as { projects?: unknown }).projects;
   const projects = (Array.isArray(list) ? list : []).filter(isProject).map((p) => ({
@@ -106,21 +118,58 @@ export async function loadProjects(fetchFn: Fetch = browserFetch, since?: Valida
   return { unchanged: false, projects, validators: file.validators };
 }
 
+/** The `default` workspace's search (another workspace's: api/http.ts searchUrl) */
 export const SEARCH_URL = '/api/search';
 
 /**
- * The tasks matching `query` in every project (api/search, T-258): their IDs per project id. Anything unexpected in
- * the answer is left out; a failed request throws.
+ * The tasks matching `query` in every project of the workspace (api/search, T-258): their IDs per project id.
+ * Anything unexpected in the answer is left out; a failed request throws.
  */
 export async function searchProjects(query: string, fetchFn: Fetch = browserFetch): Promise<Map<string, Set<string>>> {
-  const res = await fetchFn(`${SEARCH_URL}?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`${SEARCH_URL}: HTTP ${res.status}`);
+  const url = searchUrl();
+  const res = await fetchFn(`${url}?q=${encodeURIComponent(query)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
   const data: unknown = await res.json();
   const found = new Map<string, Set<string>>();
   if (data && typeof data === 'object' && !Array.isArray(data))
     for (const [project, ids] of Object.entries(data))
       if (Array.isArray(ids)) found.set(project, new Set(ids.filter((id): id is string => typeof id === 'string')));
   return found;
+}
+
+/** A workspace, as api/v2/workspaces lists it */
+export interface WorkspaceEntry {
+  id: string;
+  /** How many projects it lists */
+  projects: number;
+}
+
+export interface Workspaces {
+  workspaces: WorkspaceEntry[];
+  /** The one opened last */
+  recent: string;
+}
+
+/**
+ * The workspaces and the one opened last (api/v2/workspaces, ADR-003 §5). A server without the route (an older one),
+ * or any failure, is `default` alone: the dashboard then works as before workspaces.
+ */
+export async function loadWorkspaces(fetchFn: Fetch = browserFetch): Promise<Workspaces> {
+  const alone: Workspaces = { workspaces: [{ id: DEFAULT_WORKSPACE, projects: 0 }], recent: DEFAULT_WORKSPACE };
+  try {
+    const resp = await fetchFn(WORKSPACES_URL, { cache: 'no-store' });
+    if (!resp.ok) return alone;
+    const data = (await resp.json()) as { workspaces?: unknown; recent?: unknown };
+    const list = (Array.isArray(data.workspaces) ? data.workspaces : [])
+      .filter((w): w is WorkspaceEntry => !!w && typeof w === 'object' && typeof w.id === 'string' && !!w.id)
+      .map((w) => ({ id: w.id, projects: typeof w.projects === 'number' ? w.projects : 0 }));
+    if (!list.some((w) => w.id === DEFAULT_WORKSPACE)) return alone;
+    const recent =
+      typeof data.recent === 'string' && list.some((w) => w.id === data.recent) ? data.recent : DEFAULT_WORKSPACE;
+    return { workspaces: list, recent };
+  } catch {
+    return alone;
+  }
 }
 
 export const WHOAMI_URL = '/__atm/whoami';

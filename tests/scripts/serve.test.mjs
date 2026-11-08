@@ -1058,7 +1058,10 @@ describe('serve', () => {
     );
 
     // v1 is the default workspace's v2
-    assert.deepEqual(same((await json('/api/v2/workspaces/default/projects'))[1]), same((await json('/api/projects'))[1]));
+    assert.deepEqual(
+      same((await json('/api/v2/workspaces/default/projects'))[1]),
+      same((await json('/api/projects'))[1]),
+    );
 
     // Opening a workspace's list records it as the last opened
     [status, body] = await json('/api/v2/workspaces/work/projects');
@@ -1111,6 +1114,10 @@ describe('serve', () => {
       '/projects/any-id/',
       '/board',
       '/progress',
+      // In a workspace (ADR-003 §5, T-457)
+      '/w/work',
+      '/w/work/board',
+      '/w/work/projects/abcd1234/list',
     ];
     for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {
       const r = await fetch(`http://localhost:${port}${p}`);
@@ -1126,6 +1133,8 @@ describe('serve', () => {
       '/projects/abcd1234/List',
       '/boards',
       '/board/x',
+      '/w',
+      '/w/work/tasks.json',
     ]) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.notEqual(r.headers.get('content-type'), 'text/html; charset=utf-8', p);

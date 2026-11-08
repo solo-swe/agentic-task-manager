@@ -10,8 +10,8 @@ import { pageCsp } from './csp.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const ASSETS = root + 'dist/assets/';
 const PAGE = root + 'dist/tasks-dashboard.html';
-// As atm serve's (atm-api's pages.rs)
-const PAGE_PATH = /^\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?$/;
+// As atm serve's (atm-api's pages.rs; src/lib/address.ts PAGE_PATH), in a workspace too (/w/<w>/…)
+const PAGE_PATH = /^(?:\/w\/[^/]+)?(?:\/(?:projects(?:\/[^/]+(?:\/[a-z]+)?)?|board|progress|agents)?\/?)?$/;
 // As atm serve's asset route (atm-api's assets.rs): plain names, known extensions, no symlinks; every
 // asset readable cross-origin (the sandbox's frames have an opaque origin), a frame document sandboxed
 const ASSET = /^\/assets\/((?:[A-Za-z0-9_@][A-Za-z0-9._@-]*\/)*[A-Za-z0-9_@][A-Za-z0-9._@-]*\.(js|wasm|html))$/;

@@ -19,6 +19,8 @@ const ARCHIVE_JSON = /\/p\/([^/]+)\/tasks-archive\.json(\?.*)?$/;
 const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
+const WORKSPACES = /\/api\/v2\/workspaces(\?.*)?$/;
+const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
@@ -270,7 +272,40 @@ export class TasksServer {
     ];
   }
 
+  /** Workspaces besides `default` (api/v2/workspaces), and the one opened last; their projects aren't served */
+  private workspaceList: string[] = [];
+  private recentWorkspace = 'default';
+
+  /** List more workspaces than `default` (the switcher shows), and which one was opened last (`/` opens it) */
+  workspaces(ids: string[], recent = 'default') {
+    this.workspaceList = ids;
+    this.recentWorkspace = recent;
+    return this;
+  }
+
   async install() {
+    await this.page.route(WORKSPACES, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          generated_at: '2026-01-01T00:00:00Z',
+          workspaces: [
+            { id: 'default', projects: this.projectList().length },
+            ...this.workspaceList.map((id) => ({ id, projects: 0 })),
+          ],
+          recent: this.recentWorkspace,
+        }),
+      }),
+    );
+    // Another workspace's list: none of the fixture's projects are in it
+    await this.page.route(WORKSPACE_PROJECTS, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', projects: [] }),
+      }),
+    );
     await this.page.route(PROJECTS_JSON, (route) =>
       route.fulfill({
         status: 200,

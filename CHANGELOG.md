@@ -32,6 +32,12 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **Workspaces in the dashboard** (T-457, ADR-003 §5): addresses `/w/<w>/…` (`/w/<w>/projects/<id>/<tab>`,
+  `/w/<w>/board`, …; without `/w/<w>`, `default`'s, so every link so far still opens), and `/` opens the workspace
+  opened last. A workspace switcher sits next to the project selector when there is more than one. The dashboard reads
+  `default` from the v1 routes and another workspace from its v2 ones (`lib/api/workspace.ts`, the URL builders in
+  `lib/api/http.ts`); `/api/projects` now records `default` as the last opened, as `…/default/projects` does. atm
+  serve's pages (`pages.rs`), the e2e server and `PAGE_PATH` accept the `/w/<w>` prefix.
 - **Workspaces in the REST API, and the app's commands over them** (T-456, ADR-003 §5): `GET /api/v2/workspaces`
   (the workspaces, how many projects each lists, the last opened) and, per workspace, `…/<w>/projects` (which records
   it as the last opened in `recent.json`, only when that changes), `…/<w>/search` and
