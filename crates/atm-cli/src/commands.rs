@@ -6,6 +6,7 @@ pub mod claim;
 pub mod completion;
 pub mod component;
 pub mod db;
+pub mod detach;
 pub mod loop_;
 pub mod maintenance;
 pub mod meta;

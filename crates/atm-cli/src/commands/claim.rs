@@ -220,13 +220,7 @@ fn heartbeat(
     Ok(())
 }
 
-/// On Windows, how atm starts a process that outlives it (the claim's watcher, the dashboard server): without the
-/// caller's console (`DETACHED_PROCESS`) and in a group of its own (`CREATE_NEW_PROCESS_GROUP`), so the caller's
-/// Ctrl+C doesn't end it, as `process_group(0)` does on Unix.
-#[cfg(windows)]
-pub const DETACHED: u32 = 0x0000_0008 | 0x0000_0200;
-
-/// Start the watcher: this binary again, as `atm _claim-watch`, detached (its own process group, stdin, stdout and
+/// Start the watcher: this binary again, as `atm _claim-watch`, detached (`detach::spawn_detached`; stdin, stdout and
 /// stderr on the null device, so the caller's pipes close when atm exits). Returns its pid.
 fn detach(args: &[String], cwd: &Path) -> Result<u32> {
     let own_binary = std::env::current_exe()
@@ -238,18 +232,7 @@ fn detach(args: &[String], cwd: &Path) -> Result<u32> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(DETACHED);
-    }
-    let child = command
-        .spawn()
+    let child = crate::commands::detach::spawn_detached(&mut command)
         .map_err(|e| Error::failed(format!("can't start the claim's watcher: {e}")))?;
     Ok(child.id())
 }

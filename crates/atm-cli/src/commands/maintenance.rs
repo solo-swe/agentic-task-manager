@@ -189,18 +189,7 @@ fn start_server(home: &Path, port: u64) -> Result<Map<String, Value>> {
         .stdin(Stdio::null())
         .stdout(log)
         .stderr(errors);
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(crate::commands::claim::DETACHED);
-    }
-    let mut child = command
-        .spawn()
+    let mut child = crate::commands::detach::spawn_detached(&mut command)
         .map_err(|e| Error::failed(format!("can't start the dashboard server: {e}")))?;
     let deadline = Instant::now() + START_WAIT;
     while Instant::now() < deadline {

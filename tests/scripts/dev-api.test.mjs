@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { test } from 'node:test';
-import { makeProject, removeDir, REPO, tempDir } from './helpers.mjs';
+import { makeProject, removeDir, REPO, shown, tempDir } from './helpers.mjs';
 
 const DASHBOARD = path.join(REPO, 'dashboard');
 const VITE = path.join(DASHBOARD, 'node_modules', 'vite', 'bin', 'vite.js');
@@ -86,10 +86,11 @@ test(NAME, { skip }, async () => {
       return answer?.ok ? (await answer.json()).projects : null;
     };
     const listed = await until(projects, 'api/projects through vite');
-    const byPath = Object.fromEntries(listed.map((p) => [p.path, p]));
-    assert.equal(byPath[project].missing, false);
-    assert.equal(byPath[project].summary.total, 1);
-    assert.equal(byPath[gone].missing, true); // no task file: listed as missing, as atm serve lists a gone folder
+    // By the path as atm shows it (on Windows, the dev server lists the gone folder with `\`)
+    const byPath = Object.fromEntries(listed.map((p) => [shown(p.path), p]));
+    assert.equal(byPath[shown(project)].missing, false);
+    assert.equal(byPath[shown(project)].summary.total, 1);
+    assert.equal(byPath[shown(gone)].missing, true); // no task file: listed as missing, as atm serve lists a gone folder
     const tasks = await (await fetch(`${base}/api/v1/projects/devapi01/tasks`)).json();
     assert.deepEqual(
       tasks.tasks.map((v) => [v.task.id, v.derived.ready]),

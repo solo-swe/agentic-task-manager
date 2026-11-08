@@ -39,6 +39,9 @@ jiff = "0.2"
 # `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
+# Windows only (T-480, approved): atm's own standard handles made non-inheritable before it starts a background
+# process, so the caller's pipes close when atm exits. Already in the tree through tokio and sysinfo
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

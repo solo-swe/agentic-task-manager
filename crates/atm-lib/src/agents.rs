@@ -273,7 +273,8 @@ pub fn install_skills(
 pub fn uninstall_skills(harness: Option<&str>, project_dir: Option<&Path>) -> Result<Vec<String>> {
     let wanted: Vec<&str> = harnesses(harness)?.into_iter().map(|h| h.id).collect();
     let project =
-        project_dir.map(|p| format!("{}{}", absolute(p).shown(), std::path::MAIN_SEPARATOR));
+        // `/`: the paths recorded are as atm shows them, on every platform
+        project_dir.map(|p| format!("{}/", absolute(p).shown()));
     let mut removed = Vec::new();
     let mut kept = Vec::new();
     for entry in read_record() {

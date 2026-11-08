@@ -31,6 +31,13 @@ The Rust atm, without the plugin (0.33.0, on `dev/0.33.0`; 0.32.0 was the plugin
   the binary (`pnpm run test:e2e` builds it; CI's e2e job takes one built on Ubuntu 22.04). CI's Python jobs are gone,
   and the benchmark runs against the binary. The suite on Windows is T-480's (40 failures on CI's first run there).
 
+### Fixed
+- **atm on Windows** (T-480): paths in atm's output and files use `/` and the real, long form of each folder (never an
+  8.3 short name), so a file under the project is never "outside the repository" (atm-common's `pathtext`: `Shown`,
+  `real`, `canonical`); `HOME` is the home folder when set, as on Unix; text files are LF in every checkout (a root
+  `.gitattributes`); and `atm service` and `atm claim hold` start their background process without the caller's
+  pipes (`windows-sys`, the one `unsafe` in atm, approved), so the shell that ran them doesn't wait for it.
+
 ## [0.32.0] - 2026-11-06
 
 The sprint *Rust and distribution*: the groundwork for atm as an app that installs its own skills

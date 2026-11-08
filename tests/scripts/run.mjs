@@ -23,7 +23,10 @@ const files = fs
   .sort();
 
 const limitArg = process.argv.find((a) => a.startsWith('--file-limit='));
-const FILE_LIMIT_MS = (limitArg ? Number(limitArg.slice('--file-limit='.length)) : 180) * 1000;
+// A watchdog for hangs, not a time budget: Windows starts processes several times slower (scenarios.test.mjs takes
+// about 160 s on CI's Windows runner), so its default is longer
+const DEFAULT_LIMIT = process.platform === 'win32' ? 400 : 180;
+const FILE_LIMIT_MS = (limitArg ? Number(limitArg.slice('--file-limit='.length)) : DEFAULT_LIMIT) * 1000;
 const TEST_LIMIT_MS = 60000;
 const results = new Map();
 const timings = [];
