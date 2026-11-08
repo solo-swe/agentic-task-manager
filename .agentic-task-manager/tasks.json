@@ -20109,7 +20109,7 @@
       "description": "A button (Claude Code for now, from the harness table) that calls the same atm-lib code as `atm agents install` through a Tauri command, shows what it wrote where, and the status. Never runs on its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-457",
         "T-450"
@@ -20119,16 +20119,18 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T18:54:08Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:54:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-459",
@@ -20173,7 +20175,7 @@
       "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-456",
         "T-452"
@@ -20184,7 +20186,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:29:22Z",
+      "updated_at": "2026-11-08T18:36:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20206,6 +20208,12 @@
           "kind": "answer",
           "text": "The cask bundles `atm` and puts it on PATH, as does the `atm` formula: should the cask `conflicts_with formula: \"atm\"` (one or the other; the cask’s atm replaces the formula’s), or should the cask depend on the formula and not bundle its own? → B: the cask bundles its own atm, links it onto PATH (binary from inside the app) and conflicts_with formula atm (Hakan, 2026-11-08).; One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives? → One universal DMG (arm64 + x86_64); the CLI archives stay per architecture.; Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done. → Ship in 0.34.0.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:36:58Z",
+          "kind": "outcome",
+          "text": "Release job `app-macos`: universal DMG with the universal atm CLI inside, Tauri signs + notarizes the app, `notarize-dmg.sh` the DMG (stapled). Cask `atm-app` links the app’s atm, conflicts_with the formula, caveat only. Local unsigned bundle checked (atm.app has atm + atm-app; `atm version` runs). Not yet run for real: signing and notarization happen only on a tag in CI. Suite 597, unit 1233.",
+          "by": "claude:34798264"
         }
       ],
       "blocks": [
@@ -20216,7 +20224,10 @@
         }
       ],
       "started_at": "2026-11-08T18:29:22Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "b56d46496294c1bd7fafb6ac3ee3a2349c580386",
+      "completed_at": "2026-11-08T18:36:58Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-461",

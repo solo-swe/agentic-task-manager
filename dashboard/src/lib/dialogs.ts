@@ -1,7 +1,8 @@
-// The open dialog (About, Help) is a flag in the address ("?about"), so a dialog can be linked and Back closes it.
+// The open dialog (About, Help, Connect your agents) is a flag in the address ("?about"), so a dialog can be linked
+// and Back closes it.
 import { addressParams, formatAddress } from './address';
 
-export const DIALOGS = ['about', 'help'] as const;
+export const DIALOGS = ['about', 'help', 'agents'] as const;
 export type DialogId = (typeof DIALOGS)[number];
 
 /** The dialog an address opens, if any. */

@@ -493,6 +493,36 @@ pub async fn subscribe_project(
     state.watch(&folders, channel, message)
 }
 
+/// `atm agents status`: per harness atm knows, whether it is installed here, and each of atm's skills' state in the
+/// user's own folder for it (linked, copied, missing, stale, not atm's).
+///
+/// # Errors
+/// None: a `Result`, as every async command is.
+#[tauri::command]
+#[specta::specta]
+pub async fn agents_status() -> Result<Json, AppError> {
+    Ok(Json(json!(atm_lib::agents::skills_status(
+        None,
+        atm_common::VERSION
+    ))))
+}
+
+/// `atm agents install --harness <harness>` (T-458): this version's skills where the harness reads the user's, the
+/// same atm-lib code as the command; `{written: [{harness, skill, path, how, action}], refused: [{path, reason}]}`. Only
+/// ever run by the user's click on the app's button: nothing calls it on its own.
+///
+/// # Errors
+/// A harness atm doesn't know; a folder or file that can't be written.
+#[tauri::command]
+#[specta::specta]
+pub async fn connect_agents(harness: String) -> Result<Json, AppError> {
+    let installed =
+        atm_lib::agents::install_skills(Some(&harness), None, false, atm_common::VERSION)?;
+    Ok(Json(
+        json!({"written": installed.written, "refused": installed.refused}),
+    ))
+}
+
 /// End a subscription. Whether there was one.
 ///
 /// # Errors

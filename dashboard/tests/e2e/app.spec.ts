@@ -15,6 +15,36 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.httpRequests).toEqual([]);
   });
 
+  test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    await page.locator('#footer-agents').click();
+    const harness = page.locator('.agents-harness[data-harness="claude"]');
+    await expect(harness.locator('.agents-harness-state')).toHaveText('Not connected');
+    expect(tasksServer.agentCalls).toEqual(['agents_status']);
+
+    await harness.locator('.agents-connect').click();
+    await expect(page.locator('#agents-result li')).toHaveText([
+      '/Users/me/.claude/skills/atm-do-task (installed, linked)',
+      '/Users/me/.claude/skills/atm-serve (installed, linked)',
+    ]);
+    await expect(harness.locator('.agents-harness-state')).toHaveText('Connected');
+    await expect(harness.locator('.agents-connect')).toHaveText('Connect Claude Code again');
+    expect(tasksServer.agentCalls).toEqual(['agents_status', 'connect_agents claude', 'agents_status']);
+  });
+
+  test('in the browser there is no button: the dialog gives the command instead', async ({ page, tasksServer }) => {
+    tasksServer.use('standard');
+    await page.goto('/?agents');
+    await expect(page.locator('#footer-agents')).toHaveCount(0);
+    await expect(page.locator('#agents-panel .agents-intro')).toContainText('atm agents install');
+    await expect(page.locator('#agents-panel .agents-connect')).toHaveCount(0);
+  });
+
   test('a project’s logo comes through the app too, as a data: URL the page’s CSP allows', async ({
     page,
     tasksServer,

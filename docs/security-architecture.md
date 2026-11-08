@@ -729,6 +729,15 @@ only its file, never a project's.
   skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
   list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
 
+**The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
+`connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
+Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
+or `Invalid` before anything is written; a folder in the way that atm didn't write is refused, never replaced; every
+path written recorded in `agents.json` and listed back). It runs only on the user's click in the dialog; opening it
+calls only `agents_status`, a read (`app.spec.ts` checks the calls). The main window's capability allows both; a page
+from anywhere else is refused (`the_main_windows_capability_lets_it_call_the_commands`). atm serve has no such route:
+the browser's dialog gives the command to run. T-461 reviews it with the rest of the app.
+
 **The app's DMG and cask (T-460).** A new release artifact and a new way onto users' PATH:
 - **Signed and notarized as the CLI is**, with the same secrets, read only in the macOS jobs (I20): Tauri's bundler
   signs every binary in `atm.app` (the bundled `atm` CLI too, hardened runtime) and notarizes the app;

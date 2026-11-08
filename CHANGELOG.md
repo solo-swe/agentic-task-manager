@@ -32,6 +32,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   AGENTS.md describe the layers without boot. Nothing users see changes.
 
 ### Added
+- **The app's "Connect your agents" button** (T-458): in the atm app, the footer's *Connect your agents* opens a
+  dialog (`?agents`) with each harness atm knows (Claude Code), whether it is found and connected, and a button that
+  runs the same atm-lib code as `atm agents install` for it (the new `connect_agents` command, with `agents_status`),
+  then lists every path it wrote and what it left alone. Opening the dialog only reads the status; nothing is written
+  until the click. In the browser the dialog gives `atm agents install` to run instead.
 - **The atm app as a signed, notarized universal DMG and a Homebrew cask** (T-460): the release workflow's
   `app-macos` job builds the app for arm64 and x86_64 in one DMG (`atm-app-<version>-universal.dmg`), with the `atm`
   CLI built with it inside (`atm.app/Contents/MacOS/atm`, a universal binary); Tauri's bundler signs and notarizes

@@ -8,8 +8,9 @@ pub mod commands;
 use tauri::Manager;
 
 use commands::{
-    AppState, claims, document, file, list_projects, list_workspaces, logo, project_tasks, search,
-    subscribe_project, subscribe_workspace, unsubscribe, version, worktrees,
+    AppState, agents_status, claims, connect_agents, document, file, list_projects,
+    list_workspaces, logo, project_tasks, search, subscribe_project, subscribe_workspace,
+    unsubscribe, version, worktrees,
 };
 
 /// The app's commands, for Tauri and for the TypeScript types (each also in `build.rs`'s manifest and the main
@@ -30,6 +31,8 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         subscribe_workspace,
         subscribe_project,
         unsubscribe,
+        agents_status,
+        connect_agents,
     ])
 }
 
@@ -362,6 +365,8 @@ mod tests {
                 file,
                 logo,
                 unsubscribe,
+                agents_status,
+                connect_agents,
             ])
             .build(context())
             .expect("the mock app");
@@ -412,6 +417,36 @@ mod tests {
             missing,
             json!({"kind": "not_found", "message": "unknown workspace"})
         );
+        // Connecting agents (T-458): the status reads the harnesses atm knows; connecting reaches atm-lib's install,
+        // which refuses a harness it doesn't know before writing anything (so this test writes nowhere), and a page
+        // from anywhere else can't ask for it
+        let status = tauri::test::get_ipc_response(
+            &window,
+            request("agents_status", &json!({}), "tauri://localhost"),
+        )
+        .expect("agents_status")
+        .deserialize::<Value>()
+        .expect("json");
+        assert_eq!(status[0]["harness"], json!("claude"), "{status}");
+        let unknown = tauri::test::get_ipc_response(
+            &window,
+            request(
+                "connect_agents",
+                &json!({"harness": "nope"}),
+                "tauri://localhost",
+            ),
+        )
+        .expect_err("an unknown harness");
+        assert_eq!(unknown["kind"], json!("invalid"), "{unknown}");
+        let remote = tauri::test::get_ipc_response(
+            &window,
+            request(
+                "connect_agents",
+                &json!({"harness": "claude"}),
+                "https://example.com",
+            ),
+        );
+        assert!(remote.is_err(), "connect_agents answered a remote page");
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 }

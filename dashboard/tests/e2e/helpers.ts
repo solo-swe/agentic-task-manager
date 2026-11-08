@@ -20,6 +20,8 @@ const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
 const WORKSPACES = /\/api\/v2\/workspaces(\?.*)?$/;
+/** Two of atm's skills, for the app's agent commands (asApp) */
+const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
 const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
@@ -449,6 +451,28 @@ export class TasksServer {
 
   /** The paths of requests the page made to the server's routes (api/, p/), when it plays the app (asApp) */
   httpRequests: string[] = [];
+  /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
+  agentCalls: string[] = [];
+  /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
+  private agentsConnected = false;
+
+  /** Claude Code's status, as `agents_status` reports it */
+  private harnessStatus() {
+    return {
+      harness: 'claude',
+      label: 'Claude Code',
+      detected: true,
+      scope: 'user',
+      folder: '/Users/me/.claude/skills',
+      version: '0.0.0',
+      skills: AGENT_SKILLS.map((skill) => ({
+        skill,
+        path: `/Users/me/.claude/skills/${skill}`,
+        state: this.agentsConnected ? 'linked' : 'missing',
+        version: null,
+      })),
+    };
+  }
 
   /**
    * Play the atm app instead of atm serve (T-457): the page runs as in Tauri's window (`isTauri`, Tauri's IPC
@@ -513,6 +537,28 @@ export class TasksServer {
         return body
           ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
           : unknown;
+      case 'agents_status':
+        this.agentCalls.push(command);
+        return { ok: [this.harnessStatus()] };
+      case 'connect_agents': {
+        this.agentCalls.push(`${command} ${String(args.harness)}`);
+        if (args.harness !== 'claude')
+          return { error: { kind: 'invalid', message: `no harness '${String(args.harness)}'` } };
+        const before = this.agentsConnected;
+        this.agentsConnected = true;
+        return {
+          ok: {
+            written: AGENT_SKILLS.map((skill) => ({
+              harness: 'claude',
+              skill,
+              path: `/Users/me/.claude/skills/${skill}`,
+              how: 'link',
+              action: before ? 'unchanged' : 'installed',
+            })),
+            refused: [],
+          },
+        };
+      }
       case 'logo': {
         const svg = this.logos.get(project);
         return svg ? { ok: { content_type: 'image/svg+xml', data: [...Buffer.from(svg)] } } : { ok: null };

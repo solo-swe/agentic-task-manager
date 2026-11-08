@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { inApp } from '../api/http';
   import { archiveNotice } from '../archive';
   import { problemCount } from '../load';
   import { copyright, pluginInfo } from '../plugin-info';
@@ -33,6 +34,12 @@
     <a class="footer-link" id="footer-github" href={pluginInfo.repository} target="_blank" rel="noopener noreferrer"
       >GitHub</a
     >
+    {#if inApp}
+      <!-- In the atm app: connect the user's agents (T-458); in the browser, `atm agents install` does it -->
+      <button class="footer-link" id="footer-agents" onclick={() => dashboard.openDialog('agents')}
+        >Connect your agents</button
+      >
+    {/if}
     <button class="footer-link" id="footer-help" onclick={() => dashboard.openDialog('help')}>Help</button>
     <button class="footer-link" id="footer-about" onclick={() => dashboard.openDialog('about')}>About</button>
   </nav>

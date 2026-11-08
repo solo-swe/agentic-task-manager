@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the app's own commands, all reads (and their subscriptions), nothing else (no core or plugin APIs until a task needs one)",
+  "description": "The main window: the app's own commands, the reads (and their subscriptions) and connecting agents on the user's click, nothing else (no core or plugin APIs until a task needs one)",
   "windows": ["main"],
   "permissions": [
     "allow-version",
@@ -16,6 +16,8 @@
     "allow-logo",
     "allow-subscribe-workspace",
     "allow-subscribe-project",
-    "allow-unsubscribe"
+    "allow-unsubscribe",
+    "allow-agents-status",
+    "allow-connect-agents"
   ]
 }
