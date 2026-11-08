@@ -19922,7 +19922,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-454"
       ],
@@ -19931,16 +19931,24 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T07:56:10Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T07:55:27Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test?",
+        "OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later?"
+      ],
+      "blocked_at": "2026-11-08T07:56:10Z"
     },
     {
       "id": "T-456",
@@ -21281,7 +21289,7 @@
       "description": "Since T-478 the e2e fixture runs the binary (`tests/e2e/helpers.ts`, `target/debug/atm`). `pnpm run test:e2e:visual` and `test:e2e:visual:update` run Playwright in a Linux container with the checkout mounted, so on a Mac they run the macOS binary, and every visual test fails with `target/debug/atm: 1: Syntax error: \"(\" unexpected`. CI is fine: its visual job downloads the `atm-linux` artifact.\n\n## Change\n- Give the helper a way to use another binary (for example an `ATM_E2E_BIN` variable, defaulting to `target/debug/atm`).\n- Make the Docker scripts use a Linux atm built for this checkout without fetching anything new into the container, for example a Linux build in its own target folder (a `cargo` container or `cross`, with approval if it adds a tool), or CI's `atm-linux` artifact of the branch's run as `AGENTS.md` describes for baselines.\n- `AGENTS.md`'s screenshot section says what to run.\n\n## Tests\n`pnpm run test:e2e:visual` passes on a Mac with Docker running.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21289,7 +21297,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T07:36:17Z",
+      "updated_at": "2026-11-08T07:56:28Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
@@ -21301,7 +21309,14 @@
           "from": "2026-11-08T07:36:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T07:56:13Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1)."
+      ],
+      "blocked_at": "2026-11-08T07:56:28Z"
     },
     {
       "id": "T-486",
@@ -21314,7 +21329,7 @@
       "description": "`atm vcs pushed --pr <n>` releases a planned release only when **all** its tasks are merged **in that PR** (`release_with_merge` in [code.rs](crates/atm-lib/src/code.rs)). Release 0.32.0's sprint, *The Rust port*, merged in two PRs: #39 (32 tasks), then #40 (the other 5, which shipped in 0.33.0). Recording #39 said `0.32.0 stays planned: T-453, … are not merged in PR #39`, and recording #40 said the same about #39's 32 tasks. So 0.32.0 stays planned although every one of its tasks is merged.\n\n## Change\n- A release is released when every one of its tasks is merged (`merged_at` set), whichever PR merged it. Its release time is the last merge. The message names the tasks that keep it planned because they aren't merged yet, not because they merged in another PR.\n- `atm vcs pushed` releases such a release the next time it runs. `atm doctor` (or `atm release list`) points out a planned release whose tasks are all merged, so this repo's 0.32.0 can be fixed by running it again.\n\n## Tests\nA scenario in `tests/scripts/scenarios/`: a release whose tasks are in two PRs stays planned after the first merge and is released by the second; a release with one PR still works as it does now.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/code.rs",
@@ -21322,7 +21337,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T07:06:02Z",
-      "updated_at": "2026-11-08T07:36:17Z",
+      "updated_at": "2026-11-08T07:56:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21331,7 +21346,9 @@
           "from": "2026-11-08T07:36:17Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T07:56:28Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

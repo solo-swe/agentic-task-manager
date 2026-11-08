@@ -244,10 +244,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 println!("PR #{pr} merged: {}", ids.join(", "));
             }
             for release in result["released"].as_array().into_iter().flatten() {
-                println!(
-                    "Released {}: all its tasks are merged in PR #{pr}.",
-                    py_str(release)
-                );
+                println!("Released {}: all its tasks are merged.", py_str(release));
             }
             for (release, waiting) in result["pending"].as_object().into_iter().flatten() {
                 let waiting: Vec<String> = waiting
@@ -258,7 +255,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                     .collect();
                 let verb = if waiting.len() == 1 { "is" } else { "are" };
                 println!(
-                    "{release} stays planned: {} {verb} not merged in PR #{pr}.",
+                    "{release} stays planned: {} {verb} not merged yet.",
                     waiting.join(", ")
                 );
             }

@@ -159,7 +159,7 @@ left on a task is kept but ignored.
 | `atm vcs commit <id> --record <rev>` | records an existing commit on the task without committing (T-343), e.g. the one a rebase or cherry-pick made of its commit: the revision must be a commit on the current branch (an ancestor of HEAD) and not start with `-`; stored as the full SHA; a hint when its message doesn't mention the task's ID |
 | `atm project workflow [set <direct\|pull-request>] [--base B] [--verify true\|false] [--max-rounds N]` | prints or changes `meta.workflow` |
 | `atm vcs pr <id>... --number N --url U` | records the PR on tasks |
-| `atm vcs pushed --pr N [--at TIME]` | records the merge on the PR's tasks; a planned release whose tasks in `tasks.json` (its own or their sprint's, skipped ones aside) are now all merged in that PR becomes `released`, with its `pr` and `released_at`; one with tasks outside it stays planned, and atm names them (SR-3.7) |
+| `atm vcs pushed --pr N [--at TIME]` | records the merge on the PR's tasks; a planned release whose tasks in `tasks.json` (its own or their sprint's, skipped ones aside) are now all merged, in that PR or earlier ones, becomes `released`, with its `pr` (this one) and `released_at` (its last merge); one with tasks not merged yet stays planned, and atm names them (SR-3.7, T-486) |
 
 ### 4.6 Setup
 

@@ -6,6 +6,13 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Fixed
+- **A release whose tasks merge in several PRs is released** (T-486): `atm vcs pushed --pr N` releases a planned
+  release once every one of its tasks is merged, in that PR or an earlier one, with `released_at` its last merge;
+  before, only the tasks of PR N counted, so a sprint that reached `main` in two PRs (0.32.0: #39, then #40) stayed
+  planned. Its message says which tasks are "not merged yet". `atm doctor` warns about a planned release whose tasks
+  are all merged and names the `atm vcs pushed` that releases it. `/atm-push` says so too.
+
 ## [0.33.0] - 2026-11-08
 
 The Rust atm, without the plugin: the first release that is only the `atm` binary (`brew install solo-swe/tap/atm`, or

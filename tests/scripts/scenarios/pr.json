@@ -178,7 +178,7 @@
     "args": ["vcs", "pushed", "--pr", "7", "--at", "2026-05-10T09:00:00Z"],
     "env": { "ATM_NOW": "2026-05-10T10:00:00Z", "ATM_AGENT": "alice" },
     "expect": {
-      "stdout": "PR #7 merged: T-1, T-2\nReleased 1.0: all its tasks are merged in PR #7.\n",
+      "stdout": "PR #7 merged: T-1, T-2\nReleased 1.0: all its tasks are merged.\n",
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
@@ -236,5 +236,108 @@
     "expect": {
       "json": { "pr": 7, "tasks": ["T-1", "T-3"], "already": [], "released": [], "pending": { "1.0": ["T-2"] } }
     }
+  },
+  {
+    "name": "merged stays planned after a release's first PR and says which tasks aren't merged yet (T-486)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [
+            { "id": "T-1", "status": "done", "release": "1.0", "pr": { "number": 7, "url": "https://x/pull/7" } },
+            { "id": "T-2", "status": "done", "release": "1.0", "pr": { "number": 8, "url": "https://x/pull/8" } }
+          ]
+        }
+      }
+    },
+    "args": ["vcs", "pushed", "--pr", "7", "--at", "2026-05-10T09:00:00Z"],
+    "env": { "ATM_NOW": "2026-05-10T10:00:00Z" },
+    "expect": { "stdout": "PR #7 merged: T-1\n1.0 stays planned: T-2 is not merged yet.\n" }
+  },
+  {
+    "name": "merged releases a release whose tasks merged in several PRs, at its last merge (T-486)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 7, "url": "https://x/pull/7" },
+              "merged_at": "2026-05-10T09:00:00Z"
+            },
+            { "id": "T-2", "status": "done", "release": "1.0", "pr": { "number": 8, "url": "https://x/pull/8" } }
+          ]
+        }
+      }
+    },
+    "args": ["vcs", "pushed", "--pr", "8", "--at", "2026-05-11T09:00:00Z", "--json"],
+    "env": { "ATM_NOW": "2026-05-11T10:00:00Z", "ATM_AGENT": "alice" },
+    "expect": {
+      "json": { "pr": 8, "tasks": ["T-2"], "already": [], "released": ["1.0"], "pending": {} },
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [
+              {
+                "id": "1.0",
+                "state": "released",
+                "pr": { "number": 8, "url": "https://x/pull/8" },
+                "released_at": "2026-05-11T09:00:00Z"
+              }
+            ]
+          },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 7, "url": "https://x/pull/7" },
+              "merged_at": "2026-05-10T09:00:00Z"
+            },
+            {
+              "id": "T-2",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 8, "url": "https://x/pull/8" },
+              "merged_at": "2026-05-11T09:00:00Z",
+              "updated_at": "2026-05-11T10:00:00Z",
+              "updated_by": "alice"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "merged again releases a release whose other PR was recorded first (T-486)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 7, "url": "https://x/pull/7" },
+              "merged_at": "2026-05-10T09:00:00Z"
+            },
+            {
+              "id": "T-2",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 8, "url": "https://x/pull/8" },
+              "merged_at": "2026-05-11T09:00:00Z"
+            }
+          ]
+        }
+      }
+    },
+    "args": ["vcs", "pushed", "--pr", "7"],
+    "env": { "ATM_NOW": "2026-05-12T10:00:00Z" },
+    "expect": { "stdout": "PR #7: already recorded as merged\nReleased 1.0: all its tasks are merged.\n" }
   }
 ]
