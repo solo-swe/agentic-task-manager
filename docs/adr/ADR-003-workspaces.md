@@ -1,7 +1,7 @@
 # ADR-003: Workspaces, and opening projects without boot
 
-- **Status:** proposed, 2026-11-08
-- **Decided by:** Hakan Serce (in review)
+- **Status:** accepted, 2026-11-08
+- **Decided by:** Hakan Serce
 - **Context:** T-489 (blocks T-456, the app's commands); [layered-architecture.md](../layered-architecture.md) §3.2, §5.1,
   §11.2; [multi-project-api.md](../multi-project-api.md); [better-way-to-distribute-atm.md](../better-way-to-distribute-atm.md) §2
 
@@ -35,9 +35,14 @@ erDiagram
   STATE_FOLDER ||--o| SERVER : "one atm serve"
   STATE_FOLDER ||--o{ SKILLS : "installed by atm agents"
   WORKSPACE }o--o{ PROJECT : "lists (id, name, path, added, seen)"
-  PROJECT ||--|| TASK_FOLDER : ".agentic-task-manager/"
-  TASK_FOLDER ||--o| SETTINGS : "which store, which vcs"
+  PROJECT ||--o| SETTINGS : "which store, which vcs"
+  SETTINGS ||--|| STORE : "opens (json-git, memory, …)"
+  SETTINGS ||--|| VCS : "opens (git, …)"
 ```
+
+The task files and where they live are the store's business: the JSON-in-git store keeps `tasks.json` and its archive
+in `.agentic-task-manager/`; another store keeps nothing in the project at all. Only the settings file has a place
+every store shares (§4).
 
 - **A workspace is a named, ordered list of projects**, each entry what a registry entry is today (`id`, `name`,
   `path`, `added_at`, `seen_at`). There is no separate index: the workspaces are the indexes. A project can be in
@@ -104,7 +109,9 @@ sequenceDiagram
 
 - **A project's settings file**, `.agentic-task-manager/settings.json`, says which store and which vcs it uses
   (`{"store": "json-git", "vcs": "git"}`). Without one, those are the defaults, so every existing project opens as
-  now. It is a file of its own because the store type must be known before the store (`tasks.json`) can be read.
+  now. It is atm's, not a store's: the one file every store's project has, in the one folder atm looks for, read
+  before any store is chosen. Everything else in a project (the task files, the archive, the claims) is the chosen
+  store's, wherever it keeps them.
 - **Two factories pick the implementations**: `atm_db::open` for the store and `atm_vcs::open` for the vcs. They are
   separate on purpose: atm-lib uses the vcs on its own (commits, the branch, documents).
 - **atm-lib does the rest**, through two ways in: `Workspaces` → `Workspace` → `Project` for the server and the app,

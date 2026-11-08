@@ -21493,7 +21493,7 @@
         "docs/adr/ADR-003-workspaces.md"
       ],
       "created_at": "2026-11-08T09:20:34Z",
-      "updated_at": "2026-11-08T09:25:33Z",
+      "updated_at": "2026-11-08T10:17:23Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21506,17 +21506,24 @@
       "with": "user",
       "started_at": "2026-11-08T09:20:41Z",
       "started_by": "claude:34798264",
-      "commit": "d2c1739b59f72187eacaec0e5c961606affaf70c",
+      "commit": "905b9ebb9756890e076de9592c2178522c3810e6",
       "review_requested_at": "2026-11-08T09:25:33Z",
-      "review_state": "waiting",
+      "review_state": "approved",
       "notes": [
         {
           "at": "2026-11-08T09:25:33Z",
           "kind": "review",
           "text": "ADR-003 drafted (docs/adr/ADR-003-workspaces.md): workspaces as named lists over the home’s project index, chosen per call (flag > env > stored default), atm-lib’s Workspace with a ProjectOpener, boot as the composition root, api/v2/workspaces/<w>/…, a migration plan. Four questions for the review at the end.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T10:17:23Z",
+          "kind": "note",
+          "text": "Approved: Approved in Crit after one round (the task folder is the store’s, not the model’s)",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviewed_at": "2026-11-08T10:17:23Z"
     }
   ]
 }
