@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 490,
+    "next_id": 494,
     "labels": [
       {
         "id": "architecture",
@@ -19987,19 +19987,21 @@
       "labels": [
         "app"
       ],
-      "description": "The commands the dashboard needs, each a thin mapping to an atm-lib call ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2): projects, a project's tasks (the v1 view), claims, worktrees, documents and files, search; a Tauri channel per subscription for changes (a file watcher), with `unsubscribe`. Command-wiring tests on Tauri's mock runtime.",
+      "description": "The app's commands and the REST API's v2 routes, both thin over atm-lib's `Workspaces`, `Workspace` and `Project` ([ADR-003](docs/adr/ADR-003-workspaces.md) §5; [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2).\n\n## Routes and commands\n| v2 route | App command |\n|---|---|\n| `GET /api/v2/workspaces` (with the last opened) | `list_workspaces` |\n| `GET /api/v2/workspaces/<w>/projects` | `list_projects(w)` |\n| `GET /api/v2/workspaces/<w>/search?q=` | `search(w, q)` |\n| `GET /api/v2/workspaces/<w>/projects/<p>/tasks` | `project_tasks(w, p, filters)` |\n| `…/projects/<p>/documents`, `files`, `claims`, `worktrees`, `logo` | `document`, `file`, `claims`, `worktrees`, `logo` |\n\n- Opening a workspace records it as the last opened (`recent.json`): the one write, a choice of view (the security review covers it).\n- v1 and `/p/<p>/…` stay, as the `default` workspace.\n\n## Live changes\nA Tauri channel per subscription (a workspace's list or a project), with `unsubscribe`. A file watcher on what the store reports for the project: the `notify` crate 8.2.1 and `notify-debouncer-full` 0.7.0 (approved, with CC0-1.0 in `deny.toml`). Watch folders, not files; debounce.\n\n## Tests\n- Command wiring on Tauri's mock runtime.\n- One test per read that the REST route and the command return the same data.\n- `docs/security-architecture.md` updated for the new routes and commands.\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
       "dependencies": [
         "T-455",
-        "T-489"
+        "T-492"
       ],
       "files": [
-        "app/src-tauri/"
+        "app/src-tauri/",
+        "crates/atm-api/src/",
+        "deny.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T09:20:41Z",
+      "updated_at": "2026-11-08T10:18:27Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20027,7 +20029,7 @@
         "app",
         "dashboard"
       ],
-      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`) and an IPC one (the app), picked at start; the app's build of the dashboard. A test that each REST route and its Tauri command return the same data; Playwright on mocked Tauri IPC over an in-memory project for the app.",
+      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
       "status": "todo",
@@ -20036,12 +20038,14 @@
       ],
       "files": [
         "dashboard/src/lib/api/",
-        "dashboard/tests/"
+        "dashboard/tests/",
+        "dashboard/src/lib/address.ts",
+        "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-08T10:18:36Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
@@ -21537,6 +21541,147 @@
       ],
       "completed_at": "2026-11-08T10:17:24Z",
       "completed_by": "claude:34798264"
+    },
+    {
+      "id": "T-490",
+      "name": "Workspaces 1: the state folder, and moving ~/.agentic-task-manager into it",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §2 and §6, step 1.\n\n## Change\n- One function in atm-common gives atm's state folder: `ATM_STATE_DIR` when set, else the platform's app data folder for `com.solo-swe.atm` (the `dirs` crate, approved): `~/Library/Application Support/com.solo-swe.atm/`, `~/.local/share/com.solo-swe.atm/`, `%APPDATA%\\com.solo-swe.atm\\`. `ATM_HOME` keeps working as another name for `ATM_STATE_DIR`. Everything that used `atm_home()` uses it (the registry, the server's record, log and lock, `atm agents`).\n- The first run moves `~/.agentic-task-manager/` (or `$ATM_HOME`'s folder when it differs) into the state folder, under the lock: `projects.json` becomes `workspaces/default.json` (same entries), and the rest moves as it is. A note in the old folder says where it went.\n- A test that atm-common's identifier matches `tauri.conf.json`'s.\n- The test suite, the e2e fixture and the dev server set `ATM_STATE_DIR`.\n\n## Tests\nThe move (a folder with a registry, a server record and skills; an empty one; a second run that finds it moved), the platform folders, the alias.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-489"
+      ],
+      "files": [
+        "crates/atm-common/src/home.rs",
+        "crates/atm-db/src/registry.rs",
+        "Cargo.toml",
+        "tests/scripts/helpers.mjs",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:18:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-491",
+      "name": "Workspaces 2: atm-lib's Workspaces, Workspace and Project::open, on store and vcs factories",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §1 and §4, step 2.\n\n## Change\n- **The project's settings file**, `.agentic-task-manager/settings.json` (`store`, `vcs`; json-git and git without one), read before any store is chosen.\n- **Factories:** `atm_db::open(folder, store)` and `atm_vcs::open(folder, vcs)`. Finding a project from a folder (walking up, a linked worktree's main copy) moves behind the store's factory.\n- **atm-lib:**\n  - `Project::open(cwd)`;\n  - `Project::with_store(store, vcs)` for tests;\n  - `project.store_maintenance()` (merge driver, migrations, paths; `None` for a store without them);\n  - the actor.\n- **`Workspaces`** (over atm-db's `workspaces/<id>.json` and `recent.json`, under the state folder's lock) and **`Workspace`**:\n  - its projects, with summaries, worktrees and logos, a broken one listed as missing (F18);\n  - search across them;\n  - add, remove and prune;\n  - the summary cache, moved from atm-api's `Projects`.\n  - A new project atm meets goes into `default`.\n\natm-api's `Projects` calls these instead of its own loop; nothing users see changes.\n\n## Tests\natm-lib's unit tests on the in-memory store through `with_store`; the scenarios and `serve.test.mjs` unchanged and passing.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-490"
+      ],
+      "files": [
+        "crates/atm-lib/src/",
+        "crates/atm-db/src/",
+        "crates/atm-vcs/src/",
+        "crates/atm-api/src/routes.rs"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:18:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-492",
+      "name": "Workspaces 3: the CLI and the API on atm-lib alone; the atm-boot crate removed",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §4, step 3.\n\n## Change\n- The CLI, the API and the app depend on atm-lib (and atm-common) only. The `atm db` group's store operations go through `project.store_maintenance()`.\n- The pid and signal helpers move into the CLI. `hook_project` and what only it used are deleted.\n- `crates/atm-boot/` is removed.\n- Update `docs/layered-architecture.md` (§1, §3, §5.1, §11.2) and AGENTS.md's crate list to the new layers. The layer check (which crate may depend on which) is updated so a front end can't reach atm-db or atm-vcs.\n\n## Tests\nEverything passes unchanged: cargo test, the CLI suite and e2e.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-491"
+      ],
+      "files": [
+        "crates/atm-boot/",
+        "crates/atm-cli/",
+        "crates/atm-api/",
+        "app/src-tauri/",
+        "Cargo.toml",
+        "docs/layered-architecture.md",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:18:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app"
+    },
+    {
+      "id": "T-493",
+      "name": "Workspaces 4: the atm workspace commands",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "architecture",
+        "cli"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §3, step 6.\n\n## Commands\n```text\natm workspace list | create <w> | delete <w> | rename <w> <new>\natm workspace projects [<w>]\natm workspace add-project [<w>] [<folder>] | remove-project [<w>] <project> | prune [<w>]\n```\n- They default to `default`, and `add-project` to the current folder.\n- `atm project list|add|remove|prune` go.\n- `atm serve` serves every workspace: it opens the only one, or the last opened.\n\n## Agents read these\nThe `atm-serve` skill and `docs/agent/` change, so follow AGENTS.md's checklist: the written skill review in `docs/security-architecture.md` §3.3.\n\n## Tests\nScenarios for each command, `default`'s refusal to be deleted, and a project in two workspaces.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-492"
+      ],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "skills/atm-serve/SKILL.md",
+        "docs/agent/",
+        "docs/security-architecture.md",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-08T10:18:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app"
     }
   ]
 }
