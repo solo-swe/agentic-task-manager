@@ -21329,7 +21329,7 @@
       "description": "`atm vcs pushed --pr <n>` releases a planned release only when **all** its tasks are merged **in that PR** (`release_with_merge` in [code.rs](crates/atm-lib/src/code.rs)). Release 0.32.0's sprint, *The Rust port*, merged in two PRs: #39 (32 tasks), then #40 (the other 5, which shipped in 0.33.0). Recording #39 said `0.32.0 stays planned: T-453, … are not merged in PR #39`, and recording #40 said the same about #39's 32 tasks. So 0.32.0 stays planned although every one of its tasks is merged.\n\n## Change\n- A release is released when every one of its tasks is merged (`merged_at` set), whichever PR merged it. Its release time is the last merge. The message names the tasks that keep it planned because they aren't merged yet, not because they merged in another PR.\n- `atm vcs pushed` releases such a release the next time it runs. `atm doctor` (or `atm release list`) points out a planned release whose tasks are all merged, so this repo's 0.32.0 can be fixed by running it again.\n\n## Tests\nA scenario in `tests/scripts/scenarios/`: a release whose tasks are in two PRs stays planned after the first merge and is released by the second; a release with one PR still works as it does now.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/code.rs",
@@ -21337,7 +21337,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T07:06:02Z",
-      "updated_at": "2026-11-08T07:56:28Z",
+      "updated_at": "2026-11-08T08:02:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21348,7 +21348,18 @@
       ],
       "sprint": "The atm app",
       "started_at": "2026-11-08T07:56:28Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "aef39aed2f238c05e6afba11eb2b8729ee32647f",
+      "completed_at": "2026-11-08T08:02:12Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T08:02:12Z",
+          "kind": "outcome",
+          "text": "A release is released once all its tasks are merged, in any PR (released_at its last merge); messages say \"not merged yet\"; atm doctor warns about a planned release whose tasks are all merged. Scenarios in pr.json and releases.json. This repo’s 0.32.0 is released by `atm vcs pushed --pr 40` once this atm is installed.",
+          "by": "claude:34798264"
+        }
+      ]
     }
   ]
 }
