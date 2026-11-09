@@ -107,6 +107,12 @@ pub trait Store {
         Value::Null
     }
 
+    /// The folders whose files change when the project's data does (its task files, its claims, its working copies'
+    /// task files), for a front end that watches them; none for a store that keeps nothing on disk.
+    fn watch_folders(&self) -> Vec<std::path::PathBuf> {
+        Vec::new()
+    }
+
     /// The project's working copies, main first: `[{path, branch, main}]`; none for a store without them.
     fn working_copies(&self) -> Vec<Value> {
         Vec::new()

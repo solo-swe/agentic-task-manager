@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the app's Info.plist by Tauri's bundler: the atm:// links the app opens (T-459, src/links.rs) -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.solo-swe.atm</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>atm</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

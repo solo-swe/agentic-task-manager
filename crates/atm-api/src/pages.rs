@@ -18,11 +18,19 @@ fn is_form(rest: &str) -> bool {
         && tab.is_none_or(|t| !t.is_empty() && t.bytes().all(|b| b.is_ascii_lowercase()))
 }
 
-/// Whether `path` is one of the dashboard's pages.
+/// Whether `path` is one of the dashboard's pages: one of the forms, or one in a workspace (`/w/<w>`, the workspace's
+/// landing page, or `/w/<w>/<form>`; ADR-003 §5).
 pub fn is_page(path: &str) -> bool {
-    let Some(rest) = path.strip_prefix('/') else {
+    let Some(mut rest) = path.strip_prefix('/') else {
         return false;
     };
+    if let Some(after) = rest.strip_prefix("w/") {
+        let (workspace, page) = after.split_once('/').unwrap_or((after, ""));
+        if workspace.is_empty() {
+            return false;
+        }
+        rest = page;
+    }
     is_form(rest) || rest.strip_suffix('/').is_some_and(is_form)
 }
 
@@ -42,6 +50,10 @@ mod tests {
             "/board",
             "/progress/",
             "/agents",
+            "/w/work",
+            "/w/work/",
+            "/w/work/board",
+            "/w/work/projects/abcd1234/list",
         ] {
             assert!(is_page(page), "{page}");
         }
@@ -53,6 +65,11 @@ mod tests {
             "/boards",
             "/board/x",
             "/tasks.json",
+            "/w",
+            "/w/",
+            "/w//projects",
+            "/w/work/tasks.json",
+            "/w/work/projects/abcd1234/list/x",
             "",
         ] {
             assert!(!is_page(other), "{other}");

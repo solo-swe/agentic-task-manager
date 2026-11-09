@@ -3,8 +3,9 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::changes::{StatusChange, change_task_status, todo_command};
 use atm_lib::state::{Command, Options};
 use clap::Args;
@@ -131,7 +132,7 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
         }
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let task_id = args.task_id.as_str();
     if state == "todo" {
         // Back to to do is a different command for each kind the task is in (a failure says why: --reason)

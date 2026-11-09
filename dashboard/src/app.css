@@ -265,6 +265,13 @@ body {
 .compmd-plain {
   white-space: pre-wrap;
 }
+/* What a text couldn't show, said where it is (T-503): CompMD that didn't load, a component that drew nothing */
+.compmd-note {
+  margin: var(--space-1) 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
 /* A question in a list: one paragraph, inline with its number */
 .compmd-inline,
 .compmd-inline .compmd-page,
@@ -302,6 +309,63 @@ body {
 .about a {
   color: var(--accent);
 }
+/* Connect your agents (AgentsDialog.svelte, T-458) */
+.agents .agents-intro,
+.agents .agents-harness-detail,
+.agents .agents-result {
+  font-size: var(--text-md);
+  color: var(--text-muted);
+}
+.agents code {
+  overflow-wrap: anywhere;
+}
+.agents .agents-error {
+  color: var(--red);
+}
+.agents .agents-list {
+  list-style: none;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+}
+.agents .agents-harness {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.agents .agents-harness-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.agents .agents-harness-name {
+  font-weight: 600;
+}
+.agents .agents-harness-state {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+.agents .agents-harness-state[data-state='connected'] {
+  color: var(--green);
+}
+.agents .agents-connect {
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  cursor: pointer;
+}
+.agents .agents-connect:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.agents .agents-result ul {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-7);
+}
+
 /* "Project details": the Project tab has the rest (T-255) */
 .about .about-project-details {
   margin: var(--space-6) 0 0;
@@ -1058,6 +1122,57 @@ button.menu-trigger:hover,
 .project-menu {
   left: 0;
   width: 300px;
+}
+
+/* The workspace switcher, after the project selector when there are several workspaces (WorkspaceSelector.svelte) */
+.workspace-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 28px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.workspace-switch:hover,
+.workspace-switch[aria-expanded='true'] {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.workspace-menu {
+  left: 0;
+  min-width: 200px;
+}
+.workspace-option {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.workspace-option:hover,
+.workspace-option[data-highlighted] {
+  background: var(--surface2);
+}
+.workspace-option.current .workspace-option-name {
+  font-weight: 600;
+}
+.workspace-option-count {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }
 .project-filter {
   width: 100%;

@@ -30,11 +30,10 @@ flowchart TD
     subgraph Python["atm (Python)"]
         API["REST API<br/><i>the server process,<br/>plugin/scripts/atm-serve</i>"]
         CLI["CLI<br/><i>atm …, plugin/scripts/atm;<br/>atm serve starts the server</i>"]
-        Boot["boot<br/><i>opens a project: picks the store<br/>and the vcs; the actor</i>"]
-        Lib["atm-lib<br/><i>all business logic</i>"]
+        Lib["atm-lib<br/><i>all business logic; opens projects<br/>and workspaces, the actor</i>"]
         DbI["db interface"]
         VcsI["vcs interface"]
-        Db["db implementations<br/><i>JSON-in-git store, in-memory store,<br/>the registry</i>"]
+        Db["db implementations<br/><i>JSON-in-git store, in-memory store,<br/>the workspaces' files; the factory</i>"]
         Vcs["vcs implementation<br/><i>git, for code</i>"]
         Host["host<br/><i>runs git, reads HEAD</i>"]
     end
@@ -49,15 +48,11 @@ flowchart TD
     CLI -. "starts and stops<br/>the process" .-> API
     API --> Lib
     CLI --> Lib
-    API --> Boot
-    CLI --> Boot
     Tools --> Lib
-    Tools --> Boot
-    Boot --> Lib
-    Boot --> Db
-    Boot --> Vcs
     Lib --> DbI
     Lib --> VcsI
+    Lib -. "the factories,<br/>at open" .-> Db
+    Lib -. "the factories,<br/>at open" .-> Vcs
     Db -. implements .-> DbI
     Vcs -. implements .-> VcsI
     Db --> Host
@@ -75,8 +70,14 @@ The layers as built (T-361 to T-376, and the follow-ups of §11). Every layer in
 the Dashboard uses only the types generated from it. The solid arrows are the build's layer rule (`ALLOWED` in
 `atm-cli/build.py`): nothing else may import across layers. The dashed arrow between the CLI and the REST API is
 between processes, not an import: the CLI starts, stops and refreshes the server process (`plugin/scripts/atm-serve`),
-and the built `atm.py` enters as one or the other (§11.1). The reach of **boot** is the code's, not the first
-design's; §11 says where the code differs from the design and what follows.
+and the built `atm.py` enters as one or the other (§11.1). §11 says where the code differs from the design and what
+follows.
+
+**In the Rust port (ADR-003 §4, T-491 and T-492)** there is no boot layer: the front ends (`atm-cli`, `atm-api`, the
+app) depend on atm-lib and atm-common only, which their `Cargo.toml` files enforce. atm-lib opens a project with
+`Project::open(folder)`, through the factories `atm_db::open` and `atm_vcs::open`, which read the project's
+`.agentic-task-manager/settings.json` (`store`, `vcs`); `project.store_maintenance()` has what only the JSON-in-git
+store has; `Workspaces` and `Workspace` are the lists of projects; `atm_lib::actor` works out who works.
 
 **What implements the interfaces:**
 
@@ -104,8 +105,7 @@ flowchart TD
 | **Generated TS types** | The types of the API's responses, generated from common's schema; the Dashboard imports them | Is edited by hand |
 | **REST API** | Maps HTTP requests to atm-lib calls and results to JSON; the HTTP concerns (Host check, ETags, sizes, caching) | Holds logic; touches storage |
 | **CLI** | Maps arguments to atm-lib calls and results to text or `--json`; exit codes | Holds logic; touches storage |
-| **boot** | Opens a project and the registry (`boot/open.py`): picks the store and the vcs; works out the actor (`boot/identity.py`); reaches what only the JSON-in-git store has (`boot/jsongit.py`: paths, migrations, the merge driver, registering by folder) | Holds business rules |
-| **atm-lib** | Every business action and query (§5) | Knows how or where data is kept; prints; reads `argparse` objects |
+| **atm-lib** | Every business action and query (§5); opens a project (`Project::open`, on the store and vcs factories) and the workspaces; works out the actor; reaches what only one store has through `project.store_maintenance()` | Knows how or where data is kept; prints; reads `argparse` objects |
 | **db** | One interface for data access (§3); its implementations know how and where data is kept, and keep concurrent writers apart | Business rules |
 | **vcs** | One interface to the code's version control (§2) | Business rules; storing tasks |
 | **host** | What atm asks of the machine, for db and vcs only (`host/git.py`): running git, whether a folder is in git, and the branch a working copy has checked out, read from its HEAD (a detached HEAD as its short SHA), the one meaning of "the branch" (T-385) | Business rules; is imported by anything but db and vcs |
@@ -116,8 +116,8 @@ flowchart TD
 - the Dashboard depends on the REST API, over HTTP only, and on the generated TS types;
 - the REST API, the CLI and other tools depend on atm-lib;
 - atm-lib depends on the db and vcs **interfaces**, never on an implementation; the implementation is chosen once,
-  when a project is opened, in **boot** (`open_project`), a small layer the CLI and the REST API call and the only
-  one that knows the implementations;
+  when a project is opened, by the factories (`atm_db::open`, `atm_vcs::open`) that `Project::open` calls, from the
+  project's settings file;
 - the db and vcs implementations depend on their interfaces;
 - every Python layer may use common.
 
@@ -128,8 +128,9 @@ through its record and pid; what both know about the server (its record, the das
 anything else the CLI (T-379, §11.1).
 
 What a store alone has (the JSON-in-git store's paths, lock, merge driver and migrations; the user's registry of
-projects) is reached through boot, by the commands about it (`atm project config`, `migrate`, `merge-driver`, `init`'s merge
-driver, the hook's registering).
+projects) is reached through atm-lib: `project.store_maintenance()` (none for a store without such things) and the
+workspaces, by the commands about it (`atm project config`, `migrate`, `merge-driver`, `init`'s merge driver, the
+hook's registering).
 
 ## 2. Git's two roles
 
@@ -272,7 +273,7 @@ together. The reads are per entity where atm-lib needs only one kind (`get_setti
 `read_claims`), and the whole document (`document()`) where a rule takes it whole (§11.3). Besides: `sizes`,
 `problems` and `raw` (`atm doctor`, tolerant reads), `files_for_commit`, `working_copy`, `exists` and `create`
 (`atm db init`), `stamp` (the REST API's ETags), `logo` and `check_logo`, `working_copies` and `copy_tasks` (the worktrees'
-copies). Only atm-lib and boot reach a project's store: the build refuses `.store` in the CLI and the REST API.
+copies). Only atm-lib reaches a project's store (in the Rust port, the front ends don't depend on atm-db at all).
 
 `TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
 `with`); what is derived (ready, waiting, effective review) is atm-lib's. The JSON-in-git store filters in memory.
@@ -284,9 +285,10 @@ task's); every task it hands out fits the task schema. Writes are always strict,
 Things only one store has stay out of the interface and are reached through that store directly by the code that
 needs them: the JSON-in-git store's merge driver (`atm db merge-driver`, which git runs), its migrations of old layouts
 (`atm db migrate`), its file locations (`atm project config`) and its worktrees' copies (`worktrees.json`). A cloud store has no
-such things; atm-lib never calls them. As built, the commands about them reach them through `boot/jsongit.py`, since
-the CLI may import only common, atm-lib and boot; the worktrees' copies went into the interface after all
-(`working_copies`, `copy_tasks`, §11.2).
+such things; atm-lib's rules never call them. The commands about them reach them through
+`project.store_maintenance()` (atm-lib's `maintenance` module, ADR-003 §4; it was `boot/jsongit.py`, then the
+atm-boot crate, until T-492), which is none for a store without them; the worktrees' copies went into the interface
+after all (`working_copies`, `copy_tasks`, §11.2).
 
 ### 3.3 Do we need transactions?
 
@@ -417,6 +419,17 @@ start_task(project, "T-360")
   with the plugin, a change to it in `CHANGELOG.md`. Everything else is internal. `tests/lib/test_public.py`
   uses only that surface, and freezes it: the names and each function's signature against
   `tests/lib/public-surface.json`, so a change fails until that list is updated.
+
+In the Rust port (ADR-003 §4, T-492) atm-lib opens projects itself, and the front ends need nothing else:
+
+```rust
+use atm_lib::{Project, Workspaces};
+
+let project = Project::open(cwd)?.with_actor(Some(atm_lib::actor::agent_identity(None, cwd)));
+let maintenance = project.store_maintenance(); // the JSON-in-git store's own operations, or none
+let workspace = Workspaces::open().default_workspace(); // a list of projects: summaries, search
+let in_memory = Project::with_store(Box::new(store)); // atm-lib's own tests, on the in-memory store
+```
 
 ### 5.1 The functions
 
@@ -629,6 +642,7 @@ atm-cli/atm/
   vcs/           interface.py; git/
   lib/           atm-lib: tasks, claims, project, sprints, releases, components, archive, code, settings, projects
   boot/          opening a project: picks the store and the vcs; the actor; what is the JSON-in-git store's alone
+                 (in the Rust port, atm-lib's: Project::open, maintenance, actor, workspaces; T-492)
   cli/           argparse, renderers (text, --json), exit codes
   api/           the REST API: routes, HTTP handling, the launcher
 ```
@@ -763,6 +777,13 @@ are unchanged (the atm-cli suite, at every step).
   `boot/jsongit.py` has `task_paths`, `migrate_folder`, `merge_versions`, `set_up_store`, `hold_lock_for_test` and
   registering by folder (`register_project`, `dashboard_id`, `hook_project`). `cli/store.py` imports only it; the
   REST API only `boot/open.py`.
+- **Replaced (ADR-003 §4, T-491 and T-492):** in the Rust port there is no boot. `project.store_maintenance()`
+  (atm-lib's `StoreMaintenance`: `task_paths`, `set_up`, `migrate`, `hold_lock_for_test`; `merge_versions` beside
+  it, as git runs it outside any project) is none for a store without such things; registering is
+  `project.join_default_workspace()` (and the hook's `join_default_workspace_if_needed()`); the actor is
+  `atm_lib::actor`; the pid and signal helpers are the CLI's (`atm-cli/src/process.rs`); `hook_project` is gone. The
+  crate `atm-boot` was removed, and the front ends' `Cargo.toml` files name only atm-common, atm-lib (and the CLI
+  atm-api, to enter the server), so the compiler refuses a front end that reaches atm-db or atm-vcs.
 
 ### 11.3 The Store interface is the transitional one (T-381)
 

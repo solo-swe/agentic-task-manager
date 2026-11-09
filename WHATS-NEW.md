@@ -2,6 +2,15 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.34.0] - 2026-11-09
+
+- There is an atm app for the Mac now: install it with Homebrew, and it brings its own atm for your agents.
+- The app shows the same dashboard as the browser, and atm:// links open it at the page they name.
+- One button in the app connects atm's skills to your agents.
+- Group your projects into workspaces and switch between them, in the app and in the dashboard.
+- Your projects carry over to atm's new home folder, and an older atm on the same Mac keeps finding them.
+- Diagrams don't draw in the app yet: they come in the next release. The dashboard in your browser draws them as before.
+
 ## [0.33.0] - 2026-11-08
 
 - atm is its own program now: install it with Homebrew or download it, and update it the same way.

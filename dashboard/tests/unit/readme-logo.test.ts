@@ -1,7 +1,18 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FAVICON_COLOR } from '../../build/favicon';
-import { ACCENT, brandLogo } from '../../../branding/generate.mjs';
+import {
+  ACCENT,
+  appIcon,
+  avatar,
+  brandLogo,
+  CHECK_PATH,
+  FRAME_RING,
+  MARKS_PATHS,
+  iconPages,
+  marksLayer,
+  squircle,
+} from '../../../branding/generate.mjs';
 
 // The logo outside the dashboard (README, GitHub's social preview, the org's avatar) is made by branding/generate.mjs
 // from the dashboard's logo, in the accent blue.
@@ -26,5 +37,69 @@ describe('the branding files', () => {
     expect(existsSync(file('../../../branding/social-preview-dark.png'))).toBe(true);
     expect(existsSync(file('../../../branding/social-preview-light.png'))).toBe(true);
     expect(existsSync(file('../../../branding/social-preview.png'))).toBe(false);
+    // The app icon's source (T-504), from which `pnpm tauri icon` made app/src-tauri/icons/
+    expect(existsSync(file('../../../branding/app-icon.png'))).toBe(true);
+    expect(existsSync(file('../../../app/src-tauri/icons/icon.icns'))).toBe(true);
+  });
+});
+
+describe('the app icon and the avatar (T-504)', () => {
+  const points = (path: string) =>
+    path
+      .replace(/^M|Z$/g, '')
+      .split('L')
+      .map((p) => p.split(' ').map(Number));
+
+  it('the body is a squircle filling its box, its corners cut further in than a circle’s and less than a square’s', () => {
+    const shape = points(squircle(100, 100, 824));
+    const xs = shape.map(([x]) => x);
+    const ys = shape.map(([, y]) => y);
+    expect(Math.min(...xs)).toBeCloseTo(100, 0);
+    expect(Math.max(...xs)).toBeCloseTo(924, 0);
+    expect(Math.min(...ys)).toBeCloseTo(100, 0);
+    expect(Math.max(...ys)).toBeCloseTo(924, 0);
+    // Along the diagonal: a circle reaches 0.707 of the half side, a square 1; Apple's shape about 0.87
+    const diagonal = shape[Math.round(shape.length / 8)];
+    const reach = (diagonal[0] - 512) / 412;
+    expect(reach).toBeGreaterThan(0.8);
+    expect(reach).toBeLessThan(0.95);
+  });
+
+  it('the layer: the whole logo in the accent blue, its frame close to the shape’s edge', () => {
+    const logo = brandLogo(read('dashboard/src/assets/atm-logo.svg'));
+    const layer = marksLayer(logo);
+    // Drawn as filled shapes (one renderer or another, the same): they must stay the logo's frame, columns and check
+    expect(logo).toContain('<rect x="3" y="4" width="26" height="24" rx="5" />');
+    expect(logo).toContain(`d="${MARKS_PATHS}"`);
+    expect(logo).toContain(`d="${CHECK_PATH}"`);
+    expect(layer).not.toContain('stroke');
+    expect(layer).toContain(`<g fill="${ACCENT}">`);
+    // The frame's 2.5 stroke as a ring: the rect grown and shrunk by 1.25, its radius with it
+    expect(layer).toContain(FRAME_RING);
+    expect(FRAME_RING).toContain('M8 2.75H24A6.25 6.25 0 0 1 30.25 9');
+    expect(FRAME_RING).toContain('M8 5.25H24A3.75 3.75 0 0 1 27.75 9');
+    // The ring, then five filled bars: three columns, the check's two strokes
+    expect(layer.match(/<path /g)).toHaveLength(6);
+    // The first column, from (10, 10) to (10, 22), 2.5 wide with round ends
+    expect(layer).toContain(
+      '<path d="M8.750 10.000L8.750 22.000A1.25 1.25 0 0 0 11.250 22.000L11.250 10.000A1.25 1.25 0 0 0 8.750 10.000Z" />',
+    );
+    // The frame spans 84% of the shape across (28.5 of the logo's units in a 33.929-unit box), centred
+    expect(layer).toContain('width="1024" height="1024" viewBox="-0.964 -0.964 33.929 33.929"');
+  });
+
+  it('the icon keeps Apple’s grid: a 1024 canvas, the body 824 in its middle, the marks on it', () => {
+    const logo = brandLogo(read('dashboard/src/assets/atm-logo.svg'));
+    const icon = appIcon(logo);
+    expect(icon).toContain('viewBox="0 0 1024 1024"');
+    expect(icon).toContain(`d="${squircle(100, 100, 824)}"`);
+    expect(icon).toContain(`href="data:image/svg+xml,${encodeURIComponent(marksLayer(logo))}" x="100" y="100"`);
+    // The avatar: the face edge to edge (GitHub rounds it), the same marks
+    expect(avatar(logo)).toContain('<rect width="512" height="512" fill="url(#face)" />');
+    expect(avatar(logo)).toContain(encodeURIComponent(marksLayer(logo)));
+    expect(iconPages(logo).map((p) => [p.file, p.width, p.transparent])).toEqual([
+      ['app-icon.png', 1024, true],
+      ['atm-logo.png', 512, true],
+    ]);
   });
 });

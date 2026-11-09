@@ -124,7 +124,8 @@ describe('serve', () => {
     const port = ports();
     const started = atm(['service', '--port', String(port)], root);
     assert.equal(started.code, 0, started.stderr);
-    assert.match(started.stdout, new RegExp(`Dashboard server started: http://localhost:${port}/#project=abcd1234\n`));
+    // The project's page (T-501: an address of the router, not the old #project= link)
+    assert.match(started.stdout, new RegExp(`Dashboard server started: http://localhost:${port}/projects/abcd1234\n`));
     // The launching process has exited; the server keeps running, recorded in ATM_HOME
     const r = record(atmHome);
     assert.equal(r.port, port);
@@ -148,7 +149,7 @@ describe('serve', () => {
     assert.equal(r.home, homeId(atmHome));
 
     const again = atm(['service', 'start', '--port', String(port + 5)], root);
-    assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/#project=abcd1234`));
+    assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/projects/abcd1234`));
     assert.equal(record(atmHome).pid, r.pid);
 
     const running = atm(['service', 'status'], root).stdout;
@@ -175,7 +176,7 @@ describe('serve', () => {
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], a).code, 0);
     const second = atm(['service', '--port', String(port)], b);
-    assert.match(second.stdout, new RegExp(`already running: http://localhost:${port}/#project=bbbb2222`));
+    assert.match(second.stdout, new RegExp(`already running: http://localhost:${port}/projects/bbbb2222`));
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     assert.match(api.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     assert.deepEqual(
@@ -237,7 +238,7 @@ describe('serve', () => {
       tasks: [],
     });
     const port = ports();
-    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [root, skippedOnly, gone]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     removeDir(gone);
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = `http://localhost:${port}/api/projects`;
@@ -421,7 +422,7 @@ describe('serve', () => {
       meta: { id: 'eeee5555', project: 'Linked' },
       tasks: [task('L', 'todo')],
     });
-    assert.equal(atm(['project', 'add'], linked).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], linked).code, 0);
     const elsewhere = path.join(atmHome, 'archive.json');
     fs.writeFileSync(elsewhere, JSON.stringify(archive));
     fs.symlinkSync(elsewhere, path.join(linked, '.agentic-task-manager/tasks-archive.json'));
@@ -657,7 +658,7 @@ describe('serve', () => {
       { meta: { id: 'logo0005', project: 'Big' }, tasks: [] },
       { 'logo.png': 'x'.repeat(513 * 1024) },
     );
-    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [withLogo, found, none, outside, big]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], withLogo).code, 0);
     const base = `http://localhost:${port}`;
@@ -724,7 +725,7 @@ describe('serve', () => {
     cleanups.push(() => removeDir(elsewhere));
     fs.writeFileSync(path.join(elsewhere, 'outside.md'), '# outside');
     fs.symlinkSync(elsewhere, path.join(root, 'linked'));
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const base = `http://localhost:${port}/api/v1/projects/docs0001`;
@@ -827,7 +828,7 @@ describe('serve', () => {
     fs.writeFileSync(path.join(sub, 'local.md'), '# Ignored by the submodule\n');
     fs.writeFileSync(path.join(sub, 'new.md'), '# Not committed yet\n');
     fs.writeFileSync(path.join(sub, 'id_rsa'), 'nope');
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const get = (file) =>
@@ -1032,6 +1033,73 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
+  test('v2 (ADR-003 §5): the workspaces, each one’s projects, search and project routes; v1 is the default workspace', async () => {
+    const atmHome = home();
+    const atm = atmIn(atmHome);
+    const root = project(TASKS);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const json = async (p) => {
+      const r = await fetch(`http://localhost:${port}${p}`);
+      return [r.status, await r.json()];
+    };
+    const same = ({ generated_at, ...rest }) => rest;
+
+    let [status, body] = await json('/api/v2/workspaces');
+    assert.equal(status, 200);
+    assert.deepEqual(same(body), { workspaces: [{ id: 'default', projects: 1 }], recent: 'default' });
+
+    // A second workspace listing the same project (the `atm workspace` commands come with T-493)
+    const folder = path.join(atmHome, 'workspaces');
+    fs.copyFileSync(path.join(folder, 'default.json'), path.join(folder, 'work.json'));
+    [, body] = await json('/api/v2/workspaces');
+    assert.deepEqual(
+      body.workspaces.map((w) => w.id),
+      ['default', 'work'],
+    );
+
+    // v1 is the default workspace's v2
+    assert.deepEqual(
+      same((await json('/api/v2/workspaces/default/projects'))[1]),
+      same((await json('/api/projects'))[1]),
+    );
+
+    // Opening a workspace's list records it as the last opened
+    [status, body] = await json('/api/v2/workspaces/work/projects');
+    assert.equal(status, 200);
+    assert.deepEqual(
+      body.projects.map((p) => [p.id, p.missing]),
+      [['abcd1234', false]],
+    );
+    assert.equal((await json('/api/v2/workspaces'))[1].recent, 'work');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(atmHome, 'recent.json'), 'utf8')).workspace, 'work');
+
+    // A project's routes answer as v1's do
+    const pairs = [
+      ['/api/v1/projects/abcd1234/tasks', '/api/v2/workspaces/work/projects/abcd1234/tasks'],
+      ['/p/abcd1234/claims.json', '/api/v2/workspaces/work/projects/abcd1234/claims'],
+      ['/p/abcd1234/worktrees.json', '/api/v2/workspaces/work/projects/abcd1234/worktrees'],
+      ['/api/search?q=serve', '/api/v2/workspaces/work/search?q=serve'],
+    ];
+    for (const [v1, v2] of pairs) {
+      const [a, b] = [await json(v1), await json(v2)];
+      assert.equal(b[0], 200, v2);
+      assert.deepEqual(same(b[1]), same(a[1]), v2);
+    }
+
+    const error = async (p) => {
+      const [s, b] = await json(p);
+      return [s, b.error];
+    };
+    assert.deepEqual(await error('/api/v2/workspaces/nope/projects'), [404, 'unknown workspace']);
+    assert.deepEqual(await error('/api/v2/workspaces/..%2Fx/projects'), [404, 'unknown workspace']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/ffff0000/tasks'), [404, 'unknown project']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/tasks.json'), [404, 'not found']);
+    assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/logo'), [404, 'no logo']);
+    assert.deepEqual(await error('/api/v2/workspaces/work'), [404, 'not found']);
+    atm(['service', 'stop'], root);
+  });
+
   test("the dashboard's pages (T-429): the same page, with its CSP, at each of its paths; nothing else under them", async () => {
     const atm = atmIn(home());
     const root = project(TASKS);
@@ -1047,6 +1115,10 @@ describe('serve', () => {
       '/projects/any-id/',
       '/board',
       '/progress',
+      // In a workspace (ADR-003 §5, T-457)
+      '/w/work',
+      '/w/work/board',
+      '/w/work/projects/abcd1234/list',
     ];
     for (const p of [...pages, '/agents?task=T-1', '/projects/abcd1234/kanban?doc=docs/x.md:L3&about']) {
       const r = await fetch(`http://localhost:${port}${p}`);
@@ -1055,6 +1127,11 @@ describe('serve', () => {
       assert.equal(r.headers.get('content-security-policy'), policy, p);
       assert.equal(await r.text(), body, p);
     }
+    // SvelteKit's check for a new deployment (when the tab regains focus) gets the page's own version: no 404
+    const version = await fetch(`http://localhost:${port}/_app/version.json`);
+    assert.equal(version.status, 200);
+    const whoami = await (await fetch(`http://localhost:${port}/__atm/whoami`)).json();
+    assert.deepEqual(await version.json(), { version: whoami.version });
     // A project's files are never served under its page's path, nor anything deeper than a tab
     for (const p of [
       '/projects/abcd1234/tasks.json',
@@ -1062,6 +1139,8 @@ describe('serve', () => {
       '/projects/abcd1234/List',
       '/boards',
       '/board/x',
+      '/w',
+      '/w/work/tasks.json',
     ]) {
       const r = await fetch(`http://localhost:${port}${p}`);
       assert.notEqual(r.headers.get('content-type'), 'text/html; charset=utf-8', p);
@@ -1131,6 +1210,14 @@ describe('serve', () => {
       assert.equal(frame.headers.get('content-security-policy'), 'sandbox allow-scripts');
       assert.equal(frame.headers.get('access-control-allow-origin'), '*');
       assert.equal(js.headers.get('content-security-policy'), null);
+      // The headers CompMD needs from a host (H1, H2): the table the app's compmd: scheme is checked against too
+      const table = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/scripts/compmd-host-headers.json'), 'utf8'));
+      for (const [file, headers] of Object.entries(table.files)) {
+        const r = await fetch(base + file);
+        assert.equal(r.status, 200, file);
+        for (const [name, value] of Object.entries(headers))
+          assert.equal(r.headers.get(name), value, `${file}: ${name}`);
+      }
       const mermaid = await fetch(base + 'compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js', {
         method: 'HEAD',
       });
@@ -1320,7 +1407,7 @@ describe('serve', () => {
       tasks: [],
     });
     const port = ports();
-    assert.equal(atm(['project', 'add'], bad).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], bad).code, 0);
     fs.writeFileSync(path.join(bad, '.agentic-task-manager/tasks.json'), '['.repeat(100000) + ']'.repeat(100000));
     assert.equal(atm(['service', '--port', String(port)], good).code, 0);
     const r = await fetch(`http://localhost:${port}/api/projects`);
@@ -1345,10 +1432,10 @@ describe('serve', () => {
       meta: { id: 'abcd1234', project: 'Copy' },
       tasks: [{ id: 'T-1', name: 'x', phase: 0, type: 'feature', status: 'todo' }],
     });
-    assert.equal(atm(['project', 'add'], first).code, 0);
-    assert.equal(atm(['project', 'add'], second).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], first).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], second).code, 0);
     assert.equal(fs.statSync(atmHome).mode & 0o777, 0o700);
-    const listed = JSON.parse(atm(['project', 'list', '--json'], first).stdout);
+    const listed = JSON.parse(atm(['workspace', 'projects', '--json'], first).stdout);
     const ids = listed.projects.map((p) => p.id);
     assert.equal(new Set(ids).size, 2, ids.join(', '));
     assert.ok(ids.includes('abcd1234'));
@@ -1429,7 +1516,7 @@ describe('serve', () => {
       meta: { id: 'bbbb2222', project: 'Blog' },
       tasks: Array.from({ length: 205 }, (_, i) => task(`B-${i + 1}`, { name: 'Write a post' })),
     });
-    for (const p of [shop, blog]) assert.equal(atm(['project', 'add'], p).code, 0);
+    for (const p of [shop, blog]) assert.equal(atm(['workspace', 'add-project'], p).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], shop).code, 0);
     const search = async (q, extra = '') =>
@@ -1488,7 +1575,7 @@ describe('serve', () => {
         task('T-3', { dependencies: ['T-2'] }),
       ],
     });
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], root).code, 0);
     const url = (query = '') => `http://localhost:${port}/api/v1/projects/cccc3333/tasks${query}`;
@@ -1537,7 +1624,7 @@ describe('serve', () => {
       meta: { id: 'dddd4444', project: 'Broken', priorities: 'not a list' },
       tasks: [task('T-1'), 'not a task', task('T-2', { dependencies: 'T-1' })],
     });
-    assert.equal(atm(['project', 'add'], root).code, 0);
+    assert.equal(atm(['workspace', 'add-project'], root).code, 0);
     // Every atm command still refuses it
     assert.notEqual(atm(['task', 'list'], root).code, 0);
     const port = ports();
@@ -1619,6 +1706,31 @@ describe('serve', () => {
     fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify({ ...theirs, pid: sleeper.pid }));
     assert.match(atm(['service', 'stop'], root).stdout, /removed a stale record/);
     assert.equal(alive(theirs.pid), true);
+    atmIn(otherHome)(['service', 'stop'], root);
+    assert.equal(alive(theirs.pid), false);
+  });
+
+  test('a record naming another atm folder’s live server is not ours, and stop leaves that server (T-501)', async () => {
+    // As on a machine where the state folder moved from ~/.agentic-task-manager with the record, while an older atm
+    // still runs its server for the old folder: the record names that server, its own pid and port
+    const atmHome = home();
+    const otherHome = home();
+    const root = project();
+    const port = ports();
+    atmIn(otherHome)(['service', '--port', String(port)], root);
+    const theirs = record(otherHome);
+    fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(theirs));
+    const atm = atmIn(atmHome);
+    const status = JSON.parse(atm(['service', 'status', '--json', '--port', String(port)], root).stdout);
+    assert.equal(status.running, false);
+    assert.deepEqual(status.unrecorded, []);
+    // Only the platform's state folder looks for an older atm's server (on ~/.agentic-task-manager); never one set
+    // with ATM_HOME, as here, so a test or another setup never reports the user's own servers
+    assert.deepEqual(status.older_atms, []);
+    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), false, 'the record went');
+    fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(theirs));
+    assert.match(atm(['service', 'stop', '--port', String(port)], root).stdout, /removed a stale record/);
+    assert.equal(alive(theirs.pid), true, 'another folder’s server is never stopped');
     atmIn(otherHome)(['service', 'stop'], root);
     assert.equal(alive(theirs.pid), false);
   });
@@ -1827,7 +1939,7 @@ describe('serve', () => {
     cleanups.push(() => removeDir(root));
     const r = atm(['service', '--port', String(ports())], root);
     assert.match(r.stdout, /Moved docs\/tasks.json to .agentic-task-manager\/tasks.json/);
-    assert.match(r.stdout, /#project=abcd1234/);
+    assert.match(r.stdout, /\/projects\/abcd1234/);
     atm(['service', 'stop'], root);
   });
 
@@ -1840,7 +1952,7 @@ describe('serve', () => {
     const port = ports();
     const started = atm(['service', '--dir', root, '--port', String(port)], elsewhere);
     assert.equal(started.code, 0, started.stderr);
-    assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/#project=abcd1234`));
+    assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/projects/abcd1234`));
     assert.match(atm(['service', 'status', '--dir', root], elsewhere).stdout, new RegExp(`localhost:${port}/`));
     assert.match(atm(['service', 'stop', '--dir', root], elsewhere).stdout, /Dashboard server stopped/);
     assert.equal(record(atmHome), null);

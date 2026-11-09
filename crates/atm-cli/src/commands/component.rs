@@ -2,9 +2,9 @@
 
 use std::path::Path;
 
-use atm_boot::open_project;
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
+use atm_lib::Project;
 use atm_lib::components::{Moved, add_component, edit_component, list_components};
 use clap::Subcommand;
 use serde_json::{Value, json};
@@ -100,7 +100,7 @@ pub fn run(command: ComponentCommand, ctx: Context, cwd: &Path) -> Result<()> {
     }
     match command {
         ComponentCommand::List => {
-            let listed = list_components(&open_project(cwd)?)?;
+            let listed = list_components(&Project::open(cwd)?)?;
             if ctx.json {
                 print_json(&Value::Array(listed));
             } else if listed.is_empty() {
@@ -157,7 +157,7 @@ pub fn run(command: ComponentCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let (component, moved) = add_component(
-                &mut open_project(cwd)?,
+                &mut Project::open(cwd)?,
                 &component_id,
                 label.as_deref(),
                 &path,
@@ -200,7 +200,7 @@ pub fn run(command: ComponentCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let edited = edit_component(
-                &mut open_project(cwd)?,
+                &mut Project::open(cwd)?,
                 &component_id,
                 label.as_deref(),
                 &add_path,

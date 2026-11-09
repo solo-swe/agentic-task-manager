@@ -1,9 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { projectsUrl, searchUrl, v1DocumentUrl, v1FileUrl, v1TasksUrl } from '../../src/lib/api/http';
+import { setApiWorkspace } from '../../src/lib/api/workspace';
 import {
   DEFAULT_PROJECT_NAME,
   loadArchive,
   loadProjects,
   loadTasks,
+  loadWorkspaces,
   newBuildReady,
   parseTasksFile,
   projectFileUrl,
@@ -88,6 +91,74 @@ describe('projectFileUrl', () => {
   it("is the file under the project's id, from the server's root", () => {
     expect(projectFileUrl('abcd1234', 'worktrees.json')).toBe('/p/abcd1234/worktrees.json');
     expect(projectFileUrl('a b/c', 'claims.json')).toBe('/p/a%20b%2Fc/claims.json');
+  });
+});
+
+describe('the workspace’s routes (ADR-003 §5)', () => {
+  afterEach(() => setApiWorkspace('default'));
+
+  it("are default's v1 routes, and another workspace's v2 ones", async () => {
+    expect([
+      projectsUrl(),
+      searchUrl(),
+      v1TasksUrl('p'),
+      v1DocumentUrl('p', 'a b.md'),
+      v1FileUrl('p', 'x.png'),
+    ]).toEqual([
+      '/api/projects',
+      '/api/search',
+      '/api/v1/projects/p/tasks',
+      '/api/v1/projects/p/documents?path=a%20b.md',
+      '/api/v1/projects/p/files?path=x.png',
+    ]);
+    setApiWorkspace('my work');
+    const w = '/api/v2/workspaces/my%20work';
+    expect([
+      projectsUrl(),
+      searchUrl(),
+      v1TasksUrl('p'),
+      v1DocumentUrl('p', 'a.md'),
+      v1FileUrl('p', 'x.png'),
+      projectFileUrl('p', 'claims.json'),
+      projectFileUrl('p', 'worktrees.json'),
+    ]).toEqual([
+      `${w}/projects`,
+      `${w}/search`,
+      `${w}/projects/p/tasks`,
+      `${w}/projects/p/documents?path=a.md`,
+      `${w}/projects/p/files?path=x.png`,
+      `${w}/projects/p/claims`,
+      `${w}/projects/p/worktrees`,
+    ]);
+    const fetchFn = vi.fn<typeof fetch>(() =>
+      Promise.resolve(jsonResponse({ projects: [{ id: 'p', logo: 'api/v2/workspaces/my%20work/projects/p/logo' }] })),
+    );
+    const result = await loadProjects(fetchFn);
+    expect(fetchFn.mock.calls[0][0]).toBe(`${w}/projects`);
+    expect(!result.unchanged && result.projects[0].logo).toBe(`/${w.slice(1)}/projects/p/logo`);
+  });
+});
+
+describe('loadWorkspaces', () => {
+  it('lists the workspaces and the one opened last; anything unexpected, or no route, is `default` alone', async () => {
+    const answer = (body: unknown, status = 200) => vi.fn(() => Promise.resolve(jsonResponse(body, status)));
+    expect(
+      await loadWorkspaces(
+        answer({ workspaces: [{ id: 'default', projects: 2 }, { id: 'work' }, { id: '' }, 3], recent: 'work' }),
+      ),
+    ).toEqual({
+      workspaces: [
+        { id: 'default', projects: 2 },
+        { id: 'work', projects: 0 },
+      ],
+      recent: 'work',
+    });
+    const alone = { workspaces: [{ id: 'default', projects: 0 }], recent: 'default' };
+    // A last opened workspace that is gone is `default`
+    expect(await loadWorkspaces(answer({ workspaces: [{ id: 'default' }], recent: 'gone' }))).toEqual(alone);
+    expect(await loadWorkspaces(answer({ workspaces: [{ id: 'work' }] }))).toEqual(alone);
+    expect(await loadWorkspaces(answer({ error: 'not found' }, 404))).toEqual(alone);
+    expect(await loadWorkspaces(vi.fn(() => Promise.reject(new Error('offline'))))).toEqual(alone);
   });
 });
 

@@ -17,14 +17,16 @@
     "test:e2e": "pnpm run build && cargo build --manifest-path ../Cargo.toml && playwright test --grep-invert visual",
     "test:scripts": "cargo build --manifest-path ../Cargo.toml && node ../tests/scripts/run.mjs",
     "bench": "node ../tests/scripts/bench.mjs",
+    "app:bundle": "TAURI_APP_PATH=../app/src-tauri tauri build --config ../app/src-tauri/tauri.release.conf.json",
     "branding": "node ../branding/generate.mjs",
     "lint": "eslint .",
     "format": "prettier --config .prettierrc --write . ../tests/scripts",
     "check": "pnpm run generate && node scripts/check-versions.mjs && svelte-check --fail-on-warnings && eslint . && prettier --config .prettierrc --check . ../tests/scripts",
     "verify": "pnpm run check && pnpm run test:coverage && pnpm run build && pnpm run test:scripts && pnpm run test:e2e && pnpm run test:e2e:visual",
     "prepare": "svelte-kit sync && pnpm run generate",
-    "test:e2e:visual": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual\"",
-    "test:e2e:visual:update": "docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual --update-snapshots=changed\""
+    "build:atm-linux": "pnpm run build && docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-linux-cargo-registry:/usr/local/cargo/registry -w /repo -e RUSTUP_TOOLCHAIN=1.99.0 rust:1.99.0-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6 cargo build --locked -p atm-cli --target-dir target/linux",
+    "test:e2e:visual": "pnpm run build:atm-linux && docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard -e ATM_E2E_BIN=/repo/target/linux/debug/atm mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual\"",
+    "test:e2e:visual:update": "pnpm run build:atm-linux && docker run --rm -v \"$(cd .. && pwd)\":/repo -v atm-dashboard-linux-modules:/repo/dashboard/node_modules -w /repo/dashboard -e ATM_E2E_BIN=/repo/target/linux/debug/atm mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea sh -c \"npm install --global --silent pnpm@12.14.0 && pnpm install --frozen-lockfile && pnpm run build && pnpm exec playwright test visual --update-snapshots=changed\""
   },
   "devDependencies": {
     "@comp-markdown/mermaid": "0.1.1",
@@ -38,6 +40,8 @@
     "@sveltejs/adapter-static": "^4.0.1",
     "@sveltejs/kit": "3.1.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tauri-apps/api": "2.12.4",
+    "@tauri-apps/cli": "2.12.4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/svelte": "^5.4.2",
     "@tsconfig/svelte": "^5.0.8",

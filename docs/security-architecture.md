@@ -25,8 +25,9 @@ this document is what changes with the code.
 | A collaborator, or anyone whose commits the user pulls | may write tasks, must not control the machine | `tasks.json`, the archive, `meta` |
 | A hostile repository the user clones | no | everything in it, symlinks included |
 | A web page in the user's browser | no | HTTP requests to `localhost` |
-| Another local user or process | no | the server's port, files in `ATM_HOME` |
+| Another local user or process | no | the server's port, files in atm's state folder (`ATM_STATE_DIR`, T-490) |
 | An outside contributor, CI output | no | PRs, CI logs, review comments the push skill reads |
+| Another program, or a web page, opening a link | no | `atm://` links the app is opened with (T-459) |
 | The supply chain | partly | npm, crates.io, GitHub Actions, the CI container, the release and Homebrew tap |
 
 **Trust boundaries** (where untrusted input enters):
@@ -37,8 +38,9 @@ this document is what changes with the code.
 | B2 | repository files → atm-cli | `tasks.json`, the archive, `.gitattributes`, paths, symlinks under `.agentic-task-manager/` |
 | B3 | browser → dashboard server | every HTTP request, from any page |
 | B4 | task data → dashboard rendering | names, Markdown, links, logos; every project's card fields in `api/projects` (`board`: names, types, labels, agents, times, T-257), rendered as text on the All projects board like a project's own cards (I15, T-259) |
-| B5 | local machine → atm's runtime files | `ATM_HOME`, the server's port |
+| B5 | local machine → atm's runtime files | the state folder (the platform's app data folder, or `ATM_STATE_DIR`; made owner-only, 0700, as `ATM_HOME` was), the server's port |
 | B6 | contributors and CI → repository → users | workflows, artifacts, dependencies, the build artifacts users run |
+| B7 | the app's window → the app (IPC), and the world → the app (`atm://` links) | every command call from the window's page (task text rendered in it is B4's); every link another program opens |
 
 The threats per boundary (STRIDE, with likelihood and impact) are in `docs/security-review.md` §2.4; new ones are
 added here, in §4.
@@ -75,7 +77,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I10 | **Loopback only, matching Host**: the server binds 127.0.0.1 and refuses any other Host header (DNS rebinding) | `serve.test.mjs` "a request for another Host is refused" |
-| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, embedded in the binary from the build's `dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed) and `whoami` | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-lib/src/documents.rs`'s tests |
+| I11 | **Nothing changes state over HTTP**: only GET and HEAD. The one exception is a choice of view (ADR-003 §5, T-456): `api/v2/workspaces/<w>/projects` records `<w>` as the last opened workspace in the state folder's `recent.json` (only a workspace that exists, its ID checked as a file name, written under the state folder's lock and only when it changes; never task data). The v2 routes (`api/v2/workspaces`, and per workspace `…/<w>/projects`, `…/<w>/search` and `…/<w>/projects/<p>/tasks|documents|files|claims|worktrees|logo`) are the v1 routes below for any workspace, through the same atm-lib reads with the same checks; an unknown workspace or project is 404. The v1 routes: the page, `api/projects`, `api/search` (reads every project's `tasks.json`, the query capped at 200 characters and the answer at 200 IDs a project, T-258), a project's `claims.json`, `worktrees.json` and `logo` (computed through atm-lib; the task files themselves are no longer served as stored, T-374), `api/v1/projects/<id>/tasks` (a registered project's tasks through atm-lib, read-only: the same Host check, the size limit, and the task folder's symlink checks of `find_paths`, which refuse the whole project; filters are query parameters, compared, never run or used as paths, T-364), `/assets/…` (atm's own files the page loads, the CompMD runtime, its sandbox's frame documents and the Mermaid pack: `.js`, `.wasm` and `.html` only, embedded in the binary from the build's `dashboard/dist/assets/`, named by plain segments; readable cross-origin, a frame document sandboxed, T-284, T-285), `api/v1/projects/<id>/documents?path=` and `…/files?path=` (a project's file for the document viewer, through atm-lib, T-392: a relative, normalized path without hidden segments, not a key file, not a file git ignores (in a git submodule, the submodule's own repository decides, T-408; any git error refuses the file), under 1 MB (5 MB for an image), reached through no symlink; `files` only an image whose bytes match its type, sandboxed), `whoami` and `/_app/version.json` (the page's own version and nothing else, for SvelteKit's check for a new deployment, T-495) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "api/search", "api/v1/projects/<id>/tasks", "/assets/ serves the CompMD runtime atm embeds…", "a project's files for the document viewer…", "files in a git submodule…"; `crates/atm-lib/src/documents.rs`'s tests |
 | I12 | **Only the registered projects' data is served**: their task data, read from regular files only, never through a symlink (a task folder with a linked file is refused whole, checked on every request), and, for the document viewer, files of their working copy under the checks of I11, never a hidden, ignored or key file, nothing outside the project (a git submodule's checkout is inside it; a file in it is ignored by the submodule's own rules) | `serve.test.mjs` "a registered project has its v1 tasks…", "a task file that is a symlink is never read…", "a project's files for the document viewer…" |
 | I13 | **Every response has `nosniff` and CORP same-origin; the page has the strict CSP** (own scripts by hash, and the CompMD runtime from the asset folder only, `http://<the page's host>/assets/compmd/`, which may compile WebAssembly, `'wasm-unsafe-eval'`; never `'self'`, `'unsafe-eval'` or inline scripts; frames only CompMD's sandbox frames from the same folder, `frame-src`; `connect-src 'self'`, `frame-ancestors 'none'`) | `serve.test.mjs` "security headers"; `dashboard/tests/e2e/security.spec.ts`; `security-headers.test.ts` |
 
@@ -96,6 +98,16 @@ with the task that adds it.
 | I19 | **Actions are pinned by commit SHA and images by digest, pnpm by version; installs take exactly the lockfile** (`pnpm install --frozen-lockfile`) and `cargo build --locked` exactly `Cargo.lock`, its crates checked by `cargo deny`; Dependabot proposes action and package updates, grouped (one PR a week per ecosystem; a major apart) | `ci-workflow.test.ts`; `.github/dependabot.yml` |
 | I20 | **What users run is what was reviewed**: the dashboard and CompMD's runtime are never committed; CI and the release workflow build them from the reviewed sources (the lockfile, exactly) before the binary that embeds them (T-477); a release is built from a `v*` tag on `main`, the macOS builds signed and notarized, every archive in `SHA256SUMS`, and the formula's checksums are the release's (T-452). Nothing generated is committed since the Python atm went (T-454) | the `rust` jobs and `release.yml` build the dashboard first; `ci-workflow.test.ts` |
 | I21 | **`main` takes only reviewed changes with green checks** | the ruleset `.github/rulesets/main.json`, applied by the owner (T-231) |
+
+### The atm app (B7)
+
+| # | Invariant | Enforced by |
+|---|---|---|
+| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands` |
+| I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and CompMD's origin (`compmd://localhost`, `http://compmd.localhost` on Windows) with `'wasm-unsafe-eval'`, never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and CompMD's origin; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **A new entry point, the `compmd:` scheme** (ADR-004, T-503; `crates/tauri-plugin-compmd`): any page in the webview can request it, and it serves only CompMD's built folder as embedded at build time (`build::embed`: `.js`, `.wasm` and `.html`, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged; with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`, a frame document sandboxed, the same table for both). It is not IPC: a page or frame on it can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `compmds_files_come_from_its_own_scheme_with_no_policy_but_their_own` (the plugin against `tests/scripts/compmd-host-headers.json`, which `serve.test.mjs` checks `atm serve` against); the plugin's tests (`crates/tauri-plugin-compmd`); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd://localhost` and `http://compmd.localhost`); `the_page_is_served_with_a_policy_it_works_under`; the e2e `cspGuard` on `app.spec.ts` |
+| I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12); the commands write nothing but the last opened workspace (`list_projects`, as its route) and, on the user's click only, the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write) | `each_command_answers_what_its_rest_route_does`; `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests |
+| I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links" |
+| I29 | **The app users run is the reviewed build, with one `atm` on PATH**: the DMG is built on a `v*` tag in the release workflow's `app-macos` job (read-only token, the dashboard built from the lockfile first), signed and notarized (the app and its bundled CLI by Tauri's bundler, the DMG by `notarize-dmg.sh`, stapled), its checksum in `SHA256SUMS`; the cask links the app's own CLI and `conflicts_with` the formula; it installs nothing into agent harnesses | `release.yml` (`ci-workflow.test.ts`'s checks of every workflow); `packaging.test.mjs` "the Homebrew cask…" |
 
 ## 3. Verifying it
 
@@ -687,6 +699,97 @@ Rust binary only, installed from a release (above). What that changes:
   e2e suite (411 pass). The screenshots are CI's this time: the local Docker scripts need a Linux atm since T-478
   (T-485).
 
+**The app's skeleton (T-455, `app/src-tauri/`).** A new entry point: the app's IPC commands, which the window's pages
+can call. T-461 reviews the finished app; until then the skeleton keeps to the Tauri guide:
+- **Only the window's own pages call commands.** Each command is in the app's manifest (`build.rs`), so it needs a
+  permission; the one capability (`capabilities/main.json`) gives the main window's local pages `version` and
+  `list_projects`, and no core or plugin API. A page from anywhere else, CompMD's sandbox frames included, is refused
+  (`the_main_windows_capability_lets_it_call_the_commands`).
+- **The dashboard server's policy** (I13) for the window's page: `default-src 'none'`, scripts only by hash (Tauri adds
+  the hashes of the bundled page's inline scripts) plus CompMD's runtime, frames only CompMD's, `connect-src` only
+  Tauri's IPC, no base, forms or framing.
+- **The commands read only the user's registry** (`atm project list`'s data), through atm-lib's `Workspaces`, as
+  `atm serve` does; nothing is written yet (T-456 below adds the reads and their one write).
+- **Its dependencies** (approved): Tauri 2.12.5 (2.11.1 or later, CVE-2026-42184), the single-instance plugin, and
+  tauri-specta with specta, pre-releases pinned exactly. The CLI's release doesn't include them (`-p atm-cli`).
+
+**The app's commands and the v2 routes (T-456, ADR-003 §5).** New entry points: the v2 routes (I11) and the app's
+commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`,
+`document`, `file`, `logo`, and `subscribe_workspace`, `subscribe_project`, `unsubscribe`.
+- **Each command is a read through the same atm-lib call as its route** (`Workspace`, `Member`), so it has the same
+  checks: the task folder's symlink checks, the size limit, the document viewer's path rules. A test per read checks
+  the route and the command answer the same (`each_command_answers_what_its_rest_route_does`), and the main window's
+  capability lists exactly these commands, refused to any other page (`the_main_windows_capability_lets_it_call_the_commands`).
+- **One write, a choice of view:** `list_projects` (like its route) records the workspace as the last opened, in
+  `recent.json`, only when it changes.
+- **Subscriptions watch only what the store reports** (`Store::watch_folders`: the task folder, the claims store's
+  folder, the worktrees' task folders; for a workspace, also the state folder's `workspaces/`), not their subfolders,
+  with notify 8.2.1 and its debouncer 0.7.0 (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
+  or project changed, on that subscription's channel; the page reads again through the commands.
+
+**The `atm workspace` commands (T-493, ADR-003 §3).** `atm project list|add|remove|prune` are replaced by
+`atm workspace list|create|delete|rename|projects|add-project|remove-project|prune`. New files in the state folder:
+`workspaces/<w>.json` (a workspace's list, as `default.json` was) and `recent.json` (T-456). A workspace ID is a file
+name, checked before any path is made from it (letters, digits, `.`, `_` and `-`, not starting with `.`, at most 64:
+`valid_workspace_id`; `workspace create ../up` is refused, a scenario checks it). Every write is under the state
+folder's lock; `default` can't be deleted or renamed, and no workspace can take its name. Deleting a workspace removes
+only its file, never a project's.
+- **Skill and `docs/agent/` changed** (`skills/atm-serve/SKILL.md`, `docs/agent/commands.md`). No API key is used for
+  the agent sandbox, so this written review takes the live run's place: the serve skill names `atm workspace projects`
+  instead of `atm project list` and says the dashboard opens the last opened workspace; `atm docs commands` lists the
+  two reads and says the other workspace commands are the user's to decide. Nothing new to run, fetch or install. The
+  skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
+  list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
+
+**The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
+`connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
+Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
+or `Invalid` before anything is written; a folder in the way that atm didn't write is refused, never replaced; every
+path written recorded in `agents.json` and listed back). It runs only on the user's click in the dialog; opening it
+calls only `agents_status`, a read (`app.spec.ts` checks the calls). The main window's capability allows both; a page
+from anywhere else is refused (`the_main_windows_capability_lets_it_call_the_commands`). atm serve has no such route:
+the browser's dialog gives the command to run. T-461 reviews it with the rest of the app.
+
+**The app's deep links (T-459).** A new entry point: any program or page can open an `atm://` link. A link is only
+ever an address for the dashboard's router: `app/src-tauri/src/links.rs` turns `atm://<path>?<query>` into
+`/<path>?<query>` only when the path is one of the dashboard's pages (`projects`, `board`, `progress`, `agents`, `w`),
+without `.` or `..` segments, empty segments, a fragment, or a character outside an address's (a link over 4 KB is
+refused); the page then navigates to it only if `isPagePath` says it is one of its own (`lib/api/links.ts`). Nothing
+is fetched, read or run because of a link: it chooses which page shows, as typing the address would. The link's
+address reaches the page on its own channel (`subscribe_links`, in the main window's capability). Tests:
+`links.rs`'s, `tests/unit/links.test.ts`, `app.spec.ts` "deep links". T-461 reviews it with the rest of the app.
+
+**The app's DMG and cask (T-460).** A new release artifact and a new way onto users' PATH:
+- **Signed and notarized as the CLI is**, with the same secrets, read only in the macOS jobs (I20): Tauri's bundler
+  signs every binary in `atm.app` (the bundled `atm` CLI too, hardened runtime) and notarizes the app;
+  `packaging/notarize-dmg.sh` signs, notarizes and staples the DMG. The `app-macos` job has the workflow's read-only
+  token; only the last job, which builds nothing, writes the release. Its checksum is in `SHA256SUMS` with the rest.
+- **One `atm` on PATH:** the cask links the app's own CLI (`binary`) and `conflicts_with` the formula, so the CLI
+  agents run is the build the app was made with, never a second copy shadowing it.
+- **Nothing is installed into agent harnesses:** the cask only says to run `atm agents install`
+  (`packaging.test.mjs` checks it has no postflight or system command); the app's button for it is T-458's, never run
+  on its own.
+- **Its CI changes** (the `app-macos` job, the cask in the Homebrew workflow) add no permission, secret or action: the
+  same pinned actions, the tap's deploy key as before.
+
+**Release 0.34.0 (T-509).** The first release with the app. The checklist:
+- **Skills and `docs/agent/` changed** (against `main`: `skills/atm-serve/SKILL.md`, `skills/claude-code.json` and
+  `docs/agent/commands.md` in T-493; `skills/atm-push/SKILL.md` in T-486; 9 lines added, 3 removed). No API key is
+  used for the agent sandbox, so this written review takes the live run's place. T-493's changes are reviewed above
+  (the workspace reads named, the other workspace commands the user's, the serve skill's pre-approvals narrowed to two
+  reads). T-486's rewords one sentence: `atm vcs pushed` releases a release whose tasks are all merged "in this PR or
+  earlier ones". No rule changed, nothing new to run, fetch or install, and no pre-approval added.
+- **Entry points, fields, CI permissions:** the app's (T-455 to T-460, reviewed in T-461: B7, I25–I29), the v2 routes
+  and `recent.json` (T-456, T-493), the state folder's move (T-490, T-501), and the `compmd:` scheme (T-503, I26),
+  each recorded above with its checks. No new CI permission: the `app-macos` job runs with the read-only token.
+- **What ships is what is described:** the app's DMG and cask are built for the first time by this release's tag
+  (`release.yml`'s `app-macos`, `homebrew.yml`'s cask); §5's by-hand checklist for the first signed DMG is done with
+  the user once it is published. Diagrams don't draw in the app in 0.34.0 (CompMD 0.5.0's frames refuse their runtime
+  on `compmd://`, T-503, waiting on CompMD 0.6.0): the app shows the rest of the text, and the browser is unchanged.
+- **Checks run locally:** `cargo test`, clippy, fmt and deny; the unit tests with coverage (1249); the CLI suite (598:
+  the stress test once timed out on the lock while the whole suite ran, and passed run alone); the functional e2e
+  suite (420); the Linux screenshots in Docker (84, no baseline changed).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
@@ -706,3 +809,15 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
 - Those still **to build** rely on review until their tasks add the checks: I5 and I15 (T-234), I1's red-team run
   (T-235), I18 and I19 (T-230), I21 (T-231). I9 stays a review item.
 - A release is every PR to `main` (§3).
+- **The app (T-461, 2026-11-08):** boundary B7 and invariants I25–I29, each with its check, from the entries of
+  T-455 to T-460 in §3. Still open, by design or for later:
+  - **By hand, on the first signed DMG** (0.34.0's tag): it opens without a Gatekeeper warning, offline too
+    (stapled); `spctl -a -vv atm.app` says "Notarized Developer ID"; `atm` from the cask runs and is the app's
+    (`readlink $(which atm)`); `open 'atm://projects/<id>/list'` opens that page, running or not; `open
+    'atm://api/projects'` and `open 'atm://projects/../x'` change nothing; the window's DevTools are off in the release
+    build; Connect your agents writes only under `~/.claude/skills` and `atm agents status` agrees.
+  - **In-app updates** (T-483) will add an entry point that downloads and installs code: its own review when it lands
+    (blocked on the plugin, the key and the Homebrew choice).
+  - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.
+  - **Accepted**: in the app a document's relative images show their alt text (T-457), and a reload on a deep page
+    has no fallback page yet; neither reaches anything outside the window.

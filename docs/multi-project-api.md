@@ -31,7 +31,17 @@ parallel. The e2e `tasksServer` fixture and the dev server (`dashboard/build/dev
 | `GET /api/v1/projects/<id>/documents?path=<p>` | a file of that project, for the document viewer (§2.6) | yes |
 | `GET /api/v1/projects/<id>/files?path=<p>` | an image file of that project, its bytes (§2.6) | yes |
 | `GET /__atm/whoami` | who this server is (§4) | no |
+| `GET /_app/version.json` | `{"version": …}`, the page's own version: SvelteKit's check for a new deployment, which it makes when the tab regains focus (atm's reload offer comes from whoami) | no |
+| `GET /api/v2/workspaces` | the workspaces (§2.8) | no |
+| `GET /api/v2/workspaces/<w>/projects` | that workspace's projects with their summaries (§3); opens it | yes |
+| `GET /api/v2/workspaces/<w>/search?q=<text>` | the tasks matching a search, in its projects (§2.4) | no |
+| `GET /api/v2/workspaces/<w>/projects/<id>/tasks` | as `api/v1/projects/<id>/tasks`, in that workspace | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/documents?path=`, `files?path=` | as the v1 file routes (§2.6) | yes |
+| `GET /api/v2/workspaces/<w>/projects/<id>/claims`, `worktrees`, `logo` | as `/p/<id>/claims.json`, `worktrees.json`, `logo` | yes |
 | anything else | `404` | |
+
+The routes without a workspace (`api/projects`, `api/search`, `api/v1/…`, `/p/…`) are the `default` workspace's
+(ADR-003 §5), until the dashboard has moved to the v2 ones (T-457).
 
 - `<id>` is a project id from `/api/projects` (§3.1). An unknown id gets `404` with `{"error": "unknown project"}`.
 - Only those names are answered for a project: `claims.json` and `worktrees.json`, computed through atm-lib, and
@@ -176,12 +186,32 @@ text the page reads, never a file it looks up.
 | `/` | the landing page: the overview with two or more projects, the project with one (whose address it then takes) |
 | `/projects` | the overview's project cards; `/board`, `/progress`, `/agents` its other tabs |
 | `/projects/<id>` | a project, on its saved tab; `/projects/<id>/<tab>` on a tab (`kanban`, `list`, `graph`, `progress`, `agents`, `project`) |
+| `/w/<w>`, `/w/<w>/…` | any of the above in workspace `<w>` (§2.8, T-457): `/w/<w>` its landing page. Without `/w/<w>`, `default`'s; `/` itself opens the workspace opened last |
 
 What is open over a page is in the query: `?task=T-1` a task's details, `?doc=docs/x.md:L40` (or `#heading`, encoded) a
 document in the viewer, `?sprint=active` the Sprint filter, `?about` and `?help` the dialogs. The server ignores the
 query. The paths are `PAGE_PATH` in `api/server.py` (a tab is lowercase letters; nothing deeper than a tab), any other
 path gets `404`. An old link from before T-429 (`/#project=<id>&view=list&doc=…`) still opens: the page reads the
 old parameters from its hash and moves to the new address.
+
+### 2.8 `api/v2/workspaces`: the workspaces (ADR-003, T-456)
+
+```json
+{"generated_at": "2026-11-08T12:00:00Z", "workspaces": [{"id": "default", "projects": 3}, {"id": "work", "projects": 1}], "recent": "work"}
+```
+
+- `workspaces`: every workspace in the state folder (§5), `default` first and always there, with how many projects
+  it lists; `recent`: the one opened last (`recent.json`), else `default`.
+- **Opening a workspace** is reading its `projects` (`api/projects` for `default`): the server records it as the last
+  opened, the one write a read makes (a choice of view, never task data; written only when it changes). The
+  dashboard's `/` opens it (T-457), and a switcher next to the project selector lists the workspaces when there is
+  more than one. The dashboard reads `default` from the v1 routes and any other workspace from its v2 ones.
+- A workspace's routes answer as the v1 ones do, for its own projects: an unknown workspace gets `404` with
+  `{"error": "unknown workspace"}`, an unknown project `{"error": "unknown project"}`. A project's ID is unique within
+  a workspace; its logo is at `api/v2/workspaces/<w>/projects/<id>/logo` (in `default`, `p/<id>/logo`).
+- The app's commands answer the same (without `generated_at`): `list_workspaces`, `list_projects`, `search`,
+  `project_tasks`, `claims`, `worktrees`, `document`, `file` and `logo`, and `subscribe_workspace`,
+  `subscribe_project` and `unsubscribe` for live changes (docs/guides/tauri.md).
 
 ## 3. `GET /api/projects`
 
@@ -309,7 +339,11 @@ above, the priority the project's default when a task has none), plus `by` (the 
 path, never the path itself (T-390). `atm service status` and `stop` look at the 20 ports from `--port` (8765 by
 default) for servers of their own folder that `server.json` doesn't name, a server whose record was lost or
 overwritten: `status` reports them (`unrecorded` in `--json`), `stop` stops them. A server of another folder, or one
-too old to give `home`, is never touched.
+too old to give `home`, is never touched. A record counts as the folder's only while the server on its port gives the
+record's `pid` **and** this folder's `home` (T-501: the record moved from `~/.agentic-task-manager` names the server an
+older atm still runs for that folder); any other record is removed. For the platform's state folder, `status` also
+names an older atm's servers on those ports, those whose `home` is `~/.agentic-task-manager`'s (`older_atms` in
+`--json`).
 
 `version` and `build` are the `atm-dashboard-version` and `atm-dashboard-build` meta tags of the dashboard the server
 holds, read from the very bytes it serves at `/`, so a page loaded from it always has the same `build`. atm compares
@@ -322,12 +356,25 @@ The open dashboard compares `build` with its own to offer a reload.
 The old per-project servers (0.10.0–0.14.0) answer `{atm, folder, pid}`. The `folder` key identifies one, which is how
 `atm db migrate` recognises and stops it.
 
-## 5. Files in `ATM_HOME`
+## 5. Files in atm's state folder
 
-`ATM_HOME` is `~/.agentic-task-manager` unless the environment sets it. Both files are written atomically (temporary
-file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
+The state folder ([ADR-003](adr/ADR-003-workspaces.md) §2) is `ATM_STATE_DIR` when set, else `ATM_HOME` (its older
+name), else the platform's app data folder for `com.solo-swe.atm`: `~/Library/Application Support/com.solo-swe.atm/`
+(macOS), `$XDG_DATA_HOME/com.solo-swe.atm/` or `~/.local/share/com.solo-swe.atm/` (Linux),
+`%APPDATA%\com.solo-swe.atm\` (Windows). Without either variable, the first run moves `~/.agentic-task-manager/` there
+and leaves `MOVED.txt` in its place (T-490). Both files are written atomically (temporary file, then rename) under the
+folder's `.lock`, atm's usual lock directory.
 
-### 5.1 `projects.json`, the registry
+**An older atm beside it** (T-501): an atm from before 0.34.0 still uses `~/.agentic-task-manager/`, and makes its
+`projects.json` again there. Whenever the `default` workspace is read, the projects that file lists, with a readable
+task file, are added to `default` (never removed from it), when the file changed since it was last read:
+`legacy-adopted.txt` in the state folder holds its size and time. Only the platform's state folder does this, never
+one set with `ATM_STATE_DIR` or `ATM_HOME`; and it never waits for the folder's lock (the next read tries again).
+
+### 5.1 `workspaces/default.json`, the registry
+
+It was `projects.json` before T-490: an old one is renamed into place when atm first reads the folder. T-491 turns it
+into the `default` workspace (ADR-003 §1).
 
 ```json
 {
@@ -348,7 +395,7 @@ file, then rename) under `ATM_HOME/.lock`, atm's usual lock directory.
 - `id` and `name` are copied from `meta.id` and `meta.project` when atm registers the project, and updated when they
   change. `id` follows §3.1 when `meta.id` is missing.
 - `seen_at` is the last time atm ran there, updated at most once a day.
-- An unreadable file is renamed to `projects.json.damaged-<UTC time, e.g. 20261025T215138Z>` and replaced by an empty
+- An unreadable file is renamed to `default.json.damaged-<UTC time, e.g. 20261025T215138Z>` and replaced by an empty
   registry.
 
 ### 5.2 `server.json`, the running server

@@ -3,9 +3,9 @@
 
 use std::path::Path;
 
-use atm_boot::open_project;
 use atm_common::py::{py_str, py_str_opt, splitlines, strip, truthy};
 use atm_common::{Result, TaskId};
+use atm_lib::Project;
 use atm_lib::query::{Filters, task_dependencies, task_views};
 use atm_lib::tasks::{TaskView, show_tasks};
 use clap::{Args, Subcommand};
@@ -136,7 +136,7 @@ pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
 }
 
 fn deps(task_id: &str, ctx: Context, cwd: &Path) -> Result<()> {
-    let deps = task_dependencies(&open_project(cwd)?, task_id)?;
+    let deps = task_dependencies(&Project::open(cwd)?, task_id)?;
     if ctx.json {
         print_json(&deps);
         return Ok(());
@@ -165,14 +165,14 @@ fn list(args: ListArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if derived && tolerant {
         // The REST API's snapshot, as the dashboard reads a malformed task file (T-377), without its size
         let mut snapshot =
-            atm_lib::archive::task_snapshot(&atm_boot::open_project_tolerant(cwd)?, &filters)?;
+            atm_lib::archive::task_snapshot(&Project::open_tolerant(cwd)?, &filters)?;
         if let Some(snapshot) = snapshot.as_object_mut() {
             snapshot.shift_remove("bytes");
         }
         print_json(&snapshot);
         return Ok(());
     }
-    let project = open_project(cwd)?;
+    let project = Project::open(cwd)?;
     let views = task_views(&project, &filters)?;
     if derived {
         // JSON either way: it is for tools (the dashboard's tests take atm's own values from it)
@@ -243,7 +243,7 @@ pub fn list_lines(rows: &[Value]) -> Vec<String> {
 
 fn details(task_ids: &[String], ctx: Context, cwd: &Path) -> Result<()> {
     let ids: Vec<TaskId> = task_ids.iter().map(TaskId::new).collect();
-    let views = show_tasks(&open_project(cwd)?, &ids)?;
+    let views = show_tasks(&Project::open(cwd)?, &ids)?;
     if ctx.json {
         // An archived task says so (T-353)
         let tasks = views

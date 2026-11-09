@@ -1,0 +1,53 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "atm",
+  "mainBinaryName": "atm-app",
+  "identifier": "com.solo-swe.atm",
+  "build": {
+    "frontendDist": "../../dashboard/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "atm",
+        "url": "tasks-dashboard.html",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 720,
+        "minHeight": 480
+      }
+    ],
+    "withGlobalTauri": false,
+    "security": {
+      "csp": {
+        "default-src": "'none'",
+        "script-src": "'wasm-unsafe-eval' compmd://localhost http://compmd.localhost",
+        "frame-src": "compmd://localhost http://compmd.localhost",
+        "style-src": "'unsafe-inline'",
+        "img-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost compmd://localhost http://compmd.localhost",
+        "base-uri": "'none'",
+        "form-action": "'none'",
+        "frame-ancestors": "'none'"
+      },
+      "devCsp": {
+        "default-src": "'none'",
+        "script-src": "'wasm-unsafe-eval' compmd://localhost http://compmd.localhost",
+        "frame-src": "compmd://localhost http://compmd.localhost",
+        "style-src": "'unsafe-inline'",
+        "img-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost compmd://localhost http://compmd.localhost ws://127.0.0.1:1430/__tauri_cli",
+        "base-uri": "'none'",
+        "form-action": "'none'",
+        "frame-ancestors": "'none'"
+      },
+      "dangerousDisableAssetCspModification": ["style-src"],
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": false,
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  }
+}

@@ -7,6 +7,8 @@ import type { Request } from '@compmd/processor';
 import { version as compmdVersion } from 'virtual:atm-compmd';
 import type { Task } from './types';
 import { addressOf, isPagePath } from './address';
+import { convertFileSrc } from '@tauri-apps/api/core';
+import { inApp } from './api/http';
 
 /** Links that are safe to follow: web and mail addresses, and anchors in the page. */
 export function safeHref(href: string): boolean {
@@ -179,10 +181,26 @@ function localTimeZone(): string {
   }
 }
 
-/** Where atm serve serves this build's CompMD: dist/assets/compmd/<version>/ (embedded in atm), at /assets/compmd/<version>/ (§2):
- * the path vite.compmd.config.ts builds it for, from which @compmd/vite gives its frames' and modules' URLs */
-export function compmdAssetUrl(file: string, origin = location.origin): string {
+/**
+ * Where CompMD's files come from: this page's server (atm serve), or in the atm app CompMD's own scheme, which
+ * tauri-plugin-compmd serves at the same paths (ADR-004): Tauri's own protocol would put the window's policy on
+ * CompMD's frames. `compmd://localhost`, or `http://compmd.localhost` on Windows: Tauri's helper knows which.
+ */
+export function compmdOrigin(app = inApp): string {
+  return app ? convertFileSrc('', 'compmd').replace(/\/$/, '') : location.origin;
+}
+
+/** Where this build's CompMD is served: dist/assets/compmd/<version>/ (embedded in atm, and in the app), at
+ * /assets/compmd/<version>/ (§2): the path vite.compmd.config.ts builds it for, from which @compmd/vite gives its
+ * frames' and modules' URLs */
+export function compmdAssetUrl(file: string, origin = compmdOrigin()): string {
   return new URL(`/assets/compmd/${compmdVersion}/${file}`, origin).href;
+}
+
+/** The sandbox's `base` (where its frame documents are) as a full URL on CompMD's origin: @compmd/vite gives it from
+ * the page's root, which in the app isn't CompMD's origin (ADR-004, H4) */
+export function sandboxBase(base: string, origin = compmdOrigin()): string {
+  return new URL(base, origin).href;
 }
 
 /** What the served module gives (dashboard/compmd/entry.ts) */
@@ -204,8 +222,18 @@ export interface CompmdModule {
       scheme(): void;
       /** Each line of the text that draws something, with its boxes, from the container's top left (CompMD 0.5.0) */
       lines(from?: number): AsyncGenerator<DrawnLine>;
+      /** A component shows its fallback, and why (`@compmd/sandbox`'s `ViewEvents.error`); `failed` and `missing`
+       * draw nothing at all */
+      on(
+        type: 'error',
+        listener: (event: {
+          component: string;
+          reason: 'missing' | 'threw' | 'failed' | 'not-here';
+          message: string;
+        }) => void,
+      ): void;
       /** `layout`: what the page shows may have moved, so its lines may have (CompMD 0.5.0) */
-      on(type: 'rendered' | 'error' | 'layout', listener: (event: unknown) => void): void;
+      on(type: 'rendered' | 'layout', listener: (event: unknown) => void): void;
       destroy(): void;
     };
   };

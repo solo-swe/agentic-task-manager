@@ -1,0 +1,47 @@
+[package]
+# The atm app (T-455, docs/guides/tauri.md): a desktop window on atm-lib, the same layers as atm serve
+name = "atm-app"
+version.workspace = true
+description.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+# Not `atm`: that is the CLI's binary, in the same target folder
+name = "atm-app"
+path = "src/main.rs"
+
+[lib]
+name = "atm_app"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+tauri-plugin-compmd.workspace = true
+
+[dependencies]
+atm-common.workspace = true
+atm-lib.workspace = true
+tauri-plugin-compmd.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-single-instance.workspace = true
+specta.workspace = true
+tauri-specta.workspace = true
+specta-typescript.workspace = true
+notify.workspace = true
+notify-debouncer-full.workspace = true
+
+[dev-dependencies]
+tauri = { workspace = true, features = ["test"] }
+# The agreement test: each command answers what its REST route does (ADR-003 §5)
+atm-api.workspace = true
+axum.workspace = true
+
+[lints]
+workspace = true

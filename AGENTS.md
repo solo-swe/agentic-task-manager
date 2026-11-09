@@ -6,6 +6,10 @@ with Homebrew or a release download ([packaging/README.md](packaging/README.md))
 
 ## Layout
 - `crates/` — atm, one crate per layer (below); the binary is `atm-cli`'s `atm`
+- `app/src-tauri/` — the atm app (Tauri, T-455 onwards; the [Tauri guide](docs/guides/tauri.md)), a workspace member
+  on the same layers, so `cargo build` and `cargo test` build it too (on Linux with WebKitGTK's development
+  packages, as CI installs them). Its window shows the built dashboard (`dashboard/dist/`); its commands' TypeScript
+  types are written by its tests to `.generated/app/bindings.ts`
 - `skills/atm-*/SKILL.md` — the skills, their one source, portable to any agent harness (`name` and `description`
   only, a version check first, detail from `atm docs`; T-441), embedded in atm, which `atm agents install` writes
   where harnesses read them. Claude Code's pre-approved commands for each are in `skills/claude-code.json`
@@ -71,7 +75,7 @@ The pre-port dashboard is frozen at `dashboard/tests/legacy/tasks-dashboard.v0.4
 
 Commands (run in `dashboard/`):
 - `pnpm run dev` — Vite dev server, with the real REST API: this checkout's Rust atm (`cargo build` first; its
-  `atm _serve` on a temporary `ATM_HOME`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`,
+  `atm _serve` on a temporary state folder, `ATM_STATE_DIR`, so your own `atm service` is untouched; `build/dev-api.ts` forwards `api/`,
   `p/`, `__atm/` and `assets/` to it) for this repo's `.agentic-task-manager/`, or for other folders with
   `ATM_DEV_DATA=<path to .agentic-task-manager>[:<another>…] pnpm run dev` (a folder without a task file is listed as
   missing). `cargo build` is enough to pick up atm changes: the API server restarts when the binary changes.
@@ -82,7 +86,8 @@ Commands (run in `dashboard/`):
 - `pnpm run size` — the build, with what the single file is made of, largest first (before a guardrail change)
 - `pnpm test` / `pnpm run test:coverage` — Vitest unit tests (`tests/unit/`, 90% line threshold on `src/lib`)
 - `pnpm run test:e2e` — build, then the Playwright e2e suite without the screenshots
-- `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines)
+- `pnpm run test:e2e:visual` / `test:e2e:visual:update` — the screenshots, in Docker (Linux baselines), against a
+  Linux atm that `pnpm run build:atm-linux` builds first (in the pinned Rust image, into `target/linux/`)
 - `pnpm run check` — the release notes' entries (`scripts/check-versions.mjs`), svelte-check, ESLint, Prettier
 - `pnpm run test:scripts` — atm's test suite (builds the binary; see below)
 - `pnpm run branding` — regenerate `branding/` (the logo for the README and GitHub) from `src/assets/atm-logo.svg`
@@ -90,8 +95,9 @@ Commands (run in `dashboard/`):
 
 ## atm (`Cargo.toml`, `crates/`)
 atm ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides/rust.md)): one crate per layer
-(`docs/layered-architecture.md`) under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api`,
-`atm-cli`, whose binary is `atm`), so the compiler checks the layer rule; the toolchain pinned in
+(`docs/layered-architecture.md`) under `crates/` (`atm-common`, `atm-db`, `atm-vcs`, `atm-lib`, `atm-api`,
+`atm-cli`, whose binary is `atm`), so the compiler checks the layer rule (the front ends, `atm-api`, `atm-cli` and
+the app, depend on `atm-lib` and `atm-common` only: ADR-003 §4); the toolchain pinned in
 `rust-toolchain.toml`, atm's version the workspace's.
 - `cargo build`, `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all`, `cargo deny check`
   (from the repository root; `pnpm run build` in `dashboard/` first, as atm embeds the dashboard).
@@ -123,7 +129,10 @@ atm ([porting-to-rust.md](docs/porting-to-rust.md), the [Rust guide](docs/guides
   regenerated once a sprint, in the release task. `pnpm run verify` runs everything, the screenshots too.
 - **Screenshots** (`visual.spec.ts`) have **Linux baselines only**, made and checked in the pinned Playwright
   container, the same as CI's; on macOS the tests skip. With Docker running: `pnpm run test:e2e:visual` compares,
-  `pnpm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). They are of
+  `pnpm run test:e2e:visual:update` regenerates the changed ones (delete a baseline whose test is gone). Both first
+  build a Linux atm for the fixture (`pnpm run build:atm-linux`: the official `rust` image at the pinned toolchain,
+  pinned by digest, into `target/linux/`; the Playwright container runs it as `ATM_E2E_BIN`), as CI's e2e job runs its
+  `atm-linux` build; bump that image's digest with the toolchain (T-485). They are of
   parts (a panel, a menu, a card, a theme's Kanban column) rather than whole pages, so one change touches few; a
   few dozen differing pixels pass (anti-aliasing), a real change doesn't.
 - A test that waits in real time is a slow test: the tests reduce motion (`reducedMotion`), so scrolls and fits are

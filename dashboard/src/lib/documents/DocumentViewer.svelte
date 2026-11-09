@@ -1,6 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { browserFetch, v1FileUrl, type Validators } from '../api/http';
+  import { browserFetch, inApp, v1FileUrl, type Validators } from '../api/http';
   import {
     clampGeometry,
     defaultGeometry,
@@ -98,7 +98,8 @@
    * other image shows its alt text */
   const localImage = (url: string): string | null => {
     const resolved = doc && project ? resolvePath(url, doc.path) : null;
-    return resolved && project ? v1FileUrl(project, resolved) : null;
+    // In the atm app there is no files route to load from: the image shows its alt text for now (T-457's follow-up)
+    return resolved && project && !inApp ? v1FileUrl(project, resolved) : null;
   };
 
   // A code or text file's lines (V2a): CompMD renders it as one code block, its lines never wrapping, so the gutter

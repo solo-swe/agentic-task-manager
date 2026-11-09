@@ -10,6 +10,7 @@
   import WhatsNew from './lib/dialogs/WhatsNew.svelte';
   import Footer from './lib/shell/Footer.svelte';
   import AboutDialog from './lib/dialogs/AboutDialog.svelte';
+  import AgentsDialog from './lib/dialogs/AgentsDialog.svelte';
   import HelpDialog from './lib/dialogs/HelpDialog.svelte';
   import LandingPage from './lib/shell/LandingPage.svelte';
   import UpdateNotice from './lib/shell/UpdateNotice.svelte';
@@ -47,4 +48,5 @@
 <DocumentViewer />
 <WhatsNew />
 <AboutDialog />
+<AgentsDialog />
 <HelpDialog />

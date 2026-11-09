@@ -369,21 +369,28 @@ fn release_with_merge(
         {
             continue;
         }
-        let waiting: Vec<Value> = tasks
+        // Its tasks merged in any PR count (T-486): a release's sprint may reach the base branch in several
+        let mine: Vec<&Task> = tasks
             .iter()
             .filter(|t| vocab.effective_release(t).as_ref() == Some(&id))
             .filter(|t| vocab.kind_of(t.get("status")) != Some(Kind::Skipped))
-            .filter(|t| {
-                let value = Value::Object((*t).clone());
-                !(pr_number(&value) == Some(pr)
-                    && t.get("merged_at").is_some_and(atm_common::py::truthy))
-            })
+            .collect();
+        let waiting: Vec<Value> = mine
+            .iter()
+            .filter(|t| !t.get("merged_at").is_some_and(atm_common::py::truthy))
             .map(|t| t.get("id").cloned().unwrap_or(Value::Null))
             .collect();
         if !waiting.is_empty() {
             pending.insert(py_str(&id), Value::Array(waiting));
             continue;
         }
+        // Released when its last task was merged: this merge, or a later one recorded before it
+        let last = mine
+            .iter()
+            .filter_map(|t| t.get("merged_at").and_then(Value::as_str))
+            .filter_map(|m| parse_iso(m).map(|when| (when, m)))
+            .max_by_key(|(when, _)| *when)
+            .map_or(at, |(_, m)| m);
         release.insert("state".into(), json!("released"));
         let mut record = Map::new();
         record.insert("number".into(), json!(pr));
@@ -391,7 +398,7 @@ fn release_with_merge(
             record.insert("url".into(), url.clone());
         }
         release.insert("pr".into(), Value::Object(record));
-        release.insert("released_at".into(), json!(at));
+        release.insert("released_at".into(), json!(last));
         released.push(py_str(&id));
     }
     Ok((released, pending))
@@ -536,6 +543,18 @@ pub fn ensure_repository(project: &mut Project, vcs: Option<&GitVcs>) -> Result<
         Ok(())
     })?;
     Ok(set)
+}
+
+/// The remote's default branch (`origin/HEAD`), else `main`: the base of a workflow that names none.
+#[must_use]
+pub fn default_base(cwd: &std::path::Path) -> String {
+    let root = atm_db::jsongit::paths::project_root(cwd);
+    atm_db::git::git(
+        &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+        &root,
+    )
+    .and_then(|r| r.split_once('/').map(|(_, branch)| branch.to_string()))
+    .unwrap_or_else(|| "main".into())
 }
 
 #[cfg(test)]

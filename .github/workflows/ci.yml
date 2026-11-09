@@ -58,6 +58,13 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup show active-toolchain
+      # The atm app (T-455) is in the workspace and builds on the system's webview: WebKitGTK on Linux (macOS and
+      # Windows have theirs), from Ubuntu's own packages
+      - name: The webview's libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libwebkit2gtk-4.1-dev libxdo-dev
       # atm embeds the dashboard and CompMD's runtime, built first (dashboard/dist/, never committed: T-477)
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -106,7 +113,8 @@ jobs:
         working-directory: dashboard
       - run: pnpm run build
         working-directory: dashboard
-      - run: cargo build --locked
+      # The CLI only: the app isn't needed here, nor its webview's libraries
+      - run: cargo build --locked -p atm-cli
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: atm-linux

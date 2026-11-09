@@ -347,6 +347,7 @@ pub fn check_data(
             ));
         }
     }
+    check_merged_releases(&vocab, &tasks, &mut warnings);
     let graph: Vec<Task> = tasks
         .iter()
         .filter_map(Value::as_object)
@@ -358,6 +359,46 @@ pub fn check_data(
         errors.push(format!("dependency cycle: {}", cycle.join(" -> ")));
     }
     (errors, warnings)
+}
+
+/// A planned release whose tasks (skipped ones aside) are all merged: recorded before T-486, when only one PR's tasks
+/// counted. The warning names the `atm vcs pushed` that releases it: the PR of its last merge.
+fn check_merged_releases(vocab: &Vocabulary, tasks: &[Value], warnings: &mut Vec<String>) {
+    for release in &vocab.releases {
+        let Some(id) = release.get("id") else {
+            continue;
+        };
+        if release
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or("planned")
+            != "planned"
+        {
+            continue;
+        }
+        let mine: Vec<&Map<String, Value>> = tasks
+            .iter()
+            .filter_map(Value::as_object)
+            .filter(|t| vocab.effective_release(t).as_ref() == Some(id))
+            .filter(|t| vocab.kind_of(t.get("status")) != Some(Kind::Skipped))
+            .collect();
+        let merged =
+            |t: &&Map<String, Value>| t.get("merged_at").is_some_and(atm_common::py::truthy);
+        if mine.is_empty() || !mine.iter().all(merged) {
+            continue;
+        }
+        let pr = mine
+            .iter()
+            .max_by_key(|t| t.get("merged_at").map(py_str))
+            .and_then(|t| t.get("pr"))
+            .and_then(|p| p.get("number"))
+            .map(py_str);
+        warnings.push(format!(
+            "the release {}: all its tasks are merged, but it is still planned: atm vcs pushed --pr {} releases it",
+            py_repr(id),
+            pr.as_deref().unwrap_or("<n>")
+        ));
+    }
 }
 
 /// `atm doctor`: what is wrong with the task data as stored. With `files`, a finished task's files that don't exist

@@ -42,13 +42,133 @@ const page = (width, height, style, body) => `<!doctype html>
 const svgImg = (svg, size) =>
   `<img src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${size}" height="${size}" alt="" />`;
 
-/** The logo alone, 512×512: for places that take only PNG, JPG or GIF (the org's avatar on GitHub). */
-export const logoPage = (svg) => ({
-  file: 'atm-logo.png',
-  width: 512,
-  height: 512,
-  html: page(512, 512, '', svgImg(svg, 360)),
+/** The light face of the app icon and the avatar (T-504), top to bottom: as other macOS apps have, not GitHub's dark. */
+export const FACE = ['#ffffff', '#e6ebf2'];
+
+/**
+ * A superellipse, |x|^n + |y|^n = 1, filling a `size`×`size` box at (`x`, `y`), as an SVG path: the shape of macOS
+ * app icons since Big Sur, whose corners blend into the sides (a continuous curve), unlike a rounded rectangle's.
+ */
+export function squircle(x, y, size, n = 5, steps = 256) {
+  const r = size / 2;
+  const point = (t) => {
+    const [c, s] = [Math.cos(t), Math.sin(t)];
+    const along = (v) => Math.sign(v) * Math.abs(v) ** (2 / n);
+    return `${(x + r + r * along(c)).toFixed(2)} ${(y + r + r * along(s)).toFixed(2)}`;
+  };
+  return `M${Array.from({ length: steps }, (_, i) => point((i / steps) * 2 * Math.PI)).join('L')}Z`;
+}
+
+const dataUrl = (svg) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${FACE[0]}" /><stop offset="1" stop-color="${FACE[1]}" />
+    </linearGradient>`;
+
+/** The logo's frame, `<rect x="3" y="4" width="26" height="24" rx="5" />` stroked 2.5 wide: where it reaches in the
+ * logo's 32×32 drawing, its stroke included */
+const FRAME = { left: 1.75, top: 2.75, right: 30.25, bottom: 29.25 };
+/** How much of the icon's shape the frame spans across: close to its edge, so the frame reads as the board's and
+ * leaves no wide ring of face around it (Hakan: the logo at half the shape was too much white) */
+const FRAME_SHARE = 0.84;
+/** A rounded rectangle as a path, clockwise, in plain coordinates */
+function roundedRect(x, y, w, h, r) {
+  const n = (v) => +v.toFixed(3);
+  return (
+    `M${n(x + r)} ${n(y)}H${n(x + w - r)}A${r} ${r} 0 0 1 ${n(x + w)} ${n(y + r)}V${n(y + h - r)}` +
+    `A${r} ${r} 0 0 1 ${n(x + w - r)} ${n(y + h)}H${n(x + r)}A${r} ${r} 0 0 1 ${n(x)} ${n(y + h - r)}V${n(y + r)}` +
+    `A${r} ${r} 0 0 1 ${n(x + r)} ${n(y)}Z`
+  );
+}
+/** The frame's stroke as the ring it paints: its outer edge and its inner one, filled even-odd */
+export const FRAME_RING = `<path fill-rule="evenodd" d="${roundedRect(1.75, 2.75, 28.5, 26.5, 6.25)}${roundedRect(4.25, 5.25, 23.5, 21.5, 3.75)}" />`;
+/** The logo's strokes, `M10 10v12M16 10v6M22 10v3` and `M19.5 20.5l2 2 4-4.5` at width 2.5 with round ends, as the
+ * filled shapes they paint, so any renderer draws them the same (Apple's, for Icon Composer, drew the strokes flat and
+ * cut off). Each column a bar with round ends; the check two such bars meeting at its corner. */
+export const MARKS_PATHS = 'M10 10v12M16 10v6M22 10v3';
+export const CHECK_PATH = 'M19.5 20.5l2 2 4-4.5';
+/** A stroke from (x1, y1) to (x2, y2), 2.5 wide with round ends, as the filled path it paints: two sides and two
+ * half-circle ends, in plain coordinates */
+function bar(x1, y1, x2, y2, r = 1.25) {
+  const length = Math.hypot(x2 - x1, y2 - y1);
+  const [nx, ny] = [(-(y2 - y1) / length) * r, ((x2 - x1) / length) * r];
+  const p = (x, y) => `${x.toFixed(3)} ${y.toFixed(3)}`;
+  return (
+    `<path d="M${p(x1 + nx, y1 + ny)}L${p(x2 + nx, y2 + ny)}A${r} ${r} 0 0 0 ${p(x2 - nx, y2 - ny)}` +
+    `L${p(x1 - nx, y1 - ny)}A${r} ${r} 0 0 0 ${p(x1 + nx, y1 + ny)}Z" />`
+  );
+}
+const MARK_SHAPES = [
+  bar(10, 10, 10, 22),
+  bar(16, 10, 16, 16),
+  bar(22, 10, 22, 13),
+  bar(19.5, 20.5, 21.5, 22.5),
+  bar(21.5, 22.5, 25.5, 18),
+];
+
+/**
+ * The app icon's one layer (T-504): the whole logo in the accent blue, its frame and marks as filled shapes, centred
+ * on a 1024×1024 canvas that stands for the icon's whole shape, the frame close to its edge (`FRAME_SHARE`).
+ */
+export function marksLayer(logo) {
+  const box = (FRAME.right - FRAME.left) / FRAME_SHARE;
+  const [cx, cy] = [(FRAME.left + FRAME.right) / 2, (FRAME.top + FRAME.bottom) / 2];
+  const [x, y] = [(cx - box / 2).toFixed(3), (cy - box / 2).toFixed(3)];
+  const side = box.toFixed(3);
+  const color = /stroke="(#[0-9a-f]{6})"/i.exec(logo)?.[1] ?? ACCENT;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${x} ${y} ${side} ${side}">
+  <!-- The ATM logo, the app icon's layer. Made by branding/generate.mjs -->
+  <g fill="${color}">
+    ${FRAME_RING}
+    ${MARK_SHAPES.join('\n    ')}
+  </g>
+</svg>
+`;
+}
+
+/**
+ * The app icon (T-504), on Apple's icon grid: a 1024×1024 canvas, the body an
+ * 824×824 squircle in its middle with a transparent margin, a soft shadow under it and a hairline edge (so the white
+ * face shows on a light Dock), the marks layer on it. `pnpm tauri icon` makes the app's icon set from it (README.md).
+ */
+export function appIcon(logo) {
+  const body = squircle(100, 100, 824);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    ${faceGradient}
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+  <path d="${body}" fill="url(#face)" filter="url(#shadow)" />
+  <path d="${body}" fill="none" stroke="#000" stroke-opacity="0.08" stroke-width="2" />
+  <image href="${dataUrl(marksLayer(logo))}" x="100" y="100" width="824" height="824" />
+</svg>`;
+}
+
+/**
+ * The org's avatar on GitHub (T-504), 512×512: the face edge to edge (GitHub rounds the corners itself), the marks
+ * layer on it, as on the app icon.
+ */
+export function avatar(logo) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>${faceGradient}</defs>
+  <rect width="512" height="512" fill="url(#face)" />
+  <image href="${dataUrl(marksLayer(logo))}" x="0" y="0" width="512" height="512" />
+</svg>`;
+}
+
+/** An SVG as a page to screenshot, its background transparent (omitBackground) */
+const svgPage = (file, size, svg) => ({
+  file,
+  width: size,
+  height: size,
+  transparent: true,
+  html: `<!doctype html><html><head><style>html, body { margin: 0; background: transparent; }
+    svg { display: block; }</style></head><body>${svg}</body></html>`,
 });
+
+/** The icon pages: the app icon's source and the avatar */
+export const iconPages = (logo) => [svgPage('app-icon.png', 1024, appIcon(logo)), svgPage('atm-logo.png', 512, avatar(logo))];
 
 /** The social preview's dashboard (T-279): the built dashboard on a demo project, at a fixed time */
 export const DASHBOARD = here('../dashboard/dist/tasks-dashboard.html');
@@ -207,7 +327,20 @@ async function main() {
   const require = createRequire(here('../dashboard/package.json'));
   const { chromium } = require('@playwright/test');
   const browser = await chromium.launch();
+  const render = async ({ file, width, height, html, transparent }, outDir) => {
+    const tab = await browser.newPage({ viewport: { width, height } });
+    await tab.setContent(html, { waitUntil: 'load' });
+    const path = outDir ? `${outDir}/${file}` : fileURLToPath(here(file));
+    await tab.screenshot({ path, omitBackground: !!transparent });
+    await tab.close();
+    console.log(outDir ? path : `branding/${file}`);
+  };
   try {
+    // `--icons`: only the app icon's source and the avatar, without the dashboard the social preview needs
+    if (process.argv.includes('--icons')) {
+      for (const p of iconPages(logo)) await render(p);
+      return;
+    }
     const shot = await dashboardShot(browser);
     // `--variants <dir>`: every layout, dark and light, into <dir>, to choose from; otherwise the files in branding/
     const at = process.argv.indexOf('--variants');
@@ -224,18 +357,11 @@ async function main() {
           lightPreview(l, `social-preview-${l}-light.png`),
         ])
       : [
-          logoPage(logo),
+          ...iconPages(logo),
           socialPreviewPage(logo, shot, PREVIEW_LAYOUT, 'social-preview-dark.png'),
           lightPreview(PREVIEW_LAYOUT, 'social-preview-light.png'),
         ];
-    for (const { file, width, height, html } of pages) {
-      const tab = await browser.newPage({ viewport: { width, height } });
-      await tab.setContent(html, { waitUntil: 'load' });
-      const path = outDir ? `${outDir}/${file}` : fileURLToPath(here(file));
-      await tab.screenshot({ path });
-      await tab.close();
-      console.log(outDir ? path : `branding/${file}`);
-    }
+    for (const p of pages) await render(p, outDir);
   } finally {
     await browser.close();
   }

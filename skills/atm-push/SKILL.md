@@ -133,7 +133,7 @@ gh pr view <n> --json state,mergedAt
 
 and record a merge with `atm vcs pushed --pr <n> --at <mergedAt>`. Commit that on its own (`chore: record merged PRs`).
 The dashboard never calls GitHub; this is how it learns that tasks were merged. `atm vcs pushed` also releases a planned
-release whose tasks are now all merged in that PR ("Released 1.0: …"), or says which of its tasks keep it planned:
+release whose tasks are now all merged, in this PR or earlier ones ("Released 1.0: …"), or says which of its tasks keep it planned:
 relay either line in the report.
 
 ## Step 8: Stop and report

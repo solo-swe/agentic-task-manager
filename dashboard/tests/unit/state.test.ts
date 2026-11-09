@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setApiWorkspace } from '../../src/lib/api/workspace';
 import { DashboardState } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { asTaskViews, v1Tasks } from './api.helpers';
@@ -6,17 +7,23 @@ import { asTaskViews, v1Tasks } from './api.helpers';
 const ok = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body)));
 const project = (id: string, missing = false) => ({ id, name: id, path: `/${id}`, missing, summary: null });
 const PROJECTS = { projects: [project('p1')] };
-/** Plays atm serve: the project list, and the standard fixture as each project's tasks and files */
+/** The statuses the next project-list requests fail with, in order (failProjects) */
+let projectFailures: number[] = [];
+/** The next request for the project list fails with `status` */
+const failProjects = (status: number) => projectFailures.push(status);
+/** Plays atm serve: the workspaces (`default` alone), the project list, and the standard fixture as each project's
+ * tasks and files */
 const server = (projects: unknown = PROJECTS) =>
-  vi.fn((url: string) =>
-    ok(
-      String(url).startsWith('/api/projects')
-        ? projects
-        : String(url).startsWith('/api/v1/')
-          ? asTaskViews(standard)
-          : standard,
-    ),
-  );
+  vi.fn((url: string) => {
+    const path = String(url);
+    if (path.startsWith('/api/v2/workspaces'))
+      return ok({ workspaces: [{ id: 'default', projects: 1 }], recent: 'default' });
+    const failure = path.startsWith('/api/projects') ? projectFailures.shift() : undefined;
+    if (failure) return Promise.resolve(new Response('nope', { status: failure }));
+    return ok(
+      path.startsWith('/api/projects') ? projects : path.startsWith('/api/v1/') ? asTaskViews(standard) : standard,
+    );
+  });
 
 describe('DashboardState', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -30,6 +37,7 @@ describe('DashboardState', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
+    projectFailures = [];
   });
 
   it('starts empty and unloaded', () => {
@@ -55,9 +63,52 @@ describe('DashboardState', () => {
       history.replaceState(null, '', '/');
       localStorage.clear();
     });
-    // What the page loads (the server's whoami is asked alongside, for the "new version" notice)
+    // What the page loads (the server's whoami is asked alongside, for the "new version" notice, and the workspaces
+    // before it, for `/` and the switcher)
     const urls = () =>
-      fetchMock.mock.calls.map(([url]) => String(url).split('?')[0]).filter((u) => u !== '/__atm/whoami');
+      fetchMock.mock.calls
+        .map(([url]) => String(url).split('?')[0])
+        .filter((u) => u !== '/__atm/whoami' && u !== '/api/v2/workspaces');
+
+    it('`/` opens the workspace opened last, on its own routes; switching starts the other afresh (ADR-003 §5)', async () => {
+      const other = server();
+      fetchMock = vi.fn((url: string) => {
+        const path = String(url);
+        if (path === '/api/v2/workspaces')
+          return ok({
+            workspaces: [
+              { id: 'default', projects: 1 },
+              { id: 'work', projects: 1 },
+            ],
+            recent: 'work',
+          });
+        if (path.startsWith('/api/v2/workspaces/work/projects?') || path === '/api/v2/workspaces/work/projects')
+          return ok({ projects: [project('w1')] });
+        if (path.startsWith('/api/v2/workspaces/work/'))
+          return ok(path.includes('/tasks') ? asTaskViews(standard) : standard);
+        return other(url);
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        const s = new DashboardState();
+        await s.load();
+        expect(location.pathname).toBe('/w/work/projects/w1');
+        expect([s.workspace, s.projectId]).toEqual(['work', 'w1']);
+        expect(s.workspaces.map((w) => w.id)).toEqual(['default', 'work']);
+        expect(urls()).toEqual([
+          '/api/v2/workspaces/work/projects',
+          '/api/v2/workspaces/work/projects/w1/tasks',
+          '/api/v2/workspaces/work/projects/w1/claims',
+          '/api/v2/workspaces/work/projects/w1/worktrees',
+        ]);
+        s.openWorkspace('default');
+        expect(location.pathname).toBe('/');
+        await s.reload();
+        expect([s.workspace, s.projectId, location.pathname]).toEqual(['default', 'p1', '/projects/p1']);
+      } finally {
+        setApiWorkspace('default');
+      }
+    });
 
     it('with one project, loads the project list, then its tasks (v1) and its files from p/<id>/', async () => {
       fetchMock = server({ projects: [project('gone', true), project('p2')] });
@@ -206,7 +257,7 @@ describe('DashboardState', () => {
   });
 
   it('records an initial load failure', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('nope', { status: 404 }));
+    failProjects(404);
     const s = new DashboardState();
     await s.load();
     expect(s.loaded).toBe(false);
@@ -217,7 +268,7 @@ describe('DashboardState', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const s = new DashboardState();
     await s.load();
-    fetchMock.mockResolvedValueOnce(new Response('nope', { status: 500 }));
+    failProjects(500);
     await s.reload();
     expect(s.tasks).toHaveLength(12);
     expect(s.loadError).toBeNull();
@@ -225,7 +276,7 @@ describe('DashboardState', () => {
   });
 
   it('a successful reload replaces data and clears a load error', async () => {
-    fetchMock.mockResolvedValueOnce(new Response('nope', { status: 404 }));
+    failProjects(404);
     const s = new DashboardState();
     await s.load();
     await s.reload();

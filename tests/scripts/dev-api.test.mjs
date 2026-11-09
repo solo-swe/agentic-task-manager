@@ -1,5 +1,5 @@
 // `pnpm run dev`'s REST API (dashboard/build/dev-api.ts, T-386, docs/layered-architecture.md §11.9): `vite dev` runs
-// this checkout's Rust atm (`atm _serve`, T-478) on a private ATM_HOME and forwards the API's paths to it. Started here
+// this checkout's Rust atm (`atm _serve`, T-478) on a private state folder (ATM_STATE_DIR) and forwards the API's paths to it. Started here
 // on a temporary project and a folder without a task file; a rebuild restarts it; stopping Vite leaves no server and no
 // home behind.
 import assert from 'node:assert/strict';
@@ -79,7 +79,7 @@ test(NAME, { skip }, async () => {
   vite.stderr.on('data', (chunk) => (output += chunk));
   const exited = new Promise((resolve) => vite.once('exit', resolve));
   try {
-    const home = await until(() => /on ATM_HOME (\S+)/.exec(output)?.[1], 'the dev API to start');
+    const home = await until(() => /on ATM_STATE_DIR (\S+)/.exec(output)?.[1], 'the dev API to start');
     const base = `http://localhost:${port}`;
     const projects = async () => {
       const answer = await fetch(`${base}/api/projects`).catch(() => null);

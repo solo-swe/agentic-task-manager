@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use atm_boot::open_project;
 use atm_common::Result;
+use atm_lib::Project;
 use atm_lib::agents::{install_skills, project_folder, skills_status, uninstall_skills};
 use clap::{Args, Subcommand};
 use serde_json::{Value, json};
@@ -55,7 +55,7 @@ fn project_dir(scope: &Scope, cwd: &Path) -> Result<Option<PathBuf>> {
         return Ok(None);
     }
     Ok(Some(
-        project_folder(&open_project(cwd)?).unwrap_or_else(|| cwd.to_path_buf()),
+        project_folder(&Project::open(cwd)?).unwrap_or_else(|| cwd.to_path_buf()),
     ))
 }
 

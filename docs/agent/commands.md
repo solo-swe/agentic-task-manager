@@ -35,5 +35,9 @@ to do (`loop next`), 4 the task is claimed by another agent.
 - `atm db archive` (when atm suggests it) and `atm db unarchive <id>…`
 - `atm doctor`: check the task file
 - `atm service [start|stop|status]`: the dashboard's server
+- `atm workspace list` and `atm workspace projects [<w>]`: the workspaces, named lists of the projects the dashboard
+  shows (`default` always there; atm adds a project to it when it runs there). Making, deleting or renaming one and
+  adding or removing projects (`atm workspace create|delete|rename|add-project|remove-project|prune`) are the user's
+  to decide. No other command takes a workspace: every one works on the project in the current folder
 - `atm agents install|status|uninstall`: atm's skills where the user's agent harnesses read them; the user's to run,
   never on your own

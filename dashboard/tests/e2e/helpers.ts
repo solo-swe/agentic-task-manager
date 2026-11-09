@@ -19,6 +19,10 @@ const ARCHIVE_JSON = /\/p\/([^/]+)\/tasks-archive\.json(\?.*)?$/;
 const WORKTREES_JSON = /\/p\/([^/]+)\/worktrees\.json(\?.*)?$/;
 const LOGO = /\/p\/([^/]+)\/logo(\?.*)?$/;
 const SEARCH = /\/api\/search(\?.*)?$/;
+const WORKSPACES = /\/api\/v2\/workspaces(\?.*)?$/;
+/** Two of atm's skills, for the app's agent commands (asApp) */
+const AGENT_SKILLS = ['atm-do-task', 'atm-serve'];
+const WORKSPACE_PROJECTS = /\/api\/v2\/workspaces\/[^/]+\/projects(\?.*)?$/;
 const V1_TASKS = /\/api\/v1\/projects\/([^/]+)\/tasks(\?.*)?$/;
 const V1_DOCUMENTS = /\/api\/v1\/projects\/([^/]+)\/documents\?/;
 const V1_FILES = /\/api\/v1\/projects\/([^/]+)\/files\?/;
@@ -51,7 +55,7 @@ const viewCache = new Map<string, string>();
  * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
  * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
  */
-function asTaskViews(body: string, archive: string | null = null, archived = false): string {
+export function asTaskViews(body: string, archive: string | null = null, archived = false): string {
   const key = JSON.stringify([body, archive, archived]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
@@ -75,7 +79,7 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
       cwd: dir,
       encoding: 'utf8',
       maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
@@ -94,11 +98,13 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
 /** The id of the project the fixture serves by default */
 export const FIXTURE_PROJECT = 'fixture';
 
-/** This checkout's atm (`cargo build` first), as tests/scripts runs it (T-478) */
-const ATM = path.resolve(
-  import.meta.dirname,
-  `../../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`,
-);
+/**
+ * This checkout's atm (`cargo build` first), as tests/scripts runs it (T-478), or `ATM_E2E_BIN`: the Docker screenshot
+ * scripts run a Linux build of it there (`pnpm run build:atm-linux`, into `target/linux/`; T-485)
+ */
+const ATM = process.env.ATM_E2E_BIN
+  ? path.resolve(process.env.ATM_E2E_BIN)
+  : path.resolve(import.meta.dirname, `../../../target/debug/${process.platform === 'win32' ? 'atm.exe' : 'atm'}`);
 
 /** The command line that runs atm with `args` */
 function atm(args: string[]): string[] {
@@ -116,7 +122,7 @@ function atmSummary(body: string): Record<string, unknown> {
     const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, ATM_HOME: path.join(dir, '.atm-home'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
     });
     if (r.status !== 0) throw new Error(`atm project summary failed: ${r.stderr}`);
     return JSON.parse(r.stdout) as Record<string, unknown>;
@@ -268,7 +274,40 @@ export class TasksServer {
     ];
   }
 
+  /** Workspaces besides `default` (api/v2/workspaces), and the one opened last; their projects aren't served */
+  private workspaceList: string[] = [];
+  private recentWorkspace = 'default';
+
+  /** List more workspaces than `default` (the switcher shows), and which one was opened last (`/` opens it) */
+  workspaces(ids: string[], recent = 'default') {
+    this.workspaceList = ids;
+    this.recentWorkspace = recent;
+    return this;
+  }
+
   async install() {
+    await this.page.route(WORKSPACES, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          generated_at: '2026-01-01T00:00:00Z',
+          workspaces: [
+            { id: 'default', projects: this.projectList().length },
+            ...this.workspaceList.map((id) => ({ id, projects: 0 })),
+          ],
+          recent: this.recentWorkspace,
+        }),
+      }),
+    );
+    // Another workspace's list: none of the fixture's projects are in it
+    await this.page.route(WORKSPACE_PROJECTS, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', projects: [] }),
+      }),
+    );
     await this.page.route(PROJECTS_JSON, (route) =>
       route.fulfill({
         status: 200,
@@ -408,6 +447,173 @@ export class TasksServer {
     this.worktreesBody =
       worktrees === null ? null : JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', worktrees });
     return this;
+  }
+
+  /** The paths of requests the page made to the server's routes (api/, p/), when it plays the app (asApp) */
+  httpRequests: string[] = [];
+  /** The address of the deep link the app was started with (link), and the page's channel for later ones */
+  private startLink: string | null = null;
+  private linkChannel: number | null = null;
+  private linkMessages = 0;
+
+  /** The app was started by a deep link: its address, as the app makes it from `atm://…` (T-459) */
+  link(address: string) {
+    this.startLink = address;
+    return this;
+  }
+
+  /** A deep link while the app runs: its address on the page's channel */
+  async pushLink(address: string) {
+    if (this.linkChannel === null) throw new Error('the page has not subscribed to links');
+    const index = this.linkMessages++;
+    await this.page.evaluate(
+      ([id, message, at]) => {
+        const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+          .__atmCallbacks;
+        callbacks[id as number]({ index: at, message });
+      },
+      [this.linkChannel, address, index] as const,
+    );
+  }
+
+  /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
+  agentCalls: string[] = [];
+  /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
+  private agentsConnected = false;
+
+  /** Claude Code's status, as `agents_status` reports it */
+  private harnessStatus() {
+    return {
+      harness: 'claude',
+      label: 'Claude Code',
+      detected: true,
+      scope: 'user',
+      folder: '/Users/me/.claude/skills',
+      version: '0.0.0',
+      skills: AGENT_SKILLS.map((skill) => ({
+        skill,
+        path: `/Users/me/.claude/skills/${skill}`,
+        state: this.agentsConnected ? 'linked' : 'missing',
+        version: null,
+      })),
+    };
+  }
+
+  /**
+   * Play the atm app instead of atm serve (T-457): the page runs as in Tauri's window (`isTauri`, Tauri's IPC
+   * internals mocked, as `@tauri-apps/api/mocks` does), and the app's commands answer from the same data as the routes
+   * (the default workspace's projects, their tasks as atm's views, claims, worktrees, search, logos). Requests the page
+   * still makes to the server's routes are recorded in `httpRequests`: the app has none to answer them.
+   */
+  async asApp() {
+    this.page.on('request', (r) => {
+      const { pathname } = new URL(r.url());
+      if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
+    });
+    await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
+      this.answerCommand(command, args),
+    );
+    await this.page.addInitScript(() => {
+      const w = window as unknown as Record<string, unknown> & {
+        __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
+      };
+      w.isTauri = true;
+      // The callbacks Tauri's IPC calls back (a channel's messages), by ID, so a test can send on a channel
+      const callbacks: Record<number, (message: unknown) => void> = {};
+      w.__atmCallbacks = callbacks;
+      let next = 0;
+      w.__TAURI_INTERNALS__ = {
+        invoke: (command: string, args: unknown) =>
+          w.__atmInvoke(command, args ?? {}).then((r) => ('error' in r ? Promise.reject(r.error) : r.ok)),
+        transformCallback: (callback: (message: unknown) => void) => {
+          next += 1;
+          callbacks[next] = callback;
+          return next;
+        },
+        unregisterCallback: () => {},
+        // CompMD's scheme (tauri-plugin-compmd, ADR-004) is this test server, which serves CompMD's files with the
+        // plugin's headers (serve.mjs, as atm serve); any other scheme as Tauri writes it on macOS
+        convertFileSrc: (path: string, protocol = 'asset') =>
+          protocol === 'compmd'
+            ? `${location.origin}/${encodeURIComponent(path)}`
+            : `${protocol}://localhost/${encodeURIComponent(path)}`,
+        metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
+      };
+    });
+    return this;
+  }
+
+  /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
+  private answerCommand(command: string, args: Record<string, unknown>): { ok?: unknown; error?: unknown } {
+    const unknown = { error: { kind: 'not_found', message: 'unknown project' } };
+    const views = (text: string) => {
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      delete parsed.generated_at;
+      return parsed;
+    };
+    const project = String(args.project ?? '');
+    const body = project === this.projectId ? this.body : this.others.get(project)?.body;
+    switch (command) {
+      case 'list_workspaces':
+        return { ok: { workspaces: [{ id: 'default', projects: this.projectList().length }], recent: 'default' } };
+      case 'list_projects':
+        return { ok: { projects: this.projectList() } };
+      case 'search':
+        return { ok: this.search(String(args.q ?? '')) };
+      case 'project_tasks': {
+        if (!body) return unknown;
+        const archived = (args.filters as { archived?: boolean } | undefined)?.archived;
+        if (archived)
+          return this.archiveBody === null || project !== this.projectId
+            ? { error: { kind: 'not_found', message: 'not found' } }
+            : { ok: views(asTaskViews(body, this.archiveBody, true)) };
+        return { ok: views(asTaskViews(body, project === this.projectId ? this.archiveBody : null)) };
+      }
+      case 'claims':
+        return body ? { ok: { claims: this.claimsBody ? JSON.parse(this.claimsBody).claims : [] } } : unknown;
+      case 'worktrees':
+        return body
+          ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
+          : unknown;
+      case 'subscribe_links': {
+        // The channel: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its `id`) as Playwright passes it
+        const channel = args.channel;
+        this.linkChannel = Number(
+          typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id,
+        );
+        const first = this.startLink;
+        this.startLink = null;
+        return { ok: first };
+      }
+      case 'agents_status':
+        this.agentCalls.push(command);
+        return { ok: [this.harnessStatus()] };
+      case 'connect_agents': {
+        this.agentCalls.push(`${command} ${String(args.harness)}`);
+        if (args.harness !== 'claude')
+          return { error: { kind: 'invalid', message: `no harness '${String(args.harness)}'` } };
+        const before = this.agentsConnected;
+        this.agentsConnected = true;
+        return {
+          ok: {
+            written: AGENT_SKILLS.map((skill) => ({
+              harness: 'claude',
+              skill,
+              path: `/Users/me/.claude/skills/${skill}`,
+              how: 'link',
+              action: before ? 'unchanged' : 'installed',
+            })),
+            refused: [],
+          },
+        };
+      }
+      case 'logo': {
+        const svg = this.logos.get(project);
+        return svg ? { ok: { content_type: 'image/svg+xml', data: [...Buffer.from(svg)] } } : { ok: null };
+      }
+      default:
+        return { error: { kind: 'not_found', message: `no command ${command}` } };
+    }
   }
 
   /** Register another project, served under p/<id>/ (a fixture by name or inline tasks), with an optional summary

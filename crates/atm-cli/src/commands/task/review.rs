@@ -5,8 +5,9 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::changes::change_task_status;
 use atm_lib::state::{Command, Options};
 use clap::{Args, Subcommand};
@@ -105,7 +106,7 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
         }
     };
     let actor = agent_identity(decider.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     if ctx.dry_run {
         println!("[dry-run] would {} {task_id}", command.name());
         return Ok(());

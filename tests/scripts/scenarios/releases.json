@@ -366,5 +366,43 @@
       "exit": 1,
       "stdout": "error: T-1: the release '2.0' is not one of meta.releases\nerror: the sprint 'A': the release '1.0' is not one of meta.releases\n"
     }
+  },
+  {
+    "name": "atm doctor: a planned release whose tasks are all merged, in several PRs (T-486)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }, { "id": "2.0" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "name": "a",
+              "type": "feature",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 7, "url": "https://x/pull/7" },
+              "merged_at": "2026-05-10T09:00:00Z"
+            },
+            {
+              "id": "T-2",
+              "name": "b",
+              "type": "feature",
+              "status": "done",
+              "release": "1.0",
+              "pr": { "number": 8, "url": "https://x/pull/8" },
+              "merged_at": "2026-05-11T09:00:00Z"
+            },
+            { "id": "T-3", "name": "c", "type": "feature", "status": "todo", "release": "2.0" }
+          ]
+        }
+      }
+    },
+    "args": ["doctor"],
+    "expect": {
+      "exit": 0,
+      "stdoutIncludes": [
+        "the release '1.0': all its tasks are merged, but it is still planned: atm vcs pushed --pr 8 releases it"
+      ]
+    }
   }
 ]

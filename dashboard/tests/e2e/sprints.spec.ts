@@ -103,6 +103,24 @@ test.describe('scope bar (T-323)', () => {
     await expect(trigger).toHaveText('All tasks');
   });
 
+  test('a sprint whose name holds a comma can be picked, and stays picked after a reload (T-494)', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('sprints');
+    const name = 'Library, gallery and blog';
+    for (const sprint of sprintsOf(data)) if (sprint.id === 'Alan Turing') sprint.id = name;
+    for (const task of data.tasks) if (task.sprint === 'Alan Turing') task.sprint = name;
+    await openDashboard(page, tasksServer, data);
+    const trigger = page.locator('#scope-trigger');
+    await trigger.click();
+    await page.locator(`.scope-choice[data-scope="${name}"]`).click();
+    await expect(trigger).toHaveText(name);
+    await expect(page).toHaveURL(/[?&]sprint=Library,%20gallery%20and%20blog(&|$)/);
+    await page.reload();
+    await expect(trigger).toHaveText(name);
+  });
+
   test('other filters narrow the board within the sprint: "showing N, filtered", and ✕ keeps the sprint', async ({
     page,
     tasksServer,

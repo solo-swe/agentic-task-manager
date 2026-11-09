@@ -1,0 +1,33 @@
+{
+  "about": "What a host sends with CompMD's files (docs/tauri-compmd-design.md §3, H1 and H2), by path under CompMD's version folder. Both hosts are checked against it: atm serve (serve.test.mjs) and the app's compmd: scheme (app/src-tauri/src/lib.rs). null: the header is not sent.",
+  "files": {
+    "compmd.js": {
+      "content-type": "text/javascript; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "no-cache",
+      "content-security-policy": null
+    },
+    "compmd_wasm_bg.wasm": {
+      "content-type": "application/wasm",
+      "access-control-allow-origin": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "no-cache",
+      "content-security-policy": null
+    },
+    "compmd/strict.html": {
+      "content-type": "text/html; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "no-cache",
+      "content-security-policy": "sandbox allow-scripts"
+    },
+    "compmd/permissive.html": {
+      "content-type": "text/html; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "no-cache",
+      "content-security-policy": "sandbox allow-scripts"
+    }
+  }
+}

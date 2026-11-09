@@ -4,9 +4,10 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::Result;
 use atm_common::py::{py_str, py_str_opt, truthy};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::sprints::{
     Closed, Deleted, add_sprint, backlog_tasks, close_sprint, delete_sprint, edit_sprint,
     list_sprints, move_tasks, start_sprint,
@@ -249,7 +250,7 @@ fn show_delete(result: &Deleted, ctx: Context) {
 }
 
 fn actor_project(agent: Option<&str>, cwd: &Path) -> Result<atm_lib::Project> {
-    Ok(open_project(cwd)?.with_actor(Some(agent_identity(agent, cwd))))
+    Ok(Project::open(cwd)?.with_actor(Some(agent_identity(agent, cwd))))
 }
 
 /// Run a sprint command in `cwd`.
@@ -260,7 +261,7 @@ fn actor_project(agent: Option<&str>, cwd: &Path) -> Result<atm_lib::Project> {
 pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
         SprintCommand::List { all } => {
-            let listed = list_sprints(&open_project(cwd)?, all)?;
+            let listed = list_sprints(&Project::open(cwd)?, all)?;
             if ctx.json {
                 print_json(&json!({"sprints": listed.sprints, "backlog": listed.backlog}));
                 return Ok(());
@@ -413,7 +414,7 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
         }
         SprintCommand::Backlog { all } => {
-            let (tasks, vocab) = backlog_tasks(&open_project(cwd)?, all)?;
+            let (tasks, vocab) = backlog_tasks(&Project::open(cwd)?, all)?;
             let rows: Vec<Value> = tasks
                 .iter()
                 .map(|t| {

@@ -6,6 +6,6 @@
     "atm-loop-tasks": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint list:*), Bash(atm task details:*), Bash(atm task deps:*), Bash(atm task list:*), Bash(atm loop next:*), Bash(atm task state:*), Bash(atm claim heartbeat:*), Bash(atm claim hold:*), Bash(atm task edit:*), Bash(atm task note:*), Bash(atm vcs commit:*), Bash(atm db archive:*)",
     "atm-plan-sprint": "Bash(atm db migrate:*), Bash(atm project status:*), Bash(atm sprint:*), Bash(atm task list:*), Bash(atm task details:*), Bash(atm task deps:*)",
     "atm-push": "Bash(atm project workflow:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*), Bash(atm vcs commit:*), Bash(atm vcs pr:*), Bash(atm vcs pushed:*), Bash(atm claim hold:*)",
-    "atm-serve": "Bash(atm service:*), Bash(atm project list:*), Bash(atm project add:*), Bash(atm project remove:*), Bash(atm project prune:*), Bash(atm vcs repository:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*)"
+    "atm-serve": "Bash(atm service:*), Bash(atm workspace list:*), Bash(atm workspace projects:*), Bash(atm vcs repository:*), Bash(atm project status:*), Bash(atm task details:*), Bash(atm task list:*)"
   }
 }

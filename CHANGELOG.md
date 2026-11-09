@@ -4,7 +4,157 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
-## [Unreleased]
+## [0.34.0] - 2026-11-09
+
+The first atm app (macOS, a notarized DMG and a Homebrew cask), workspaces, and atm's state in the platform's app
+data folder. Diagrams in the app wait for CompMD 0.6.0 (0.35.0, T-503).
+
+### Changed
+- **atm's state moves to the platform's app data folder** (T-490, [ADR-003](docs/adr/ADR-003-workspaces.md) §2):
+  `~/Library/Application Support/com.solo-swe.atm/` on macOS, `~/.local/share/com.solo-swe.atm/` (`$XDG_DATA_HOME`)
+  on Linux, `%APPDATA%\com.solo-swe.atm\` on Windows, the folder the app's Tauri APIs name too; `ATM_STATE_DIR` puts
+  it elsewhere, and `ATM_HOME` keeps working as its older name. The first run without either moves
+  `~/.agentic-task-manager/` there (one rename; `MOVED.txt` is left saying where), and the registry, `projects.json`,
+  becomes `workspaces/default.json`, renamed in place when found. The `dirs` crate (approved, already in the tree)
+  finds the folder; a test checks the app's identifier is atm-common's `APP_ID`. The tests, the e2e fixture and the
+  dev server use `ATM_STATE_DIR`, and the suite drops an inherited one.
+- **Projects open through atm-lib, on store and version-control factories** (T-491, ADR-003 §1 and §4): a project's
+  `.agentic-task-manager/settings.json` (`store`, `vcs`; `json-git` and `git` without one) is read before any store
+  is chosen, and a store or vcs atm doesn't know is refused. `atm_db::open` and `atm_vcs::open` build them;
+  `Project::open` and `open_tolerant` use them, and `project.store_maintenance()` has what only the JSON-in-git store
+  has (its paths, `db init`'s merge driver, migrations, the lock test hook, the merge driver itself). atm-lib's
+  `Workspaces` and `Workspace` (over atm-db's `workspaces/<id>.json` and `recent.json`) list a workspace's projects
+  with their summaries, worktrees and logos, search them, and add and remove them; atm-api's project list and search
+  call them, the summary cache moved with them. Nothing users see changes.
+- **The atm-boot crate is removed** (T-492, ADR-003 §4): the CLI, the REST API and the app depend on atm-lib and
+  atm-common only. The `atm db` commands, `atm project config` and `atm _lock-test` go through
+  `project.store_maintenance()`; registering is `project.join_default_workspace()` (the hook's,
+  `join_default_workspace_if_needed()`); the actor and `default_base` are atm-lib's (`actor`, `code`); the pid and
+  signal helpers are the CLI's (`process.rs`); `hook_project` is gone. `tests/scripts/layers.test.mjs` checks each
+  crate's `Cargo.toml` against the layer rule. `docs/layered-architecture.md`, the Rust guide, porting-to-rust.md and
+  AGENTS.md describe the layers without boot. Nothing users see changes.
+
+### Added
+- **The app's security review** (T-461): `docs/security-architecture.md` gains boundary B7 (the app's window and its
+  `atm://` links) and invariants I25–I29 (the capability is exactly the app's commands, the window's strict CSP, the
+  commands are atm serve's reads, a deep link is only an address, the shipped app is the reviewed build with one
+  `atm` on PATH), each with its check; two new checks in the app's tests
+  (`the_capability_allows_exactly_the_apps_commands`, `the_windows_csp_is_strict`), and a by-hand checklist for the
+  first signed DMG (§5).
+- **The app's deep links** (T-459): `atm://projects/<id>[/<tab>]?task=…&doc=…` (and `atm://w/<w>/…`, `atm://board`, …)
+  open the app at that page, whether the link starts it or it is running. The scheme is in the app's `Info.plist`;
+  macOS hands the app its links (`RunEvent::Opened`, no plugin), `app/src-tauri/src/links.rs` checks each is one of
+  the dashboard's pages (no other scheme, path, `..`, fragment or character an address doesn't hold) and sends its
+  address on the page's channel (`subscribe_links`; the link that started the app waits for it). The page goes there
+  only if it is one of its own pages (`lib/api/links.ts`): an address for its router, never fetched or run.
+- **The app's "Connect your agents" button** (T-458): in the atm app, the footer's *Connect your agents* opens a
+  dialog (`?agents`) with each harness atm knows (Claude Code), whether it is found and connected, and a button that
+  runs the same atm-lib code as `atm agents install` for it (the new `connect_agents` command, with `agents_status`),
+  then lists every path it wrote and what it left alone. Opening the dialog only reads the status; nothing is written
+  until the click. In the browser the dialog gives `atm agents install` to run instead.
+- **The atm app as a signed, notarized universal DMG and a Homebrew cask** (T-460): the release workflow's
+  `app-macos` job builds the app for arm64 and x86_64 in one DMG (`atm-app-<version>-universal.dmg`), with the `atm`
+  CLI built with it inside (`atm.app/Contents/MacOS/atm`, a universal binary); Tauri's bundler signs and notarizes
+  the app, `packaging/notarize-dmg.sh` the DMG (stapled). The Homebrew workflow also writes `Casks/atm-app.rb`
+  (`packaging/homebrew-cask.sh`): `brew install --cask solo-swe/tap/atm-app` puts the app's own `atm` on PATH and
+  `conflicts_with` the `atm` formula (one or the other, so the CLI and the app are always the same build); it only
+  says to run `atm agents install`. The app's release config is `app/src-tauri/tauri.release.conf.json`
+  (`pnpm run app:bundle`); the keychain import moved into `packaging/keychain-macos.sh`.
+- **The dashboard's IPC transport** (T-457): in the atm app the dashboard reads through the app's commands, not HTTP.
+  `browserFetch` picks it at start (`isTauri()`); `lib/api/ipc.ts`'s `ipcFetch` maps the dashboard's URLs (v1 as
+  `default`'s, v2) to `list_workspaces`, `list_projects`, `search`, `project_tasks`, `claims`, `worktrees`, `document`,
+  `file` and `logo`, errors to their HTTP statuses; logos come as `data:` URLs (`lib/api/images.ts`). One window,
+  switching workspaces in place. New dependency: `@tauri-apps/api` 2.12.4 (approved). Tests: `tests/unit/ipc.test.ts`
+  (on `@tauri-apps/api/mocks`) and `tests/e2e/app.spec.ts` (the page as in Tauri's window, the fixture answering the
+  commands, no HTTP request made).
+- **`atm workspace`** (T-493, ADR-003 §3): `list` (each with its project count; the last opened marked), `create`,
+  `delete` and `rename` (`default` can't be deleted or renamed, and no workspace can take its name), `projects [<w>]`,
+  `add-project [<w>] [<folder>]`, `remove-project [<w>] <project>` and `prune [<w>]`, each defaulting to `default`.
+  A project can be in several workspaces. **`atm project list|add|remove|prune` are removed**: use
+  `atm workspace projects|add-project|remove-project|prune`. The `atm-serve` skill names the new commands, and its
+  Claude Code pre-approvals narrow to the two reads (`atm workspace list`, `atm workspace projects`); `atm docs
+  commands` lists them. The dev server adds its projects with `atm workspace add-project`.
+- **Workspaces in the dashboard** (T-457, ADR-003 §5): addresses `/w/<w>/…` (`/w/<w>/projects/<id>/<tab>`,
+  `/w/<w>/board`, …; without `/w/<w>`, `default`'s, so every link so far still opens), and `/` opens the workspace
+  opened last. A workspace switcher sits next to the project selector when there is more than one. The dashboard reads
+  `default` from the v1 routes and another workspace from its v2 ones (`lib/api/workspace.ts`, the URL builders in
+  `lib/api/http.ts`); `/api/projects` now records `default` as the last opened, as `…/default/projects` does. atm
+  serve's pages (`pages.rs`), the e2e server and `PAGE_PATH` accept the `/w/<w>` prefix.
+- **Workspaces in the REST API, and the app's commands over them** (T-456, ADR-003 §5): `GET /api/v2/workspaces`
+  (the workspaces, how many projects each lists, the last opened) and, per workspace, `…/<w>/projects` (which records
+  it as the last opened in `recent.json`, only when that changes), `…/<w>/search` and
+  `…/<w>/projects/<p>/tasks|documents|files|claims|worktrees|logo`. The v1 routes and `/p/<p>/…` are the `default`
+  workspace's, unchanged. The app's commands mirror them (`list_workspaces`, `list_projects`, `search`,
+  `project_tasks`, `claims`, `worktrees`, `document`, `file`, `logo`), through the same atm-lib reads (`Workspace`,
+  `Member`), and a test checks each command answers what its route does. Live changes: `subscribe_workspace` and
+  `subscribe_project` send on a channel when the folders the store reports change (`Store::watch_folders`; notify
+  8.2.1 and notify-debouncer-full 0.7.0, approved, CC0-1.0 allowed in `deny.toml`), `unsubscribe` ends one. The main
+  window's capability lists exactly these commands; the commands' JSON answers are typed `Json` for TypeScript.
+- **The atm app's skeleton** (T-455, `app/src-tauri/`, the Tauri guide): a Tauri 2.12 app in the workspace, one
+  instance (opening it again focuses its window), the user's registry of projects in its state, two commands
+  (`version`, `list_projects`) mapping to atm, their TypeScript types generated with tauri-specta
+  (`.generated/app/bindings.ts`), errors as one tagged enum, and a capability that lets only the main window's own
+  pages call them. The window shows the built dashboard under the dashboard server's policy, with `connect-src` for
+  IPC only; the dashboard talks to the app from T-457. `cargo build`/`test` build the app too: CI's Linux job installs
+  WebKitGTK, and the e2e binary and the release build only the CLI (`-p atm-cli`). New dependencies (approved):
+  `tauri`, `tauri-build`, `tauri-plugin-single-instance`, `tauri-specta`, `specta`, `specta-typescript`, and
+  `@tauri-apps/cli` (the icons, from `branding/atm-logo.png`). `deny.toml` allows BSD-2-Clause and MPL-2.0 and
+  ignores five "unmaintained" advisories of the app's tree (`paste`, `proc-macro-error`, `zbus_names`, `zvariant`,
+  `zvariant_derive`; no vulnerability), each with its reason (approved).
+
+### Fixed
+- **A sprint whose name holds a comma can be chosen** (T-494): the Sprint filter in the address was a comma-separated
+  list (`?sprint=a,b`), so "Library, gallery and blog" read back as two unknown sprints and the filter fell back to
+  All tasks. It is now one `sprint=` per value (`?sprint=Foundations&sprint=backlog`), as HTML forms send a list;
+  older links with commas no longer select several sprints. The scope menu also split its choice's key on commas;
+  each choice is one value now (`ScopeBar.svelte`).
+- **No more 404 for `/_app/version.json` in the browser's console** (T-495): SvelteKit checks it for a new deployment
+  when the tab regains focus; atm serve now answers it with the page's own version (`{"version": …}`), so it never
+  sees one (atm's reload offer stays whoami's).
+- **The app's icon looks like a desktop app's** (T-504): the logo, its frame close to the shape's edge, in blue on a
+  light face, in Apple's rounded shape with its margin and shadow, instead of edge to edge on dark. The `.icns`, `.ico` and PNGs and the GitHub avatar (`branding/atm-logo.png`) come from one
+  source, `pnpm run branding --icons`. macOS 26 still shows it on a tile of its own until the app has an Icon Composer
+  icon (T-505).
+- **An older atm on the same machine no longer hides projects** (T-501): 0.34.0 moves `~/.agentic-task-manager/` to
+  the state folder, and an atm from before keeps using the old folder, so its dashboard showed only the projects it
+  listed since, and the moved `server.json` made `atm service status` call that atm's server its own. Now:
+  - the projects an older atm lists in `~/.agentic-task-manager/projects.json` join the `default` workspace whenever
+    it is read, when that file changed (`legacy-adopted.txt` in the state folder); only for the platform's state
+    folder, never one set with `ATM_STATE_DIR`;
+  - a record counts as the server's only when the server on its port gives this folder's `home` as well as the
+    record's pid; `atm service status` names an older atm's servers (`older_atms` in `--json`) and leaves them alone;
+  - `atm service` prints the project's page (`/projects/<id>`), not the old `/#project=<id>` link.
+- **Mermaid diagrams in the app** (T-502): no diagram drew in the app's window. Tauri puts the window's CSP on every
+  HTML file it serves, CompMD's sandbox frames included, and its `frame-ancestors 'none'` refused them in the page.
+  The app's CSP no longer has `frame-ancestors` (its one window is its own); a test now checks what Tauri serves
+  for CompMD's frames, not only `tauri.conf.json`.
+- **Markdown and the layout in the app** (T-502): CompMD couldn't fetch its WebAssembly (`connect-src` allowed only
+  Tauri's IPC), so task text showed as raw Markdown; it now also allows CompMD's folder. Tauri added a nonce to
+  `style-src`, which made WebKit ignore `'unsafe-inline'` and refuse every `style` attribute (the footer wasn't
+  pinned); `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written. Debug builds (`cargo run`,
+  `cargo tauri dev`) use a `devCsp`: the same policy plus the CLI's dev server (`http://127.0.0.1:1430`) and its
+  live-reload socket, kept in step by a test. A test checks the policy Tauri serves the page with.
+- **CompMD in the app comes from a scheme of its own** (T-503, ADR-004, `docs/tauri-compmd-design.md`): a new crate,
+  `tauri-plugin-compmd` (no atm dependencies, for CompMD to take), serves CompMD's built folder on
+  `compmd://localhost` (`http://compmd.localhost` on Windows) with `atm serve`'s headers, so Tauri's window policy no
+  longer lands on CompMD's frames. Its `build::embed`, from the app's `build.rs`, embeds the folder and fails the
+  build without it; it serves only those files, `GET` and `HEAD`, and answers anything else with a `404` or `405`
+  that says why. The window's policy names that origin instead of Tauri's own, with `frame-ancestors 'none'` back,
+  and `devCsp` adds only the CLI's live-reload socket. The page gives CompMD's sandbox a full `base` on the scheme
+  (`compmdOrigin`, from `convertFileSrc`). When CompMD can't load, or a component draws nothing, the text now says so
+  in a note, and the console says why (in the browser too). One table of the headers CompMD needs,
+  `tests/scripts/compmd-host-headers.json`, tests both `atm serve` and the plugin. **Diagrams in the app need CompMD
+  0.6.0:** WebKit gives a sandboxed frame no `'self'` on a non-http scheme, so CompMD 0.5.0's frames refuse their own
+  runtime from `compmd://` (recorded in ADR-004's risks).
+- **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
+  macOS `target/debug/atm` inside the Linux Playwright container since T-478, and every test failed. They now first
+  run `pnpm run build:atm-linux`, which builds the CLI in the official `rust:1.99.0-bookworm` image (pinned by digest,
+  approved) into `target/linux/`, and the fixture takes it from `ATM_E2E_BIN`.
+- **A release whose tasks merge in several PRs is released** (T-486): `atm vcs pushed --pr N` releases a planned
+  release once every one of its tasks is merged, in that PR or an earlier one, with `released_at` its last merge;
+  before, only the tasks of PR N counted, so a sprint that reached `main` in two PRs (0.32.0: #39, then #40) stayed
+  planned. Its message says which tasks are "not merged yet". `atm doctor` warns about a planned release whose tasks
+  are all merged and names the `atm vcs pushed` that releases it. `/atm-push` says so too.
 
 ## [0.33.0] - 2026-11-08
 

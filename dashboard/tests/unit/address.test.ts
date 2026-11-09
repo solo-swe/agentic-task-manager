@@ -9,6 +9,8 @@ import {
   isPagePath,
   legacyParams,
   OVERVIEW_TABS,
+  withWorkspace,
+  workspaceOf,
 } from '../../src/lib/address';
 import { VIEWS } from '../../src/lib/tabs';
 import { OVERVIEW_PATHS, PROJECT_TABS } from '../../src/params';
@@ -107,6 +109,54 @@ describe('the address (T-429)', () => {
     expect(PROJECT_TABS).toEqual([...VIEWS]);
     expect(OVERVIEW_PATHS).toEqual(OVERVIEW_TABS.filter((tab) => tab !== 'projects'));
     const routes = join(dirname(fileURLToPath(import.meta.url)), '../../src/routes');
+    for (const page of [
+      '+page.svelte',
+      'projects/+page.svelte',
+      'projects/[id]/+page.svelte',
+      'projects/[id]/[tab=view]/+page.svelte',
+      '[tab=overview]/+page.svelte',
+    ])
+      expect(existsSync(join(routes, page)), page).toBe(true);
+  });
+});
+
+describe('the workspace in the address (ADR-003 §5)', () => {
+  it('reads /w/<w> as the workspace, `default` as none, and keeps it through every page', () => {
+    expect(params('/w/work')).toEqual([['workspace', 'work']]);
+    expect(params('/w/work/projects/abc/list?task=T-1')).toEqual([
+      ['workspace', 'work'],
+      ['project', 'abc'],
+      ['view', 'list'],
+      ['task', 'T-1'],
+    ]);
+    expect(params('/w/default/board')).toEqual([
+      ['overview', ''],
+      ['view', 'board'],
+    ]);
+    // The workspace is the path's: a query can't set it
+    expect(params('/projects?workspace=x')).toEqual([
+      ['overview', ''],
+      ['view', 'projects'],
+    ]);
+    for (const address of ['/w/work', '/w/work/projects', '/w/work/board', '/w/work/projects/abc/list?about'])
+      expect(formatAddress(addressParams(address)), address).toBe(address);
+    expect(formatAddress(addressParams('/w/default/projects/abc'))).toBe('/projects/abc');
+    expect(addressOf(at('/w/a%20b/projects'))).toBe('/w/a%20b/projects');
+  });
+
+  it('knows which workspace an address is in, and moves to another without the first one’s project', () => {
+    expect(workspaceOf('/')).toBe('default');
+    expect(workspaceOf('/w/work/board')).toBe('work');
+    expect(withWorkspace('/projects/abc/list?task=T-1&about', 'work')).toBe('/w/work?about');
+    expect(withWorkspace('/w/work/board?sprint=a', 'default')).toBe('/board');
+    expect(withWorkspace('/w/work/projects/abc', 'work')).toBe('/w/work/projects/abc');
+  });
+
+  it("has a page under /w/<w> for each of the dashboard's pages", () => {
+    for (const path of ['/w/work', '/w/work/', '/w/work/projects', '/w/work/projects/abc/list', '/w/work/agents'])
+      expect(isPagePath(path), path).toBe(true);
+    for (const path of ['/w', '/w/', '/w/work/x', '/w/work/projects/a/b/c']) expect(isPagePath(path), path).toBe(false);
+    const routes = join(dirname(fileURLToPath(import.meta.url)), '../../src/routes/w/[workspace]');
     for (const page of [
       '+page.svelte',
       'projects/+page.svelte',

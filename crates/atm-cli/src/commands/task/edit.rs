@@ -2,9 +2,10 @@
 
 use std::path::Path;
 
-use atm_boot::{agent_identity, open_project};
 use atm_common::py::py_str;
 use atm_common::{Error, Result};
+use atm_lib::Project;
+use atm_lib::actor::agent_identity;
 use atm_lib::edit::{TaskEdit, edit_existing_task};
 use clap::Args;
 use serde_json::Value;
@@ -128,7 +129,7 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
         remove_use_cases: args.remove_use_case,
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
-    let mut project = open_project(cwd)?.with_actor(Some(actor));
+    let mut project = Project::open(cwd)?.with_actor(Some(actor));
     let edited = edit_existing_task(&mut project, &args.task_id, &change)?;
     if ctx.json {
         print_json(&Value::Object(edited.task));

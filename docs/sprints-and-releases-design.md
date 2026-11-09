@@ -169,7 +169,7 @@ then ID, as today without the phase.
 
 | ID | P | Requirement |
 |---|---|---|
-| SR-3.7 | P1 | `atm merged --pr N` (exists) also marks released the release whose tasks are all in PR `N` and merged, setting its `pr` and `released_at`; a release with tasks outside the PR stays planned and `atm merged` says which. |
+| SR-3.7 | P1 | `atm merged --pr N` (exists) also marks released the release whose tasks are all in PR `N` and merged, setting its `pr` and `released_at`; a release with tasks outside the PR stays planned and `atm merged` says which. *Since T-486, tasks merged in earlier PRs count too: a release's sprint may reach the base branch in several PRs.* |
 
 ### 3.4 Reviews, resolution, relations
 

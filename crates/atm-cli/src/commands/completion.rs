@@ -4,9 +4,9 @@
 //! loudly: outside a project, or with a task file atm can't read, it completes nothing. `atm completion <shell>`
 //! prints the line that turns it on.
 
-use atm_boot::open_project;
 use atm_common::Vocabulary;
 use atm_common::py::py_str;
+use atm_lib::Project;
 use atm_lib::query::{Filters, task_views};
 use clap_complete::engine::{ArgValueCandidates, CompletionCandidate};
 use serde_json::Value;
@@ -28,7 +28,7 @@ const STATE_TARGETS: [(&str, &str); 6] = [
 type Values = fn() -> Vec<(String, String)>;
 
 fn here() -> Option<atm_lib::Project> {
-    open_project(&std::env::current_dir().ok()?).ok()
+    Project::open(&std::env::current_dir().ok()?).ok()
 }
 
 fn with_vocabulary(pick: fn(&Vocabulary) -> Vec<(String, String)>) -> Vec<(String, String)> {

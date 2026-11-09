@@ -1,10 +1,10 @@
 //! Installing atm's skills into the agent harnesses (T-442, docs/better-way-to-distribute-atm.md §3, §5): the Python
 //! atm's `lib/agents.py`.
 //!
-//! The skills of this atm's version are written once per harness into the user's atm folder
-//! (`<ATM_HOME>/skills/<harness>/<skill>/SKILL.md`) and linked from the folder each harness reads its skills from;
+//! The skills of this atm's version are written once per harness into atm's state folder
+//! (`<state>/skills/<harness>/<skill>/SKILL.md`) and linked from the folder each harness reads its skills from;
 //! copied there instead with `copy`, where a link can't be made, and always for a project (whose copy is committed for
-//! a team, so it can't point into one person's home folder). What install wrote is recorded (`<ATM_HOME>/agents.json`),
+//! a team, so it can't point into one person's home folder). What install wrote is recorded (`<state>/agents.json`),
 //! so uninstall removes exactly that and status can say what is missing or stale. A folder atm didn't write is never
 //! touched. Harnesses are a table: Claude Code for now; another is one more entry (T-413).
 
@@ -13,7 +13,7 @@ use std::fs;
 use atm_common::Shown;
 use std::path::{Path, PathBuf};
 
-use atm_common::home::{absolute, atm_home, ensure_home, in_home, write_text_atomic};
+use atm_common::home::{absolute, ensure_home, in_home, state_dir, write_text_atomic};
 use atm_common::py::to_json;
 use atm_common::skills::{SKILLS, claude_code_allowed_tools};
 use atm_common::{Error, Result};
@@ -90,7 +90,7 @@ pub fn skill_text(harness: &Harness, name: &str, text: &str) -> String {
 }
 
 fn record_path() -> PathBuf {
-    atm_home().join(RECORD)
+    state_dir().join(RECORD)
 }
 
 /// What install wrote: the record's entries, each with its `path`.
@@ -115,7 +115,7 @@ fn entry_path(entry: &serde_json::Map<String, Value>) -> &str {
 }
 
 fn write_record(mut entries: Vec<serde_json::Map<String, Value>>) -> Result<()> {
-    let home = atm_home();
+    let home = state_dir();
     ensure_home(&home).map_err(|e| Error::failed(format!("can't make {}: {e}", home.shown())))?;
     entries.sort_by(|a, b| entry_path(a).cmp(entry_path(b)));
     let installed: Vec<Value> = entries.into_iter().map(Value::Object).collect();
@@ -213,7 +213,7 @@ pub fn install_skills(
     let mut refused = Vec::new();
     for h in harnesses(harness)? {
         let (folder, scope) = target(h, project_dir);
-        let source_root = atm_home().join("skills").join(h.id);
+        let source_root = state_dir().join("skills").join(h.id);
         for (name, core) in SKILLS {
             let text = skill_text(h, name, core);
             let source = source_root.join(name);
@@ -299,7 +299,7 @@ pub fn uninstall_skills(harness: Option<&str>, project_dir: Option<&Path>) -> Re
     }
     if project.is_none() {
         for h in &wanted {
-            let source_root = atm_home().join("skills").join(h);
+            let source_root = state_dir().join("skills").join(h);
             if source_root.is_dir() {
                 fs::remove_dir_all(&source_root).map_err(io(&source_root))?;
             }

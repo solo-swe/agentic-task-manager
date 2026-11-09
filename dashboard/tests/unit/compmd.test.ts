@@ -9,6 +9,7 @@ import { version } from 'virtual:atm-compmd';
 import { request as base, sandbox } from 'virtual:compmd';
 import {
   compmdAssetUrl,
+  compmdOrigin,
   compmdRequest,
   dashboardAddress,
   frontmatter,
@@ -17,6 +18,7 @@ import {
   loadCompmd,
   resetCompmd,
   safeHref,
+  sandboxBase,
   secureLinks,
   slug,
   taskData,
@@ -43,6 +45,32 @@ describe('the asset folder', () => {
     expect(compmdAssetUrl('compmd.js', 'http://localhost:8765')).toBe(
       `http://localhost:8765/assets/compmd/${version}/compmd.js`,
     );
+  });
+
+  it('comes from the page’s server in a browser, and from CompMD’s own scheme in the app (ADR-004)', () => {
+    expect(compmdOrigin(false)).toBe(location.origin);
+    const internals = { convertFileSrc: vi.fn((path: string, scheme: string) => `${scheme}://localhost/${path}`) };
+    vi.stubGlobal('__TAURI_INTERNALS__', internals);
+    try {
+      expect(compmdOrigin(true)).toBe('compmd://localhost');
+      expect(internals.convertFileSrc).toHaveBeenCalledWith('', 'compmd');
+      internals.convertFileSrc.mockImplementation((path, scheme) => `http://${scheme}.localhost/${path}`);
+      expect(compmdOrigin(true)).toBe('http://compmd.localhost');
+      expect(compmdAssetUrl('compmd.js', compmdOrigin(true))).toBe(
+        `http://compmd.localhost/assets/compmd/${version}/compmd.js`,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('the sandbox’s base is a full URL on CompMD’s origin, whatever the page’s (H4)', () => {
+    const relative = `/assets/compmd/${version}/compmd/`;
+    expect(sandboxBase(relative, 'compmd://localhost')).toBe(`compmd://localhost${relative}`);
+    expect(sandboxBase(relative, 'http://compmd.localhost')).toBe(`http://compmd.localhost${relative}`);
+    expect(sandboxBase(relative, 'http://localhost:8765')).toBe(`http://localhost:8765${relative}`);
+    // A base that is already a full URL stays as it is
+    expect(sandboxBase(`compmd://localhost${relative}`, 'http://localhost:8765')).toBe(`compmd://localhost${relative}`);
   });
 
   it('the Mermaid pack’s module is pinned by the hash of the file it ships (@compmd/vite, T-285)', () => {

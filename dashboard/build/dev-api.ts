@@ -3,12 +3,21 @@
 // answers. ATM_DEV_DATA picks the task folders (.agentic-task-manager paths, separated like PATH); the default is this
 // repo's own.
 //
-// The API server runs on a private ATM_HOME (a temporary folder, removed when Vite stops) that lists only those
+// The API server runs on a private state folder (ATM_STATE_DIR, a temporary folder removed when Vite stops) that lists only those
 // projects, so the developer's own `atm serve`, its registry and its port are never touched. Vite forwards the API's
 // paths to it; everything else (the page, its modules, hot reload) stays Vite's. When atm is rebuilt (`cargo build`
 // writes target/debug/atm), the API server restarts on it: no Vite restart needed.
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, watch, writeFileSync, type FSWatcher } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  watch,
+  writeFileSync,
+  type FSWatcher,
+} from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -39,8 +48,9 @@ interface Api {
  * folder is gone (`atm projects add` refuses such a folder) */
 function listMissing(home: string, projects: string[]) {
   if (!projects.length) return;
-  const file = path.join(home, 'projects.json');
+  const file = path.join(home, 'workspaces', 'default.json');
   const registry = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { version: 1, projects: [] };
+  mkdirSync(path.dirname(file), { recursive: true });
   const stamp = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
   for (const project of projects) {
     const id = `missing-${path.basename(project).replace(/[^A-Za-z0-9._-]/g, '-')}`.slice(0, 64);
@@ -49,10 +59,11 @@ function listMissing(home: string, projects: string[]) {
   writeFileSync(file, JSON.stringify(registry, null, 2));
 }
 
-/** Start the API server for `dirs` on a private ATM_HOME. Returns how to reach it, restart it and stop it. */
+/** Start the API server for `dirs` on a private state folder (ATM_STATE_DIR). Returns how to reach it, restart it and
+ * stop it. */
 function startApi(dirs: string[], log: (line: string) => void): Api {
   const home = mkdtempSync(path.join(tmpdir(), 'atm-dev-home-'));
-  const env = { ...process.env, ATM_HOME: home };
+  const env = { ...process.env, ATM_STATE_DIR: home };
   const missing: string[] = [];
   for (const dir of dirs) {
     const project = path.dirname(dir);
@@ -61,7 +72,7 @@ function startApi(dirs: string[], log: (line: string) => void): Api {
       continue;
     }
     try {
-      execFileSync(ATM, ['project', 'add', project], { env, stdio: 'pipe' });
+      execFileSync(ATM, ['workspace', 'add-project', 'default', project], { env, stdio: 'pipe' });
     } catch (e) {
       log(`  atm: can't list ${dir}: ${String((e as { stderr?: Buffer }).stderr ?? e).trim()}`);
     }
@@ -132,7 +143,7 @@ export function devApi(defaultDir: string): Plugin {
       const api = startApi(dirs, log);
       const watcher = restartOnRebuild(api, log);
       if (!existsSync(ATM)) log(`  atm: ${ATM} isn't built: run \`cargo build\` (the REST API is this checkout's atm)`);
-      log(`  atm: the REST API (this checkout's atm) for ${dirs.join(', ')}, on ATM_HOME ${api.home}`);
+      log(`  atm: the REST API (this checkout's atm) for ${dirs.join(', ')}, on ATM_STATE_DIR ${api.home}`);
       const stop = () => {
         watcher?.close();
         api.stop();

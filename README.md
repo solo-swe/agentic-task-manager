@@ -164,6 +164,18 @@ brew install solo-swe/tap/atm
 
 `brew upgrade` gets a new version.
 
+### The atm app (macOS)
+
+The dashboard in a window of its own, with the `atm` CLI built with it:
+
+```bash
+brew install --cask solo-swe/tap/atm-app
+```
+
+It puts its own `atm` on PATH, so it replaces the `atm` formula: uninstall that first (`brew uninstall atm`). Or
+download `atm-app-<version>-universal.dmg` from a release (signed and notarized, for Apple silicon and Intel) and drag
+the app to Applications.
+
 ### A download
 
 Every [release](https://github.com/solo-swe/agentic-task-manager/releases) has an archive per platform
@@ -392,9 +404,13 @@ the dashboard's project selector, next to the title, switches between them. **Al
 card per project: its progress, current phase, agents at work, what needs you, and recent activity. With two or more
 projects the dashboard opens on it.
 
-- **The list:** `~/.agentic-task-manager/projects.json` (set `ATM_HOME` to keep it elsewhere). `atm project list` lists the
-  projects, `atm project add [path]` adds one, `atm project remove <id|path>` removes one, and `atm project prune`
-  drops those whose folder is gone.
+- **The list:** `workspaces/default.json` in atm's state folder: `~/Library/Application Support/com.solo-swe.atm/` on
+  macOS, `~/.local/share/com.solo-swe.atm/` on Linux, `%APPDATA%\com.solo-swe.atm\` on Windows (set `ATM_STATE_DIR` to
+  keep it elsewhere; atm moves an older `~/.agentic-task-manager/` there the first time). `atm workspace projects`
+  lists the projects, `atm workspace add-project [<w>] [<folder>]` adds one, `atm workspace remove-project [<w>]
+  <id|path>` removes one, and `atm workspace prune` drops those whose folder is gone.
+- **Workspaces:** more lists than `default`, each `workspaces/<w>.json` (`atm workspace create|delete|rename`, `atm
+  workspace list`). A project can be in several. The dashboard opens the one opened last, and switches between them.
 - **Opting out:** a project with `"dashboard": { "listed": false }` in its `tasks.json` meta isn't listed.
 - **What the server exposes:** it listens on `127.0.0.1` only and answers only requests addressed to `localhost`. For
   each listed project it serves just three files from `.agentic-task-manager/`: `tasks.json`, `claims.json` and
@@ -730,7 +746,7 @@ Merge each branch back as usual (or open a PR per branch).
 | `atm claim list`, `atm claim heartbeat <id>`                                                                        | Who works on what, with time left on each lease; extend your claim's lease                                                                                                                |
 | `atm db init`                                                                                                | Register the `tasks.json` merge driver (the skills do this automatically)                                                                                                                 |
 | `atm service [start\|stop\|status] [--open] [--all]`                                                        | The dashboard server, one for all your projects                                                                                                                                           |
-| `atm project list \| add [PATH] \| remove <id\|PATH> \| prune`                                                 | The projects the dashboard lists                                                                                                                                                          |
+| `atm workspace list \| create \| delete \| rename \| projects \| add-project \| remove-project \| prune`        | The workspaces, named lists of the projects the dashboard shows (`default` always there)                                                                                                  |
 | `atm vcs repository [URL [--from OLD]]`                                                                   | The repository's web address, for commit and PR links (`atm db init` takes it from `origin`); after a move, setting the new one also moves the tasks' recorded PR links from the old address |
 
 The full analysis (scenarios, failure modes, the alternatives considered) is in

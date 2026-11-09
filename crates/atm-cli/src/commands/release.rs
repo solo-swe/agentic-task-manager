@@ -4,9 +4,9 @@
 use std::fmt::Write;
 use std::path::Path;
 
-use atm_boot::open_project;
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
+use atm_lib::Project;
 use atm_lib::releases::{add_release, archive_release, edit_release, list_releases, release_notes};
 use clap::Subcommand;
 use serde_json::{Value, json};
@@ -162,7 +162,7 @@ fn describe_notes(notes: &Value) -> Vec<String> {
 pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
         ReleaseCommand::List { all } => {
-            let (releases, any) = list_releases(&open_project(cwd)?, all)?;
+            let (releases, any) = list_releases(&Project::open(cwd)?, all)?;
             if ctx.json {
                 print_json(&Value::Array(releases));
             } else if releases.is_empty() {
@@ -203,7 +203,7 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let added = add_release(
-                &mut open_project(cwd)?,
+                &mut Project::open(cwd)?,
                 &release_id,
                 name.as_deref(),
                 target.as_deref(),
@@ -248,7 +248,7 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 return Ok(());
             }
             let (release, changed) = edit_release(
-                &mut open_project(cwd)?,
+                &mut Project::open(cwd)?,
                 &release_id,
                 name.as_deref(),
                 target.as_deref(),
@@ -266,7 +266,7 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 println!("[dry-run] would archive release {release_id}");
                 return Ok(());
             }
-            let release = archive_release(&mut open_project(cwd)?, &release_id)?;
+            let release = archive_release(&mut Project::open(cwd)?, &release_id)?;
             if ctx.json {
                 print_json(&release);
             } else {
@@ -274,7 +274,7 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
         }
         ReleaseCommand::Notes { release_id } => {
-            let notes = release_notes(&open_project(cwd)?, &release_id)?;
+            let notes = release_notes(&Project::open(cwd)?, &release_id)?;
             if ctx.json {
                 print_json(&notes);
             } else {

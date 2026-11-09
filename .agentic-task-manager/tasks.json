@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 486,
+    "next_id": 511,
     "labels": [
       {
         "id": "architecture",
@@ -949,15 +949,83 @@
       },
       {
         "id": "The Rust port",
-        "state": "active",
+        "state": "closed",
         "goal": "atm as one Rust binary: the slices of porting-to-rust.md §5, the release machinery, and the switch from Python",
         "release": "0.32.0",
-        "start": "2026-11-07T00:37:18Z"
+        "start": "2026-11-07T00:37:18Z",
+        "end": "2026-11-08T07:22:01Z",
+        "report": {
+          "done": [
+            "T-444",
+            "T-445",
+            "T-446",
+            "T-447",
+            "T-448",
+            "T-449",
+            "T-450",
+            "T-451",
+            "T-452",
+            "T-453",
+            "T-454",
+            "T-462",
+            "T-463",
+            "T-464",
+            "T-465",
+            "T-466",
+            "T-467",
+            "T-468",
+            "T-469",
+            "T-470",
+            "T-471",
+            "T-472",
+            "T-473",
+            "T-474",
+            "T-475",
+            "T-476",
+            "T-477",
+            "T-478",
+            "T-479",
+            "T-480",
+            "T-484"
+          ],
+          "carried": [],
+          "added": [
+            "T-454",
+            "T-462",
+            "T-463",
+            "T-464",
+            "T-465",
+            "T-466",
+            "T-467",
+            "T-468",
+            "T-469",
+            "T-470",
+            "T-471",
+            "T-472",
+            "T-473",
+            "T-474",
+            "T-475",
+            "T-476",
+            "T-477",
+            "T-478",
+            "T-479",
+            "T-480",
+            "T-484"
+          ]
+        }
       },
       {
         "id": "The atm app",
+        "state": "active",
+        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging",
+        "release": "0.34.0",
+        "start": "2026-11-08T07:36:18Z"
+      },
+      {
+        "id": "The atm app, continued",
         "state": "planned",
-        "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging"
+        "goal": "Diagrams in the app (CompMD 0.6.0), in-app updates, the macOS 26 icon, and the app reacting to changes instead of polling",
+        "release": "0.35.0"
       }
     ],
     "releases": [
@@ -1158,6 +1226,14 @@
       {
         "id": "0.32.0",
         "state": "planned"
+      },
+      {
+        "id": "0.34.0",
+        "state": "planned"
+      },
+      {
+        "id": "0.35.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -1230,1365 +1306,9 @@
         ]
       }
     ],
-    "archived": 128
+    "archived": 155
   },
   "tasks": [
-    {
-      "id": "T-109",
-      "name": "Screenshots and e2e for every v4 dashboard feature",
-      "type": "test",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-6.1–6.3.\n\n### The v4 fixture\nA fixture with:\n- priorities and labels;\n- actors (including an approval by someone else);\n- `in_review` and blocked tasks (waiting on user and on agent, with questions);\n- notes;\n- PR stages in a pull-request project;\n- a custom vocabulary;\n- and a matching `tasks-archive.json`.\n\n### e2e\n- footer links, `#help` / `#about`, dialog keyboard behaviour;\n- priority / label / stage / agent filters;\n- *In Review* and *Blocked* columns;\n- notes and actors in the detail panel;\n- archive loading only on Progress and *Show archived*;\n- 304 polls.\n\n### Screenshots and budgets\n- **Strict** screenshots in both modes (darwin locally; Linux baselines from CI).\n- The build stays **within 256 KB**.\n- The performance spec stays within budget with 500 tasks plus a large archive.\n",
-      "requirements": [
-        "D-6.1",
-        "D-6.2",
-        "D-6.3"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-101",
-        "T-102",
-        "T-103",
-        "T-105",
-        "T-106",
-        "T-133",
-        "T-134",
-        "T-135",
-        "T-136",
-        "T-137",
-        "T-138",
-        "T-140"
-      ],
-      "files": [
-        "dashboard/tests/e2e/",
-        "dashboard/tests/fixtures/"
-      ],
-      "created_at": "2026-10-24T07:23:07Z",
-      "updated_at": "2026-10-25T21:40:47Z",
-      "started_at": "2026-10-25T01:22:48Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:26:26Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T07:23:07Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-110",
-      "name": "Release 0.13.0",
-      "type": "docs",
-      "priority": "P1",
-      "description": "See `docs/v4/README.md`.\n\n- CHANGELOG **0.13.0** entry covering every v4 feature (the archive entry says to **update every agent's plugin before the first `atm archive`**, DM-6.2).\n- Bump both versions to 0.13.0, rebuild.\n- `npm run verify` and the atm-cli suite green.\n- Ship through `/atm:push`.\n",
-      "requirements": [
-        "DM-6.2"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-107",
-        "T-108",
-        "T-109",
-        "T-141"
-      ],
-      "files": [
-        "README.md",
-        "plugin/CHANGELOG.md",
-        "plugin/.claude-plugin/plugin.json",
-        ".claude-plugin/marketplace.json",
-        "plugin/CLAUDE.md"
-      ],
-      "created_at": "2026-10-24T07:23:07Z",
-      "updated_at": "2026-10-25T21:40:47Z",
-      "started_at": "2026-10-25T01:29:54Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:40:33Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T07:23:07Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-131",
-      "name": "Skills: workflows in create-tasks, loop-tasks and do-task",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/skills-and-workflows.md` S-1.3, S-3.3.\n\n- **create-tasks** asks for the workflow once with the vocabularies (suggest `pull-request` when the repo has a GitHub remote with CI workflows, else `direct`) and saves it with `atm workflow set`.\n- **loop-tasks:** `--push`, `--batch-push` and `--push-every N` push through `/atm:push`; mid-loop pushes use `--no-watch`, the last one watches CI and fixes failures; `--no-watch` on the loop skips that.\n- **do-task**'s report suggests `/atm:push` when the branch has unpushed task commits.\n",
-      "requirements": [
-        "S-1.3",
-        "S-3.3"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-128",
-        "T-130"
-      ],
-      "files": [
-        "plugin/skills/create-tasks/SKILL.md",
-        "plugin/skills/loop-tasks/SKILL.md",
-        "plugin/skills/do-task/SKILL.md"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:52Z",
-      "started_at": "2026-10-25T00:46:20Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:46:58Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "skills"
-      ]
-    },
-    {
-      "id": "T-132",
-      "name": "This repo: CI notes in CLAUDE.md and its workflow",
-      "type": "docs",
-      "priority": "P2",
-      "description": "See `docs/v4/skills-and-workflows.md` §4.\n\n### Root `CLAUDE.md` gets a CI section\n- **Linux screenshot baselines:** CI fails until they're committed; artifact `linux-screenshot-baselines`; download with `gh api .../artifacts/<id>/zip`, since `gh run download` fails on duplicate entries; extract only `*-linux.png`, look at one, commit.\n- **Performance budgets:** CI's is twice the local one; runners are ~3× slower; a CI-only failure needs a local measurement and a real fix.\n- **Workflow:** `pull-request`, with one combined PR per release branch.\n\n### This repo's workflow\nSet this repo's `meta.workflow` with `atm workflow set pull-request`.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-122"
-      ],
-      "files": [
-        "CLAUDE.md",
-        ".agentic-task-manager/tasks.json"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:52Z",
-      "started_at": "2026-10-25T00:46:58Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:47:46Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "docs"
-      ]
-    },
-    {
-      "id": "T-133",
-      "name": "About shows \"Agentic Task Manager (atm)\"",
-      "type": "polish",
-      "priority": "P2",
-      "description": "See `docs/v4/dashboard.md` D-1.4. The About dialog shows `plugin.json`'s name (`atm`). Add the full name as a build-time constant next to it (`dashboard/build/plugin-info.ts`) and show **\"Agentic Task Manager (atm)\"**. Update the component test and the About screenshot.\n",
-      "requirements": [
-        "D-1.4"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "dashboard/build/plugin-info.ts",
-        "dashboard/src/components/AboutDialog.svelte",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:52Z",
-      "started_at": "2026-10-25T00:47:47Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:49:05Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-134",
-      "name": "Dashboard: labels",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-2.4.\n\n- Labels as **small neutral chips** on task cards, Kanban cards, the List tab and the detail panel.\n- A *Labels* filter group (with counts, saved per project), shown when some task has a label.\n- Search matches labels.\n- With `meta.labels`, chips use its text and order (P2).\n\nUnit and component tests.\n",
-      "requirements": [
-        "D-2.4"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-100"
-      ],
-      "files": [
-        "dashboard/src/components/",
-        "dashboard/src/lib/filters.ts",
-        "dashboard/src/lib/view-store.ts",
-        "dashboard/tests/unit/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:53Z",
-      "started_at": "2026-10-25T00:49:06Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:53:38Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-135",
-      "name": "Dashboard: Blocked, waiting on you or an agent",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-3.2, D-3.3.\n\n- The *Blocked* column appears **only when a task is blocked**.\n- Blocked cards show *\"Waiting on you\"* or *\"Waiting on an agent\"* (`waiting_on`), the time waited (`blocked_at`) and the number of questions; the detail panel lists the questions.\n- The header's attention count includes tasks in review and tasks waiting on the user.\n\nComponent tests.\n",
-      "requirements": [
-        "D-3.2",
-        "D-3.3"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-100"
-      ],
-      "files": [
-        "dashboard/src/components/",
-        "dashboard/src/lib/kanban.ts",
-        "dashboard/tests/unit/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:53Z",
-      "started_at": "2026-10-25T00:53:40Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:57:38Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-136",
-      "name": "Dashboard: notes in the detail panel",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-4.1. The detail panel lists the task's **notes, newest first**, with kind, who wrote it (`by`) and when; a legacy `last_failure` shows as a failure note; the commit SHA shows (short) when `commit` is set. Component tests.\n",
-      "requirements": [
-        "D-4.1"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-100"
-      ],
-      "files": [
-        "dashboard/src/components/DetailPanel.svelte",
-        "dashboard/src/lib/types.ts",
-        "dashboard/tests/unit/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:53Z",
-      "started_at": "2026-10-25T00:57:39Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T00:59:13Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-137",
-      "name": "Dashboard: actors (created, started, completed by)",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-4.5 and `docs/v4/data-model.md` §4.1.\n\n### Agents tab and utilisation\n- Use `started_by`, falling back to `agent` (**numbers unchanged**).\n- Actors starting with `claude:` are agents (bot icon); others are people (person icon) and get lanes too.\n- When `completed_by` differs from `started_by`, the bar ends with a small marker (*\"approved by ...\"*).\n\n### Detail panel\n*\"Created by X · started by Y · completed by Z\"*, and earlier attempts from handoff/failure notes.\n\n### Filter\nAn *Agent* filter group (by `started_by`, with counts) appears when more than one actor started tasks.\n\nUnit and component tests.\n",
-      "requirements": [
-        "D-4.5"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-101",
-        "T-136"
-      ],
-      "files": [
-        "dashboard/src/lib/agents.ts",
-        "dashboard/src/lib/utilization.ts",
-        "dashboard/src/components/AgentsTab.svelte",
-        "dashboard/src/components/DetailPanel.svelte",
-        "dashboard/src/lib/filters.ts",
-        "dashboard/tests/unit/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:53Z",
-      "started_at": "2026-10-25T00:59:14Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:02:40Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-138",
-      "name": "Dashboard: stages of Done (In PR, Merged)",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-4.2–4.4 and `docs/v4/data-model.md` DM-4.3.\n\n- **Stage** derived from `pr` / `merged_at`, shown whenever a task has them, whatever the workflow: a chip on cards (`PR #12` linking to `pr.url`, `Merged`).\n- In a **pull-request** project the *Done* column has sections *In PR* (per PR), *Done* (not pushed yet) and *Merged*, with counts; *Merged* collapses to the latest 20.\n- A *Stage* filter group, shown only when some task has a stage.\n- Same columns in both workflows.\n\nUnit and component tests.\n",
-      "requirements": [
-        "D-4.2",
-        "D-4.3",
-        "D-4.4"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-100"
-      ],
-      "files": [
-        "dashboard/src/lib/kanban.ts",
-        "dashboard/src/components/KanbanColumns.svelte",
-        "dashboard/src/components/KanbanCard.svelte",
-        "dashboard/src/lib/filters.ts",
-        "dashboard/tests/unit/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:53Z",
-      "started_at": "2026-10-25T01:02:45Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:05:48Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-139",
-      "name": "Dashboard: conditional fetch (304 when unchanged)",
-      "type": "feature",
-      "priority": "P0",
-      "description": "See `docs/v4/dashboard.md` D-5.1.\n\n- Drop the `?ts` cache-buster; fetch `tasks.json` with `cache: 'no-cache'` so the browser revalidates (`If-Modified-Since` / `ETag`) and **a 304 skips parsing and re-rendering**.\n- Check that `atm serve`'s handler answers 304 (`SimpleHTTPRequestHandler` does), and that the Vite dev middleware does too.\n\ne2e: an unchanged poll doesn't re-render; a changed file still updates; errors still show.\n",
-      "requirements": [
-        "D-5.1"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "dashboard/src/lib/load.ts",
-        "dashboard/build/dev-data.ts",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:54Z",
-      "started_at": "2026-10-25T01:05:53Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:09:34Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-140",
-      "name": "Dashboard: load the archive only when needed",
-      "type": "feature",
-      "priority": "P1",
-      "description": "See `docs/v4/dashboard.md` D-5.2–5.4.\n\n### When to load the archive\nLoad `tasks-archive.json` (conditional fetch) **only** for:\n- the Progress tab;\n- the Activity widget and Agents tab, for periods before the oldest task in `tasks.json`;\n- search with *Include archived*;\n- the graph's *Show archived*.\n\nA 404 means no archive.\n\n### Showing it\n- A dependency on an archived task is a stub (*\"T-042 · archived, done\"*) in the detail panel.\n- The header shows *\"N tasks · M archived\"*.\n- The footer shows a small notice when the archive threshold is reached.\n\nUnit and component tests with an archive fixture.\n",
-      "requirements": [
-        "D-5.2",
-        "D-5.3",
-        "D-5.4"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-100",
-        "T-139"
-      ],
-      "files": [
-        "dashboard/src/lib/load.ts",
-        "dashboard/src/lib/state.svelte.ts",
-        "dashboard/src/components/",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:54Z",
-      "started_at": "2026-10-25T01:09:35Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:22:10Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-141",
-      "name": "Docs: README, plugin/CLAUDE.md and Help for v4",
-      "type": "docs",
-      "priority": "P1",
-      "description": "See `docs/v4/README.md` and `docs/v4/dashboard.md` D-1.3.\n\n- **README:** priorities, labels, vocabularies, In Review and Blocked, notes, actors, the atm-cli commands, the archive, workflows and `/atm:push`.\n- **`plugin/CLAUDE.md`:** the task schema with the new fields (actors replace `agent`, labels, notes, stages), the never-touch-`tasks.json` rule and the command list.\n- **`docs/help.md`** covers every v4 topic in D-1.3.\n",
-      "requirements": [
-        "D-1.3",
-        "S-3.1"
-      ],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-105",
-        "T-127",
-        "T-129",
-        "T-131"
-      ],
-      "files": [
-        "README.md",
-        "plugin/CLAUDE.md",
-        "docs/help.md"
-      ],
-      "created_at": "2026-10-24T21:48:53Z",
-      "updated_at": "2026-10-25T21:40:54Z",
-      "started_at": "2026-10-25T01:26:33Z",
-      "agent": "claude:e5ea9db0",
-      "completed_at": "2026-10-25T01:29:54Z",
-      "pr": {
-        "number": 7,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/7"
-      },
-      "updated_by": "claude:e5ea9db0",
-      "merged_at": "2026-10-25T05:19:44Z",
-      "sprint": "Phase 13",
-      "sprint_history": [
-        {
-          "sprint": "Phase 13",
-          "from": "2026-10-24T21:48:53Z"
-        }
-      ],
-      "release": "0.13.0",
-      "components": [
-        "dashboard",
-        "cli",
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-142",
-      "name": "Dashboard: Markdown in task descriptions",
-      "type": "feature",
-      "priority": "P2",
-      "description": "Render the `description` field **as Markdown** wherever it is shown: at least the detail panel, possibly the cards (decide whether cards show a plain-text excerpt instead).\n\n### How\n- **No new library**, like the changelog and Help: reuse the Markdown renderer T-105 builds for Help (move it to `src/lib` if it only exists at build time, since descriptions are rendered in the browser).\n- **HTML in descriptions must stay escaped**: the edge-cases fixture's HTML-in-description test must keep passing.\n\n### Tests\n- Unit tests for the renderer on descriptions: headings, lists, code, links opening in a new tab.\n- A component test for the detail panel.\n- Screenshot update.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-105",
-        "T-146"
-      ],
-      "files": [
-        "dashboard/src/lib/markdown.ts",
-        "dashboard/src/components/DetailPanel.svelte",
-        "dashboard/src/components/TaskCard.svelte",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-24T22:03:56Z",
-      "updated_at": "2026-10-25T21:40:54Z",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:25:02Z",
-          "kind": "handoff",
-          "text": "Done and tested (506 unit tests), uncommitted in the tree: detail panel renders descriptions as Markdown. Blocked by the 256 KB budget (263,107 bytes); T-146 frees space. Then: update detail-panel screenshots, commit, done.",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:35:08Z",
-          "kind": "outcome",
-          "text": "The detail panel renders descriptions as Markdown (headings, lists, code, links in a new tab), every piece of text escaped",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "started_at": "2026-10-25T06:33:44Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "14fbed0e3bbfaa91600691a831a18085e5b3de14",
-      "completed_at": "2026-10-25T06:35:08Z",
-      "completed_by": "claude:e5ea9db0",
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-24T22:03:56Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-143",
-      "name": "Progress panel: rings as separate items",
-      "type": "polish",
-      "priority": "P3",
-      "description": "In the Progress panel's deep dive, give **each ring** under *By Phase* and *By Type* a border or a light background (theme tokens only, no hard-coded colours), so each ring reads as a separate item, like the Activity charts' cards. Check every theme and both modes; update the screenshots.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "dashboard/src/components/ProgressWidget.svelte",
-        "dashboard/src/components/Ring.svelte",
-        "dashboard/src/app.css",
-        "dashboard/tests/e2e/"
-      ],
-      "created_at": "2026-10-24T22:03:56Z",
-      "updated_at": "2026-10-25T21:40:54Z",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:41:09Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "ca5cab5c1f9ed07a5730052ba767d3c6aa869ab4",
-      "completed_at": "2026-10-25T06:42:26Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:42:26Z",
-          "kind": "outcome",
-          "text": "Each ring in the Progress panel is a card (theme tokens), like the Activity charts; light-mode screenshot added",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-24T22:03:56Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-144",
-      "name": "Activity: titles name the selected period",
-      "type": "bugfix",
-      "priority": "P1",
-      "labels": [
-        "activity"
-      ],
-      "description": "**Bug:** in the Activity details, choosing *Week* shows *\"Tasks completed per 6 hours\"*. The headings use `series.unitLabel` (the bucket size picked by `activitySeries` in `dashboard/src/lib/insights.ts`, `BUCKET_SIZES` / `MAX_ACTIVITY_BUCKETS`), not the period the user selected.\n\n### Fix both sides\n1. **Each preset gets a natural bucket:** hour → 5 minutes, day → hour, week → day, month → day; all time / custom → the current automatic choice.\n2. **The headings name the period and the bucket**, e.g. *\"Tasks completed this week, per day\"*, or *\"last week\"* when stepped back with ‹ (`rangeLabel` already has the period text).\n\nSame for *\"Agents working (1 = one agent busy the whole …)\"*.\n\n### Tests\n- Unit tests in `tests/unit/insights.test.ts` for each preset's bucket and label.\n- Update the activity screenshots (light/dark) and their `-linux` baselines per `CLAUDE.md`.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "dashboard/src/lib/insights.ts",
-        "dashboard/src/components/ActivityDeepDive.svelte",
-        "dashboard/tests/unit/insights.test.ts"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:55Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T05:50:48Z",
-          "kind": "outcome",
-          "text": "Each period has its natural bucket (week per day); headings name the period: 'Tasks completed this week, per day'",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:01:09Z",
-          "kind": "note",
-          "text": "Reopened: Marked done before its commit; atm commit couldn't commit the two git-rm'd Linux screenshots (fixed by T-153)",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:01:10Z",
-          "kind": "note",
-          "text": "Waiting for T-153 (atm commit with git-rm'd files) before its commit",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:13:41Z",
-          "kind": "answer",
-          "text": "T-153 is committed (fe75775); atm commit now takes git-rm'd files",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:13:56Z",
-          "kind": "outcome",
-          "text": "Each period has its natural bucket (week per day); headings name the period: 'Tasks completed this week, per day'",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "started_at": "2026-10-25T06:13:42Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "924a3e1ccd037c62bafaaf11cd8e7ca953b14851",
-      "completed_at": "2026-10-25T06:13:56Z",
-      "completed_by": "claude:e5ea9db0",
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-145",
-      "name": "Progress tab: show all phases or only active ones",
-      "type": "feature",
-      "priority": "P2",
-      "labels": [
-        "progress"
-      ],
-      "description": "The Progress tab gets long with many phases (this repo has 15).\n\n### The option\n- A checkbox above the phase table: *Active phases only*.\n- An **active phase** is one with unfinished tasks (todo/active/review/blocked kinds), or a finished one whose last completion is within the last *N* days (*N* = 7 by default, editable next to the checkbox).\n- With it on, the phase table and the burndown's phase list show only active phases (*Show all phases* focus still works; the overall burndown keeps all tasks).\n- Remembered in the project's saved view (`view-store.ts`), like `progressPhase`.\n\n### Code and tests\n- Logic in a lib function (e.g. `activePhases(tasks, now, days, vocab)` in `forecast.ts` or a new `phases.ts`) with unit tests.\n- A component or e2e test for the toggle.\n- Screenshots in both modes.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "dashboard/src/components/ProgressTab.svelte",
-        "dashboard/src/components/PhaseTable.svelte",
-        "dashboard/src/lib/view-store.ts",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:55Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:35:09Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "13acc3faec48b73419cdb3f0526eef85c9e1812d",
-      "completed_at": "2026-10-25T06:40:49Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:40:49Z",
-          "kind": "outcome",
-          "text": "Progress tab: 'Active phases only' hides phases finished more than N days ago (7 by default), saved per project",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard"
-      ]
-    },
-    {
-      "id": "T-146",
-      "name": "Short, end-user What's New, separate from the changelog",
-      "type": "docs",
-      "priority": "P2",
-      "labels": [
-        "release-notes"
-      ],
-      "description": "The What's new dialog and `/atm:update-dashboard` show `plugin/CHANGELOG.md`, which is written for developers and is **too detailed for users** (0.13.0 alone is ~25 bullets with command names).\n\n### `plugin/WHATS-NEW.md`\n- Per version, **3–6 short bullets in plain language** about what a user notices (no command flags, no internals), e.g. *\"Agents can ask you a question instead of guessing; the dashboard tells you when a task needs you.\"*\n- Write it for every released version from the changelog (summarize, newest first).\n\n### Where it's shown\n- The dashboard's What's new (`build/changelog.ts` → a whats-new module) and the `/atm:update-dashboard` skill show `WHATS-NEW.md`.\n- `CHANGELOG.md` stays the detailed record.\n- Inlining the short notes instead of the full changelog also **frees room under the 256 KB budget** (the build is ~1.9 KB under it).\n\n### Checks and docs\n- Keep the version check (`scripts/check-versions.mjs`) covering `WHATS-NEW.md`.\n- Add to the root `CLAUDE.md` (Versions section): every release adds a short, end-user What's New entry next to the changelog entry, written for users, not developers.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "plugin/WHATS-NEW.md",
-        "dashboard/build/changelog.ts",
-        "dashboard/src/components/WhatsNew.svelte",
-        "plugin/skills/update-dashboard/SKILL.md",
-        "dashboard/scripts/check-versions.mjs",
-        "CLAUDE.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:55Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:25:02Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "a7439ce1b9dab1543dae6dc6bb2c2450e94abc80",
-      "completed_at": "2026-10-25T06:33:43Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:33:43Z",
-          "kind": "outcome",
-          "text": "plugin/WHATS-NEW.md: short user notes for every release, shown in What's new and /atm:update-dashboard; the dashboard is 9 KB under budget again",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard",
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-147",
-      "name": "Themes: pick the top 20 VS Code themes",
-      "type": "docs",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "Choose the **20 most popular VS Code colour themes** (by Marketplace installs; note the date and source) that aren't already in the dashboard (it has Default, Nord, Solarized, Catppuccin, Tokyo Night, High contrast; see `dashboard/src/themes/`).\n\nFor each:\n- its name;\n- its **licence** (must allow reusing the palette);\n- whether it has light and dark variants;\n- the source of its colours.\n\nRecord the list in `docs/theme-validation.md` (or a new `docs/themes.md`), split into four batches of five for the next tasks. If the menu needs to change for 26 themes (grouping, light/dark pairs), note a proposal.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "docs/themes.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:55Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:40:49Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "0f626120f6e2502db868eb551161df12f01c12c7",
-      "completed_at": "2026-10-25T06:51:30Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:51:30Z",
-          "kind": "outcome",
-          "text": "docs/themes.md: 20 MIT/Apache themes by installs (2026-10-24), colours, batches; open: size budget and dark-only themes",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-148",
-      "name": "Themes: add batch 1 (Ayu, Night Owl, Gruvbox)",
-      "type": "feature",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "Add **GitHub, Ayu and Night Owl** (`docs/themes.md`, Decision; light and dark variants only), as the existing ones are built (`dashboard/src/themes/<name>.css` + `index.ts`):\n- every token for both variants, checked by `tests/unit/theme-contrast.test.ts` (readable contrast) and recorded in `docs/theme-validation.md`;\n- a screenshot per theme and mode (`visual.spec.ts`' theme loop), with `-linux` baselines per `CLAUDE.md`.\n\nMind the **256 KB size budget** (about 7 KB left for six themes); if it doesn't fit, **ask before raising it**.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-147"
-      ],
-      "files": [
-        "dashboard/src/themes/",
-        "dashboard/tests/",
-        "docs/theme-validation.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:56Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:01:13Z",
-          "kind": "answer",
-          "text": "Size: 20 more themes add about 24 KB, but only about 7 KB is left under the 256 KB budget. Raise the budget (e.g. to 320 KB), store themes more compactly (still ~8 KB), or add fewer themes? → Fewer themes: only light+dark ones (6 fit the budget).; Dark-only themes (12 of 20): derive a light variant from their accents, or always show them dark (the mode switch then says so)? → No dark-only themes; drop near-duplicates too (see docs/themes.md).",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T07:18:16Z",
-          "kind": "outcome",
-          "text": "Ayu, Night Owl, Gruvbox added (GitHub dropped: Default is its palette); contrast passes; 258.9 KB built",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "started_at": "2026-10-25T07:13:48Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "a90f35c461770d70b734ab3b12aa95a4a6da33c8",
-      "completed_at": "2026-10-25T07:18:16Z",
-      "completed_by": "claude:e5ea9db0",
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-149",
-      "name": "Themes: add batch 2 (Noctis, Sublime Material)",
-      "type": "feature",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "Add **Noctis** (dark Noctis, light Lux) and **Sublime Material** (`docs/themes.md`, Decision), as in T-148:\n- tokens for both variants;\n- contrast test (Sublime Material light's foreground is too pale and needs adjusting);\n- `docs/theme-validation.md`;\n- screenshots in both modes;\n- size budget (about 3 KB left after T-148).\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-148"
-      ],
-      "files": [
-        "dashboard/src/themes/",
-        "dashboard/tests/",
-        "docs/theme-validation.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:56Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T07:18:19Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "2e587d1fb0684f26424161687962acc19f38676c",
-      "completed_at": "2026-10-25T07:20:04Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:20:04Z",
-          "kind": "outcome",
-          "text": "Noctis and Sublime Material added; contrast passes; 261.3 KB built (814 bytes under budget)",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-150",
-      "name": "Themes: add batch 3 (5 themes)",
-      "type": "feature",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "The third five themes from `docs/themes.md`, as in the batch 1 task: tokens per variant, contrast test, `docs/theme-validation.md`, screenshots in both modes, size budget.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "skipped",
-      "dependencies": [
-        "T-149"
-      ],
-      "files": [
-        "dashboard/src/themes/",
-        "dashboard/tests/",
-        "docs/theme-validation.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:56Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:01:38Z",
-          "kind": "note",
-          "text": "Skipped: Dark-only themes and near-duplicates dropped (docs/themes.md, Decision): two batches are enough",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "skipped_at": "2026-10-25T07:01:38Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-151",
-      "name": "Themes: add batch 4 (5 themes)",
-      "type": "feature",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "The last five themes from `docs/themes.md`, as in the batch 1 task: tokens per variant, contrast test, `docs/theme-validation.md`, screenshots in both modes, size budget.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "skipped",
-      "dependencies": [
-        "T-150"
-      ],
-      "files": [
-        "dashboard/src/themes/",
-        "dashboard/tests/",
-        "docs/theme-validation.md"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:56Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:01:39Z",
-          "kind": "note",
-          "text": "Skipped: Dark-only themes and near-duplicates dropped (docs/themes.md, Decision): two batches are enough",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "skipped_at": "2026-10-25T07:01:39Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-152",
-      "name": "Appearance menu for 11 themes",
-      "type": "polish",
-      "priority": "P2",
-      "labels": [
-        "themes"
-      ],
-      "description": "With 12 themes the Appearance menu (`dashboard/src/components/AppearanceMenu.svelte`) needs to **stay usable**: follow the proposal in `docs/themes.md` (a scrollable list with a swatch per theme, keyboard navigable, the current one visible on open). README and `docs/help.md` list the themes. e2e for choosing a theme by keyboard; screenshot of the open menu in both modes.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [
-        "T-149"
-      ],
-      "files": [
-        "dashboard/src/components/AppearanceMenu.svelte",
-        "README.md",
-        "docs/help.md",
-        "dashboard/tests/"
-      ],
-      "created_at": "2026-10-25T05:46:06Z",
-      "updated_at": "2026-10-25T21:40:56Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T07:20:04Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "f95d7d05d61dced48eddb8850caed88aca855917",
-      "completed_at": "2026-10-25T07:24:57Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:24:57Z",
-          "kind": "outcome",
-          "text": "Theme list scrolls only on small windows, current theme focused on open, arrows/Home/End choose; 261.8 KB built",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:46:06Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "dashboard",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-153",
-      "name": "atm commit: accept git-rm'd files; atm reopen",
-      "type": "bugfix",
-      "priority": "P0",
-      "description": "Two atm-cli gaps found while committing T-144:\n\n1. **`atm commit` refused a file already removed with `git rm`** (in neither the working tree nor the index). Accept a path `HEAD` tracks, and stage only paths that still exist in the tree or the index.\n2. **A task marked done by mistake couldn't be taken back.** Add `atm reopen <id> --reason TEXT` (done/skipped kind → todo, clearing the attempt, the reason kept as a note).\n\nTests: `tests/scripts/git.test.mjs`, `scenarios/reopen.json`; `docs/v4/atm-cli.md` and `plugin/CLAUDE.md`.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "atm-cli/atm/git_ops.py",
-        "plugin/scripts/atm.py",
-        "tests/scripts/git.test.mjs",
-        "atm-cli/atm/model.py",
-        "atm-cli/atm/tasks.py",
-        "atm-cli/atm/cli.py",
-        "tests/scripts/scenarios/reopen.json",
-        "docs/v4/atm-cli.md",
-        "plugin/CLAUDE.md"
-      ],
-      "created_at": "2026-10-25T05:55:52Z",
-      "updated_at": "2026-10-25T21:40:57Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:01:10Z",
-          "kind": "outcome",
-          "text": "atm commit takes files removed with git rm; new atm reopen <id> --reason undoes a done or skipped task",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:01:18Z",
-          "kind": "note",
-          "text": "Reopened: Marked done before its commit (the order T-154 fixes)",
-          "by": "claude:e5ea9db0"
-        },
-        {
-          "at": "2026-10-25T06:01:26Z",
-          "kind": "outcome",
-          "text": "atm commit takes files removed with git rm; new atm reopen <id> --reason undoes a done or skipped task",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "started_at": "2026-10-25T06:01:18Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "fe7577539d760118204171b1e67d9a105e2d1102",
-      "completed_at": "2026-10-25T06:01:26Z",
-      "completed_by": "claude:e5ea9db0",
-      "pr": {
-        "number": 8,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/8"
-      },
-      "merged_at": "2026-10-25T06:11:27Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:55:52Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "cli",
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-154",
-      "name": "Skills: commit before marking a task done",
-      "type": "bugfix",
-      "priority": "P1",
-      "description": "do-task and loop-tasks mark a task done (`atm done`) **before** committing it (`atm commit`), so a failed commit leaves a task done with its work uncommitted (happened with T-144).\n\n### Reorder\n1. Verify.\n2. `atm commit <id> --file ...` (the task still in progress).\n3. `atm done <id> --note`.\n\nIf the commit fails, the task stays in progress and the agent fixes the cause or releases it with a handoff note. For a review or a block, the same: **commit first**, then `atm review` / `atm block`.\n\n### Check and update\n- Check `atm commit` works on an in-progress task and records the SHA (`atm done` keeps it).\n- Update `plugin/skills/do-task` and `loop-tasks`, `plugin/CLAUDE.md`, and README's do-task steps.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "plugin/skills/do-task/SKILL.md",
-        "plugin/skills/loop-tasks/SKILL.md",
-        "plugin/CLAUDE.md",
-        "README.md"
-      ],
-      "created_at": "2026-10-25T05:55:53Z",
-      "updated_at": "2026-10-25T21:40:57Z",
-      "created_by": "Hakan Serce",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:14:01Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "cc3db38356cfd96853b1e2d8c97d9f336bb9f21f",
-      "completed_at": "2026-10-25T06:16:06Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T06:16:06Z",
-          "kind": "outcome",
-          "text": "do-task and loop-tasks commit while the task is in progress, then mark it done; a failed commit leaves it in progress",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T05:55:53Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "skills",
-        "docs"
-      ]
-    },
-    {
-      "id": "T-155",
-      "name": "atm skip: drop a to-do or blocked task that isn't needed",
-      "type": "feature",
-      "description": "There is **no way to skip a task through atm**: the theme batches T-150/T-151 became unneeded and could only be repurposed.\n\nAdd `atm skip <id> --reason TEXT`:\n- a todo- or blocked-kind task moves to the skipped kind;\n- the reason is kept as a note (*\"Skipped: ...\"*);\n- any claim is dropped;\n- `reopen` undoes it.\n\nUsage text, scenarios in `tests/scripts/scenarios/skip.json`, skills (do-task, loop-tasks) mention it, CHANGELOG.\n",
-      "requirements": [],
-      "use_cases": [],
-      "status": "done",
-      "dependencies": [],
-      "files": [
-        "atm-cli/atm/model.py",
-        "atm-cli/atm/cli.py",
-        "plugin/scripts/atm.py",
-        "tests/scripts/scenarios/skip.json"
-      ],
-      "created_at": "2026-10-25T06:57:56Z",
-      "updated_at": "2026-10-25T21:40:57Z",
-      "created_by": "claude:e5ea9db0",
-      "updated_by": "claude:e5ea9db0",
-      "started_at": "2026-10-25T06:58:00Z",
-      "started_by": "claude:e5ea9db0",
-      "commit": "de0ac09e942c6dd771408b3b1ad3e338ceefaea8",
-      "completed_at": "2026-10-25T07:01:00Z",
-      "completed_by": "claude:e5ea9db0",
-      "notes": [
-        {
-          "at": "2026-10-25T07:01:00Z",
-          "kind": "outcome",
-          "text": "atm skip <id> --reason: todo/blocked to skipped, reason as a note; scenarios in skip.json",
-          "by": "claude:e5ea9db0"
-        }
-      ],
-      "pr": {
-        "number": 9,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/9"
-      },
-      "merged_at": "2026-10-25T07:37:43Z",
-      "sprint": "Phase 14",
-      "sprint_history": [
-        {
-          "sprint": "Phase 14",
-          "from": "2026-10-25T06:57:56Z"
-        }
-      ],
-      "release": "0.14.0",
-      "components": [
-        "cli",
-        "skills"
-      ]
-    },
     {
       "id": "T-156",
       "name": "Progress panel: one card for By Phase, one for By Type",
@@ -19726,7 +18446,7 @@
         "packaging/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:04:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19752,7 +18472,8 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z"
     },
     {
       "id": "T-454",
@@ -19783,7 +18504,7 @@
         "docs/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:04:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19841,7 +18562,8 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z"
     },
     {
       "id": "T-455",
@@ -19854,7 +18576,7 @@
       "description": "Following the [Tauri guide](docs/guides/tauri.md): `app/src-tauri/` in the workspace, Tauri 2.11.1+, single instance, the opened registry in state, typed commands and DTOs exported with `tauri-specta`, least-privilege capabilities, the dashboard's CSP with `connect-src` for IPC only. New dependencies proposed first.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-454"
       ],
@@ -19863,16 +18585,57 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "blocks": [
+        {
+          "from": "2026-11-08T07:56:10Z",
+          "to": "2026-11-08T08:08:49Z",
+          "on": "user"
+        },
+        {
+          "from": "2026-11-08T08:18:39Z",
+          "to": "2026-11-08T08:29:24Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T08:08:49Z",
+          "kind": "answer",
+          "text": "Approve the new dependencies: tauri 2.12.5, tauri-build 2.x, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript 0.0.15 (pre-release, pinned exactly), and npm @tauri-apps/cli and @tauri-apps/api 2.12.4? Or replace specta with hand-written TypeScript types checked by a test? → Approved: add the dependencies (tauri 2.12.5, tauri-build, tauri-plugin-single-instance 2.5.5, tauri-specta 2.0.0-rc.26 with specta-typescript, @tauri-apps/cli and @tauri-apps/api 2.12.4).; OK to keep the app out of the default cargo build/test (not in default-members), with its own macOS CI job later? → No: the app is part of cargo build/test. A separate backlog task reviews and refactors the CI jobs from what we learned.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:29:24Z",
+          "kind": "answer",
+          "text": "cargo deny: allow the licences BSD-2-Clause (Inflector, via specta) and MPL-2.0 (cssparser, cssparser-macros, dtoa-short, selectors via tauri-utils; option-ext via dirs) in deny.toml? → Yes: allow BSD-2-Clause and MPL-2.0.; cargo deny: ignore five “unmaintained” advisories (no vulnerability, no fixed version): paste (RUSTSEC-2024-0436, via specta), proc-macro-error (RUSTSEC-2024-0370, via gtk on Linux), zbus_names, zvariant, zvariant_derive (RUSTSEC-2026-0370/0371/0372, via the single-instance plugin on Linux), each with its reason in deny.toml? → Yes: ignore all five unmaintained advisories, each with its reason in deny.toml.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:52:35Z",
+          "kind": "outcome",
+          "text": "The Tauri skeleton in `app/src-tauri/`: single instance, the registry in state, `version` and `list_projects` with tauri-specta types (`.generated/app/bindings.ts`), a least-privilege capability (tested: remote pages refused), the dashboard CSP with IPC-only `connect-src`. In cargo build/test on all three platforms (CI run 42464218268 green); the IPC test is ignored on Windows until T-482. deny.toml exceptions approved.",
+          "by": "claude:34798264"
+        }
+      ],
+      "commit": "4ccf25125753601c9087d0c3912b4325ac1a4bab",
+      "started_at": "2026-11-08T08:29:24Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T08:52:35Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-456",
@@ -19882,27 +18645,53 @@
       "labels": [
         "app"
       ],
-      "description": "The commands the dashboard needs, each a thin mapping to an atm-lib call ([better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2): projects, a project's tasks (the v1 view), claims, worktrees, documents and files, search; a Tauri channel per subscription for changes (a file watcher), with `unsubscribe`. Command-wiring tests on Tauri's mock runtime.",
+      "description": "The app's commands and the REST API's v2 routes, both thin over atm-lib's `Workspaces`, `Workspace` and `Project` ([ADR-003](docs/adr/ADR-003-workspaces.md) §5; [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) §2).\n\n## Routes and commands\n| v2 route | App command |\n|---|---|\n| `GET /api/v2/workspaces` (with the last opened) | `list_workspaces` |\n| `GET /api/v2/workspaces/<w>/projects` | `list_projects(w)` |\n| `GET /api/v2/workspaces/<w>/search?q=` | `search(w, q)` |\n| `GET /api/v2/workspaces/<w>/projects/<p>/tasks` | `project_tasks(w, p, filters)` |\n| `…/projects/<p>/documents`, `files`, `claims`, `worktrees`, `logo` | `document`, `file`, `claims`, `worktrees`, `logo` |\n\n- Opening a workspace records it as the last opened (`recent.json`): the one write, a choice of view (the security review covers it).\n- v1 and `/p/<p>/…` stay, as the `default` workspace.\n\n## Live changes\nA Tauri channel per subscription (a workspace's list or a project), with `unsubscribe`. A file watcher on what the store reports for the project: the `notify` crate 8.2.1 and `notify-debouncer-full` 0.7.0 (approved, with CC0-1.0 in `deny.toml`). Watch folders, not files; debounce.\n\n## Tests\n- Command wiring on Tauri's mock runtime.\n- One test per read that the REST route and the command return the same data.\n- `docs/security-architecture.md` updated for the new routes and commands.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
-        "T-455"
+        "T-455",
+        "T-492"
       ],
       "files": [
-        "app/src-tauri/"
+        "app/src-tauri/",
+        "crates/atm-api/src/",
+        "deny.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "notes": [
+        {
+          "at": "2026-11-08T09:20:41Z",
+          "kind": "handoff",
+          "text": "Paused before any code: the multi-project reads need a home first. Workspaces are designed in T-489 (ADR-003). notify 8.2.1 and notify-debouncer-full 0.7.0 are approved, with CC0-1.0 in deny.toml.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T11:04:24Z",
+          "kind": "outcome",
+          "text": "v2 routes (`/api/v2/workspaces…`; v1 = default) and 13 app commands over atm-lib `Workspace`/`Member`; agreement test per read; notify watcher behind channels (`Store::watch_folders`). JSON answers typed `Json` (numbers as number, specta-typescript 0.0.13 has no bigint option). Known limits: a workspace subscription watches the projects listed when it started; `.git/HEAD` (branch switch) is not watched. Suite 587, e2e 411, deny ok.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-08T10:49:23Z",
+      "started_by": "claude:34798264",
+      "commit": "4918c5da0e922e04b3a541f8caa673fe4b5f6ed5",
+      "completed_at": "2026-11-08T11:04:24Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-457",
@@ -19913,28 +18702,66 @@
         "app",
         "dashboard"
       ],
-      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`) and an IPC one (the app), picked at start; the app's build of the dashboard. A test that each REST route and its Tauri command return the same data; Playwright on mocked Tauri IPC over an in-memory project for the app.",
+      "description": "`dashboard/src/lib/api/` becomes an interface with an HTTP implementation (the browser, `atm serve`, on the v2 routes) and an IPC one (the app), picked at start; the app's build of the dashboard. Playwright on mocked Tauri IPC over an in-memory project for the app.\n\n## Workspaces ([ADR-003](docs/adr/ADR-003-workspaces.md) §5)\n- Addresses `/w/<w>/projects/<p>/<tab>`, `/w/<w>/board`, …; `/` goes to the last opened workspace; an address without `/w/<w>` (every link so far) is `default`'s. `src/lib/address.ts` and atm serve's `PAGE_PATH` (`docs/multi-project-api.md` §2.7) change together.\n- A workspace switcher next to the project switcher when there is more than one; opening one records it as the last opened.\n- The app opens the last opened workspace, one window per workspace; deep links `atm://w/<w>/projects/<p>` (T-459).\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-456"
       ],
       "files": [
         "dashboard/src/lib/api/",
-        "dashboard/tests/"
+        "dashboard/tests/",
+        "dashboard/src/lib/address.ts",
+        "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "commit": "e6554f41c8dee210dda19e8b8364e422ffee3b92",
+      "notes": [
+        {
+          "at": "2026-11-08T11:19:24Z",
+          "kind": "note",
+          "text": "Done in 3403ff6: `/w/<w>` addresses and pages, `/` opens the last workspace, the switcher (2+ workspaces), default on v1 and others on v2 routes. Left: an IPC `Fetch` mapping the v2 routes to the app’s commands (images as blob URLs), the app’s dashboard build, Playwright on mocked IPC. Once: serve.test.mjs symlink test got ECONNRESET right after start (passed on rerun).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:00:57Z",
+          "kind": "answer",
+          "text": "The IPC transport needs `@tauri-apps/api` (Tauri’s own JS package, MIT/Apache-2.0, at the version matching tauri 2.12.x) as a dashboard dependency: the generated `.generated/app/bindings.ts` imports `@tauri-apps/api/core`, and the Playwright tests on mocked IPC use `@tauri-apps/api/mocks`. OK to add it (pnpm, pinned in the lockfile)? → Yes: add @tauri-apps/api (Hakan, 2026-11-08).; The app window: one window per workspace (ADR-003 §5) or one window that switches, for now? I would start with one window that opens the last opened workspace and switches in place, and add per-workspace windows with the deep links (T-459). → One window for now, switching workspaces in place; per-workspace windows can come with deep links (T-459).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:22:05Z",
+          "kind": "outcome",
+          "text": "IPC transport: `browserFetch` picks `ipcFetch` in the app (`isTauri()`), mapping the dashboard’s URLs to the app’s commands; logos as data: URLs (no CSP change); one window. `@tauri-apps/api` 2.12.4 added. Unit 1233, e2e 417 (app.spec on mocked IPC). Left for later: a document’s relative images show alt text in the app; a reload on a deep path in the app has no page fallback (deep links, T-459).",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-08T11:19:13Z",
+          "to": "2026-11-08T18:00:57Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-08T18:14:54Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T18:22:05Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-458",
@@ -19948,7 +18775,7 @@
       "description": "A button (Claude Code for now, from the harness table) that calls the same atm-lib code as `atm agents install` through a Tauri command, shows what it wrote where, and the status. Never runs on its own.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-457",
         "T-450"
@@ -19958,16 +18785,33 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:54:08Z",
+      "started_by": "claude:34798264",
+      "commit": "4a8e2846a62ff5810493dfc037683e7e2f9c8b6d",
+      "completed_at": "2026-11-08T18:59:08Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:59:08Z",
+          "kind": "outcome",
+          "text": "`agents_status` and `connect_agents` app commands over atm-lib’s skills_status/install_skills; footer button (app only) opens the `?agents` dialog; connects only on click and lists paths written/refused; browser shows `atm agents install`. Unit 1237, e2e 419.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-459",
@@ -19980,7 +18824,7 @@
       "description": "`atm://projects/<id>[/<tab>]?task=…&doc=…` opens the app at that page, parsed by the dashboard's address code (T-429's `lib/address.ts`), never fetched or run.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-457"
       ],
@@ -19989,16 +18833,33 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:59:20Z",
+      "started_by": "claude:34798264",
+      "commit": "03e7a44ef361e5faf0d7e02684f3e299745f166f",
+      "completed_at": "2026-11-08T19:04:45Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T19:04:45Z",
+          "kind": "outcome",
+          "text": "`atm://` links on macOS without a plugin (Info.plist scheme, `RunEvent::Opened`); `links.rs` checks them into dashboard addresses, `subscribe_links` channel (start link waits), page re-checks with `isPagePath` before navigating. Not run in a real app yet (needs a bundle + `open atm://…`). Unit 1240, e2e 420.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-460",
@@ -20012,7 +18873,7 @@
       "description": "The app as a signed, notarized DMG and a Homebrew cask, bundling the `atm` binary and putting it on PATH; built in CI on a tag; after install it only says how to connect agents (no silent install).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-456",
         "T-452"
@@ -20023,16 +18884,52 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "notes": [
+        {
+          "at": "2026-11-08T18:00:57Z",
+          "kind": "note",
+          "text": "Hakan: ship in 0.34.0; leaning to the cask depending on the atm formula (downsides sent: the app’s built-in atm-lib and the formula’s CLI can drift apart, it clashes with the T-483 updater, the DMG still bundles atm for non-brew users). Universal vs per-arch: comparison sent, recommended universal DMG with per-arch CLI. Waiting on his pick.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:29:22Z",
+          "kind": "answer",
+          "text": "The cask bundles `atm` and puts it on PATH, as does the `atm` formula: should the cask `conflicts_with formula: \"atm\"` (one or the other; the cask’s atm replaces the formula’s), or should the cask depend on the formula and not bundle its own? → B: the cask bundles its own atm, links it onto PATH (binary from inside the app) and conflicts_with formula atm (Hakan, 2026-11-08).; One universal (arm64 + x86_64) DMG, or one per architecture like the CLI’s archives? → One universal DMG (arm64 + x86_64); the CLI archives stay per architecture.; Ship the app in 0.34.0, or only once its window works on IPC (T-457 is blocked on @tauri-apps/api)? A DMG built now opens a window that cannot load data yet. I would build the DMG job and the cask script now and keep the cask out of the tap until T-457 is done. → Ship in 0.34.0.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T18:36:58Z",
+          "kind": "outcome",
+          "text": "Release job `app-macos`: universal DMG with the universal atm CLI inside, Tauri signs + notarizes the app, `notarize-dmg.sh` the DMG (stapled). Cask `atm-app` links the app’s atm, conflicts_with the formula, caveat only. Local unsigned bundle checked (atm.app has atm + atm-app; `atm version` runs). Not yet run for real: signing and notarization happen only on a tag in CI. Suite 597, unit 1233.",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-08T11:19:54Z",
+          "to": "2026-11-08T18:29:22Z",
+          "on": "user"
+        }
+      ],
+      "started_at": "2026-11-08T18:29:22Z",
+      "started_by": "claude:34798264",
+      "commit": "b56d46496294c1bd7fafb6ac3ee3a2349c580386",
+      "completed_at": "2026-11-08T18:36:58Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-461",
@@ -20046,7 +18943,7 @@
       "description": "[security-architecture.md](docs/security-architecture.md): the app's capabilities, its CSP, the IPC commands as entry points, deep links, the skills button writing into Claude Code's folder, signing and notarization; invariants and their checks where they apply.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-458",
         "T-459",
@@ -20056,16 +18953,33 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-06T20:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
           "from": "2026-11-06T20:53:32Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app",
+      "commit": "358bb9552ea95e5ddcd55931862b0b5021d94dc6",
+      "started_at": "2026-11-08T19:06:32Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-08T19:06:32Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T19:06:32Z",
+          "kind": "outcome",
+          "text": "B7 and I25–I29 in security-architecture.md, each with a check; new app tests for the capability list and the CSP; by-hand checklist for the first signed DMG in §5. Open: T-483’s updater gets its own review.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-462",
@@ -20819,7 +19733,7 @@
         "crates/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:04:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20850,7 +19764,8 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z"
     },
     {
       "id": "T-478",
@@ -20873,7 +19788,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-07T06:20:49Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:04:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20914,7 +19829,8 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z"
     },
     {
       "id": "T-479",
@@ -21006,7 +19922,7 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-07T23:09:20Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:04:07Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21041,7 +19957,8 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z"
     },
     {
       "id": "T-481",
@@ -21098,13 +20015,21 @@
         ".github/workflows/ci.yml"
       ],
       "created_at": "2026-11-08T00:45:52Z",
-      "updated_at": "2026-11-08T00:45:59Z",
+      "updated_at": "2026-11-08T08:44:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard",
         "cli",
         "ci"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T08:44:32Z",
+          "kind": "note",
+          "text": "From T-455: on Windows the app’s IPC test `the_main_windows_capability_lets_it_call_the_commands` (app/src-tauri/src/lib.rs) is ignored. Its request from `tauri://localhost` is refused as not local; Windows’ local origin is likely `http://tauri.localhost`. Also logged: the default window icon fails to load from the test executable’s resources.",
+          "by": "claude:34798264"
+        }
       ]
     },
     {
@@ -21130,16 +20055,36 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-08T01:23:30Z",
+      "updated_at": "2026-11-09T09:40:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
-          "from": "2026-11-08T01:21:48Z"
+          "from": "2026-11-08T01:21:48Z",
+          "to": "2026-11-09T09:40:00Z"
+        },
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:40:00Z"
         }
       ],
-      "sprint": "The atm app"
+      "sprint": "The atm app, continued",
+      "blocks": [
+        {
+          "from": "2026-11-08T18:59:19Z",
+          "to": "2026-11-08T21:17:35Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T21:17:35Z",
+          "kind": "answer",
+          "text": "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard? → Approved: add tauri-plugin-updater and @tauri-apps/plugin-updater.; The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in? → Open for now: the updater key pair (TAURI_SIGNING_PRIVATE_KEY and its password, and the public key in the app) is set up together with Hakan; build everything else so only the key is left.; Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone. → The app updates itself, in addition to brew upgrade: the cask says auto_updates true.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-484",
@@ -21152,7 +20097,7 @@
       "description": "The first release without the plugin: `dev/0.33.0` to `main`, tagged, built, signed and published, with the formula and the first export of the skills to `solo-swe/skills`. The release process is in [packaging/README.md](packaging/README.md).\n\n## On `dev/0.33.0`\n- **Version:** `0.33.0` in `Cargo.toml` (`[workspace.package]`), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.33.0] - <date>`: T-453, T-454, T-477, T-478, T-480, and how plugin users move.\n- **WHATS-NEW.md:** a `## [0.33.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): atm is now its own program (Homebrew or a download), its skills go into your agents with one command, and your projects and dashboard carry over.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): the skills and `docs/agent/` changed, so do a written review of the skills in §3.3 instead of the live sandbox run. Check that the T-454 entry describes what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.33.0` to `main`. The ruleset's required checks (the three Rust jobs, lint and unit tests, Playwright) must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.33.0 --push` on an up-to-date `main`; watch the Release run.\n- Check the draft (six assets: five archives and `SHA256SUMS`), then publish it.\n- Watch the Homebrew and Skills workflows. This is the Skills workflow's first run: check `solo-swe/skills` for the `skills/atm-*` folders and the `atm-v0.33.0` tag.\n- Check `brew upgrade solo-swe/tap/atm` gives 0.33.0, and that `atm agents install` writes the skills.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-453",
         "T-454",
@@ -21169,7 +20114,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-08T06:48:11Z",
-      "updated_at": "2026-11-08T06:55:02Z",
+      "updated_at": "2026-11-08T07:19:47Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21186,7 +20131,18 @@
       "pr": {
         "number": 40,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
-      }
+      },
+      "merged_at": "2026-11-08T07:02:27Z",
+      "completed_at": "2026-11-08T07:19:47Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T07:19:47Z",
+          "kind": "outcome",
+          "text": "Released: v0.33.0 published, formula 0.33.0 in the tap, skills exported to solo-swe/skills (atm-v0.33.0); brew upgrade and atm agents install checked. Screenshots by CI (T-485).",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-485",
@@ -21199,7 +20155,7 @@
       "description": "Since T-478 the e2e fixture runs the binary (`tests/e2e/helpers.ts`, `target/debug/atm`). `pnpm run test:e2e:visual` and `test:e2e:visual:update` run Playwright in a Linux container with the checkout mounted, so on a Mac they run the macOS binary, and every visual test fails with `target/debug/atm: 1: Syntax error: \"(\" unexpected`. CI is fine: its visual job downloads the `atm-linux` artifact.\n\n## Change\n- Give the helper a way to use another binary (for example an `ATM_E2E_BIN` variable, defaulting to `target/debug/atm`).\n- Make the Docker scripts use a Linux atm built for this checkout without fetching anything new into the container, for example a Linux build in its own target folder (a `cargo` container or `cross`, with approval if it adds a tool), or CI's `atm-linux` artifact of the branch's run as `AGENTS.md` describes for baselines.\n- `AGENTS.md`'s screenshot section says what to run.\n\n## Tests\n`pnpm run test:e2e:visual` passes on a Mac with Docker running.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21207,12 +20163,1188 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T06:53:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
         "T-478"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T07:36:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "blocks": [
+        {
+          "from": "2026-11-08T07:56:28Z",
+          "to": "2026-11-08T08:08:49Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-08T08:08:49Z",
+          "kind": "answer",
+          "text": "Linux atm for the local screenshots: (1) build it in the official rust:1.99.0 image, pinned by digest, into target/linux/ (a new image), or (2) download CI’s atm-linux artifact of the branch’s run with gh api (nothing new, but needs a pushed branch and a CI run)? I recommend (1). → (1): build it in the official rust:1.99.0 image, pinned by digest, into target/linux/.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T08:22:58Z",
+          "kind": "outcome",
+          "text": "`pnpm run build:atm-linux` builds the CLI in the official rust:1.99.0-bookworm image (pinned by digest) into `target/linux/`; the visual scripts run it first and pass it to the fixture as `ATM_E2E_BIN`. `pnpm run test:e2e:visual` passes on a Mac (84 screenshots); functional e2e 411 pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-08T08:18:47Z",
+      "started_by": "claude:34798264",
+      "commit": "828aa94e57fb2998e290f6b3c0e466804feac4da",
+      "completed_at": "2026-11-08T08:22:58Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-486",
+      "name": "A release whose tasks merge in several PRs is never released",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "`atm vcs pushed --pr <n>` releases a planned release only when **all** its tasks are merged **in that PR** (`release_with_merge` in [code.rs](crates/atm-lib/src/code.rs)). Release 0.32.0's sprint, *The Rust port*, merged in two PRs: #39 (32 tasks), then #40 (the other 5, which shipped in 0.33.0). Recording #39 said `0.32.0 stays planned: T-453, … are not merged in PR #39`, and recording #40 said the same about #39's 32 tasks. So 0.32.0 stays planned although every one of its tasks is merged.\n\n## Change\n- A release is released when every one of its tasks is merged (`merged_at` set), whichever PR merged it. Its release time is the last merge. The message names the tasks that keep it planned because they aren't merged yet, not because they merged in another PR.\n- `atm vcs pushed` releases such a release the next time it runs. `atm doctor` (or `atm release list`) points out a planned release whose tasks are all merged, so this repo's 0.32.0 can be fixed by running it again.\n\n## Tests\nA scenario in `tests/scripts/scenarios/`: a release whose tasks are in two PRs stays planned after the first merge and is released by the second; a release with one PR still works as it does now.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/code.rs",
+        "crates/atm-cli/src/commands/vcs.rs",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-08T07:06:02Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T07:36:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T07:56:28Z",
+      "started_by": "claude:34798264",
+      "commit": "aef39aed2f238c05e6afba11eb2b8729ee32647f",
+      "completed_at": "2026-11-08T08:02:12Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T08:02:12Z",
+          "kind": "outcome",
+          "text": "A release is released once all its tasks are merged, in any PR (released_at its last merge); messages say \"not merged yet\"; atm doctor warns about a planned release whose tasks are all merged. Scenarios in pr.json and releases.json. This repo’s 0.32.0 is released by `atm vcs pushed --pr 40` once this atm is installed.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-487",
+      "name": "Review and refactor the CI jobs from what the Rust port taught us",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "rust"
+      ],
+      "description": "Go through `.github/workflows/` with the user and propose changes, based on what CI did during *The Rust port* and the first releases. Each change is agreed first: editing CI is the user's call.\n\n## What to look at\n- **What runs when:** pushes to a release branch run nothing unless dispatched (`gh workflow run CI --ref <branch>`); a PR runs again after every push. Is that still the right trade?\n- **Time and caching:** a run takes about 4–5 minutes. Look at the cargo and pnpm caches, the jobs that build the dashboard and atm more than once (Rust ×3, `atm for the e2e suite`, Playwright), and whether artifacts could be shared instead.\n- **The app (T-455 onwards)** is part of `cargo build`/`test`, so the Linux job needs the webview's system packages and Windows builds against WebView2. See what that adds to each job, and whether the e2e binary and the release should build only `-p atm-cli`.\n- **Windows:** the suite runs only partly there (T-480, T-482), and the stress test fails (T-481). Decide what the Windows job checks until those are done.\n- **macOS:** the stress test hit lock timeouts twice (T-481). Is that a slow runner or a real bug?\n- **Screenshots:** CI makes missing Linux baselines, and the local scripts get a Linux atm (T-485). Check that the two use the same binary and the same steps.\n- **Runner images:** `ubuntu-latest` moves to Ubuntu 26 (CI's annotation); the e2e binary is built on 22.04 for an older glibc. Pin the images we depend on.\n- **Required checks:** the ruleset names jobs by their display names (`Rust (ubuntu-latest)`, …), so renaming a job breaks merges. Keep the names in one place, or test that `.github/rulesets/main.json` matches `ci.yml` (`ci-workflow.test.ts`).\n- **Release workflows:** `release.yml`, `homebrew.yml` and `skills.yml` worked first time for 0.32.0 and 0.33.0. Note anything worth keeping in `packaging/README.md`.\n\n## Outcome\nThe agreed changes in the workflows, `ci-workflow.test.ts` and `AGENTS.md`'s CI section, with `docs/security-architecture.md` updated if a permission or secret changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release.yml",
+        ".github/rulesets/main.json",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-08T08:09:05Z",
+      "updated_at": "2026-11-08T08:09:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "with": "user"
+    },
+    {
+      "id": "T-488",
+      "name": "Overhaul atm's human-readable output: alignment, grouping and styling",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "cli",
+        "rust"
+      ],
+      "description": "atm's plain output (without `--json`) is hard to scan. For example, `atm project status` prints the per-sprint, per-type and per-label counts as one long comma-separated line each, and the blocked and waiting lists as long lines joined with `;`. Make it read well in a terminal without changing what it says or what `--json` returns.\n\n## First, a design with the user\nPropose the look before changing code: a before/after of `atm project status`, `atm task list`, `atm task details`, `atm sprint list`, `atm release list` and `atm doctor`. Decide:\n- **Alignment:** columns padded to the widest value (IDs, statuses, priorities), long names cut or wrapped to the terminal's width, and sections with a heading and indented lines instead of `a, b, c` runs.\n- **Styling:** bold headings, colour for status kinds and priorities, dimmed secondary text. Only when standard output is a terminal; never with `NO_COLOR`, `--json`, or output going to a pipe or file.\n- **What `project status` leads with:** the active sprint and what's next first; the long breakdowns (all sprints, types, labels) shorter, or behind a flag.\n- **Dependencies:** terminal width and colour either hand-written or from a crate (e.g. `anstyle`, already in the tree through clap). Any new crate is proposed first.\n\n## Agents read this output too\nThe skills relay what atm prints, and agents act on it. Keep it plain text when it isn't a terminal, keep each fact on a line agents can find, and check `docs/agent/` and the skills that quote output. A change to output agents act on follows AGENTS.md's security checklist (the written review in `docs/security-architecture.md` §3.3).\n\n## Tests\nThe scenarios' exact `stdout` expectations change with the new layout: update them in one place per command. Add a test that a pipe gets no escape codes and that `NO_COLOR` turns colour off.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "tests/scripts/scenarios/",
+        "docs/agent/"
+      ],
+      "created_at": "2026-11-08T08:30:53Z",
+      "updated_at": "2026-11-08T08:30:53Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce"
+    },
+    {
+      "id": "T-489",
+      "name": "ADR-003: workspaces, the set of projects atm works on",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "app"
+      ],
+      "description": "A design proposal, as an ADR, for a **workspace**: a set of projects atm works on, of which there may be several (usually one; others for tests, or work and personal projects).\n\n## Why\nThe logic that works across projects (the project list with summaries, worktrees and logos; search across projects; skipping a broken project) lives in atm-api's HTTP routes, and the app (T-456) needs the same. atm-lib knows only one project; the registry is concrete in atm-db; boot is a bag of openers and JSON-in-git helpers ([layered-architecture.md](docs/layered-architecture.md) §3.2, §5.1, §11.2).\n\n## The ADR\n- Research: how atm's layers handle one project and many today; what the registry, `ATM_HOME`, `atm service`, the dashboard's routes and the app assume; how other tools model workspaces.\n- Propose the workspace: what it is and holds, how one is chosen (default, `ATM_HOME`, a flag), the API's place for it (`api/v<N>/workspace/…`), the layers that own it, and how boot gets simpler.\n- Diagrams in Mermaid. Options with trade-offs, a recommendation, consequences and a migration plan.\n\nReviewed with Hakan; T-456 waits for it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "docs/adr/ADR-003-workspaces.md"
+      ],
+      "created_at": "2026-11-08T09:20:34Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T09:20:34Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "with": "user",
+      "started_at": "2026-11-08T09:20:41Z",
+      "started_by": "claude:34798264",
+      "commit": "fa9c3cedab3dfe8c8500071aa37b0b997e8b805e",
+      "review_requested_at": "2026-11-08T09:25:33Z",
+      "notes": [
+        {
+          "at": "2026-11-08T09:25:33Z",
+          "kind": "review",
+          "text": "ADR-003 drafted (docs/adr/ADR-003-workspaces.md): workspaces as named lists over the home’s project index, chosen per call (flag > env > stored default), atm-lib’s Workspace with a ProjectOpener, boot as the composition root, api/v2/workspaces/<w>/…, a migration plan. Four questions for the review at the end.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T10:17:23Z",
+          "kind": "note",
+          "text": "Approved: Approved in Crit after one round (the task folder is the store’s, not the model’s)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-08T10:17:24Z",
+          "kind": "outcome",
+          "text": "ADR-003 accepted: workspaces in the state folder (platform app data, ATM_STATE_DIR), no project index, no boot (settings file + factories in atm-db and atm-vcs), atm workspace commands, api/v2/workspaces, a six-step migration.",
+          "by": "claude:34798264"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-08T09:25:33Z",
+          "to": "2026-11-08T10:17:23Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-08T10:17:24Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-490",
+      "name": "Workspaces 1: the state folder, and moving ~/.agentic-task-manager into it",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §2 and §6, step 1.\n\n## Change\n- One function in atm-common gives atm's state folder: `ATM_STATE_DIR` when set, else the platform's app data folder for `com.solo-swe.atm` (the `dirs` crate, approved): `~/Library/Application Support/com.solo-swe.atm/`, `~/.local/share/com.solo-swe.atm/`, `%APPDATA%\\com.solo-swe.atm\\`. `ATM_HOME` keeps working as another name for `ATM_STATE_DIR`. Everything that used `atm_home()` uses it (the registry, the server's record, log and lock, `atm agents`).\n- The first run moves `~/.agentic-task-manager/` (or `$ATM_HOME`'s folder when it differs) into the state folder, under the lock: `projects.json` becomes `workspaces/default.json` (same entries), and the rest moves as it is. A note in the old folder says where it went.\n- A test that atm-common's identifier matches `tauri.conf.json`'s.\n- The test suite, the e2e fixture and the dev server set `ATM_STATE_DIR`.\n\n## Tests\nThe move (a folder with a registry, a server record and skills; an empty one; a second run that finds it moved), the platform folders, the alias.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-489"
+      ],
+      "files": [
+        "crates/atm-common/src/home.rs",
+        "crates/atm-db/src/registry.rs",
+        "Cargo.toml",
+        "tests/scripts/helpers.mjs",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:18:46Z",
+      "started_by": "claude:34798264",
+      "commit": "bac895375e7994ddbf9496cfacf2d5cfe858faae",
+      "completed_at": "2026-11-08T10:28:34Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T10:28:34Z",
+          "kind": "outcome",
+          "text": "The state folder: `atm_common::home::state_dir()` (ATM_STATE_DIR, ATM_HOME as its alias, else the platform app data folder for com.solo-swe.atm via dirs). The first run moves ~/.agentic-task-manager there with a MOVED.txt; projects.json becomes workspaces/default.json in place. Tests: unit (the move), a scenario (precedence, the rename), an end-to-end move from HOME; suite 584, e2e 411.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-491",
+      "name": "Workspaces 2: atm-lib's Workspaces, Workspace and Project::open, on store and vcs factories",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §1 and §4, step 2.\n\n## Change\n- **The project's settings file**, `.agentic-task-manager/settings.json` (`store`, `vcs`; json-git and git without one), read before any store is chosen.\n- **Factories:** `atm_db::open(folder, store)` and `atm_vcs::open(folder, vcs)`. Finding a project from a folder (walking up, a linked worktree's main copy) moves behind the store's factory.\n- **atm-lib:**\n  - `Project::open(cwd)`;\n  - `Project::with_store(store, vcs)` for tests;\n  - `project.store_maintenance()` (merge driver, migrations, paths; `None` for a store without them);\n  - the actor.\n- **`Workspaces`** (over atm-db's `workspaces/<id>.json` and `recent.json`, under the state folder's lock) and **`Workspace`**:\n  - its projects, with summaries, worktrees and logos, a broken one listed as missing (F18);\n  - search across them;\n  - add, remove and prune;\n  - the summary cache, moved from atm-api's `Projects`.\n  - A new project atm meets goes into `default`.\n\natm-api's `Projects` calls these instead of its own loop; nothing users see changes.\n\n## Tests\natm-lib's unit tests on the in-memory store through `with_store`; the scenarios and `serve.test.mjs` unchanged and passing.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-490"
+      ],
+      "files": [
+        "crates/atm-lib/src/",
+        "crates/atm-db/src/",
+        "crates/atm-vcs/src/",
+        "crates/atm-api/src/routes.rs"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:28:35Z",
+      "started_by": "claude:34798264",
+      "commit": "48a86859daa8c4445663182baa269c56c4694491",
+      "completed_at": "2026-11-08T10:38:49Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T10:38:49Z",
+          "kind": "outcome",
+          "text": "settings.json + `atm_db::open`/`atm_vcs::open` factories; `Project::open`, `store_maintenance()`; atm-lib `Workspaces`/`Workspace` (listing, search, add/remove/prune, summary cache, `recent.json`); atm-api routes use them; boot only delegates. The actor stays in boot until T-492 moves it. Suite 584 pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-492",
+      "name": "Workspaces 3: the CLI and the API on atm-lib alone; the atm-boot crate removed",
+      "type": "refactor",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "rust"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §4, step 3.\n\n## Change\n- The CLI, the API and the app depend on atm-lib (and atm-common) only. The `atm db` group's store operations go through `project.store_maintenance()`.\n- The pid and signal helpers move into the CLI. `hook_project` and what only it used are deleted.\n- `crates/atm-boot/` is removed.\n- Update `docs/layered-architecture.md` (§1, §3, §5.1, §11.2) and AGENTS.md's crate list to the new layers. The layer check (which crate may depend on which) is updated so a front end can't reach atm-db or atm-vcs.\n\n## Tests\nEverything passes unchanged: cargo test, the CLI suite and e2e.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-491"
+      ],
+      "files": [
+        "crates/atm-boot/",
+        "crates/atm-cli/",
+        "crates/atm-api/",
+        "app/src-tauri/",
+        "Cargo.toml",
+        "docs/layered-architecture.md",
+        "AGENTS.md"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T10:38:53Z",
+      "started_by": "claude:34798264",
+      "commit": "1da3dd60d9d5c223dfacb30efe040f87ebcc0067",
+      "completed_at": "2026-11-08T10:49:18Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T10:49:18Z",
+          "kind": "outcome",
+          "text": "atm-boot removed; CLI, API and app depend on atm-lib + atm-common only (new `tests/scripts/layers.test.mjs` checks the Cargo.toml files). `store_maintenance()` for db/config/lock-test, `join_default_workspace()` for registering (the hook keeps its cheap path), actor in `atm_lib::actor`, pid helpers in `atm-cli/src/process.rs`, `hook_project` gone. Suite 584 pass, e2e 411 pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-493",
+      "name": "Workspaces 4: the atm workspace commands",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "architecture",
+        "cli"
+      ],
+      "description": "[ADR-003](docs/adr/ADR-003-workspaces.md) §3, step 6.\n\n## Commands\n```text\natm workspace list | create <w> | delete <w> | rename <w> <new>\natm workspace projects [<w>]\natm workspace add-project [<w>] [<folder>] | remove-project [<w>] <project> | prune [<w>]\n```\n- They default to `default`, and `add-project` to the current folder.\n- `atm project list|add|remove|prune` go.\n- `atm serve` serves every workspace: it opens the only one, or the last opened.\n\n## Agents read these\nThe `atm-serve` skill and `docs/agent/` change, so follow AGENTS.md's checklist: the written skill review in `docs/security-architecture.md` §3.3.\n\n## Tests\nScenarios for each command, `default`'s refusal to be deleted, and a project in two workspaces.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-492"
+      ],
+      "files": [
+        "crates/atm-cli/src/commands/",
+        "skills/atm-serve/SKILL.md",
+        "docs/agent/",
+        "docs/security-architecture.md",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-08T10:18:17Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T10:18:17Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T11:19:55Z",
+      "started_by": "claude:34798264",
+      "commit": "71b8219f165568c7cc5d84139c07f43fbf095a14",
+      "completed_at": "2026-11-08T11:29:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T11:29:41Z",
+          "kind": "outcome",
+          "text": "`atm workspace list|create|delete|rename|projects|add-project|remove-project|prune` (default can’t go or be renamed); `atm project list|add|remove|prune` removed. atm-serve skill, `atm docs commands`, README updated; skill pre-approvals narrowed to the two reads; written skill review in security §3. Also fixed T-456’s app IPC test, which failed clippy after fmt. Suite 596, unit 1228.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-494",
+      "name": "The Sprint filter in the address as repeated sprint= parameters",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "dashboard"
+      ],
+      "description": "A sprint whose name holds a comma (\"Library, gallery and blog\") couldn't be chosen: the address wrote the selection comma-separated (`?sprint=a,b`), reading it back split the name into unknown ones, and the filter fell back to All tasks.\n\n## Change\n- `dashboard/src/lib/sprint-param.ts`: write one `sprint=` parameter per value (`params.append`), read them with `getAll`, as HTML forms and atm's own v1 tasks route (`status=…&status=…`) do. `all`, `active` and `backlog` stay keywords.\n- Old comma-separated links are not read any more (Hakan's call).\n- Remove the longest-match parsing added while looking into it.\n\n## Tests\n- `dashboard/tests/unit/sprint-param.test.ts`: keep the round-trip test of a name with a comma, alone and with others; update the cases written as `a,b`.\n- Update any e2e spec that asserts or opens `?sprint=a,b`; the sprints area specs pass.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/sprint-param.ts",
+        "dashboard/tests/unit/sprint-param.test.ts",
+        "dashboard/tests/e2e/"
+      ],
+      "created_at": "2026-11-08T18:09:43Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T18:09:43Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:10:34Z",
+      "started_by": "claude:34798264",
+      "commit": "5e8e2d9c0b14fab5d83cdd820a44f17cf5cd73ce",
+      "completed_at": "2026-11-08T18:14:45Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:14:45Z",
+          "kind": "outcome",
+          "text": "Repeated `sprint=` parameters in the address (write `append`, read `getAll`), old comma links dropped; also fixed the scope menu, which split its choice key on commas (`ScopeBar.svelte`). New e2e: a comma-named sprint picked, still picked after reload. Unit 1229, e2e 415.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-495",
+      "name": "atm serve answers SvelteKit's _app/version.json",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "dashboard"
+      ],
+      "description": "SvelteKit checks `/_app/version.json` for a new deployment whenever the tab regains focus; atm serve answered 404, logged in the browser's console.\n\n## Change\n- `crates/atm-api/src/lib.rs`: `GET /_app/version.json` answers `{\"version\": <the page's version>}`, the page's own version tag, so SvelteKit never sees a new one (atm's reload offer stays whoami's).\n- `docs/multi-project-api.md` §2 and `docs/security-architecture.md` I11 list the route; `CHANGELOG.md` under Fixed.\n\n## Tests\n`tests/scripts/serve.test.mjs` (the dashboard's pages test): 200, and the version is whoami's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "crates/atm-api/src/lib.rs",
+        "tests/scripts/serve.test.mjs",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md",
+        "CHANGELOG.md"
+      ],
+      "created_at": "2026-11-08T18:09:43Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T18:09:43Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "started_at": "2026-11-08T18:09:50Z",
+      "started_by": "claude:34798264",
+      "commit": "336a8ed5bedc2ebb68b95d2886e0056a3cf98f2b",
+      "completed_at": "2026-11-08T18:10:34Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-08T18:10:34Z",
+          "kind": "outcome",
+          "text": "`GET /_app/version.json` answers the page’s version; serve test checks it against whoami; docs and changelog updated.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-496",
+      "name": "Rename a sprint: atm sprint rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "A sprint's name is its identifier and can't be changed today: `atm sprint edit` changes only its goal, release and due date.\n\n## Change\n- `atm sprint rename <old> <new>`, the same form as `atm workspace rename`, in any state (planned, active, closed).\n- Every reference follows: each task's `sprint`, in `tasks.json` and in `tasks-archive.json`, and the other sprints' reports (`report.to`, and any other field naming a sprint).\n- Refused: a name another sprint has, an empty name.\n- The rename lives in atm-lib (`sprints.rs`); the CLI only maps to it.\n\n## Docs\n`docs/agent/commands.md`, and the sprint skills' text if they say a sprint can't be renamed.\n\n## Tests\nA scenario in `tests/scripts/scenarios/sprint-commands.json`: rename an active sprint with tasks (one of them archived) and a closed one that carried tasks to it; check the tasks, the archive and the report follow; a name in use is refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/sprints.rs",
+        "crates/atm-cli/src/commands/sprint.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/sprint-commands.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
       ]
+    },
+    {
+      "id": "T-497",
+      "name": "Rename a release's ID: atm release rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm release edit --name` sets a display name, but a release's ID (what tasks and sprints point to) can't change, so a typo in it (`0.34` for `0.34.0`) stays.\n\n## Change\n- `atm release rename <old> <new>`, the form of `atm workspace rename` and `atm sprint rename`.\n- Every reference follows: tasks' release, in `tasks.json` and `tasks-archive.json`, and sprints' `release`.\n- Refused: an ID in use, an ID that isn't valid (the rule `atm release add` checks).\n- In atm-lib (`releases.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/releases.json`: a release with tasks (one archived) and a sprint delivering to it, renamed; a clash refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/releases.rs",
+        "crates/atm-cli/src/commands/release.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/releases.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-498",
+      "name": "Rename a component's ID: atm component rename",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "`atm component edit --label` sets the name shown, but the component's ID, which tasks list in `components`, can't change.\n\n## Change\n- `atm component rename <old> <new>`, the same form as the other renames.\n- Every reference follows: tasks' `components`, in `tasks.json` and `tasks-archive.json`.\n- Refused: an ID in use, an invalid ID.\n- In atm-lib (`components.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/components.json`: rename a component given to tasks (one archived); a clash refused.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/components.rs",
+        "crates/atm-cli/src/commands/component.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/components.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-499",
+      "name": "Rename a label across the tasks",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "Labels are per task (`atm task edit --add-label/--remove-label`): renaming one (`ui` to `dashboard`) means editing every task by hand.\n\n## Change\n- A rename of a label on every task that has it, in `tasks.json` and `tasks-archive.json`. Propose where it lives (`atm task relabel <old> <new>`, or a small `atm label` group with `list` and `rename`) and pick the one that fits the other renames.\n- A task that already has the new label keeps one.\n- The new label follows the label rule (lowercase letters, digits, `-`, `_`, at most 32 characters).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario: tasks with the old label, one with both, one archived.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/edit.rs",
+        "crates/atm-cli/src/commands/task.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/edit.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-500",
+      "name": "Rename a vocabulary entry: a status, a type or a priority",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "cli"
+      ],
+      "description": "A project's statuses, types and priorities are set only with `atm db init --meta-file`, which replaces a whole list: changing an ID there leaves the tasks that use the old one invalid (`atm doctor` reports them).\n\n## Change\n- A rename of one entry's ID (and, separately, its label) that moves every task using it, in `tasks.json` and `tasks-archive.json`: a task's `status` and its history, `type`, `priority`, and `meta.default_priority`.\n- Refused: an ID in use in that list.\n- Propose the command's form so it matches the other renames (sprint, release, component, label).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/vocab.json`: rename a status in use (with history), a type and the default priority; `atm doctor` stays clean.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/settings.rs",
+        "crates/atm-cli/src/commands/meta.rs",
+        "docs/agent/commands.md",
+        "tests/scripts/scenarios/vocab.json"
+      ],
+      "created_at": "2026-11-08T21:25:11Z",
+      "updated_at": "2026-11-08T21:25:20Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "cli",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-501",
+      "name": "An older atm beside the new state folder: no projects lost, no server mistaken for ours",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "cli"
+      ],
+      "description": "T-490 moves `~/.agentic-task-manager` into the state folder once (`atm_common::home::move_legacy_state`), leaving a note. An atm from before (Homebrew 0.33.0, on the same machine as the app or a newer atm) still uses the old folder: it makes it again, with only the projects it registers from then on, and its dashboard shows just those (seen on Hakan's machine: the 0.33.0 server listed one project, the app all three). And the moved folder brought the old server's record along, so the new atm reports a server that serves the old folder as its own (`atm service status`).\n\n## Change\n- **Projects added in the old folder afterwards reach `default`:** when the legacy folder exists again beside the state folder (it has a registry, not only the note), its projects are added to the `default` workspace (never removed from it), on the same start-up path as the move.\n- **The server record:** a record whose server serves another home (its whoami `home` isn't this state folder's) is not ours: `atm service` treats it as a stray of another atm, says so, and starts its own.\n- **The link `atm service` prints** for a project is the page address (`/projects/<id>`), not the old `/#project=<id>`.\n- Say in the 0.34.0 changelog and `packaging/README.md` that an older atm keeps the old folder, and how to tell (`atm version`).\n\n## Tests\n- atm-common: the legacy folder moved, then made again with a project: that project joins `default`.\n- The CLI suite (`tests/scripts/serve.test.mjs` or `registry.test.mjs`): a record naming a server of another home isn't reported as this atm's.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "crates/atm-common/src/home.rs",
+        "crates/atm-db/src/registry.rs",
+        "crates/atm-cli/src/commands/maintenance.rs",
+        "tests/scripts/serve.test.mjs",
+        "CHANGELOG.md",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-08T21:25:33Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T21:25:33Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "cli",
+        "api"
+      ],
+      "started_at": "2026-11-09T01:00:23Z",
+      "started_by": "claude:34798264",
+      "commit": "85a90ee69b9000cd5f39b7043beaf4a6cf497f7a",
+      "completed_at": "2026-11-09T01:08:36Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-09T01:08:36Z",
+          "kind": "outcome",
+          "text": "Projects an older atm lists in ~/.agentic-task-manager join default when that list changes (platform state folder only); a server record counts only with this folder’s home, older atms’ servers are named, never stopped; atm service prints /projects/<id>. Checked on Hakan’s machine: learn-forever-blog joined, the 0.33.0 servers reported.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-502",
+      "name": "Markdown and the layout in the app: Tauri's style nonce and connect-src (diagrams: T-503)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "In the app, a ```mermaid block never draws. Tauri puts the window's CSP on every HTML file it serves, CompMD's frame documents (`assets/compmd/<v>/compmd/strict.html`) included, and that policy had `frame-ancestors 'none'` (copied from `atm serve`'s page policy), so the frame was refused in the page. Missed because the e2e app mode serves the files from the Node test server, and the CSP test read `tauri.conf.json` rather than what Tauri serves.\n\n## Change\n- `frame-ancestors` out of the app's CSP (`app/src-tauri/tauri.conf.json`): the app's one window is its own, so it protects nothing there. Config only, no code.\n- A test on what Tauri serves (its asset resolver): CompMD's frame document comes without `frame-ancestors`; the strict-CSP test updated.\n- `docs/security-architecture.md` (I26) says why.\n\n## Check\nBy hand in the real window (`cargo tauri dev`): the diagrams below draw, in this task's details and in Help. If the frame's scripts are still refused (it has an opaque origin; Tauri answers with the app's origin), decide the next step with Hakan.\n\n**Found 2026-11-08 (Hakan, `cargo tauri dev`):** with `frame-ancestors` gone, Help still shows nothing where a diagram is, not even its code: the frame loads but its scripts don't run.\n\n## Test diagrams\n\nA flowchart:\n\n```mermaid {alt=\"Draft, then review, then done\"}\nflowchart LR\n  a[Draft] --> b[Review]\n  b --> c{Approved?}\n  c -- yes --> d[Done]\n  c -- no --> a\n```\n\nA sequence diagram:\n\n```mermaid {alt=\"The page asks the app, the app asks atm-lib\"}\nsequenceDiagram\n  participant Page\n  participant App\n  participant Lib as atm-lib\n  Page->>App: project_tasks\n  App->>Lib: Member::tasks\n  Lib-->>App: tasks\n  App-->>Page: tasks\n```\n\nA state diagram:\n\n```mermaid {alt=\"A task's states\"}\nstateDiagram-v2\n  [*] --> todo\n  todo --> in_progress\n  in_progress --> in_review\n  in_review --> done\n  in_progress --> blocked\n  blocked --> todo\n  done --> [*]\n```\n\nOne Mermaid can't read: it should show its code (the fallback), never nothing:\n\n```mermaid\nflowchart LR\n  a -->\n  ((((\n```\n",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/src/lib.rs",
+        "docs/security-architecture.md",
+        "CHANGELOG.md"
+      ],
+      "created_at": "2026-11-08T22:32:25Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T22:32:25Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "docs"
+      ],
+      "started_at": "2026-11-08T22:32:28Z",
+      "started_by": "claude:34798264",
+      "commit": "356846d6544f1c897ecd62c4bf56952bae246e6a",
+      "review_requested_at": "2026-11-08T22:33:39Z",
+      "notes": [
+        {
+          "at": "2026-11-08T22:33:39Z",
+          "kind": "review",
+          "text": "Config only: frame-ancestors out of the app CSP. Check in the real window: open a task with a mermaid block (cargo run -p atm-app after pnpm run build in dashboard/); the diagram should draw. If it stays code or blank, the frame scripts are refused (opaque origin vs Tauri ACAO): decide the next step together.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:01Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan for the Markdown and layout fix; the diagrams are T-503 (CompMD 0.6.0)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:08Z",
+          "kind": "outcome",
+          "text": "Markdown and the layout in the app fixed (style-src nonce, connect-src). Diagrams: T-503, waiting on CompMD 0.6.0.",
+          "by": "claude:34798264"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-08T22:33:39Z",
+          "to": "2026-11-09T09:33:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T09:33:08Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-503",
+      "name": "Mermaid diagrams in the app: CompMD from a scheme of its own (tauri-plugin-compmd)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "Build the proposal of [CompMD in a Tauri app](docs/tauri-compmd-design.md#4-proposal-compmds-own-protocol-from-a-tauri-plugin), once Hakan has reviewed the document: a Tauri plugin serves CompMD's built folder on a `compmd:` scheme with the headers CompMD needs from a host (§3, H1–H5). Mermaid diagrams in the app need it (T-502).\n\n## Steps (§4.7)\n1. **A check first, in a branch:** the plugin's smallest form, in `cargo run -p atm-app` and `cargo tauri dev`. Does WebKit let the opaque-origin frame load modules from `compmd://localhost` with `Access-Control-Allow-Origin: *`? Does Tauri leave the scheme's responses alone? Does every URL the sandbox makes come from `base`? Checked by hand with Hakan. If WebKit refuses, stop and go back to the document.\n2. **Decide with Hakan (§4.6):** the plugin as a crate of its own in atm's workspace (`crates/tauri-plugin-compmd/`, no atm dependencies) until CompMD ships one.\n3. **The change (§4.1, §4.2):** the plugin (embedded folder, path checks, H1/H2 headers, 404/405 with reasons); the app's CSP names `compmd://localhost` and `http://compmd.localhost`, `frame-ancestors 'none'` back, `devCsp` only adds the CLI's socket; the dashboard gives CompMD a full `base` in the app (`convertFileSrc('', 'compmd')`).\n4. **Nothing fails silently (§4.3):** `CompMd.svelte` listens for the view's `error` event and shows a note at the block; a failed `compmd.js` load shows a note on the text; both log the cause.\n\n## Tests (§4.5)\nThe plugin's handler; the app's policy; no IPC from `compmd:`; atm serve and the plugin on the same header table; the page's error notes; by hand in a window, both `cargo tauri dev` and `cargo run -p atm-app`, with T-502's test diagrams and Help.\n\n## Docs\n`docs/security-architecture.md` I26 (the `compmd:` protocol as an entry point), `docs/guides/tauri.md`, the design document's status.\n",
+      "requirements": [
+        "[CompMD in a Tauri app, §3–§4](docs/tauri-compmd-design.md#4-proposal-compmds-own-protocol-from-a-tauri-plugin)",
+        "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)"
+      ],
+      "use_cases": [],
+      "status": "blocked",
+      "dependencies": [],
+      "files": [
+        "crates/atm-api/src/assets.rs",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/tauri.conf.json",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md",
+        "docs/tauri-compmd-design.md",
+        "crates/tauri-plugin-compmd/",
+        "dashboard/src/lib/compmd.ts",
+        "dashboard/src/lib/documents/CompMd.svelte"
+      ],
+      "created_at": "2026-11-08T23:19:40Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-08T23:19:40Z",
+          "to": "2026-11-09T09:40:00Z"
+        },
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:40:00Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "components": [
+        "docs"
+      ],
+      "related": [
+        "T-502"
+      ],
+      "commit": "cae83a5b741d6d91f7b6e0d2b8a6964dcba0b17b",
+      "notes": [
+        {
+          "at": "2026-11-09T02:33:53Z",
+          "kind": "note",
+          "text": "Step 1, the check: built, with tests green (plugin 3, app 13, app e2e 5). Waiting on Hakan to look in a real window, cargo run -p atm-app and cargo tauri dev: T-502 test diagrams and Help draw, Markdown formatted; or a console error naming compmd://.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T08:26:42Z",
+          "kind": "note",
+          "text": "Step 1, the check: WebKit refuses. The frames (strict.html, opaque origin) refuse compmd://localhost/…/runtime.js under their own meta CSP, script-src 'self' blob:. WebKit (ContentSecurityPolicy.cpp) takes 'self' from the response URL only for HTTP(S); for an opaque origin on any other scheme it matches nothing. Back to the design: the fix is in CompMD’s frame policy. No error note showed either (H5 gap).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T08:59:12Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-09T08:59:20Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "Waiting on CompMD 0.6.0: its frame policy allows the compmd: scheme (WebKit matches 'self' only on http for a sandboxed frame), released with the read-all-lockfiles fix. Then bump CompMD and do the window check again."
+      ],
+      "blocked_at": "2026-11-09T08:59:29Z",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-504",
+      "name": "The app icon and GitHub avatar: macOS's rounded shape, on a light face",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "The app's icon (`app/src-tauri/icons/`) and the GitHub org's avatar (`branding/atm-logo.png`) are the logo filled edge to edge on dark `#0d1117`, with square corners. In the Dock, Finder and Launchpad, beside other apps, it looks out of place (Hakan): macOS apps since Big Sur have a rounded-square body with a margin around it, and most have a light face.\n\n## Change\n- **One source for the icons**, made by `branding/generate.mjs` from the logo drawing (`dashboard/src/assets/atm-logo.svg`), never by hand:\n  - **macOS:** Apple's icon grid: a 1024×1024 canvas, the body a rounded square of 824×824 centred (its corners Apple's continuous curve, radius about 185), a transparent margin, and a soft shadow under it; a light face (white to a light grey) with the logo in the accent blue (`#2f81f7`).\n  - **Windows and Linux:** the same face and logo; the shape per platform (a rounded square fits both).\n- **The app's icon set** from it with `pnpm tauri icon` (the CLI the dashboard already has): `icon.icns`, `icon.ico` and the PNGs in `app/src-tauri/icons/`.\n- **The GitHub avatar:** `atm-logo.png` on the light face, with the logo large enough for GitHub's rounded crop at small sizes; upload it by hand (the org's Settings → Profile). The social previews keep their own dark and light cards.\n- `branding/README.md`: the new files and how they are made.\n\n## Check\nShow Hakan the icon in the Dock and Finder (a `cargo tauri build --debug` bundle) next to other apps, and the avatar at GitHub's sizes, before it is done. A dark or tinted variant (macOS 26's Icon Composer) is a later task if wanted.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "branding/generate.mjs",
+        "branding/README.md",
+        "branding/atm-logo.png",
+        "app/src-tauri/icons/"
+      ],
+      "created_at": "2026-11-09T00:53:47Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T00:53:47Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "branding"
+      ],
+      "review": "async",
+      "started_at": "2026-11-09T01:11:27Z",
+      "started_by": "claude:34798264",
+      "commit": "2bb8bda49e2f60c1db8953b804af559de309a6d4",
+      "review_requested_at": "2026-11-09T01:14:08Z",
+      "notes": [
+        {
+          "at": "2026-11-09T01:14:08Z",
+          "kind": "review",
+          "text": "Look at the icon in the Dock next to other apps (`cargo run -p atm-app` sets it in the Dock; macOS may cache the old one until the Dock restarts), and at branding/atm-logo.png as the avatar. Approve, or say what to change (logo size, face colour, shadow). Then upload atm-logo.png to the org’s profile by hand.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T02:18:08Z",
+          "kind": "note",
+          "text": "Split (Hakan): the portable icons are done here (frameless marks on a light face; PNG/ICO/ICNS and the avatar). The macOS 26 Icon Composer icon is T-505, made in Icon Composer with Hakan; the hand-written .icon and the release-config change were reverted.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:01Z",
+          "kind": "note",
+          "text": "Approved: Icon and avatar approved by Hakan: the logo with its frame close to the edge, on the light face",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:08Z",
+          "kind": "outcome",
+          "text": "The app icon set and the GitHub avatar: the logo with its frame close to the edge, on a light face, in macOS's shape. Upload branding/atm-logo.png to the org profile by hand; the macOS 26 icon is T-505.",
+          "by": "claude:34798264"
+        }
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-09T01:14:08Z",
+          "to": "2026-11-09T09:33:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T09:33:08Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-505",
+      "name": "The app icon on macOS 26: an Icon Composer icon, made the sanctioned way",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "macOS 26 shows an app icon that isn't an Icon Composer icon (`Assets.car`, `CFBundleIconName`) shrunk on a tile of its own: atm's icon looks smaller, with a wide border, beside apps that have one (VS Code, Notion). T-504 made the portable icons (PNG, ICO, ICNS); this is the macOS 26 one.\n\n## Decided (T-504)\n- **Made in Apple's Icon Composer, by hand, and committed as a source file** (`app/src-tauri/icons/AppIcon.icon`), as a design file is: not generated. T-504 tried writing the `.icon` from a script; Apple's renderer drew its strokes flat and cut off, and Tauri's `actool` step failed in ways it didn't report. Hakan makes it from the marks layer (`marksLayer` in `branding/generate.mjs`: the logo's columns and check as filled shapes), white fill.\n- The `.icns` stays the icon of older macOS, so a missing or failed `Assets.car` never breaks a release.\n\n## Change\n- `bundle.icon` in `tauri.release.conf.json` lists the `.icon` (Tauri 2.11+ compiles it with Xcode 26's `actool`).\n- **The release runner:** check `app-macos` (`.github/workflows/release.yml`, `macos-latest`) has Xcode 26 selected (`xcodebuild -version`); if not, select it in the job. Without it the bundle has no `Assets.car`.\n- **Docs:** an \"App icons\" section in `docs/guides/tauri.md`: Apple's grid (1024 canvas, 824 body), macOS 26 and Icon Composer, the build's Xcode 26 requirement, and what T-504 learned about `actool` (Tauri doesn't print its error: run it by hand with Tauri's options to see it; a stuck `ibtoold` daemon fails every run with \"Bad file descriptor\" until it is stopped). `branding/README.md`, `packaging/README.md`.\n\n## Check\nA bundle (`pnpm run app:bundle --bundles app`) has `Assets.car` and `CFBundleIconName`; in the Dock beside VS Code and Notion it is their size (Hakan).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-504"
+      ],
+      "files": [
+        "app/src-tauri/icons/AppIcon.icon",
+        "app/src-tauri/tauri.release.conf.json",
+        ".github/workflows/release.yml",
+        "docs/guides/tauri.md",
+        "branding/README.md",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T09:40:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:17:51Z",
+          "to": "2026-11-09T09:40:00Z"
+        },
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:40:00Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "components": [
+        "ci",
+        "branding",
+        "docs"
+      ],
+      "with": "user"
+    },
+    {
+      "id": "T-506",
+      "name": "The app reacts to changes: its subscriptions instead of polling, and no refresh settings",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "In the app the dashboard still polls: the Refresh menu (`lib/shell/RefreshMenu.svelte`) reloads every few seconds (`autoRefresh`, `autoRefreshSeconds` in `lib/state.svelte.ts` and `lib/prefs.ts`, set in the Settings menu). The app already watches the task files and says what changed (T-456: `subscribe_workspace`, `subscribe_project`, `unsubscribe` over a `Channel`, with the store's `watch_folders`), but nothing in the page subscribes. In the app the page should only react to changes (Hakan).\n\n## Change\n- **In the app** (`inApp`), the page subscribes to its workspace and to each open project (`lib/api/`, beside `links.ts`), reloads what a change names, and unsubscribes when it leaves them (a workspace switch, a closed project).\n- **No refresh settings in the app:** the Refresh menu's interval and the auto-refresh switch are gone there; a manual reload (the menu's Reload, or ⌘R) may stay. Their stored prefs are ignored in the app, not deleted.\n- **A change the watcher misses never goes unseen for long:** say what covers it (a reload when the window regains focus), and test it.\n- The browser keeps its refresh settings until `atm serve` pushes changes too (the follow-up task).\n- `docs/guides/tauri.md` (Streams), the What's new and changelog entries.\n\n## Tests\nUnit: the page subscribes in the app and not in the browser; a change message reloads that project; switching workspace unsubscribes. e2e (`app.spec.ts`, `asApp()`): no Refresh interval in the app; a channel message (the mock's stored callback) reloads the board.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/shell/RefreshMenu.svelte",
+        "dashboard/src/lib/shell/SettingsMenu.svelte",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/tests/e2e/app.spec.ts",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T09:40:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:17:51Z",
+          "to": "2026-11-09T09:40:00Z"
+        },
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:40:00Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-507",
+      "name": "The browser reacts to changes too: atm serve pushes them, and the refresh settings go",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "dashboard",
+        "api"
+      ],
+      "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-506"
+      ],
+      "files": [
+        "crates/atm-api/src/",
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/shell/RefreshMenu.svelte",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T02:17:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-508",
+      "name": "CompMD's files from compmd:// after an upgrade: WebKit's custom-scheme cache",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "A gap in [ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md): WebKit (WKWebView, on macOS and iOS) caches a custom URI scheme's responses, so a file replaced at the same path can keep running its old version (seen in another Tauri app's custom-scheme frames). ADR-004 keeps the paths CompMD's files have under `atm serve` (`/assets/compmd/<version>/…`). The CompMD version in the path changes with CompMD, but not when atm rebuilds the same CompMD version differently (its packs, `compmd.config.json`, a pack's built module), so after an atm upgrade the app could run the previous files from `compmd://`, and the page and its frames could speak different versions of the frame protocol.\n\n## 1. Check it first\nIn the running app on macOS (`cargo run -p atm-app`, and a bundle): open a task with a diagram; replace a CompMD file the plugin serves (a frame's `runtime.js`, or the Mermaid pack's module) with a changed copy at the same path, one that shows it changed (a console line); rebuild, run again, open the task: does the old file still run? Record what each build showed.\n\n## 2. If it does, fix it in `tauri-plugin-compmd`, as the plugin's default\nThe plugin is meant to move into CompMD for any Tauri host (ADR-004 decision 5), so the fix is its default behaviour, not atm's configuration. One of:\n- **Content-hashed paths:** the plugin serves the build's CompMD folder under a name made from a hash of its files, gives the page that `base` (H4), and answers with `Cache-Control: max-age=31536000, immutable`; a changed file is then a new path;\n- **or, if the paths must stay as under `atm serve`:** `Cache-Control: no-cache` with a validator (an `ETag` and `If-None-Match`, as `atm serve` sends) that WebKit honours for custom schemes; check in the app that it does.\nPrefer the first if WebKit's handling of validators on custom schemes is uncertain.\n\n## 3. Record it\n- ADR-004: the result in its Risks; a decision if the plugin changes (and the design doc's §4.2 if its headers change).\n- The plugin's header tests stay in step with `atm serve`'s (H1, H2: CORS `*`, `nosniff`, `sandbox allow-scripts` on frame documents); if the cache headers differ between the two, say why in both.",
+      "requirements": [
+        "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)",
+        "[CompMD in a Tauri app, §4.2](docs/tauri-compmd-design.md#42-the-plugin)"
+      ],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-503"
+      ],
+      "files": [
+        "crates/tauri-plugin-compmd/",
+        "dashboard/src/lib/compmd.ts",
+        "docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md",
+        "docs/tauri-compmd-design.md"
+      ],
+      "created_at": "2026-11-09T02:26:10Z",
+      "updated_at": "2026-11-09T09:40:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:26:10Z",
+          "to": "2026-11-09T09:40:00Z"
+        },
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:40:00Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-503"
+      ]
+    },
+    {
+      "id": "T-509",
+      "name": "Release 0.34.0: the first atm app",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "distribution",
+        "app"
+      ],
+      "description": "The first release with the atm app: `dev/0.34.0` to `main`, tagged, built, signed and published, with the CLI's formula and, for the first time, the app's DMG and its Homebrew cask. The release process is in [packaging/README.md](packaging/README.md); the last one was T-484.\n\n## On `dev/0.34.0`\n- **Version:** `0.34.0` in `Cargo.toml` (`[workspace.package]`, which the app takes too), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.34.0] - <date>`. Check the T-503 entry says what shipped: the plugin and the error notes are in, diagrams in the app wait for CompMD 0.6.0 (0.35.0).\n- **WHATS-NEW.md:** a `## [0.34.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): the atm app for macOS (install with Homebrew, it brings its own `atm`), its icon, your projects carried over to the new state folder, and that diagrams in the app come in the next release.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): `skills/atm-push`, `skills/atm-serve`, `skills/claude-code.json` and `docs/agent/commands.md` changed since `main`, so a written review of them in §3.3 instead of the live sandbox run. New entry points this release (the app's commands, deep links, the `compmd:` scheme) are in I25 and I26: check they describe what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.34.0` to `main`. The required checks must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.34.0 --push` on an up-to-date `main`; watch the Release run. **The app's job runs for the first time** (the universal DMG, signed and notarized by Tauri's bundler, the DMG by `packaging/notarize-dmg.sh`): if it fails, fix it on a branch and tag again, never by hand.\n- Check the draft: the CLI's archives, `atm-app-0.34.0-universal.dmg` and `SHA256SUMS` (which lists the DMG), then publish it.\n- Watch the Homebrew and Skills workflows: `Formula/atm.rb` and, the first time, `Casks/atm-app.rb` in `solo-swe/homebrew-tap`; the skills exported to `solo-swe/skills` (`atm-v0.34.0`).\n- Check with the user, on a Mac: `brew upgrade solo-swe/tap/atm` gives 0.34.0; the app installs with `brew install --cask solo-swe/tap/atm-app` (after `brew uninstall atm`: they conflict), opens without a Gatekeeper warning, shows the projects and the new icon, and its `atm` is on PATH (`atm version`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-09T09:40:23Z",
+      "updated_at": "2026-11-09T09:51:59Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T09:40:23Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "with": "user",
+      "started_at": "2026-11-09T09:41:11Z",
+      "started_by": "claude:34798264",
+      "commit": "39cb0632ed4a7ca15625012c5f222fe7acaa83b1",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
+    },
+    {
+      "id": "T-510",
+      "name": "The atm app's UI overhaul: a desktop app, not the web page in a window",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "The app shows the dashboard's web page as it is in a browser. Make it feel like a desktop app (Hakan).\n\n## What it could have\n- **The title in the title bar:** the page's header (project, workspace) goes into the window's title bar (Tauri's overlay title bar on macOS), not a second bar under it.\n- **Tabs:** several projects (or workspaces, the board) open at once, one tab each.\n- **A collapsible side panel** listing the workspace's projects, instead of the project selector.\n- **A proper status bar:** what the dashboard's footer shows now (version, connection, agents at work, the active sprint), as the app's own.\n- **Menus:** the app's menu bar (macOS) for settings, the views, the projects and workspaces, Help and What's new, with their keyboard shortcuts; settings in a window or sheet of their own.\n- Anything else a desktop app should have that the page lacks (window state kept between runs, the Dock menu, …).\n\n## First: a design, with Hakan\nA short design document (`docs/`): what changes in the app and what stays shared with the browser dashboard (one Svelte code base: the browser keeps working as it does), which Tauri APIs it uses (window, menu, title bar), how tabs map to the dashboard's addresses and deep links (T-459), and how it fits T-506 (no refresh settings). Review it with Hakan, then break it into tasks with `/atm-create-tasks`.\n\n## Checks\nThe Tauri guide's by-hand check in a window (`cargo tauri dev` and `cargo run -p atm-app`), the app e2e specs, and the security doc where a new command or capability is added (I25).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/",
+        "app/src-tauri/",
+        "dashboard/src/lib/shell/"
+      ],
+      "created_at": "2026-11-09T09:50:27Z",
+      "updated_at": "2026-11-09T09:50:27Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:50:27Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "with": "user"
     }
   ]
 }

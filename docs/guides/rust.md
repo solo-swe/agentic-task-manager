@@ -20,9 +20,11 @@ atm's own Rust rules, for the Rust port of atm-cli ([porting-to-rust.md](../port
 ## Crates and modules
 
 - **One crate per layer**, under `crates/` ([porting-to-rust.md](../porting-to-rust.md) §2): `atm-common`, `atm-db`,
-  `atm-vcs`, `atm-lib`, `atm-boot`, `atm-api` and `atm-cli`, each depending only on what
-  [layered-architecture.md](../layered-architecture.md) allows; the CLI and the REST API are two front ends: the API never
-  depends on the CLI, and the CLI on the API only to enter the server (`atm _serve`, in the one `atm` binary). A crate can use only what its `Cargo.toml` declares, so the compiler checks the layer rule.
+  `atm-vcs`, `atm-lib`, `atm-api` and `atm-cli`, each depending only on what
+  [layered-architecture.md](../layered-architecture.md) allows; the CLI, the REST API and the app are front ends, on
+  atm-lib and atm-common only (ADR-003 §4: atm-lib opens projects): the API never depends on the CLI, and the CLI on
+  the API only to enter the server (`atm _serve`, in the one `atm` binary). A crate can use only what its `Cargo.toml`
+  declares, so the compiler checks the layer rule, and `tests/scripts/layers.test.mjs` checks the `Cargo.toml` files.
 - **Module files:** `foo.rs` next to a `foo/` directory, never `foo/mod.rs`.
 - **Visibility:** `pub` only for the crate's API; `pub(crate)` for the rest.
 - **IDs are newtypes** (`TaskId`, `SprintId`, `ProjectId`, …), never bare `String` in APIs.

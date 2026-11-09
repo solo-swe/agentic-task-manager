@@ -154,8 +154,17 @@ mod tests {
 
     #[test]
     fn local_time_is_now_shifted_by_a_zone_offset() {
-        let shift = local_now() - now();
-        assert!(shift.abs() <= 14 * 3600 && shift % 900 == 0, "{shift}");
+        // local_now reads the clock itself, so the second may turn between the reads: its shift from one of the
+        // instants around it is the zone's offset (CI's Windows runner saw -1 once)
+        let before = now();
+        let local = local_now();
+        let after = now();
+        assert!(
+            (before..=after)
+                .map(|at| local - at)
+                .any(|shift| shift.abs() <= 14 * 3600 && shift % 900 == 0),
+            "{local} against {before}..={after}"
+        );
         assert_eq!(
             civil(parse_iso("2026-05-12T22:38:00Z").unwrap()),
             (2026, 5, 12, 22, 38)
