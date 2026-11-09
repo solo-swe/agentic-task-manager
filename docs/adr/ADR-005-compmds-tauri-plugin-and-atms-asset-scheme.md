@@ -57,8 +57,10 @@ Those still need a place the window's policy allows. Tauri's own protocol isn't 
 
 - **WebKit's custom-scheme cache** (T-508) no longer reaches the frames, whose paths name their content. It could
   still reach `atm:`'s files, at the paths `atm serve` uses: a pack's module is checked by its hash, so a stale one
-  fails visibly; `compmd.js` is at CompMD's version, so a stale one would be the same CompMD rebuilt. T-508 checks it
-  in the app, and if needed names `atm:`'s folder by a hash too.
+  fails visibly; `compmd.js` is at CompMD's version, so a stale one would be the same CompMD rebuilt. T-508 checked
+  it on macOS 26 (2026-11-09): two builds of the app embedding different `compmd.js` files at the same `atm:` path,
+  run one after the other, each ran its own, so WebKit asks the handler again (`no-cache`) and the paths stay. If a
+  later WebKit caches them, the fix is atm's version in `atm:`'s paths, with `immutable`.
 - **A new entry point,** `atm:`: it serves only the embedded files, and a test checks that no page on it can call the
   app's commands (I26).
 - **CompMD's plugin and atm's page drift apart:** the crate is pinned to the exact version of the packages

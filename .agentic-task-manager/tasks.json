@@ -17068,7 +17068,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "in_review",
       "dependencies": [
         "T-460"
       ],
@@ -17079,7 +17079,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-09T17:10:03Z",
+      "updated_at": "2026-11-09T17:20:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17118,11 +17118,19 @@
           "kind": "answer",
           "text": "Everything but the key is built and committed. Make the updater key pair together: in dashboard/, pnpm exec tauri signer generate -w <a file outside the repo> (it asks for a password); set the secrets TAURI_SIGNING_PRIVATE_KEY (the file’s content) and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; paste me the public key for PUBKEY in app/src-tauri/src/updates.rs. Then the end-to-end check against a draft release. Until then a release can’t build the app (createUpdaterArtifacts needs the key). → Key pair made by Hakan (minisign key D2392A7664649507; the first one was replaced, as its private half was pasted here); secrets set. Public key given for PUBKEY.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T17:20:46Z",
+          "kind": "review",
+          "text": "Key in (PUBKEY and tauri.conf.json, kept equal by a test). Checked locally: the release bundle signs atm.app.tar.gz with Hakan’s key, the bundler verifies it, and updater-manifest.mjs makes a correct latest.json. Left: 0.35.0’s release has latest.json and the signed archive and finds no update; the first release after 0.35.0 checks the install end to end (offered, signature verified, installed, restarted).",
+          "by": "claude:34798264"
         }
       ],
-      "commit": "f69dfe047634af0cbed21bed94cb0a8f81d314af",
+      "commit": "756a48d461216722f350a2f4ce37030f435bc250",
       "started_at": "2026-11-09T17:09:25Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "review_requested_at": "2026-11-09T17:20:46Z",
+      "review_state": "waiting"
     },
     {
       "id": "T-484",
@@ -18345,7 +18353,7 @@
         "[ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)"
       ],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-503"
       ],
@@ -18357,7 +18365,7 @@
         "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md"
       ],
       "created_at": "2026-11-09T02:26:10Z",
-      "updated_at": "2026-11-09T17:03:15Z",
+      "updated_at": "2026-11-09T17:23:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18386,7 +18394,9 @@
           "text": "Scope after T-503 (ADR-005): the frames are CompMD’s plugin’s, at content-hashed paths, so the cache can’t serve an old frame. What is left to check is atm’s own atm: scheme (assets.rs: compmd.js, its WebAssembly, the packs’ modules, at /assets/compmd/<version>/, no-cache). A stale pack module fails its hash check visibly; check compmd.js across a rebuild of the same CompMD version, and if it sticks, name the folder by a hash.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-09T17:23:00Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-509",

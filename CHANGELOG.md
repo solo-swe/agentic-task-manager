@@ -41,7 +41,9 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   fetches a pack's module from there, checked against its hash, and gives it to the frames as code
   (`sandboxOptions`, `fetchPackModules` in `lib/compmd.ts`). The window's `script-src` and `connect-src` name the two
   folders, `atm://localhost/assets/compmd/` and `compmd://localhost/frames/`. atm's own `crates/tauri-plugin-compmd/`
-  is gone. A frame that never loads now shows a note too (CompMD 0.6.0 reports it).
+  is gone. A frame that never loads now shows a note too (CompMD 0.6.0 reports it). The pack's module is fetched from
+  `atm:` even when its address is already on the page's origin, as `@compmd/vite` writes it (`moduleUrl`, T-508,
+  which also found that WebKit asks the app again for each `atm:` file, so their paths stay as they are).
 - **The app starts again** (T-483): the updater plugin reads `plugins.updater` in `tauri.conf.json` when it starts,
   and refused a configuration without it, so every build of the app stopped as it started. It has the section now,
   with the public key, which the bundler also checks the update archive's signature against (a test keeps it equal to

@@ -17,6 +17,7 @@ import {
   FRONTMATTER_LINES,
   gutterRows,
   loadCompmd,
+  moduleUrl,
   resetCompmd,
   resetPackModules,
   safeHref,
@@ -115,6 +116,24 @@ describe('the sandbox’s options (T-503)', () => {
     // Once per module
     await fetchPackModules(stub, [{ module: mermaid }], fetcher, 'atm://localhost');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('a module URL already resolved against the page is fetched from atm’s scheme, never the page’s origin', async () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {
+      convertFileSrc: (path: string, scheme: string) => `${scheme}://localhost/${path}`,
+    });
+    const path = `/assets/compmd/${version}/compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js`;
+    // As @compmd/vite gives it in the app: on the page's own origin, which the window's policy refuses
+    const resolved = {
+      ...stub,
+      sandbox: { ...stub.sandbox, modules: () => ({ url: `tauri://localhost${path}`, integrity: 'sha384-abc' }) },
+    };
+    expect(moduleUrl(`tauri://localhost${path}`, 'atm://localhost')).toBe(`atm://localhost${path}`);
+    expect(moduleUrl(path, 'http://atm.localhost')).toBe(`http://atm.localhost${path}`);
+    const fetcher = vi.fn(async () => new Response('export default {}', { status: 200 }));
+    await fetchPackModules(resolved, [{ module: mermaid }], fetcher, 'atm://localhost');
+    expect(fetcher).toHaveBeenCalledWith(`atm://localhost${path}`, { integrity: 'sha384-abc' });
+    expect(sandboxOptions(resolved, true).modules(mermaid)).toHaveProperty('code');
   });
 
   it('a module that can’t be fetched is left out and logged, never thrown', async () => {

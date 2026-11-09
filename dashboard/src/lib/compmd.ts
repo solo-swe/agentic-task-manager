@@ -212,6 +212,13 @@ export type ModuleSource = (place: ModulePlace) => { url: string; integrity: str
 /** The packs' modules the app's page has fetched, by URL, as code for the sandbox (fetchPackModules) */
 const packCode = new Map<string, Blob>();
 
+/** A pack module's URL on atm's asset origin: @compmd/vite gives it from the page's root, already resolved against the
+ * page (`tauri://localhost/assets/…` in the app), so only its path is kept */
+export function moduleUrl(url: string, origin: string): string {
+  const { pathname, search } = new URL(url, origin);
+  return new URL(pathname + search, origin).href;
+}
+
 /**
  * In the app, the packs' built modules the components need, fetched by the page from atm's scheme and checked
  * against the hash @compmd/vite took (the fetch's `integrity`), kept for the sandbox as code (T-503): the frames are
@@ -228,7 +235,7 @@ export async function fetchPackModules(
     const place = (component as { module?: ModulePlace }).module;
     const source = place === undefined ? undefined : compmd.sandbox.modules(place);
     if (!source || !('url' in source)) continue;
-    const url = new URL(source.url, origin).href;
+    const url = moduleUrl(source.url, origin);
     if (packCode.has(url)) continue;
     try {
       const response = await fetcher(url, { integrity: source.integrity });
@@ -256,7 +263,7 @@ export function sandboxOptions(compmd: Pick<CompmdModule, 'sandbox'>, app = inAp
   const modules: ModuleSource = (place) => {
     const source = compmd.sandbox.modules(place);
     if (!source || !('url' in source)) return source;
-    const code = packCode.get(new URL(source.url, origin).href);
+    const code = packCode.get(moduleUrl(source.url, origin));
     return code ? { code } : undefined;
   };
   return { trusted: compmd.sandbox.trusted, modules, page: 'host' as const };
