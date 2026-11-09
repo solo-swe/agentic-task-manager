@@ -82,9 +82,11 @@ page keeps the browser's header and footer.
 - **the title bar:** the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the
   right), the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at
   its left;
-- **the toolbar** under it: the project's logo and name (or "Projects Overview") with the active sprint in small text;
-  the view switcher (Graph, Kanban, List, …) as a segmented control; search, the Filters popup, the needs-you chip and
-  the reload button at the right.
+- **the toolbar** under it: the view switcher (Graph, Kanban, List, …) as a segmented control; search, the Filters
+  popup, the needs-you chip and the reload button at the right.
+
+The project's logo and name are the **active tab's title** (or "Projects Overview"), not repeated in the toolbar; the
+active sprint is in the status bar (§5).
 
 The charts (progress, activity) move to the status bar (§5) and the Progress view; the version chip and the ⋯ menu go
 to the menus (§6); the project and workspace selectors go to the sidebar (§4).
