@@ -17997,7 +17997,7 @@
         "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)"
       ],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-api/src/assets.rs",
@@ -18011,7 +18011,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T16:24:52Z",
+      "updated_at": "2026-11-09T17:03:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18032,7 +18032,7 @@
       "related": [
         "T-502"
       ],
-      "commit": "cae83a5b741d6d91f7b6e0d2b8a6964dcba0b17b",
+      "commit": "954e89ae604d5b9a73772ad04791afd0b7fe2045",
       "notes": [
         {
           "at": "2026-11-09T02:33:53Z",
@@ -18056,6 +18056,12 @@
           "kind": "answer",
           "text": "Waiting on CompMD 0.6.0: its frame policy allows the compmd: scheme (WebKit matches 'self' only on http for a sandboxed frame), released with the read-all-lockfiles fix. Then bump CompMD and do the window check again. → CompMD 0.6.0 is out, with tauri-plugin-compmd 0.6.0 on crates.io: frames whose policies name their scheme, content-hashed paths, and frames that never load reported. Use it in place of the in-repo crate.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T17:03:07Z",
+          "kind": "outcome",
+          "text": "CompMD 0.6.0 with its plugin (crates.io) for the frames; atm’s own atm: scheme for compmd.js, its WebAssembly and the packs’ modules, given to the frames as code (ADR-005). Diagrams draw in the app (checked by Hakan in cargo tauri dev). Also fixed T-483’s start panic (plugins.updater).",
+          "by": "claude:34798264"
         }
       ],
       "pr": {
@@ -18071,7 +18077,9 @@
         }
       ],
       "started_at": "2026-11-09T16:24:52Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-09T17:03:07Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-504",
@@ -18327,7 +18335,8 @@
       "description": "A gap in [ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md): WebKit (WKWebView, on macOS and iOS) caches a custom URI scheme's responses, so a file replaced at the same path can keep running its old version (seen in another Tauri app's custom-scheme frames). ADR-004 keeps the paths CompMD's files have under `atm serve` (`/assets/compmd/<version>/…`). The CompMD version in the path changes with CompMD, but not when atm rebuilds the same CompMD version differently (its packs, `compmd.config.json`, a pack's built module), so after an atm upgrade the app could run the previous files from `compmd://`, and the page and its frames could speak different versions of the frame protocol.\n\n## 1. Check it first\nIn the running app on macOS (`cargo run -p atm-app`, and a bundle): open a task with a diagram; replace a CompMD file the plugin serves (a frame's `runtime.js`, or the Mermaid pack's module) with a changed copy at the same path, one that shows it changed (a console line); rebuild, run again, open the task: does the old file still run? Record what each build showed.\n\n## 2. If it does, fix it in `tauri-plugin-compmd`, as the plugin's default\nThe plugin is meant to move into CompMD for any Tauri host (ADR-004 decision 5), so the fix is its default behaviour, not atm's configuration. One of:\n- **Content-hashed paths:** the plugin serves the build's CompMD folder under a name made from a hash of its files, gives the page that `base` (H4), and answers with `Cache-Control: max-age=31536000, immutable`; a changed file is then a new path;\n- **or, if the paths must stay as under `atm serve`:** `Cache-Control: no-cache` with a validator (an `ETag` and `If-None-Match`, as `atm serve` sends) that WebKit honours for custom schemes; check in the app that it does.\nPrefer the first if WebKit's handling of validators on custom schemes is uncertain.\n\n## 3. Record it\n- ADR-004: the result in its Risks; a decision if the plugin changes (and the design doc's §4.2 if its headers change).\n- The plugin's header tests stay in step with `atm serve`'s (H1, H2: CORS `*`, `nosniff`, `sandbox allow-scripts` on frame documents); if the cache headers differ between the two, say why in both.",
       "requirements": [
         "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)",
-        "[CompMD in a Tauri app, §4.2](docs/tauri-compmd-design.md#42-the-plugin)"
+        "[CompMD in a Tauri app, §4.2](docs/tauri-compmd-design.md#42-the-plugin)",
+        "[ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)"
       ],
       "use_cases": [],
       "status": "todo",
@@ -18335,13 +18344,14 @@
         "T-503"
       ],
       "files": [
-        "crates/tauri-plugin-compmd/",
         "dashboard/src/lib/compmd.ts",
         "docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md",
-        "docs/tauri-compmd-design.md"
+        "docs/tauri-compmd-design.md",
+        "app/src-tauri/src/assets.rs",
+        "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md"
       ],
       "created_at": "2026-11-09T02:26:10Z",
-      "updated_at": "2026-11-09T09:40:00Z",
+      "updated_at": "2026-11-09T17:03:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18362,6 +18372,14 @@
       ],
       "related": [
         "T-503"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-09T17:03:15Z",
+          "kind": "note",
+          "text": "Scope after T-503 (ADR-005): the frames are CompMD’s plugin’s, at content-hashed paths, so the cache can’t serve an old frame. What is left to check is atm’s own atm: scheme (assets.rs: compmd.js, its WebAssembly, the packs’ modules, at /assets/compmd/<version>/, no-cache). A stale pack module fails its hash check visibly; check compmd.js across a rebuild of the same CompMD version, and if it sticks, name the folder by a hash.",
+          "by": "claude:34798264"
+        }
       ]
     },
     {
