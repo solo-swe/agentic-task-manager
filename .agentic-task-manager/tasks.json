@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 510,
+    "next_id": 511,
     "labels": [
       {
         "id": "architecture",
@@ -21204,7 +21204,7 @@
       "description": "The first release with the atm app: `dev/0.34.0` to `main`, tagged, built, signed and published, with the CLI's formula and, for the first time, the app's DMG and its Homebrew cask. The release process is in [packaging/README.md](packaging/README.md); the last one was T-484.\n\n## On `dev/0.34.0`\n- **Version:** `0.34.0` in `Cargo.toml` (`[workspace.package]`, which the app takes too), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.34.0] - <date>`. Check the T-503 entry says what shipped: the plugin and the error notes are in, diagrams in the app wait for CompMD 0.6.0 (0.35.0).\n- **WHATS-NEW.md:** a `## [0.34.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): the atm app for macOS (install with Homebrew, it brings its own `atm`), its icon, your projects carried over to the new state folder, and that diagrams in the app come in the next release.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): `skills/atm-push`, `skills/atm-serve`, `skills/claude-code.json` and `docs/agent/commands.md` changed since `main`, so a written review of them in §3.3 instead of the live sandbox run. New entry points this release (the app's commands, deep links, the `compmd:` scheme) are in I25 and I26: check they describe what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.34.0` to `main`. The required checks must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.34.0 --push` on an up-to-date `main`; watch the Release run. **The app's job runs for the first time** (the universal DMG, signed and notarized by Tauri's bundler, the DMG by `packaging/notarize-dmg.sh`): if it fails, fix it on a branch and tag again, never by hand.\n- Check the draft: the CLI's archives, `atm-app-0.34.0-universal.dmg` and `SHA256SUMS` (which lists the DMG), then publish it.\n- Watch the Homebrew and Skills workflows: `Formula/atm.rb` and, the first time, `Casks/atm-app.rb` in `solo-swe/homebrew-tap`; the skills exported to `solo-swe/skills` (`atm-v0.34.0`).\n- Check with the user, on a Mac: `brew upgrade solo-swe/tap/atm` gives 0.34.0; the app installs with `brew install --cask solo-swe/tap/atm-app` (after `brew uninstall atm`: they conflict), opens without a Gatekeeper warning, shows the projects and the new icon, and its `atm` is on PATH (`atm version`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -21215,9 +21215,9 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-09T09:40:23Z",
-      "updated_at": "2026-11-09T09:40:23Z",
+      "updated_at": "2026-11-09T09:41:11Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
@@ -21225,6 +21225,40 @@
         }
       ],
       "sprint": "The atm app",
+      "with": "user",
+      "started_at": "2026-11-09T09:41:11Z",
+      "started_by": "claude:34798264"
+    },
+    {
+      "id": "T-510",
+      "name": "The atm app's UI overhaul: a desktop app, not the web page in a window",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "ux"
+      ],
+      "description": "The app shows the dashboard's web page as it is in a browser. Make it feel like a desktop app (Hakan).\n\n## What it could have\n- **The title in the title bar:** the page's header (project, workspace) goes into the window's title bar (Tauri's overlay title bar on macOS), not a second bar under it.\n- **Tabs:** several projects (or workspaces, the board) open at once, one tab each.\n- **A collapsible side panel** listing the workspace's projects, instead of the project selector.\n- **A proper status bar:** what the dashboard's footer shows now (version, connection, agents at work, the active sprint), as the app's own.\n- **Menus:** the app's menu bar (macOS) for settings, the views, the projects and workspaces, Help and What's new, with their keyboard shortcuts; settings in a window or sheet of their own.\n- Anything else a desktop app should have that the page lacks (window state kept between runs, the Dock menu, …).\n\n## First: a design, with Hakan\nA short design document (`docs/`): what changes in the app and what stays shared with the browser dashboard (one Svelte code base: the browser keeps working as it does), which Tauri APIs it uses (window, menu, title bar), how tabs map to the dashboard's addresses and deep links (T-459), and how it fits T-506 (no refresh settings). Review it with Hakan, then break it into tasks with `/atm-create-tasks`.\n\n## Checks\nThe Tauri guide's by-hand check in a window (`cargo tauri dev` and `cargo run -p atm-app`), the app e2e specs, and the security doc where a new command or capability is added (I25).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/",
+        "app/src-tauri/",
+        "dashboard/src/lib/shell/"
+      ],
+      "created_at": "2026-11-09T09:50:27Z",
+      "updated_at": "2026-11-09T09:50:27Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-09T09:50:27Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
       "with": "user"
     }
   ]

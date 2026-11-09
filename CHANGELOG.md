@@ -4,7 +4,10 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
-## [Unreleased]
+## [0.34.0] - 2026-11-09
+
+The first atm app (macOS, a notarized DMG and a Homebrew cask), workspaces, and atm's state in the platform's app
+data folder. Diagrams in the app wait for CompMD 0.6.0 (0.35.0, T-503).
 
 ### Changed
 - **atm's state moves to the platform's app data folder** (T-490, [ADR-003](docs/adr/ADR-003-workspaces.md) §2):

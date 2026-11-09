@@ -772,6 +772,24 @@ address reaches the page on its own channel (`subscribe_links`, in the main wind
 - **Its CI changes** (the `app-macos` job, the cask in the Homebrew workflow) add no permission, secret or action: the
   same pinned actions, the tap's deploy key as before.
 
+**Release 0.34.0 (T-509).** The first release with the app. The checklist:
+- **Skills and `docs/agent/` changed** (against `main`: `skills/atm-serve/SKILL.md`, `skills/claude-code.json` and
+  `docs/agent/commands.md` in T-493; `skills/atm-push/SKILL.md` in T-486; 9 lines added, 3 removed). No API key is
+  used for the agent sandbox, so this written review takes the live run's place. T-493's changes are reviewed above
+  (the workspace reads named, the other workspace commands the user's, the serve skill's pre-approvals narrowed to two
+  reads). T-486's rewords one sentence: `atm vcs pushed` releases a release whose tasks are all merged "in this PR or
+  earlier ones". No rule changed, nothing new to run, fetch or install, and no pre-approval added.
+- **Entry points, fields, CI permissions:** the app's (T-455 to T-460, reviewed in T-461: B7, I25–I29), the v2 routes
+  and `recent.json` (T-456, T-493), the state folder's move (T-490, T-501), and the `compmd:` scheme (T-503, I26),
+  each recorded above with its checks. No new CI permission: the `app-macos` job runs with the read-only token.
+- **What ships is what is described:** the app's DMG and cask are built for the first time by this release's tag
+  (`release.yml`'s `app-macos`, `homebrew.yml`'s cask); §5's by-hand checklist for the first signed DMG is done with
+  the user once it is published. Diagrams don't draw in the app in 0.34.0 (CompMD 0.5.0's frames refuse their runtime
+  on `compmd://`, T-503, waiting on CompMD 0.6.0): the app shows the rest of the text, and the browser is unchanged.
+- **Checks run locally:** `cargo test`, clippy, fmt and deny; the unit tests with coverage (1249); the CLI suite (598:
+  the stress test once timed out on the lock while the whole suite ran, and passed run alone); the functional e2e
+  suite (420); the Linux screenshots in Docker (84, no baseline changed).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:
