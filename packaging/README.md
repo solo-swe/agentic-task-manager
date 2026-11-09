@@ -12,6 +12,12 @@ agentic-status-bar, not a Tauri app, uses Sparkle).
 always the same build. The cask `conflicts_with` the formula: someone with the formula uninstalls it before installing
 the app. Without Homebrew, the DMG alone gives the app; its CLI is inside it.
 
+**An atm from before 0.34.0 on the same machine** (another install, a server still running from it) keeps using
+`~/.agentic-task-manager/`, which 0.34.0 moved to the state folder (T-490): its dashboard shows only the projects it
+listed since. 0.34.0 adds those to its own `default` workspace and names that older atm's server in
+`atm service status` (T-501). `atm version` in a shell says which one is on PATH; upgrade the other, or stop its
+server with its own `atm service stop`.
+
 ## What's here
 
 | File | What it does |

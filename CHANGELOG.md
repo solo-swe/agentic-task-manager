@@ -108,6 +108,15 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 - **No more 404 for `/_app/version.json` in the browser's console** (T-495): SvelteKit checks it for a new deployment
   when the tab regains focus; atm serve now answers it with the page's own version (`{"version": …}`), so it never
   sees one (atm's reload offer stays whoami's).
+- **An older atm on the same machine no longer hides projects** (T-501): 0.34.0 moves `~/.agentic-task-manager/` to
+  the state folder, and an atm from before keeps using the old folder, so its dashboard showed only the projects it
+  listed since, and the moved `server.json` made `atm service status` call that atm's server its own. Now:
+  - the projects an older atm lists in `~/.agentic-task-manager/projects.json` join the `default` workspace whenever
+    it is read, when that file changed (`legacy-adopted.txt` in the state folder); only for the platform's state
+    folder, never one set with `ATM_STATE_DIR`;
+  - a record counts as the server's only when the server on its port gives this folder's `home` as well as the
+    record's pid; `atm service status` names an older atm's servers (`older_atms` in `--json`) and leaves them alone;
+  - `atm service` prints the project's page (`/projects/<id>`), not the old `/#project=<id>` link.
 - **Mermaid diagrams in the app** (T-502): no diagram drew in the app's window. Tauri puts the window's CSP on every
   HTML file it serves, CompMD's sandbox frames included, and its `frame-ancestors 'none'` refused them in the page.
   The app's CSP no longer has `frame-ancestors` (its one window is its own); a test now checks what Tauri serves

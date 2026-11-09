@@ -124,7 +124,8 @@ describe('serve', () => {
     const port = ports();
     const started = atm(['service', '--port', String(port)], root);
     assert.equal(started.code, 0, started.stderr);
-    assert.match(started.stdout, new RegExp(`Dashboard server started: http://localhost:${port}/#project=abcd1234\n`));
+    // The project's page (T-501: an address of the router, not the old #project= link)
+    assert.match(started.stdout, new RegExp(`Dashboard server started: http://localhost:${port}/projects/abcd1234\n`));
     // The launching process has exited; the server keeps running, recorded in ATM_HOME
     const r = record(atmHome);
     assert.equal(r.port, port);
@@ -148,7 +149,7 @@ describe('serve', () => {
     assert.equal(r.home, homeId(atmHome));
 
     const again = atm(['service', 'start', '--port', String(port + 5)], root);
-    assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/#project=abcd1234`));
+    assert.match(again.stdout, new RegExp(`already running: http://localhost:${port}/projects/abcd1234`));
     assert.equal(record(atmHome).pid, r.pid);
 
     const running = atm(['service', 'status'], root).stdout;
@@ -175,7 +176,7 @@ describe('serve', () => {
     const port = ports();
     assert.equal(atm(['service', '--port', String(port)], a).code, 0);
     const second = atm(['service', '--port', String(port)], b);
-    assert.match(second.stdout, new RegExp(`already running: http://localhost:${port}/#project=bbbb2222`));
+    assert.match(second.stdout, new RegExp(`already running: http://localhost:${port}/projects/bbbb2222`));
     const api = await (await fetch(`http://localhost:${port}/api/projects`)).json();
     assert.match(api.generated_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     assert.deepEqual(
@@ -1701,6 +1702,31 @@ describe('serve', () => {
     assert.equal(alive(theirs.pid), false);
   });
 
+  test('a record naming another atm folder’s live server is not ours, and stop leaves that server (T-501)', async () => {
+    // As on a machine where the state folder moved from ~/.agentic-task-manager with the record, while an older atm
+    // still runs its server for the old folder: the record names that server, its own pid and port
+    const atmHome = home();
+    const otherHome = home();
+    const root = project();
+    const port = ports();
+    atmIn(otherHome)(['service', '--port', String(port)], root);
+    const theirs = record(otherHome);
+    fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(theirs));
+    const atm = atmIn(atmHome);
+    const status = JSON.parse(atm(['service', 'status', '--json', '--port', String(port)], root).stdout);
+    assert.equal(status.running, false);
+    assert.deepEqual(status.unrecorded, []);
+    // Only the platform's state folder looks for an older atm's server (on ~/.agentic-task-manager); never one set
+    // with ATM_HOME, as here, so a test or another setup never reports the user's own servers
+    assert.deepEqual(status.older_atms, []);
+    assert.equal(fs.existsSync(path.join(atmHome, 'server.json')), false, 'the record went');
+    fs.writeFileSync(path.join(atmHome, 'server.json'), JSON.stringify(theirs));
+    assert.match(atm(['service', 'stop', '--port', String(port)], root).stdout, /removed a stale record/);
+    assert.equal(alive(theirs.pid), true, 'another folder’s server is never stopped');
+    atmIn(otherHome)(['service', 'stop'], root);
+    assert.equal(alive(theirs.pid), false);
+  });
+
   test('keeps serving after the directory it was started from is deleted', async () => {
     const atm = atmIn(home());
     const root = project(TASKS, { 'sub/x.txt': 'x' });
@@ -1905,7 +1931,7 @@ describe('serve', () => {
     cleanups.push(() => removeDir(root));
     const r = atm(['service', '--port', String(ports())], root);
     assert.match(r.stdout, /Moved docs\/tasks.json to .agentic-task-manager\/tasks.json/);
-    assert.match(r.stdout, /#project=abcd1234/);
+    assert.match(r.stdout, /\/projects\/abcd1234/);
     atm(['service', 'stop'], root);
   });
 
@@ -1918,7 +1944,7 @@ describe('serve', () => {
     const port = ports();
     const started = atm(['service', '--dir', root, '--port', String(port)], elsewhere);
     assert.equal(started.code, 0, started.stderr);
-    assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/#project=abcd1234`));
+    assert.match(started.stdout, new RegExp(`started: http://localhost:${port}/projects/abcd1234`));
     assert.match(atm(['service', 'status', '--dir', root], elsewhere).stdout, new RegExp(`localhost:${port}/`));
     assert.match(atm(['service', 'stop', '--dir', root], elsewhere).stdout, /Dashboard server stopped/);
     assert.equal(record(atmHome), null);

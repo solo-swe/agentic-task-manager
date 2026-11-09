@@ -15,7 +15,7 @@ use crate::process::{pid_alive, pid_exists, signal_process};
 use atm_common::dashboard::{
     PAGE, SCAN_PORTS, SERVER_LOG, SERVER_RECORD, home_id, page_tags, parse_version, whoami,
 };
-use atm_common::home::{ensure_home, state_dir};
+use atm_common::home::{ensure_home, legacy_folder_of, state_dir};
 use atm_common::py::{py_str_opt, to_json};
 use atm_common::time::{parse_iso, real_now};
 use atm_common::{Error, Result};
@@ -81,12 +81,19 @@ pub struct ServiceArgs {
     pub refresh: bool,
 }
 
+/// The dashboard's address: the project's page (`/projects/<id>`, T-429), or the overview.
 fn server_url(port: &Value, project: Option<&str>) -> String {
     let port = py_str_opt(Some(port));
     match project {
-        Some(project) => format!("http://localhost:{port}/#project={project}"),
+        Some(project) => format!("http://localhost:{port}/projects/{project}"),
         None => format!("http://localhost:{port}/"),
     }
+}
+
+/// Whether whoami's answer is the server `record` names, of this atm folder: the same pid, and `home` this folder's
+/// (T-501: a record moved from `~/.agentic-task-manager` names a server an older atm runs for that folder).
+fn answers_for(info: &Map<String, Value>, record: &Map<String, Value>, home: &Path) -> bool {
+    info.get("pid") == record.get("pid") && info.get("home") == Some(&json!(home_id(home)))
 }
 
 fn record_path(home: &Path) -> PathBuf {
@@ -116,11 +123,12 @@ fn ask(port: u64) -> Option<Map<String, Value>> {
     whoami(port, Duration::from_secs(1))
 }
 
-/// The record of the user's running server, or none. A stale record is removed.
+/// The record of the user's running server, or none. A stale record is removed, and so is one naming another atm
+/// folder's server.
 fn live_server(home: &Path) -> Option<Map<String, Value>> {
     let record = read_record(home)?;
     let info = ask(port_of(&record));
-    if info.is_some_and(|i| i.get("pid") == record.get("pid")) {
+    if info.is_some_and(|i| answers_for(&i, &record, home)) {
         return Some(record);
     }
     let _ = std::fs::remove_file(record_path(home));
@@ -311,17 +319,40 @@ fn stop_server(home: &Path, pid: u32) -> Result<()> {
     Ok(())
 }
 
-/// The servers of this atm folder answering on the usual ports (from `first_port`) that the record doesn't name: a
-/// server whose record was lost or overwritten. A server of another folder isn't this folder's to stop.
+/// The atm servers answering on the usual ports (from `first_port`).
+fn servers_on(first_port: u16) -> Vec<Map<String, Value>> {
+    (first_port..first_port.saturating_add(SCAN_PORTS))
+        .filter_map(|port| whoami(u64::from(port), Duration::from_millis(500)))
+        .collect()
+}
+
+/// The servers of this atm folder among `servers` that the record doesn't name: a server whose record was lost or
+/// overwritten. A server of another folder isn't this folder's to stop.
 fn unrecorded_servers(
     home: &Path,
-    first_port: u16,
+    servers: &[Map<String, Value>],
     recorded: Option<&Value>,
 ) -> Vec<Map<String, Value>> {
     let mine = json!(home_id(home));
-    (first_port..first_port.saturating_add(SCAN_PORTS))
-        .filter_map(|port| whoami(u64::from(port), Duration::from_millis(500)))
+    servers
+        .iter()
         .filter(|info| info.get("home") == Some(&mine) && info.get("pid") != recorded)
+        .cloned()
+        .collect()
+}
+
+/// The servers among `servers` an older atm runs for `~/.agentic-task-manager`, after this state folder took its
+/// content (T-501): reported, never stopped. None for a state folder set with `ATM_STATE_DIR` (`legacy_folder_of`),
+/// and servers of any other folder aren't this atm's business.
+fn older_atms_servers(home: &Path, servers: &[Map<String, Value>]) -> Vec<Map<String, Value>> {
+    let Some(legacy) = legacy_folder_of(home) else {
+        return Vec::new();
+    };
+    let theirs = json!(home_id(&legacy));
+    servers
+        .iter()
+        .filter(|info| info.get("home") == Some(&theirs))
+        .cloned()
         .collect()
 }
 
@@ -329,9 +360,9 @@ fn serve_stop(home: &Path, port: u16) -> Result<()> {
     let record = read_record(home);
     let live = record
         .as_ref()
-        .is_some_and(|r| ask(port_of(r)).is_some_and(|i| i.get("pid") == r.get("pid")));
+        .is_some_and(|r| ask(port_of(r)).is_some_and(|i| answers_for(&i, r, home)));
     let recorded = record.as_ref().filter(|_| live).and_then(|r| r.get("pid"));
-    let strays = unrecorded_servers(home, port, recorded);
+    let strays = unrecorded_servers(home, &servers_on(port), recorded);
     let Some(record) = record else {
         if strays.is_empty() {
             println!("Dashboard server is not running.");
@@ -427,7 +458,9 @@ pub fn refresh_server(home: &Path) -> Result<Option<Map<String, Value>>> {
 
 fn serve_status(home: &Path, as_json: bool, port: u16) {
     let record = live_server(home);
-    let strays = unrecorded_servers(home, port, record.as_ref().and_then(|r| r.get("pid")));
+    let servers = servers_on(port);
+    let strays = unrecorded_servers(home, &servers, record.as_ref().and_then(|r| r.get("pid")));
+    let older = older_atms_servers(home, &servers);
     if as_json {
         let mut status = Map::new();
         status.insert("running".into(), json!(record.is_some()));
@@ -445,6 +478,11 @@ fn serve_status(home: &Path, as_json: bool, port: u16) {
             .map(|s| json!({"pid": s.get("pid"), "port": s.get("port"), "version": s.get("version")}))
             .collect();
         status.insert("unrecorded".into(), Value::Array(unrecorded));
+        let older_atms: Vec<Value> = older
+            .iter()
+            .map(|s| json!({"pid": s.get("pid"), "port": s.get("port"), "version": s.get("version")}))
+            .collect();
+        status.insert("older_atms".into(), Value::Array(older_atms));
         print_json(&Value::Object(status));
         return;
     }
@@ -468,6 +506,15 @@ fn serve_status(home: &Path, as_json: bool, port: u16) {
     for info in &strays {
         println!(
             "Also running, without a record: pid {} on port {} (dashboard {}); `atm service stop` stops it.",
+            py_str_opt(info.get("pid")),
+            py_str_opt(info.get("port")),
+            py_str_opt(info.get("version"))
+        );
+    }
+    for info in &older {
+        println!(
+            "Also running: an older atm's server, still on ~/.agentic-task-manager: pid {} on port {} (dashboard {}). \
+             It shows only the projects that atm listed; upgrade it, or stop it with its own `atm service stop`.",
             py_str_opt(info.get("pid")),
             py_str_opt(info.get("port")),
             py_str_opt(info.get("version"))

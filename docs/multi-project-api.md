@@ -339,7 +339,11 @@ above, the priority the project's default when a task has none), plus `by` (the 
 path, never the path itself (T-390). `atm service status` and `stop` look at the 20 ports from `--port` (8765 by
 default) for servers of their own folder that `server.json` doesn't name, a server whose record was lost or
 overwritten: `status` reports them (`unrecorded` in `--json`), `stop` stops them. A server of another folder, or one
-too old to give `home`, is never touched.
+too old to give `home`, is never touched. A record counts as the folder's only while the server on its port gives the
+record's `pid` **and** this folder's `home` (T-501: the record moved from `~/.agentic-task-manager` names the server an
+older atm still runs for that folder); any other record is removed. For the platform's state folder, `status` also
+names an older atm's servers on those ports, those whose `home` is `~/.agentic-task-manager`'s (`older_atms` in
+`--json`).
 
 `version` and `build` are the `atm-dashboard-version` and `atm-dashboard-build` meta tags of the dashboard the server
 holds, read from the very bytes it serves at `/`, so a page loaded from it always has the same `build`. atm compares
@@ -360,6 +364,12 @@ name), else the platform's app data folder for `com.solo-swe.atm`: `~/Library/Ap
 `%APPDATA%\com.solo-swe.atm\` (Windows). Without either variable, the first run moves `~/.agentic-task-manager/` there
 and leaves `MOVED.txt` in its place (T-490). Both files are written atomically (temporary file, then rename) under the
 folder's `.lock`, atm's usual lock directory.
+
+**An older atm beside it** (T-501): an atm from before 0.34.0 still uses `~/.agentic-task-manager/`, and makes its
+`projects.json` again there. Whenever the `default` workspace is read, the projects that file lists, with a readable
+task file, are added to `default` (never removed from it), when the file changed since it was last read:
+`legacy-adopted.txt` in the state folder holds its size and time. Only the platform's state folder does this, never
+one set with `ATM_STATE_DIR` or `ATM_HOME`; and it never waits for the folder's lock (the next read tries again).
 
 ### 5.1 `workspaces/default.json`, the registry
 

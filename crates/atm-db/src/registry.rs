@@ -39,6 +39,75 @@ pub fn registry_file(home: &Path) -> PathBuf {
     }
     file
 }
+/// Where the state folder notes the legacy registry it last took in: its size and modification time.
+pub const LEGACY_ADOPTED_FILE: &str = "legacy-adopted.txt";
+
+/// The projects an older atm listed in the legacy folder after its content moved (T-501), added to the `default`
+/// workspace of `home` when the legacy registry changed since it was last taken in. Only added, never removed, and
+/// only those with a readable tasks.json there (a missing folder stays out). Skipped while the state folder's lock is
+/// taken (the next read takes them in), so it never waits and never runs inside a locked change. The paths added.
+///
+/// # Errors
+/// The `default` workspace's file can't be read or written.
+pub fn adopt_legacy_projects(legacy: &Path, home: &Path) -> Result<Vec<String>> {
+    let source = legacy.join(LEGACY_REGISTRY_FILE);
+    let Ok(meta) = std::fs::metadata(&source) else {
+        return Ok(Vec::new());
+    };
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_nanos());
+    let stamp = format!("{} {modified}\n", meta.len());
+    let seen = home.join(LEGACY_ADOPTED_FILE);
+    if std::fs::read_to_string(&seen).is_ok_and(|s| s == stamp) {
+        return Ok(Vec::new());
+    }
+    let Ok(held) = lock(home, Some(0.0)) else {
+        return Ok(Vec::new());
+    };
+    let theirs = read_json(&source).unwrap_or(Value::Null);
+    let file = registry_file(home);
+    let (mut registry, _) = read_registry(&file)?;
+    let mut added = Vec::new();
+    for entry in entries(&theirs) {
+        let Some(path) = entry.get("path").and_then(Value::as_str) else {
+            continue;
+        };
+        if position(&registry, path).is_some() {
+            continue;
+        }
+        let folder = Path::new(path);
+        if let Some(project) = project_meta(folder)
+            && update_entry(&mut registry, folder, &project) == "added"
+        {
+            added.push(path.to_string());
+        }
+    }
+    if !added.is_empty() {
+        write_registry(&file, &registry)?;
+    }
+    write_text_atomic(&seen, &stamp)
+        .map_err(|e| Error::failed(format!("{}: {e}", seen.shown())))?;
+    drop(held);
+    Ok(added)
+}
+
+/// [`adopt_legacy_projects`] for the state folder `home`, when an older atm may still write to the legacy folder
+/// (`legacy_folder_of`). A failure leaves the `default` workspace as it was and is said on stderr (the server's log,
+/// for the server); the next read tries again.
+fn adopt_moved_away_projects(home: &Path) {
+    if let Some(legacy) = atm_common::home::legacy_folder_of(home)
+        && let Err(e) = adopt_legacy_projects(&legacy, home)
+    {
+        eprintln!(
+            "atm: couldn't add the projects an older atm listed in {}: {e}",
+            legacy.shown()
+        );
+    }
+}
+
 const REGISTRY_VERSION: u64 = 1;
 /// Seconds between `seen_at` updates, so the registry isn't rewritten on every command.
 const SEEN_EVERY: i64 = 24 * 3600;
@@ -250,6 +319,7 @@ pub fn register(paths: &Paths, wait: bool) -> Result<Option<&'static str>> {
         return Ok(None);
     };
     let home = home()?;
+    adopt_moved_away_projects(&home);
     let held = match lock(&home, if wait { None } else { Some(0.0) }) {
         Ok(held) => held,
         Err(_) if !wait => return Ok(Some("busy")),
@@ -426,6 +496,9 @@ impl FileRegistry {
     /// a `path`.
     #[must_use]
     pub fn entries(&self) -> Vec<Value> {
+        if self.workspace == DEFAULT_WORKSPACE {
+            adopt_moved_away_projects(&self.home);
+        }
         let registry = read_json(&self.file()).unwrap_or(Value::Null);
         registry
             .get("projects")
@@ -464,6 +537,9 @@ impl FileRegistry {
     /// # Errors
     /// The registry's lock or file.
     pub fn list_projects(&self) -> Result<Value> {
+        if self.workspace == DEFAULT_WORKSPACE {
+            adopt_moved_away_projects(&self.home);
+        }
         let held = self.locked()?;
         let (registry, damaged) = read_registry(&self.file())?;
         if damaged.is_some() {

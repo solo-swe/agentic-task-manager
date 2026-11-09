@@ -51,6 +51,19 @@ pub fn state_dir() -> PathBuf {
     state
 }
 
+/// The legacy folder an older atm may still write to, when `home` is the state folder its content moved to (T-501):
+/// `~/.agentic-task-manager` once it holds the move's note, and only for the platform's state folder, never one set
+/// with `ATM_STATE_DIR` or `ATM_HOME` (a test's or another setup's must never take in the user's projects).
+#[must_use]
+pub fn legacy_folder_of(home: &Path) -> Option<PathBuf> {
+    let overridden = ["ATM_STATE_DIR", "ATM_HOME"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some_and(|v| !v.is_empty()));
+    let legacy = in_home(LEGACY_FOLDER);
+    (!overridden && home == platform_state_dir() && legacy.join(MOVED_NOTE).is_file())
+        .then_some(legacy)
+}
+
 /// The platform's app data folder for atm (the user's home folder's when the platform names none).
 fn platform_state_dir() -> PathBuf {
     dirs::data_dir().map_or_else(|| in_home(APP_ID), |data| data.join(APP_ID))
@@ -193,6 +206,13 @@ mod tests {
             "{}"
         );
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// T-501: only the platform's state folder looks at the legacy one; any other (a test's, an `ATM_STATE_DIR`) never
+    #[test]
+    fn only_the_platforms_state_folder_has_a_legacy_folder() {
+        assert_eq!(legacy_folder_of(&scratch("other-home")), None);
+        assert_eq!(legacy_folder_of(Path::new("relative")), None);
     }
 
     #[test]
