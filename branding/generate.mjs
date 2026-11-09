@@ -71,7 +71,8 @@ const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
  */
 export function appIcon(logo) {
   const body = squircle(100, 100, 824);
-  const size = 500;
+  // The logo's own frame nearly fills the body, so little of the face shows around it (Hakan: "too much white")
+  const size = 660;
   const at = (1024 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
@@ -91,7 +92,7 @@ export function appIcon(logo) {
  * logo large enough to read at the small sizes GitHub shows it.
  */
 export function avatar(logo) {
-  const size = 340;
+  const size = 420;
   const at = (512 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>${faceGradient}</defs>
