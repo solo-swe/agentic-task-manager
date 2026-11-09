@@ -1,0 +1,18 @@
+[package]
+# CompMD in a Tauri app (ADR-004, docs/tauri-compmd-design.md §3–§4): CompMD's built folder on a `compmd:` scheme of
+# its own, with the headers CompMD needs from a host. No dependency on atm's crates, so it can move to CompMD as it is
+name = "tauri-plugin-compmd"
+version.workspace = true
+description = "Serves CompMD's built files on a compmd: scheme, with the headers its sandbox frames need, for a Tauri app"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+tauri.workspace = true
+
+[lints]
+workspace = true

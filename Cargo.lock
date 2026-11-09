@@ -284,6 +284,7 @@ dependencies = [
  "specta-typescript",
  "tauri",
  "tauri-build",
+ "tauri-plugin-compmd",
  "tauri-plugin-single-instance",
  "tauri-specta",
 ]
@@ -3908,6 +3909,13 @@ dependencies = [
  "syn 2.0.119",
  "tauri-codegen",
  "tauri-utils",
+]
+
+[[package]]
+name = "tauri-plugin-compmd"
+version = "0.33.0"
+dependencies = [
+ "tauri",
 ]
 
 [[package]]

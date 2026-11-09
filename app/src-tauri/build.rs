@@ -35,4 +35,7 @@ fn main() {
         println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", xml.display());
     }
     tauri_build::try_build(attributes).expect("the app's Tauri build");
+    // CompMD's built folder (the dashboard's build), served on the compmd: scheme at the paths atm serve gives it
+    // (ADR-004): the page's CompMD URLs differ only by origin
+    tauri_plugin_compmd::build::embed("../../dashboard/dist/assets/compmd", "assets/compmd");
 }

@@ -5,6 +5,7 @@
     loadCompmd,
     processText,
     safeHref,
+    sandboxBase,
     secureLinks,
     slug,
     taskData,
@@ -60,6 +61,11 @@
   /** CompMD's own element: the sandbox's page owns it, Svelte never renders into it */
   let host: HTMLElement | undefined = $state();
   let failed = $state(false);
+  /** Why CompMD couldn't load, shown over the text as written (T-503: it was only in the console) */
+  let loadError = $state('');
+  /** Components that drew nothing, not even their fallback (a frame that never answered, a missing module): one note
+   * each, by component, so the reader knows something is missing (the sandbox's `error`, T-503) */
+  let undrawn = $state<string[]>([]);
   /** Whether CompMD has drawn this text yet: `data-compmd` says so, for what measures the panel once it has */
   let drawn = $state(false);
   let view: View | null = null;
@@ -94,10 +100,27 @@
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
           // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)
-          view = compmd.createSandbox({ ...compmd.sandbox, page: 'host' }).open(target, { components });
+          view = compmd
+            .createSandbox({ ...compmd.sandbox, base: sandboxBase(compmd.sandbox.base), page: 'host' })
+            .open(target, { components });
           view.on('rendered', () => {
             secureLinks(target);
             drawn = true;
+          });
+          // A component that shows its fallback says why. One that threw shows its code in its frame; one whose frame
+          // never answered, or whose module is missing, shows nothing at all, so the text says so (T-503)
+          view.on('error', ({ component, reason, message }) => {
+            const nothing = reason === 'failed' || reason === 'missing';
+            const log = nothing ? console.error : console.warn;
+            log(
+              `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
+                (reason === 'failed'
+                  ? `. A frame that never answers is almost always refused by a policy: is ${sandboxBase('/')} ` +
+                    'allowed in the page’s script-src, frame-src and connect-src, and its frame served with no ' +
+                    'policy but its own?'
+                  : ''),
+            );
+            if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];
           });
           const shown = view;
           // After a render is painted, when the page or a block in it changes size, when fonts load
@@ -112,6 +135,7 @@
       })
       .catch((e: unknown) => {
         console.error('CompMD could not render a text:', e);
+        loadError = e instanceof Error ? e.message : String(e);
         failed = true;
       });
   });
@@ -166,6 +190,12 @@
   data-compmd={failed ? 'failed' : drawn ? 'ready' : 'loading'}
   onclick={follow}
 >
+  {#if failed}
+    <p class="compmd-note" role="note">Shown as written: the formatting couldn’t load ({loadError}).</p>
+  {/if}
   <div class="compmd-page" hidden={failed} bind:this={host}></div>
   {#if failed}<div class="compmd-plain">{text}</div>{/if}
+  {#each undrawn as component (component)}
+    <p class="compmd-note" role="note">A {component} here couldn’t be drawn; the console says why.</p>
+  {/each}
 </div>

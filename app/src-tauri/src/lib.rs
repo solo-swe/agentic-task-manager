@@ -14,6 +14,9 @@ use commands::{
     subscribe_workspace, unsubscribe, version, worktrees,
 };
 
+// CompMD's built files, embedded by tauri-plugin-compmd's build step (build.rs)
+include!(concat!(env!("OUT_DIR"), "/compmd_files.rs"));
+
 /// The app's commands, for Tauri and for the TypeScript types (each also in `build.rs`'s manifest and the main
 /// window's capability).
 #[must_use]
@@ -59,6 +62,8 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus(app);
         }))
+        // CompMD's files on a scheme of their own, so its frames keep their own policy (ADR-004)
+        .plugin(tauri_plugin_compmd::init(COMPMD_FILES))
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
         .setup(move |app| {
@@ -162,42 +167,33 @@ mod tests {
         );
     }
 
+    /// `CompMD`'s origin in the app (ADR-004): its plugin's scheme, as macOS and Linux, and Windows and Android, name it
+    const COMPMD_ORIGINS: &str = "compmd://localhost http://compmd.localhost";
+
     /// I26 (T-461): the window's CSP is the dashboard server's (I13): no remote, inline or evaluated script, frames only
-    /// `CompMD`'s, images only the app's own or `data:`, connections only to Tauri's IPC; no global Tauri object
+    /// `CompMD`'s, images only the app's own or `data:`, connections only to Tauri's IPC and `CompMD`'s files; no
+    /// global Tauri object
     #[test]
     fn the_windows_csp_is_strict() {
         let conf: Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
         let csp = &conf["app"]["security"]["csp"];
         assert_eq!(csp["default-src"], json!("'none'"));
-        let script = csp["script-src"].as_str().expect("script-src");
-        for word in script.split_whitespace() {
-            assert!(
-                word == "'wasm-unsafe-eval'" || word.ends_with("localhost/assets/compmd/"),
-                "script-src {word}"
-            );
-        }
-        for word in csp["frame-src"]
-            .as_str()
-            .expect("frame-src")
-            .split_whitespace()
-        {
-            assert!(
-                word.ends_with("localhost/assets/compmd/"),
-                "frame-src {word}"
-            );
-        }
+        // Scripts: CompMD's, from its own scheme (ADR-004), which may compile WebAssembly; never blob:, data: or 'self'
+        // (CVE-2026-95626: they cancel Tauri's nonces)
+        assert_eq!(
+            csp["script-src"],
+            json!(format!("'wasm-unsafe-eval' {COMPMD_ORIGINS}"))
+        );
+        assert_eq!(csp["frame-src"], json!(COMPMD_ORIGINS));
         assert_eq!(csp["img-src"], json!("'self' data:"));
-        // Tauri's IPC, and CompMD fetching its WebAssembly from its folder (T-502)
+        // Tauri's IPC, and CompMD fetching its WebAssembly from its scheme
         assert_eq!(
             csp["connect-src"],
-            json!(
-                "ipc: http://ipc.localhost tauri://localhost/assets/compmd/ http://tauri.localhost/assets/compmd/"
-            )
+            json!(format!("ipc: http://ipc.localhost {COMPMD_ORIGINS}"))
         );
-        // No frame-ancestors (T-502): Tauri puts this policy on every HTML file, CompMD's frames too, which it would
-        // refuse in the page; the app's one window is its own, so it protected nothing
-        assert!(csp.get("frame-ancestors").is_none());
+        // Back (T-503): CompMD's frames come from its own scheme, so the window's policy no longer reaches them
+        assert_eq!(csp["frame-ancestors"], json!("'none'"));
         assert_eq!(csp["form-action"], json!("'none'"));
         assert_eq!(conf["app"]["security"]["freezePrototype"], json!(true));
         assert_eq!(conf["app"]["withGlobalTauri"], json!(false));
@@ -206,19 +202,17 @@ mod tests {
             conf["app"]["security"]["dangerousDisableAssetCspModification"],
             json!(["style-src"])
         );
-        // Every debug build (`cargo run`, `cargo tauri dev`) uses devCsp (T-502): this policy, plus the CLI's own
-        // server, which `cargo tauri dev` serves the page from, and its live-reload socket; nothing else
+        // Every debug build (`cargo run`, `cargo tauri dev`) uses devCsp (T-502): this policy, plus the live-reload
+        // socket of the CLI's own server, which `cargo tauri dev` serves the page from; CompMD's origin is the same in
+        // every build (its plugin is in the app)
         let dev = &conf["app"]["security"]["devCsp"];
-        let server = "http://127.0.0.1:1430/assets/compmd/";
         for (directive, value) in csp.as_object().expect("the csp") {
             let value = value.as_str().expect("a directive");
-            let mut expected = value.to_owned();
-            if value.contains("localhost/assets/compmd/") {
-                expected = format!("{expected} {server}");
-            }
-            if directive == "connect-src" {
-                expected = format!("{expected} ws://127.0.0.1:1430/__tauri_cli");
-            }
+            let expected = if directive == "connect-src" {
+                format!("{value} ws://127.0.0.1:1430/__tauri_cli")
+            } else {
+                value.to_owned()
+            };
             assert_eq!(dev[directive], json!(expected), "devCsp {directive}");
         }
         assert_eq!(
@@ -519,12 +513,20 @@ mod tests {
                 expected,
                 "{command}"
             );
-            // A page from anywhere else, CompMD's sandbox frames included, gets nothing (docs/guides/tauri.md)
-            let refused = tauri::test::get_ipc_response(
-                &window,
-                request(command, &args, "https://example.com"),
-            );
-            assert!(refused.is_err(), "{command} answered a remote page");
+            // A page from anywhere else gets nothing (docs/guides/tauri.md): a remote one, or one from CompMD's own
+            // scheme, where its sandbox frames are (ADR-004)
+            for elsewhere in [
+                "https://example.com",
+                "compmd://localhost",
+                "http://compmd.localhost",
+            ] {
+                let refused =
+                    tauri::test::get_ipc_response(&window, request(command, &args, elsewhere));
+                assert!(
+                    refused.is_err(),
+                    "{command} answered a page from {elsewhere}"
+                );
+            }
         }
         // An error is atm's kind, with its message
         let missing = tauri::test::get_ipc_response(
@@ -573,14 +575,11 @@ mod tests {
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 
-    /// T-502: what Tauri serves, not what the config says. Tauri puts the window's policy on every HTML file, `CompMD`'s
-    /// sandbox frames (Mermaid's diagrams) included: it must let the page frame them, and still allow their scripts
-    /// only from `CompMD`'s folder
+    /// ADR-004: the app serves `CompMD`'s files on its own scheme, at the paths `atm serve` gives them, and its frames
+    /// with no policy but their own (what Tauri's protocol did, T-502), as the page loads them
     #[test]
-    fn compmds_frames_are_served_with_a_policy_the_page_can_frame() {
-        let app = tauri::test::mock_builder()
-            .build(context())
-            .expect("the mock app");
+    fn compmds_files_come_from_its_own_scheme_with_no_policy_but_their_own() {
+        use tauri::http::Method;
         let compmd = std::fs::read_dir(
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd"),
         )
@@ -590,22 +589,26 @@ mod tests {
         .next()
         .expect("CompMD's version folder");
         for frame in ["strict.html", "permissive.html"] {
-            let asset = app
-                .asset_resolver()
-                .get(format!("assets/compmd/{compmd}/compmd/{frame}"))
-                .expect("CompMD's frame in the app's files");
-            let csp = asset.csp_header.unwrap_or_default();
-            assert!(!csp.contains("frame-ancestors"), "{frame}: {csp}");
-            assert!(
-                csp.contains("script-src 'wasm-unsafe-eval' tauri://localhost/assets/compmd/"),
-                "{frame}: {csp}"
-            );
+            let path = format!("/assets/compmd/{compmd}/compmd/{frame}");
+            let response = tauri_plugin_compmd::respond(COMPMD_FILES, &Method::GET, &path);
+            assert_eq!(response.status(), 200, "{path}");
+            let csp = response.headers()["content-security-policy"].to_str().ok();
+            assert_eq!(csp, Some("sandbox allow-scripts"), "{path}");
         }
+        let processor = format!("/assets/compmd/{compmd}/compmd.js");
+        let response = tauri_plugin_compmd::respond(COMPMD_FILES, &Method::GET, &processor);
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers()["access-control-allow-origin"]
+                .to_str()
+                .ok(),
+            Some("*")
+        );
     }
 
     /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
     /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` fetches its
-    /// `WebAssembly` from its folder
+    /// `WebAssembly` from its scheme
     #[test]
     fn the_page_is_served_with_a_policy_it_works_under() {
         let app = tauri::test::mock_builder()
@@ -630,7 +633,11 @@ mod tests {
         };
         assert!(!directive("style-src").contains("'nonce-"), "{shown}");
         assert!(
-            directive("connect-src").contains("tauri://localhost/assets/compmd/"),
+            directive("connect-src").contains("compmd://localhost"),
+            "{shown}"
+        );
+        assert!(
+            directive("script-src").contains("compmd://localhost"),
             "{shown}"
         );
     }

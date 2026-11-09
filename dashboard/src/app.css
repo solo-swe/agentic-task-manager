@@ -265,6 +265,13 @@ body {
 .compmd-plain {
   white-space: pre-wrap;
 }
+/* What a text couldn't show, said where it is (T-503): CompMD that didn't load, a component that drew nothing */
+.compmd-note {
+  margin: var(--space-1) 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-style: italic;
+}
 /* A question in a list: one paragraph, inline with its number */
 .compmd-inline,
 .compmd-inline .compmd-page,

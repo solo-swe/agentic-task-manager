@@ -531,7 +531,12 @@ export class TasksServer {
           return next;
         },
         unregisterCallback: () => {},
-        convertFileSrc: (path: string) => path,
+        // CompMD's scheme (tauri-plugin-compmd, ADR-004) is this test server, which serves CompMD's files with the
+        // plugin's headers (serve.mjs, as atm serve); any other scheme as Tauri writes it on macOS
+        convertFileSrc: (path: string, protocol = 'asset') =>
+          protocol === 'compmd'
+            ? `${location.origin}/${encodeURIComponent(path)}`
+            : `${protocol}://localhost/${encodeURIComponent(path)}`,
         metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
       };
     });

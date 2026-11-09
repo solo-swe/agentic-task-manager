@@ -21,10 +21,12 @@ path = "src/lib.rs"
 
 [build-dependencies]
 tauri-build.workspace = true
+tauri-plugin-compmd.workspace = true
 
 [dependencies]
 atm-common.workspace = true
 atm-lib.workspace = true
+tauri-plugin-compmd.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true
