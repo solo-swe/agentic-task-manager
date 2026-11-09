@@ -21215,7 +21215,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-09T09:40:23Z",
-      "updated_at": "2026-11-09T09:41:11Z",
+      "updated_at": "2026-11-09T09:50:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21227,7 +21227,8 @@
       "sprint": "The atm app",
       "with": "user",
       "started_at": "2026-11-09T09:41:11Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "39cb0632ed4a7ca15625012c5f222fe7acaa83b1"
     },
     {
       "id": "T-510",
