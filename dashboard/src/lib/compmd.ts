@@ -186,8 +186,8 @@ function localTimeZone(): string {
  * tauri-plugin-compmd serves at the same paths (ADR-004): Tauri's own protocol would put the window's policy on
  * CompMD's frames. `compmd://localhost`, or `http://compmd.localhost` on Windows: Tauri's helper knows which.
  */
-export function compmdOrigin(): string {
-  return inApp ? convertFileSrc('', 'compmd').replace(/\/$/, '') : location.origin;
+export function compmdOrigin(app = inApp): string {
+  return app ? convertFileSrc('', 'compmd').replace(/\/$/, '') : location.origin;
 }
 
 /** Where this build's CompMD is served: dist/assets/compmd/<version>/ (embedded in atm, and in the app), at

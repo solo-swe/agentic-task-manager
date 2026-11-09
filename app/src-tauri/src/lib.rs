@@ -588,22 +588,26 @@ mod tests {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .next()
         .expect("CompMD's version folder");
-        for frame in ["strict.html", "permissive.html"] {
-            let path = format!("/assets/compmd/{compmd}/compmd/{frame}");
+        // The headers CompMD needs from a host (H1, H2): the table `atm serve` is checked against too
+        // (tests/scripts/serve.test.mjs), so the two hosts never drift apart
+        let table: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/scripts/compmd-host-headers.json"
+        ))
+        .expect("the host headers table");
+        let files = table["files"].as_object().expect("files");
+        assert!(files.contains_key("compmd/strict.html"));
+        for (file, headers) in files {
+            let path = format!("/assets/compmd/{compmd}/{file}");
             let response = tauri_plugin_compmd::respond(COMPMD_FILES, &Method::GET, &path);
             assert_eq!(response.status(), 200, "{path}");
-            let csp = response.headers()["content-security-policy"].to_str().ok();
-            assert_eq!(csp, Some("sandbox allow-scripts"), "{path}");
+            for (name, value) in headers.as_object().expect("headers") {
+                let sent = response
+                    .headers()
+                    .get(name.as_str())
+                    .and_then(|v| v.to_str().ok());
+                assert_eq!(sent, value.as_str(), "{file}: {name}");
+            }
         }
-        let processor = format!("/assets/compmd/{compmd}/compmd.js");
-        let response = tauri_plugin_compmd::respond(COMPMD_FILES, &Method::GET, &processor);
-        assert_eq!(response.status(), 200);
-        assert_eq!(
-            response.headers()["access-control-allow-origin"]
-                .to_str()
-                .ok(),
-            Some("*")
-        );
     }
 
     /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles

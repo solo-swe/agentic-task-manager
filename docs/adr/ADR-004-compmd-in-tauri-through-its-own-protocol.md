@@ -1,6 +1,6 @@
 # ADR-004: CompMD in a Tauri app, through a protocol of its own
 
-- **Status:** accepted, 2026-11-08
+- **Status:** accepted, 2026-11-08; the check (decision 6) done 2026-11-09, which needs CompMD 0.6.0 (Risks)
 - **Decided by:** Hakan Serce
 - **Context:** T-502, T-503, [tauri-compmd-design.md](../tauri-compmd-design.md) (the design this records; its §2
   has the facts, with their sources), [compmd-rendering-design.md](../compmd-rendering-design.md) §2 and §3c,
@@ -62,11 +62,22 @@ The design's §5 compares them in full, with who uses each.
 - **WebKit refuses the opaque frame's module loads from a custom scheme.** It works over `http:` in every browser;
   WKWebView with a custom scheme is unchecked. Mitigation: the check comes first (decision 6); no alternative here
   avoids a custom scheme on macOS, so the answer reopens this ADR rather than a quiet workaround.
+  **The check (2026-11-09): WebKit refuses**, for a reason in CompMD's frame policy, not in the scheme. The frames'
+  `<meta>` policy allows `script-src 'self'`, and a sandboxed frame's origin is opaque. WebKit takes `'self'` from
+  the response's URL in that case only when it is `http:` or `https:`
+  ([`ContentSecurityPolicy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/csp/ContentSecurityPolicy.cpp),
+  the constructor's `hasOpaqueOriginWithResponseURL`); on any other scheme `'self'` is the opaque origin, which
+  matches nothing, so `compmd://localhost/…/runtime.js` is refused. The scheme itself worked: the plugin served the
+  frame, and Tauri left its response alone. So on macOS and Linux (WebKitGTK) **any** custom scheme fails the same
+  way, Tauri's own included; `http://compmd.localhost` (Windows, Android) doesn't. The decisions stand: CompMD 0.6.0
+  allows the `compmd:` scheme in its frames' policy (a scheme source, which matches without an origin; only the app
+  serves that scheme), and reports a frame that never starts (in 0.5.0 nothing is shown, against decision 4). T-503
+  waits for it.
 - **A new entry point:** a protocol any page in the webview can request. Mitigation: it serves only the embedded
   folder's files, by an allow-list of paths and types, `GET` only; the security document lists it (I26); a test
   checks that `compmd:` can't call the app's commands.
 - **The plugin and `atm serve` drift apart** on the headers. Mitigation: both are tested against the same table (H1,
-  H2).
+  H2), `tests/scripts/compmd-host-headers.json`.
 - **WebKit caches custom-scheme responses** (macOS, iOS): a CompMD file atm rebuilds at the same path (the same CompMD
   version, other packs or configuration) could keep running its old version after an upgrade, the page and its frames
   then on different frame protocol versions. Mitigation: T-508 checks it in the app, and if so makes the plugin's

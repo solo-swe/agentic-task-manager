@@ -49,14 +49,25 @@ atm's own rules for the atm app, the desktop distribution proposed in
 - **Rendered task text is never given a capability:** CompMD's sandbox origin is not listed in any capability
   ([compmd-rendering-design.md](../compmd-rendering-design.md)).
 - **Strict CSP for the shell:** the dashboard server's policy ([security-architecture.md](../security-architecture.md)
-  I13: own scripts by hash, no remote or inline scripts, `frame-src` only CompMD's sandbox frames), with `connect-src`
-  only for Tauri IPC and CompMD's folder (it fetches its WebAssembly). What Tauri does to the policy (T-502):
-  - it puts it on **every HTML file** it serves, CompMD's frames too, so there is no `frame-ancestors`;
+  I13, I26: own scripts by hash, no remote or inline scripts, no `blob:`, `data:` or `'self'` in `script-src`,
+  `frame-ancestors 'none'`), with CompMD's origin in `script-src`, `frame-src` and `connect-src`, and `connect-src`
+  otherwise only Tauri's IPC. What Tauri does to the policy (T-502):
+  - it puts it on **every HTML file its own protocol serves**, so CompMD's files don't come from it (below);
   - it adds a nonce to `style-src`, which makes the browser ignore `'unsafe-inline'` (every `style` attribute
     refused): `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written;
-  - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus the
-    CLI's own server (`http://127.0.0.1:1430`, which `cargo tauri dev` serves the page from) and its live-reload
-    socket. A test keeps the two in step; the app's tests check the policy Tauri serves (its asset resolver).
+  - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
+    the CLI's live-reload socket. A test keeps the two in step.
+- **CompMD comes from its own scheme** ([ADR-004](../adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md),
+  [the design](../tauri-compmd-design.md) §4): `tauri-plugin-compmd` (`crates/`, no atm dependencies, for CompMD to
+  take) serves CompMD's built folder on `compmd://localhost` (`http://compmd.localhost` on Windows and Android), at the
+  paths `atm serve` uses and with its headers (one table, `tests/scripts/compmd-host-headers.json`, tests both). The
+  app's `build.rs` embeds the folder (`build::embed`, which fails the build without it); the page gets the origin from
+  `convertFileSrc('', 'compmd')` (`compmdOrigin` in `lib/compmd.ts`) and gives the sandbox a full `base` on it.
+  Don't serve CompMD from Tauri's own protocol, and don't loosen the window's policy for it (`blob:` in `script-src` is
+  CVE-2026-95626's case). On macOS and Linux a sandboxed frame's `'self'` matches nothing on a custom scheme (WebKit
+  takes it from the URL only for http), so CompMD's frames must name the scheme in their own policy: CompMD 0.6.0 does.
+- **Nothing CompMD does fails silently:** `CompMd.svelte` shows a note when CompMD can't load or a component draws
+  nothing, and logs the cause; keep both when changing it.
 - **Check the app in a window, both ways:** `cargo tauri dev` (the CLI's server) and `cargo run -p atm-app`
   (`tauri://localhost`, as the bundle), before a task that changes the window is done.
 

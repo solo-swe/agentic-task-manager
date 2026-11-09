@@ -132,6 +132,18 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   pinned); `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written. Debug builds (`cargo run`,
   `cargo tauri dev`) use a `devCsp`: the same policy plus the CLI's dev server (`http://127.0.0.1:1430`) and its
   live-reload socket, kept in step by a test. A test checks the policy Tauri serves the page with.
+- **CompMD in the app comes from a scheme of its own** (T-503, ADR-004, `docs/tauri-compmd-design.md`): a new crate,
+  `tauri-plugin-compmd` (no atm dependencies, for CompMD to take), serves CompMD's built folder on
+  `compmd://localhost` (`http://compmd.localhost` on Windows) with `atm serve`'s headers, so Tauri's window policy no
+  longer lands on CompMD's frames. Its `build::embed`, from the app's `build.rs`, embeds the folder and fails the
+  build without it; it serves only those files, `GET` and `HEAD`, and answers anything else with a `404` or `405`
+  that says why. The window's policy names that origin instead of Tauri's own, with `frame-ancestors 'none'` back,
+  and `devCsp` adds only the CLI's live-reload socket. The page gives CompMD's sandbox a full `base` on the scheme
+  (`compmdOrigin`, from `convertFileSrc`). When CompMD can't load, or a component draws nothing, the text now says so
+  in a note, and the console says why (in the browser too). One table of the headers CompMD needs,
+  `tests/scripts/compmd-host-headers.json`, tests both `atm serve` and the plugin. **Diagrams in the app need CompMD
+  0.6.0:** WebKit gives a sandboxed frame no `'self'` on a non-http scheme, so CompMD 0.5.0's frames refuse their own
+  runtime from `compmd://` (recorded in ADR-004's risks).
 - **The local screenshots run again** (T-485): `pnpm run test:e2e:visual` and `test:e2e:visual:update` ran the
   macOS `target/debug/atm` inside the Linux Playwright container since T-478, and every test failed. They now first
   run `pnpm run build:atm-linux`, which builds the CLI in the official `rust:1.99.0-bookworm` image (pinned by digest,

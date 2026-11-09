@@ -1,6 +1,7 @@
 # CompMD in a Tauri app
 
-Status: **accepted** (T-502, T-503), 2026-11-08, reviewed by Hakan; the decision is
+Status: **accepted** (T-502, T-503), 2026-11-08, reviewed by Hakan; the check of §4.7 (2026-11-09) found WebKit
+refusing for a reason in CompMD's frame policy, fixed in CompMD 0.6.0 (§4.7, at its end); the decision is
 [ADR-004](adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md). How to show CompMD's output in a Tauri app, worked out for the atm
 app, and written as the way to do it for any Tauri app that uses CompMD. Builds on
 [compmd-rendering-design.md](compmd-rendering-design.md) (how the dashboard renders with CompMD, §2 and §3c), the
@@ -185,15 +186,19 @@ flowchart LR
 
 ### 4.1 What a Tauri developer does
 
-1. **Add the plugin, with CompMD's built folder**, embedded when the app is built:
+1. **Add the plugin, with CompMD's built folder**, embedded when the app is built: the plugin is both a dependency
+   and a build dependency, its build helper writes the folder's file table, and the app passes it to the plugin:
 
    ```rust
-   tauri::Builder::default()
-       .plugin(tauri_plugin_compmd::init(tauri_plugin_compmd::embed!("../dist/compmd")))
+   // build.rs: the folder, from the crate's manifest folder, and the path it is served under
+   tauri_plugin_compmd::build::embed("../dist/assets/compmd", "assets/compmd");
+   // lib.rs
+   include!(concat!(env!("OUT_DIR"), "/compmd_files.rs"));
+   tauri::Builder::default().plugin(tauri_plugin_compmd::init(COMPMD_FILES))
    ```
 
-   The folder is what `@compmd/vite` built (H1). `embed!` fails the build, naming the folder, when it is missing or
-   has no frame documents.
+   The folder is what `@compmd/vite` built (H1). `embed` fails the build, naming the folder, when it is missing or
+   has no frame document (`strict.html`), and Cargo builds again when the folder changes.
 2. **Add CompMD's origin to the CSP** in `tauri.conf.json` (H3), both forms, as Tauri's documentation does for
    `asset:`:
 
@@ -228,18 +233,19 @@ Nothing else changes: windows are still declared in `tauri.conf.json`, Tauri sti
 About a hundred lines, with no dependency but Tauri:
 
 - `register_uri_scheme_protocol("compmd", …)` on the plugin's builder.
-- **A request is served only if** its path is a file of the embedded folder: plain segments, no `..`, and a known
-  type (`.js`, `.mjs`, `.wasm`, `.html`, `.json`, `.css`). Anything else is a `404` whose body names the path, and a
-  line in the app's log.
+- **A request is served only if** its path is a file of the embedded folder: plain segments, no `..`, and a type
+  CompMD's built folder holds (`.js`, `.wasm`, `.html`, as `atm serve`; the build helper embeds only those, and no
+  file reached through a symlink). Anything else is a `404` whose body names the path, and a line in the app's log.
 - **Headers:** the content type by extension; `Access-Control-Allow-Origin: *`; `X-Content-Type-Options: nosniff`;
   `Cache-Control: no-cache`; for `.html`, `Content-Security-Policy: sandbox allow-scripts`. Nothing else: the frame's
   own `<meta>` policy is the one that rules it (H2).
-- **Only `GET`**; any other method is a `405`.
+- **Only `GET` and `HEAD`**; any other method is a `405`.
 - The scheme is not IPC: a page or frame on `compmd:` can't call the app's commands (fact 7). A test in atm checks
   it (§4.5).
 
 In atm, `atm-api`'s `assets.rs` sends the same headers, so the browser and the app agree; each has a test on that
-table (H1, H2).
+table (H1, H2): `tests/scripts/compmd-host-headers.json`, read by `serve.test.mjs` and by the app's
+`compmds_files_come_from_its_own_scheme_with_no_policy_but_their_own`.
 
 ### 4.3 Nothing fails silently
 
@@ -305,6 +311,28 @@ dependency on atm's crates, so it can move as it is (ADR-004, decision 5).
    `compmd:` protocol as an entry point), the Tauri guide.
 3. If WebKit refuses the opaque frame's loads from a custom scheme: no option here fixes that on macOS (the hook's
    files are on a custom scheme too). Back to this document with what WebKit said.
+
+**What the check found (2026-11-09).** Tauri left the scheme's responses alone, and the plugin served every file
+asked for, but **WebKit refused**: in both builds each frame logged `Refused to load
+compmd://localhost/assets/compmd/0.5.0/compmd/runtime.js because it does not appear in the script-src directive`.
+The policy refusing it is the frame's own `<meta>` (§2.1: `script-src 'self' blob: 'sha256-…'`), and the cause is
+how WebKit reads `'self'` there. A sandboxed frame's origin is opaque; CSP's `'self'` for such a document is, in
+WebKit, the response URL's origin **only when that URL is `http:` or `https:`**
+([`ContentSecurityPolicy.cpp`](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/page/csp/ContentSecurityPolicy.cpp),
+`hasOpaqueOriginWithResponseURL`); on any other scheme it is the opaque origin, which no URL matches. So:
+
+- under `atm serve`, and on Windows and Android (`http://compmd.localhost`), `'self'` is the server's origin and the
+  frame loads;
+- on macOS and Linux, a CompMD frame served from **any** custom scheme refuses its own runtime, whoever serves it
+  (Tauri's `tauri:` too), so no host setting fixes it.
+
+It is fixed where the policy is, in CompMD 0.6.0: its frames' policy also allows the `compmd:` scheme (a scheme
+source matches without an origin, and only the app serves that scheme). 0.6.0 also reports a frame that never starts:
+here nothing was shown, not even a note (§4.3), since the view's `error` never came. The rest of this proposal
+stands; T-503 is finished with CompMD 0.6.0, and the window check done again then.
+
+For any host of CompMD on WebKit with a custom scheme, the lesson: a sandboxed document's `'self'` is not its URL's
+origin. Name the scheme (or the origin) in its policy.
 
 ## 5. Discarded alternatives
 

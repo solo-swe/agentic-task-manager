@@ -1210,6 +1210,14 @@ describe('serve', () => {
       assert.equal(frame.headers.get('content-security-policy'), 'sandbox allow-scripts');
       assert.equal(frame.headers.get('access-control-allow-origin'), '*');
       assert.equal(js.headers.get('content-security-policy'), null);
+      // The headers CompMD needs from a host (H1, H2): the table the app's compmd: scheme is checked against too
+      const table = JSON.parse(fs.readFileSync(path.join(REPO, 'tests/scripts/compmd-host-headers.json'), 'utf8'));
+      for (const [file, headers] of Object.entries(table.files)) {
+        const r = await fetch(base + file);
+        assert.equal(r.status, 200, file);
+        for (const [name, value] of Object.entries(headers))
+          assert.equal(r.headers.get(name), value, `${file}: ${name}`);
+      }
       const mermaid = await fetch(base + 'compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js', {
         method: 'HEAD',
       });
