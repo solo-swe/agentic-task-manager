@@ -1,8 +1,9 @@
 #!/bin/sh
 # The Homebrew cask for the atm app (T-460), printed for a release: the universal DMG from the release's assets, with
 # its checksum from the release's SHA256SUMS. The app brings its own atm CLI and puts it on PATH (the same build as the
-# app, so they never drift apart), so it conflicts with the atm formula: one or the other (Hakan, T-460). After
-# installing it only says how to connect agents; it installs nothing into them. The Homebrew workflow
+# app, so they never drift apart), so it and the atm formula are one or the other (Hakan, T-460). A cask can declare
+# a conflict only with another cask (the Cask Cookbook's `conflicts_with`), so its caveats say to uninstall the formula
+# first. It says how to connect agents too; it installs nothing into them. The Homebrew workflow
 # (.github/workflows/homebrew.yml) writes it to Casks/atm-app.rb in solo-swe/homebrew-tap.
 #
 # Usage: packaging/homebrew-cask.sh <version> <SHA256SUMS file>
@@ -32,14 +33,17 @@ cask "atm-app" do
   desc "Agentic Task Manager: file-based tasks for agentic development, and their dashboard"
   homepage "https://github.com/solo-swe/agentic-task-manager"
 
-  depends_on macos: ">= :big_sur"
-  # The app's own atm CLI goes on PATH: the formula's would be a second one
-  conflicts_with formula: "solo-swe/tap/atm"
+  # Big Sur (the app's minimum) is older than any macOS Homebrew runs on
+  depends_on :macos
 
   app "atm.app"
+  # The app's own atm CLI goes on PATH: the formula's would be a second one
   binary "#{appdir}/atm.app/Contents/MacOS/atm"
 
   caveats <<~CAVEATS
+    The app brings its own atm CLI. If the atm formula is installed, uninstall it
+    (\`brew uninstall solo-swe/tap/atm\`) so the atm on your PATH is the app's.
+
     Run \`atm agents install\` to let your AI agents use atm.
   CAVEATS
 end
