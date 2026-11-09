@@ -67,6 +67,10 @@ The design's §5 compares them in full, with who uses each.
   checks that `compmd:` can't call the app's commands.
 - **The plugin and `atm serve` drift apart** on the headers. Mitigation: both are tested against the same table (H1,
   H2).
+- **WebKit caches custom-scheme responses** (macOS, iOS): a CompMD file atm rebuilds at the same path (the same CompMD
+  version, other packs or configuration) could keep running its old version after an upgrade, the page and its frames
+  then on different frame protocol versions. Mitigation: T-508 checks it in the app, and if so makes the plugin's
+  default content-hashed paths (or validators WebKit honours); the result is recorded here.
 - **CompMD changes what it loads** (a new file type, a URL not from `base`). Mitigation: the plugin's tests and the
   by-hand check in both builds, which the Tauri guide makes part of any task that changes the window.
 

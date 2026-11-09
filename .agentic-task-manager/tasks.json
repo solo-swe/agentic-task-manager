@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 508,
+    "next_id": 509,
     "labels": [
       {
         "id": "architecture",
@@ -21045,6 +21045,49 @@
         "dashboard",
         "api",
         "docs"
+      ]
+    },
+    {
+      "id": "T-508",
+      "name": "CompMD's files from compmd:// after an upgrade: WebKit's custom-scheme cache",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "A gap in [ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md): WebKit (WKWebView, on macOS and iOS) caches a custom URI scheme's responses, so a file replaced at the same path can keep running its old version (seen in another Tauri app's custom-scheme frames). ADR-004 keeps the paths CompMD's files have under `atm serve` (`/assets/compmd/<version>/…`). The CompMD version in the path changes with CompMD, but not when atm rebuilds the same CompMD version differently (its packs, `compmd.config.json`, a pack's built module), so after an atm upgrade the app could run the previous files from `compmd://`, and the page and its frames could speak different versions of the frame protocol.\n\n## 1. Check it first\nIn the running app on macOS (`cargo run -p atm-app`, and a bundle): open a task with a diagram; replace a CompMD file the plugin serves (a frame's `runtime.js`, or the Mermaid pack's module) with a changed copy at the same path, one that shows it changed (a console line); rebuild, run again, open the task: does the old file still run? Record what each build showed.\n\n## 2. If it does, fix it in `tauri-plugin-compmd`, as the plugin's default\nThe plugin is meant to move into CompMD for any Tauri host (ADR-004 decision 5), so the fix is its default behaviour, not atm's configuration. One of:\n- **Content-hashed paths:** the plugin serves the build's CompMD folder under a name made from a hash of its files, gives the page that `base` (H4), and answers with `Cache-Control: max-age=31536000, immutable`; a changed file is then a new path;\n- **or, if the paths must stay as under `atm serve`:** `Cache-Control: no-cache` with a validator (an `ETag` and `If-None-Match`, as `atm serve` sends) that WebKit honours for custom schemes; check in the app that it does.\nPrefer the first if WebKit's handling of validators on custom schemes is uncertain.\n\n## 3. Record it\n- ADR-004: the result in its Risks; a decision if the plugin changes (and the design doc's §4.2 if its headers change).\n- The plugin's header tests stay in step with `atm serve`'s (H1, H2: CORS `*`, `nosniff`, `sandbox allow-scripts` on frame documents); if the cache headers differ between the two, say why in both.",
+      "requirements": [
+        "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)",
+        "[CompMD in a Tauri app, §4.2](docs/tauri-compmd-design.md#42-the-plugin)"
+      ],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-503"
+      ],
+      "files": [
+        "crates/tauri-plugin-compmd/",
+        "dashboard/src/lib/compmd.ts",
+        "docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md",
+        "docs/tauri-compmd-design.md"
+      ],
+      "created_at": "2026-11-09T02:26:10Z",
+      "updated_at": "2026-11-09T02:26:10Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:26:10Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-503"
       ]
     }
   ]
