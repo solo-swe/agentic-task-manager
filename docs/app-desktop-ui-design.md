@@ -1,6 +1,6 @@
 # The atm app as a desktop app
 
-Status: **draft** (T-510), for review with Hakan. Once agreed, `/atm-create-tasks` breaks §9 into tasks.
+Status: **accepted** (T-510, reviewed with Hakan 2026-11-09; the decisions in §10). §9's steps are tasks.
 
 The atm app (T-455 onwards, the [Tauri guide](guides/tauri.md)) shows the dashboard's page as a browser shows it: a
 header with the title, the selectors and the ⋯ menu, and a footer of links, in a plain window. This document says what
@@ -320,12 +320,12 @@ ships there.
 7. **Settings as a sheet** (§6).
 8. **Windows come back, and the badge** (§7).
 
-## 10. Questions for Hakan
+## 10. Decisions (Hakan, 2026-11-09)
 
-1. **Tabs as addresses** in one page (§3), loading a project again on a switch (measured), rather than a state per tab?
+1. **Tabs are addresses** in one page (§3), a project loaded again on a switch (measured), not a state per tab.
 2. **The page's own window buttons and menus on Windows and Linux** (§2, §6), with the system's title bar as the
-   fallback if the spike finds a hack is needed?
-3. **The view switcher in the toolbar** (§2), or the views kept as tabs in the page under it?
-4. **Settings as a sheet** first, or a window of its own from the start (§6)?
-5. **Anything to drop or add:** the badge, notifications for what needs you (a plugin, `tauri-plugin-notification`,
-   so a question of its own)?
+   fallback if the spike finds a hack is needed.
+3. **The view switcher in the toolbar** (§2).
+4. **Settings as a sheet** first (§6); a window of its own only if the sheet feels wrong.
+5. **The badge stays** (§7). Notifications for what needs you need a plugin (`tauri-plugin-notification`), so they are
+   a later task of their own, not part of these steps.

@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 511,
+    "next_id": 521,
     "labels": [
       {
         "id": "architecture",
@@ -18502,7 +18502,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-09T21:43:37Z",
+      "updated_at": "2026-11-09T21:50:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18515,7 +18515,7 @@
       "with": "user",
       "started_at": "2026-11-09T21:16:35Z",
       "started_by": "claude:34798264",
-      "commit": "a87f0f5563e678621b90d52771f5e95c091e139d",
+      "commit": "27a5d22525ce26d58e784dbcef0c88be8172f673",
       "review_requested_at": "2026-11-09T21:16:36Z",
       "review_state": "waiting",
       "notes": [
@@ -18525,6 +18525,312 @@
           "text": "The design draft, docs/app-desktop-ui-design.md, for review in Crit: tabs as macOS window tabs, the title bar, sidebar, status bar, menus, window state; the questions in §10. Once agreed, /atm-create-tasks breaks §9 into tasks.",
           "by": "claude:34798264"
         }
+      ]
+    },
+    {
+      "id": "T-511",
+      "name": "Desktop app: windows and the shell (subscriptions by window, shell, open_window, set_title)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Step 1 of [the desktop app design](docs/app-desktop-ui-design.md) (§9, accepted in T-510): the groundwork for several windows and the page's own shell. **No visible change yet.**\n\n## Change\n- **Windows:** `main` and `window-<n>`; `capabilities/main.json` names them (`\"windows\": [\"main\", \"window-*\"]`), and I25's tests check a `window-` window as they check `main` ([§3](docs/app-desktop-ui-design.md#3-tabs)).\n- **Subscriptions belong to a window:** `AppState` keeps them by the webview's label; `unwatch_all` becomes `unwatch_window` (a page loading again ends only its own window's), and a window closing ends its own.\n- **Deep links and the second instance** go to the window in front (the last focused); with no window, a new one. A deep link opens in a new tab once tabs exist (step 4); until then it navigates that window, as now.\n- **New commands**, each in `build.rs`'s manifest with one permission, acting on the calling window only (never a label):\n  - `shell` → `{ system_menu_bar, system_window_buttons }` from `cfg!(target_os)` ([§1a](docs/app-desktop-ui-design.md#1a-platforms));\n  - `set_title` (`Window::set_title`): the page calls it when `document.title` changes;\n  - `open_window(address)`: checks the address with `link_address` (T-459's check) before making the window.\n- The page: a small `lib/app-shell.ts` (or beside `lib/api/`) reading `shell` once, for the later steps.\n\n## Checks\nRust tests for the window registry, `unwatch_window` and `open_window`'s check; the app e2e specs (`dashboard/tests/e2e/app.spec.ts`); by hand in a window (`cargo tauri dev`, `cargo run -p atm-app`). `docs/security-architecture.md` gains the commands and the `window-` windows (I25).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/commands.rs",
+        "app/src-tauri/src/links.rs",
+        "app/src-tauri/build.rs",
+        "app/src-tauri/capabilities/main.json",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:04Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-512",
+      "name": "Desktop app: the menus, defined once in Rust (macOS menu bar, subscribe_menu, menu, menu_state)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Step 2 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)).\n\n## Change\n- **One menu definition** in Rust (`tauri::menu`, no plugin): the table of §6 (atm, File, Edit, View, Go, Window, Help), `CheckMenuItem`s for the toggles, `PredefinedMenuItem`s for the system's items, `AboutMetadata` for About; accelerators written as `CmdOrCtrl+…`, with each platform's own where §1a's table differs.\n- **macOS:** it is the app's menu bar. **Windows and Linux:** attach it and hide it (`hide_menu`); the page draws it in step 3.\n- **Commands:** `subscribe_menu` (a channel of `MenuAction`s, a closed enum, generated into `.generated/app/bindings.ts` by tauri-specta), `menu` (the items, labels, shortcuts and check marks, for the page to draw), `menu_state` (the page tells the app its checked view, sidebar and archived toggles; the app updates the items while that window is in front). The Go menu's projects and workspaces come from `AppState`.\n- **The page** maps each action to what its control does now (`dashboard.selectTab`, `openDialog`, `navigate`); in the app it leaves the menu's keys to the menu, so none fires twice.\n- GitHub, Help, About, Connect your agents, What's new and Check for Updates (T-483's `UpdateNotice`) reachable from the menu. New Tab / Close Tab / New Window items can send their actions already; tabs come in step 4.\n\n## Checks\nRust tests for the definition (every action has an item, no accelerator twice) and `menu`'s output; unit tests for the page's action mapping; the app e2e specs; by hand on macOS. `docs/security-architecture.md` gains the commands.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-511"
+      ],
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/commands.rs",
+        "app/src-tauri/build.rs",
+        "docs/security-architecture.md",
+        "dashboard/src/lib/shell/"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-513",
+      "name": "Desktop app: the title bar (two rows, macOS overlay, the page's window buttons and menus elsewhere)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui",
+        "ux"
+      ],
+      "description": "Step 3 of [the desktop app design](docs/app-desktop-ui-design.md) ([§2](docs/app-desktop-ui-design.md#2-the-title-bar), with its wireframes).\n\n## Change\n- **Two rows, in the app only** (`TitleBar.svelte` gets an app variant; the browser's header is unchanged): the title bar (room for the window buttons, the sidebar button `[=]`, a place for the tabs of step 4 and the `+`; on Windows and Linux the menus of step 2 at its left), and the toolbar (the view switcher as a segmented control, Filters, the needs-you chip). The logo and name are the window's title for now (the active tab's once tabs exist); no reload button (View ▸ Reload stays). The charts, version chip and ⋯ menu leave the app's header (to the status bar and menus).\n- **macOS:** `titleBarStyle: \"Overlay\"`, `hiddenTitle: true`, `trafficLightPosition` centring the lights in the first row (`tauri.conf.json` and `WebviewWindowBuilder` for new windows).\n- **Windows and Linux:** `decorations: false`; the page's minimize, maximize and close call new commands `minimize`, `toggle_maximize` (`is_maximized`, then `maximize` or `unmaximize`) and `close_window` (`Window::close`); `set_shadow(true)` on Windows.\n- **Dragging:** a `start_dragging` command the bars call on a mouse-down outside their controls; a double click calls `toggle_maximize`. No `data-tauri-drag-region` (it needs a core permission, ruled out by I25).\n- The menus drawn by the page on Windows and Linux use `menu` and send the same actions (Bits UI menus).\n\nThe Windows and Linux spike (snap layouts, edge resizing, Alt+Space, accelerators with a hidden menu) is its own task; build those paths here so they compile and are covered by unit tests.\n\n## Checks\nComponent tests for the app title bar in each `shell` mode; the app e2e specs; by hand on macOS (lights placed, drag, double click, full screen). `docs/security-architecture.md` gains the window commands.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-512"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/TitleBar.svelte",
+        "dashboard/src/lib/shell/ViewPanel.svelte",
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/src/commands.rs",
+        "app/src-tauri/build.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:05Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-514",
+      "name": "Desktop app: tabs as addresses (strip, New/Close Tab, switching, ⌘-click, Move Tab to New Window)",
+      "type": "feature",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui",
+        "ux"
+      ],
+      "description": "Step 4 of [the desktop app design](docs/app-desktop-ui-design.md) ([§3](docs/app-desktop-ui-design.md#3-tabs)). Decided: a tab is an **address**, one page and one dashboard state per window, not a state per tab.\n\n## Change\n- **The strip** in the title bar: each tab its project's logo and name (or the page's title), the needs-you count, a close button; drag to reorder; `+`, ⌘T and File ▸ New Tab open the workspace's overview.\n- **Switching** (a click, ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[) navigates to the tab's address through `lib/navigation.ts`; the tab keeps its address, the preferences keep the rest.\n- **Open in a new tab:** ⌘-click (Ctrl-click, middle click) on a project, a task, a document link; deep links open in a new tab of the window in front.\n- **Close Tab** (⌘W); closing the last one closes the window.\n- **Move Tab to New Window** (the tab's context menu, the Window menu): `open_window` on its address, and the tab leaves this window.\n- The window's title and `set_title` follow the active tab.\n\n## Measure\nA switch between two tabs of a large project within the e2e budget (200 ms, `tests/e2e/performance.spec.ts`). If it isn't, keep the last few projects' data in `state.svelte.ts` (a cache), not a state per tab.\n\n## Checks\nUnit tests for the tab list (open, close, reorder, move, the active one); the app e2e specs and the performance spec; by hand on macOS with two windows.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-513"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/",
+        "dashboard/src/lib/navigation.ts",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/tests/e2e/app.spec.ts",
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-515",
+      "name": "Desktop app: the sidebar (search on top, the workspace, Overview, projects with progress and needs-you)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui",
+        "ux"
+      ],
+      "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click in a new one (once step 4 is in); missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-513"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/tests/unit/Sidebar.component.test.ts"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-516",
+      "name": "Desktop app: the status bar in place of the footer",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui",
+        "ux"
+      ],
+      "description": "Step 6 of [the desktop app design](docs/app-desktop-ui-design.md) ([§5](docs/app-desktop-ui-design.md#5-the-status-bar)).\n\n## Change\nIn the app only, the footer becomes a one-line status bar (about 24 px, tokens only):\n- **left:** \"Up to date\" while the app watches the project (T-506), or why not; the agents at work (from `claims`), \"2 agents working\", a click opens the Agents view;\n- **middle:** the active sprint's name and progress (`ProgressWidget`'s numbers, as text);\n- **right:** the archive and problems notices (as now) and the version, which opens What's new.\n\nGitHub, Help, About and Connect your agents are in the menus (step 2), so they leave the app's footer. The browser keeps its footer.\n\n## Checks\nComponent tests for the status bar; the app e2e specs; by hand on macOS.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-512"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/Footer.svelte",
+        "dashboard/src/lib/shell/"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-517",
+      "name": "Desktop app: Settings as a sheet (⌘,)",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui",
+        "ux"
+      ],
+      "description": "Step 7 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)). Decided: a sheet first; a window of its own only if the sheet feels wrong.\n\n## Change\nThe menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux) opens a sheet over the window (a Bits UI dialog): the ⋯ menu's content (mode, theme, document style, reset the view) laid out as a settings pane, plus the badge's on/off switch for step 8. The ⋯ menu stays in the browser; in the app it leaves the header.\n\n## Checks\nComponent tests for the sheet; the app e2e specs; by hand on macOS.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-512"
+      ],
+      "files": [
+        "dashboard/src/lib/shell/SettingsMenu.svelte",
+        "dashboard/src/lib/dialogs/"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:07Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard"
+      ]
+    },
+    {
+      "id": "T-518",
+      "name": "Desktop app: windows come back with their tabs, and the needs-you badge",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Step 8 of [the desktop app design](docs/app-desktop-ui-design.md) ([§7](docs/app-desktop-ui-design.md#7-window-state-and-the-badge)), the same on the three desktops.\n\n## Change\n- **Windows come back as they were:** each window's size and place, its tabs (addresses, order) and the active one. The app writes the windows' list to a file in its own data folder when it changes and opens them again at the start (no `tauri-plugin-window-state`: it keeps frames, not tabs). A deep link the app was started with opens in a new tab of the first window. A saved address is checked with `link_address` before it is opened.\n- **The badge:** the workspace's needs-you count (in review, blocked on the user), off in Settings (step 7). macOS and Linux: `Window::set_badge_count` (`None` removes it); Windows: `Window::set_overlay_icon` with a small icon of the count.\n- No Dock menu or jump list (no Tauri API).\n\n## Checks\nRust tests for the saved list (write, read, a bad file ignored, addresses checked); the app e2e specs; by hand on macOS (quit and start again; the Dock badge).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-514",
+        "T-517"
+      ],
+      "files": [
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/commands.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-519",
+      "name": "Desktop app spike on Windows and Linux: the undecorated window and the hidden menu",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "The spike of [the desktop app design](docs/app-desktop-ui-design.md) [§2](docs/app-desktop-ui-design.md#2-the-title-bar) and §6, on Windows 11 and on Linux (X11 and Wayland, GNOME): with the page's own title bar (`decorations: false`), check\n- Windows 11's snap layouts from the page's maximize button;\n- resizing the window from its edges;\n- the system window menu (Alt+Space on Windows);\n- the menu's accelerators firing while the native menu is hidden (`hide_menu`).\n\nRecord the results in the design doc. Where one can't be had without a hack, switch that platform to the system's title bar with the same two rows under it (the decided fallback); if the accelerators don't fire, the page handles those keys from the menu's definition.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-513",
+        "T-482"
+      ],
+      "files": [
+        "docs/app-desktop-ui-design.md",
+        "app/src-tauri/tauri.conf.json"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:08Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-520",
+      "name": "Desktop app: notifications for what needs you (tauri-plugin-notification)",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Left out of [the desktop app design](docs/app-desktop-ui-design.md)'s steps by decision (§10, item 5): a system notification when a task starts needing the user (in review, blocked on them), off in Settings. It needs a new plugin, `tauri-plugin-notification`, which the [Rust guide](docs/guides/rust.md) asks a yes for: first a short note on the plugin (its permissions, platforms, what I25 says about the page calling it; the app should send notifications from Rust, not the page), then ask Hakan before adding it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-518"
+      ],
+      "files": [
+        "app/src-tauri/Cargo.toml",
+        "app/src-tauri/src/lib.rs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-09T23:14:59Z",
+      "updated_at": "2026-11-09T23:15:09Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "docs"
       ]
     }
   ]
