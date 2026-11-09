@@ -96,6 +96,18 @@ impl AppState {
             .remove(&id)
             .is_some()
     }
+
+    /// End every subscription: the window's page is loading again (a reload, ⌘R), and the page that made them is gone
+    /// without saying so (a channel to it doesn't fail, its messages only find no callback). How many there were.
+    pub fn unwatch_all(&self) -> usize {
+        let mut subscriptions = self
+            .subscriptions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let ended = subscriptions.len();
+        subscriptions.clear();
+        ended
+    }
 }
 
 /// A command's error, as the UI sees it: atm's error kind, with its message.
@@ -592,6 +604,31 @@ mod tests {
             json!({"workspace": "work", "project": "abcd1234"})
         );
         assert!(state.unwatch(id) && !state.unwatch(id));
+        std::fs::remove_dir_all(&dir).expect("clean up");
+    }
+
+    /// T-506: a page that reloads leaves its subscriptions behind; the page load ends them all
+    #[test]
+    fn the_page_loading_again_ends_every_subscription() {
+        let dir = std::env::temp_dir().join(format!("atm-app-unwatch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a folder");
+        let state = AppState::new(Workspaces::at(&dir));
+        let message = Changed {
+            workspace: "default".into(),
+            project: None,
+        };
+        let ids: Vec<u32> = (0..2)
+            .map(|_| {
+                let channel = Channel::new(|_| Ok(()));
+                state
+                    .watch(std::slice::from_ref(&dir), channel, message.clone())
+                    .expect("watching")
+            })
+            .collect();
+        assert_eq!(state.unwatch_all(), 2);
+        assert!(ids.iter().all(|id| !state.unwatch(*id)));
+        assert_eq!(state.unwatch_all(), 0);
         std::fs::remove_dir_all(&dir).expect("clean up");
     }
 }

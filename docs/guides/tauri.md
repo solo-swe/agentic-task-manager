@@ -34,6 +34,9 @@ atm's own rules for the atm app, the desktop distribution proposed in
   subscriptions when it moves to another workspace or project. A change the watcher can't see (a document outside the
   task folder, a missed event) shows when the window regains focus, and on the Reload button. The refresh settings are
   the browser's only (`dashboard.polls`), until `atm serve` pushes changes too (T-507).
+- **A page that goes away doesn't say so:** sending on its channel doesn't fail, the message only finds no callback.
+  So the window's page loading again (`on_page_load`, `PageLoadEvent::Started`: a reload, ⌘R) ends every
+  subscription (`AppState::unwatch_all`); the new page makes its own.
 
 ## The dashboard in the window
 

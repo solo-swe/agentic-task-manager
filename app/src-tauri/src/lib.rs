@@ -66,6 +66,12 @@ pub fn run() {
         .plugin(tauri_plugin_compmd::init(COMPMD_FILES))
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
+        // The window's page loading again (a reload) ends the old page's subscriptions (T-506): it can't say so itself
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                webview.state::<AppState>().unwatch_all();
+            }
+        })
         .setup(move |app| {
             commands.mount_events(app);
             Ok(())

@@ -12,7 +12,9 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   says something in them changed, ending the subscriptions when it moves to another workspace or project. It also
   reloads when the window regains focus, which covers what the watcher doesn't see (an open document, a missed
   event). The refresh interval and the auto-refresh switch are gone in the app (the reload button stays); their stored
-  settings are ignored there, not deleted. The browser keeps polling until T-507.
+  settings are ignored there, not deleted. The browser keeps polling until T-507. When the window's page loads again
+  (a reload), the app ends the old page's subscriptions (`on_page_load`, `AppState::unwatch_all`), which it couldn't
+  end itself.
 
 ### Fixed
 - **The app's Homebrew cask installs** (T-509): 0.34.0's first `Casks/atm-app.rb` had `conflicts_with formula:`,
