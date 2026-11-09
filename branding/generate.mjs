@@ -71,8 +71,9 @@ const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
  */
 export function appIcon(logo) {
   const body = squircle(100, 100, 824);
-  // The logo's own frame nearly fills the body, so little of the face shows around it (Hakan: "too much white")
-  const size = 660;
+  // The logo's own frame fills about 80% of the body, as other apps' marks fill theirs in the Dock (VS Code, Notion);
+  // smaller, the face showed as a wide white border (Hakan)
+  const size = 800;
   const at = (1024 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
@@ -92,7 +93,7 @@ export function appIcon(logo) {
  * logo large enough to read at the small sizes GitHub shows it.
  */
 export function avatar(logo) {
-  const size = 420;
+  const size = 480;
   const at = (512 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>${faceGradient}</defs>

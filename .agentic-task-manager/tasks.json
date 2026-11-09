@@ -20899,7 +20899,7 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T01:14:08Z",
+      "updated_at": "2026-11-09T01:15:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20915,7 +20915,7 @@
       "review": "async",
       "started_at": "2026-11-09T01:11:27Z",
       "started_by": "claude:34798264",
-      "commit": "5a0d30d2a81f37760e8885aa6aacb91635854df6",
+      "commit": "50edd463eddcbb964c1e4a8861433e7a9067d7cd",
       "review_requested_at": "2026-11-09T01:14:08Z",
       "review_state": "waiting",
       "notes": [
