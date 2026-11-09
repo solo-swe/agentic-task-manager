@@ -64,17 +64,62 @@ const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${FACE[0]}" /><stop offset="1" stop-color="${FACE[1]}" />
     </linearGradient>`;
 
+/** The logo's marks, its columns and check, without its frame: where they reach in the logo's 32×32 drawing (their
+ * round 2.5 strokes included) */
+const MARKS = { left: 8.75, top: 8.75, right: 26.75, bottom: 23.75 };
+/** How much of the icon's shape the marks span across: about what VS Code's and Notion's marks span */
+const MARKS_SHARE = 0.62;
+/** The logo's strokes, `M10 10v12M16 10v6M22 10v3` and `M19.5 20.5l2 2 4-4.5` at width 2.5 with round ends, as the
+ * filled shapes they paint, so any renderer draws them the same (Apple's, for Icon Composer, drew the strokes flat and
+ * cut off). Each column a bar with round ends; the check two such bars meeting at its corner. */
+export const MARKS_PATHS = 'M10 10v12M16 10v6M22 10v3';
+export const CHECK_PATH = 'M19.5 20.5l2 2 4-4.5';
+/** A stroke from (x1, y1) to (x2, y2), 2.5 wide with round ends, as the filled path it paints: two sides and two
+ * half-circle ends, in plain coordinates */
+function bar(x1, y1, x2, y2, r = 1.25) {
+  const length = Math.hypot(x2 - x1, y2 - y1);
+  const [nx, ny] = [(-(y2 - y1) / length) * r, ((x2 - x1) / length) * r];
+  const p = (x, y) => `${x.toFixed(3)} ${y.toFixed(3)}`;
+  return (
+    `<path d="M${p(x1 + nx, y1 + ny)}L${p(x2 + nx, y2 + ny)}A${r} ${r} 0 0 0 ${p(x2 - nx, y2 - ny)}` +
+    `L${p(x1 - nx, y1 - ny)}A${r} ${r} 0 0 0 ${p(x1 + nx, y1 + ny)}Z" />`
+  );
+}
+const MARK_SHAPES = [
+  bar(10, 10, 10, 22),
+  bar(16, 10, 16, 16),
+  bar(22, 10, 22, 13),
+  bar(19.5, 20.5, 21.5, 22.5),
+  bar(21.5, 22.5, 25.5, 18),
+];
+
 /**
- * The app icon (T-504), on Apple's icon grid: a 1024×1024 canvas, the body 824×824 in its middle with a transparent
- * margin, a soft shadow under it and a hairline edge (so the light face shows on a light Dock), the logo in the
- * accent blue. `pnpm tauri icon` makes the app's icon set from it (README.md).
+ * The app icon's one layer (T-504): the logo's marks in the accent blue, without its frame, centred on a 1024×1024
+ * canvas that stands for the icon's whole shape. On the app icon the shape itself is the board: the logo's own frame
+ * inside it made a frame within a frame, its white ring a wide border next to other apps' icons (Hakan).
+ */
+export function marksLayer(logo) {
+  const box = (MARKS.right - MARKS.left) / MARKS_SHARE;
+  const [cx, cy] = [(MARKS.left + MARKS.right) / 2, (MARKS.top + MARKS.bottom) / 2];
+  const [x, y] = [(cx - box / 2).toFixed(3), (cy - box / 2).toFixed(3)];
+  const side = box.toFixed(3);
+  const color = /stroke="(#[0-9a-f]{6})"/i.exec(logo)?.[1] ?? ACCENT;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${x} ${y} ${side} ${side}">
+  <!-- The ATM logo's marks, the app icon's layer. Made by branding/generate.mjs -->
+  <g fill="${color}">
+    ${MARK_SHAPES.join('\n    ')}
+  </g>
+</svg>
+`;
+}
+
+/**
+ * The app icon (T-504), on Apple's icon grid: a 1024×1024 canvas, the body an
+ * 824×824 squircle in its middle with a transparent margin, a soft shadow under it and a hairline edge (so the white
+ * face shows on a light Dock), the marks layer on it. `pnpm tauri icon` makes the app's icon set from it (README.md).
  */
 export function appIcon(logo) {
   const body = squircle(100, 100, 824);
-  // The logo's own frame fills about 80% of the body, as other apps' marks fill theirs in the Dock (VS Code, Notion);
-  // smaller, the face showed as a wide white border (Hakan)
-  const size = 800;
-  const at = (1024 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     ${faceGradient}
@@ -84,21 +129,19 @@ export function appIcon(logo) {
   </defs>
   <path d="${body}" fill="url(#face)" filter="url(#shadow)" />
   <path d="${body}" fill="none" stroke="#000" stroke-opacity="0.08" stroke-width="2" />
-  <image href="${dataUrl(logo)}" x="${at}" y="${at}" width="${size}" height="${size}" />
+  <image href="${dataUrl(marksLayer(logo))}" x="100" y="100" width="824" height="824" />
 </svg>`;
 }
 
 /**
- * The org's avatar on GitHub (T-504), 512×512: the light face edge to edge (GitHub rounds the corners itself), the
- * logo large enough to read at the small sizes GitHub shows it.
+ * The org's avatar on GitHub (T-504), 512×512: the face edge to edge (GitHub rounds the corners itself), the marks
+ * layer on it, as on the app icon.
  */
 export function avatar(logo) {
-  const size = 480;
-  const at = (512 - size) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <defs>${faceGradient}</defs>
   <rect width="512" height="512" fill="url(#face)" />
-  <image href="${dataUrl(logo)}" x="${at}" y="${at}" width="${size}" height="${size}" />
+  <image href="${dataUrl(marksLayer(logo))}" x="0" y="0" width="512" height="512" />
 </svg>`;
 }
 

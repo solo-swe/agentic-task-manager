@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 505,
+    "next_id": 508,
     "labels": [
       {
         "id": "architecture",
@@ -20899,7 +20899,7 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T01:15:52Z",
+      "updated_at": "2026-11-09T01:18:18Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20915,7 +20915,7 @@
       "review": "async",
       "started_at": "2026-11-09T01:11:27Z",
       "started_by": "claude:34798264",
-      "commit": "50edd463eddcbb964c1e4a8861433e7a9067d7cd",
+      "commit": "4f1f1fca2aa20068ffadf2d00d732911b4c8f6f3",
       "review_requested_at": "2026-11-09T01:14:08Z",
       "review_state": "waiting",
       "notes": [
@@ -20925,6 +20925,120 @@
           "text": "Look at the icon in the Dock next to other apps (`cargo run -p atm-app` sets it in the Dock; macOS may cache the old one until the Dock restarts), and at branding/atm-logo.png as the avatar. Approve, or say what to change (logo size, face colour, shadow). Then upload atm-logo.png to the org’s profile by hand.",
           "by": "claude:34798264"
         }
+      ]
+    },
+    {
+      "id": "T-505",
+      "name": "The app icon on macOS 26: an Icon Composer icon, made the sanctioned way",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "macOS 26 shows an app icon that isn't an Icon Composer icon (`Assets.car`, `CFBundleIconName`) shrunk on a tile of its own: atm's icon looks smaller, with a wide border, beside apps that have one (VS Code, Notion). T-504 made the portable icons (PNG, ICO, ICNS); this is the macOS 26 one.\n\n## Decided (T-504)\n- **Made in Apple's Icon Composer, by hand, and committed as a source file** (`app/src-tauri/icons/AppIcon.icon`), as a design file is: not generated. T-504 tried writing the `.icon` from a script; Apple's renderer drew its strokes flat and cut off, and Tauri's `actool` step failed in ways it didn't report. Hakan makes it from the marks layer (`marksLayer` in `branding/generate.mjs`: the logo's columns and check as filled shapes), white fill.\n- The `.icns` stays the icon of older macOS, so a missing or failed `Assets.car` never breaks a release.\n\n## Change\n- `bundle.icon` in `tauri.release.conf.json` lists the `.icon` (Tauri 2.11+ compiles it with Xcode 26's `actool`).\n- **The release runner:** check `app-macos` (`.github/workflows/release.yml`, `macos-latest`) has Xcode 26 selected (`xcodebuild -version`); if not, select it in the job. Without it the bundle has no `Assets.car`.\n- **Docs:** an \"App icons\" section in `docs/guides/tauri.md`: Apple's grid (1024 canvas, 824 body), macOS 26 and Icon Composer, the build's Xcode 26 requirement, and what T-504 learned about `actool` (Tauri doesn't print its error: run it by hand with Tauri's options to see it; a stuck `ibtoold` daemon fails every run with \"Bad file descriptor\" until it is stopped). `branding/README.md`, `packaging/README.md`.\n\n## Check\nA bundle (`pnpm run app:bundle --bundles app`) has `Assets.car` and `CFBundleIconName`; in the Dock beside VS Code and Notion it is their size (Hakan).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-504"
+      ],
+      "files": [
+        "app/src-tauri/icons/AppIcon.icon",
+        "app/src-tauri/tauri.release.conf.json",
+        ".github/workflows/release.yml",
+        "docs/guides/tauri.md",
+        "branding/README.md",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T02:17:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:17:51Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "ci",
+        "branding",
+        "docs"
+      ],
+      "with": "user"
+    },
+    {
+      "id": "T-506",
+      "name": "The app reacts to changes: its subscriptions instead of polling, and no refresh settings",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "In the app the dashboard still polls: the Refresh menu (`lib/shell/RefreshMenu.svelte`) reloads every few seconds (`autoRefresh`, `autoRefreshSeconds` in `lib/state.svelte.ts` and `lib/prefs.ts`, set in the Settings menu). The app already watches the task files and says what changed (T-456: `subscribe_workspace`, `subscribe_project`, `unsubscribe` over a `Channel`, with the store's `watch_folders`), but nothing in the page subscribes. In the app the page should only react to changes (Hakan).\n\n## Change\n- **In the app** (`inApp`), the page subscribes to its workspace and to each open project (`lib/api/`, beside `links.ts`), reloads what a change names, and unsubscribes when it leaves them (a workspace switch, a closed project).\n- **No refresh settings in the app:** the Refresh menu's interval and the auto-refresh switch are gone there; a manual reload (the menu's Reload, or ⌘R) may stay. Their stored prefs are ignored in the app, not deleted.\n- **A change the watcher misses never goes unseen for long:** say what covers it (a reload when the window regains focus), and test it.\n- The browser keeps its refresh settings until `atm serve` pushes changes too (the follow-up task).\n- `docs/guides/tauri.md` (Streams), the What's new and changelog entries.\n\n## Tests\nUnit: the page subscribes in the app and not in the browser; a change message reloads that project; switching workspace unsubscribes. e2e (`app.spec.ts`, `asApp()`): no Refresh interval in the app; a channel message (the mock's stored callback) reloads the board.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/state.svelte.ts",
+        "dashboard/src/lib/shell/RefreshMenu.svelte",
+        "dashboard/src/lib/shell/SettingsMenu.svelte",
+        "dashboard/src/lib/prefs.ts",
+        "dashboard/tests/e2e/app.spec.ts",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T02:17:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The atm app",
+          "from": "2026-11-09T02:17:51Z"
+        }
+      ],
+      "sprint": "The atm app",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-507",
+      "name": "The browser reacts to changes too: atm serve pushes them, and the refresh settings go",
+      "type": "feature",
+      "priority": "P3",
+      "labels": [
+        "dashboard",
+        "api"
+      ],
+      "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-506"
+      ],
+      "files": [
+        "crates/atm-api/src/",
+        "dashboard/src/lib/api/",
+        "dashboard/src/lib/shell/RefreshMenu.svelte",
+        "docs/multi-project-api.md",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-09T02:17:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard",
+        "api",
+        "docs"
       ]
     }
   ]

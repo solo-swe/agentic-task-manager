@@ -31,7 +31,7 @@ In `dashboard/` (where Playwright is installed), after `pnpm run build`:
 ```bash
 pnpm run branding
 pnpm run branding --variants /tmp/previews   # every layout, to choose from
-pnpm run branding --icons                    # only app-icon.png and atm-logo.png (no dashboard needed)
+pnpm run branding --icons                    # only the icons: app-icon.png and atm-logo.png (no dashboard needed)
 ```
 
 **The app's icons** come from `app-icon.png` with Tauri's CLI, in `dashboard/`:

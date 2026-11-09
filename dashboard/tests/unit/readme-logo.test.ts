@@ -1,7 +1,17 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { FAVICON_COLOR } from '../../build/favicon';
-import { ACCENT, appIcon, avatar, brandLogo, iconPages, squircle } from '../../../branding/generate.mjs';
+import {
+  ACCENT,
+  appIcon,
+  avatar,
+  brandLogo,
+  CHECK_PATH,
+  MARKS_PATHS,
+  iconPages,
+  marksLayer,
+  squircle,
+} from '../../../branding/generate.mjs';
 
 // The logo outside the dashboard (README, GitHub's social preview, the org's avatar) is made by branding/generate.mjs
 // from the dashboard's logo, in the accent blue.
@@ -54,16 +64,34 @@ describe('the app icon and the avatar (T-504)', () => {
     expect(reach).toBeLessThan(0.95);
   });
 
-  it('the icon keeps Apple’s grid: a 1024 canvas, the body 824 in its middle, the logo in the accent blue', () => {
+  it('the marks: the logo’s columns and check in the accent blue, without its frame (the icon’s shape is the board)', () => {
+    const logo = brandLogo(read('dashboard/src/assets/atm-logo.svg'));
+    const layer = marksLayer(logo);
+    // Drawn as filled shapes (Apple's renderer mangles strokes): they must stay the logo's columns and check
+    expect(logo).toContain(`d="${MARKS_PATHS}"`);
+    expect(logo).toContain(`d="${CHECK_PATH}"`);
+    expect(layer).not.toContain('stroke');
+    expect(layer).not.toContain('<rect');
+    expect(layer).toContain(`<g fill="${ACCENT}">`);
+    // Five filled bars: three columns, the check's two strokes
+    expect(layer.match(/<path /g)).toHaveLength(5);
+    // The first column, from (10, 10) to (10, 22), 2.5 wide with round ends
+    expect(layer).toContain(
+      '<path d="M8.750 10.000L8.750 22.000A1.25 1.25 0 0 0 11.250 22.000L11.250 10.000A1.25 1.25 0 0 0 8.750 10.000Z" />',
+    );
+    // They span 62% of the shape across (18 of the logo's units in a 29.032-unit box), centred
+    expect(layer).toContain('width="1024" height="1024" viewBox="3.234 1.734 29.032 29.032"');
+  });
+
+  it('the icon keeps Apple’s grid: a 1024 canvas, the body 824 in its middle, the marks on it', () => {
     const logo = brandLogo(read('dashboard/src/assets/atm-logo.svg'));
     const icon = appIcon(logo);
     expect(icon).toContain('viewBox="0 0 1024 1024"');
     expect(icon).toContain(`d="${squircle(100, 100, 824)}"`);
-    // The logo is the README's (in the accent blue), embedded as a data: URL
-    expect(icon).toContain(encodeURIComponent(logo));
-    expect(logo).toContain(`stroke="${ACCENT}"`);
-    // The avatar: the face edge to edge (GitHub rounds it), the same logo
+    expect(icon).toContain(`href="data:image/svg+xml,${encodeURIComponent(marksLayer(logo))}" x="100" y="100"`);
+    // The avatar: the face edge to edge (GitHub rounds it), the same marks
     expect(avatar(logo)).toContain('<rect width="512" height="512" fill="url(#face)" />');
+    expect(avatar(logo)).toContain(encodeURIComponent(marksLayer(logo)));
     expect(iconPages(logo).map((p) => [p.file, p.width, p.transparent])).toEqual([
       ['app-icon.png', 1024, true],
       ['atm-logo.png', 512, true],

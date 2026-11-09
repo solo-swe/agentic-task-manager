@@ -108,6 +108,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 - **No more 404 for `/_app/version.json` in the browser's console** (T-495): SvelteKit checks it for a new deployment
   when the tab regains focus; atm serve now answers it with the page's own version (`{"version": …}`), so it never
   sees one (atm's reload offer stays whoami's).
+- **The app's icon looks like a desktop app's** (T-504): the logo's columns and check in blue on a light face, in
+  Apple's rounded shape with its margin and shadow, instead of the framed logo edge to edge on dark (on the app icon
+  the shape is the board). The `.icns`, `.ico` and PNGs and the GitHub avatar (`branding/atm-logo.png`) come from one
+  source, `pnpm run branding --icons`. macOS 26 still shows it on a tile of its own until the app has an Icon Composer
+  icon (T-505).
 - **An older atm on the same machine no longer hides projects** (T-501): 0.34.0 moves `~/.agentic-task-manager/` to
   the state folder, and an atm from before keeps using the old folder, so its dashboard showed only the projects it
   listed since, and the moved `server.json` made `atm service status` call that atm's server its own. Now:
