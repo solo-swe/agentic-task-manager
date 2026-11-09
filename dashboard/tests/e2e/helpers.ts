@@ -183,6 +183,12 @@ export function board(
   );
 }
 
+/** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
+ * `id`) as Playwright passes it */
+function channelId(channel: unknown): number {
+  return Number(typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id);
+}
+
 export function loadFixture(name: string): TasksData {
   return JSON.parse(readFileSync(new URL(`../fixtures/${name}.json`, import.meta.url), 'utf8'));
 }
@@ -476,6 +482,30 @@ export class TasksServer {
     );
   }
 
+  /** The page's live change subscriptions (T-506), by ID: what each watches and its channel */
+  subscriptions = new Map<number, { workspace: string; project: string | null; channel: number }>();
+  private nextSubscription = 0;
+  private changeMessages = new Map<number, number>();
+
+  /** Something changed in what the page watches: a message on each subscription's channel that matches (the
+   * workspace's, or `project`'s), as the app's watcher sends it */
+  async pushChange(project: string | null = null) {
+    const targets = [...this.subscriptions.values()].filter((s) => s.project === project);
+    if (targets.length === 0) throw new Error(`the page has not subscribed to ${project ?? 'its workspace'}`);
+    for (const s of targets) {
+      const index = this.changeMessages.get(s.channel) ?? 0;
+      this.changeMessages.set(s.channel, index + 1);
+      await this.page.evaluate(
+        ([id, message, at]) => {
+          const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+            .__atmCallbacks;
+          callbacks[id as number]({ index: at, message });
+        },
+        [s.channel, { workspace: s.workspace, project: s.project }, index] as const,
+      );
+    }
+  }
+
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
@@ -576,15 +606,23 @@ export class TasksServer {
           ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
           : unknown;
       case 'subscribe_links': {
-        // The channel: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its `id`) as Playwright passes it
-        const channel = args.channel;
-        this.linkChannel = Number(
-          typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id,
-        );
+        this.linkChannel = channelId(args.channel);
         const first = this.startLink;
         this.startLink = null;
         return { ok: first };
       }
+      case 'subscribe_workspace':
+      case 'subscribe_project': {
+        const id = ++this.nextSubscription;
+        this.subscriptions.set(id, {
+          workspace: String(args.workspace),
+          project: command === 'subscribe_project' ? project : null,
+          channel: channelId(args.channel),
+        });
+        return { ok: id };
+      }
+      case 'unsubscribe':
+        return { ok: this.subscriptions.delete(Number(args.id)) };
       case 'agents_status':
         this.agentCalls.push(command);
         return { ok: [this.harnessStatus()] };

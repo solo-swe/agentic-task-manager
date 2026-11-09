@@ -1,4 +1,4 @@
-import { browserFetch } from './api/http';
+import { browserFetch, inApp } from './api/http';
 import { apiWorkspace, DEFAULT_WORKSPACE, setApiWorkspace } from './api/workspace';
 import { loadClaims, type ClaimMap } from './claims';
 import {
@@ -292,6 +292,11 @@ export class DashboardState {
   // On by default (FR-6.1); the user's choice is remembered per browser (FR-6.2)
   autoRefresh = $state(getPref('autoRefresh', true));
   autoRefreshSeconds = $state(getPref('autoRefreshSeconds', 5));
+  /** In the atm app the page reacts to the app's changes instead of polling (T-506): no refresh settings there, and
+   * the stored ones are ignored, not deleted */
+  live = $state(inApp);
+  /** Whether the page polls: in the browser, with auto-refresh on */
+  polls = $derived(!this.live && this.autoRefresh);
 
   // The last tasks.json's ETag / Last-Modified: polls ask whether it changed, and skip the work when it hasn't
   #validators: Validators | undefined;

@@ -24,6 +24,7 @@
   import { page } from '$app/state';
   import App from '../App.svelte';
   import { addressOf, legacyParams } from '../lib/address';
+  import { watchChanges } from '../lib/api/changes';
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
   import { arrived, navigate, useRouter, type EntryState } from '../lib/navigation';
@@ -51,6 +52,14 @@
     if (inApp) void listenForLinks((address) => navigate(address)).catch((e) => console.error('Deep links:', e));
   });
 
+  // In the atm app the page reacts to changes (T-506): the app says when the workspace's list or the open project's
+  // data changed, and the page reloads them (a workspace switch or another project ends these subscriptions and makes
+  // new ones). A change its watcher missed shows when the window regains focus.
+  $effect(() => {
+    if (!dashboard.live) return;
+    return watchChanges(dashboard.workspace, dashboard.projectId, () => void dashboard.reload());
+  });
+
   afterNavigate(({ type }) => {
     arrived();
     // The first page is the app's start, which loads it
@@ -59,7 +68,10 @@
 </script>
 
 <!-- An old link typed over the page's address: its page, in place -->
-<svelte:window onhashchange={() => legacyParams(location.hash) && settle()} />
+<svelte:window
+  onhashchange={() => legacyParams(location.hash) && settle()}
+  onfocus={() => dashboard.live && void dashboard.reload()}
+/>
 
 <App />
 {@render children()}

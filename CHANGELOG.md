@@ -6,6 +6,14 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Changed
+- **The app reacts to changes instead of polling** (T-506): in the atm app the page subscribes to its workspace and
+  the open project (`subscribe_workspace`, `subscribe_project`, T-456; `lib/api/changes.ts`) and reloads when the app
+  says something in them changed, ending the subscriptions when it moves to another workspace or project. It also
+  reloads when the window regains focus, which covers what the watcher doesn't see (an open document, a missed
+  event). The refresh interval and the auto-refresh switch are gone in the app (the reload button stays); their stored
+  settings are ignored there, not deleted. The browser keeps polling until T-507.
+
 ### Fixed
 - **The app's Homebrew cask installs** (T-509): 0.34.0's first `Casks/atm-app.rb` had `conflicts_with formula:`,
   which Homebrew refuses (a cask declares conflicts only with casks, the Cask Cookbook), so `brew install --cask

@@ -18196,7 +18196,7 @@
       "description": "In the app the dashboard still polls: the Refresh menu (`lib/shell/RefreshMenu.svelte`) reloads every few seconds (`autoRefresh`, `autoRefreshSeconds` in `lib/state.svelte.ts` and `lib/prefs.ts`, set in the Settings menu). The app already watches the task files and says what changed (T-456: `subscribe_workspace`, `subscribe_project`, `unsubscribe` over a `Channel`, with the store's `watch_folders`), but nothing in the page subscribes. In the app the page should only react to changes (Hakan).\n\n## Change\n- **In the app** (`inApp`), the page subscribes to its workspace and to each open project (`lib/api/`, beside `links.ts`), reloads what a change names, and unsubscribes when it leaves them (a workspace switch, a closed project).\n- **No refresh settings in the app:** the Refresh menu's interval and the auto-refresh switch are gone there; a manual reload (the menu's Reload, or ⌘R) may stay. Their stored prefs are ignored in the app, not deleted.\n- **A change the watcher misses never goes unseen for long:** say what covers it (a reload when the window regains focus), and test it.\n- The browser keeps its refresh settings until `atm serve` pushes changes too (the follow-up task).\n- `docs/guides/tauri.md` (Streams), the What's new and changelog entries.\n\n## Tests\nUnit: the page subscribes in the app and not in the browser; a change message reloads that project; switching workspace unsubscribes. e2e (`app.spec.ts`, `asApp()`): no Refresh interval in the app; a channel message (the mock's stored callback) reloads the board.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/",
@@ -18208,7 +18208,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-09T09:40:00Z",
+      "updated_at": "2026-11-09T11:07:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18226,7 +18226,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-09T11:07:08Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-507",

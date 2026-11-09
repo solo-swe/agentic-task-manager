@@ -29,6 +29,11 @@ atm's own rules for the atm app, the desktop distribution proposed in
   command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
   subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
+- **The page reacts, it doesn't poll** (T-506): in the app (`dashboard.live`) the root layout subscribes to the
+  workspace and the open project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the
+  subscriptions when it moves to another workspace or project. A change the watcher can't see (a document outside the
+  task folder, a missed event) shows when the window regains focus, and on the Reload button. The refresh settings are
+  the browser's only (`dashboard.polls`), until `atm serve` pushes changes too (T-507).
 
 ## The dashboard in the window
 
