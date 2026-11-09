@@ -9,8 +9,10 @@ agentic-status-bar, not a Tauri app, uses Sparkle).
 
 **The app and the formula are one or the other** (T-460): the app's DMG bundles the `atm` CLI built with it
 (`atm.app/Contents/MacOS/atm`), and its cask links that onto PATH, so the CLI agents run and the atm inside the app are
-always the same build. The cask `conflicts_with` the formula: someone with the formula uninstalls it before installing
-the app. Without Homebrew, the DMG alone gives the app; its CLI is inside it.
+always the same build. Someone with the formula uninstalls it before installing the app (`brew uninstall
+solo-swe/tap/atm`), as the cask's caveats say: a cask can declare a conflict only with another cask (the
+[Cask Cookbook](https://docs.brew.sh/Cask-Cookbook#stanza-conflicts_with); Homebrew refuses `conflicts_with formula:`,
+which 0.34.0's first cask had). Without Homebrew, the DMG alone gives the app; its CLI is inside it.
 
 **An atm from before 0.34.0 on the same machine** (another install, a server still running from it) keeps using
 `~/.agentic-task-manager/`, which 0.34.0 moved to the state folder (T-490): its dashboard shows only the projects it
@@ -27,7 +29,7 @@ server with its own `atm service stop`.
 | `sign-macos.sh <binary>` | Signs a macOS build with the Developer ID (hardened runtime) and notarizes it; the release workflow runs it |
 | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
 | `homebrew-formula.sh <version> <SHA256SUMS>` | Prints `Formula/atm.rb` for a release, from its checksums; the Homebrew workflow writes it to the tap |
-| `homebrew-cask.sh <version> <SHA256SUMS>` | Prints `Casks/atm-app.rb` for a release: the universal DMG, the app's `atm` on PATH, `conflicts_with` the formula, and a note on connecting agents (nothing is installed into them) |
+| `homebrew-cask.sh <version> <SHA256SUMS>` | Prints `Casks/atm-app.rb` for a release: the universal DMG, the app's `atm` on PATH, caveats saying to remove the formula first and how to connect agents (nothing is installed into them) |
 | `skills-export.sh <version> <checkout>` | Puts this version's `skills/atm-*` and the README's atm section into a checkout of `solo-swe/skills`, leaving other apps' parts alone ([ADR-002](../docs/adr/ADR-002-atm-public-skills-repo.md)); the Skills workflow commits, tags `atm-v<version>` and pushes |
 
 The app's release build is `pnpm run app:bundle` in `dashboard/` (Tauri's CLI on `app/src-tauri/`, with

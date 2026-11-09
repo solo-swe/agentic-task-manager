@@ -4,6 +4,15 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [Unreleased]
+
+### Fixed
+- **The app's Homebrew cask installs** (T-509): 0.34.0's first `Casks/atm-app.rb` had `conflicts_with formula:`,
+  which Homebrew refuses (a cask declares conflicts only with casks, the Cask Cookbook), so `brew install --cask
+  atm-app` failed. Its caveats now say to uninstall the `atm` formula first, and `depends_on :macos` replaces the
+  deprecated `depends_on macos: ">= :big_sur"` (Big Sur is older than any macOS Homebrew runs on). The tap's cask is
+  written again for 0.34.0 by running the Homebrew workflow by hand.
+
 ## [0.34.0] - 2026-11-09
 
 The first atm app (macOS, a notarized DMG and a Homebrew cask), workspaces, and atm's state in the platform's app

@@ -52,7 +52,7 @@ describe('packaging', () => {
   });
 
   // T-460: the app's universal DMG, its own atm on PATH, one or the other with the formula
-  test('the Homebrew cask has the universal DMG with its checksum, puts the app’s atm on PATH and conflicts with the formula', () => {
+  test('the Homebrew cask has the universal DMG with its checksum, puts the app’s atm on PATH and says to remove the formula', () => {
     const dir = tempDir('atm-cask-');
     try {
       const sums = path.join(dir, 'SHA256SUMS');
@@ -72,7 +72,11 @@ describe('packaging', () => {
       );
       assert.match(r.stdout, /^ {2}app "atm\.app"$/m);
       assert.ok(r.stdout.includes('binary "#{appdir}/atm.app/Contents/MacOS/atm"'));
-      assert.match(r.stdout, /^ {2}conflicts_with formula: "solo-swe\/tap\/atm"$/m);
+      // A cask declares conflicts only with casks (Homebrew refuses `conflicts_with formula:`), and `depends_on macos:`
+      // only for a minimum newer than Homebrew's own: the caveats say to remove the formula
+      assert.doesNotMatch(r.stdout, /conflicts_with/);
+      assert.match(r.stdout, /^ {2}depends_on :macos$/m);
+      assert.ok(r.stdout.includes('`brew uninstall solo-swe/tap/atm`'));
       // It says how to connect agents, and does nothing to them
       assert.ok(r.stdout.includes('Run `atm agents install` to let your AI agents use atm.'));
       assert.doesNotMatch(r.stdout, /postflight|system_command/);
