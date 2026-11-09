@@ -108,13 +108,16 @@ jobs:
         working-directory: dashboard
       - run: pnpm run build
         working-directory: dashboard
-      # The CLI the app bundles: both architectures in one binary, where tauri.release.conf.json's externalBin wants it
+      # The CLI the app bundles: both architectures in one binary, where tauri.release.conf.json's externalBin wants it.
+      # A universal build compiles the app once per architecture, and each compile checks its own architecture's CLI is
+      # there (binaries/atm-<target>); the bundle then takes the universal one
       - name: The universal atm CLI
         run: |
+          mkdir -p app/src-tauri/binaries
           for target in aarch64-apple-darwin x86_64-apple-darwin; do
             cargo build --release --locked --target "$target" -p atm-cli
+            cp "target/$target/release/atm" "app/src-tauri/binaries/atm-$target"
           done
-          mkdir -p app/src-tauri/binaries
           lipo -create -output app/src-tauri/binaries/atm-universal-apple-darwin \
             target/aarch64-apple-darwin/release/atm target/x86_64-apple-darwin/release/atm
       - name: Import the Developer ID certificate
