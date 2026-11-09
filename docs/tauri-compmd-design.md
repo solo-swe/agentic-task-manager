@@ -1,6 +1,6 @@
 # CompMD in a Tauri app
 
-Status: **proposal** (T-502, T-503), 2026-11-08; the decision is
+Status: **accepted** (T-502, T-503), 2026-11-08, reviewed by Hakan; the decision is
 [ADR-004](adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md). How to show CompMD's output in a Tauri app, worked out for the atm
 app, and written as the way to do it for any Tauri app that uses CompMD. Builds on
 [compmd-rendering-design.md](compmd-rendering-design.md) (how the dashboard renders with CompMD, §2 and §3c), the
@@ -291,7 +291,7 @@ origin. `devCsp` adds only what the CLI itself needs: its live-reload socket.
 The plugin is CompMD's integration with a Tauri host, not atm's logic: any Tauri app that uses CompMD needs the same
 one. CompMD is the natural home (a `tauri-plugin-compmd` crate, and this document's §3 and §4.1 as its guide). Until
 CompMD has it, atm builds it as a crate of its own in atm's workspace (`crates/tauri-plugin-compmd/`), with no
-dependency on atm's crates, so it can move as it is. **To decide with Hakan.**
+dependency on atm's crates, so it can move as it is (ADR-004, decision 5).
 
 ### 4.7 Order
 

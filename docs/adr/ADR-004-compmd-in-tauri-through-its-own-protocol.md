@@ -1,7 +1,7 @@
 # ADR-004: CompMD in a Tauri app, through a protocol of its own
 
-- **Status:** proposed, 2026-11-08
-- **Decided by:** Hakan Serce (pending)
+- **Status:** accepted, 2026-11-08
+- **Decided by:** Hakan Serce
 - **Context:** T-502, T-503, [tauri-compmd-design.md](../tauri-compmd-design.md) (the design this records; its §2
   has the facts, with their sources), [compmd-rendering-design.md](../compmd-rendering-design.md) §2 and §3c,
   [security-architecture.md](../security-architecture.md) I13 and I26
@@ -36,7 +36,7 @@ it: straightforward for its developer, with Tauri's documented APIs only, and no
 4. **Nothing fails silently:** the page listens for CompMD's `error` event and for `compmd.js` failing to load, and
    shows both at the text, with the cause in the console.
 5. **The plugin belongs with CompMD.** atm builds it first as a crate of its own in atm's workspace, with no
-   dependency on atm's crates, so it can move to CompMD as it is. (Part of this decision for Hakan to confirm.)
+   dependency on atm's crates, so it can move to CompMD as it is.
 6. **Before the change, a check by hand** (the design's §4.7): WebKit lets the opaque frame load modules from
    `compmd://`, Tauri leaves the scheme's responses alone, and every URL CompMD makes comes from `base`. If WebKit
    refuses, this ADR is reopened.
