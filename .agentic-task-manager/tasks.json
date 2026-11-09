@@ -20830,7 +20830,8 @@
       ],
       "description": "Build the proposal of [CompMD in a Tauri app](docs/tauri-compmd-design.md#4-proposal-compmds-own-protocol-from-a-tauri-plugin), once Hakan has reviewed the document: a Tauri plugin serves CompMD's built folder on a `compmd:` scheme with the headers CompMD needs from a host (§3, H1–H5). Mermaid diagrams in the app need it (T-502).\n\n## Steps (§4.7)\n1. **A check first, in a branch:** the plugin's smallest form, in `cargo run -p atm-app` and `cargo tauri dev`. Does WebKit let the opaque-origin frame load modules from `compmd://localhost` with `Access-Control-Allow-Origin: *`? Does Tauri leave the scheme's responses alone? Does every URL the sandbox makes come from `base`? Checked by hand with Hakan. If WebKit refuses, stop and go back to the document.\n2. **Decide with Hakan (§4.6):** the plugin as a crate of its own in atm's workspace (`crates/tauri-plugin-compmd/`, no atm dependencies) until CompMD ships one.\n3. **The change (§4.1, §4.2):** the plugin (embedded folder, path checks, H1/H2 headers, 404/405 with reasons); the app's CSP names `compmd://localhost` and `http://compmd.localhost`, `frame-ancestors 'none'` back, `devCsp` only adds the CLI's socket; the dashboard gives CompMD a full `base` in the app (`convertFileSrc('', 'compmd')`).\n4. **Nothing fails silently (§4.3):** `CompMd.svelte` listens for the view's `error` event and shows a note at the block; a failed `compmd.js` load shows a note on the text; both log the cause.\n\n## Tests (§4.5)\nThe plugin's handler; the app's policy; no IPC from `compmd:`; atm serve and the plugin on the same header table; the page's error notes; by hand in a window, both `cargo tauri dev` and `cargo run -p atm-app`, with T-502's test diagrams and Help.\n\n## Docs\n`docs/security-architecture.md` I26 (the `compmd:` protocol as an entry point), `docs/guides/tauri.md`, the design document's status.\n",
       "requirements": [
-        "[CompMD in a Tauri app, §3–§4](docs/tauri-compmd-design.md#4-proposal-compmds-own-protocol-from-a-tauri-plugin)"
+        "[CompMD in a Tauri app, §3–§4](docs/tauri-compmd-design.md#4-proposal-compmds-own-protocol-from-a-tauri-plugin)",
+        "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)"
       ],
       "use_cases": [],
       "status": "todo",
@@ -20847,7 +20848,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T00:53:16Z",
+      "updated_at": "2026-11-09T00:58:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [

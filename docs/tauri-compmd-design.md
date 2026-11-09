@@ -1,6 +1,7 @@
 # CompMD in a Tauri app
 
-Status: **proposal** (T-502, T-503), 2026-11-08. How to show CompMD's output in a Tauri app, worked out for the atm
+Status: **proposal** (T-502, T-503), 2026-11-08; the decision is
+[ADR-004](adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md). How to show CompMD's output in a Tauri app, worked out for the atm
 app, and written as the way to do it for any Tauri app that uses CompMD. Builds on
 [compmd-rendering-design.md](compmd-rendering-design.md) (how the dashboard renders with CompMD, §2 and §3c), the
 [Tauri guide](guides/tauri.md) and [security-architecture.md](security-architecture.md) (I13, I26).
