@@ -11,8 +11,9 @@ What this aims for:
 - **One Svelte code base:** the browser dashboard keeps working as it does, and its e2e suite and screenshots don't
   change. The app's shell is a variant of the page's shell, switched on `inApp` (`lib/api/http.ts`); the views,
   dialogs, state and addresses are shared.
-- **Native where macOS has a native way:** the menu bar, the title bar, window tabs and keyboard shortcuts behave as
-  in other Mac apps, with no web imitation of them.
+- **Native on each platform:** the menu bar, the title bar, tabs and keyboard shortcuts behave as in the platform's
+  other apps. Where macOS has a system feature the others don't (window tabs), macOS uses it and the others get their
+  nearest one, never a web imitation of macOS (§1a).
 - **Only Tauri's documented APIs,** and no new plugin without a yes (the [Rust guide](guides/rust.md)).
 - **The page's privileges stay as narrow:** it calls only the app's own commands (I25), never Tauri's window or menu
   API directly.
@@ -26,6 +27,49 @@ What this aims for:
 | Footer | `Footer.svelte`: brand, copyright, archive and problems notices, version (What's new), GitHub, Connect your agents (app only), Help, About |
 | Window | one window, `main` (`tauri.conf.json`), standard macOS title bar with the title "atm"; workspaces switch in place (T-457) |
 | App | `lib.rs`: one instance (the second focuses `main`), deep links to `main` (T-459), subscriptions for the page's changes (T-506), all subscriptions ended when the page loads again (`unwatch_all`) |
+
+## 1a. Platforms
+
+The app ships on macOS now. Windows and Linux come next (their tests in T-482, the deep-link plugin when the app ships
+there; the [Tauri guide](guides/tauri.md)). iOS and Android aren't planned, and nothing here stands in their way.
+Every part of this design is for all three desktop platforms; what differs is where a platform has its own way:
+
+| Part | macOS | Windows | Linux | iOS, Android |
+|---|---|---|---|---|
+| Title bar (§2) | the page's bar, under the overlay title bar (the window buttons over it) | the native title bar, the page's bar as a toolbar under it | the same as Windows (the window manager's title bar) | none: the page's bar at the top |
+| Tabs (§3) | the system's window tabs | windows: New Tab opens a window, the Window menu lists them | the same as Windows | none: one page, the sidebar switches projects |
+| Menus (§6) | the menu bar at the top of the screen | the same menu, in each window under its title bar | the same as Windows | none (Tauri's menu API is desktop only): the page's ⋯ menu and footer links stay |
+| Shortcuts (§6) | ⌘ | Ctrl | Ctrl | the page's own keys, as in the browser |
+| Sidebar, status bar, settings sheet (§4–§6) | yes | yes | yes | the browser's header and footer |
+| Windows come back (§7) | yes | yes | yes | not needed: one window |
+| Badge (§7) | the Dock's | none yet (Tauri: `set_overlay_icon` instead) | the launcher's, where the desktop shows one | not now |
+
+From Tauri's documentation: menus "appear as part of the application window for Windows or Linux, or in the menu bar
+on MacOS", and the menu API is "available on desktop only"; the overlay title bar, the hidden title and the tabbing
+identifier are macOS only.
+
+**On Windows, no title bar of our own.** Drawing the whole bar there (`decorations: false`) means drawing the minimize,
+maximize and close buttons too, and the page's buttons lose what Windows gives its own (the snap layouts on hovering
+maximize, Windows 11). The native bar and a toolbar under it is what Windows apps without a custom frame do.
+
+**The page asks about features, not about the OS.** One command, `shell`, says what the window has:
+`{ menu_bar, overlay_title_bar, system_tabs }` (from `cfg!(target_os)` and the build), and the shell's app variant
+follows it: no menu bar, so the ⋯ menu and the footer's links stay; no overlay, so the bar is a toolbar; no system
+tabs, so New Tab is a window. In the browser, none of them.
+
+**Shortcuts are written once,** as `CmdOrCtrl+…` in the menu's accelerators (Tauri's menus map `CmdOrCtrl` to ⌘ on
+macOS and Ctrl on Windows and Linux). Where the platforms' conventions differ, each gets its own:
+
+| Action | macOS | Windows, Linux |
+|---|---|---|
+| Back, Forward | ⌘[, ⌘] | Alt+←, Alt+→ |
+| Show Sidebar | ⌃⌘S | Ctrl+B |
+| Full Screen | ⌃⌘F | F11 |
+| Help | ⌘? | F1 |
+| Quit | ⌘Q | Ctrl+Q on Linux; Alt+F4 (the system's) on Windows |
+| Open in a new tab | ⌘-click | Ctrl-click; a middle click on all three |
+
+The rest (⌘T, ⌘N, ⌘W, ⌘,, ⌘F, ⌘1–⌘6, ⌘R) are the same keys with Ctrl. The tables below give the macOS keys.
 
 ## 2. The title bar
 
@@ -55,7 +99,8 @@ permission each; I25 keeps its wording.
 `document.title`; in the app it also calls `set_title`, a command that sets its own window's title
 (`Window::set_title`).
 
-Windows and Linux keep their native title bars (the overlay is macOS's); the page's bar is then a toolbar under it.
+Windows and Linux keep their native title bars (the overlay is macOS's); the page's bar is then a toolbar under it,
+with the same row, and no `start_dragging` (the native bar drags the window), §1a.
 
 ## 3. Tabs
 
@@ -78,13 +123,17 @@ What one window per tab changes in the app:
   only its own window's (`unwatch_all` becomes `unwatch_window`). A window closing ends its own too.
 - **Deep links** open in the window in front (the last focused); with no window open, in a new one. The second
   instance focuses that window too.
-- **New Tab** (⌘T) opens the workspace's overview; **⌘-click** on a project or a task opens it in a new tab: the page
+- **New Tab** (⌘T, Ctrl+T) opens the workspace's overview; **⌘-click** on a project or a task (Ctrl-click on Windows
+  and Linux, a middle click on all three) opens it in a new tab: the page
   calls `open_tab(address)`, which the app checks with `link_address` (the deep links' check, T-459) before it makes
   the window.
 - **Memory:** each tab is a WKWebView with its own content process, about as heavy as a Safari tab; fine for the
   handful of projects a user keeps open.
 
-Windows and Linux have no system tabs: there the same windows stay windows (T-482's platforms, later).
+**Windows and Linux have no system tabs:** there the same windows stay windows. New Tab opens a window, Ctrl-click
+opens one, and the Window menu lists them, as apps without tabs of their own do on those platforms. The code is the
+same: a window per page everywhere, and only macOS groups them. Tabs drawn by the page on every platform are the
+alternative (above), at the cost of that rewrite; §10 asks.
 
 **To check first** (a spike in the first task): the tab bar's **+** button. macOS shows it only for a window that
 answers `newWindowForTab:`, which Tauri's API doesn't mention; without it, tabs open with ⌘T and File ▸ New Tab, and
@@ -142,8 +191,8 @@ only the window in front.
 - **State the menu shows** (the current view checked, Show/Hide Sidebar, Include Archived): the page tells the app
   with one command, `menu_state`, when it changes, for its own window; the app updates the items when that window is in
   front. The Go menu's projects and workspaces come from `AppState`'s workspaces, in Rust.
-- **Shortcuts are the menu's accelerators**, so they work as macOS's do (shown in the menu, remappable in System
-  Settings). The page's own keys in the browser stay; in the app the page leaves the ones the menu has to it, so none
+- **Shortcuts are the menu's accelerators**, written as `CmdOrCtrl+…`, so they work as the platform's do (shown in
+  the menu; on macOS, remappable in System Settings), with each platform's own keys where they differ (§1a). The page's own keys in the browser stay; in the app the page leaves the ones the menu has to it, so none
   fires twice.
 - **Settings** (⌘,) opens the settings as a sheet over the window: the ⋯ menu's content (mode, theme, document style,
   reset the view), laid out as a settings pane. The ⋯ menu stays in the browser. A settings window of its own would
@@ -152,16 +201,21 @@ only the window in front.
 
 ## 7. Window state and the Dock
 
+Window state is for the three desktop platforms alike (Tauri's window frame and position APIs are desktop's); the Dock
+is macOS's, and Windows' and Linux's nearest things are noted with each item. On iOS and Android there is one window,
+so nothing here applies (§1a).
+
 - **Windows come back as they were:** their size and place, and their tabs with each one's address. The app writes the
   windows' list (label, frame, address) to a file in its own data folder when it changes, and opens them again at the
   start; a deep link it was started with opens in front of them. Tauri's `tauri-plugin-window-state` keeps frames but
   not addresses or tabs, so it doesn't save much over doing both ourselves; this design proposes no new plugin.
-- **The Dock menu: not now.** Tauri 2.12 has no API for it (its menu module has app, window, context and tray menus,
+- **The Dock menu: not now** (nor Windows' jump list, the taskbar's menu: no Tauri API either). Tauri 2.12 has no API
+  for it (its menu module has app, window, context and tray menus,
   none for the Dock), and doing it through AppKit directly is the kind of hack this design rules out. It waits for
   Tauri; nothing else depends on it.
 - **The Dock badge:** the needs-you count of the workspace (in review, blocked on you), off in Settings, through
   `Window::set_badge_count` ("Using `0` or `None` will remove the badge"; macOS and Linux, not Windows, where Tauri
-  points to `set_overlay_icon`).
+  points to `set_overlay_icon`, a small icon over the taskbar button: a later step for Windows, not this design's).
 
 ## 8. How it fits what is there
 
@@ -172,7 +226,7 @@ only the window in front.
 - **The updater (T-483):** Check for Updates… in the atm menu opens what `UpdateNotice` shows today.
 - **The browser dashboard:** no change. The new components are in the app only; the shared ones (TitleBar, Footer)
   get an app variant beside their browser one. The browser's e2e specs and screenshots don't change.
-- **Security:** new commands only, each in `build.rs`'s manifest with one permission (`start_dragging`,
+- **Security:** new commands only, each in `build.rs`'s manifest with one permission (`shell`, `start_dragging`,
   `toggle_maximize`, `set_title`, `open_tab`, `subscribe_menu`, `menu_state`); no core or plugin permission. A window
   acts on itself only (the commands take the calling window, never a label). `open_tab` takes an address and checks it
   as a deep link. I25's text gains the tab windows; `docs/security-architecture.md` is updated with the commands.
@@ -187,7 +241,7 @@ Each a task of its own, in this order; each checked in a window both ways (`carg
 atm-app`), with the app e2e specs (`tests/e2e/app.spec.ts`).
 
 1. **Windows, not a window:** subscriptions by window, deep links and the second instance to the window in front,
-   `set_title`, the capability for `tab-*`; the spike on tabbing (§3). No visible change yet.
+   `set_title`, `shell` (§1a), the capability for `tab-*`; the spike on tabbing (§3). No visible change yet.
 2. **The menu bar:** the menus of §6, `subscribe_menu` and `menu_state`, the shortcuts; GitHub, Help, About, Connect
    your agents and What's new reachable from it.
 3. **Tabs and windows:** New Tab, New Window, Close Tab, ⌘-click, `open_tab`.
@@ -199,7 +253,8 @@ atm-app`), with the app e2e specs (`tests/e2e/app.spec.ts`).
 
 ## 10. Questions for Hakan
 
-1. **Tabs as macOS window tabs** (§3), one page per tab, rather than tabs drawn in one page?
+1. **Tabs as macOS window tabs** (§3), one page per tab, with windows instead of tabs on Windows and Linux (§1a);
+   or tabs drawn in the page, the same on every platform, at the cost of one state per tab?
 2. **The view switcher in the title bar** (§2), or the views kept as tabs in the page under it?
 3. **Settings as a sheet** first, or a window of its own from the start (§6)?
 4. **Window state without the plugin** (§7), as proposed?
