@@ -1066,6 +1066,12 @@
         "goal": "Diagrams in the app (CompMD 0.6.0), in-app updates, the macOS 26 icon, and the app reacting to changes instead of polling",
         "release": "0.35.0",
         "start": "2026-11-09T11:02:25Z"
+      },
+      {
+        "id": "The desktop app",
+        "state": "planned",
+        "goal": "The atm app as a desktop app, the same on macOS, Windows and Linux: tabs, sidebar, status bar, menus, the title bar (docs/app-desktop-ui-design.md)",
+        "release": "0.36.0"
       }
     ],
     "releases": [
@@ -1278,6 +1284,10 @@
       },
       {
         "id": "0.35.0",
+        "state": "planned"
+      },
+      {
+        "id": "0.36.0",
         "state": "planned"
       }
     ],
@@ -18494,7 +18504,7 @@
       "description": "The app shows the dashboard's web page as it is in a browser. Make it feel like a desktop app (Hakan).\n\n## What it could have\n- **The title in the title bar:** the page's header (project, workspace) goes into the window's title bar (Tauri's overlay title bar on macOS), not a second bar under it.\n- **Tabs:** several projects (or workspaces, the board) open at once, one tab each.\n- **A collapsible side panel** listing the workspace's projects, instead of the project selector.\n- **A proper status bar:** what the dashboard's footer shows now (version, connection, agents at work, the active sprint), as the app's own.\n- **Menus:** the app's menu bar (macOS) for settings, the views, the projects and workspaces, Help and What's new, with their keyboard shortcuts; settings in a window or sheet of their own.\n- Anything else a desktop app should have that the page lacks (window state kept between runs, the Dock menu, …).\n\n## First: a design, with Hakan\nA short design document (`docs/`): what changes in the app and what stays shared with the browser dashboard (one Svelte code base: the browser keeps working as it does), which Tauri APIs it uses (window, menu, title bar), how tabs map to the dashboard's addresses and deep links (T-459), and how it fits T-506 (no refresh settings). Review it with Hakan, then break it into tasks with `/atm-create-tasks`.\n\n## Checks\nThe Tauri guide's by-hand check in a window (`cargo tauri dev` and `cargo run -p atm-app`), the app e2e specs, and the security doc where a new command or capability is added (I25).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/",
@@ -18502,7 +18512,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-09T21:50:52Z",
+      "updated_at": "2026-11-09T23:16:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18515,17 +18525,37 @@
       "with": "user",
       "started_at": "2026-11-09T21:16:35Z",
       "started_by": "claude:34798264",
-      "commit": "27a5d22525ce26d58e784dbcef0c88be8172f673",
+      "commit": "045d43f6b8ba995b077f8dfc4d9b6066e5432296",
       "review_requested_at": "2026-11-09T21:16:36Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-09T21:16:36Z",
           "kind": "review",
           "text": "The design draft, docs/app-desktop-ui-design.md, for review in Crit: tabs as macOS window tabs, the title bar, sidebar, status bar, menus, window state; the questions in §10. Once agreed, /atm-create-tasks breaks §9 into tasks.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T23:16:24Z",
+          "kind": "note",
+          "text": "Approved: Design accepted in Crit; §10 decided; tasks T-511–T-520 created",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T23:16:29Z",
+          "kind": "outcome",
+          "text": "docs/app-desktop-ui-design.md accepted (Crit, §10 decisions); its steps are T-511–T-520",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-09T21:16:36Z",
+          "to": "2026-11-09T23:16:24Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T23:16:29Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-511",
@@ -18551,13 +18581,20 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:04Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-512",
@@ -18583,13 +18620,20 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:05Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-513",
@@ -18617,13 +18661,20 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:05Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-514",
@@ -18650,12 +18701,19 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:06Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-515",
@@ -18680,12 +18738,19 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:06Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-516",
@@ -18709,12 +18774,19 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:07Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-517",
@@ -18738,12 +18810,19 @@
         "dashboard/src/lib/dialogs/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:07Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-518",
@@ -18768,12 +18847,19 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:08Z",
+      "updated_at": "2026-11-09T23:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-09T23:18:15Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-519",
