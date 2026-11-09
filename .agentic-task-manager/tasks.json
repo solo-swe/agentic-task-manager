@@ -18502,7 +18502,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-09T21:16:36Z",
+      "updated_at": "2026-11-09T21:34:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18515,7 +18515,7 @@
       "with": "user",
       "started_at": "2026-11-09T21:16:35Z",
       "started_by": "claude:34798264",
-      "commit": "f6bf3932fb9b72178d6c592e90328281a7cea5f4",
+      "commit": "27f1af0858fe2159e90bb10490e3dd6f87c89a0f",
       "review_requested_at": "2026-11-09T21:16:36Z",
       "review_state": "waiting",
       "notes": [
