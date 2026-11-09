@@ -1016,16 +1016,56 @@
       },
       {
         "id": "The atm app",
-        "state": "active",
+        "state": "closed",
         "goal": "The Tauri app on atm-lib: IPC, the dashboard in its window, the skills button, macOS packaging",
         "release": "0.34.0",
-        "start": "2026-11-08T07:36:18Z"
+        "start": "2026-11-08T07:36:18Z",
+        "end": "2026-11-09T11:02:12Z",
+        "report": {
+          "done": [
+            "T-455",
+            "T-456",
+            "T-457",
+            "T-458",
+            "T-459",
+            "T-460",
+            "T-461",
+            "T-485",
+            "T-486",
+            "T-489",
+            "T-490",
+            "T-491",
+            "T-492",
+            "T-493",
+            "T-494",
+            "T-495",
+            "T-501",
+            "T-502",
+            "T-504",
+            "T-509"
+          ],
+          "carried": [],
+          "added": [
+            "T-489",
+            "T-490",
+            "T-491",
+            "T-492",
+            "T-493",
+            "T-494",
+            "T-495",
+            "T-501",
+            "T-502",
+            "T-504",
+            "T-509"
+          ]
+        }
       },
       {
         "id": "The atm app, continued",
-        "state": "planned",
+        "state": "active",
         "goal": "Diagrams in the app (CompMD 0.6.0), in-app updates, the macOS 26 icon, and the app reacting to changes instead of polling",
-        "release": "0.35.0"
+        "release": "0.35.0",
+        "start": "2026-11-09T11:02:25Z"
       }
     ],
     "releases": [
