@@ -20797,7 +20797,7 @@
       "description": "In the app, a ```mermaid block never draws. Tauri puts the window's CSP on every HTML file it serves, CompMD's frame documents (`assets/compmd/<v>/compmd/strict.html`) included, and that policy had `frame-ancestors 'none'` (copied from `atm serve`'s page policy), so the frame was refused in the page. Missed because the e2e app mode serves the files from the Node test server, and the CSP test read `tauri.conf.json` rather than what Tauri serves.\n\n## Change\n- `frame-ancestors` out of the app's CSP (`app/src-tauri/tauri.conf.json`): the app's one window is its own, so it protects nothing there. Config only, no code.\n- A test on what Tauri serves (its asset resolver): CompMD's frame document comes without `frame-ancestors`; the strict-CSP test updated.\n- `docs/security-architecture.md` (I26) says why.\n\n## Check\nBy hand in the real window (`cargo tauri dev`): the diagrams below draw, in this task's details and in Help. If the frame's scripts are still refused (it has an opaque origin; Tauri answers with the app's origin), decide the next step with Hakan.\n\n**Found 2026-11-08 (Hakan, `cargo tauri dev`):** with `frame-ancestors` gone, Help still shows nothing where a diagram is, not even its code: the frame loads but its scripts don't run.\n\n## Test diagrams\n\nA flowchart:\n\n```mermaid {alt=\"Draft, then review, then done\"}\nflowchart LR\n  a[Draft] --> b[Review]\n  b --> c{Approved?}\n  c -- yes --> d[Done]\n  c -- no --> a\n```\n\nA sequence diagram:\n\n```mermaid {alt=\"The page asks the app, the app asks atm-lib\"}\nsequenceDiagram\n  participant Page\n  participant App\n  participant Lib as atm-lib\n  Page->>App: project_tasks\n  App->>Lib: Member::tasks\n  Lib-->>App: tasks\n  App-->>Page: tasks\n```\n\nA state diagram:\n\n```mermaid {alt=\"A task's states\"}\nstateDiagram-v2\n  [*] --> todo\n  todo --> in_progress\n  in_progress --> in_review\n  in_review --> done\n  in_progress --> blocked\n  blocked --> todo\n  done --> [*]\n```\n\nOne Mermaid can't read: it should show its code (the fallback), never nothing:\n\n```mermaid\nflowchart LR\n  a -->\n  ((((\n```\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/tauri.conf.json",
@@ -20806,7 +20806,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T22:32:25Z",
-      "updated_at": "2026-11-09T09:26:46Z",
+      "updated_at": "2026-11-09T09:33:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20823,15 +20823,35 @@
       "started_by": "claude:34798264",
       "commit": "356846d6544f1c897ecd62c4bf56952bae246e6a",
       "review_requested_at": "2026-11-08T22:33:39Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-08T22:33:39Z",
           "kind": "review",
           "text": "Config only: frame-ancestors out of the app CSP. Check in the real window: open a task with a mermaid block (cargo run -p atm-app after pnpm run build in dashboard/); the diagram should draw. If it stays code or blank, the frame scripts are refused (opaque origin vs Tauri ACAO): decide the next step together.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:01Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan for the Markdown and layout fix; the diagrams are T-503 (CompMD 0.6.0)",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:08Z",
+          "kind": "outcome",
+          "text": "Markdown and the layout in the app fixed (style-src nonce, connect-src). Diagrams: T-503, waiting on CompMD 0.6.0.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-08T22:33:39Z",
+          "to": "2026-11-09T09:33:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T09:33:08Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-503",
@@ -20917,7 +20937,7 @@
       "description": "The app's icon (`app/src-tauri/icons/`) and the GitHub org's avatar (`branding/atm-logo.png`) are the logo filled edge to edge on dark `#0d1117`, with square corners. In the Dock, Finder and Launchpad, beside other apps, it looks out of place (Hakan): macOS apps since Big Sur have a rounded-square body with a margin around it, and most have a light face.\n\n## Change\n- **One source for the icons**, made by `branding/generate.mjs` from the logo drawing (`dashboard/src/assets/atm-logo.svg`), never by hand:\n  - **macOS:** Apple's icon grid: a 1024×1024 canvas, the body a rounded square of 824×824 centred (its corners Apple's continuous curve, radius about 185), a transparent margin, and a soft shadow under it; a light face (white to a light grey) with the logo in the accent blue (`#2f81f7`).\n  - **Windows and Linux:** the same face and logo; the shape per platform (a rounded square fits both).\n- **The app's icon set** from it with `pnpm tauri icon` (the CLI the dashboard already has): `icon.icns`, `icon.ico` and the PNGs in `app/src-tauri/icons/`.\n- **The GitHub avatar:** `atm-logo.png` on the light face, with the logo large enough for GitHub's rounded crop at small sizes; upload it by hand (the org's Settings → Profile). The social previews keep their own dark and light cards.\n- `branding/README.md`: the new files and how they are made.\n\n## Check\nShow Hakan the icon in the Dock and Finder (a `cargo tauri build --debug` bundle) next to other apps, and the avatar at GitHub's sizes, before it is done. A dark or tinted variant (macOS 26's Icon Composer) is a later task if wanted.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "branding/generate.mjs",
@@ -20926,7 +20946,7 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T02:18:08Z",
+      "updated_at": "2026-11-09T09:33:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20942,9 +20962,8 @@
       "review": "async",
       "started_at": "2026-11-09T01:11:27Z",
       "started_by": "claude:34798264",
-      "commit": "b82b3913b8ea0f2fe2f7bd859faa61772d806700",
+      "commit": "2bb8bda49e2f60c1db8953b804af559de309a6d4",
       "review_requested_at": "2026-11-09T01:14:08Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-09T01:14:08Z",
@@ -20957,8 +20976,29 @@
           "kind": "note",
           "text": "Split (Hakan): the portable icons are done here (frameless marks on a light face; PNG/ICO/ICNS and the avatar). The macOS 26 Icon Composer icon is T-505, made in Icon Composer with Hakan; the hand-written .icon and the release-config change were reverted.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:01Z",
+          "kind": "note",
+          "text": "Approved: Icon and avatar approved by Hakan: the logo with its frame close to the edge, on the light face",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T09:33:08Z",
+          "kind": "outcome",
+          "text": "The app icon set and the GitHub avatar: the logo with its frame close to the edge, on a light face, in macOS's shape. Upload branding/atm-logo.png to the org profile by hand; the macOS 26 icon is T-505.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-09T01:14:08Z",
+          "to": "2026-11-09T09:33:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T09:33:08Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-505",
