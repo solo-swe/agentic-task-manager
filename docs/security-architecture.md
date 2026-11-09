@@ -803,7 +803,10 @@ build (I29):
 - **Only on the user's click.** The page gets two commands, `check_update` and `install_update` (in the main window's
   capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install. The app looks for
   an update on start and at most every six hours; installing (and the restart into it) happens only from the bar's
-  *Install and restart*. A debug build, or one without `PUBKEY`, finds no update.
+  *Install and restart*. A debug build finds no update.
+- **The key pair** was made by Hakan on his machine (minisign `D2392A7664649507`). A first pair was replaced before
+  use because its private half was pasted into an agent session; `updates.rs`'s test checks that `PUBKEY` is a public
+  key, not a secret one.
 - **Homebrew:** the cask says `auto_updates true`, so `brew upgrade` leaves the app to its own updates; the bundled
   `atm` CLI is inside the app, so the CLI on PATH stays the app's build.
 - New dependency (approved): `tauri-plugin-updater` 2.14.1 (MIT or Apache-2.0), on the system's TLS (`native-tls`:

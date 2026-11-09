@@ -82,9 +82,10 @@ archive is signed with the updater key as well.
 (`releases/latest/download/latest.json`; never a draft or a pre-release), offers a newer version, and installs it only
 on the user's click, once its signature verifies against the public key built into the app
 (`app/src-tauri/src/updates.rs`, `PUBKEY`). Lose the private key and no installed app can be updated in place again
-(users reinstall), so it is kept with the other signing secrets, backed up. Making the key pair, once:
-`pnpm exec tauri signer generate -w <a file outside the repository>` in `dashboard/` (it asks for the password), then
-the private key's file content into `TAURI_SIGNING_PRIVATE_KEY`, the password into
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and the public key into `PUBKEY`. Until `PUBKEY` is set, the app finds no updates;
-a debug build never does. Installed with the cask, the app updates itself too (`auto_updates true`: `brew upgrade`
+(users reinstall), so it is kept with the other signing secrets, backed up. The key pair was made once (2026-11-09,
+minisign key `D2392A7664649507`): `pnpm --dir dashboard exec tauri signer generate -w ~/.tauri/atm-updater.key` (it
+asks for the password), then `gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/atm-updater.key`,
+`gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (it prompts), and the `.pub` file's content into `PUBKEY`. Never
+paste or commit the private key file (the one without `.pub`); a key that was exposed is replaced the same way, with
+`-f`, and the app built with the new public key. A debug build never finds updates. Installed with the cask, the app updates itself too (`auto_updates true`: `brew upgrade`
 leaves it alone, `brew upgrade --greedy` updates it).

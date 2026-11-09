@@ -15,8 +15,8 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `install_update`, not the plugin's API; it checks on start and at most every six hours. The release workflow signs
   the app's update archive with the updater key (`TAURI_SIGNING_PRIVATE_KEY` and its password, new secrets;
   `createUpdaterArtifacts` in `tauri.release.conf.json`) and writes `latest.json` (`packaging/updater-manifest.mjs`).
-  The cask says `auto_updates true`. Until the key pair is made (`PUBKEY` in `app/src-tauri/src/updates.rs`), the app
-  finds no updates, and a release can't build the app.
+  The cask says `auto_updates true`. The public key is in `PUBKEY` (`app/src-tauri/src/updates.rs`); 0.35.0 is the
+  first version that can update itself, so the install is first checked end to end on the release after it.
 
 ### Changed
 - **The app reacts to changes instead of polling** (T-506): in the atm app the page subscribes to its workspace and

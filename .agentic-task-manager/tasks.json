@@ -17068,7 +17068,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-460"
       ],
@@ -17079,7 +17079,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-09T11:23:53Z",
+      "updated_at": "2026-11-09T17:09:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17099,6 +17099,11 @@
           "from": "2026-11-08T18:59:19Z",
           "to": "2026-11-08T21:17:35Z",
           "on": "user"
+        },
+        {
+          "from": "2026-11-09T11:23:53Z",
+          "to": "2026-11-09T17:09:06Z",
+          "on": "user"
         }
       ],
       "notes": [
@@ -17107,16 +17112,17 @@
           "kind": "answer",
           "text": "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard? → Approved: add tauri-plugin-updater and @tauri-apps/plugin-updater.; The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in? → Open for now: the updater key pair (TAURI_SIGNING_PRIVATE_KEY and its password, and the public key in the app) is set up together with Hakan; build everything else so only the key is left.; Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone. → The app updates itself, in addition to brew upgrade: the cask says auto_updates true.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T17:09:06Z",
+          "kind": "answer",
+          "text": "Everything but the key is built and committed. Make the updater key pair together: in dashboard/, pnpm exec tauri signer generate -w <a file outside the repo> (it asks for a password); set the secrets TAURI_SIGNING_PRIVATE_KEY (the file’s content) and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; paste me the public key for PUBKEY in app/src-tauri/src/updates.rs. Then the end-to-end check against a draft release. Until then a release can’t build the app (createUpdaterArtifacts needs the key). → Key pair made by Hakan (minisign key D2392A7664649507; the first one was replaced, as its private half was pasted here); secrets set. Public key given for PUBKEY.",
+          "by": "claude:34798264"
         }
       ],
-      "started_at": "2026-11-09T11:16:36Z",
-      "started_by": "claude:34798264",
       "commit": "001615c5657f22587420e60b93a7fafefb24e263",
-      "waiting_on": "user",
-      "questions": [
-        "Everything but the key is built and committed. Make the updater key pair together: in dashboard/, pnpm exec tauri signer generate -w <a file outside the repo> (it asks for a password); set the secrets TAURI_SIGNING_PRIVATE_KEY (the file’s content) and TAURI_SIGNING_PRIVATE_KEY_PASSWORD; paste me the public key for PUBKEY in app/src-tauri/src/updates.rs. Then the end-to-end check against a draft release. Until then a release can’t build the app (createUpdaterArtifacts needs the key)."
-      ],
-      "blocked_at": "2026-11-09T11:23:53Z"
+      "started_at": "2026-11-09T17:09:25Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-484",
