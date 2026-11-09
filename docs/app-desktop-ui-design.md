@@ -82,11 +82,44 @@ page keeps the browser's header and footer.
 - **the title bar:** the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the
   right), the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at
   its left;
-- **the toolbar** under it: the view switcher (Graph, Kanban, List, …) as a segmented control; search, the Filters
-  popup, the needs-you chip and the reload button at the right.
+- **the toolbar** under it, right of the sidebar: the view switcher (Graph, Kanban, List, …) as a segmented control,
+  then the Filters popup and the needs-you chip.
 
 The project's logo and name are the **active tab's title** (or "Projects Overview"), not repeated in the toolbar; the
-active sprint is in the status bar (§5).
+active sprint is in the status bar (§5); search is at the top of the sidebar (§4). **No reload button:** the page
+reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the menu for the rare change the watcher
+missed.
+
+The window on macOS (the menu bar is the system's, at the top of the screen):
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ o o o  [=]  │ ▣ atm (2)   × │ ▣ compmd    × │ Projects Overview × │ +                              │  title bar: tabs
+├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
+│ Search…           ⌘F   │ [ Graph | Kanban | List | Agents | Progress | Project ]  Filters  (2)     │  toolbar
+│ ▾ Personal             ├───────────────────────────────────────────────────────────────────────────┤
+│   Projects Overview    │ Sprint: The atm app, continued ▾      3 of 6 done  ▓▓▓▓▓▓░░░░             │  scope bar (as now)
+│ ▸ ▣ atm           (2)  │                                                                           │
+│     ▓▓▓▓▓░░░░░         │                                                                           │
+│   ▣ compmd             │                   the view: Kanban, List, Graph, … (as now)               │
+│     ▓▓░░░░░░░░         │                                                                           │
+│   ▣ old-app (missing)  │                                                                           │
+│                        │                                                                           │
+├────────────────────────┴───────────────────────────────────────────────────────────────────────────┤
+│ ● Up to date · 2 agents working       The atm app, continued: 3 of 6 done      1 problem · v0.35.0 │  status bar
+└────────────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+On Windows and Linux only the title bar's row differs: the menus at its left, the window buttons at its right.
+
+```text
+┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [=]  File  Edit  View  Go  Window  Help │ ▣ atm (2) × │ ▣ compmd × │ +                 _   □   ×   │
+├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
+```
+
+`o o o` are macOS's window buttons, `[=]` the sidebar's button, `▣` a project's logo, `(2)` the needs-you count (on a
+tab, in the sidebar, and the toolbar's chip, which lists them), `▸` the open project, `▓░` a sprint's progress.
 
 The charts (progress, activity) move to the status bar (§5) and the Progress view; the version chip and the ⋯ menu go
 to the menus (§6); the project and workspace selectors go to the sidebar (§4).
@@ -166,7 +199,9 @@ changes:
 
 **A collapsible sidebar** listing the workspace's projects, in place of the project selector:
 
-- at the top, the workspace (a menu, `WorkspaceSelector`'s content);
+- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks, as the search does now; on the overview,
+  every project's (the app's `search` command);
+- then the workspace (a menu, `WorkspaceSelector`'s content);
 - then **Overview**, and each project: its logo, name, the active sprint's progress as a thin bar, and the needs-you
   count as a badge;
 - the open project marked; a click opens it in this tab, ⌘-click in a new one (§3);
@@ -212,7 +247,7 @@ the window in front.
 |---|---|
 | **atm** (macOS; on Windows and Linux its items go to File and Help) | About atm · Check for Updates… · Settings… ⌘, · Connect Your Agents… · Services, Hide, Quit |
 | **File** | New Tab ⌘T · New Window ⌘N · Close Tab ⌘W · Copy Link to This Page ⌥⌘C · (Windows, Linux: Settings…, Exit) |
-| **Edit** | Undo, Cut, Copy, Paste, Select All · Find ⌘F (the search) |
+| **Edit** | Undo, Cut, Copy, Paste, Select All · Find ⌘F (the sidebar's search) |
 | **View** | Graph ⌘1 · Kanban ⌘2 · List ⌘3 · Agents ⌘4 · Progress ⌘5 · Project ⌘6 · Show Sidebar ⌃⌘S · Show Filters ⌥⌘F · Include Archived Tasks · Reload ⌘R · Enter Full Screen |
 | **Go** | Back ⌘[ · Forward ⌘] · Projects Overview ⇧⌘O · each project of the workspace · Workspace ▸ (each workspace) |
 | **Window** | Minimize, Zoom · Next Tab, Previous Tab · Move Tab to New Window · the open windows |
