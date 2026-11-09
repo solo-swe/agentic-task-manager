@@ -64,11 +64,23 @@ const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="${FACE[0]}" /><stop offset="1" stop-color="${FACE[1]}" />
     </linearGradient>`;
 
-/** The logo's marks, its columns and check, without its frame: where they reach in the logo's 32×32 drawing (their
- * round 2.5 strokes included) */
-const MARKS = { left: 8.75, top: 8.75, right: 26.75, bottom: 23.75 };
-/** How much of the icon's shape the marks span across: about what VS Code's and Notion's marks span */
-const MARKS_SHARE = 0.62;
+/** The logo's frame, `<rect x="3" y="4" width="26" height="24" rx="5" />` stroked 2.5 wide: where it reaches in the
+ * logo's 32×32 drawing, its stroke included */
+const FRAME = { left: 1.75, top: 2.75, right: 30.25, bottom: 29.25 };
+/** How much of the icon's shape the frame spans across: close to its edge, so the frame reads as the board's and
+ * leaves no wide ring of face around it (Hakan: the logo at half the shape was too much white) */
+const FRAME_SHARE = 0.84;
+/** A rounded rectangle as a path, clockwise, in plain coordinates */
+function roundedRect(x, y, w, h, r) {
+  const n = (v) => +v.toFixed(3);
+  return (
+    `M${n(x + r)} ${n(y)}H${n(x + w - r)}A${r} ${r} 0 0 1 ${n(x + w)} ${n(y + r)}V${n(y + h - r)}` +
+    `A${r} ${r} 0 0 1 ${n(x + w - r)} ${n(y + h)}H${n(x + r)}A${r} ${r} 0 0 1 ${n(x)} ${n(y + h - r)}V${n(y + r)}` +
+    `A${r} ${r} 0 0 1 ${n(x + r)} ${n(y)}Z`
+  );
+}
+/** The frame's stroke as the ring it paints: its outer edge and its inner one, filled even-odd */
+export const FRAME_RING = `<path fill-rule="evenodd" d="${roundedRect(1.75, 2.75, 28.5, 26.5, 6.25)}${roundedRect(4.25, 5.25, 23.5, 21.5, 3.75)}" />`;
 /** The logo's strokes, `M10 10v12M16 10v6M22 10v3` and `M19.5 20.5l2 2 4-4.5` at width 2.5 with round ends, as the
  * filled shapes they paint, so any renderer draws them the same (Apple's, for Icon Composer, drew the strokes flat and
  * cut off). Each column a bar with round ends; the check two such bars meeting at its corner. */
@@ -94,19 +106,19 @@ const MARK_SHAPES = [
 ];
 
 /**
- * The app icon's one layer (T-504): the logo's marks in the accent blue, without its frame, centred on a 1024×1024
- * canvas that stands for the icon's whole shape. On the app icon the shape itself is the board: the logo's own frame
- * inside it made a frame within a frame, its white ring a wide border next to other apps' icons (Hakan).
+ * The app icon's one layer (T-504): the whole logo in the accent blue, its frame and marks as filled shapes, centred
+ * on a 1024×1024 canvas that stands for the icon's whole shape, the frame close to its edge (`FRAME_SHARE`).
  */
 export function marksLayer(logo) {
-  const box = (MARKS.right - MARKS.left) / MARKS_SHARE;
-  const [cx, cy] = [(MARKS.left + MARKS.right) / 2, (MARKS.top + MARKS.bottom) / 2];
+  const box = (FRAME.right - FRAME.left) / FRAME_SHARE;
+  const [cx, cy] = [(FRAME.left + FRAME.right) / 2, (FRAME.top + FRAME.bottom) / 2];
   const [x, y] = [(cx - box / 2).toFixed(3), (cy - box / 2).toFixed(3)];
   const side = box.toFixed(3);
   const color = /stroke="(#[0-9a-f]{6})"/i.exec(logo)?.[1] ?? ACCENT;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="${x} ${y} ${side} ${side}">
-  <!-- The ATM logo's marks, the app icon's layer. Made by branding/generate.mjs -->
+  <!-- The ATM logo, the app icon's layer. Made by branding/generate.mjs -->
   <g fill="${color}">
+    ${FRAME_RING}
     ${MARK_SHAPES.join('\n    ')}
   </g>
 </svg>

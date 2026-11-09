@@ -20788,7 +20788,7 @@
     },
     {
       "id": "T-502",
-      "name": "Mermaid diagrams in the app: the window's policy refused CompMD's frames",
+      "name": "Markdown and the layout in the app: Tauri's style nonce and connect-src (diagrams: T-503)",
       "type": "bugfix",
       "priority": "P1",
       "labels": [
@@ -20806,7 +20806,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T22:32:25Z",
-      "updated_at": "2026-11-08T23:18:36Z",
+      "updated_at": "2026-11-09T09:26:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20835,7 +20835,7 @@
     },
     {
       "id": "T-503",
-      "name": "The app serves CompMD from a scheme of its own (tauri-plugin-compmd)",
+      "name": "Mermaid diagrams in the app: CompMD from a scheme of its own (tauri-plugin-compmd)",
       "type": "feature",
       "priority": "P1",
       "labels": [
@@ -20861,7 +20861,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T08:59:29Z",
+      "updated_at": "2026-11-09T09:26:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20877,7 +20877,7 @@
       "related": [
         "T-502"
       ],
-      "commit": "2c1c96508b1874a5361b29cb8b8a5184fa913bac",
+      "commit": "cae83a5b741d6d91f7b6e0d2b8a6964dcba0b17b",
       "notes": [
         {
           "at": "2026-11-09T02:33:53Z",

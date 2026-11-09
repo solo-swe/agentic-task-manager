@@ -7,6 +7,7 @@ import {
   avatar,
   brandLogo,
   CHECK_PATH,
+  FRAME_RING,
   MARKS_PATHS,
   iconPages,
   marksLayer,
@@ -64,23 +65,27 @@ describe('the app icon and the avatar (T-504)', () => {
     expect(reach).toBeLessThan(0.95);
   });
 
-  it('the marks: the logo’s columns and check in the accent blue, without its frame (the icon’s shape is the board)', () => {
+  it('the layer: the whole logo in the accent blue, its frame close to the shape’s edge', () => {
     const logo = brandLogo(read('dashboard/src/assets/atm-logo.svg'));
     const layer = marksLayer(logo);
-    // Drawn as filled shapes (Apple's renderer mangles strokes): they must stay the logo's columns and check
+    // Drawn as filled shapes (one renderer or another, the same): they must stay the logo's frame, columns and check
+    expect(logo).toContain('<rect x="3" y="4" width="26" height="24" rx="5" />');
     expect(logo).toContain(`d="${MARKS_PATHS}"`);
     expect(logo).toContain(`d="${CHECK_PATH}"`);
     expect(layer).not.toContain('stroke');
-    expect(layer).not.toContain('<rect');
     expect(layer).toContain(`<g fill="${ACCENT}">`);
-    // Five filled bars: three columns, the check's two strokes
-    expect(layer.match(/<path /g)).toHaveLength(5);
+    // The frame's 2.5 stroke as a ring: the rect grown and shrunk by 1.25, its radius with it
+    expect(layer).toContain(FRAME_RING);
+    expect(FRAME_RING).toContain('M8 2.75H24A6.25 6.25 0 0 1 30.25 9');
+    expect(FRAME_RING).toContain('M8 5.25H24A3.75 3.75 0 0 1 27.75 9');
+    // The ring, then five filled bars: three columns, the check's two strokes
+    expect(layer.match(/<path /g)).toHaveLength(6);
     // The first column, from (10, 10) to (10, 22), 2.5 wide with round ends
     expect(layer).toContain(
       '<path d="M8.750 10.000L8.750 22.000A1.25 1.25 0 0 0 11.250 22.000L11.250 10.000A1.25 1.25 0 0 0 8.750 10.000Z" />',
     );
-    // They span 62% of the shape across (18 of the logo's units in a 29.032-unit box), centred
-    expect(layer).toContain('width="1024" height="1024" viewBox="3.234 1.734 29.032 29.032"');
+    // The frame spans 84% of the shape across (28.5 of the logo's units in a 33.929-unit box), centred
+    expect(layer).toContain('width="1024" height="1024" viewBox="-0.964 -0.964 33.929 33.929"');
   });
 
   it('the icon keeps Apple’s grid: a 1024 canvas, the body 824 in its middle, the marks on it', () => {

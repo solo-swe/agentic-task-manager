@@ -8,6 +8,7 @@ export const FACE: [string, string];
 export function squircle(x: number, y: number, size: number, n?: number, steps?: number): string;
 export const MARKS_PATHS: string;
 export const CHECK_PATH: string;
+export const FRAME_RING: string;
 export function marksLayer(logo: string): string;
 export function appIcon(logo: string): string;
 export function avatar(logo: string): string;
