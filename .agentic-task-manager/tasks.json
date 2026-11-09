@@ -20835,7 +20835,7 @@
     },
     {
       "id": "T-503",
-      "name": "The app serves CompMD's folder as atm serve does (Tauri's response hook)",
+      "name": "The app serves CompMD from a scheme of its own (tauri-plugin-compmd)",
       "type": "feature",
       "priority": "P1",
       "labels": [
@@ -20847,7 +20847,7 @@
         "[ADR-004](docs/adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md)"
       ],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "blocked",
       "dependencies": [],
       "files": [
         "crates/atm-api/src/assets.rs",
@@ -20861,7 +20861,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T02:26:32Z",
+      "updated_at": "2026-11-09T08:59:29Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20877,8 +20877,33 @@
       "related": [
         "T-502"
       ],
-      "started_at": "2026-11-09T02:26:32Z",
-      "started_by": "claude:34798264"
+      "commit": "2c1c96508b1874a5361b29cb8b8a5184fa913bac",
+      "notes": [
+        {
+          "at": "2026-11-09T02:33:53Z",
+          "kind": "note",
+          "text": "Step 1, the check: built, with tests green (plugin 3, app 13, app e2e 5). Waiting on Hakan to look in a real window, cargo run -p atm-app and cargo tauri dev: T-502 test diagrams and Help draw, Markdown formatted; or a console error naming compmd://.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T08:26:42Z",
+          "kind": "note",
+          "text": "Step 1, the check: WebKit refuses. The frames (strict.html, opaque origin) refuse compmd://localhost/…/runtime.js under their own meta CSP, script-src 'self' blob:. WebKit (ContentSecurityPolicy.cpp) takes 'self' from the response URL only for HTTP(S); for an opaque origin on any other scheme it matches nothing. Back to the design: the fix is in CompMD’s frame policy. No error note showed either (H5 gap).",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T08:59:12Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-09T08:59:20Z",
+      "started_by": "claude:34798264",
+      "waiting_on": "user",
+      "questions": [
+        "Waiting on CompMD 0.6.0: its frame policy allows the compmd: scheme (WebKit matches 'self' only on http for a sandboxed frame), released with the read-all-lockfiles fix. Then bump CompMD and do the window check again."
+      ],
+      "blocked_at": "2026-11-09T08:59:29Z"
     },
     {
       "id": "T-504",
