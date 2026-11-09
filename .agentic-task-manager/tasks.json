@@ -18494,7 +18494,7 @@
       "description": "The app shows the dashboard's web page as it is in a browser. Make it feel like a desktop app (Hakan).\n\n## What it could have\n- **The title in the title bar:** the page's header (project, workspace) goes into the window's title bar (Tauri's overlay title bar on macOS), not a second bar under it.\n- **Tabs:** several projects (or workspaces, the board) open at once, one tab each.\n- **A collapsible side panel** listing the workspace's projects, instead of the project selector.\n- **A proper status bar:** what the dashboard's footer shows now (version, connection, agents at work, the active sprint), as the app's own.\n- **Menus:** the app's menu bar (macOS) for settings, the views, the projects and workspaces, Help and What's new, with their keyboard shortcuts; settings in a window or sheet of their own.\n- Anything else a desktop app should have that the page lacks (window state kept between runs, the Dock menu, …).\n\n## First: a design, with Hakan\nA short design document (`docs/`): what changes in the app and what stays shared with the browser dashboard (one Svelte code base: the browser keeps working as it does), which Tauri APIs it uses (window, menu, title bar), how tabs map to the dashboard's addresses and deep links (T-459), and how it fits T-506 (no refresh settings). Review it with Hakan, then break it into tasks with `/atm-create-tasks`.\n\n## Checks\nThe Tauri guide's by-hand check in a window (`cargo tauri dev` and `cargo run -p atm-app`), the app e2e specs, and the security doc where a new command or capability is added (I25).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/",
@@ -18502,9 +18502,9 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-09T09:50:27Z",
+      "updated_at": "2026-11-09T21:16:35Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app, continued",
@@ -18512,7 +18512,9 @@
         }
       ],
       "sprint": "The atm app, continued",
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-09T21:16:35Z",
+      "started_by": "claude:34798264"
     }
   ]
 }
