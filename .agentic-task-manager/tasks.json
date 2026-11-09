@@ -20899,7 +20899,7 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T01:18:18Z",
+      "updated_at": "2026-11-09T02:18:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20915,7 +20915,7 @@
       "review": "async",
       "started_at": "2026-11-09T01:11:27Z",
       "started_by": "claude:34798264",
-      "commit": "4f1f1fca2aa20068ffadf2d00d732911b4c8f6f3",
+      "commit": "b82b3913b8ea0f2fe2f7bd859faa61772d806700",
       "review_requested_at": "2026-11-09T01:14:08Z",
       "review_state": "waiting",
       "notes": [
@@ -20923,6 +20923,12 @@
           "at": "2026-11-09T01:14:08Z",
           "kind": "review",
           "text": "Look at the icon in the Dock next to other apps (`cargo run -p atm-app` sets it in the Dock; macOS may cache the old one until the Dock restarts), and at branding/atm-logo.png as the avatar. Approve, or say what to change (logo size, face colour, shadow). Then upload atm-logo.png to the org’s profile by hand.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T02:18:08Z",
+          "kind": "note",
+          "text": "Split (Hakan): the portable icons are done here (frameless marks on a light face; PNG/ICO/ICNS and the avatar). The macOS 26 Icon Composer icon is T-505, made in Icon Composer with Hakan; the hand-written .icon and the release-config change were reverted.",
           "by": "claude:34798264"
         }
       ]
