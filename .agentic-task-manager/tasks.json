@@ -14536,7 +14536,7 @@
       "description": "T-427 moved the dashboard to pnpm without the `devEngines` pins the [Svelte guide](docs/guides/svelte.md#toolchain) asks for, because of a CompMD bug: with `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents (the pinned pnpm and Node first, then the packages), and `@compmd/vite` 0.5.0 reads only the first document that has `packages` (`dist/packs.js`, `integrities`). The mermaid pack's `integrity` then becomes `null` in `plugin/assets/compmd/<version>/compmd.js`, and its pin is lost.\n\n**Wait for** a `@compmd/vite` release that reads every document of the lockfile. Until then this task stays in the backlog.\n\n## Change\n- Bump `@compmd/vite` (and the other `@compmd/*` packages it goes with) to that release.\n- Add `devEngines` to `dashboard/package.json`: `packageManager` pnpm 12.14.0 (or the version in use then) and `runtime` node 24, both with `\"onFail\": \"download\"`, as in the guide; `pnpm install` records them in the lockfile.\n- Update the guide's example version if it changed, and AGENTS.md if it says the pins are missing.\n\n## Tests\n`pnpm run build`, then `compmd.js` holds the mermaid pack's `integrity` (a `sha512-…`, not `null`); `pnpm run check` passes (it fails on a stale CompMD build); unit and functional e2e tests; CI green.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [
         "T-427"
       ],
@@ -14547,21 +14547,31 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-06T07:14:50Z",
+      "updated_at": "2026-11-09T21:11:02Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "dashboard"
       ],
-      "waiting_on": "user",
-      "questions": [],
-      "blocked_at": "2026-11-06T07:14:50Z",
       "notes": [
         {
           "at": "2026-11-06T07:14:50Z",
           "kind": "note",
           "text": "Waits for a `@compmd/vite` release that reads every document of `pnpm-lock.yaml` (the CompMD task the user is creating in that project). Unblock it once that release is out.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T21:11:02Z",
+          "kind": "answer",
+          "text": "CompMD 0.6.0 is out (T-503 uses it) and reads every document of pnpm 12’s lockfile (Hakan): go ahead.",
+          "by": "claude:34798264"
+        }
+      ],
+      "blocks": [
+        {
+          "from": "2026-11-06T07:14:50Z",
+          "to": "2026-11-09T21:11:02Z",
+          "on": "user"
         }
       ]
     },
@@ -17079,7 +17089,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-09T17:20:46Z",
+      "updated_at": "2026-11-09T21:13:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17124,13 +17134,20 @@
           "kind": "review",
           "text": "Key in (PUBKEY and tauri.conf.json, kept equal by a test). Checked locally: the release bundle signs atm.app.tar.gz with Hakan’s key, the bundler verifies it, and updater-manifest.mjs makes a correct latest.json. Left: 0.35.0’s release has latest.json and the signed archive and finds no update; the first release after 0.35.0 checks the install end to end (offered, signature verified, installed, restarted).",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T21:13:01Z",
+          "kind": "note",
+          "text": "Approved: Approved in Crit with no comments (001615c..756a48d). Left: on 0.35.0’s release, check latest.json, the signed archive, and that the app finds no update; on the first release after it, the install end to end.",
+          "by": "claude:34798264"
         }
       ],
       "commit": "756a48d461216722f350a2f4ce37030f435bc250",
       "started_at": "2026-11-09T17:09:25Z",
       "started_by": "claude:34798264",
       "review_requested_at": "2026-11-09T17:20:46Z",
-      "review_state": "waiting"
+      "review_state": "approved",
+      "reviewed_at": "2026-11-09T21:13:01Z"
     },
     {
       "id": "T-484",
