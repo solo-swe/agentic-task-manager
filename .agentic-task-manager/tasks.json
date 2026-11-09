@@ -20747,7 +20747,7 @@
       "description": "T-490 moves `~/.agentic-task-manager` into the state folder once (`atm_common::home::move_legacy_state`), leaving a note. An atm from before (Homebrew 0.33.0, on the same machine as the app or a newer atm) still uses the old folder: it makes it again, with only the projects it registers from then on, and its dashboard shows just those (seen on Hakan's machine: the 0.33.0 server listed one project, the app all three). And the moved folder brought the old server's record along, so the new atm reports a server that serves the old folder as its own (`atm service status`).\n\n## Change\n- **Projects added in the old folder afterwards reach `default`:** when the legacy folder exists again beside the state folder (it has a registry, not only the note), its projects are added to the `default` workspace (never removed from it), on the same start-up path as the move.\n- **The server record:** a record whose server serves another home (its whoami `home` isn't this state folder's) is not ours: `atm service` treats it as a stray of another atm, says so, and starts its own.\n- **The link `atm service` prints** for a project is the page address (`/projects/<id>`), not the old `/#project=<id>`.\n- Say in the 0.34.0 changelog and `packaging/README.md` that an older atm keeps the old folder, and how to tell (`atm version`).\n\n## Tests\n- atm-common: the legacy folder moved, then made again with a project: that project joins `default`.\n- The CLI suite (`tests/scripts/serve.test.mjs` or `registry.test.mjs`): a record naming a server of another home isn't reported as this atm's.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-common/src/home.rs",
@@ -20758,7 +20758,7 @@
         "packaging/README.md"
       ],
       "created_at": "2026-11-08T21:25:33Z",
-      "updated_at": "2026-11-09T01:00:23Z",
+      "updated_at": "2026-11-09T01:08:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20773,7 +20773,18 @@
         "api"
       ],
       "started_at": "2026-11-09T01:00:23Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "85a90ee69b9000cd5f39b7043beaf4a6cf497f7a",
+      "completed_at": "2026-11-09T01:08:36Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-09T01:08:36Z",
+          "kind": "outcome",
+          "text": "Projects an older atm lists in ~/.agentic-task-manager join default when that list changes (platform state folder only); a server record counts only with this folder’s home, older atms’ servers are named, never stopped; atm service prints /projects/<id>. Checked on Hakan’s machine: learn-forever-blog joined, the 0.33.0 servers reported.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-502",
