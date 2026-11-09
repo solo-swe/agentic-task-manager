@@ -18585,7 +18585,7 @@
         "Cargo.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T08:52:35Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18631,7 +18631,11 @@
       "started_at": "2026-11-08T08:29:24Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-08T08:52:35Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-456",
@@ -18655,7 +18659,7 @@
         "deny.toml"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T11:04:24Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18683,7 +18687,11 @@
       "started_by": "claude:34798264",
       "commit": "4918c5da0e922e04b3a541f8caa673fe4b5f6ed5",
       "completed_at": "2026-11-08T11:04:24Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-457",
@@ -18708,7 +18716,7 @@
         "crates/atm-api/src/pages.rs"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:22:05Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18749,7 +18757,11 @@
       "started_at": "2026-11-08T18:14:54Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-08T18:22:05Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-458",
@@ -18773,7 +18785,7 @@
         "dashboard/src/lib/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:59:08Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18795,7 +18807,11 @@
           "text": "`agents_status` and `connect_agents` app commands over atm-lib’s skills_status/install_skills; footer button (app only) opens the `?agents` dialog; connects only on click and lists paths written/refused; browser shows `atm agents install`. Unit 1237, e2e 419.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-459",
@@ -18817,7 +18833,7 @@
         "dashboard/src/lib/address.ts"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T19:04:45Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18839,7 +18855,11 @@
           "text": "`atm://` links on macOS without a plugin (Info.plist scheme, `RunEvent::Opened`); `links.rs` checks them into dashboard addresses, `subscribe_links` channel (start link waits), page re-checks with `isPagePath` before navigating. Not run in a real app yet (needs a bundle + `open atm://…`). Unit 1240, e2e 420.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-460",
@@ -18864,7 +18884,7 @@
         ".github/workflows/"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T18:36:58Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18905,7 +18925,11 @@
       "started_by": "claude:34798264",
       "commit": "b56d46496294c1bd7fafb6ac3ee3a2349c580386",
       "completed_at": "2026-11-08T18:36:58Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-461",
@@ -18929,7 +18953,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-06T20:53:32Z",
-      "updated_at": "2026-11-08T19:06:32Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18951,7 +18975,11 @@
           "text": "B7 and I25–I29 in security-architecture.md, each with a check; new app tests for the capability list and the CSP; by-hand checklist for the first signed DMG in §5. Open: T-483’s updater gets its own review.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-462",
@@ -20135,7 +20163,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T06:53:32Z",
-      "updated_at": "2026-11-08T08:22:58Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "claude:34798264",
       "updated_by": "claude:34798264",
       "related": [
@@ -20173,7 +20201,11 @@
       "started_by": "claude:34798264",
       "commit": "828aa94e57fb2998e290f6b3c0e466804feac4da",
       "completed_at": "2026-11-08T08:22:58Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-486",
@@ -20194,7 +20226,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T07:06:02Z",
-      "updated_at": "2026-11-08T08:02:12Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20216,7 +20248,11 @@
           "text": "A release is released once all its tasks are merged, in any PR (released_at its last merge); messages say \"not merged yet\"; atm doctor warns about a planned release whose tasks are all merged. Scenarios in pr.json and releases.json. This repo’s 0.32.0 is released by `atm vcs pushed --pr 40` once this atm is installed.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-487",
@@ -20285,7 +20321,7 @@
         "docs/adr/ADR-003-workspaces.md"
       ],
       "created_at": "2026-11-08T09:20:34Z",
-      "updated_at": "2026-11-08T10:17:24Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20328,7 +20364,11 @@
         }
       ],
       "completed_at": "2026-11-08T10:17:24Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-490",
@@ -20354,7 +20394,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:28:34Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20376,7 +20416,11 @@
           "text": "The state folder: `atm_common::home::state_dir()` (ATM_STATE_DIR, ATM_HOME as its alias, else the platform app data folder for com.solo-swe.atm via dirs). The first run moves ~/.agentic-task-manager there with a MOVED.txt; projects.json becomes workspaces/default.json in place. Tests: unit (the move), a scenario (precedence, the rename), an end-to-end move from HOME; suite 584, e2e 411.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-491",
@@ -20401,7 +20445,7 @@
         "crates/atm-api/src/routes.rs"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:38:49Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20423,7 +20467,11 @@
           "text": "settings.json + `atm_db::open`/`atm_vcs::open` factories; `Project::open`, `store_maintenance()`; atm-lib `Workspaces`/`Workspace` (listing, search, add/remove/prune, summary cache, `recent.json`); atm-api routes use them; boot only delegates. The actor stays in boot until T-492 moves it. Suite 584 pass.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-492",
@@ -20451,7 +20499,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T10:49:18Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20473,7 +20521,11 @@
           "text": "atm-boot removed; CLI, API and app depend on atm-lib + atm-common only (new `tests/scripts/layers.test.mjs` checks the Cargo.toml files). `store_maintenance()` for db/config/lock-test, `join_default_workspace()` for registering (the hook keeps its cheap path), actor in `atm_lib::actor`, pid helpers in `atm-cli/src/process.rs`, `hook_project` gone. Suite 584 pass, e2e 411 pass.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-493",
@@ -20499,7 +20551,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-08T10:18:17Z",
-      "updated_at": "2026-11-08T11:29:41Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20521,7 +20573,11 @@
           "text": "`atm workspace list|create|delete|rename|projects|add-project|remove-project|prune` (default can’t go or be renamed); `atm project list|add|remove|prune` removed. atm-serve skill, `atm docs commands`, README updated; skill pre-approvals narrowed to the two reads; written skill review in security §3. Also fixed T-456’s app IPC test, which failed clippy after fmt. Suite 596, unit 1228.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-494",
@@ -20542,7 +20598,7 @@
         "dashboard/tests/e2e/"
       ],
       "created_at": "2026-11-08T18:09:43Z",
-      "updated_at": "2026-11-08T18:14:45Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20564,7 +20620,11 @@
           "text": "Repeated `sprint=` parameters in the address (write `append`, read `getAll`), old comma links dropped; also fixed the scope menu, which split its choice key on commas (`ScopeBar.svelte`). New e2e: a comma-named sprint picked, still picked after reload. Unit 1229, e2e 415.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-495",
@@ -20587,7 +20647,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T18:09:43Z",
-      "updated_at": "2026-11-08T18:10:34Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20609,7 +20669,11 @@
           "text": "`GET /_app/version.json` answers the page’s version; serve test checks it against whoami; docs and changelog updated.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-496",
@@ -20773,7 +20837,7 @@
         "packaging/README.md"
       ],
       "created_at": "2026-11-08T21:25:33Z",
-      "updated_at": "2026-11-09T01:08:36Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20799,7 +20863,11 @@
           "text": "Projects an older atm lists in ~/.agentic-task-manager join default when that list changes (platform state folder only); a server record counts only with this folder’s home, older atms’ servers are named, never stopped; atm service prints /projects/<id>. Checked on Hakan’s machine: learn-forever-blog joined, the 0.33.0 servers reported.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-502",
@@ -20821,7 +20889,7 @@
         "CHANGELOG.md"
       ],
       "created_at": "2026-11-08T22:32:25Z",
-      "updated_at": "2026-11-09T09:33:08Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20866,7 +20934,11 @@
         }
       ],
       "completed_at": "2026-11-09T09:33:08Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-503",
@@ -20896,7 +20968,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T09:40:00Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -20943,7 +21015,11 @@
       "questions": [
         "Waiting on CompMD 0.6.0: its frame policy allows the compmd: scheme (WebKit matches 'self' only on http for a sandboxed frame), released with the read-all-lockfiles fix. Then bump CompMD and do the window check again."
       ],
-      "blocked_at": "2026-11-09T08:59:29Z"
+      "blocked_at": "2026-11-09T08:59:29Z",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-504",
@@ -20966,7 +21042,7 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T09:33:08Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21018,7 +21094,11 @@
         }
       ],
       "completed_at": "2026-11-09T09:33:08Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-505",
@@ -21215,7 +21295,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-09T09:40:23Z",
-      "updated_at": "2026-11-09T09:50:35Z",
+      "updated_at": "2026-11-09T09:51:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21228,7 +21308,11 @@
       "with": "user",
       "started_at": "2026-11-09T09:41:11Z",
       "started_by": "claude:34798264",
-      "commit": "39cb0632ed4a7ca15625012c5f222fe7acaa83b1"
+      "commit": "39cb0632ed4a7ca15625012c5f222fe7acaa83b1",
+      "pr": {
+        "number": 41,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+      }
     },
     {
       "id": "T-510",
