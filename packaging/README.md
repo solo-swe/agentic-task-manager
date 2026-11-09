@@ -12,7 +12,10 @@ agentic-status-bar, not a Tauri app, uses Sparkle).
 always the same build. Someone with the formula uninstalls it before installing the app (`brew uninstall
 solo-swe/tap/atm`), as the cask's caveats say: a cask can declare a conflict only with another cask (the
 [Cask Cookbook](https://docs.brew.sh/Cask-Cookbook#stanza-conflicts_with); Homebrew refuses `conflicts_with formula:`,
-which 0.34.0's first cask had). Without Homebrew, the DMG alone gives the app; its CLI is inside it.
+which 0.34.0's first cask had). With the formula still installed, the cask installs the app but leaves the formula's
+`atm` on PATH ("It seems there is already a Binary at '/opt/homebrew/bin/atm' from formula atm; skipping link"):
+after `brew uninstall solo-swe/tap/atm`, `brew reinstall --cask atm-app` links the app's (checked with 0.34.0). Without
+Homebrew, the DMG alone gives the app; its CLI is inside it.
 
 **An atm from before 0.34.0 on the same machine** (another install, a server still running from it) keeps using
 `~/.agentic-task-manager/`, which 0.34.0 moved to the state folder (T-490): its dashboard shows only the projects it
