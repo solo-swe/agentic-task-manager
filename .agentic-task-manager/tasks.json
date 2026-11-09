@@ -21320,7 +21320,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-09T09:40:23Z",
-      "updated_at": "2026-11-09T10:11:27Z",
+      "updated_at": "2026-11-09T10:34:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -21333,12 +21333,12 @@
       "with": "user",
       "started_at": "2026-11-09T09:41:11Z",
       "started_by": "claude:34798264",
-      "commit": "10ae199c622e3b0c2236a8e5ffebeb998f584faa",
+      "commit": "9351d71ba5331b4cbc6c36dd13c7f9f88cfb5bbe",
       "pr": {
-        "number": 41,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+        "number": 42,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/42"
       },
-      "merged_at": "2026-11-09T10:10:27Z"
+      "merged_at": "2026-11-09T10:33:34Z"
     },
     {
       "id": "T-510",
