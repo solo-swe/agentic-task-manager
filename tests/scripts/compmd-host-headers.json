@@ -1,5 +1,5 @@
 {
-  "about": "What a host sends with CompMD's files (docs/tauri-compmd-design.md §3, H1 and H2), by path under CompMD's version folder. Both hosts are checked against it: atm serve (serve.test.mjs) and the app's compmd: scheme (app/src-tauri/src/lib.rs). null: the header is not sent.",
+  "about": "What a host sends with CompMD's files (docs/tauri-compmd-design.md §3, H1 and H2), by path under CompMD's version folder. atm serve is checked against all of it (serve.test.mjs); the app's atm: scheme against its script and WebAssembly rows (app/src-tauri/src/lib.rs), as the app's frames are CompMD's plugin's (ADR-005). null: the header is not sent.",
   "files": {
     "compmd.js": {
       "content-type": "text/javascript; charset=utf-8",

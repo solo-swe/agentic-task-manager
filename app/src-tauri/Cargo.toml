@@ -21,7 +21,6 @@ path = "src/lib.rs"
 
 [build-dependencies]
 tauri-build.workspace = true
-tauri-plugin-compmd.workspace = true
 
 [dependencies]
 atm-common.workspace = true

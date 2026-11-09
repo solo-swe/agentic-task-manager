@@ -24,8 +24,9 @@ atm-db = { path = "crates/atm-db" }
 atm-vcs = { path = "crates/atm-vcs" }
 atm-lib = { path = "crates/atm-lib" }
 atm-api = { path = "crates/atm-api" }
-# CompMD in a Tauri app (ADR-004): its files on a compmd: scheme; no dependency on atm's crates, to move to CompMD
-tauri-plugin-compmd = { path = "crates/tauri-plugin-compmd" }
+# CompMD in a Tauri app (ADR-004, T-503): CompMD's own plugin, its sandbox frames on a compmd: scheme, at
+# content-hashed paths. Its version is @compmd/sandbox's (dashboard/package.json): they are released together
+tauri-plugin-compmd = "=0.6.0"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }

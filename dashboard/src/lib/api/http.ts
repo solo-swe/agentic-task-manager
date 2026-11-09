@@ -18,6 +18,10 @@ export const inApp = typeof window !== 'undefined' && isTauri();
 /** The transport: the browser's fetch to atm serve, or in the app the IPC one */
 export const browserFetch: Fetch = (input, init) => (inApp ? ipcFetch(input) : fetch(input, init));
 
+/** A file of atm's own build, in the app from its asset scheme (`atm:`, never the IPC): the packs' modules the page
+ * gives CompMD's sandbox as code (lib/compmd.ts, T-503) */
+export const assetFetch: Fetch = (input, init) => fetch(input, init);
+
 /** What atm serve computes for a project under p/<id>/ (the task files themselves come only through the v1 route) */
 export type ProjectFile = 'claims.json' | 'worktrees.json';
 

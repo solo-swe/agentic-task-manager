@@ -49,7 +49,7 @@ describe('CompMd', () => {
     expect(error).toHaveBeenCalled();
   });
 
-  it('the sandbox is given its base as a full URL on CompMD’s origin (H4)', async () => {
+  it('in a browser, the sandbox is given its base as a full URL on the server’s origin (H4)', async () => {
     const { createSandbox } = await compmdWithView();
     render(CompMd, { text: 'text' });
     await vi.waitFor(() => expect(createSandbox).toHaveBeenCalled());

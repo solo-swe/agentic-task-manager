@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os';
 import path from 'node:path';
 import { test as base, expect, type Page, type Route } from '@playwright/test';
+import { compmdVersion } from '../../build/compmd';
 import type { FilterGroup } from '../../src/lib/filters';
 import { PREFS_KEY } from '../../src/lib/prefs';
 import type { ViewId } from '../../src/lib/tabs';
@@ -549,7 +550,7 @@ export class TasksServer {
     await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
       this.answerCommand(command, args),
     );
-    await this.page.addInitScript(() => {
+    await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
       };
@@ -567,15 +568,18 @@ export class TasksServer {
           return next;
         },
         unregisterCallback: () => {},
-        // CompMD's scheme (tauri-plugin-compmd, ADR-004) is this test server, which serves CompMD's files with the
-        // plugin's headers (serve.mjs, as atm serve); any other scheme as Tauri writes it on macOS
+        // The app's asset scheme (`atm:`, ADR-005) is this test server, which serves CompMD's build with atm serve's
+        // headers (serve.mjs); any other scheme as Tauri writes it on macOS
         convertFileSrc: (path: string, protocol = 'asset') =>
-          protocol === 'compmd'
+          protocol === 'atm'
             ? `${location.origin}/${encodeURIComponent(path)}`
             : `${protocol}://localhost/${encodeURIComponent(path)}`,
         metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
       };
-    });
+      // What CompMD's plugin gives the page, its frames' base (ADR-005): here the test server's frames, as atm
+      // serve's, since the plugin's own are in the crate
+      w.__COMPMD__ = { base: `${location.origin}/assets/compmd/${version}/compmd/` };
+    }, compmdVersion());
     return this;
   }
 

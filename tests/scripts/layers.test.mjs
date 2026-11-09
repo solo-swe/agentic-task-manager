@@ -16,8 +16,6 @@ const ALLOWED = {
   // The CLI enters the server (`atm _serve`), never calls it otherwise
   'crates/atm-cli': ['atm-common', 'atm-lib', 'atm-api'],
   'app/src-tauri': ['atm-common', 'atm-lib'],
-  // CompMD's Tauri plugin (ADR-004): none of atm's crates, so it can move to CompMD as it is
-  'crates/tauri-plugin-compmd': [],
 };
 
 /** The atm crates a Cargo.toml's `[dependencies]` (and target-specific ones) name. */

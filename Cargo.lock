@@ -4182,9 +4182,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-compmd"
-version = "0.34.0"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af047ab72eb59cc8561e0171cc3c66ec270b5602c52d4ca9a66edf801d76c2eb"
 dependencies = [
+ "serde",
+ "serde_json",
  "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

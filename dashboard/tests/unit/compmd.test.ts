@@ -12,13 +12,16 @@ import {
   compmdOrigin,
   compmdRequest,
   dashboardAddress,
+  fetchPackModules,
   frontmatter,
   FRONTMATTER_LINES,
   gutterRows,
   loadCompmd,
   resetCompmd,
+  resetPackModules,
   safeHref,
   sandboxBase,
+  sandboxOptions,
   secureLinks,
   slug,
   taskData,
@@ -47,32 +50,87 @@ describe('the asset folder', () => {
     );
   });
 
-  it('comes from the page’s server in a browser, and from CompMD’s own scheme in the app (ADR-004)', () => {
+  it('comes from the page’s server in a browser, and from the app’s own asset scheme in the app (ADR-004, T-503)', () => {
     expect(compmdOrigin(false)).toBe(location.origin);
     const internals = { convertFileSrc: vi.fn((path: string, scheme: string) => `${scheme}://localhost/${path}`) };
     vi.stubGlobal('__TAURI_INTERNALS__', internals);
     try {
-      expect(compmdOrigin(true)).toBe('compmd://localhost');
-      expect(internals.convertFileSrc).toHaveBeenCalledWith('', 'compmd');
+      expect(compmdOrigin(true)).toBe('atm://localhost');
+      expect(internals.convertFileSrc).toHaveBeenCalledWith('', 'atm');
       internals.convertFileSrc.mockImplementation((path, scheme) => `http://${scheme}.localhost/${path}`);
-      expect(compmdOrigin(true)).toBe('http://compmd.localhost');
+      expect(compmdOrigin(true)).toBe('http://atm.localhost');
       expect(compmdAssetUrl('compmd.js', compmdOrigin(true))).toBe(
-        `http://compmd.localhost/assets/compmd/${version}/compmd.js`,
+        `http://atm.localhost/assets/compmd/${version}/compmd.js`,
       );
     } finally {
       vi.unstubAllGlobals();
     }
   });
 
-  it('the sandbox’s base is a full URL on CompMD’s origin, whatever the page’s (H4)', () => {
+  it('the sandbox’s base is a full URL on the server’s origin, whatever the page’s (H4)', () => {
     const relative = `/assets/compmd/${version}/compmd/`;
-    expect(sandboxBase(relative, 'compmd://localhost')).toBe(`compmd://localhost${relative}`);
-    expect(sandboxBase(relative, 'http://compmd.localhost')).toBe(`http://compmd.localhost${relative}`);
     expect(sandboxBase(relative, 'http://localhost:8765')).toBe(`http://localhost:8765${relative}`);
     // A base that is already a full URL stays as it is
-    expect(sandboxBase(`compmd://localhost${relative}`, 'http://localhost:8765')).toBe(`compmd://localhost${relative}`);
+    expect(sandboxBase(`http://127.0.0.1:1${relative}`, 'http://localhost:8765')).toBe(`http://127.0.0.1:1${relative}`);
+  });
+});
+
+describe('the sandbox’s options (T-503)', () => {
+  const mermaid = { pack: '@comp-markdown/mermaid', version: '0.1.1', path: 'dist/mermaid.js' };
+  const stub = {
+    sandbox: {
+      base: `/assets/compmd/${version}/compmd/`,
+      trusted: {},
+      modules: () => ({ url: `/assets/compmd/${version}/compmd/packs/m.js`, integrity: 'sha384-abc' }),
+    },
+  };
+  afterEach(() => {
+    resetPackModules();
+    vi.unstubAllGlobals();
   });
 
+  it('under atm serve are @compmd/vite’s, with a full base', () => {
+    const options = sandboxOptions(stub, false);
+    expect(options.page).toBe('host');
+    expect((options as { base: string }).base).toBe(`${location.origin}/assets/compmd/${version}/compmd/`);
+    expect(options.modules).toBe(stub.sandbox.modules);
+  });
+
+  it('in the app have no base (CompMD’s plugin gives it) and give the packs’ modules as the code fetched', async () => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {
+      convertFileSrc: (path: string, scheme: string) => `${scheme}://localhost/${path}`,
+    });
+    const options = sandboxOptions(stub, true);
+    expect('base' in options).toBe(false);
+    // Nothing fetched yet: the component shows its fallback, and the sandbox says why
+    expect(options.modules(mermaid)).toBeUndefined();
+    const fetcher = vi.fn(async () => new Response('export default {}', { status: 200 }));
+    await fetchPackModules(stub, [{ module: mermaid }, { name: 'no module' }], fetcher, 'atm://localhost');
+    expect(fetcher).toHaveBeenCalledWith(`atm://localhost/assets/compmd/${version}/compmd/packs/m.js`, {
+      integrity: 'sha384-abc',
+    });
+    const source = options.modules(mermaid) as { code: Blob };
+    expect(await source.code.text()).toBe('export default {}');
+    expect(source.code.type).toBe('text/javascript');
+    // Once per module
+    await fetchPackModules(stub, [{ module: mermaid }], fetcher, 'atm://localhost');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('a module that can’t be fetched is left out and logged, never thrown', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const fetcher = vi.fn(async () => new Response('', { status: 404, statusText: 'Not Found' }));
+    await fetchPackModules(stub, [{ module: mermaid }], fetcher, 'atm://localhost');
+    vi.stubGlobal('__TAURI_INTERNALS__', {
+      convertFileSrc: (path: string, scheme: string) => `${scheme}://localhost/${path}`,
+    });
+    expect(sandboxOptions(stub, true).modules(mermaid)).toBeUndefined();
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('couldn’t be fetched'), expect.any(Error));
+    error.mockRestore();
+  });
+});
+
+describe('the pack modules', () => {
   it('the Mermaid pack’s module is pinned by the hash of the file it ships (@compmd/vite, T-285)', () => {
     const found = (sandbox.modules as (place: object) => { url: string; integrity: string })({
       pack: '@comp-markdown/mermaid',

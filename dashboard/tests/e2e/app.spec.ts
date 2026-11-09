@@ -134,6 +134,26 @@ test.describe('the dashboard in the atm app', () => {
     await expect(bar).toHaveCount(0);
   });
 
+  test('a Mermaid diagram draws in the app: the frames from the plugin’s base, the pack’s module given as code (T-503)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    const modules: string[] = [];
+    page.on('request', (r) => {
+      if (r.url().includes('/compmd/packs/')) modules.push(`${r.frame() === page.mainFrame() ? 'page' : 'frame'}`);
+    });
+    await page.goto('/');
+    await page.locator('#footer-help').click();
+    const svg = page.frameLocator('#help-panel iframe').locator('svg').first();
+    await expect(svg).toBeVisible({ timeout: 15_000 });
+    await expect(svg).toContainText('In progress');
+    // The page fetched the module once; no frame asked for it by URL
+    expect(modules).toEqual(['page']);
+    expect(tasksServer.httpRequests).toEqual([]);
+  });
+
   test('in the browser there is no button: the dialog gives the command instead', async ({ page, tasksServer }) => {
     tasksServer.use('standard');
     await page.goto('/?agents');
