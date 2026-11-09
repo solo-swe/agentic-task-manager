@@ -8,7 +8,8 @@ the demo project or the pages in `generate.mjs`, then regenerate.
 | File | What it is | Where it's used |
 |---|---|---|
 | `atm-logo.svg` | The logo in the accent blue (`#2f81f7`, the favicon's colour) | The README's header |
-| `atm-logo.png` | 512×512, the blue logo on the dark background (`#0d1117`) | The GitHub org's avatar (avatars take only PNG, JPG or GIF) |
+| `atm-logo.png` | 512×512, the blue logo on the light face, edge to edge (GitHub rounds the corners itself; T-504) | The GitHub org's avatar (avatars take only PNG, JPG or GIF) |
+| `app-icon.png` | 1024×1024 on Apple's icon grid: the body an 824×824 squircle (the continuous-corner shape of macOS icons) in the middle, with a transparent margin, a soft shadow and a hairline edge; the light face; the logo in the accent blue (T-504) | The source of the app's icons, `app/src-tauri/icons/` (below) |
 | `social-preview-dark.png`, `social-preview-light.png` | 1280×640: the logo, name and tagline, how to install, and the dashboard (T-279), on dark and on light | GitHub's social preview, shown when the repository is linked: one of them |
 | `demo-tasks.json` | The demo project the social preview's dashboard shows: a small shop's sprint, two agents at work, a review, a question | `generate.mjs` |
 | `generate.mjs` | The script that makes them, with the HTML it renders the PNGs from | `pnpm run branding` |
@@ -30,7 +31,18 @@ In `dashboard/` (where Playwright is installed), after `pnpm run build`:
 ```bash
 pnpm run branding
 pnpm run branding --variants /tmp/previews   # every layout, to choose from
+pnpm run branding --icons                    # only app-icon.png and atm-logo.png (no dashboard needed)
 ```
+
+**The app's icons** come from `app-icon.png` with Tauri's CLI, in `dashboard/`:
+
+```bash
+pnpm exec tauri icon ../branding/app-icon.png -o <a scratch folder>
+```
+
+It writes every platform's set; copy into `app/src-tauri/icons/` the ones the app lists in `tauri.conf.json`
+(`icon.icns`, `icon.ico`, `icon.png`, `32x32.png`, `64x64.png`, `128x128.png`, `128x128@2x.png`), and look at them
+before committing. The same image serves Windows and Linux.
 
 It rewrites the files above. Then upload what changed by hand, GitHub doesn't read them from the repository:
 - `social-preview-dark.png` or `social-preview-light.png`: the repository's Settings → General → Social preview;

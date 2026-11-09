@@ -20890,7 +20890,7 @@
       "description": "The app's icon (`app/src-tauri/icons/`) and the GitHub org's avatar (`branding/atm-logo.png`) are the logo filled edge to edge on dark `#0d1117`, with square corners. In the Dock, Finder and Launchpad, beside other apps, it looks out of place (Hakan): macOS apps since Big Sur have a rounded-square body with a margin around it, and most have a light face.\n\n## Change\n- **One source for the icons**, made by `branding/generate.mjs` from the logo drawing (`dashboard/src/assets/atm-logo.svg`), never by hand:\n  - **macOS:** Apple's icon grid: a 1024×1024 canvas, the body a rounded square of 824×824 centred (its corners Apple's continuous curve, radius about 185), a transparent margin, and a soft shadow under it; a light face (white to a light grey) with the logo in the accent blue (`#2f81f7`).\n  - **Windows and Linux:** the same face and logo; the shape per platform (a rounded square fits both).\n- **The app's icon set** from it with `pnpm tauri icon` (the CLI the dashboard already has): `icon.icns`, `icon.ico` and the PNGs in `app/src-tauri/icons/`.\n- **The GitHub avatar:** `atm-logo.png` on the light face, with the logo large enough for GitHub's rounded crop at small sizes; upload it by hand (the org's Settings → Profile). The social previews keep their own dark and light cards.\n- `branding/README.md`: the new files and how they are made.\n\n## Check\nShow Hakan the icon in the Dock and Finder (a `cargo tauri build --debug` bundle) next to other apps, and the avatar at GitHub's sizes, before it is done. A dark or tinted variant (macOS 26's Icon Composer) is a later task if wanted.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "branding/generate.mjs",
@@ -20899,9 +20899,9 @@
         "app/src-tauri/icons/"
       ],
       "created_at": "2026-11-09T00:53:47Z",
-      "updated_at": "2026-11-09T00:53:47Z",
+      "updated_at": "2026-11-09T01:11:27Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
       "sprint_history": [
         {
           "sprint": "The atm app",
@@ -20912,7 +20912,9 @@
       "components": [
         "branding"
       ],
-      "review": "async"
+      "review": "async",
+      "started_at": "2026-11-09T01:11:27Z",
+      "started_by": "claude:34798264"
     }
   ]
 }

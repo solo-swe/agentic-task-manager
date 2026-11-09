@@ -42,13 +42,76 @@ const page = (width, height, style, body) => `<!doctype html>
 const svgImg = (svg, size) =>
   `<img src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${size}" height="${size}" alt="" />`;
 
-/** The logo alone, 512×512: for places that take only PNG, JPG or GIF (the org's avatar on GitHub). */
-export const logoPage = (svg) => ({
-  file: 'atm-logo.png',
-  width: 512,
-  height: 512,
-  html: page(512, 512, '', svgImg(svg, 360)),
+/** The light face of the app icon and the avatar (T-504), top to bottom: as other macOS apps have, not GitHub's dark. */
+export const FACE = ['#ffffff', '#e6ebf2'];
+
+/**
+ * A superellipse, |x|^n + |y|^n = 1, filling a `size`×`size` box at (`x`, `y`), as an SVG path: the shape of macOS
+ * app icons since Big Sur, whose corners blend into the sides (a continuous curve), unlike a rounded rectangle's.
+ */
+export function squircle(x, y, size, n = 5, steps = 256) {
+  const r = size / 2;
+  const point = (t) => {
+    const [c, s] = [Math.cos(t), Math.sin(t)];
+    const along = (v) => Math.sign(v) * Math.abs(v) ** (2 / n);
+    return `${(x + r + r * along(c)).toFixed(2)} ${(y + r + r * along(s)).toFixed(2)}`;
+  };
+  return `M${Array.from({ length: steps }, (_, i) => point((i / steps) * 2 * Math.PI)).join('L')}Z`;
+}
+
+const dataUrl = (svg) => `data:image/svg+xml,${encodeURIComponent(svg)}`;
+const faceGradient = `<linearGradient id="face" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="${FACE[0]}" /><stop offset="1" stop-color="${FACE[1]}" />
+    </linearGradient>`;
+
+/**
+ * The app icon (T-504), on Apple's icon grid: a 1024×1024 canvas, the body 824×824 in its middle with a transparent
+ * margin, a soft shadow under it and a hairline edge (so the light face shows on a light Dock), the logo in the
+ * accent blue. `pnpm tauri icon` makes the app's icon set from it (README.md).
+ */
+export function appIcon(logo) {
+  const body = squircle(100, 100, 824);
+  const size = 500;
+  const at = (1024 - size) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    ${faceGradient}
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+  <path d="${body}" fill="url(#face)" filter="url(#shadow)" />
+  <path d="${body}" fill="none" stroke="#000" stroke-opacity="0.08" stroke-width="2" />
+  <image href="${dataUrl(logo)}" x="${at}" y="${at}" width="${size}" height="${size}" />
+</svg>`;
+}
+
+/**
+ * The org's avatar on GitHub (T-504), 512×512: the light face edge to edge (GitHub rounds the corners itself), the
+ * logo large enough to read at the small sizes GitHub shows it.
+ */
+export function avatar(logo) {
+  const size = 340;
+  const at = (512 - size) / 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>${faceGradient}</defs>
+  <rect width="512" height="512" fill="url(#face)" />
+  <image href="${dataUrl(logo)}" x="${at}" y="${at}" width="${size}" height="${size}" />
+</svg>`;
+}
+
+/** An SVG as a page to screenshot, its background transparent (omitBackground) */
+const svgPage = (file, size, svg) => ({
+  file,
+  width: size,
+  height: size,
+  transparent: true,
+  html: `<!doctype html><html><head><style>html, body { margin: 0; background: transparent; }
+    svg { display: block; }</style></head><body>${svg}</body></html>`,
 });
+
+/** The icon pages: the app icon's source and the avatar */
+export const iconPages = (logo) => [svgPage('app-icon.png', 1024, appIcon(logo)), svgPage('atm-logo.png', 512, avatar(logo))];
 
 /** The social preview's dashboard (T-279): the built dashboard on a demo project, at a fixed time */
 export const DASHBOARD = here('../dashboard/dist/tasks-dashboard.html');
@@ -207,7 +270,20 @@ async function main() {
   const require = createRequire(here('../dashboard/package.json'));
   const { chromium } = require('@playwright/test');
   const browser = await chromium.launch();
+  const render = async ({ file, width, height, html, transparent }, outDir) => {
+    const tab = await browser.newPage({ viewport: { width, height } });
+    await tab.setContent(html, { waitUntil: 'load' });
+    const path = outDir ? `${outDir}/${file}` : fileURLToPath(here(file));
+    await tab.screenshot({ path, omitBackground: !!transparent });
+    await tab.close();
+    console.log(outDir ? path : `branding/${file}`);
+  };
   try {
+    // `--icons`: only the app icon's source and the avatar, without the dashboard the social preview needs
+    if (process.argv.includes('--icons')) {
+      for (const p of iconPages(logo)) await render(p);
+      return;
+    }
     const shot = await dashboardShot(browser);
     // `--variants <dir>`: every layout, dark and light, into <dir>, to choose from; otherwise the files in branding/
     const at = process.argv.indexOf('--variants');
@@ -224,18 +300,11 @@ async function main() {
           lightPreview(l, `social-preview-${l}-light.png`),
         ])
       : [
-          logoPage(logo),
+          ...iconPages(logo),
           socialPreviewPage(logo, shot, PREVIEW_LAYOUT, 'social-preview-dark.png'),
           lightPreview(PREVIEW_LAYOUT, 'social-preview-light.png'),
         ];
-    for (const { file, width, height, html } of pages) {
-      const tab = await browser.newPage({ viewport: { width, height } });
-      await tab.setContent(html, { waitUntil: 'load' });
-      const path = outDir ? `${outDir}/${file}` : fileURLToPath(here(file));
-      await tab.screenshot({ path });
-      await tab.close();
-      console.log(outDir ? path : `branding/${file}`);
-    }
+    for (const p of pages) await render(p, outDir);
   } finally {
     await browser.close();
   }
