@@ -5,6 +5,7 @@
 
 pub mod commands;
 pub mod links;
+pub mod updates;
 
 use tauri::Manager;
 
@@ -13,6 +14,7 @@ use commands::{
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use updates::{check_update, install_update};
 
 // CompMD's built files, embedded by tauri-plugin-compmd's build step (build.rs)
 include!(concat!(env!("OUT_DIR"), "/compmd_files.rs"));
@@ -38,6 +40,8 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         agents_status,
         connect_agents,
         subscribe_links,
+        check_update,
+        install_update,
     ])
 }
 
@@ -64,6 +68,8 @@ pub fn run() {
         }))
         // CompMD's files on a scheme of their own, so its frames keep their own policy (ADR-004)
         .plugin(tauri_plugin_compmd::init(COMPMD_FILES))
+        // Its own updates (T-483), through the two commands in `updates`: the page has no permission of the plugin's
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
         // The window's page loading again (a reload) ends the old page's subscriptions (T-506): it can't say so itself

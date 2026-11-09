@@ -506,6 +506,12 @@ export class TasksServer {
     }
   }
 
+  /** The update the app's `check_update` finds (T-483), and why `install_update` fails, if it should */
+  update: { version: string; current_version: string; notes: string | null } | null = null;
+  updateFails: string | null = null;
+  /** The update commands the page called, in order */
+  updateCalls: string[] = [];
+
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
@@ -623,6 +629,12 @@ export class TasksServer {
       }
       case 'unsubscribe':
         return { ok: this.subscriptions.delete(Number(args.id)) };
+      case 'check_update':
+        this.updateCalls.push(command);
+        return { ok: this.update };
+      case 'install_update':
+        this.updateCalls.push(command);
+        return this.updateFails ? { error: { kind: 'failed', message: this.updateFails } } : { ok: null };
       case 'agents_status':
         this.agentCalls.push(command);
         return { ok: [this.harnessStatus()] };

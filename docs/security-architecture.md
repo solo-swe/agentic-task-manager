@@ -792,6 +792,27 @@ address reaches the page on its own channel (`subscribe_links`, in the main wind
   the stress test once timed out on the lock while the whole suite ran, and passed run alone); the functional e2e
   suite (420); the Linux screenshots in Docker (84, no baseline changed).
 
+**The app's own updates (T-483).** A new entry point: the app downloads and installs code. What keeps it the reviewed
+build (I29):
+- **Only a signed update installs.** Tauri's updater reads `latest.json` from the latest published GitHub release over
+  HTTPS (`updates.rs` `ENDPOINT`; drafts and pre-releases are never "latest") and installs the archive it names only if
+  its minisign signature verifies against the public key built into the app (`PUBKEY`). The private key is a release
+  secret (`TAURI_SIGNING_PRIVATE_KEY`, with its password), read only in the `app-macos` job, which has the read-only
+  token; the manifest itself isn't trusted for anything but where to look (its notes show as plain text). The archive
+  is the same signed, notarized `atm.app` as the DMG's.
+- **Only on the user's click.** The page gets two commands, `check_update` and `install_update` (in the main window's
+  capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install. The app looks for
+  an update on start and at most every six hours; installing (and the restart into it) happens only from the bar's
+  *Install and restart*. A debug build, or one without `PUBKEY`, finds no update.
+- **Homebrew:** the cask says `auto_updates true`, so `brew upgrade` leaves the app to its own updates; the bundled
+  `atm` CLI is inside the app, so the CLI on PATH stays the app's build.
+- New dependency (approved): `tauri-plugin-updater` 2.14.1 (MIT or Apache-2.0), on the system's TLS (`native-tls`:
+  Security.framework on macOS) rather than rustls, whose root certificates come as a crate under a licence `deny.toml`
+  doesn't list; `cargo deny` passes with no change to it.
+- Tests: the update manifest's generation (`packaging.test.mjs`), the cask's `auto_updates`, the capability listing
+  exactly the app's commands, and `app.spec.ts` (offered, installed only on the click, a failure shown, Not now kept).
+  The update flow end to end is checked by hand against a draft release once the key pair exists.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

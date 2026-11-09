@@ -36,6 +36,9 @@ cask "atm-app" do
   # Big Sur (the app's minimum) is older than any macOS Homebrew runs on
   depends_on :macos
 
+  # The app updates itself (T-483), its atm CLI with it: brew leaves an installed one alone
+  auto_updates true
+
   app "atm.app"
   # The app's own atm CLI goes on PATH: the formula's would be a second one
   binary "#{appdir}/atm.app/Contents/MacOS/atm"

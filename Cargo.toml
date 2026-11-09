@@ -52,7 +52,11 @@ serde = { version = "1", features = ["derive"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
 tauri-plugin-single-instance = "2.5.5"
-specta = { version = "=2.0.0-rc.26", features = ["derive"] }
+# The app's own updates (T-483, approved): Tauri's updater, its signed update manifest on each GitHub release. The
+# system's TLS (native-tls: Security.framework on macOS) rather than rustls, whose root certificates come as a crate
+# under a licence deny.toml doesn't list (webpki-root-certs, CDLA-Permissive-2.0)
+tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
 # The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced

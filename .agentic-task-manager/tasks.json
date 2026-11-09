@@ -17068,7 +17068,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-460"
       ],
@@ -17079,7 +17079,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-09T09:40:00Z",
+      "updated_at": "2026-11-09T11:16:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17108,7 +17108,9 @@
           "text": "OK to add `tauri-plugin-updater` (Tauri’s own updater plugin, MIT/Apache-2.0, at the version matching tauri 2.12.x) to the app, and its JS side `@tauri-apps/plugin-updater` to the dashboard? → Approved: add tauri-plugin-updater and @tauri-apps/plugin-updater.; The updater needs a signing key pair of its own (`tauri signer generate`): its public key is built into the app; the private key and its password go in as the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Can you generate it and set the two secrets (I can write the exact steps into packaging/README.md), and give me the public key to build in? → Open for now: the updater key pair (TAURI_SIGNING_PRIVATE_KEY and its password, and the public key in the app) is set up together with Hakan; build everything else so only the key is left.; Homebrew installs: the cask says `auto_updates true` and the app updates itself (brew then leaves it alone), or the updater is off when installed by the cask and `brew upgrade` updates it? With option B the bundled atm CLI updates with the app either way. I would suggest `auto_updates true`: one update path for everyone. → The app updates itself, in addition to brew upgrade: the cask says auto_updates true.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "started_at": "2026-11-09T11:16:36Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-484",
@@ -18196,7 +18198,7 @@
       "description": "In the app the dashboard still polls: the Refresh menu (`lib/shell/RefreshMenu.svelte`) reloads every few seconds (`autoRefresh`, `autoRefreshSeconds` in `lib/state.svelte.ts` and `lib/prefs.ts`, set in the Settings menu). The app already watches the task files and says what changed (T-456: `subscribe_workspace`, `subscribe_project`, `unsubscribe` over a `Channel`, with the store's `watch_folders`), but nothing in the page subscribes. In the app the page should only react to changes (Hakan).\n\n## Change\n- **In the app** (`inApp`), the page subscribes to its workspace and to each open project (`lib/api/`, beside `links.ts`), reloads what a change names, and unsubscribes when it leaves them (a workspace switch, a closed project).\n- **No refresh settings in the app:** the Refresh menu's interval and the auto-refresh switch are gone there; a manual reload (the menu's Reload, or ⌘R) may stay. Their stored prefs are ignored in the app, not deleted.\n- **A change the watcher misses never goes unseen for long:** say what covers it (a reload when the window regains focus), and test it.\n- The browser keeps its refresh settings until `atm serve` pushes changes too (the follow-up task).\n- `docs/guides/tauri.md` (Streams), the What's new and changelog entries.\n\n## Tests\nUnit: the page subscribes in the app and not in the browser; a change message reloads that project; switching workspace unsubscribes. e2e (`app.spec.ts`, `asApp()`): no Refresh interval in the app; a channel message (the mock's stored callback) reloads the board.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/api/",
@@ -18208,7 +18210,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-09T11:12:23Z",
+      "updated_at": "2026-11-09T11:16:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18229,17 +18231,43 @@
       ],
       "started_at": "2026-11-09T11:07:08Z",
       "started_by": "claude:34798264",
-      "commit": "5ec551a3716b2cdebc0aa1d8ac7e54fe94a2022e",
+      "commit": "684e62e96d872e1837e892c58c812fe897c1102a",
       "review_requested_at": "2026-11-09T11:12:23Z",
-      "review_state": "waiting",
       "notes": [
         {
           "at": "2026-11-09T11:12:23Z",
           "kind": "review",
           "text": "Check in a window (cargo run --release -p atm-app; a debug build is unoptimized): no interval on the reload button or in the ⋯ menu; an agent changing tasks (or atm task note) shows on the board within a second or so; switching back to the window reloads. The page no longer reloads every 5 s.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T11:15:11Z",
+          "kind": "note",
+          "text": "Added: a page reload (⌘R) ends the old page’s subscriptions in the app (on_page_load, AppState::unwatch_all); tested.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T11:16:23Z",
+          "kind": "note",
+          "text": "Approved: Checked by Hakan in the app: no polling, better; measuring later if needed",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-09T11:16:24Z",
+          "kind": "outcome",
+          "text": "In the app the page reacts to the app’s changes (workspace and project subscriptions, a reload on focus) instead of polling; no refresh settings there; a page reload ends the old subscriptions. Checked by Hakan.",
+          "by": "claude:34798264"
         }
-      ]
+      ],
+      "reviews": [
+        {
+          "from": "2026-11-09T11:12:23Z",
+          "to": "2026-11-09T11:16:23Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-09T11:16:24Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-507",

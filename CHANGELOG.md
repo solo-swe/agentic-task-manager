@@ -6,6 +6,18 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Added
+- **The app updates itself** (T-483): Tauri's updater (`tauri-plugin-updater` 2.14.1, approved, on the system's TLS,
+  `native-tls`, so `deny.toml` needs no new licence) reads `latest.json`
+  from the latest published release, and the app offers a newer version in a bar (its What's new folded in it):
+  *Install and restart* downloads it, checks its signature against the public key built into the app, installs it and
+  restarts; *Not now* doesn't offer that version again. The page has two commands for it, `check_update` and
+  `install_update`, not the plugin's API; it checks on start and at most every six hours. The release workflow signs
+  the app's update archive with the updater key (`TAURI_SIGNING_PRIVATE_KEY` and its password, new secrets;
+  `createUpdaterArtifacts` in `tauri.release.conf.json`) and writes `latest.json` (`packaging/updater-manifest.mjs`).
+  The cask says `auto_updates true`. Until the key pair is made (`PUBKEY` in `app/src-tauri/src/updates.rs`), the app
+  finds no updates, and a release can't build the app.
+
 ### Changed
 - **The app reacts to changes instead of polling** (T-506): in the atm app the page subscribes to its workspace and
   the open project (`subscribe_workspace`, `subscribe_project`, T-456; `lib/api/changes.ts`) and reloads when the app

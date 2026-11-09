@@ -10,6 +10,8 @@ export interface Prefs {
   lastSeenVersion: string;
   /** The server build whose update notice the user dismissed ("Not now"); only another build shows it again */
   dismissedBuild: string;
+  /** The app version whose update the user put off ("Not now"); only a newer one is offered again (T-483) */
+  dismissedAppUpdate: string;
   kanbanGroupByPhase: boolean;
   /** 'system', 'light' or 'dark' (see appearance.ts) */
   mode: string;

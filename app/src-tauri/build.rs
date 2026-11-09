@@ -23,6 +23,8 @@ fn main() {
         "agents_status",
         "connect_agents",
         "subscribe_links",
+        "check_update",
+        "install_update",
     ]);
     let mut attributes = tauri_build::Attributes::new().app_manifest(manifest);
     let msvc = std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|env| env == "msvc");
