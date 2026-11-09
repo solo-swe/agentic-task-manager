@@ -19,7 +19,8 @@ pub const ENDPOINT: &str =
 
 /// The updater's public key (`tauri signer generate`, the `.pub` file as Tauri writes it, base64; minisign key
 /// `D2392A7664649507`, made by Hakan, 2026-11-09): an update whose signature it doesn't verify is refused. Its private
-/// half is the release secret `TAURI_SIGNING_PRIVATE_KEY`, never in the repository.
+/// half is the release secret `TAURI_SIGNING_PRIVATE_KEY`, never in the repository. The same key is in tauri.conf.json
+/// (`plugins.updater.pubkey`), which the bundler checks the archive's signature against (a test keeps them equal).
 pub const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyMzkyQTc2NjQ2NDk1MDcKUldRSGxXUmtkaW81MHZsaFpiTUJVdW5Cek5JanhaV0JDQmZyOVR5d25UcjRDKzdLTVVQV0tPV0sK";
 
 /// An update the app can install.
@@ -117,5 +118,14 @@ mod tests {
             ENDPOINT
                 .starts_with("https://github.com/solo-swe/agentic-task-manager/releases/latest/")
         );
+    }
+
+    /// The bundler checks the update archive's signature against `plugins.updater.pubkey` in tauri.conf.json, and the
+    /// plugin starts from it: the same key as the app checks updates with
+    #[test]
+    fn the_config_has_the_same_key() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(conf["plugins"]["updater"]["pubkey"], PUBKEY);
     }
 }

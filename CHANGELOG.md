@@ -43,9 +43,10 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   folders, `atm://localhost/assets/compmd/` and `compmd://localhost/frames/`. atm's own `crates/tauri-plugin-compmd/`
   is gone. A frame that never loads now shows a note too (CompMD 0.6.0 reports it).
 - **The app starts again** (T-483): the updater plugin reads `plugins.updater` in `tauri.conf.json` when it starts,
-  and refused a configuration without it, so every build of the app stopped as it started. It has the section now
-  (`pubkey` empty: `updates.rs` sets the key and endpoint), and a test builds the app with its plugins
-  (`with_plugins`, `the_app_starts_with_its_plugins`).
+  and refused a configuration without it, so every build of the app stopped as it started. It has the section now,
+  with the public key, which the bundler also checks the update archive's signature against (a test keeps it equal to
+  `updates.rs`'s `PUBKEY`), and a test builds the app with its plugins (`with_plugins`,
+  `the_app_starts_with_its_plugins`).
 - **The app's Homebrew cask installs** (T-509): 0.34.0's first `Casks/atm-app.rb` had `conflicts_with formula:`,
   which Homebrew refuses (a cask declares conflicts only with casks, the Cask Cookbook), so `brew install --cask
   atm-app` failed. Its caveats now say to uninstall the `atm` formula first, and `depends_on :macos` replaces the

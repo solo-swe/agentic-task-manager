@@ -117,7 +117,7 @@ fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
             response
         })
         // Its own updates (T-483), through the two commands in `updates`: the page has no permission of the plugin's.
-        // The plugin reads `plugins.updater` in tauri.conf.json when it starts; `updates.rs` sets the key and endpoint
+        // The plugin reads `plugins.updater` in tauri.conf.json when it starts (the key, as `updates.rs` has it)
         .plugin(tauri_plugin_updater::Builder::new().build())
 }
 
