@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 521,
+    "next_id": 523,
     "labels": [
       {
         "id": "architecture",
@@ -17088,7 +17088,7 @@
       "description": "The app checks for, downloads and installs its own updates through Tauri's updater plugin (agentic-status-bar, not a Tauri app, uses Sparkle: only its release habits carry over, not its mechanism).\n\n## Change\n- `tauri-plugin-updater`, its endpoint a `latest.json` update manifest attached to each GitHub release.\n- The release workflow signs the app bundle with Tauri's updater key (a new secret, `TAURI_SIGNING_PRIVATE_KEY` and its password; separate from the Developer ID signature) and writes `latest.json`; the public key is built into the app.\n- The app asks before installing; never updates silently. The bundled `atm` binary updates with it.\n- A Homebrew cask install updates through `brew upgrade` instead (the cask says `auto_updates true`, or the updater is off for it: decide in the task).\n\n## Docs\n`packaging/README.md` (the secret, the manifest), `docs/security-architecture.md` (a new entry point: downloads and installs code).\n\n## Tests\nThe manifest's generation, tested; the update flow checked by hand against a draft release.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_review",
+      "status": "done",
       "dependencies": [
         "T-460"
       ],
@@ -17099,7 +17099,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-09T21:13:01Z",
+      "updated_at": "2026-11-10T01:56:05Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17150,14 +17150,27 @@
           "kind": "note",
           "text": "Approved: Approved in Crit with no comments (001615c..756a48d). Left: on 0.35.0’s release, check latest.json, the signed archive, and that the app finds no update; on the first release after it, the install end to end.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-10T01:56:05Z",
+          "kind": "outcome",
+          "text": "Approved; the updater is built and signed with Hakan’s key. The release checks are follow-up tasks (0.35.0’s manifest; the first install end to end).",
+          "by": "claude:34798264"
         }
       ],
       "commit": "756a48d461216722f350a2f4ce37030f435bc250",
       "started_at": "2026-11-09T17:09:25Z",
       "started_by": "claude:34798264",
       "review_requested_at": "2026-11-09T17:20:46Z",
-      "review_state": "approved",
-      "reviewed_at": "2026-11-09T21:13:01Z"
+      "reviews": [
+        {
+          "from": "2026-11-09T17:20:46Z",
+          "to": "2026-11-09T21:13:01Z",
+          "outcome": "approved"
+        }
+      ],
+      "completed_at": "2026-11-10T01:56:05Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-484",
@@ -18918,6 +18931,73 @@
       "components": [
         "docs"
       ]
+    },
+    {
+      "id": "T-521",
+      "name": "Release check: 0.35.0 ships the updater's manifest and signed archive, and finds no update",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "Follow-up of T-483 (in-app updates, approved), done with Hakan when 0.35.0 is released.\n\n## Check\n- The 0.35.0 GitHub release (draft, then published) has `latest.json` and the signed `atm.app.tar.gz` (with its `.sig`) attached; `latest.json` names 0.35.0, the archive's URL on that release, and the signature from the `.sig`.\n- The released app, installed (from the release download and from the Homebrew cask), checks for updates and finds none, with no error.\n\nRecord the result in a note. A problem found is fixed in the release branch before the release is published, or becomes a task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        ".github/workflows/release.yml",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-10T01:56:18Z",
+      "updated_at": "2026-11-10T01:56:21Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-10T01:56:18Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "with": "user",
+      "components": [
+        "ci"
+      ]
+    },
+    {
+      "id": "T-522",
+      "name": "Release check: the first release after 0.35.0 updates the app end to end",
+      "type": "test",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "Follow-up of T-483 (in-app updates, approved), done with Hakan when 0.36.0 (or the first release after 0.35.0) is published.\n\n## Check\nOn a Mac with 0.35.0 installed (one from the release download, one from the Homebrew cask, which says `auto_updates true`):\n- the app offers the update and asks before installing (never silently);\n- the download's signature is verified against the built-in key (a tampered or wrongly signed archive is refused: check on a draft release, if practical);\n- it installs, restarts on the new version, and the bundled `atm` is the new one too (`atm version`);\n- `brew upgrade` afterwards leaves the cask's app alone.\n\nRecord the result in a note; a problem becomes a task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-521"
+      ],
+      "files": [
+        "app/src-tauri/src/updates.rs",
+        "packaging/README.md"
+      ],
+      "created_at": "2026-11-10T01:56:18Z",
+      "updated_at": "2026-11-10T01:56:18Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-10T01:56:18Z"
+        }
+      ],
+      "sprint": "The desktop app",
+      "with": "user"
     }
   ]
 }
