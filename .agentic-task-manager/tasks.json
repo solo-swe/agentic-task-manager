@@ -18227,7 +18227,7 @@
       "description": "macOS 26 shows an app icon that isn't an Icon Composer icon (`Assets.car`, `CFBundleIconName`) shrunk on a tile of its own: atm's icon looks smaller, with a wide border, beside apps that have one (VS Code, Notion). T-504 made the portable icons (PNG, ICO, ICNS); this is the macOS 26 one.\n\n## Decided (T-504)\n- **Made in Apple's Icon Composer, by hand, and committed as a source file** (`app/src-tauri/icons/AppIcon.icon`), as a design file is: not generated. T-504 tried writing the `.icon` from a script; Apple's renderer drew its strokes flat and cut off, and Tauri's `actool` step failed in ways it didn't report. Hakan makes it from the marks layer (`marksLayer` in `branding/generate.mjs`: the logo's columns and check as filled shapes), white fill.\n- The `.icns` stays the icon of older macOS, so a missing or failed `Assets.car` never breaks a release.\n\n## Change\n- `bundle.icon` in `tauri.release.conf.json` lists the `.icon` (Tauri 2.11+ compiles it with Xcode 26's `actool`).\n- **The release runner:** check `app-macos` (`.github/workflows/release.yml`, `macos-latest`) has Xcode 26 selected (`xcodebuild -version`); if not, select it in the job. Without it the bundle has no `Assets.car`.\n- **Docs:** an \"App icons\" section in `docs/guides/tauri.md`: Apple's grid (1024 canvas, 824 body), macOS 26 and Icon Composer, the build's Xcode 26 requirement, and what T-504 learned about `actool` (Tauri doesn't print its error: run it by hand with Tauri's options to see it; a stuck `ibtoold` daemon fails every run with \"Bad file descriptor\" until it is stopped). `branding/README.md`, `packaging/README.md`.\n\n## Check\nA bundle (`pnpm run app:bundle --bundles app`) has `Assets.car` and `CFBundleIconName`; in the Dock beside VS Code and Notion it is their size (Hakan).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "skipped",
       "dependencies": [
         "T-504"
       ],
@@ -18240,7 +18240,7 @@
         "packaging/README.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-09T09:40:00Z",
+      "updated_at": "2026-11-10T16:48:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18260,7 +18260,16 @@
         "branding",
         "docs"
       ],
-      "with": "user"
+      "with": "user",
+      "skipped_at": "2026-11-10T16:48:30Z",
+      "notes": [
+        {
+          "at": "2026-11-10T16:48:30Z",
+          "kind": "note",
+          "text": "Skipped: Not needed: with T-504’s final icon the Dock shows no extra border on macOS 26 (Hakan, 2026-11-10)",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-506",
