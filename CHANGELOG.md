@@ -6,7 +6,55 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-10
+
+Diagrams in the app (CompMD 0.6.0), the app updating itself from the next release on, and the app showing changes
+as they happen instead of polling. The design for the app's desktop UI is accepted
+(`docs/app-desktop-ui-design.md`, T-510); its steps are the next sprint.
+
+### Added
+- **The app updates itself** (T-483): Tauri's updater (`tauri-plugin-updater` 2.14.1, approved, on the system's TLS,
+  `native-tls`, so `deny.toml` needs no new licence) reads `latest.json`
+  from the latest published release, and the app offers a newer version in a bar (its What's new folded in it):
+  *Install and restart* downloads it, checks its signature against the public key built into the app, installs it and
+  restarts; *Not now* doesn't offer that version again. The page has two commands for it, `check_update` and
+  `install_update`, not the plugin's API; it checks on start and at most every six hours. The release workflow signs
+  the app's update archive with the updater key (`TAURI_SIGNING_PRIVATE_KEY` and its password, new secrets;
+  `createUpdaterArtifacts` in `tauri.release.conf.json`) and writes `latest.json` (`packaging/updater-manifest.mjs`).
+  The cask says `auto_updates true`. The public key is in `PUBKEY` (`app/src-tauri/src/updates.rs`); 0.35.0 is the
+  first version that can update itself, so the install is first checked end to end on the release after it.
+
+### Changed
+- **The app reacts to changes instead of polling** (T-506): in the atm app the page subscribes to its workspace and
+  the open project (`subscribe_workspace`, `subscribe_project`, T-456; `lib/api/changes.ts`) and reloads when the app
+  says something in them changed, ending the subscriptions when it moves to another workspace or project. It also
+  reloads when the window regains focus, which covers what the watcher doesn't see (an open document, a missed
+  event). The refresh interval and the auto-refresh switch are gone in the app (the reload button stays); their stored
+  settings are ignored there, not deleted. The browser keeps polling until T-507. When the window's page loads again
+  (a reload), the app ends the old page's subscriptions (`on_page_load`, `AppState::unwatch_all`), which it couldn't
+  end itself.
+
+- **CompMD 0.6.0** (`@compmd/processor`, `render`, `sandbox`, `vite`).
+
 ### Fixed
+- **Mermaid diagrams draw in the app** (T-503, ADR-005, replacing ADR-004): the sandbox's frames now come from
+  CompMD's own Tauri plugin, `tauri-plugin-compmd` 0.6.0 (crates.io, pinned to the packages' version), whose frames
+  name their scheme in their policy (WebKit reads a sandboxed frame's `'self'` on a custom scheme as matching nothing,
+  which stopped 0.5.0's frames) and are served at a path named by their content, so WebKit's cache never serves an old
+  one. The page leaves their `base` to the plugin. What atm ships for the page itself (`compmd.js`, its WebAssembly,
+  the Mermaid pack's module) comes from the app's own `atm:` scheme (`app/src-tauri/src/assets.rs`, embedded by its
+  `build.rs`, at `atm serve`'s paths and headers; the deep links' scheme, which no asset address opens); the page
+  fetches a pack's module from there, checked against its hash, and gives it to the frames as code
+  (`sandboxOptions`, `fetchPackModules` in `lib/compmd.ts`). The window's `script-src` and `connect-src` name the two
+  folders, `atm://localhost/assets/compmd/` and `compmd://localhost/frames/`. atm's own `crates/tauri-plugin-compmd/`
+  is gone. A frame that never loads now shows a note too (CompMD 0.6.0 reports it). The pack's module is fetched from
+  `atm:` even when its address is already on the page's origin, as `@compmd/vite` writes it (`moduleUrl`, T-508,
+  which also found that WebKit asks the app again for each `atm:` file, so their paths stay as they are).
+- **The app starts again** (T-483): the updater plugin reads `plugins.updater` in `tauri.conf.json` when it starts,
+  and refused a configuration without it, so every build of the app stopped as it started. It has the section now,
+  with the public key, which the bundler also checks the update archive's signature against (a test keeps it equal to
+  `updates.rs`'s `PUBKEY`), and a test builds the app with its plugins (`with_plugins`,
+  `the_app_starts_with_its_plugins`).
 - **The app's Homebrew cask installs** (T-509): 0.34.0's first `Casks/atm-app.rb` had `conflicts_with formula:`,
   which Homebrew refuses (a cask declares conflicts only with casks, the Cask Cookbook), so `brew install --cask
   atm-app` failed. Its caveats now say to uninstall the `atm` formula first, and `depends_on :macos` replaces the

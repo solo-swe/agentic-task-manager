@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import os from 'node:os';
 import path from 'node:path';
 import { test as base, expect, type Page, type Route } from '@playwright/test';
+import { compmdVersion } from '../../build/compmd';
 import type { FilterGroup } from '../../src/lib/filters';
 import { PREFS_KEY } from '../../src/lib/prefs';
 import type { ViewId } from '../../src/lib/tabs';
@@ -181,6 +182,12 @@ export function board(
       return [id, { count: counts[id] ?? cards.length, cards }];
     }),
   );
+}
+
+/** A channel's ID in an app command's arguments: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its
+ * `id`) as Playwright passes it */
+function channelId(channel: unknown): number {
+  return Number(typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id);
 }
 
 export function loadFixture(name: string): TasksData {
@@ -476,6 +483,36 @@ export class TasksServer {
     );
   }
 
+  /** The page's live change subscriptions (T-506), by ID: what each watches and its channel */
+  subscriptions = new Map<number, { workspace: string; project: string | null; channel: number }>();
+  private nextSubscription = 0;
+  private changeMessages = new Map<number, number>();
+
+  /** Something changed in what the page watches: a message on each subscription's channel that matches (the
+   * workspace's, or `project`'s), as the app's watcher sends it */
+  async pushChange(project: string | null = null) {
+    const targets = [...this.subscriptions.values()].filter((s) => s.project === project);
+    if (targets.length === 0) throw new Error(`the page has not subscribed to ${project ?? 'its workspace'}`);
+    for (const s of targets) {
+      const index = this.changeMessages.get(s.channel) ?? 0;
+      this.changeMessages.set(s.channel, index + 1);
+      await this.page.evaluate(
+        ([id, message, at]) => {
+          const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+            .__atmCallbacks;
+          callbacks[id as number]({ index: at, message });
+        },
+        [s.channel, { workspace: s.workspace, project: s.project }, index] as const,
+      );
+    }
+  }
+
+  /** The update the app's `check_update` finds (T-483), and why `install_update` fails, if it should */
+  update: { version: string; current_version: string; notes: string | null } | null = null;
+  updateFails: string | null = null;
+  /** The update commands the page called, in order */
+  updateCalls: string[] = [];
+
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
@@ -513,7 +550,7 @@ export class TasksServer {
     await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
       this.answerCommand(command, args),
     );
-    await this.page.addInitScript(() => {
+    await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
         __atmInvoke: (command: string, args: unknown) => Promise<{ ok?: unknown; error?: unknown }>;
       };
@@ -531,15 +568,18 @@ export class TasksServer {
           return next;
         },
         unregisterCallback: () => {},
-        // CompMD's scheme (tauri-plugin-compmd, ADR-004) is this test server, which serves CompMD's files with the
-        // plugin's headers (serve.mjs, as atm serve); any other scheme as Tauri writes it on macOS
+        // The app's asset scheme (`atm:`, ADR-005) is this test server, which serves CompMD's build with atm serve's
+        // headers (serve.mjs); any other scheme as Tauri writes it on macOS
         convertFileSrc: (path: string, protocol = 'asset') =>
-          protocol === 'compmd'
+          protocol === 'atm'
             ? `${location.origin}/${encodeURIComponent(path)}`
             : `${protocol}://localhost/${encodeURIComponent(path)}`,
         metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
       };
-    });
+      // What CompMD's plugin gives the page, its frames' base (ADR-005): here the test server's frames, as atm
+      // serve's, since the plugin's own are in the crate
+      w.__COMPMD__ = { base: `${location.origin}/assets/compmd/${version}/compmd/` };
+    }, compmdVersion());
     return this;
   }
 
@@ -576,15 +616,29 @@ export class TasksServer {
           ? { ok: { worktrees: this.worktreesBody ? JSON.parse(this.worktreesBody).worktrees : [] } }
           : unknown;
       case 'subscribe_links': {
-        // The channel: `__CHANNEL__:<id>` as Tauri sends it, or the Channel itself (its `id`) as Playwright passes it
-        const channel = args.channel;
-        this.linkChannel = Number(
-          typeof channel === 'string' ? channel.split(':')[1] : (channel as { id?: unknown } | null)?.id,
-        );
+        this.linkChannel = channelId(args.channel);
         const first = this.startLink;
         this.startLink = null;
         return { ok: first };
       }
+      case 'subscribe_workspace':
+      case 'subscribe_project': {
+        const id = ++this.nextSubscription;
+        this.subscriptions.set(id, {
+          workspace: String(args.workspace),
+          project: command === 'subscribe_project' ? project : null,
+          channel: channelId(args.channel),
+        });
+        return { ok: id };
+      }
+      case 'unsubscribe':
+        return { ok: this.subscriptions.delete(Number(args.id)) };
+      case 'check_update':
+        this.updateCalls.push(command);
+        return { ok: this.update };
+      case 'install_update':
+        this.updateCalls.push(command);
+        return this.updateFails ? { error: { kind: 'failed', message: this.updateFails } } : { ok: null };
       case 'agents_status':
         this.agentCalls.push(command);
         return { ok: [this.harnessStatus()] };

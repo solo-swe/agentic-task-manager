@@ -15,17 +15,17 @@ importers:
         specifier: 0.1.1
         version: 0.1.1
       '@compmd/processor':
-        specifier: 0.5.0
-        version: 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+        specifier: 0.6.0
+        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
       '@compmd/render':
-        specifier: 0.5.0
-        version: 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+        specifier: 0.6.0
+        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
       '@compmd/sandbox':
-        specifier: 0.5.0
-        version: 0.5.0(@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+        specifier: 0.6.0
+        version: 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       '@compmd/vite':
-        specifier: 0.5.0
-        version: 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+        specifier: 0.6.0
+        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       '@dagrejs/dagre':
         specifier: ^3.1.3
         version: 3.1.3
@@ -163,16 +163,16 @@ packages:
   '@comp-markdown/mermaid@0.1.1':
     resolution: {integrity: sha512-EwevqkkUdxOsFLHV85W74wEL+LoyZhaZkmnj8bJax3zLG48uuiGrezFTixCdlS6VQC/GHVU8Ra0vVXjeFftc7Q==}
 
-  '@compmd/processor@0.5.0':
-    resolution: {integrity: sha512-9wfT1XsTqL494KuZkrQCBT/97rUSuZRG1xewoBJxo2LjVih99QKiwU1FYG9a4MxlCGDQoqPjQofI2X3bY/nJpA==}
+  '@compmd/processor@0.6.0':
+    resolution: {integrity: sha512-qx7+65H4A8i28nWHY46Q0BHcliY0tclWtT2u9gBf8Uco0theOszyOU88ljNhL87YFO2Tmjv3EsaDChe0dfFVQg==}
 
-  '@compmd/registry@0.5.0':
-    resolution: {integrity: sha512-INPIKMrqn9UEvfoRAp45D6yRPWQL+rZleoQS2ksi0mIH2Fmvsx4aMABoGOgT2spyxXh+jrrDZIiL2pJlHvD5lw==}
+  '@compmd/registry@0.6.0':
+    resolution: {integrity: sha512-IQoDjw20pYvVlaEyOnC8Cc99BFwVuwlyS1DAwsAYs94b+wnmka0ePhxc4wtYUJPMgzkAGYtuUIMF9BVhG5jpbg==}
     peerDependencies:
-      '@compmd/processor': ^0.5.0
+      '@compmd/processor': ^0.6.0
 
-  '@compmd/render@0.5.0':
-    resolution: {integrity: sha512-/AueF7AE360xIyj/MHq5K1K8HBB4kqb3pM9DZ2yhgHgpGRt+YDyHQIQRnmqN4XYdmwLjdxFyQS/Ur0PwexmYSQ==}
+  '@compmd/render@0.6.0':
+    resolution: {integrity: sha512-a/cuLY3Yxg3NdQCTbYEH4DNt/jXfT4wP3G5kIqroQvhT1GSayBpawT1z+lyKQ1qK5ED5lgPAKvnErusYLw8Ahg==}
     peerDependencies:
       react: ^19
       react-dom: ^19
@@ -185,17 +185,17 @@ packages:
       svelte:
         optional: true
 
-  '@compmd/sandbox@0.5.0':
-    resolution: {integrity: sha512-VSrW/3GKN0xSx25v+99P92iuYCWCC4FlgSlZbQ9f6o0e6eV07rzeo/OL7s+0ES/tViXOhJj5jnJQTzF9CCu/7A==}
+  '@compmd/sandbox@0.6.0':
+    resolution: {integrity: sha512-9Hdv1XAVfJP4khSa1qMBbt9UPPhfQIV+ebwXhNYLX//FG9YbA+neFrBKsHjK+YcrmS/gTNw4Xf7/pWi5Flc1iw==}
     peerDependencies:
-      '@compmd/processor': ^0.5.0
+      '@compmd/processor': ^0.6.0
       vite: '>=8'
     peerDependenciesMeta:
       vite:
         optional: true
 
-  '@compmd/vite@0.5.0':
-    resolution: {integrity: sha512-hNh0YK4HP4nDtpwAmmwkYU+YpzmjEN/GDl+E/peE6H4op6GGWj6DYPR9Zi7acs/CNwu82uKGKXwjEaB1kMg59A==}
+  '@compmd/vite@0.6.0':
+    resolution: {integrity: sha512-6G38bOPFL3//YFrdG2q6cxN4xOF5g9HURRoPxjftSuLT7Eo5EVxeErm1mK2nXj7wTbIFuPduOr5QN290zlNMWA==}
     peerDependencies:
       react: ^19
       react-dom: ^19
@@ -1844,26 +1844,26 @@ snapshots:
 
   '@comp-markdown/mermaid@0.1.1': {}
 
-  '@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+  '@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
     dependencies:
-      '@compmd/render': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
     transitivePeerDependencies:
       - react
       - react-dom
       - svelte
 
-  '@compmd/registry@0.5.0(@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
+  '@compmd/registry@0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
     dependencies:
-      '@compmd/processor': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
 
-  '@compmd/render@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+  '@compmd/render@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
     optionalDependencies:
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
 
-  '@compmd/sandbox@0.5.0(@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+  '@compmd/sandbox@0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
     dependencies:
-      '@compmd/processor': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/render': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
       '@shikijs/core': 4.5.0
       '@shikijs/engine-javascript': 4.5.0
       '@shikijs/langs': 4.5.0
@@ -1877,12 +1877,12 @@ snapshots:
       - react-dom
       - svelte
 
-  '@compmd/vite@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+  '@compmd/vite@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
     dependencies:
-      '@compmd/processor': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/registry': 0.5.0(@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
-      '@compmd/render': 0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/sandbox': 0.5.0(@compmd/processor@0.5.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/registry': 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
+      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/sandbox': 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       semver: 7.8.5
       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
       yaml: 2.9.1

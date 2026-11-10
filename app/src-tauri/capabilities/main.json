@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the app's own commands, the reads (and their subscriptions) and connecting agents on the user's click, nothing else (no core or plugin APIs until a task needs one)",
+  "description": "The main window: the app's own commands, the reads (and their subscriptions), connecting agents and installing an update on the user's click, nothing else (no core or plugin APIs: the updater only through the app's two commands)",
   "windows": ["main"],
   "permissions": [
     "allow-version",
@@ -19,6 +19,8 @@
     "allow-unsubscribe",
     "allow-agents-status",
     "allow-connect-agents",
-    "allow-subscribe-links"
+    "allow-subscribe-links",
+    "allow-check-update",
+    "allow-install-update"
   ]
 }

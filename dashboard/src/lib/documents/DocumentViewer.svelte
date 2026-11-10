@@ -80,10 +80,21 @@
 
   // Kept current as the dashboard refreshes: a conditional request, 304 while the file is unchanged
   $effect(() => {
-    if (!open || !ref || !project || !dashboard.autoRefresh) return;
+    if (!open || !ref || !project || !dashboard.polls) return;
     const key = `${project}\u0000${ref.path}`;
     const timer = setInterval(() => void load(key, project, ref.path, true), dashboard.autoRefreshSeconds * 1000);
     return () => clearInterval(timer);
+  });
+
+  // In the atm app (T-506), which watches the task folder rather than every file: asked for again each time the
+  // dashboard reloads (a change in the project, the window regaining focus, the Reload button)
+  let reloadsSeen = 0;
+  $effect(() => {
+    const at = dashboard.loadedAt;
+    if (!dashboard.live || !open || !ref || !project || at === reloadsSeen) return;
+    const first = reloadsSeen === 0;
+    reloadsSeen = at;
+    if (!first) void load(`${project}\u0000${ref.path}`, project, ref.path, true);
   });
 
   const title = $derived(doc ? documentTitle(doc) : (ref?.path.split('/').pop() ?? ''));

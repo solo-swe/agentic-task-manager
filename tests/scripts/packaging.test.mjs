@@ -75,6 +75,8 @@ describe('packaging', () => {
       // A cask declares conflicts only with casks (Homebrew refuses `conflicts_with formula:`), and `depends_on macos:`
       // only for a minimum newer than Homebrew's own: the caveats say to remove the formula
       assert.doesNotMatch(r.stdout, /conflicts_with/);
+      // The app updates itself (T-483), so brew leaves an installed one alone
+      assert.match(r.stdout, /^ {2}auto_updates true$/m);
       assert.match(r.stdout, /^ {2}depends_on :macos$/m);
       assert.ok(r.stdout.includes('`brew uninstall solo-swe/tap/atm`'));
       // It says how to connect agents, and does nothing to them
@@ -85,6 +87,43 @@ describe('packaging', () => {
       const missing = run('homebrew-cask.sh', ['1.2.3', sums]);
       assert.notEqual(missing.status, 0);
       assert.match(missing.stderr, /atm-app-1\.2\.3-universal\.dmg isn't in /);
+    } finally {
+      removeDir(dir);
+    }
+  });
+
+  // T-483: the app's update manifest names the release's signed archive, for both Mac architectures, with the
+  // version's What's new as its notes
+  test('the update manifest names the signed universal archive and carries the version’s What’s new', () => {
+    const dir = tempDir('atm-manifest-');
+    const manifest = (args) =>
+      spawnSync('node', [script('updater-manifest.mjs'), ...args], { cwd: REPO, encoding: 'utf8' });
+    try {
+      const sig = path.join(dir, 'atm.app.tar.gz.sig');
+      fs.writeFileSync(sig, 'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==\n');
+      const notes = path.join(dir, 'WHATS-NEW.md');
+      fs.writeFileSync(
+        notes,
+        '# What’s new\n\n## [1.2.3] - 2026-01-02\n\n- One thing.\n- Another "quoted" thing.\n\n## [1.2.2] - 2026-01-01\n\n- Older.\n',
+      );
+      const archive = 'atm-app-1.2.3-universal.app.tar.gz';
+      const r = manifest(['1.2.3', archive, sig, notes]);
+      assert.equal(r.status, 0, r.stderr);
+      const json = JSON.parse(r.stdout);
+      assert.equal(json.version, '1.2.3');
+      assert.equal(json.notes, '- One thing.\n- Another "quoted" thing.');
+      assert.match(json.pub_date, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+      const expected = {
+        signature: 'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==',
+        url: `https://github.com/solo-swe/agentic-task-manager/releases/download/v1.2.3/${archive}`,
+      };
+      assert.deepEqual(json.platforms, { 'darwin-aarch64': expected, 'darwin-x86_64': expected });
+
+      // A version without a What's new entry, or not a version, is refused
+      const none = manifest(['1.2.4', archive, sig, notes]);
+      assert.notEqual(none.status, 0);
+      assert.match(none.stderr, /has no entry for 1\.2\.4/);
+      assert.notEqual(manifest(['latest', archive, sig, notes]).status, 0);
     } finally {
       removeDir(dir);
     }

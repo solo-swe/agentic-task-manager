@@ -3,8 +3,10 @@
 //! Its commands are in `commands`; tauri-specta writes their TypeScript types (`.generated/app/bindings.ts`, never
 //! edited by hand). The window may call only the commands its capability lists (`capabilities/main.json`).
 
+pub mod assets;
 pub mod commands;
 pub mod links;
+pub mod updates;
 
 use tauri::Manager;
 
@@ -13,9 +15,10 @@ use commands::{
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use updates::{check_update, install_update};
 
-// CompMD's built files, embedded by tauri-plugin-compmd's build step (build.rs)
-include!(concat!(env!("OUT_DIR"), "/compmd_files.rs"));
+// What the app serves on its own `atm:` scheme (`assets`), embedded by build.rs
+include!(concat!(env!("OUT_DIR"), "/atm_assets.rs"));
 
 /// The app's commands, for Tauri and for the TypeScript types (each also in `build.rs`'s manifest and the main
 /// window's capability).
@@ -38,6 +41,8 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         agents_status,
         connect_agents,
         subscribe_links,
+        check_update,
+        install_update,
     ])
 }
 
@@ -57,15 +62,20 @@ fn focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
 /// When Tauri can't start (no window system, a broken build).
 pub fn run() {
     let commands = commands();
-    let app = tauri::Builder::default()
-        // First, so a second instance stops before it sets anything up
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+    // The single instance first, so a second instance stops before it sets anything up
+    let first =
+        tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus(app);
-        }))
-        // CompMD's files on a scheme of their own, so its frames keep their own policy (ADR-004)
-        .plugin(tauri_plugin_compmd::init(COMPMD_FILES))
+        }));
+    let app = with_plugins(first)
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
+        // The window's page loading again (a reload) ends the old page's subscriptions (T-506): it can't say so itself
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                webview.state::<AppState>().unwatch_all();
+            }
+        })
         .setup(move |app| {
             commands.mount_events(app);
             Ok(())
@@ -84,6 +94,31 @@ pub fn run() {
         #[cfg(not(target_os = "macos"))]
         let _ = (app, event);
     });
+}
+
+/// The plugins and schemes the app starts with, after the single instance: the same in the tests, which build the
+/// app's context with them, so a plugin that can't start (its configuration, T-483) fails a test, not the app.
+fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    builder
+        // CompMD's sandbox frames on a scheme of their own, `compmd:`, so they keep their own policy and origin
+        // (ADR-005); the plugin gives the page their `base`
+        .plugin(tauri_plugin_compmd::init())
+        // What atm ships for its page itself (CompMD's processor, its WebAssembly, the packs' modules) on `atm:`
+        .register_uri_scheme_protocol(assets::SCHEME, |_context, request| {
+            let response = assets::respond(ATM_ASSETS, request.method(), request.uri().path());
+            if !response.status().is_success() {
+                eprintln!(
+                    "atm-app: {} {} {}",
+                    response.status().as_u16(),
+                    request.method(),
+                    request.uri().path()
+                );
+            }
+            response
+        })
+        // Its own updates (T-483), through the two commands in `updates`: the page has no permission of the plugin's.
+        // The plugin reads `plugins.updater` in tauri.conf.json when it starts (the key, as `updates.rs` has it)
+        .plugin(tauri_plugin_updater::Builder::new().build())
 }
 
 /// The app's context (`tauri.conf.json`, the capabilities, the dashboard's files), made once: it can be generated only
@@ -167,8 +202,13 @@ mod tests {
         );
     }
 
-    /// `CompMD`'s origin in the app (ADR-004): its plugin's scheme, as macOS and Linux, and Windows and Android, name it
+    /// `CompMD`'s frames' origin in the app (ADR-004): its plugin's scheme, as macOS and Linux, and Windows and Android,
+    /// name it
     const COMPMD_ORIGINS: &str = "compmd://localhost http://compmd.localhost";
+    /// The folders the page loads scripts from and fetches (T-503): atm's own `CompMD` build on `atm:` (`assets`), and
+    /// the frames' folder, whose Shiki and Temml a host-mode page loads; each in both forms
+    const SCRIPT_FOLDERS: &str = "atm://localhost/assets/compmd/ http://atm.localhost/assets/compmd/ \
+                                  compmd://localhost/frames/ http://compmd.localhost/frames/";
 
     /// I26 (T-461): the window's CSP is the dashboard server's (I13): no remote, inline or evaluated script, frames only
     /// `CompMD`'s, images only the app's own or `data:`, connections only to Tauri's IPC and `CompMD`'s files; no
@@ -179,18 +219,18 @@ mod tests {
             serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
         let csp = &conf["app"]["security"]["csp"];
         assert_eq!(csp["default-src"], json!("'none'"));
-        // Scripts: CompMD's, from its own scheme (ADR-004), which may compile WebAssembly; never blob:, data: or 'self'
-        // (CVE-2026-95626: they cancel Tauri's nonces)
+        // Scripts: only from the two folders, by path (ADR-004), which may compile WebAssembly; never blob:, data:
+        // (CVE-2026-95626: they cancel Tauri's nonces) or 'self' (every file of the app's own protocol)
         assert_eq!(
             csp["script-src"],
-            json!(format!("'wasm-unsafe-eval' {COMPMD_ORIGINS}"))
+            json!(format!("'wasm-unsafe-eval' {SCRIPT_FOLDERS}"))
         );
         assert_eq!(csp["frame-src"], json!(COMPMD_ORIGINS));
         assert_eq!(csp["img-src"], json!("'self' data:"));
-        // Tauri's IPC, and CompMD fetching its WebAssembly from its scheme
+        // Tauri's IPC, CompMD fetching its WebAssembly, the page fetching the packs' modules, the frames' libraries
         assert_eq!(
             csp["connect-src"],
-            json!(format!("ipc: http://ipc.localhost {COMPMD_ORIGINS}"))
+            json!(format!("ipc: http://ipc.localhost {SCRIPT_FOLDERS}"))
         );
         // Back (T-503): CompMD's frames come from its own scheme, so the window's policy no longer reaches them
         assert_eq!(csp["frame-ancestors"], json!("'none'"));
@@ -220,6 +260,15 @@ mod tests {
             csp.as_object().map(serde_json::Map::len),
             "devCsp has the same directives"
         );
+    }
+
+    /// The app starts with its plugins and its configuration (T-483: the updater refused a `tauri.conf.json` with no
+    /// `plugins.updater`, so the app stopped as it started, which no test built with the plugins saw)
+    #[test]
+    fn the_app_starts_with_its_plugins() {
+        with_plugins(tauri::test::mock_builder())
+            .build(context())
+            .expect("the app with its plugins");
     }
 
     /// The state folder is named by atm-common's identifier, and the app's must be the same (ADR-003 §2)
@@ -459,6 +508,16 @@ mod tests {
         ]
     }
 
+    /// Pages that may call no command: a remote one, one from `CompMD`'s own scheme, where its sandbox frames are
+    /// (ADR-004), and one from atm's asset scheme, which serves no page (T-503)
+    const ELSEWHERE: [&str; 5] = [
+        "https://example.com",
+        "compmd://localhost",
+        "http://compmd.localhost",
+        "atm://localhost",
+        "http://atm.localhost",
+    ];
+
     /// Through the app's own context, so its capability is what lets the window call them
     #[test]
     #[cfg_attr(
@@ -513,13 +572,8 @@ mod tests {
                 expected,
                 "{command}"
             );
-            // A page from anywhere else gets nothing (docs/guides/tauri.md): a remote one, or one from CompMD's own
-            // scheme, where its sandbox frames are (ADR-004)
-            for elsewhere in [
-                "https://example.com",
-                "compmd://localhost",
-                "http://compmd.localhost",
-            ] {
+            // A page from anywhere else gets nothing (docs/guides/tauri.md)
+            for elsewhere in ELSEWHERE {
                 let refused =
                     tauri::test::get_ipc_response(&window, request(command, &args, elsewhere));
                 assert!(
@@ -575,10 +629,10 @@ mod tests {
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 
-    /// ADR-004: the app serves `CompMD`'s files on its own scheme, at the paths `atm serve` gives them, and its frames
-    /// with no policy but their own (what Tauri's protocol did, T-502), as the page loads them
+    /// ADR-004, T-503: the app serves what its page loads of `CompMD`'s build on `atm:`, at the paths `atm serve`
+    /// gives them and with its headers, the packs' modules too; and no frame document, which `CompMD`'s plugin serves
     #[test]
-    fn compmds_files_come_from_its_own_scheme_with_no_policy_but_their_own() {
+    fn the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them() {
         use tauri::http::Method;
         let compmd = std::fs::read_dir(
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd"),
@@ -595,10 +649,15 @@ mod tests {
         ))
         .expect("the host headers table");
         let files = table["files"].as_object().expect("files");
-        assert!(files.contains_key("compmd/strict.html"));
+        let mut served = 0;
         for (file, headers) in files {
             let path = format!("/assets/compmd/{compmd}/{file}");
-            let response = tauri_plugin_compmd::respond(COMPMD_FILES, &Method::GET, &path);
+            let response = assets::respond(ATM_ASSETS, &Method::GET, &path);
+            if assets::content_type(file).is_none() {
+                assert_eq!(response.status(), 404, "{path}: a frame is the plugin's");
+                continue;
+            }
+            served += 1;
             assert_eq!(response.status(), 200, "{path}");
             for (name, value) in headers.as_object().expect("headers") {
                 let sent = response
@@ -608,11 +667,28 @@ mod tests {
                 assert_eq!(sent, value.as_str(), "{file}: {name}");
             }
         }
+        assert!(served >= 2, "compmd.js and its WebAssembly");
+        // The Mermaid pack's built module, which the page fetches and gives the sandbox as code
+        let packs: Vec<&str> = ATM_ASSETS
+            .iter()
+            .map(|(path, _)| *path)
+            .filter(|path| path.contains("/compmd/packs/"))
+            .collect();
+        assert!(
+            packs.iter().any(|path| path.ends_with("/mermaid.js")),
+            "{packs:?}"
+        );
+        assert!(
+            ATM_ASSETS
+                .iter()
+                .all(|(path, _)| assets::content_type(path).is_some()),
+            "only scripts and WebAssembly"
+        );
     }
 
     /// T-502: the policy Tauri serves the dashboard's page with lets it work as under `atm serve`: its inline styles
-    /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` fetches its
-    /// `WebAssembly` from its scheme
+    /// and `style` attributes apply (a nonce would make the browser ignore `'unsafe-inline'`), and `CompMD` loads and
+    /// fetches its files from atm's scheme and its frames' folder
     #[test]
     fn the_page_is_served_with_a_policy_it_works_under() {
         let app = tauri::test::mock_builder()
@@ -636,13 +712,13 @@ mod tests {
                 .to_owned()
         };
         assert!(!directive("style-src").contains("'nonce-"), "{shown}");
-        assert!(
-            directive("connect-src").contains("compmd://localhost"),
-            "{shown}"
-        );
-        assert!(
-            directive("script-src").contains("compmd://localhost"),
-            "{shown}"
-        );
+        for name in ["script-src", "connect-src"] {
+            for folder in [
+                "atm://localhost/assets/compmd/",
+                "compmd://localhost/frames/",
+            ] {
+                assert!(directive(name).contains(folder), "{name}: {shown}");
+            }
+        }
     }
 }

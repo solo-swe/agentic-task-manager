@@ -1,6 +1,7 @@
 # ADR-004: CompMD in a Tauri app, through a protocol of its own
 
-- **Status:** accepted, 2026-11-08; the check (decision 6) done 2026-11-09, which needs CompMD 0.6.0 (Risks)
+- **Status:** replaced by [ADR-005](ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md), 2026-11-09 (CompMD
+  0.6.0 ships the plugin, serving its own frames). Accepted 2026-11-08; the check (decision 6) done 2026-11-09 (Risks)
 - **Decided by:** Hakan Serce
 - **Context:** T-502, T-503, [tauri-compmd-design.md](../tauri-compmd-design.md) (the design this records; its §2
   has the facts, with their sources), [compmd-rendering-design.md](../compmd-rendering-design.md) §2 and §3c,

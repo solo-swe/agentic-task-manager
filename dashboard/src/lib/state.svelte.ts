@@ -1,4 +1,5 @@
-import { browserFetch } from './api/http';
+import { browserFetch, inApp } from './api/http';
+import { checkAppUpdate, installAppUpdate, UPDATE_CHECK_MS, type AppUpdate } from './api/updates';
 import { apiWorkspace, DEFAULT_WORKSPACE, setApiWorkspace } from './api/workspace';
 import { loadClaims, type ClaimMap } from './claims';
 import {
@@ -111,6 +112,13 @@ export class DashboardState {
   projectId = $state<string | null>(null);
   /** The server holds a newer dashboard than this page (after a plugin update): a bar offers to reload */
   newVersionReady = $state(false);
+  /** In the atm app, a newer version of the app it can install (T-483): a bar offers it, never installs by itself */
+  appUpdate = $state.raw<AppUpdate | null>(null);
+  /** The offered update is being downloaded and installed; then the app restarts */
+  installingUpdate = $state(false);
+  /** Why the last install failed, shown on the bar */
+  updateError = $state<string | null>(null);
+  #updateCheckedAt = 0;
   /** The overview shows only active projects (open work, or activity lately); remembered per browser */
   overviewActiveOnly = $state(getPref('overviewActiveOnly', true));
   /** The overview's tab, project cards or the board (T-259): /board in a link, else the last one chosen */
@@ -292,6 +300,11 @@ export class DashboardState {
   // On by default (FR-6.1); the user's choice is remembered per browser (FR-6.2)
   autoRefresh = $state(getPref('autoRefresh', true));
   autoRefreshSeconds = $state(getPref('autoRefreshSeconds', 5));
+  /** In the atm app the page reacts to the app's changes instead of polling (T-506): no refresh settings there, and
+   * the stored ones are ignored, not deleted */
+  live = $state(inApp);
+  /** Whether the page polls: in the browser, with auto-refresh on */
+  polls = $derived(!this.live && this.autoRefresh);
 
   // The last tasks.json's ETag / Last-Modified: polls ask whether it changed, and skip the work when it hasn't
   #validators: Validators | undefined;
@@ -493,6 +506,33 @@ export class DashboardState {
     this.newVersionReady = newBuildReady(dashboardBuild(), server, dismissed);
   }
 
+  /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS; one put off ("Not
+   * now") isn't offered again, a newer one is */
+  async checkAppUpdate(now = Date.now()) {
+    if (!this.live || now - this.#updateCheckedAt < UPDATE_CHECK_MS) return;
+    this.#updateCheckedAt = now;
+    const update = await checkAppUpdate();
+    const dismissed = getPref('dismissedAppUpdate', '');
+    this.appUpdate = update && update.version !== dismissed ? update : null;
+  }
+
+  /** Install the offered update, on the user's click: the app restarts into it, or the bar says why it couldn't */
+  async installAppUpdate() {
+    if (!this.appUpdate || this.installingUpdate) return;
+    this.installingUpdate = true;
+    this.updateError = null;
+    this.updateError = await installAppUpdate();
+    this.installingUpdate = false;
+    if (this.updateError === null) this.appUpdate = null; // nothing was left to install
+  }
+
+  /** "Not now" on the app's update: not offered again until a newer version */
+  dismissAppUpdate() {
+    if (this.appUpdate) setPref('dismissedAppUpdate', this.appUpdate.version);
+    this.appUpdate = null;
+    this.updateError = null;
+  }
+
   /** "Not now": the bar stays away for this build, also after a reload; only another build brings it back */
   dismissNewVersion() {
     if (this.#serverBuild) {
@@ -523,6 +563,7 @@ export class DashboardState {
     else await this.refreshWorkspaces();
     const project = await this.refreshProjects();
     void this.checkServerBuild(); // the server answered: ask which dashboard it holds now
+    void this.checkAppUpdate(); // in the app: on start, then now and then
     if (project === null) {
       if (this.route.page === 'overview') await this.refreshProjectSources();
       // A task open on the Omniboard (T-411): its project's data kept current under the board

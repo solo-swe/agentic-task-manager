@@ -12,7 +12,10 @@ agentic-status-bar, not a Tauri app, uses Sparkle).
 always the same build. Someone with the formula uninstalls it before installing the app (`brew uninstall
 solo-swe/tap/atm`), as the cask's caveats say: a cask can declare a conflict only with another cask (the
 [Cask Cookbook](https://docs.brew.sh/Cask-Cookbook#stanza-conflicts_with); Homebrew refuses `conflicts_with formula:`,
-which 0.34.0's first cask had). Without Homebrew, the DMG alone gives the app; its CLI is inside it.
+which 0.34.0's first cask had). With the formula still installed, the cask installs the app but leaves the formula's
+`atm` on PATH ("It seems there is already a Binary at '/opt/homebrew/bin/atm' from formula atm; skipping link"):
+after `brew uninstall solo-swe/tap/atm`, `brew reinstall --cask atm-app` links the app's (checked with 0.34.0). Without
+Homebrew, the DMG alone gives the app; its CLI is inside it.
 
 **An atm from before 0.34.0 on the same machine** (another install, a server still running from it) keeps using
 `~/.agentic-task-manager/`, which 0.34.0 moved to the state folder (T-490): its dashboard shows only the projects it
@@ -30,6 +33,7 @@ server with its own `atm service stop`.
 | `notarize-dmg.sh <dmg>` | Signs the app's DMG, notarizes it and staples the ticket to it (Tauri's bundler has signed and notarized the app inside) |
 | `homebrew-formula.sh <version> <SHA256SUMS>` | Prints `Formula/atm.rb` for a release, from its checksums; the Homebrew workflow writes it to the tap |
 | `homebrew-cask.sh <version> <SHA256SUMS>` | Prints `Casks/atm-app.rb` for a release: the universal DMG, the app's `atm` on PATH, caveats saying to remove the formula first and how to connect agents (nothing is installed into them) |
+| `updater-manifest.mjs <version> <archive> <signature> <WHATS-NEW.md>` | Prints `latest.json`, the app's update manifest (T-483): the release's signed app archive for both Mac architectures, with the version's What's new as its notes |
 | `skills-export.sh <version> <checkout>` | Puts this version's `skills/atm-*` and the README's atm section into a checkout of `solo-swe/skills`, leaving other apps' parts alone ([ADR-002](../docs/adr/ADR-002-atm-public-skills-repo.md)); the Skills workflow commits, tags `atm-v<version>` and pushes |
 
 The app's release build is `pnpm run app:bundle` in `dashboard/` (Tauri's CLI on `app/src-tauri/`, with
@@ -47,7 +51,8 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
    older glibc) and Windows (x86_64), signs and notarizes the macOS builds; builds the app as one universal DMG
    (arm64 and x86_64, its CLI a universal binary made with `lipo`), signed and notarized, its ticket stapled; and
    drafts a GitHub release with `atm-<version>-<target>.tar.gz` (`.zip` for Windows),
-   `atm-app-<version>-universal.dmg` and `SHA256SUMS`.
+   `atm-app-<version>-universal.dmg`, the app's update (`atm-app-<version>-universal.app.tar.gz`, signed with the
+   updater key, and `latest.json` naming it) and `SHA256SUMS`.
 4. Check the draft, then publish it. `.github/workflows/homebrew.yml` writes the formula and the cask to the tap, and
    `.github/workflows/skills.yml` the skills to `solo-swe/skills` (`npx skills add solo-swe/skills`); both can also be
    run by hand with a tag. Without its deploy key, the Skills workflow says so and does nothing.
@@ -65,8 +70,22 @@ Set in this repository's settings (Secrets and variables → Actions), the same 
 | `NOTARY_API_ISSUER_ID` | Its issuer ID |
 | `HOMEBREW_TAP_DEPLOY_KEY` | The private half of a deploy key with write access to `solo-swe/homebrew-tap` (one per repository: GitHub doesn't share a deploy key between repositories) |
 | `SKILLS_DEPLOY_KEY` | The private half of a deploy key with write access to `solo-swe/skills` (the public repo, created once, empty) |
+| `TAURI_SIGNING_PRIVATE_KEY` | The app updater's private key (T-483; `tauri signer generate`), as Tauri writes it: it signs the app's update archive. Not the Developer ID |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password |
 
 The release workflow reads the signing secrets only in the macOS jobs (the CLI's and the app's); only its last job,
 which builds nothing, can write to the repository (its releases). The Homebrew workflow reads only the tap's deploy
-key, the Skills workflow only the skills repo's. The app needs no new secret: it is signed and notarized with the
-CLI's.
+key, the Skills workflow only the skills repo's. The app is signed and notarized with the CLI's secrets; its update
+archive is signed with the updater key as well.
+
+**The app's updates** (T-483): the app reads `latest.json` from the latest published release
+(`releases/latest/download/latest.json`; never a draft or a pre-release), offers a newer version, and installs it only
+on the user's click, once its signature verifies against the public key built into the app
+(`app/src-tauri/src/updates.rs`, `PUBKEY`). Lose the private key and no installed app can be updated in place again
+(users reinstall), so it is kept with the other signing secrets, backed up. The key pair was made once (2026-11-09,
+minisign key `D2392A7664649507`): `pnpm --dir dashboard exec tauri signer generate -w ~/.tauri/atm-updater.key` (it
+asks for the password), then `gh secret set TAURI_SIGNING_PRIVATE_KEY < ~/.tauri/atm-updater.key`,
+`gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (it prompts), and the `.pub` file's content into `PUBKEY`. Never
+paste or commit the private key file (the one without `.pub`); a key that was exposed is replaced the same way, with
+`-f`, and the app built with the new public key. A debug build never finds updates. Installed with the cask, the app updates itself too (`auto_updates true`: `brew upgrade`
+leaves it alone, `brew upgrade --greedy` updates it).

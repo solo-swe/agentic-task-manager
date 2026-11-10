@@ -3,6 +3,7 @@
   "bundle": {
     "active": true,
     "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": true,
     "externalBin": ["binaries/atm"],
     "category": "DeveloperTool",
     "shortDescription": "Agentic Task Manager: tasks for agentic development, and their dashboard",

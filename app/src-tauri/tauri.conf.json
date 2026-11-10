@@ -22,28 +22,33 @@
     "security": {
       "csp": {
         "default-src": "'none'",
-        "script-src": "'wasm-unsafe-eval' compmd://localhost http://compmd.localhost",
+        "script-src": "'wasm-unsafe-eval' atm://localhost/assets/compmd/ http://atm.localhost/assets/compmd/ compmd://localhost/frames/ http://compmd.localhost/frames/",
         "frame-src": "compmd://localhost http://compmd.localhost",
         "style-src": "'unsafe-inline'",
         "img-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost compmd://localhost http://compmd.localhost",
+        "connect-src": "ipc: http://ipc.localhost atm://localhost/assets/compmd/ http://atm.localhost/assets/compmd/ compmd://localhost/frames/ http://compmd.localhost/frames/",
         "base-uri": "'none'",
         "form-action": "'none'",
         "frame-ancestors": "'none'"
       },
       "devCsp": {
         "default-src": "'none'",
-        "script-src": "'wasm-unsafe-eval' compmd://localhost http://compmd.localhost",
+        "script-src": "'wasm-unsafe-eval' atm://localhost/assets/compmd/ http://atm.localhost/assets/compmd/ compmd://localhost/frames/ http://compmd.localhost/frames/",
         "frame-src": "compmd://localhost http://compmd.localhost",
         "style-src": "'unsafe-inline'",
         "img-src": "'self' data:",
-        "connect-src": "ipc: http://ipc.localhost compmd://localhost http://compmd.localhost ws://127.0.0.1:1430/__tauri_cli",
+        "connect-src": "ipc: http://ipc.localhost atm://localhost/assets/compmd/ http://atm.localhost/assets/compmd/ compmd://localhost/frames/ http://compmd.localhost/frames/ ws://127.0.0.1:1430/__tauri_cli",
         "base-uri": "'none'",
         "form-action": "'none'",
         "frame-ancestors": "'none'"
       },
       "dangerousDisableAssetCspModification": ["style-src"],
       "freezePrototype": true
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQyMzkyQTc2NjQ2NDk1MDcKUldRSGxXUmtkaW81MHZsaFpiTUJVdW5Cek5JanhaV0JDQmZyOVR5d25UcjRDKzdLTVVQV0tPV0sK"
     }
   },
   "bundle": {

@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { inApp } from '../api/http';
   import {
     dashboardAddress,
+    fetchPackModules,
     loadCompmd,
     processText,
     safeHref,
-    sandboxBase,
+    sandboxOptions,
     secureLinks,
     slug,
     taskData,
@@ -94,15 +96,16 @@
     if (!target || key === rendered) return;
     rendered = key;
     loadCompmd()
-      .then((compmd) => {
+      .then(async (compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
         const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
+        // In the app the packs' modules go to the frames as code, fetched first (T-503)
+        if (inApp) await fetchPackModules(compmd, components);
+        if (key !== rendered) return;
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
-          // of its own. Where the frames and the packs' modules are, with their hashes, is @compmd/vite's (§3c)
-          view = compmd
-            .createSandbox({ ...compmd.sandbox, base: sandboxBase(compmd.sandbox.base), page: 'host' })
-            .open(target, { components });
+          // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c)
+          view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
           view.on('rendered', () => {
             secureLinks(target);
             drawn = true;
@@ -115,9 +118,9 @@
             log(
               `CompMD: ${component} shows ${nothing ? 'nothing' : 'its fallback'} (${reason}): ${message}` +
                 (reason === 'failed'
-                  ? `. A frame that never answers is almost always refused by a policy: is ${sandboxBase('/')} ` +
-                    'allowed in the page’s script-src, frame-src and connect-src, and its frame served with no ' +
-                    'policy but its own?'
+                  ? '. A frame that never answers is almost always refused by a policy: are the frames’ origin ' +
+                    'and folder allowed in the page’s script-src, frame-src and connect-src, and the frames served ' +
+                    'with no policy but their own?'
                   : ''),
             );
             if (nothing && !undrawn.includes(component)) undrawn = [...undrawn, component];

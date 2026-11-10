@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.34.0"
+version = "0.35.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -24,8 +24,9 @@ atm-db = { path = "crates/atm-db" }
 atm-vcs = { path = "crates/atm-vcs" }
 atm-lib = { path = "crates/atm-lib" }
 atm-api = { path = "crates/atm-api" }
-# CompMD in a Tauri app (ADR-004): its files on a compmd: scheme; no dependency on atm's crates, to move to CompMD
-tauri-plugin-compmd = { path = "crates/tauri-plugin-compmd" }
+# CompMD in a Tauri app (ADR-004, T-503): CompMD's own plugin, its sandbox frames on a compmd: scheme, at
+# content-hashed paths. Its version is @compmd/sandbox's (dashboard/package.json): they are released together
+tauri-plugin-compmd = "=0.6.0"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
@@ -52,7 +53,11 @@ serde = { version = "1", features = ["derive"] }
 tauri = "2.12.5"
 tauri-build = "2.7.4"
 tauri-plugin-single-instance = "2.5.5"
-specta = { version = "=2.0.0-rc.26", features = ["derive"] }
+# The app's own updates (T-483, approved): Tauri's updater, its signed update manifest on each GitHub release. The
+# system's TLS (native-tls: Security.framework on macOS) rather than rustls, whose root certificates come as a crate
+# under a licence deny.toml doesn't list (webpki-root-certs, CDLA-Permissive-2.0)
+tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
 # The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced

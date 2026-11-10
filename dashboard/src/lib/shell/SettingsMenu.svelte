@@ -35,37 +35,44 @@
           class="menu-trigger settings-btn"
           id="settings-btn"
           aria-label="Settings"
-          title="Auto-refresh, mode and theme"><Icon name="ellipsis-vertical" /></button
+          title={dashboard.live ? 'Mode and theme' : 'Auto-refresh, mode and theme'}
+          ><Icon name="ellipsis-vertical" /></button
         >
       {/snippet}
     </Popover.Trigger>
     <Popover.ContentStatic role="dialog" aria-label="Settings">
       {#snippet child({ props })}
         <div {...props} class="menu settings-menu" id="settings-menu">
-          <div class="menu-label">Auto-refresh</div>
-          <div class="settings-row">
-            <label class="auto-refresh-toggle" title="Auto-refresh tasks.json"
-              ><input
-                type="checkbox"
-                id="auto-refresh-check"
-                checked={dashboard.autoRefresh}
-                onchange={(e) => dashboard.setAutoRefresh(e.currentTarget.checked)}
-              /><span class="toggle-track"></span> On</label
-            >
-            <label class="refresh-interval"
-              >every <input
-                type="number"
-                class="auto-refresh-interval"
-                id="auto-refresh-interval"
-                value={dashboard.autoRefreshSeconds}
-                min="1"
-                max="300"
-                title="Interval in seconds"
-                onchange={onIntervalChange}
-              /> s</label
-            >
+          <!-- In the atm app the page reacts to changes (T-506): nothing to set -->
+          {#if !dashboard.live}
+            <div class="menu-label">Auto-refresh</div>
+            <div class="settings-row">
+              <label class="auto-refresh-toggle" title="Auto-refresh tasks.json"
+                ><input
+                  type="checkbox"
+                  id="auto-refresh-check"
+                  checked={dashboard.autoRefresh}
+                  onchange={(e) => dashboard.setAutoRefresh(e.currentTarget.checked)}
+                /><span class="toggle-track"></span> On</label
+              >
+              <label class="refresh-interval"
+                >every <input
+                  type="number"
+                  class="auto-refresh-interval"
+                  id="auto-refresh-interval"
+                  value={dashboard.autoRefreshSeconds}
+                  min="1"
+                  max="300"
+                  title="Interval in seconds"
+                  onchange={onIntervalChange}
+                /> s</label
+              >
+            </div>
+          {/if}
+          <div class="menu-note" id="last-loaded">
+            {#if dashboard.live}Updates as tasks change ·
+            {/if}Last loaded {lastLoaded}
           </div>
-          <div class="menu-note" id="last-loaded">Last loaded {lastLoaded}</div>
           <div class="menu-label">Mode</div>
           <div class="mode-switch" role="group" aria-label="Color mode" id="mode-control">
             {#each MODE_PREFS as pref (pref)}

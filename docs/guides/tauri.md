@@ -29,6 +29,14 @@ atm's own rules for the atm app, the desktop distribution proposed in
   command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
   subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
+- **The page reacts, it doesn't poll** (T-506): in the app (`dashboard.live`) the root layout subscribes to the
+  workspace and the open project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the
+  subscriptions when it moves to another workspace or project. A change the watcher can't see (a document outside the
+  task folder, a missed event) shows when the window regains focus, and on the Reload button. The refresh settings are
+  the browser's only (`dashboard.polls`), until `atm serve` pushes changes too (T-507).
+- **A page that goes away doesn't say so:** sending on its channel doesn't fail, the message only finds no callback.
+  So the window's page loading again (`on_page_load`, `PageLoadEvent::Started`: a reload, ⌘R) ends every
+  subscription (`AppState::unwatch_all`); the new page makes its own.
 
 ## The dashboard in the window
 
@@ -50,22 +58,28 @@ atm's own rules for the atm app, the desktop distribution proposed in
   ([compmd-rendering-design.md](../compmd-rendering-design.md)).
 - **Strict CSP for the shell:** the dashboard server's policy ([security-architecture.md](../security-architecture.md)
   I13, I26: own scripts by hash, no remote or inline scripts, no `blob:`, `data:` or `'self'` in `script-src`,
-  `frame-ancestors 'none'`), with CompMD's origin in `script-src`, `frame-src` and `connect-src`, and `connect-src`
-  otherwise only Tauri's IPC. What Tauri does to the policy (T-502):
+  `frame-ancestors 'none'`), with CompMD's two folders in `script-src` and `connect-src` and the frames' origin in
+  `frame-src` (below), and `connect-src` otherwise only Tauri's IPC. What Tauri does to the policy (T-502):
   - it puts it on **every HTML file its own protocol serves**, so CompMD's files don't come from it (below);
   - it adds a nonce to `style-src`, which makes the browser ignore `'unsafe-inline'` (every `style` attribute
     refused): `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written;
   - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
     the CLI's live-reload socket. A test keeps the two in step.
-- **CompMD comes from its own scheme** ([ADR-004](../adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md),
-  [the design](../tauri-compmd-design.md) §4): `tauri-plugin-compmd` (`crates/`, no atm dependencies, for CompMD to
-  take) serves CompMD's built folder on `compmd://localhost` (`http://compmd.localhost` on Windows and Android), at the
-  paths `atm serve` uses and with its headers (one table, `tests/scripts/compmd-host-headers.json`, tests both). The
-  app's `build.rs` embeds the folder (`build::embed`, which fails the build without it); the page gets the origin from
-  `convertFileSrc('', 'compmd')` (`compmdOrigin` in `lib/compmd.ts`) and gives the sandbox a full `base` on it.
-  Don't serve CompMD from Tauri's own protocol, and don't loosen the window's policy for it (`blob:` in `script-src` is
-  CVE-2026-95626's case). On macOS and Linux a sandboxed frame's `'self'` matches nothing on a custom scheme (WebKit
-  takes it from the URL only for http), so CompMD's frames must name the scheme in their own policy: CompMD 0.6.0 does.
+- **CompMD from two schemes** ([ADR-005](../adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)):
+  - **the sandbox's frames** from CompMD's own plugin, `tauri_plugin_compmd::init()` (crates.io, pinned to the
+    `@compmd/sandbox` version: bump them together), on `compmd://localhost/frames/<hash>/` (`http://compmd.localhost`
+    on Windows and Android); it gives the page their `base`, so the page names none;
+  - **what atm ships for the page** (`compmd.js`, its WebAssembly, the packs' built modules) from the app's own `atm:`
+    scheme (`src/assets.rs`; `atm://localhost`, `http://atm.localhost` on Windows and Android), at the paths `atm serve`
+    uses and with its headers for scripts (`tests/scripts/compmd-host-headers.json`). `build.rs` embeds them from the
+    dashboard's build, and fails without it. The page gets the origin from `convertFileSrc('', 'atm')`
+    (`compmdOrigin`), and gives the frames the packs' modules as code it fetched and checked (`sandboxOptions`,
+    `fetchPackModules` in `lib/compmd.ts`).
+
+  The window's policy names those two folders in `script-src` and `connect-src`, never an origin. Don't serve CompMD
+  from Tauri's own protocol, and don't loosen the window's policy for it (`blob:` in `script-src` is CVE-2026-95626's
+  case). On macOS and Linux a sandboxed frame's `'self'` matches nothing on a custom scheme (WebKit takes it from the
+  URL only for http), which is why the frames are CompMD's: their policies name their scheme.
 - **Nothing CompMD does fails silently:** `CompMd.svelte` shows a note when CompMD can't load or a component draws
   nothing, and logs the cause; keep both when changing it.
 - **Check the app in a window, both ways:** `cargo tauri dev` (the CLI's server) and `cargo run -p atm-app`

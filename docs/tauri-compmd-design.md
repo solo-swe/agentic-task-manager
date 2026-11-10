@@ -1,8 +1,12 @@
 # CompMD in a Tauri app
 
 Status: **accepted** (T-502, T-503), 2026-11-08, reviewed by Hakan; the check of §4.7 (2026-11-09) found WebKit
-refusing for a reason in CompMD's frame policy, fixed in CompMD 0.6.0 (§4.7, at its end); the decision is
-[ADR-004](adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md). How to show CompMD's output in a Tauri app, worked out for the atm
+refusing for a reason in CompMD's frame policy, fixed in CompMD 0.6.0 (§4.7, at its end); the decision was
+[ADR-004](adr/ADR-004-compmd-in-tauri-through-its-own-protocol.md). **Replaced in part** (2026-11-09):
+CompMD 0.6.0 ships the plugin, which serves its own frames at content-hashed paths; atm serves the rest of its
+CompMD build on a scheme of its own, `atm:`
+([ADR-005](adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)). §4's plugin is atm's first version of it; §2,
+§3 and §5 still hold. How to show CompMD's output in a Tauri app, worked out for the atm
 app, and written as the way to do it for any Tauri app that uses CompMD. Builds on
 [compmd-rendering-design.md](compmd-rendering-design.md) (how the dashboard renders with CompMD, §2 and §3c), the
 [Tauri guide](guides/tauri.md) and [security-architecture.md](security-architecture.md) (I13, I26).

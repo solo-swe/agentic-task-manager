@@ -125,6 +125,8 @@ jobs:
           CERT_P12: ${{ secrets.DEVELOPER_ID_CERT_P12 }}
           CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
         run: sh packaging/keychain-macos.sh
+      # Also the updater's archive of the app (atm.app.tar.gz), signed with the updater key (T-483; not the Developer
+      # ID: the app checks it against the public key built into it), and the update manifest naming it (latest.json)
       - name: Build, sign and notarize the app and its DMG
         env:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
@@ -132,6 +134,8 @@ jobs:
           NOTARY_KEY: ${{ runner.temp }}/notary.p8
           NOTARY_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_ISSUER: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           printf '%s' "$NOTARY_KEY_P8" | base64 --decode > "$NOTARY_KEY"
           # Tauri's bundler signs every binary in the app (the bundled CLI too) and notarizes the app
@@ -142,7 +146,12 @@ jobs:
           sh packaging/notarize-dmg.sh "$dmg"
           rm "$NOTARY_KEY"
           mkdir -p dist
-          cp "$dmg" "dist/atm-app-${GITHUB_REF_NAME#v}-universal.dmg"
+          version="${GITHUB_REF_NAME#v}"
+          cp "$dmg" "dist/atm-app-$version-universal.dmg"
+          bundle=target/universal-apple-darwin/release/bundle/macos
+          cp "$bundle/atm.app.tar.gz" "dist/atm-app-$version-universal.app.tar.gz"
+          node packaging/updater-manifest.mjs "$version" "atm-app-$version-universal.app.tar.gz" \
+            "$bundle/atm.app.tar.gz.sig" WHATS-NEW.md > dist/latest.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: app-macos

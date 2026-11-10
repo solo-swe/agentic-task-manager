@@ -2,6 +2,12 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.35.0] - 2026-11-10
+
+- Diagrams in task details and documents now draw in the app, as they do in the browser.
+- The app shows changes to your tasks as they happen, without refreshing.
+- The app can update itself: from the next release on, it offers the new version and installs it when you say so.
+
 ## [0.34.0] - 2026-11-09
 
 - There is an atm app for the Mac now: install it with Homebrew, and it brings its own atm for your agents.
