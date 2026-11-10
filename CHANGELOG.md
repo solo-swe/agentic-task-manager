@@ -6,6 +6,12 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-11-10
+
+Diagrams in the app (CompMD 0.6.0), the app updating itself from the next release on, and the app showing changes
+as they happen instead of polling. The design for the app's desktop UI is accepted
+(`docs/app-desktop-ui-design.md`, T-510); its steps are the next sprint.
+
 ### Added
 - **The app updates itself** (T-483): Tauri's updater (`tauri-plugin-updater` 2.14.1, approved, on the system's TLS,
   `native-tls`, so `deny.toml` needs no new licence) reads `latest.json`

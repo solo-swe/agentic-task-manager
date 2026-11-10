@@ -259,7 +259,7 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-common",
  "atm-lib",
@@ -270,7 +270,7 @@ dependencies = [
 
 [[package]]
 name = "atm-app"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -306,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "atm-common"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "dirs",
  "jiff",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-common",
  "serde_json",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "atm-lib"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "atm-vcs"
-version = "0.34.0"
+version = "0.35.0"
 dependencies = [
  "atm-common",
  "serde_json",

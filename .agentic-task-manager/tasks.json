@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 523,
+    "next_id": 524,
     "labels": [
       {
         "id": "architecture",
@@ -19007,6 +19007,46 @@
       ],
       "sprint": "The desktop app",
       "with": "user"
+    },
+    {
+      "id": "T-523",
+      "name": "Release 0.35.0: diagrams in the app, in-app updates, live changes",
+      "type": "infra",
+      "priority": "P1",
+      "labels": [
+        "distribution",
+        "app"
+      ],
+      "description": "`dev/0.35.0` to `main`, tagged, built, signed and published. The process is in [packaging/README.md](packaging/README.md); the last one was T-509.\n\n## On `dev/0.35.0`\n- **Version:** `0.35.0` in `Cargo.toml` (`[workspace.package]`), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.35.0] - <date>`; check they say what shipped (T-503 diagrams in the app with CompMD 0.6.0, T-506, T-483, T-508; T-510's design).\n- **WHATS-NEW.md:** a `## [0.35.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): diagrams in the app, the app updating itself (from the next release on), the app showing changes as they happen.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): skills or `docs/agent/` changed since `main` → a written review in §3.3 instead of the live sandbox run. New entry points this release (the updater, which downloads and installs code; the app's subscription commands; the `atm:` scheme) are in the doc: check they describe what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.35.0` to `main`. The required checks must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.35.0 --push` on an up-to-date `main`; watch the Release run. **The updater's artifacts are made for the first time** (the signed `.app.tar.gz` and `latest.json`): if the job fails, fix it on a branch and tag again, never by hand.\n- Check the draft (the CLI's archives, the DMG, the app archive and its signature, `latest.json`, `SHA256SUMS`), then publish it; T-521 checks the updater's side with the user.\n- Watch the Homebrew and Skills workflows (formula, cask with `auto_updates true`, skills `atm-v0.35.0`).\n- Check with the user, on a Mac: `brew upgrade` gives 0.35.0, the app opens, diagrams draw in it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock",
+        "CHANGELOG.md",
+        "WHATS-NEW.md",
+        "docs/security-architecture.md",
+        "dashboard/tests/e2e/__screenshots__/"
+      ],
+      "created_at": "2026-11-10T16:52:51Z",
+      "updated_at": "2026-11-10T16:52:58Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The atm app, continued",
+          "from": "2026-11-10T16:52:51Z"
+        }
+      ],
+      "sprint": "The atm app, continued",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-10T16:52:58Z",
+      "started_by": "claude:34798264"
     }
   ]
 }
