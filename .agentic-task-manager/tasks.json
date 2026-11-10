@@ -1062,16 +1062,34 @@
       },
       {
         "id": "The atm app, continued",
-        "state": "active",
+        "state": "closed",
         "goal": "Diagrams in the app (CompMD 0.6.0), in-app updates, the macOS 26 icon, and the app reacting to changes instead of polling",
         "release": "0.35.0",
-        "start": "2026-11-09T11:02:25Z"
+        "start": "2026-11-09T11:02:25Z",
+        "end": "2026-11-10T23:28:48Z",
+        "report": {
+          "done": [
+            "T-483",
+            "T-503",
+            "T-506",
+            "T-508",
+            "T-510",
+            "T-521",
+            "T-523"
+          ],
+          "carried": [],
+          "added": [
+            "T-521",
+            "T-523"
+          ]
+        }
       },
       {
         "id": "The desktop app",
-        "state": "planned",
+        "state": "active",
         "goal": "The atm app as a desktop app, the same on macOS, Windows and Linux: tabs, sidebar, status bar, menus, the title bar (docs/app-desktop-ui-design.md)",
-        "release": "0.36.0"
+        "release": "0.36.0",
+        "start": "2026-11-10T23:28:49Z"
       }
     ],
     "releases": [
