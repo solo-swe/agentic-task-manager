@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 524,
+    "next_id": 525,
     "labels": [
       {
         "id": "architecture",
@@ -19051,7 +19051,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-10T16:52:51Z",
-      "updated_at": "2026-11-10T17:16:46Z",
+      "updated_at": "2026-11-10T22:42:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19065,14 +19065,60 @@
         "dashboard",
         "docs"
       ],
-      "started_at": "2026-11-10T16:52:58Z",
-      "started_by": "claude:34798264",
       "commit": "da39f858f8c199d182d7fa4362cf3574d58cee83",
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
       },
-      "merged_at": "2026-11-10T17:16:11Z"
+      "merged_at": "2026-11-10T17:16:11Z",
+      "notes": [
+        {
+          "at": "2026-11-10T22:42:44Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-10T22:42:50Z",
+      "started_by": "claude:34798264"
+    },
+    {
+      "id": "T-524",
+      "name": "Check atm's app against CompMD's redesigned Tauri plugin and its guidance for Tauri apps",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "compmd"
+      ],
+      "description": "CompMD is redesigning `tauri-plugin-compmd` and how Tauri apps should use CompMD. **Waits for that redesign task in CompMD** (its release and its documentation for Tauri apps).\n\nOnce it's out, check atm's app against it and bring it up to the standard:\n\n## What to compare\n- **The plugin and its version:** `tauri-plugin-compmd` (pinned with `=` to the `@compmd/*` packages' version, `app/src-tauri/Cargo.toml`), and how the app registers it (`app/src-tauri/src/lib.rs`).\n- **What atm serves itself on `atm:`** (`app/src-tauri/src/assets.rs`, embedded by `app/src-tauri/build.rs`): `compmd.js`, its WebAssembly and the packs' modules. Does the plugin now serve these, or say how an app should?\n- **The page's side** (`dashboard/src/lib/compmd.ts`: `sandboxOptions`, `fetchPackModules`, `moduleUrl`): the frames' `base`, the packs' modules handed over as code checked by their `integrity`. Is this still the recommended way, or does CompMD's API cover it now?\n- **The window's CSP** (`tauri.conf.json`, I26 in `docs/security-architecture.md`): the `atm://localhost/assets/compmd/` and `compmd://localhost/frames/` folders, and their `http://….localhost` forms for Windows.\n- **Caching:** T-508 found WebKit asks again for each `atm:` file (`no-cache`); check against what CompMD now recommends.\n\n## Then\nWhere atm differs from the standard: change it (or record why not), keeping `atm serve` and the app serving the same files with the same headers (`tests/scripts/compmd-host-headers.json`). Update [ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md) (or a new ADR replacing it), I26, and the [Tauri guide](docs/guides/tauri.md). New dependencies or plugin versions need a yes first.\n\n## Checks\nThe app's Rust tests (`the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them`, `the_windows_csp_is_strict`, `assets.rs`'s), `compmd.test.ts`, the app e2e specs, and by hand: diagrams draw in the app (`cargo tauri dev`, and a release bundle).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "blocked",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/Cargo.toml",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/assets.rs",
+        "app/src-tauri/build.rs",
+        "app/src-tauri/tauri.conf.json",
+        "dashboard/src/lib/compmd.ts",
+        "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-10T22:42:38Z",
+      "updated_at": "2026-11-10T22:42:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "waiting_on": "user",
+      "questions": [
+        "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this."
+      ],
+      "blocked_at": "2026-11-10T22:42:44Z"
     }
   ]
 }
