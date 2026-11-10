@@ -4,6 +4,7 @@
 //! hands the app its links (`RunEvent::Opened`; the scheme is in `Info.plist`); the page gets them on a channel
 //! (`subscribe_links`), and a link that started the app waits for it.
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 
 use tauri::ipc::Channel;
@@ -47,40 +48,62 @@ pub fn link_address(link: &str) -> Option<String> {
     })
 }
 
-/// The links that reach the app: the page's channel once it has subscribed, the last link until then.
+/// The addresses that reach each window's page (T-511): on its channel once it has subscribed, the last one kept for
+/// it until then (a link that started the app, a new window's first page).
 #[derive(Default)]
 pub struct Links {
-    inner: Mutex<(Option<Channel<String>>, Option<String>)>,
+    inner: Mutex<Inner>,
+}
+
+#[derive(Default)]
+struct Inner {
+    /// Each window's page's channel, by the window's label
+    channels: HashMap<String, Channel<String>>,
+    /// The address waiting for each window's page
+    waiting: HashMap<String, String>,
 }
 
 impl Links {
-    /// A link the app was opened with: to the page now, or kept for it. Whether it was a link the app opens.
-    pub fn open(&self, link: &str) -> bool {
+    fn inner(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// A link the app was opened with, for `window`'s page: sent now, or kept for it. Whether it was a link the app
+    /// opens.
+    pub fn open(&self, window: &str, link: &str) -> bool {
         let Some(address) = link_address(link) else {
             return false;
         };
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let sent = inner
-            .0
-            .as_ref()
-            .is_some_and(|channel| channel.send(address.clone()).is_ok());
-        if !sent {
-            inner.1 = Some(address);
-        }
+        self.send(window, address);
         true
     }
 
-    /// The page subscribes: later links go to `channel`; the one that came before, if any, is the answer.
-    pub fn subscribe(&self, channel: Channel<String>) -> Option<String> {
-        let mut inner = self
-            .inner
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        inner.0 = Some(channel);
-        inner.1.take()
+    /// An address (already checked) for `window`'s page: sent now, or kept until it subscribes.
+    pub fn send(&self, window: &str, address: String) {
+        let mut inner = self.inner();
+        let sent = inner
+            .channels
+            .get(window)
+            .is_some_and(|channel| channel.send(address.clone()).is_ok());
+        if !sent {
+            inner.waiting.insert(window.to_owned(), address);
+        }
+    }
+
+    /// `window`'s page subscribes: its later addresses go to `channel`; the one waiting for it, if any, is the answer.
+    pub fn subscribe(&self, window: &str, channel: Channel<String>) -> Option<String> {
+        let mut inner = self.inner();
+        inner.channels.insert(window.to_owned(), channel);
+        inner.waiting.remove(window)
+    }
+
+    /// `window` closed: nothing more goes to it.
+    pub fn forget(&self, window: &str) {
+        let mut inner = self.inner();
+        inner.channels.remove(window);
+        inner.waiting.remove(window);
     }
 }
 
@@ -131,26 +154,63 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_link_before_the_page_subscribes_waits_for_it_and_one_after_goes_to_its_channel() {
-        let links = Links::default();
-        assert!(!links.open("https://example.com"));
-        assert!(links.open("atm://projects/abc"));
-        assert!(links.open("atm://projects/def/list"));
+    /// A channel that hands what it is sent to the returned receiver.
+    fn recorded() -> (
+        Channel<String>,
+        std::sync::mpsc::Receiver<tauri::ipc::InvokeResponseBody>,
+    ) {
         let (sent, received) = std::sync::mpsc::channel();
         let channel = Channel::new(move |body| {
             let _ = sent.send(body);
             Ok(())
         });
-        // The latest link is the one the app opens at
-        assert_eq!(
-            links.subscribe(channel).as_deref(),
-            Some("/projects/def/list")
-        );
-        assert!(links.open("atm://board"));
-        let tauri::ipc::InvokeResponseBody::Json(text) = received.recv().expect("a link") else {
+        (channel, received)
+    }
+
+    fn text(body: tauri::ipc::InvokeResponseBody) -> String {
+        let tauri::ipc::InvokeResponseBody::Json(text) = body else {
             panic!("a JSON message");
         };
-        assert_eq!(text, "\"/board\"");
+        text
+    }
+
+    #[test]
+    fn a_link_before_the_page_subscribes_waits_for_it_and_one_after_goes_to_its_channel() {
+        let links = Links::default();
+        assert!(!links.open("main", "https://example.com"));
+        assert!(links.open("main", "atm://projects/abc"));
+        assert!(links.open("main", "atm://projects/def/list"));
+        let (channel, received) = recorded();
+        // The latest link is the one the app opens at
+        assert_eq!(
+            links.subscribe("main", channel).as_deref(),
+            Some("/projects/def/list")
+        );
+        assert!(links.open("main", "atm://board"));
+        assert_eq!(text(received.recv().expect("a link")), "\"/board\"");
+    }
+
+    /// T-511: each window's page gets its own addresses, and a closed window none
+    #[test]
+    fn each_window_gets_its_own_links() {
+        let links = Links::default();
+        let (main, to_main) = recorded();
+        assert_eq!(links.subscribe("main", main), None);
+        // A new window's first page waits for its page to subscribe
+        links.send("window-1", "/projects/abc".into());
+        let (other, to_other) = recorded();
+        assert_eq!(
+            links.subscribe("window-1", other).as_deref(),
+            Some("/projects/abc")
+        );
+        assert!(links.open("window-1", "atm://board"));
+        assert_eq!(text(to_other.recv().expect("a link")), "\"/board\"");
+        assert!(
+            to_main.try_recv().is_err(),
+            "main got another window's link"
+        );
+        links.forget("window-1");
+        links.send("window-1", "/projects/def".into());
+        assert!(to_other.try_recv().is_err(), "a closed window got a link");
     }
 }

@@ -15,6 +15,23 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.httpRequests).toEqual([]);
   });
 
+  test('the window takes the page’s title, and follows it to another project (T-511)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    await page.goto('/');
+    // Two projects: the page opens on the overview
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect.poll(() => tasksServer.windowTitles.at(-1)).toBe(await page.title());
+
+    await tasksServer.pushLink('/projects/second/list');
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect.poll(() => tasksServer.windowTitles.at(-1)).toContain('Minimal Project');
+  });
+
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
     page,
     tasksServer,

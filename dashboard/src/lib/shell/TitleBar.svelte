@@ -3,6 +3,8 @@
   // reload button and the ⋯ settings menu pinned at the right. The project page adds its charts (before the controls) and
   // its filters (a second row) through snippets.
   import type { Snippet } from 'svelte';
+  import { inApp } from '../api/http';
+  import { setWindowTitle } from '../api/shell';
   import { dashboardVersion } from '../release-notes';
   import { compactAt } from '../scroll';
   import { dashboard } from '../state.svelte';
@@ -33,6 +35,8 @@
 
   $effect(() => {
     document.title = title;
+    // In the app, the window's own title too: the window switcher's and the taskbar's (T-511)
+    if (inApp) void setWindowTitle(title);
   });
 
   // The title bar stays pinned at the top; once the page scrolls it compacts and casts a shadow

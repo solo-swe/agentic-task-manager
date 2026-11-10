@@ -6,6 +6,17 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Changed
+- **The app's windows** (T-511, step 1 of `docs/app-desktop-ui-design.md`): the groundwork for several windows and
+  the page's own shell, with no visible change yet. The app's windows are `main` and `window-<n>`, both in the
+  capability (`"windows": ["main", "window-*"]`). Subscriptions belong to the window whose page made them: a page
+  loading again or a window closing ends only its own (`AppState::unwatch_window`, replacing `unwatch_all`), and
+  `unsubscribe` ends only the calling window's. Links go to each window's page (`Links` by window); deep links and a
+  second instance go to the window in front (the last focused), or a new one when none is open. Three new commands,
+  each acting on the calling window: `shell` (`{ system_menu_bar, system_window_buttons }`, what the window has of
+  the platform's own), `set_title` (the page sets it with `document.title`, `lib/api/shell.ts`), and
+  `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
+
 ## [0.35.0] - 2026-11-10
 
 Diagrams in the app (CompMD 0.6.0), the app updating itself from the next release on, and the app showing changes

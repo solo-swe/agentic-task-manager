@@ -515,6 +515,8 @@ export class TasksServer {
 
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
+  /** The titles the page gave its window (`set_title`, T-511), in order */
+  windowTitles: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -661,6 +663,12 @@ export class TasksServer {
           },
         };
       }
+      // The window (T-511): macOS's, as the app on a Mac answers
+      case 'shell':
+        return { ok: { system_menu_bar: true, system_window_buttons: true } };
+      case 'set_title':
+        this.windowTitles.push(String(args.title));
+        return { ok: null };
       case 'logo': {
         const svg = this.logos.get(project);
         return svg ? { ok: { content_type: 'image/svg+xml', data: [...Buffer.from(svg)] } } : { ok: null };
