@@ -17099,7 +17099,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-10T01:56:05Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17170,7 +17170,11 @@
         }
       ],
       "completed_at": "2026-11-10T01:56:05Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      }
     },
     {
       "id": "T-484",
@@ -18065,7 +18069,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-09T17:03:07Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18119,10 +18123,9 @@
         }
       ],
       "pr": {
-        "number": 41,
-        "url": "https://github.com/solo-swe/agentic-task-manager/pull/41"
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
       },
-      "merged_at": "2026-11-09T10:10:27Z",
       "blocks": [
         {
           "from": "2026-11-09T08:59:29Z",
@@ -18295,7 +18298,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-09T11:16:24Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18352,7 +18355,11 @@
         }
       ],
       "completed_at": "2026-11-09T11:16:24Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      }
     },
     {
       "id": "T-507",
@@ -18414,7 +18421,7 @@
         "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md"
       ],
       "created_at": "2026-11-09T02:26:10Z",
-      "updated_at": "2026-11-09T20:37:16Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18459,7 +18466,11 @@
       "started_at": "2026-11-09T20:37:11Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-09T20:37:16Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      }
     },
     {
       "id": "T-509",
@@ -18534,7 +18545,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-09T23:16:29Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18577,7 +18588,11 @@
         }
       ],
       "completed_at": "2026-11-09T23:16:29Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      }
     },
     {
       "id": "T-511",
@@ -19031,7 +19046,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-10T16:52:51Z",
-      "updated_at": "2026-11-10T16:52:58Z",
+      "updated_at": "2026-11-10T17:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19046,7 +19061,12 @@
         "docs"
       ],
       "started_at": "2026-11-10T16:52:58Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "da39f858f8c199d182d7fa4362cf3574d58cee83",
+      "pr": {
+        "number": 44,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      }
     }
   ]
 }
