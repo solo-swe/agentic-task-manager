@@ -179,6 +179,14 @@ export class DashboardState {
   archiveLoaded = $state(false);
   /** Search, the lists and the graph include archived tasks ("Include archived") */
   includeArchived = $state(false);
+  /** The ⋯ settings popup and the Filters popup are open: their buttons, and in the app the menu (T-512) */
+  settingsOpen = $state(false);
+  filtersOpen = $state(false);
+
+  /** A project's page is shown */
+  get onProject(): boolean {
+    return this.route.page === 'project';
+  }
   /** tasks.json's tasks, then the archived ones it doesn't have: the history views use these */
   history = $derived(
     this.archive.length ? [...this.tasks, ...this.archive.filter((t) => !this.taskMap.has(t.id))] : this.tasks,
@@ -506,10 +514,10 @@ export class DashboardState {
     this.newVersionReady = newBuildReady(dashboardBuild(), server, dismissed);
   }
 
-  /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS; one put off ("Not
-   * now") isn't offered again, a newer one is */
-  async checkAppUpdate(now = Date.now()) {
-    if (!this.live || now - this.#updateCheckedAt < UPDATE_CHECK_MS) return;
+  /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS (now, `force`d by
+   * the menu's Check for Updates, T-512); one put off ("Not now") isn't offered again, a newer one is */
+  async checkAppUpdate(now = Date.now(), force = false) {
+    if (!this.live || (!force && now - this.#updateCheckedAt < UPDATE_CHECK_MS)) return;
     this.#updateCheckedAt = now;
     const update = await checkAppUpdate();
     const dismissed = getPref('dismissedAppUpdate', '');

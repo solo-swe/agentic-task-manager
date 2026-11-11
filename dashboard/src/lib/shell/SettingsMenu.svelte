@@ -16,8 +16,6 @@
       second: '2-digit',
     }),
   );
-  let open = $state(false);
-
   // Like the legacy dashboard, the interval only applies on "change" (blur/enter), not on every keystroke
   function onIntervalChange(e: Event) {
     dashboard.setAutoRefreshSeconds(parseInt((e.currentTarget as HTMLInputElement).value) || 5);
@@ -27,7 +25,8 @@
 <!-- A popover of settings, Bits UI's (T-431): focus moves in and stays while it is open, Escape or a click outside
      closes it, and focus goes back to the button. Placed by CSS under the button -->
 <div class="menu-anchor settings">
-  <Popover.Root bind:open>
+  <!-- Open from its button, and in the app from the menu's Settings… (T-512) -->
+  <Popover.Root bind:open={dashboard.settingsOpen}>
     <Popover.Trigger>
       {#snippet child({ props })}
         <button
@@ -130,7 +129,7 @@
               title="Forget this project's saved filters, search, tab, options and zoom"
               onclick={() => {
                 dashboard.resetView();
-                open = false;
+                dashboard.settingsOpen = false;
               }}>Reset this project's view</button
             >
           {/if}

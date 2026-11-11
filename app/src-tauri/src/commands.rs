@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::links::Links;
+use crate::menu::Menus;
 use atm_lib::Workspaces;
 use atm_lib::query::Filters;
 use atm_lib::workspaces::{Member, Workspace};
@@ -46,6 +47,8 @@ pub struct AppState {
     front: Mutex<Option<String>>,
     /// The next `window-<n>`'s number
     next_window: AtomicU32,
+    /// Each window's page's menu channel and what its menu shows (T-512)
+    menus: Menus,
 }
 
 impl AppState {
@@ -59,7 +62,14 @@ impl AppState {
             links: Links::default(),
             front: Mutex::new(None),
             next_window: AtomicU32::new(1),
+            menus: Menus::default(),
         }
+    }
+
+    /// Each window's menu channel and state.
+    #[must_use]
+    pub fn menus(&self) -> &Menus {
+        &self.menus
     }
 
     /// A label for a new window, `window-<n>`, never one used before.
@@ -93,6 +103,7 @@ impl AppState {
     /// subscriptions ended.
     pub fn window_closed(&self, window: &str) -> usize {
         self.links.forget(window);
+        self.menus.forget(window);
         let mut front = self
             .front
             .lock()

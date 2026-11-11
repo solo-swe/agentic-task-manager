@@ -17,6 +17,18 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   the platform's own), `set_title` (the page sets it with `document.title`, `lib/api/shell.ts`), and
   `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
 
+### Added
+- **The app's menus** (T-512, step 2 of `docs/app-desktop-ui-design.md`, §6): one definition in Rust
+  (`app/src-tauri/src/menu.rs`, `tauri::menu`), the menu bar on macOS: atm, File, Edit, View, Go (Back, Forward, the
+  overview, the workspace's projects, the workspaces), Window and Help, with their shortcuts (`CmdOrCtrl+…`, and each
+  platform's own for Back, Forward, the sidebar, Help and Quit). On Windows and Linux it is attached and hidden, for
+  the page to draw (T-513). An item sends the window in front an action (`subscribe_menu`); the page does what the
+  control does (`lib/menu-actions.ts`): the views, the dialogs, What's new, Check for Updates (now, not on its six-hour
+  turn), Settings and Show Filters (their popups), Include Archived Tasks, Find, Copy Link to This Page (its `atm://`
+  link), Reload, Back and Forward, and the two links in Help. Quit and New Window the app does. The page reports what
+  the menu shows checked (`menu_state`); `menu` gives the definition. Tabs (T-514) and the sidebar (T-515) items do
+  nothing yet.
+
 ## [0.35.0] - 2026-11-10
 
 Diagrams in the app (CompMD 0.6.0), the app updating itself from the next release on, and the app showing changes

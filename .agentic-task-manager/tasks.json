@@ -18629,7 +18629,7 @@
       "description": "Step 1 of [the desktop app design](docs/app-desktop-ui-design.md) (§9, accepted in T-510): the groundwork for several windows and the page's own shell. **No visible change yet.**\n\n## Change\n- **Windows:** `main` and `window-<n>`; `capabilities/main.json` names them (`\"windows\": [\"main\", \"window-*\"]`), and I25's tests check a `window-` window as they check `main` ([§3](docs/app-desktop-ui-design.md#3-tabs)).\n- **Subscriptions belong to a window:** `AppState` keeps them by the webview's label; `unwatch_all` becomes `unwatch_window` (a page loading again ends only its own window's), and a window closing ends its own.\n- **Deep links and the second instance** go to the window in front (the last focused); with no window, a new one. A deep link opens in a new tab once tabs exist (step 4); until then it navigates that window, as now.\n- **New commands**, each in `build.rs`'s manifest with one permission, acting on the calling window only (never a label):\n  - `shell` → `{ system_menu_bar, system_window_buttons }` from `cfg!(target_os)` ([§1a](docs/app-desktop-ui-design.md#1a-platforms));\n  - `set_title` (`Window::set_title`): the page calls it when `document.title` changes;\n  - `open_window(address)`: checks the address with `link_address` (T-459's check) before making the window.\n- The page: a small `lib/app-shell.ts` (or beside `lib/api/`) reading `shell` once, for the later steps.\n\n## Checks\nRust tests for the window registry, `unwatch_window` and `open_window`'s check; the app e2e specs (`dashboard/tests/e2e/app.spec.ts`); by hand in a window (`cargo tauri dev`, `cargo run -p atm-app`). `docs/security-architecture.md` gains the commands and the `window-` windows (I25).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/lib.rs",
@@ -18641,7 +18641,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-10T23:29:01Z",
+      "updated_at": "2026-11-10T23:47:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18656,7 +18656,18 @@
       ],
       "sprint": "The desktop app",
       "started_at": "2026-11-10T23:29:01Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "1299029199ad4d8b568bcd0bdd82e9f0bc939067",
+      "completed_at": "2026-11-10T23:47:14Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-10T23:47:14Z",
+          "kind": "outcome",
+          "text": "Windows main and window-<n> (capability window-*); subscriptions and links per window; deep links and second instance to the window in front; shell, set_title, open_window (checked as a deep link). Not checked by hand in a window yet: open the app and confirm the title follows the project.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-512",
@@ -18670,7 +18681,7 @@
       "description": "Step 2 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)).\n\n## Change\n- **One menu definition** in Rust (`tauri::menu`, no plugin): the table of §6 (atm, File, Edit, View, Go, Window, Help), `CheckMenuItem`s for the toggles, `PredefinedMenuItem`s for the system's items, `AboutMetadata` for About; accelerators written as `CmdOrCtrl+…`, with each platform's own where §1a's table differs.\n- **macOS:** it is the app's menu bar. **Windows and Linux:** attach it and hide it (`hide_menu`); the page draws it in step 3.\n- **Commands:** `subscribe_menu` (a channel of `MenuAction`s, a closed enum, generated into `.generated/app/bindings.ts` by tauri-specta), `menu` (the items, labels, shortcuts and check marks, for the page to draw), `menu_state` (the page tells the app its checked view, sidebar and archived toggles; the app updates the items while that window is in front). The Go menu's projects and workspaces come from `AppState`.\n- **The page** maps each action to what its control does now (`dashboard.selectTab`, `openDialog`, `navigate`); in the app it leaves the menu's keys to the menu, so none fires twice.\n- GitHub, Help, About, Connect your agents, What's new and Check for Updates (T-483's `UpdateNotice`) reachable from the menu. New Tab / Close Tab / New Window items can send their actions already; tabs come in step 4.\n\n## Checks\nRust tests for the definition (every action has an item, no accelerator twice) and `menu`'s output; unit tests for the page's action mapping; the app e2e specs; by hand on macOS. `docs/security-architecture.md` gains the commands.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-511"
       ],
@@ -18682,7 +18693,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-11T05:10:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18695,7 +18706,16 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "notes": [
+        {
+          "at": "2026-11-11T05:10:06Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        }
+      ],
+      "started_at": "2026-11-11T05:10:11Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-513",

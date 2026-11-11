@@ -6,6 +6,7 @@
 pub mod assets;
 pub mod commands;
 pub mod links;
+pub mod menu;
 pub mod updates;
 pub mod windows;
 
@@ -16,6 +17,7 @@ use commands::{
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use menu::{menu, menu_state, subscribe_menu};
 use updates::{check_update, install_update};
 use windows::{open_window, set_title, shell};
 
@@ -48,6 +50,9 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         shell,
         set_title::<tauri::Wry>,
         open_window::<tauri::Wry>,
+        subscribe_menu::<tauri::Wry>,
+        menu::<tauri::Wry>,
+        menu_state::<tauri::Wry>,
     ])
 }
 
@@ -77,16 +82,25 @@ pub fn run() {
         })
         .setup(move |app| {
             commands.mount_events(app);
+            // The menus (T-512): macOS's menu bar; on Windows and Linux hidden, for the page to draw
+            menu::refresh(app.handle());
             Ok(())
         })
+        .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))
         .build(context())
         .expect("the atm app");
     app.run(|app, event| match event {
-        // The window in front is the one links and a second instance go to; a closed one's subscriptions end
+        // The window in front is the one links, a second instance and the menu go to; a closed one's subscriptions end
         tauri::RunEvent::WindowEvent { label, event, .. } => {
             let state = app.state::<AppState>();
             match event {
-                tauri::WindowEvent::Focused(true) => state.focused(&label),
+                tauri::WindowEvent::Focused(true) => {
+                    let changed = state.front().as_deref() != Some(label.as_str());
+                    state.focused(&label);
+                    if changed {
+                        menu::refresh(app);
+                    }
+                }
                 tauri::WindowEvent::Destroyed => {
                     state.window_closed(&label);
                 }

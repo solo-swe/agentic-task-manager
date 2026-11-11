@@ -483,6 +483,25 @@ export class TasksServer {
     );
   }
 
+  /** The page's menu channel (T-512), and what it last reported the menu shows */
+  private menuChannel: number | null = null;
+  private menuMessages = 0;
+  menuState: Record<string, unknown> | null = null;
+
+  /** A menu item chosen: its action on the page's menu channel, as the app sends it */
+  async chooseMenu(action: { kind: string; id?: string }) {
+    if (this.menuChannel === null) throw new Error('the page has not subscribed to the menu');
+    const index = this.menuMessages++;
+    await this.page.evaluate(
+      ([id, message, at]) => {
+        const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+          .__atmCallbacks;
+        callbacks[id as number]({ index: at, message });
+      },
+      [this.menuChannel, action, index] as const,
+    );
+  }
+
   /** The page's live change subscriptions (T-506), by ID: what each watches and its channel */
   subscriptions = new Map<number, { workspace: string; project: string | null; channel: number }>();
   private nextSubscription = 0;
@@ -668,6 +687,13 @@ export class TasksServer {
         return { ok: { system_menu_bar: true, system_window_buttons: true } };
       case 'set_title':
         this.windowTitles.push(String(args.title));
+        return { ok: null };
+      // The menu (T-512)
+      case 'subscribe_menu':
+        this.menuChannel = channelId(args.channel);
+        return { ok: null };
+      case 'menu_state':
+        this.menuState = args.shown as Record<string, unknown>;
         return { ok: null };
       case 'logo': {
         const svg = this.logos.get(project);

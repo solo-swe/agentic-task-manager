@@ -861,6 +861,14 @@ build (I29):
 - **`shell`** says what the window has of the platform's own (a constant per platform), **`set_title`** sets the
   calling window's title (no control characters, at most 200 characters). Neither names a window.
 
+**The app's menus (T-512, `app/src-tauri/src/menu.rs`).** Defined in Rust, with `tauri::menu` (no plugin). Three new
+commands, each acting on the calling window (I25): `subscribe_menu` (a channel of `MenuAction`s, a closed enum),
+`menu` (the definition, for the page to draw on Windows and Linux) and `menu_state` (what the menu shows checked: a
+view name, three booleans and a workspace ID, only compared and shown). An item sends its action to the page of the
+window in front, which does what the same control does; Quit and New Window the app does itself. The page opens
+only the two fixed addresses of Help ▸ atm on GitHub and CompMD (`pluginInfo.repository`, CompMD's site), never one
+from the menu or the app. The Go menu's names are the workspace's projects' (from the user's own registry).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

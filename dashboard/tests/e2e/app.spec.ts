@@ -32,6 +32,30 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.windowTitles.at(-1)).toContain('Minimal Project');
   });
 
+  test('the menu’s items do what their controls do, and the menu shows what the page shows (T-512)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+    await expect.poll(() => tasksServer.menuState?.view).toBe('kanban');
+
+    await tasksServer.chooseMenu({ kind: 'show_list' });
+    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+    await expect.poll(() => tasksServer.menuState?.view).toBe('list');
+
+    await tasksServer.chooseMenu({ kind: 'toggle_filters' });
+    await expect(page.locator('.filter-panel')).toBeVisible();
+    await expect.poll(() => tasksServer.menuState?.filters).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect.poll(() => tasksServer.menuState?.filters).toBe(false);
+
+    await tasksServer.chooseMenu({ kind: 'about' });
+    await expect(page.locator('#about-overlay')).toHaveClass(/open/);
+  });
+
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
     page,
     tasksServer,

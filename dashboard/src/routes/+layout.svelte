@@ -27,6 +27,8 @@
   import { watchChanges } from '../lib/api/changes';
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
+  import { listenForMenu, reportMenuState } from '../lib/api/menu';
+  import { menuStateOf, runMenuAction } from '../lib/menu-actions';
   import { arrived, navigate, useRouter, type EntryState } from '../lib/navigation';
   import { dashboard } from '../lib/state.svelte';
 
@@ -48,8 +50,17 @@
 
   onMount(() => {
     settle();
-    // In the atm app, its atm:// links open their page here (T-459)
-    if (inApp) void listenForLinks((address) => navigate(address)).catch((e) => console.error('Deep links:', e));
+    // In the atm app, its atm:// links open their page here (T-459), and its menu's items do what their controls do
+    // (T-512)
+    if (inApp) {
+      void listenForLinks((address) => navigate(address)).catch((e) => console.error('Deep links:', e));
+      void listenForMenu((action) => runMenuAction(action, dashboard)).catch((e) => console.error('The menu:', e));
+    }
+  });
+
+  // In the atm app, what the menu shows checked follows the page (T-512)
+  $effect(() => {
+    if (inApp) void reportMenuState(menuStateOf(dashboard));
   });
 
   // In the atm app the page reacts to changes (T-506): the app says when the workspace's list or the open project's

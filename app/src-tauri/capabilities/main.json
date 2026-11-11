@@ -24,6 +24,9 @@
     "allow-install-update",
     "allow-shell",
     "allow-set-title",
-    "allow-open-window"
+    "allow-open-window",
+    "allow-subscribe-menu",
+    "allow-menu",
+    "allow-menu-state"
   ]
 }
