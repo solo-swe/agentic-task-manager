@@ -27,6 +27,10 @@
     "allow-open-window",
     "allow-subscribe-menu",
     "allow-menu",
-    "allow-menu-state"
+    "allow-menu-state",
+    "allow-minimize",
+    "allow-toggle-maximize",
+    "allow-close-window",
+    "allow-start-dragging"
   ]
 }

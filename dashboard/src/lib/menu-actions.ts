@@ -1,6 +1,7 @@
 // What each of the app's menu items does on the page (T-512): what the same control does now. Tabs come in T-514 and
-// the sidebar in T-515: their items do nothing yet. Quit and New Window the app does itself.
-import type { MenuAction, MenuState } from './api/menu';
+// the sidebar in T-515: their items do nothing yet. Quit and New Window the app does itself, except in the menus the
+// page draws (Windows, Linux, T-513).
+import type { MenuAction, MenuState, SystemItem } from './api/menu';
 import { currentAddress } from './navigation';
 import { pluginInfo } from './plugin-info';
 import type { DialogId } from './dialogs';
@@ -123,6 +124,41 @@ export function runMenuAction(action: MenuAction, target: MenuTarget, page: Page
       // Tabs (T-514), the sidebar (T-515); Quit and New Window are the app's
       return;
   }
+}
+
+/** The window commands the menus the page draws (Windows, Linux, T-513) need: there the app doesn't see the click */
+export interface WindowActions {
+  openWindow(address: string): Promise<unknown>;
+  closeWindow(): Promise<unknown>;
+  minimize(): Promise<unknown>;
+  exec(command: 'undo' | 'redo' | 'cut' | 'copy' | 'paste' | 'selectAll'): void;
+}
+
+/** An item of a menu the page draws: what the menu bar's would do (Quit closes this window; with the last, the app) */
+export function runDrawnAction(
+  action: MenuAction,
+  target: MenuTarget,
+  window: WindowActions,
+  page: PageActions = pageActions,
+): void {
+  if (action.kind === 'quit') void window.closeWindow();
+  else if (action.kind === 'new_window') void window.openWindow('/');
+  else runMenuAction(action, target, page);
+}
+
+/** One of the system's items in a menu the page draws; those only macOS has do nothing */
+export function runSystemItem(item: SystemItem, window: WindowActions): void {
+  const commands: Partial<Record<SystemItem, Parameters<WindowActions['exec']>[0]>> = {
+    undo: 'undo',
+    redo: 'redo',
+    cut: 'cut',
+    copy: 'copy',
+    paste: 'paste',
+    select_all: 'selectAll',
+  };
+  const command = commands[item];
+  if (command) window.exec(command);
+  else if (item === 'minimize') void window.minimize();
 }
 
 /** What the menu shows checked for `target` */

@@ -40,6 +40,30 @@ export async function setWindowTitle(title: string): Promise<void> {
   }
 }
 
+/** One of the window commands (T-513): on the calling window; a failure is only logged */
+async function windowCommand(command: 'minimize' | 'toggle_maximize' | 'close_window' | 'start_dragging') {
+  try {
+    await invoke(command);
+  } catch (e) {
+    console.error(`The window's ${command} failed:`, e);
+  }
+}
+
+/** The page's window buttons (Windows, Linux) and its bars (a drag, a double click) */
+export const minimizeWindow = () => windowCommand('minimize');
+export const toggleMaximizeWindow = () => windowCommand('toggle_maximize');
+export const closeWindow = () => windowCommand('close_window');
+export const startDragging = () => windowCommand('start_dragging');
+
+/** What a mouse-down on a bar does: a drag, or a double click maximizing, unless it is on one of the bar's controls */
+export function onBarMouseDown(e: MouseEvent): void {
+  if (e.button !== 0) return;
+  const target = e.target as Element | null;
+  if (target?.closest('button, a, input, select, textarea, [role="menuitem"], [role="menubar"], [role="tab"]')) return;
+  e.preventDefault();
+  void (e.detail === 2 ? toggleMaximizeWindow() : startDragging());
+}
+
 /** Open a new window at `address`, one of the dashboard's pages (the app checks it again); whether it opened */
 export async function openWindow(address: string): Promise<boolean> {
   const target = linkTarget(address);

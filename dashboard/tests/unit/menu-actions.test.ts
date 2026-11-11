@@ -1,13 +1,16 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { listenForMenu, reportMenuState, type MenuAction } from '../../src/lib/api/menu';
+import { listenForMenu, menuDefinition, reportMenuState, shortcutLabel, type MenuAction } from '../../src/lib/api/menu';
 import {
   COMPMD_URL,
   menuStateOf,
   pageLink,
+  runDrawnAction,
   runMenuAction,
+  runSystemItem,
   type MenuTarget,
   type PageActions,
+  type WindowActions,
 } from '../../src/lib/menu-actions';
 import { pluginInfo } from '../../src/lib/plugin-info';
 import type { ViewId } from '../../src/lib/tabs';
@@ -113,6 +116,42 @@ describe('the app’s menu on the page (T-512)', () => {
     for (const kind of ['show_kanban', 'new_tab', 'close_tab', 'next_tab', 'toggle_sidebar', 'quit'] as const)
       runMenuAction({ kind }, t, p);
     expect([...t.did, ...p.did]).toEqual([]);
+  });
+
+  it('in the menus the page draws, Quit and New Window are the window’s, the system’s items the webview’s', () => {
+    const did: string[] = [];
+    const window: WindowActions = {
+      openWindow: async (address) => void did.push(`open ${address}`),
+      closeWindow: async () => void did.push('close'),
+      minimize: async () => void did.push('minimize'),
+      exec: (command) => void did.push(`exec ${command}`),
+    };
+    const t = target();
+    runDrawnAction({ kind: 'quit' }, t, window, page());
+    runDrawnAction({ kind: 'new_window' }, t, window, page());
+    runDrawnAction({ kind: 'show_list' }, t, window, page());
+    for (const item of ['copy', 'select_all', 'minimize', 'services'] as const) runSystemItem(item, window);
+    expect(did).toEqual(['close', 'open /', 'exec copy', 'exec selectAll', 'minimize']);
+    expect(t.did).toEqual(['tab list']);
+  });
+
+  it('shows shortcuts as Windows and Linux write them', () => {
+    expect(shortcutLabel('CmdOrCtrl+Digit3')).toBe('Ctrl+3');
+    expect(shortcutLabel('Alt+CmdOrCtrl+Comma')).toBe('Alt+Ctrl+,');
+    expect(shortcutLabel('Alt+ArrowLeft')).toBe('Alt+←');
+    expect(shortcutLabel(null)).toBe('');
+  });
+
+  it('asks the app for its menus, none when it can’t say', async () => {
+    mockIPC((command) => (command === 'menu' ? [{ label: 'View', windows: false, entries: [] }] : null));
+    expect(await menuDefinition()).toEqual([{ label: 'View', windows: false, entries: [] }]);
+    clearMocks();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockIPC(() => {
+      throw new Error('no app');
+    });
+    expect(await menuDefinition()).toEqual([]);
+    logged.mockRestore();
   });
 
   it('reports what the menu shows checked', () => {

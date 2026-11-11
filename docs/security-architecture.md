@@ -869,6 +869,13 @@ window in front, which does what the same control does; Quit and New Window the 
 only the two fixed addresses of Help ▸ atm on GitHub and CompMD (`pluginInfo.repository`, CompMD's site), never one
 from the menu or the app. The Go menu's names are the workspace's projects' (from the user's own registry).
 
+**The app's title bar (T-513).** Four new commands, each on the calling window only and taking nothing (I25):
+`minimize`, `toggle_maximize`, `close_window` (as the system's close button: the app's close handling runs) and
+`start_dragging`, which the page's bars call in place of Tauri's drag region (that needs the core permission
+`core:window:allow-start-dragging`, which the page doesn't get). On Windows and Linux the windows have no decorations
+and the page draws their buttons and the menus (from `menu`); on macOS the configuration's overlay title bar keeps the
+system's buttons.
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

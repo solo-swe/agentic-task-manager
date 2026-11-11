@@ -68,7 +68,7 @@ pub fn build_window<R: Runtime>(
         .iter()
         .find(|w| w.label == MAIN)
         .cloned();
-    match config {
+    let window = match config {
         Some(mut config) => {
             label.clone_into(&mut config.label);
             WebviewWindowBuilder::from_config(app, &config)?.build()
@@ -77,6 +77,18 @@ pub fn build_window<R: Runtime>(
             WebviewWindowBuilder::new(app, label, WebviewUrl::App("tasks-dashboard.html".into()))
                 .build()
         }
+    }?;
+    dress(&window);
+    Ok(window)
+}
+
+/// The window's frame as the page's title bar wants it (T-513, §2): on macOS the configuration's overlay title bar
+/// (the system's buttons over the page); on Windows and Linux no decorations, the page draws its own buttons, and
+/// Windows 11 gives it rounded corners and a border with a shadow.
+pub fn dress<R: Runtime>(window: &WebviewWindow<R>) {
+    if !shell_of().system_window_buttons {
+        let _ = window.set_decorations(false);
+        let _ = window.set_shadow(true);
     }
 }
 
@@ -108,6 +120,57 @@ pub fn focus<R: Runtime>(window: &WebviewWindow<R>) {
     let _ = window.unminimize();
     let _ = window.show();
     let _ = window.set_focus();
+}
+
+fn failed(e: &tauri::Error) -> AppError {
+    AppError::Failed(e.to_string())
+}
+
+/// Minimize the calling window (the page's button, on Windows and Linux).
+///
+/// # Errors
+/// When the window can't.
+#[tauri::command]
+#[specta::specta]
+pub async fn minimize<R: Runtime>(window: WebviewWindow<R>) -> Result<(), AppError> {
+    window.minimize().map_err(|e| failed(&e))
+}
+
+/// Maximize the calling window, or restore it when it is maximized (the page's button, a double click on its bars):
+/// Tauri has no toggle.
+///
+/// # Errors
+/// When the window can't.
+#[tauri::command]
+#[specta::specta]
+pub async fn toggle_maximize<R: Runtime>(window: WebviewWindow<R>) -> Result<(), AppError> {
+    if window.is_maximized().map_err(|e| failed(&e))? {
+        window.unmaximize()
+    } else {
+        window.maximize()
+    }
+    .map_err(|e| failed(&e))
+}
+
+/// Close the calling window, as a click on the system's close button would (its close handling runs).
+///
+/// # Errors
+/// When the window can't.
+#[tauri::command]
+#[specta::specta]
+pub async fn close_window<R: Runtime>(window: WebviewWindow<R>) -> Result<(), AppError> {
+    window.close().map_err(|e| failed(&e))
+}
+
+/// Start dragging the calling window (a mouse-down on its bars outside their controls): the app's own command, as
+/// Tauri's drag region needs a core permission the page doesn't have (I25).
+///
+/// # Errors
+/// When the window can't.
+#[tauri::command]
+#[specta::specta]
+pub async fn start_dragging<R: Runtime>(window: WebviewWindow<R>) -> Result<(), AppError> {
+    window.start_dragging().map_err(|e| failed(&e))
 }
 
 /// What the calling window has of the platform's own (§1a).

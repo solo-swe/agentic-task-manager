@@ -536,6 +536,10 @@ export class TasksServer {
   agentCalls: string[] = [];
   /** The titles the page gave its window (`set_title`, T-511), in order */
   windowTitles: string[] = [];
+  /** What the window has of the platform's own (`shell`): macOS's by default, `{false, false}` for Windows' */
+  windowShell = { system_menu_bar: true, system_window_buttons: true };
+  /** The window commands the page called (T-513), in order */
+  windowCalls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -684,7 +688,34 @@ export class TasksServer {
       }
       // The window (T-511): macOS's, as the app on a Mac answers
       case 'shell':
-        return { ok: { system_menu_bar: true, system_window_buttons: true } };
+        return { ok: this.windowShell };
+      case 'minimize':
+      case 'toggle_maximize':
+      case 'close_window':
+      case 'start_dragging':
+        this.windowCalls.push(command);
+        return { ok: null };
+      // A short definition of the app's menus (its own tests check the whole one)
+      case 'menu':
+        return {
+          ok: [
+            {
+              label: 'View',
+              windows: false,
+              entries: [
+                {
+                  type: 'item',
+                  action: { kind: 'show_list' },
+                  label: 'List',
+                  accelerator: 'CmdOrCtrl+Digit3',
+                  checked: false,
+                },
+                { type: 'separator' },
+                { type: 'item', action: { kind: 'reload' }, label: 'Reload', accelerator: null, checked: null },
+              ],
+            },
+          ],
+        };
       case 'set_title':
         this.windowTitles.push(String(args.title));
         return { ok: null };

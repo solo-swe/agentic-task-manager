@@ -19,7 +19,9 @@ use commands::{
 };
 use menu::{menu, menu_state, subscribe_menu};
 use updates::{check_update, install_update};
-use windows::{open_window, set_title, shell};
+use windows::{
+    close_window, minimize, open_window, set_title, shell, start_dragging, toggle_maximize,
+};
 
 // What the app serves on its own `atm:` scheme (`assets`), embedded by build.rs
 include!(concat!(env!("OUT_DIR"), "/atm_assets.rs"));
@@ -53,6 +55,10 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         subscribe_menu::<tauri::Wry>,
         menu::<tauri::Wry>,
         menu_state::<tauri::Wry>,
+        minimize::<tauri::Wry>,
+        toggle_maximize::<tauri::Wry>,
+        close_window::<tauri::Wry>,
+        start_dragging::<tauri::Wry>,
     ])
 }
 
@@ -84,6 +90,10 @@ pub fn run() {
             commands.mount_events(app);
             // The menus (T-512): macOS's menu bar; on Windows and Linux hidden, for the page to draw
             menu::refresh(app.handle());
+            // The main window's frame for the page's title bar (T-513); new windows get theirs as they are made
+            if let Some(window) = app.get_webview_window(windows::MAIN) {
+                windows::dress(&window);
+            }
             Ok(())
         })
         .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))

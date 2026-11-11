@@ -56,6 +56,40 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#about-overlay')).toHaveClass(/open/);
   });
 
+  test('the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    await expect(page.locator('#app-titlebar #dashboard-title')).toHaveText('Standard Project');
+    // The views switch from the toolbar; the page's own tab row is gone in the app
+    await expect(page.locator('#app-toolbar #tab-kanban')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.view-header')).toHaveCount(0);
+    await expect(page.locator('#window-buttons')).toHaveCount(0);
+    await expect(page.locator('#app-menus')).toHaveCount(0);
+    await page.locator('#app-toolbar #tab-list').click();
+    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+    // A drag on the bar's free space moves the window; a double click maximizes it
+    await page.locator('#app-titlebar').click({ position: { x: 400, y: 10 } });
+    await page.locator('#app-titlebar').dblclick({ position: { x: 400, y: 10 } });
+    expect(tasksServer.windowCalls).toContain('start_dragging');
+    expect(tasksServer.windowCalls).toContain('toggle_maximize');
+
+    // Windows and Linux: the page's window buttons and its menus
+    tasksServer.windowShell = { system_menu_bar: false, system_window_buttons: false };
+    tasksServer.windowCalls = [];
+    await page.reload();
+    await expect(page.locator('#window-buttons')).toBeVisible();
+    await page.locator('#window-minimize').click();
+    await page.locator('#window-close').click();
+    expect(tasksServer.windowCalls).toEqual(['minimize', 'close_window']);
+    await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
+    await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
+    await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+  });
+
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
     page,
     tasksServer,

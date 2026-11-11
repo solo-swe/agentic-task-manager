@@ -9,6 +9,8 @@
   import OverviewActivity from '../overview/OverviewActivity.svelte';
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
+  import AppTitleBar from './AppTitleBar.svelte';
+  import { inApp } from '../api/http';
 
   const onProject = $derived(dashboard.route.page === 'project');
   // A project's page is titled by its name alone (T-271); while loading, and without a name, "Task Dashboard"
@@ -36,7 +38,10 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
-{#if onProject}
+{#if inApp}
+  <!-- The atm app's own title bar (T-513): two rows, the same on every desktop -->
+  <AppTitleBar {title} />
+{:else if onProject}
   <TitleBar {title}>
     {#snippet subtitle()}
       {#if dashboard.loaded}

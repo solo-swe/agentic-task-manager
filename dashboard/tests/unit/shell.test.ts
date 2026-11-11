@@ -1,6 +1,15 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { appShell, NO_SHELL, openWindow, resetAppShell, setWindowTitle } from '../../src/lib/api/shell';
+import {
+  appShell,
+  closeWindow,
+  minimizeWindow,
+  NO_SHELL,
+  onBarMouseDown,
+  openWindow,
+  resetAppShell,
+  setWindowTitle,
+} from '../../src/lib/api/shell';
 
 describe('the app’s window (T-511)', () => {
   afterEach(() => {
@@ -42,6 +51,39 @@ describe('the app’s window (T-511)', () => {
       throw new Error('no window');
     });
     await setWindowTitle('atm');
+    expect(logged).toHaveBeenCalled();
+  });
+
+  it('drags the window from a bar’s free space, maximizes it on a double click, and leaves its controls alone', async () => {
+    const asked: string[] = [];
+    mockIPC((command) => void asked.push(command));
+    const bar = document.createElement('div');
+    const button = document.createElement('button');
+    bar.append(button);
+    const down = (target: Element, detail: number, button = 0) => {
+      const e = new MouseEvent('mousedown', { button, detail, bubbles: true, cancelable: true });
+      Object.defineProperty(e, 'target', { value: target });
+      onBarMouseDown(e);
+    };
+    down(bar, 1);
+    down(bar, 2);
+    down(button, 1);
+    down(bar, 1, 2);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(asked).toEqual(['start_dragging', 'toggle_maximize']);
+
+    asked.length = 0;
+    await minimizeWindow();
+    await closeWindow();
+    expect(asked).toEqual(['minimize', 'close_window']);
+
+    clearMocks();
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockIPC(() => {
+      throw new Error('no window');
+    });
+    await minimizeWindow();
     expect(logged).toHaveBeenCalled();
   });
 

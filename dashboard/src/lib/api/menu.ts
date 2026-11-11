@@ -49,6 +49,64 @@ export interface MenuState {
   workspace: string | null;
 }
 
+/** One of the system's own items, which the page carries out where it draws the menus */
+export type SystemItem =
+  | 'undo'
+  | 'redo'
+  | 'cut'
+  | 'copy'
+  | 'paste'
+  | 'select_all'
+  | 'services'
+  | 'hide'
+  | 'hide_others'
+  | 'show_all'
+  | 'minimize'
+  | 'zoom'
+  | 'fullscreen';
+
+/** An entry of a menu (the app's `MenuEntry`) */
+export type MenuEntry =
+  | { type: 'item'; action: MenuAction; label: string; accelerator: string | null; checked: boolean | null }
+  | { type: 'system'; item: SystemItem }
+  | { type: 'separator' }
+  | { type: 'submenu'; label: string; entries: MenuEntry[] };
+
+/** A menu of the bar (the app's `MenuDef`) */
+export interface MenuDef {
+  label: string;
+  windows: boolean;
+  entries: MenuEntry[];
+}
+
+/** The calling window's menus, for the page to draw (Windows, Linux); none when the app can't say */
+export async function menuDefinition(): Promise<MenuDef[]> {
+  try {
+    return await invoke<MenuDef[]>('menu');
+  } catch (e) {
+    console.error('Asking the app for its menus failed:', e);
+    return [];
+  }
+}
+
+/** A shortcut as the menu shows it on Windows and Linux: `CmdOrCtrl+Digit1` is `Ctrl+1` */
+export function shortcutLabel(accelerator: string | null): string {
+  if (!accelerator) return '';
+  const keys: Record<string, string> = {
+    CmdOrCtrl: 'Ctrl',
+    Comma: ',',
+    Slash: '/',
+    BracketLeft: '[',
+    BracketRight: ']',
+    ArrowLeft: '←',
+    ArrowRight: '→',
+  };
+  return accelerator
+    .split('+')
+    .map((part) => keys[part] ?? part.replace(/^Digit/, ''))
+    .join('+');
+}
+
 /** Listen for the menu's actions, `run` each one */
 export async function listenForMenu(run: (action: MenuAction) => void): Promise<void> {
   const channel = new Channel<MenuAction>();
