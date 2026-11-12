@@ -9,6 +9,7 @@
     "dev": "pnpm run generate && vite",
     "build": "pnpm run build:page && vite build -c vite.compmd.config.ts",
     "build:page": "pnpm run generate && vite build && node build/finish-page.ts",
+    "watch:page": "node build/watch-page.ts",
     "size": "pnpm run generate && ATM_SIZE_REPORT=1 vite build",
     "preview": "vite preview",
     "test": "pnpm run generate && vitest run",

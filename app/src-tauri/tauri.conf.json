@@ -4,7 +4,8 @@
   "mainBinaryName": "atm-app",
   "identifier": "com.solo-swe.atm",
   "build": {
-    "frontendDist": "../../dashboard/dist"
+    "frontendDist": "../../dashboard/dist",
+    "beforeDevCommand": "pnpm --dir \"$(git rev-parse --show-toplevel)/dashboard\" run watch:page"
   },
   "app": {
     "windows": [

@@ -6,6 +6,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 
 ## [Unreleased]
 
+### Development
+- **`cargo tauri dev` follows the dashboard's sources:** its `beforeDevCommand` starts `pnpm run watch:page`
+  (`dashboard/build/watch-page.ts`), which builds the page again a few seconds after a change; the Tauri CLI's server
+  reloads the window. A page change no longer needs a build and a restart.
+
 ### Changed
 - **The app's windows** (T-511, step 1 of `docs/app-desktop-ui-design.md`): the groundwork for several windows and
   the page's own shell, with no visible change yet. The app's windows are `main` and `window-<n>`, both in the
