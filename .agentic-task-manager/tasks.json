@@ -19019,7 +19019,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T18:43:28Z",
+      "updated_at": "2026-11-12T18:43:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -19034,7 +19034,7 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-12T17:50:07Z",
       "started_by": "claude:34798264",
-      "commit": "668803fe0233e4264733a28be05e66bf95046d4c",
+      "commit": "023d80793b2304dc5b493274449be430109f1042",
       "completed_at": "2026-11-12T18:35:43Z",
       "completed_by": "claude:34798264",
       "notes": [
@@ -19103,12 +19103,19 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:09Z",
+      "updated_at": "2026-11-12T19:02:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-12T19:02:16Z"
+        }
+      ],
+      "sprint": "The desktop app"
     },
     {
       "id": "T-521",
