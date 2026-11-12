@@ -18728,7 +18728,7 @@
     },
     {
       "id": "T-513",
-      "name": "Desktop app: the title bar (one row of tabs, macOS overlay, the pages window buttons and menus elsewhere)",
+      "name": "Desktop app: the title bar (one row of tabs, macOS overlay, the page’s window buttons and menus elsewhere)",
       "type": "feature",
       "priority": "P1",
       "labels": [
@@ -18752,7 +18752,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T03:14:47Z",
+      "updated_at": "2026-11-12T03:19:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18768,7 +18768,7 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-11T13:51:45Z",
       "started_by": "claude:34798264",
-      "commit": "c563def06a35b68759347dad0be4018b6469caa4",
+      "commit": "0db56d51ffc152c4920b35aa68bf93822c8ceae1",
       "completed_at": "2026-11-11T14:20:35Z",
       "completed_by": "claude:34798264",
       "notes": [

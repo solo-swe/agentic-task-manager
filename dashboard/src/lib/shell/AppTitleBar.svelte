@@ -67,8 +67,9 @@
 </header>
 
 <style>
-  /* The window's own title bar: everything on its middle line, macOS's traffic lights too (trafficLightPosition's
-     y, 26, centres them at 20 px: macOS makes their strip the buttons' height plus y, and centres them in it) */
+  /* The window's own title bar, from its very top and edge to edge (out of the page's padding, body in app.css):
+     everything on its middle line, macOS's traffic lights too (trafficLightPosition's y, 22, centres them at 20 px,
+     as measured on macOS 26) */
   .app-titlebar {
     align-items: center;
     background: var(--surface2);
@@ -76,6 +77,7 @@
     display: flex;
     gap: var(--space-3);
     height: 40px;
+    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) var(--space-4);
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
@@ -84,26 +86,30 @@
   }
   /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
   .app-titlebar.system-buttons {
-    --traffic-lights: 80px;
+    --traffic-lights: 88px;
     padding-left: var(--traffic-lights);
   }
   .app-tabs {
-    align-items: center;
+    align-self: stretch;
     display: flex;
-    gap: var(--space-1);
     min-width: 0;
   }
-  /* A tab in the title bar, as Notion's: a rounded chip on the bar's middle line, the active one lighter */
+  /* A tab in the title bar, as Notion's: the bar's full height, between thin lines; the active one in the page's
+     background, over the bar's bottom line, so it joins the page under it */
   .app-tab {
     align-items: center;
-    background: var(--surface);
-    border-radius: var(--radius-md);
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
     display: flex;
     gap: var(--space-2);
-    height: 28px;
-    max-width: 240px;
-    min-width: 0;
-    padding: 0 var(--space-3);
+    --hairline: 1px;
+    margin-bottom: calc(-1 * var(--hairline));
+    max-width: 260px;
+    min-width: 160px;
+    padding: 0 var(--space-4);
+  }
+  .app-tab[aria-selected='true'] {
+    background: var(--bg);
   }
   .app-tab h1 {
     font-size: var(--text-sm);
