@@ -89,6 +89,17 @@ test.describe('the dashboard in the atm app', () => {
         );
       }),
     ).toBe(true);
+    // The Filters button is its icon (its name stays for screen readers), and its popup opens inside the window
+    await expect(page.locator('#filters-toggle')).toHaveAccessibleName(/Filters/);
+    expect(await page.locator('#filters-toggle .filters-label').evaluate((e) => e.getBoundingClientRect().width)).toBe(
+      1,
+    );
+    await page.locator('#filters-toggle').click();
+    await expect(page.locator('.filter-panel')).toBeVisible();
+    expect(await page.locator('.filter-panel').evaluate((e) => e.getBoundingClientRect().left)).toBeGreaterThanOrEqual(
+      0,
+    );
+    await page.keyboard.press('Escape');
     await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
     await expect(page.locator('#reload-btn')).toHaveCount(0);
     await expect(page.locator('#version-chip')).toHaveCount(0);

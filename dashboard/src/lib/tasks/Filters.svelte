@@ -142,7 +142,7 @@
               class:filtered={badge > 0}
               id="filters-toggle"
               title="Filter the tasks"
-              ><Icon name="sliders-horizontal" size={14} /> Filters{#if badge}<span
+              ><Icon name="sliders-horizontal" size={14} /> <span class="filters-label">Filters</span>{#if badge}<span
                   class="filters-badge"
                   id="filters-badge">{badge}</span
                 >{/if}

@@ -130,6 +130,21 @@
     display: flex;
     flex: 0 0 auto;
   }
+  /* The Filters popup opens from the bar's left end: under its button, to the right (the browser's, at the title
+     bar's right end, opens to the left) */
+  .app-titlebar-start :global(.filter-panel) {
+    left: 0;
+    right: auto;
+  }
+  /* In the bar, the Filters button is its icon: the label is for screen readers only (Hakan) */
+  .app-titlebar-start :global(.filters-label) {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
   .app-titlebar-start:empty {
     display: none;
   }
