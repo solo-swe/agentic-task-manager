@@ -40,24 +40,36 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs, and at its right end what the browser's title bar has
-     at its right (search and Filters, the charts, the ⋯); inside the tab, only the subtitle line -->
-{#snippet appEnd()}
-  <WorkspaceSelector />
-  {#if onProject}
-    {#if dashboard.loaded}
+<!-- The charts at the title bar's right: the browser's title bar and the app's share them -->
+{#snippet projectCharts()}
+  {#if dashboard.loaded}
+    <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
+    <div class="topbar-charts">
       <Filters />
       <ProgressWidget />
       <ActivityWidget />
-    {/if}
-  {:else if dashboard.route.page === 'overview'}
-    <OverviewActivity />
+    </div>
   {/if}
+{/snippet}
+{#snippet overviewCharts()}
+  {#if dashboard.route.page === 'overview'}
+    <!-- Every project's activity together (T-328) -->
+    <div class="topbar-charts">
+      <OverviewActivity />
+    </div>
+  {/if}
+{/snippet}
+
+<!-- The atm app's own title bar (T-513): the window's, its tabs, and at its right end what the browser's title bar has
+     at its right (the workspace picker, the charts, the ⋯); inside the tab, only the subtitle line -->
+{#snippet appEnd()}
+  <WorkspaceSelector />
+  {@render (onProject ? projectCharts : overviewCharts)()}
   <SettingsMenu />
 {/snippet}
 {#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
 {#if onProject}
-  <TitleBar {title} inTab={inApp}>
+  <TitleBar {title} inTab={inApp} charts={projectCharts}>
     {#snippet subtitle()}
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->
@@ -87,32 +99,14 @@
         Loading tasks.json…
       {/if}
     {/snippet}
-    {#snippet charts()}
-      {#if dashboard.loaded}
-        <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
-        <div class="topbar-charts">
-          <Filters />
-          <ProgressWidget />
-          <ActivityWidget />
-        </div>
-      {/if}
-    {/snippet}
   </TitleBar>
 {:else}
-  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp}>
+  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp} charts={overviewCharts}>
     {#snippet subtitle()}
       {#if !dashboard.projectsLoaded}
         Loading projects…
       {:else}
         {present.length} project{present.length === 1 ? '' : 's'}
-      {/if}
-    {/snippet}
-    {#snippet charts()}
-      {#if dashboard.route.page === 'overview'}
-        <!-- Every project's activity together (T-328) -->
-        <div class="topbar-charts">
-          <OverviewActivity />
-        </div>
       {/if}
     {/snippet}
   </TitleBar>

@@ -72,6 +72,7 @@ test.describe('the dashboard in the atm app', () => {
     // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
     // the tab only the subtitle line; no reload button or version chip
     await expect(page.locator('#app-tab-current #project-selector')).toBeVisible();
+    await expect(page.locator('#app-tab-current #other-projects-need')).toHaveCount(0);
     await expect(page.locator('#app-titlebar-end #filters')).toBeVisible();
     await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
     await expect(page.locator('#reload-btn')).toHaveCount(0);

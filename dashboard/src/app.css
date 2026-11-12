@@ -575,7 +575,7 @@ h1 {
 .topbar.in-tab {
   top: 40px;
   margin-top: 0;
-  padding: var(--space-3) var(--space-9) var(--space-2);
+  padding: var(--space-3) var(--space-9) var(--space-5);
 }
 .topbar.in-tab::before {
   display: none;

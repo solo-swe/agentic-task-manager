@@ -56,7 +56,7 @@
       {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} id="app-tab-logo" />{/if}
       <h1 id="dashboard-title">{title}</h1>
       <!-- The project picker, in the tab's label -->
-      {#if dashboard.projects.length > 0}<ProjectSelector />{/if}
+      {#if dashboard.projects.length > 0}<ProjectSelector badge={false} />{/if}
     </div>
     <!-- A new tab (T-514); until tabs exist, a new window at the overview -->
     <button class="app-tab-new" id="app-tab-new" title="New Tab" onclick={() => void openWindow('/')}>+</button>
