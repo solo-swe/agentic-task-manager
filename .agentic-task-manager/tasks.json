@@ -19321,7 +19321,7 @@
       "description": "T-514's outcome says switching the app's title-bar tabs (a tab is an address: a switch navigates the window's one page) was never timed on a large project. Add the timing to [the performance spec](dashboard/tests/e2e/performance.spec.ts), beside its `switching tabs` test, with the same budget (`BUDGET_MS`: 200 ms locally, twice that in CI).\n\n## Change\n- In the app (`tasksServer.asApp()`), with the `large-500` fixture and a second project: open tabs on the Kanban, the List and the Graph of the large project and on the second project, then time each `.title-bar-tab` click until its page is shown (its view's first card or node visible, the title the tab's project), as the spec times its views.\n- Also time ⌃Tab (the menu's Next Tab, `chooseMenu({ kind: 'next_tab' })`) once round the tabs.\n- Log the timings as the other tests do (`tab switch in the app (ms):`) and expect each under `BUDGET_MS`.\n\n## If it is over budget\nMeasure where the time goes (`--trace on` locally) and fix the cause; never raise the budget (AGENTS.md, Performance budgets). Record the timings in T-514's follow-up note on this task.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-514"
       ],
@@ -19329,7 +19329,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-12T19:36:30Z",
-      "updated_at": "2026-11-12T19:43:33Z",
+      "updated_at": "2026-11-12T20:02:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19343,7 +19343,18 @@
         "dashboard"
       ],
       "started_at": "2026-11-12T19:43:33Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6ee0fbe246af127e2be9565684f76a4622a9d89a",
+      "completed_at": "2026-11-12T20:02:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-12T20:02:11Z",
+          "kind": "outcome",
+          "text": "Timed the app’s tabs on 500 tasks (performance.spec.ts): same-project switches 45–110 ms; back from another project was 240–290 ms, over budget. Fixed: the graph keeps the last 4 layouts (dagre ~100 ms), the hidden Graph and List are not drawn (List mounted only while shown). Now 140–200 ms with the mock’s ~55 ms transport; List switch 108–175; reloads faster. Specs that read hidden views open them. Close to the budget under the full local suite: watch it.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
