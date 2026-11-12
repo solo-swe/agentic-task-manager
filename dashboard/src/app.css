@@ -3013,6 +3013,23 @@ button.repo-ref {
   padding-left: var(--space-4);
   border-bottom: 1px solid var(--border);
 }
+/* In the atm app (T-513) the tab's header: the views, and at their right what the browser's title bar has */
+.view-header.in-app {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: var(--space-3);
+  padding-right: var(--space-4);
+}
+.view-header.in-app .view-tabs {
+  border-bottom: none;
+  flex: 1;
+}
+.app-page-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-4) 0;
+}
 /* Between the task views and the project views (T-251) */
 .view-tab-divider {
   align-self: center;

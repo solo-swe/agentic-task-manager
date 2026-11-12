@@ -77,18 +77,16 @@ page keeps the browser's header and footer.
 
 ## 2. The title bar
 
-**Two rows, drawn by the page, the same on all three:**
+**One row, drawn by the page, the same on all three** (Hakan, on T-513's first try: a second row under the title bar
+looked wrong): the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the right),
+the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at its left.
+A tab's label is its project's logo and name (or "Projects Overview"), nothing else.
 
-- **the title bar:** the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the
-  right), the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at
-  its left;
-- **the toolbar** under it, right of the sidebar: the view switcher (Graph, Kanban, List, …) as a segmented control,
-  then the Filters popup and the needs-you chip.
-
-The project's logo and name are the **active tab's title** (or "Projects Overview"), not repeated in the toolbar; the
-active sprint is in the status bar (§5); search is at the top of the sidebar (§4). **No reload button:** the page
-reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the menu for the rare change the watcher
-missed.
+**Everything else is inside the tab:** the page's own header, under the title bar, has the views (Graph, Kanban,
+List, …) and, at their right, what the browser's title bar has: the needs-you chip, search and Filters, and the ⋯
+settings (until the sheet, §6). The active sprint is in the status bar (§5); search moves to the top of the sidebar
+(§4). **No reload button:** the page reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the
+menu for the rare change the watcher missed.
 
 The window on macOS (the menu bar is the system's, at the top of the screen):
 
@@ -96,7 +94,7 @@ The window on macOS (the menu bar is the system's, at the top of the screen):
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ o o o  [=]  │ ▣ atm (2)   × │ ▣ compmd    × │ Projects Overview × │ +                              │  title bar: tabs
 ├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
-│ Search…           ⌘F   │ [ Graph | Kanban | List | Agents | Progress | Project ]  Filters  (2)     │  toolbar
+│ Search…           ⌘F   │ Graph  Kanban  List │ Agents  Progress  Project       (2)  Filters  ⋯     │  the tab's header
 │ ▾ Personal             ├───────────────────────────────────────────────────────────────────────────┤
 │   Projects Overview    │ Sprint: The atm app, continued ▾      3 of 6 done  ▓▓▓▓▓▓░░░░             │  scope bar (as now)
 │ ▸ ▣ atm           (2)  │                                                                           │

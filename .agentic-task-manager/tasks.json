@@ -18739,7 +18739,7 @@
       "description": "Step 3 of [the desktop app design](docs/app-desktop-ui-design.md) ([§2](docs/app-desktop-ui-design.md#2-the-title-bar), with its wireframes).\n\n## Change\n- **Two rows, in the app only** (`TitleBar.svelte` gets an app variant; the browser's header is unchanged): the title bar (room for the window buttons, the sidebar button `[=]`, a place for the tabs of step 4 and the `+`; on Windows and Linux the menus of step 2 at its left), and the toolbar (the view switcher as a segmented control, Filters, the needs-you chip). The logo and name are the window's title for now (the active tab's once tabs exist); no reload button (View ▸ Reload stays). The charts, version chip and ⋯ menu leave the app's header (to the status bar and menus).\n- **macOS:** `titleBarStyle: \"Overlay\"`, `hiddenTitle: true`, `trafficLightPosition` centring the lights in the first row (`tauri.conf.json` and `WebviewWindowBuilder` for new windows).\n- **Windows and Linux:** `decorations: false`; the page's minimize, maximize and close call new commands `minimize`, `toggle_maximize` (`is_maximized`, then `maximize` or `unmaximize`) and `close_window` (`Window::close`); `set_shadow(true)` on Windows.\n- **Dragging:** a `start_dragging` command the bars call on a mouse-down outside their controls; a double click calls `toggle_maximize`. No `data-tauri-drag-region` (it needs a core permission, ruled out by I25).\n- The menus drawn by the page on Windows and Linux use `menu` and send the same actions (Bits UI menus).\n\nThe Windows and Linux spike (snap layouts, edge resizing, Alt+Space, accelerators with a hidden menu) is its own task; build those paths here so they compile and are covered by unit tests.\n\n## Checks\nComponent tests for the app title bar in each `shell` mode; the app e2e specs; by hand on macOS (lights placed, drag, double click, full screen). `docs/security-architecture.md` gains the window commands.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-512"
       ],
@@ -18752,7 +18752,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-11T13:51:45Z",
+      "updated_at": "2026-11-11T14:20:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18767,7 +18767,18 @@
       ],
       "sprint": "The desktop app",
       "started_at": "2026-11-11T13:51:45Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "9ed8a735e4afce25c56439b95d1ea5e03d6fcc66",
+      "completed_at": "2026-11-11T14:20:35Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-11T14:20:35Z",
+          "kind": "outcome",
+          "text": "App title bar: two rows (AppTitleBar.svelte), macOS overlay with room for the traffic lights, page-drawn menus and window buttons on Windows/Linux (decorations off), start_dragging/double click, view switcher in the toolbar. To check by hand: trafficLightPosition {16, 20} and the 80 px room are guesses; drag, double click, full screen.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-514",

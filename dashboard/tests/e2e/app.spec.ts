@@ -63,13 +63,13 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     await page.goto('/');
-    await expect(page.locator('#app-titlebar #dashboard-title')).toHaveText('Standard Project');
-    // The views switch from the toolbar; the page's own tab row is gone in the app
-    await expect(page.locator('#app-toolbar #tab-kanban')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.view-header')).toHaveCount(0);
+    // One row: the tab, labelled with the project's name; the views and the page's controls are inside the tab
+    await expect(page.locator('#app-titlebar #app-tab-current #dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
+    await expect(page.locator('.view-header #app-page-controls #filters')).toBeVisible();
     await expect(page.locator('#window-buttons')).toHaveCount(0);
     await expect(page.locator('#app-menus')).toHaveCount(0);
-    await page.locator('#app-toolbar #tab-list').click();
+    await page.locator('#tab-list').click();
     await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
     // A drag on the bar's free space moves the window; a double click maximizes it
     await page.locator('#app-titlebar').click({ position: { x: 400, y: 10 } });

@@ -28,16 +28,17 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   link), Reload, Back and Forward, and the two links in Help. Quit and New Window the app does. The page reports what
   the menu shows checked (`menu_state`); `menu` gives the definition. Tabs (T-514) and the sidebar (T-515) items do
   nothing yet.
-- **The app's title bar** (T-513, step 3, §2): in the app, two rows drawn by the page (`AppTitleBar.svelte`; the
-  browser's title bar is unchanged). The title bar has the page's title and logo, with room for macOS's traffic
-  lights (`titleBarStyle: "Overlay"`, `hiddenTitle`, `trafficLightPosition` in `tauri.conf.json`); on Windows and
-  Linux the window has no decorations (`windows::dress`, with Windows 11's shadow) and the page draws the menus
-  (`AppMenus.svelte`, Bits UI's menubar, from `menu`) and its minimize, maximize and close buttons (new commands
-  `minimize`, `toggle_maximize`, `close_window`). The toolbar has the view switcher (the view tabs leave the page in
-  the app), search and Filters, the needs-you chip and the ⋯ settings (until the sheet, T-517). Dragging either bar
-  moves the window (`start_dragging`), a double click maximizes it. In the app the subtitle, charts, version chip and
-  reload button are gone from the header: View ▸ Reload and Help ▸ What's New have them, and the status bar (T-516)
-  the rest. The Windows and Linux paths are checked on those platforms by T-519.
+- **The app's title bar** (T-513, step 3, §2): in the app, one row drawn by the page, as a browser's tab strip
+  (`AppTitleBar.svelte`; the browser's title bar is unchanged): the tab, labelled with the project's logo and name,
+  with room for macOS's traffic lights (`titleBarStyle: "Overlay"`, `hiddenTitle`, `trafficLightPosition` in
+  `tauri.conf.json`); on Windows and Linux the window has no decorations (`windows::dress`, with Windows 11's shadow)
+  and the page draws the menus (`AppMenus.svelte`, Bits UI's menubar, from `menu`) and its minimize, maximize and
+  close buttons (new commands `minimize`, `toggle_maximize`, `close_window`). Everything else is inside the tab: the
+  view header has the views and, at their right, the needs-you chip, search and Filters and the ⋯ settings
+  (`AppPageControls.svelte`; on the overview, the ⋯ alone). Dragging the bar moves the window (`start_dragging`), a
+  double click maximizes it. In the app the subtitle, charts, version chip and reload button are gone from the
+  header: View ▸ Reload and Help ▸ What's New have them, and the status bar (T-516) the rest. The Windows and Linux
+  paths are checked on those platforms by T-519.
 
 ## [0.35.0] - 2026-11-10
 

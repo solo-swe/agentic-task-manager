@@ -7,6 +7,7 @@
   import Icon from '../ui/Icon.svelte';
   import KanbanBoard from '../kanban/KanbanBoard.svelte';
   import ProgressTab from '../progress/ProgressTab.svelte';
+  import AppPageControls from './AppPageControls.svelte';
   import ProjectTab from './ProjectTab.svelte';
   import ScopeBar from './ScopeBar.svelte';
   import TaskGrid from '../tasks/TaskGrid.svelte';
@@ -30,25 +31,26 @@
 </script>
 
 <div class="graph-section" id="graph-section">
-  <!-- In the atm app the views are switched from its toolbar (T-513) -->
-  {#if !inApp}<div class="view-header">
-      <div class="view-tabs" role="tablist" aria-label="Views">
-        {#each VIEWS as id (id)}
-          <button
-            bind:this={tabs[id]}
-            class="view-tab"
-            id="tab-{id}"
-            role="tab"
-            aria-selected={view === id}
-            aria-controls="panel-{id}"
-            tabindex={view === id ? 0 : -1}
-            onclick={() => select(id)}
-            onkeydown={onTabKeydown}><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}</button
-          >
-          {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
-        {/each}
-      </div>
-    </div>{/if}
+  <div class="view-header" class:in-app={inApp}>
+    <div class="view-tabs" role="tablist" aria-label="Views">
+      {#each VIEWS as id (id)}
+        <button
+          bind:this={tabs[id]}
+          class="view-tab"
+          id="tab-{id}"
+          role="tab"
+          aria-selected={view === id}
+          aria-controls="panel-{id}"
+          tabindex={view === id ? 0 : -1}
+          onclick={() => select(id)}
+          onkeydown={onTabKeydown}><Icon name={VIEW_ICONS[id]} size={15} />{VIEW_LABELS[id]}</button
+        >
+        {#if id === GROUP_END}<span class="view-tab-divider" aria-hidden="true"></span>{/if}
+      {/each}
+    </div>
+    <!-- In the atm app, what the browser's title bar has is here, inside the tab (T-513) -->
+    {#if inApp && dashboard.loaded}<AppPageControls />{/if}
+  </div>
   <div class="view-panels">
     {#if view === 'kanban' || view === 'list' || view === 'graph'}<ScopeBar />{/if}
     <!-- Inactive panels stay mounted (hidden) so each view keeps its state, e.g. the graph's pan/zoom (FR-2.4) -->
