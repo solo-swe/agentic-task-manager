@@ -159,14 +159,17 @@ pub struct Session {
 struct Inner {
     /// The file, once the app knows its data folder
     path: Option<PathBuf>,
-    /// The open windows, by label, in the order they opened
+    /// The windows kept, by label, in the order they opened: the open ones, and the last ones closed or there when the
+    /// app quit
     order: Vec<String>,
+    /// The windows open now
+    open: HashSet<String>,
     /// Each window's tabs, as its page last said
     tabs: HashMap<String, Tabs>,
     /// Each window's frame, as it last moved or changed size
     frames: HashMap<String, Frame>,
-    /// The windows being closed (by the user, or the page's last tab): gone for good once destroyed. A window
-    /// destroyed without closing (the app quitting) is kept
+    /// The windows being closed (by the user, or the page's last tab): gone for good once destroyed while another is
+    /// open. The last one closed, and those destroyed without closing (the app quitting), are kept
     closing: HashSet<String>,
     /// The tabs each window comes back with, until its page asks
     restored: HashMap<String, Tabs>,
@@ -184,20 +187,16 @@ impl Session {
         self.inner().path = Some(path);
     }
 
-    /// `window` opened.
+    /// `window` opened. The first after every window closed (macOS keeps the app running) starts again: the windows
+    /// kept from before are forgotten.
     pub fn opened(&self, window: &str) {
-        let mut inner = self.inner();
-        if !inner.order.iter().any(|w| w == window) {
-            inner.order.push(window.to_owned());
-        }
+        inner_opened(&mut self.inner(), window);
     }
 
     /// `window`'s page shows `tabs`. Whether that changed what is kept.
     pub fn show(&self, window: &str, tabs: Tabs) -> bool {
         let mut inner = self.inner();
-        if !inner.order.iter().any(|w| w == window) {
-            inner.order.push(window.to_owned());
-        }
+        inner_opened(&mut inner, window);
         inner.tabs.insert(window.to_owned(), tabs.clone()) != Some(tabs)
     }
 
@@ -220,17 +219,16 @@ impl Session {
         self.inner().closing.insert(window.to_owned());
     }
 
-    /// `window` is gone: forgotten when it was closed, kept when the app is quitting. Whether it was forgotten.
+    /// `window` is gone: forgotten when it was closed while another window is open; kept when it was the last one
+    /// closed, or the app is quitting. Whether what is kept changed.
     pub fn destroyed(&self, window: &str) -> bool {
         let mut inner = self.inner();
-        if !inner.closing.remove(window) {
-            return false;
+        inner.open.remove(window);
+        let closed = inner.closing.remove(window);
+        if closed && !inner.open.is_empty() {
+            forget(&mut inner, window);
         }
-        inner.order.retain(|w| w != window);
-        inner.tabs.remove(window);
-        inner.frames.remove(window);
-        inner.restored.remove(window);
-        true
+        closed
     }
 
     /// `window` comes back with `tabs`, for its page to ask.
@@ -275,6 +273,34 @@ impl Session {
         std::fs::write(&next, text_of(self.saved()))?;
         std::fs::rename(&next, &path)
     }
+}
+
+/// `window` is open: kept, in the order windows opened; the first after every window closed forgets those kept from
+/// before.
+fn inner_opened(inner: &mut Inner, window: &str) {
+    if inner.open.is_empty() {
+        let gone: Vec<String> = inner
+            .order
+            .iter()
+            .filter(|w| w.as_str() != window)
+            .cloned()
+            .collect();
+        for w in gone {
+            forget(inner, &w);
+        }
+    }
+    inner.open.insert(window.to_owned());
+    if !inner.order.iter().any(|w| w == window) {
+        inner.order.push(window.to_owned());
+    }
+}
+
+/// Forget `window`: it doesn't come back.
+fn forget(inner: &mut Inner, window: &str) {
+    inner.order.retain(|w| w != window);
+    inner.tabs.remove(window);
+    inner.frames.remove(window);
+    inner.restored.remove(window);
 }
 
 /// `window`'s frame now; none when Tauri can't say.
@@ -540,12 +566,41 @@ mod tests {
                 ..FRAME
             })
         );
-        // Closed by the user: forgotten
+        // Closed by the user while others are open: forgotten
         session.closing("window-2");
         assert!(session.destroyed("window-2"));
+        assert_eq!(session.saved().len(), 2);
         // Destroyed as the app quits: kept
         assert!(!session.destroyed("window-1"));
+        assert!(!session.destroyed("main"));
         assert_eq!(session.saved().len(), 2);
+    }
+
+    /// Hakan: closing the last window with its button is closing the app, so it comes back as after ⌘Q; a window
+    /// opened after it (macOS keeps the app running) starts again
+    #[test]
+    fn the_last_window_closed_is_kept_until_another_opens() {
+        let session = Session::default();
+        session.opened("main");
+        session.opened("window-1");
+        session.show("main", tabs(&["/"], 0));
+        session.show("window-1", tabs(&["/board", "/projects/abc"], 1));
+        session.closing("main");
+        assert!(session.destroyed("main"));
+        session.closing("window-1");
+        assert!(session.destroyed("window-1"));
+        assert_eq!(
+            session.saved(),
+            vec![SavedWindow {
+                tabs: tabs(&["/board", "/projects/abc"], 1),
+                frame: None,
+            }]
+        );
+        // A new window, the app still running: it alone is kept
+        session.opened("window-2");
+        session.show("window-2", tabs(&["/"], 0));
+        assert_eq!(session.saved().len(), 1);
+        assert_eq!(session.saved()[0].tabs, tabs(&["/"], 0));
     }
 
     #[test]

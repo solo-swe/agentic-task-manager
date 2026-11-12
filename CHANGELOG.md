@@ -26,7 +26,8 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 - **The app's windows come back as they were** (T-518, step 8, §7): each window's frame (place, size, maximized) and
   its tabs (addresses, order, the active one) are kept in `windows.json` in the app's data folder as they change, and
   opened again at the start; a link the app was started with opens in a new tab of the first window. A window closed
-  by the user is forgotten; the windows open when the app quits come back. The file is read as untrusted (every
+  while another is open is forgotten; the windows open when the app quits come back, and so does the last one closed
+  with its button (Hakan: that is closing the app), until a new window opens. The file is read as untrusted (every
   address checked as a deep link is, a frame off every screen dropped, an unreadable file a fresh start). New
   commands `save_tabs` and `restored_tabs` (`session.rs`).
 - **The needs-you badge** (T-518): the workspace's count of tasks that need you (in review, blocked on you, done with

@@ -19008,7 +19008,7 @@
       "description": "Step 8 of [the desktop app design](docs/app-desktop-ui-design.md) ([§7](docs/app-desktop-ui-design.md#7-window-state-and-the-badge)), the same on the three desktops.\n\n## Change\n- **Windows come back as they were:** each window's size and place, its tabs (addresses, order) and the active one. The app writes the windows' list to a file in its own data folder when it changes and opens them again at the start (no `tauri-plugin-window-state`: it keeps frames, not tabs). A deep link the app was started with opens in a new tab of the first window. A saved address is checked with `link_address` before it is opened.\n- **The badge:** the workspace's needs-you count (in review, blocked on the user), off in Settings (step 7). macOS and Linux: `Window::set_badge_count` (`None` removes it); Windows: `Window::set_overlay_icon` with a small icon of the count.\n- No Dock menu or jump list (no Tauri API).\n\n## Checks\nRust tests for the saved list (write, read, a bad file ignored, addresses checked); the app e2e specs; by hand on macOS (quit and start again; the Dock badge).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-514",
         "T-517"
@@ -19019,7 +19019,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T17:50:07Z",
+      "updated_at": "2026-11-12T18:43:28Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -19033,7 +19033,24 @@
       ],
       "sprint": "The desktop app",
       "started_at": "2026-11-12T17:50:07Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "668803fe0233e4264733a28be05e66bf95046d4c",
+      "completed_at": "2026-11-12T18:35:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T18:35:43Z",
+          "kind": "outcome",
+          "text": "Windows come back (session.rs: windows.json in the app data folder, frames and tabs, checked as deep links, off-screen frames dropped; closed windows forgotten, those open at quit kept); a start link opens in a new tab; the needs-you badge (badge.rs: set_badge_count, Windows overlay icon), off in Settings. New commands save_tabs, restored_tabs, set_badge; security doc updated. By hand on macOS (quit and start again, the Dock badge) is Hakan’s.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-12T18:43:28Z",
+          "kind": "note",
+          "text": "Changed with Hakan: the last window closed with its button is kept and comes back, as after ⌘Q (closing it is closing the app); a window closed while another is open is still forgotten, and a new window opened after the last closed starts again.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-519",
