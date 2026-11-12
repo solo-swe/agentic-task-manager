@@ -65,17 +65,17 @@ test.describe('the dashboard in the atm app', () => {
     await page.goto('/');
     // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
     // charts are inside the tab, under it, without a second title
-    await expect(page.locator('#app-titlebar #app-tab-current-label #dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#app-titlebar .title-bar-tab.selected #dashboard-title')).toHaveText('Standard Project');
     await expect(page.locator('#dashboard-title')).toHaveCount(1);
     await expect(page.locator('#app-tab-new')).toBeVisible();
     await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
     await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
     // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
     // the tab only the subtitle line; no reload button or version chip
-    await expect(page.locator('#app-tab-current-label #project-selector')).toBeVisible();
-    await expect(page.locator('#app-tab-current-label #other-projects-need')).toHaveCount(0);
+    await expect(page.locator('.title-bar-tab.selected #project-selector')).toBeVisible();
+    await expect(page.locator('.title-bar-tab.selected #other-projects-need')).toHaveCount(0);
     // The chooser in the tab opens its menu (its click isn't the tab's)
-    await page.locator('#app-tab-current-label #project-selector').click();
+    await page.locator('.title-bar-tab.selected #project-selector').click();
     await expect(page.locator('#project-menu')).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator('#app-titlebar-end #filters')).toBeVisible();
@@ -103,6 +103,49 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('#app-menus').getByRole('menuitem', { name: 'View' }).click();
     await page.getByRole('menuitemcheckbox', { name: /List/ }).click();
     await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
+  });
+
+  test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    tasksServer.link(`/projects/${tasksServer.projectId}/list`);
+    await page.goto('/');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(tabs).toHaveCount(1);
+
+    // + : a second tab, on the overview
+    await page.locator('#app-tab-new').click();
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    // The other tab keeps its project's name, and a click goes back to where it was
+    await expect(page.locator('#app-tab-t1-label')).toContainText('Standard Project');
+    await tabs.nth(0).click();
+    await expect.poll(() => addressOf(page)).toMatch(new RegExp(`^/projects/${tasksServer.projectId}/list(\\?|$)`));
+
+    // A link while the app runs opens in a new tab
+    await tasksServer.pushLink('/projects/second/list');
+    await expect(tabs).toHaveCount(3);
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+
+    // The menu's Previous Tab, then Close Tab: the next tab takes its place
+    await tasksServer.chooseMenu({ kind: 'previous_tab' });
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await tasksServer.chooseMenu({ kind: 'close_tab' });
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+
+    // ×, on the last tab left: the window closes
+    await page.locator('.title-bar-tab').nth(0).hover();
+    await page.locator('.title-bar-tab-close').nth(0).click();
+    await expect(tabs).toHaveCount(1);
+    await page.locator('.title-bar-tab-close').nth(0).click();
+    expect(tasksServer.windowCalls).toContain('close_window');
   });
 
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({

@@ -2,6 +2,7 @@ import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetAppShell } from '../../src/lib/api/shell';
+import { appTabs } from '../../src/lib/app-tabs.svelte';
 import AppTitleBar from '../../src/lib/shell/AppTitleBar.svelte';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
@@ -19,6 +20,7 @@ describe('AppTitleBar (T-513)', () => {
   beforeEach(() => {
     resetAppShell();
     loadIntoDashboard(standard);
+    appTabs.start('/');
   });
   afterEach(() => clearMocks());
 

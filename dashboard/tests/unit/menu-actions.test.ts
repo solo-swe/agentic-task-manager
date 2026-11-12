@@ -135,6 +135,21 @@ describe('the app’s menu on the page (T-512)', () => {
     expect(t.did).toEqual(['tab list']);
   });
 
+  it('the tab items act on the window’s tabs (T-514)', () => {
+    const did: string[] = [];
+    const tabs = {
+      open: () => did.push('open'),
+      select: () => {},
+      close: () => did.push('close'),
+      step: (s: 1 | -1) => did.push(`step ${s}`),
+      move: () => {},
+      toWindow: () => did.push('window'),
+    };
+    for (const kind of ['new_tab', 'close_tab', 'next_tab', 'previous_tab', 'move_tab_to_new_window'] as const)
+      runMenuAction({ kind }, target(), page(), tabs);
+    expect(did).toEqual(['open', 'close', 'step 1', 'step -1', 'window']);
+  });
+
   it('shows shortcuts as Windows and Linux write them', () => {
     expect(shortcutLabel('CmdOrCtrl+Digit3')).toBe('Ctrl+3');
     expect(shortcutLabel('Alt+CmdOrCtrl+Comma')).toBe('Alt+Ctrl+,');

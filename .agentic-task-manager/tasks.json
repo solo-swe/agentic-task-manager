@@ -18752,7 +18752,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T04:05:41Z",
+      "updated_at": "2026-11-12T04:20:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18768,7 +18768,7 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-11T13:51:45Z",
       "started_by": "claude:34798264",
-      "commit": "4b2c80505a972cb7ef331595a52a52e04e5d1d29",
+      "commit": "a47c90594a3f3c27d040954aecce1207a7dc6bb8",
       "completed_at": "2026-11-11T14:20:35Z",
       "completed_by": "claude:34798264",
       "notes": [
@@ -18793,7 +18793,7 @@
       "description": "Step 4 of [the desktop app design](docs/app-desktop-ui-design.md) ([§3](docs/app-desktop-ui-design.md#3-tabs)). Decided: a tab is an **address**, one page and one dashboard state per window, not a state per tab.\n\n## Change\n- **The strip** in the title bar: each tab its project's logo and name (or the page's title), the needs-you count, a close button; drag to reorder; `+`, ⌘T and File ▸ New Tab open the workspace's overview.\n- **Switching** (a click, ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[) navigates to the tab's address through `lib/navigation.ts`; the tab keeps its address, the preferences keep the rest.\n- **Open in a new tab:** ⌘-click (Ctrl-click, middle click) on a project, a task, a document link; deep links open in a new tab of the window in front.\n- **Close Tab** (⌘W); closing the last one closes the window.\n- **Move Tab to New Window** (the tab's context menu, the Window menu): `open_window` on its address, and the tab leaves this window.\n- The window's title and `set_title` follow the active tab.\n\n## Measure\nA switch between two tabs of a large project within the e2e budget (200 ms, `tests/e2e/performance.spec.ts`). If it isn't, keep the last few projects' data in `state.svelte.ts` (a cache), not a state per tab.\n\n## Checks\nUnit tests for the tab list (open, close, reorder, move, the active one); the app e2e specs and the performance spec; by hand on macOS with two windows.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-513"
       ],
@@ -18805,7 +18805,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-12T04:23:24Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18817,7 +18817,17 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "notes": [
+        {
+          "at": "2026-11-12T04:20:45Z",
+          "kind": "note",
+          "text": "Build the tab strip on ui/TitleBarTabs.svelte (T-513, Hakan: reusable in other apps, knows nothing of atm): give it the tabs, onclose and onnew; atm’s label stays in AppTitleBar. Add drag to reorder there, with the browser’s own drag and drop.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-12T04:23:24Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-515",

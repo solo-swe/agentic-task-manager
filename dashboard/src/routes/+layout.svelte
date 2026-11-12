@@ -28,8 +28,12 @@
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
   import { listenForMenu, reportMenuState } from '../lib/api/menu';
+  import { appTabs } from '../lib/app-tabs.svelte';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
-  import { arrived, navigate, useRouter, type EntryState } from '../lib/navigation';
+  import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
+  import { tabActions } from '../lib/tab-actions';
+
+  const tabs = tabActions();
   import { dashboard } from '../lib/state.svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -50,11 +54,17 @@
 
   onMount(() => {
     settle();
-    // In the atm app, its atm:// links open their page here (T-459), and its menu's items do what their controls do
-    // (T-512)
+    // In the atm app: the window's tabs, from the page shown (T-514); its atm:// links open their page, the one it was
+    // started with here, later ones in a new tab (T-459); its menu's items do what their controls do (T-512)
     if (inApp) {
-      void listenForLinks((address) => navigate(address)).catch((e) => console.error('Deep links:', e));
-      void listenForMenu((action) => runMenuAction(action, dashboard)).catch((e) => console.error('The menu:', e));
+      appTabs.start(addressOf(location));
+      void listenForLinks(
+        (address) => navigate(address),
+        (address) => tabs.open(address),
+      ).catch((e) => console.error('Deep links:', e));
+      void listenForMenu((action) => runMenuAction(action, dashboard, undefined, tabs)).catch((e) =>
+        console.error('The menu:', e),
+      );
     }
   });
 
@@ -73,6 +83,8 @@
 
   afterNavigate(({ type }) => {
     arrived();
+    // The active tab shows where the page is now (T-514)
+    if (inApp) appTabs.follow(currentAddress());
     // The first page is the app's start, which loads it
     if (type !== 'enter') dashboard.onNavigate();
   });

@@ -22,6 +22,8 @@
     onclose?: (id: string) => void;
     /** Open a new tab: a + after the tabs when given */
     onnew?: () => void;
+    /** Move a tab to another place: the tabs can be dragged when given */
+    onmove?: (id: string, to: number) => void;
     /** Every tab's width, in pixels */
     width?: number;
     /** The strip's accessible name */
@@ -36,12 +38,38 @@
     onselect,
     onclose,
     onnew,
+    onmove,
     width = 220,
     ariaLabel = 'Tabs',
     idPrefix = 'title-bar-tab-',
   }: Props = $props();
 
   const elements: Record<string, HTMLElement> = {};
+  /** The drag's own data type: a tab of this strip, not a file or text */
+  const DRAG_TYPE = 'application/x-title-bar-tab';
+  let dragging = $state<string | null>(null);
+
+  function ondragstart(e: DragEvent, id: string) {
+    dragging = id;
+    e.dataTransfer?.setData(DRAG_TYPE, id);
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function ondrop(e: DragEvent, index: number) {
+    const id = e.dataTransfer?.getData(DRAG_TYPE) || dragging;
+    dragging = null;
+    if (!id || !onmove) return;
+    e.preventDefault();
+    onmove(id, index);
+  }
+
+  /** A middle click closes a tab, as in a browser */
+  function onauxclick(e: MouseEvent, id: string) {
+    if (e.button === 1 && onclose) {
+      e.preventDefault();
+      onclose(id);
+    }
+  }
 
   function onkeydown(e: KeyboardEvent, index: number) {
     const last = tabs.length - 1;
@@ -65,8 +93,8 @@
 
 <div class="title-bar-tabs" role="tablist" aria-label={ariaLabel} style:--tab-width="{width}px">
   {#each tabs as tab, index (tab.id)}
-    <div class="title-bar-tab" class:selected={tab.id === active}>
-      <!-- The tab itself (Enter and Space select it, as a button's click), named by its label -->
+    <div class="title-bar-tab" class:selected={tab.id === active} class:dragging={dragging === tab.id}>
+      <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
       <button
         bind:this={elements[tab.id]}
         class="title-bar-tab-select"
@@ -75,8 +103,14 @@
         aria-selected={tab.id === active}
         aria-labelledby="{idPrefix}{tab.id}-label"
         tabindex={tab.id === active ? 0 : -1}
+        draggable={onmove ? 'true' : undefined}
         onclick={() => onselect(tab.id)}
+        onauxclick={(e) => onauxclick(e, tab.id)}
         onkeydown={(e) => onkeydown(e, index)}
+        ondragstart={(e) => ondragstart(e, tab.id)}
+        ondragend={() => (dragging = null)}
+        ondragover={(e) => dragging && e.preventDefault()}
+        ondrop={(e) => ondrop(e, index)}
       ></button>
       <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
       {#if onclose}
@@ -123,6 +157,9 @@
   }
   .title-bar-tab.selected {
     background: var(--bg);
+  }
+  .title-bar-tab.dragging {
+    opacity: 0.5;
   }
   /* The tab's button fills it, under the label */
   .title-bar-tab-select {

@@ -12,6 +12,31 @@ const TABS: Tab[] = [
 const label = createRawSnippet((tab: () => Tab) => ({ render: () => `<span class="name">${tab().name}</span>` }));
 
 describe('TitleBarTabs (a reusable title-bar tab strip)', () => {
+  it('moves a dragged tab, and closes one on a middle click', async () => {
+    const onmove = vi.fn();
+    const onclose = vi.fn();
+    const { container } = render(TitleBarTabs<Tab>, {
+      tabs: TABS,
+      active: 'a',
+      label,
+      onselect: () => {},
+      onmove,
+      onclose,
+    });
+    const tabs = [...container.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(tabs[0].getAttribute('draggable')).toBe('true');
+    const data = new Map<string, string>();
+    const dataTransfer = {
+      setData: (t: string, v: string) => data.set(t, v),
+      getData: (t: string) => data.get(t) ?? '',
+    };
+    await fireEvent.dragStart(tabs[0], { dataTransfer });
+    await fireEvent.drop(tabs[2], { dataTransfer });
+    expect(onmove).toHaveBeenCalledWith('a', 2);
+    await fireEvent(tabs[1], new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    expect(onclose).toHaveBeenCalledWith('b');
+  });
+
   it('draws each tab with the app’s label, the active one selected and focusable', () => {
     const { container } = render(TitleBarTabs<Tab>, { tabs: TABS, active: 'b', label, onselect: () => {} });
     const tabs = [...container.querySelectorAll('[role="tab"]')];

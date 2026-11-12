@@ -6,6 +6,9 @@
   import { menuDefinition, shortcutLabel, type MenuDef, type MenuEntry } from '../api/menu';
   import { closeWindow, minimizeWindow, openWindow } from '../api/shell';
   import { runDrawnAction, runSystemItem, type WindowActions } from '../menu-actions';
+  import { tabActions } from '../tab-actions';
+
+  const tabs = tabActions();
   import { dashboard } from '../state.svelte';
 
   const SYSTEM_LABELS: Record<string, string> = {
@@ -53,13 +56,16 @@
       <Menubar.CheckboxItem
         class="app-menu-item"
         checked={entry.checked}
-        onSelect={() => runDrawnAction(entry.action, dashboard, windowActions)}
+        onSelect={() => runDrawnAction(entry.action, dashboard, windowActions, undefined, tabs)}
       >
         <span class="app-menu-check" aria-hidden="true">{entry.checked ? '✓' : ''}</span>{entry.label}
         <span class="app-menu-key">{shortcutLabel(entry.accelerator)}</span>
       </Menubar.CheckboxItem>
     {:else}
-      <Menubar.Item class="app-menu-item" onSelect={() => runDrawnAction(entry.action, dashboard, windowActions)}>
+      <Menubar.Item
+        class="app-menu-item"
+        onSelect={() => runDrawnAction(entry.action, dashboard, windowActions, undefined, tabs)}
+      >
         <span class="app-menu-check" aria-hidden="true"></span>{entry.label}
         <span class="app-menu-key">{shortcutLabel(entry.accelerator)}</span>
       </Menubar.Item>

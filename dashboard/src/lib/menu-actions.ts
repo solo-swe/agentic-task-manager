@@ -2,6 +2,7 @@
 // the sidebar in T-515: their items do nothing yet. Quit and New Window the app does itself, except in the menus the
 // page draws (Windows, Linux, T-513).
 import type { MenuAction, MenuState, SystemItem } from './api/menu';
+import type { TabActions } from './tab-actions';
 import { currentAddress } from './navigation';
 import { pluginInfo } from './plugin-info';
 import type { DialogId } from './dialogs';
@@ -60,8 +61,13 @@ export function pageLink(address: string = currentAddress()): string {
   return `atm:/${address}`;
 }
 
-/** Do what `action` asks, on `target` */
-export function runMenuAction(action: MenuAction, target: MenuTarget, page: PageActions = pageActions): void {
+/** Do what `action` asks, on `target`; the tab items on `tabs` (the app's, T-514) */
+export function runMenuAction(
+  action: MenuAction,
+  target: MenuTarget,
+  page: PageActions = pageActions,
+  tabs?: TabActions,
+): void {
   const view = VIEWS[action.kind];
   if (view) {
     if (target.onProject) target.selectTab(view);
@@ -120,8 +126,23 @@ export function runMenuAction(action: MenuAction, target: MenuTarget, page: Page
     case 'compmd':
       page.open(COMPMD_URL);
       return;
+    case 'new_tab':
+      tabs?.open();
+      return;
+    case 'close_tab':
+      tabs?.close();
+      return;
+    case 'next_tab':
+      tabs?.step(1);
+      return;
+    case 'previous_tab':
+      tabs?.step(-1);
+      return;
+    case 'move_tab_to_new_window':
+      tabs?.toWindow();
+      return;
     default:
-      // Tabs (T-514), the sidebar (T-515); Quit and New Window are the app's
+      // The sidebar (T-515); Quit and New Window are the app's
       return;
   }
 }
@@ -140,10 +161,11 @@ export function runDrawnAction(
   target: MenuTarget,
   window: WindowActions,
   page: PageActions = pageActions,
+  tabs?: TabActions,
 ): void {
   if (action.kind === 'quit') void window.closeWindow();
   else if (action.kind === 'new_window') void window.openWindow('/');
-  else runMenuAction(action, target, page);
+  else runMenuAction(action, target, page, tabs);
 }
 
 /** One of the system's items in a menu the page draws; those only macOS has do nothing */

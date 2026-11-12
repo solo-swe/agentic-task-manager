@@ -23,6 +23,14 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
 
 ### Added
+- **Tabs in the app** (T-514, step 4, §3): a tab is an address (`lib/app-tabs.svelte.ts`): the window keeps one page
+  and one dashboard state, switching tabs goes to the tab's address, and the active tab follows the page as it moves.
+  The + (and File ▸ New Tab, ⌘T) opens the workspace's overview in a new tab; × or a middle click closes a tab (Close
+  Tab, ⌘W, the active one), and closing the last one closes the window; Next and Previous Tab step round them; Move Tab
+  to New Window opens a window at the tab's address and takes the tab out; tabs can be dragged into another order. A
+  link that reaches the running app opens in a new tab (the one it started with, in the first). The tabs last over a
+  reload (the window's `sessionStorage`). The strip is the reusable `ui/TitleBarTabs.svelte`, which knows nothing of
+  atm: tabs, the active one, a label snippet, and optional close, new and move; atm's label is in `AppTitleBar`.
 - **The app's menus** (T-512, step 2 of `docs/app-desktop-ui-design.md`, §6): one definition in Rust
   (`app/src-tauri/src/menu.rs`, `tauri::menu`), the menu bar on macOS: atm, File, Edit, View, Go (Back, Forward, the
   overview, the workspace's projects, the workspaces), Window and Help, with their shortcuts (`CmdOrCtrl+…`, and each

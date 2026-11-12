@@ -12,7 +12,6 @@
     closeWindow,
     minimizeWindow,
     onBarMouseDown,
-    openWindow,
     setWindowTitle,
     toggleMaximizeWindow,
     type AppShell,
@@ -20,10 +19,14 @@
   import { dashboard } from '../state.svelte';
   import Logo from '../ui/Logo.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
+  import { appTabs, tabProject } from '../app-tabs.svelte';
+  import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
   import AppMenus from './AppMenus.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
+
+  const tabs = tabActions();
 
   // Until the app says, neither the platform's buttons nor the page's: nothing drawn twice
   let shell = $state<AppShell | null>(null);
@@ -51,21 +54,27 @@
   onmousedown={onBarMouseDown}
 >
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
-  <!-- The tabs (the reusable strip, ui/TitleBarTabs): for now the one, the page shown; a + for a new one (T-514; until
-       tabs exist, a new window at the overview) -->
+  <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
-    tabs={[{ id: 'current' }]}
-    active="current"
+    tabs={appTabs.tabs}
+    active={appTabs.active}
     idPrefix="app-tab-"
-    onselect={() => {}}
-    onnew={() => void openWindow('/')}
+    onselect={tabs.select}
+    onclose={(id) => tabs.close(id)}
+    onnew={() => tabs.open()}
+    onmove={tabs.move}
   >
-    {#snippet label()}
-      <!-- A project's logo; on the overview and the other pages, atm's -->
-      {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} id="app-tab-logo" />{/if}
-      <h1 id="dashboard-title">{title}</h1>
-      <!-- The project chooser, a quiet chevron at the label's end -->
-      {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+    {#snippet label(tab)}
+      {#if tab.id === appTabs.active}
+        <!-- The page shown: its project's logo (atm's on the other pages), its title, and the project chooser -->
+        {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} />{/if}
+        <h1 id="dashboard-title">{title}</h1>
+        {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+      {:else}
+        {@const other = dashboard.projects.find((p) => p.id === tabProject(tab.address))}
+        {#if other}<ProjectLogo project={other} size={16} />{:else}<Logo size={16} />{/if}
+        <span class="app-tab-name">{other?.name ?? 'Projects Overview'}</span>
+      {/if}
     {/snippet}
   </TitleBarTabs>
   <!-- At the bar's right end, on the tab's line: search and Filters, the charts, the ⋯ -->
@@ -115,7 +124,8 @@
     padding-left: var(--traffic-lights);
   }
   /* atm's tab label: the name takes the room left (cut short with …), the chooser sits at its right end */
-  h1 {
+  h1,
+  .app-tab-name {
     flex: 1;
     font-size: var(--text-sm);
     font-weight: 600;
