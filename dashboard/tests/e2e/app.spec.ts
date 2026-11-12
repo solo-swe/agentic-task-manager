@@ -63,10 +63,15 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     await page.goto('/');
-    // One row: the tab, labelled with the project's name; the views and the page's controls are inside the tab
+    // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
+    // charts are inside the tab, under it, without a second title
     await expect(page.locator('#app-titlebar #app-tab-current #dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#dashboard-title')).toHaveCount(1);
+    await expect(page.locator('#app-tab-new')).toBeVisible();
     await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
-    await expect(page.locator('.view-header #app-page-controls #filters')).toBeVisible();
+    await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
+    await expect(page.locator('.topbar.in-tab #filters')).toBeVisible();
+    await expect(page.locator('#reload-btn')).toHaveCount(0);
     await expect(page.locator('#window-buttons')).toHaveCount(0);
     await expect(page.locator('#app-menus')).toHaveCount(0);
     await page.locator('#tab-list').click();

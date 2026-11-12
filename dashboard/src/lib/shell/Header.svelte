@@ -38,11 +38,10 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
-{#if inApp}
-  <!-- The atm app's own title bar (T-513): two rows, the same on every desktop -->
-  <AppTitleBar {title} />
-{:else if onProject}
-  <TitleBar {title}>
+<!-- The atm app's own title bar (T-513): the window's, its tabs; the page's header is then inside the tab -->
+{#if inApp}<AppTitleBar {title} />{/if}
+{#if onProject}
+  <TitleBar {title} inTab={inApp}>
     {#snippet subtitle()}
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->
@@ -84,7 +83,7 @@
     {/snippet}
   </TitleBar>
 {:else}
-  <TitleBar {title} selector={dashboard.projects.length > 0}>
+  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp}>
     {#snippet subtitle()}
       {#if !dashboard.projectsLoaded}
         Loading projects…

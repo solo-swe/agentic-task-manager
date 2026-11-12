@@ -14,8 +14,6 @@
   import HelpDialog from './lib/dialogs/HelpDialog.svelte';
   import LandingPage from './lib/shell/LandingPage.svelte';
   import UpdateNotice from './lib/shell/UpdateNotice.svelte';
-  import AppPageControls from './lib/shell/AppPageControls.svelte';
-  import { inApp } from './lib/api/http';
 
   onMount(() => {
     dashboard.load();
@@ -41,8 +39,6 @@
   {#if dashboard.route.page === 'project'}
     <ViewPanel />
   {:else}
-    <!-- In the atm app, the page's own controls inside the tab (T-513); a project's are in its view header -->
-    {#if inApp}<div class="app-page-header"><AppPageControls /></div>{/if}
     <LandingPage />
   {/if}
 </main>

@@ -18752,7 +18752,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T03:19:01Z",
+      "updated_at": "2026-11-12T03:23:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18768,7 +18768,7 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-11T13:51:45Z",
       "started_by": "claude:34798264",
-      "commit": "0db56d51ffc152c4920b35aa68bf93822c8ceae1",
+      "commit": "9a3524cb4bcf18340a6a612a4d3e0498d5001ad4",
       "completed_at": "2026-11-11T14:20:35Z",
       "completed_by": "claude:34798264",
       "notes": [

@@ -2,20 +2,22 @@
   // The atm app's title bar (T-513, docs/app-desktop-ui-design.md §2): one row, drawn by the page, the same on every
   // desktop, as a browser's tab strip. Room for macOS's window buttons, or the page's menus and its own buttons on
   // Windows and Linux, and the tabs: for now the one tab, the page shown, labelled with its project's logo and name
-  // (T-514 adds the others). Everything else (the views, search and Filters, the needs-you chip, the ⋯ settings) is
-  // inside the tab, the page's own header (AppPageBar). Dragging the bar moves the window, a double click maximizes it.
-  // The browser keeps its own title bar.
+  // (T-514 adds the others), and a +. Everything else is inside the tab: the page's own header (TitleBar, `inTab`)
+  // with its subtitle, search and Filters, Progress and Activity, and the ⋯ settings. Dragging the bar moves the
+  // window, a double click maximizes it. The browser keeps its own title bar.
   import { onMount } from 'svelte';
   import {
     appShell,
     closeWindow,
     minimizeWindow,
     onBarMouseDown,
+    openWindow,
     setWindowTitle,
     toggleMaximizeWindow,
     type AppShell,
   } from '../api/shell';
   import { dashboard } from '../state.svelte';
+  import Logo from '../ui/Logo.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import AppMenus from './AppMenus.svelte';
 
@@ -49,9 +51,12 @@
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
   <div class="app-tabs" role="tablist" aria-label="Tabs">
     <div class="app-tab" role="tab" aria-selected="true" id="app-tab-current">
-      {#if project}<ProjectLogo {project} size={16} />{/if}
+      <!-- A project's logo; on the overview and the other pages, atm's -->
+      {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} id="app-tab-logo" />{/if}
       <h1 id="dashboard-title">{title}</h1>
     </div>
+    <!-- A new tab (T-514); until tabs exist, a new window at the overview -->
+    <button class="app-tab-new" id="app-tab-new" title="New Tab" onclick={() => void openWindow('/')}>+</button>
   </div>
   {#if shell && !shell.system_window_buttons}
     <div class="window-buttons" id="window-buttons">
@@ -77,12 +82,28 @@
     display: flex;
     gap: var(--space-3);
     height: 40px;
-    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) var(--space-4);
+    margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
     user-select: none;
-    z-index: 20;
+    /* Over the page's header pinned under it */
+    z-index: 50;
+  }
+  .app-tab-new {
+    align-self: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: var(--text-lg);
+    height: 28px;
+    margin-left: var(--space-1);
+    width: 28px;
+  }
+  .app-tab-new:hover {
+    background: var(--surface);
+    color: var(--text);
   }
   /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
   .app-titlebar.system-buttons {

@@ -33,12 +33,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   with room for macOS's traffic lights (`titleBarStyle: "Overlay"`, `hiddenTitle`, `trafficLightPosition` in
   `tauri.conf.json`); on Windows and Linux the window has no decorations (`windows::dress`, with Windows 11's shadow)
   and the page draws the menus (`AppMenus.svelte`, Bits UI's menubar, from `menu`) and its minimize, maximize and
-  close buttons (new commands `minimize`, `toggle_maximize`, `close_window`). Everything else is inside the tab: the
-  view header has the views and, at their right, the needs-you chip, search and Filters and the ⋯ settings
-  (`AppPageControls.svelte`; on the overview, the ⋯ alone). Dragging the bar moves the window (`start_dragging`), a
-  double click maximizes it. In the app the subtitle, charts, version chip and reload button are gone from the
-  header: View ▸ Reload and Help ▸ What's New have them, and the status bar (T-516) the rest. The Windows and Linux
-  paths are checked on those platforms by T-519.
+  close buttons (new commands `minimize`, `toggle_maximize`, `close_window`), and a + (a new window until tabs,
+  T-514); the overview's tab has atm's logo. Everything else is inside the tab: the page's header as the browser's,
+  without its title and reload button (`TitleBar`'s `inTab`: View ▸ Reload has it), pinned under the app's bar.
+  Dragging the bar moves the window (`start_dragging`), a double click maximizes it. The Windows and Linux paths are
+  checked on those platforms by T-519.
 
 ## [0.35.0] - 2026-11-10
 

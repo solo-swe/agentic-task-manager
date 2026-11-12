@@ -23,8 +23,11 @@
     charts?: Snippet;
     /** The second row, below everything else */
     below?: Snippet;
+    /** In the atm app, inside the tab (T-513): the tab carries the title, the app's title bar the window's title,
+     * and View ▸ Reload the reload button; the subtitle, the charts and the ⋯ stay */
+    inTab?: boolean;
   }
-  let { title, selector = true, subtitle, charts, below }: Props = $props();
+  let { title, selector = true, subtitle, charts, below, inTab = false }: Props = $props();
 
   const version = dashboardVersion();
   // The open project, as api/projects lists it: its logo goes next to the title
@@ -34,6 +37,7 @@
   });
 
   $effect(() => {
+    if (inTab) return; // the app's title bar sets them
     document.title = title;
     // In the app, the window's own title too: the window switcher's and the taskbar's (T-511)
     if (inApp) void setWindowTitle(title);
@@ -45,11 +49,14 @@
 
 <svelte:window onscroll={() => (scrolled = compactAt(window.scrollY))} />
 
-<header class="topbar" class:scrolled>
+<header class="topbar" class:scrolled class:in-tab={inTab}>
   <div class="title-block">
     <div class="title-row">
-      {#if project}<ProjectLogo {project} size={26} />{/if}
-      <h1 id="dashboard-title">{title}</h1>
+      <!-- In the app the tab is labelled with them (T-513); the pickers stay until the sidebar (T-515) -->
+      {#if !inTab}
+        {#if project}<ProjectLogo {project} size={26} />{/if}
+        <h1 id="dashboard-title">{title}</h1>
+      {/if}
       {#if selector}<ProjectSelector />{/if}
       <WorkspaceSelector />
       {#if version}
@@ -67,7 +74,7 @@
   </div>
   {@render charts?.()}
   <div class="topbar-controls">
-    <RefreshMenu />
+    {#if !inTab}<RefreshMenu />{/if}
     <SettingsMenu />
   </div>
   {@render below?.()}
