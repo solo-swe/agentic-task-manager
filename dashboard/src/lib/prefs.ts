@@ -31,6 +31,10 @@ export interface Prefs {
   boardScope: string;
   /** Where the document viewer is and how big (lib/documents.ts ViewerGeometry), or null for its default */
   documentViewer: { x: number; y: number; w: number; h: number } | null;
+  /** The app's sidebar is shown (T-515) */
+  sidebarOpen: boolean;
+  /** The app's sidebar's width, in pixels (T-515) */
+  sidebarWidth: number;
 }
 
 function storage(): Storage | null {

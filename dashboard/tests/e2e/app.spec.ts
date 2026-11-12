@@ -148,6 +148,48 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.windowCalls).toContain('close_window');
   });
 
+  test('the sidebar (T-515): projects open here or, ⌘-clicked, in a new tab; a task too; its button and menu hide it', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    await page.goto('/');
+    const sidebar = page.locator('#app-sidebar');
+    const tabs = page.locator('#app-titlebar [role="tab"]');
+    await expect(sidebar.locator('.app-sidebar-item')).toHaveCount(3);
+    await expect.poll(() => tasksServer.menuState?.sidebar).toBe(true);
+
+    // A click opens the project here
+    await sidebar.locator(`[data-id="${tasksServer.projectId}"]`).click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await expect(tabs).toHaveCount(1);
+    // ⌘-click (Ctrl-click) opens one in a new tab
+    await sidebar.locator('[data-id="second"]').click({ modifiers: ['ControlOrMeta'] });
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+
+    // ⌘-click on a task's card opens its details in a new tab
+    await tabs.nth(0).click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    const card = page.locator('#kanban .kanban-card').first();
+    const id = await card.getAttribute('data-id');
+    await card.click({ modifiers: ['ControlOrMeta'] });
+    await expect(tabs).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toContain(`task=${id}`);
+    await expect(page.locator('#detail-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#detail-overlay')).not.toHaveClass(/open/);
+
+    // The title bar's button, then the menu's Show Sidebar
+    await page.locator('#app-sidebar-toggle').click();
+    await expect(sidebar).toHaveCount(0);
+    await expect.poll(() => tasksServer.menuState?.sidebar).toBe(false);
+    await tasksServer.chooseMenu({ kind: 'toggle_sidebar' });
+    await expect(sidebar).toBeVisible();
+  });
+
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
     page,
     tasksServer,

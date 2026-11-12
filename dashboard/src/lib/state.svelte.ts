@@ -182,6 +182,13 @@ export class DashboardState {
   /** The ⋯ settings popup and the Filters popup are open: their buttons, and in the app the menu (T-512) */
   settingsOpen = $state(false);
   filtersOpen = $state(false);
+  /** The app's sidebar is shown (T-515): its button, View ▸ Show Sidebar; remembered */
+  sidebarOpen = $state(getPref('sidebarOpen', true));
+
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+    setPref('sidebarOpen', this.sidebarOpen);
+  }
 
   /** A project's page is shown */
   get onProject(): boolean {
@@ -454,8 +461,7 @@ export class DashboardState {
     id: string | null,
     { needsYou = false, task, view }: { needsYou?: boolean; task?: string; view?: ViewId } = {},
   ) {
-    // Another project's sprints are not this one's: its own saved Sprint filter applies
-    let address = withSprintParam(withProject(currentAddress(), id, this.overviewTab), null);
+    let address = this.projectAddress(id);
     if (id !== null && needsYou) {
       address = withView(address, 'kanban');
       this.#pendingNeedsYou = true;
@@ -463,6 +469,13 @@ export class DashboardState {
     // The task's details open once its project has loaded (fetchAndApply)
     if (id !== null && task) address = withTask(address, task);
     navigate(address);
+  }
+
+  /** Where project `id` (the overview for null) is, from here: what openProject goes to, and the app opens in a new
+   * tab (T-515) */
+  projectAddress(id: string | null): string {
+    // Another project's sprints are not this one's: its own saved Sprint filter applies
+    return withSprintParam(withProject(currentAddress(), id, this.overviewTab), null);
   }
 
   /** The address changed (a link, Back, or the dashboard's own move): pick up the dialog, the document, the tab and

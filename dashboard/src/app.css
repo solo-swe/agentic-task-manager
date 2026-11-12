@@ -13,6 +13,8 @@ body {
   background: var(--bg);
   color: var(--text);
   padding: var(--space-9);
+  /* Room for the atm app's sidebar when it is open (T-515: Sidebar.svelte sets it; nothing in the browser) */
+  padding-left: calc(var(--space-9) + var(--sidebar-offset, 0px));
   line-height: 1.5;
   min-height: 100vh;
   display: flex;

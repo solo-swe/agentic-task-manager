@@ -23,6 +23,15 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
 
 ### Added
+- **The app's sidebar** (T-515, step 5, §4): Projects Overview, then the workspace's projects, each with its logo,
+  name, its active sprint's progress (the project chooser's bar) and what needs you as a badge; the one shown marked,
+  missing ones dimmed (`shell/Sidebar.svelte`, the app only). A click opens a project in this tab; ⌘-click, Ctrl-click or
+  a middle click in a new one. The title bar's sidebar button and View ▸ Show Sidebar (the menu's check follows it)
+  show and hide it; its edge (a button: drag it, or the arrows) resizes it, 180 to 420 px; both kept in the
+  preferences (`sidebarOpen`, `sidebarWidth`). The page and the title bar make room for it with `--sidebar-offset`,
+  which only the app sets. As Hakan chose, the project chooser, search and the workspace picker stay in the title bar.
+  ⌘-click (Ctrl-click, a middle click) on a task's card or row, or on a link to a document, opens it in a new tab too
+  (`lib/new-tab-clicks.ts`, the app only); `dashboard.projectAddress` is the address `openProject` goes to.
 - **Tabs in the app** (T-514, step 4, §3): a tab is an address (`lib/app-tabs.svelte.ts`): the window keeps one page
   and one dashboard state, switching tabs goes to the tab's address, and the active tab follows the page as it moves.
   The + (and File ▸ New Tab, ⌘T) opens the workspace's overview in a new tab; × or a middle click closes a tab (Close

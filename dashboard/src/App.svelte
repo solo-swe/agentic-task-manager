@@ -14,6 +14,8 @@
   import HelpDialog from './lib/dialogs/HelpDialog.svelte';
   import LandingPage from './lib/shell/LandingPage.svelte';
   import UpdateNotice from './lib/shell/UpdateNotice.svelte';
+  import Sidebar from './lib/shell/Sidebar.svelte';
+  import { inApp } from './lib/api/http';
 
   onMount(() => {
     dashboard.load();
@@ -33,6 +35,8 @@
 </script>
 
 <UpdateNotice />
+<!-- The atm app's sidebar (T-515): the workspace's projects, left of the page -->
+{#if inApp}<Sidebar />{/if}
 <!-- One layout for every page: the title bar, a main area that takes the rest of the window, the status bar -->
 <Header />
 <main class="app-main" id="app-main">

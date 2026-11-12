@@ -5,6 +5,11 @@ import { appTabs, type AppTabs } from './app-tabs.svelte';
 import { closeWindow, openWindow } from './api/shell';
 import { navigate } from './navigation';
 
+/** A click that asks for a new tab: ⌘-click, Ctrl-click or a middle click, as in a browser */
+export function wantsNewTab(e: MouseEvent): boolean {
+  return e.metaKey || e.ctrlKey || e.button === 1;
+}
+
 export interface TabActions {
   /** A new tab at `address` (the workspace's overview by default) */
   open(address?: string): void;

@@ -26,6 +26,8 @@ function target(onProject = true): MenuTarget & { did: string[] } {
     workspace: 'work',
     settingsOpen: false,
     filtersOpen: false,
+    sidebarOpen: true,
+    toggleSidebar: () => did.push('sidebar'),
     openDialog: (id) => did.push(`dialog ${id}`),
     openWhatsNew: () => did.push('whats new'),
     selectTab: (tab) => did.push(`tab ${tab}`),
@@ -110,12 +112,14 @@ describe('the app’s menu on the page (T-512)', () => {
     expect(pageLink('/projects/abc/list?task=T-1')).toBe('atm://projects/abc/list?task=T-1');
   });
 
-  it('switches views only on a project’s page, and leaves tabs and the sidebar for later', () => {
+  it('switches views only on a project’s page; without tabs their items do nothing; Show Sidebar toggles it', () => {
     const t = target(false);
     const p = page();
-    for (const kind of ['show_kanban', 'new_tab', 'close_tab', 'next_tab', 'toggle_sidebar', 'quit'] as const)
+    for (const kind of ['show_kanban', 'new_tab', 'close_tab', 'next_tab', 'quit'] as const)
       runMenuAction({ kind }, t, p);
     expect([...t.did, ...p.did]).toEqual([]);
+    runMenuAction({ kind: 'toggle_sidebar' }, t, p);
+    expect(t.did).toEqual(['sidebar']);
   });
 
   it('in the menus the page draws, Quit and New Window are the window’s, the system’s items the webview’s', () => {
@@ -172,7 +176,7 @@ describe('the app’s menu on the page (T-512)', () => {
   it('reports what the menu shows checked', () => {
     expect(menuStateOf(target())).toEqual({
       view: 'kanban',
-      sidebar: false,
+      sidebar: true,
       filters: false,
       archived: false,
       workspace: 'work',

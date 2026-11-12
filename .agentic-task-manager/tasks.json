@@ -18793,7 +18793,7 @@
       "description": "Step 4 of [the desktop app design](docs/app-desktop-ui-design.md) ([§3](docs/app-desktop-ui-design.md#3-tabs)). Decided: a tab is an **address**, one page and one dashboard state per window, not a state per tab.\n\n## Change\n- **The strip** in the title bar: each tab its project's logo and name (or the page's title), the needs-you count, a close button; drag to reorder; `+`, ⌘T and File ▸ New Tab open the workspace's overview.\n- **Switching** (a click, ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[) navigates to the tab's address through `lib/navigation.ts`; the tab keeps its address, the preferences keep the rest.\n- **Open in a new tab:** ⌘-click (Ctrl-click, middle click) on a project, a task, a document link; deep links open in a new tab of the window in front.\n- **Close Tab** (⌘W); closing the last one closes the window.\n- **Move Tab to New Window** (the tab's context menu, the Window menu): `open_window` on its address, and the tab leaves this window.\n- The window's title and `set_title` follow the active tab.\n\n## Measure\nA switch between two tabs of a large project within the e2e budget (200 ms, `tests/e2e/performance.spec.ts`). If it isn't, keep the last few projects' data in `state.svelte.ts` (a cache), not a state per tab.\n\n## Checks\nUnit tests for the tab list (open, close, reorder, move, the active one); the app e2e specs and the performance spec; by hand on macOS with two windows.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-513"
       ],
@@ -18805,7 +18805,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T04:23:24Z",
+      "updated_at": "2026-11-12T04:29:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18824,10 +18824,19 @@
           "kind": "note",
           "text": "Build the tab strip on ui/TitleBarTabs.svelte (T-513, Hakan: reusable in other apps, knows nothing of atm): give it the tabs, onclose and onnew; atm’s label stays in AppTitleBar. Add drag to reorder there, with the browser’s own drag and drop.",
           "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-12T04:29:46Z",
+          "kind": "outcome",
+          "text": "Tabs as addresses (app-tabs.svelte.ts, tab-actions.ts) in the reusable ui/TitleBarTabs: +/⌘T, × and middle click, ⌘W, Next/Previous Tab, Move Tab to New Window, drag to reorder, later links in a new tab, kept over a reload. Not done: ⌘-click to open in a new tab (needs the sidebar’s list, T-515), and the measured switch on a large project.",
+          "by": "claude:34798264"
         }
       ],
       "started_at": "2026-11-12T04:23:24Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "57fb2e8f8c2568317ff99f5daee3a0361f4ee624",
+      "completed_at": "2026-11-12T04:29:46Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-515",
@@ -18839,10 +18848,10 @@
         "desktop-ui",
         "ux"
       ],
-      "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click in a new one (once step 4 is in); missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.",
+      "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click (Ctrl-click, a middle click) in a new one; missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Open in a new tab (left from T-514)\nTabs are in (T-514): `tabActions().open(address)` (`lib/tab-actions.ts`) opens one. Besides the sidebar's projects, ⌘-click (Ctrl-click, a middle click) opens in a new tab, in the app only: a task (a card, a list row: its address with `?task=`) and a link to a document (`?doc=`). The browser keeps its own behaviour for these.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-513"
       ],
@@ -18852,7 +18861,7 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-12T08:16:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18864,7 +18873,9 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T08:16:09Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-516",

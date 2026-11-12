@@ -31,9 +31,21 @@
   import { appTabs } from '../lib/app-tabs.svelte';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
   import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
-  import { tabActions } from '../lib/tab-actions';
+  import { newTabAddress } from '../lib/new-tab-clicks';
+  import { tabActions, wantsNewTab } from '../lib/tab-actions';
 
   const tabs = tabActions();
+
+  /** In the app: ⌘-click, Ctrl-click or a middle click on a task or a document opens it in a new tab (T-515), before
+   * the click reaches what would open it here */
+  function openInNewTab(e: MouseEvent) {
+    if (!inApp || !wantsNewTab(e)) return;
+    const address = newTabAddress(e.target as Element | null, currentAddress());
+    if (!address) return;
+    e.preventDefault();
+    e.stopPropagation();
+    tabs.open(address);
+  }
   import { dashboard } from '../lib/state.svelte';
 
   let { children }: { children: Snippet } = $props();
@@ -94,6 +106,8 @@
 <svelte:window
   onhashchange={() => legacyParams(location.hash) && settle()}
   onfocus={() => dashboard.live && void dashboard.reload()}
+  onclickcapture={openInNewTab}
+  onauxclickcapture={openInNewTab}
 />
 
 <App />

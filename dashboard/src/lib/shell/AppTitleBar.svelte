@@ -22,6 +22,7 @@
   import { appTabs, tabProject } from '../app-tabs.svelte';
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
+  import Icon from '../ui/Icon.svelte';
   import AppMenus from './AppMenus.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
@@ -54,6 +55,15 @@
   onmousedown={onBarMouseDown}
 >
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
+  <!-- Show or hide the sidebar (T-515; View ▸ Show Sidebar) -->
+  <button
+    class="app-sidebar-toggle"
+    id="app-sidebar-toggle"
+    title={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
+    aria-label={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
+    aria-pressed={dashboard.sidebarOpen}
+    onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
+  >
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -104,6 +114,8 @@
     gap: var(--space-3);
     height: 40px;
     margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
+    /* Over the sidebar too, from the window's left edge */
+    margin-left: calc(-1 * (var(--space-9) + var(--sidebar-offset, 0px)));
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
@@ -117,6 +129,24 @@
     gap: var(--space-3);
     margin-left: auto;
     min-width: 0;
+  }
+  .app-sidebar-toggle {
+    align-items: center;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    display: inline-flex;
+    flex: 0 0 28px;
+    height: 28px;
+    justify-content: center;
+  }
+  .app-sidebar-toggle:hover,
+  .app-sidebar-toggle[aria-pressed='true'] {
+    color: var(--text);
+  }
+  .app-sidebar-toggle:hover {
+    background: var(--surface);
   }
   /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
   .app-titlebar.system-buttons {

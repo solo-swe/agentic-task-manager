@@ -1,5 +1,5 @@
-// What each of the app's menu items does on the page (T-512): what the same control does now. Tabs come in T-514 and
-// the sidebar in T-515: their items do nothing yet. Quit and New Window the app does itself, except in the menus the
+// What each of the app's menu items does on the page (T-512): what the same control does now, the tabs' on the window's
+// tabs (T-514), Show Sidebar on the sidebar (T-515). Quit and New Window the app does itself, except in the menus the
 // page draws (Windows, Linux, T-513).
 import type { MenuAction, MenuState, SystemItem } from './api/menu';
 import type { TabActions } from './tab-actions';
@@ -19,6 +19,8 @@ export interface MenuTarget {
   readonly workspace: string;
   settingsOpen: boolean;
   filtersOpen: boolean;
+  readonly sidebarOpen: boolean;
+  toggleSidebar(): void;
   openDialog(id: DialogId): void;
   openWhatsNew(): void;
   selectTab(tab: ViewId): void;
@@ -96,6 +98,9 @@ export function runMenuAction(
     case 'toggle_archived':
       target.setIncludeArchived(!target.includeArchived);
       return;
+    case 'toggle_sidebar':
+      target.toggleSidebar();
+      return;
     case 'find':
       page.focusSearch();
       return;
@@ -142,7 +147,7 @@ export function runMenuAction(
       tabs?.toWindow();
       return;
     default:
-      // The sidebar (T-515); Quit and New Window are the app's
+      // Quit and New Window are the app's
       return;
   }
 }
@@ -187,7 +192,7 @@ export function runSystemItem(item: SystemItem, window: WindowActions): void {
 export function menuStateOf(target: MenuTarget): MenuState {
   return {
     view: target.onProject ? target.tab : null,
-    sidebar: false,
+    sidebar: target.sidebarOpen,
     filters: target.filtersOpen,
     archived: target.includeArchived,
     workspace: target.workspace,
