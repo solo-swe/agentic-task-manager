@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 525,
+    "next_id": 526,
     "labels": [
       {
         "id": "architecture",
@@ -19093,7 +19093,7 @@
       "description": "Left out of [the desktop app design](docs/app-desktop-ui-design.md)'s steps by decision (§10, item 5): a system notification when a task starts needing the user (in review, blocked on them), off in Settings. It needs a new plugin, `tauri-plugin-notification`, which the [Rust guide](docs/guides/rust.md) asks a yes for: first a short note on the plugin (its permissions, platforms, what I25 says about the page calling it; the app should send notifications from Rust, not the page), then ask Hakan before adding it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-518"
       ],
@@ -19103,7 +19103,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T19:05:06Z",
+      "updated_at": "2026-11-12T19:34:41Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -19117,7 +19117,18 @@
       ],
       "sprint": "The desktop app",
       "started_at": "2026-11-12T19:05:06Z",
-      "started_by": "claude:34798264"
+      "started_by": "claude:34798264",
+      "commit": "ec27de41016ccca52400d009eb405b4215693aca",
+      "completed_at": "2026-11-12T19:34:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T19:34:41Z",
+          "kind": "outcome",
+          "text": "Notifications from Rust (tauri-plugin-notification =2.8.0, approved): \"<project>: N tasks need you\" when a project’s count rises, not at start nor while an app window is focused; the page gets no plugin permission. set_badge became needs_you(workspace, badge, notify): the app reads counts and names itself. Settings ▸ What needs you has both switches. By hand on macOS (a notification appears from the bundled app) is Hakan’s.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-521",
@@ -19297,6 +19308,40 @@
         "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this."
       ],
       "blocked_at": "2026-11-10T22:42:44Z"
+    },
+    {
+      "id": "T-525",
+      "name": "Desktop app: time switching the app's tabs on a large project",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "T-514's outcome says switching the app's title-bar tabs (a tab is an address: a switch navigates the window's one page) was never timed on a large project. Add the timing to [the performance spec](dashboard/tests/e2e/performance.spec.ts), beside its `switching tabs` test, with the same budget (`BUDGET_MS`: 200 ms locally, twice that in CI).\n\n## Change\n- In the app (`tasksServer.asApp()`), with the `large-500` fixture and a second project: open tabs on the Kanban, the List and the Graph of the large project and on the second project, then time each `.title-bar-tab` click until its page is shown (its view's first card or node visible, the title the tab's project), as the spec times its views.\n- Also time ⌃Tab (the menu's Next Tab, `chooseMenu({ kind: 'next_tab' })`) once round the tabs.\n- Log the timings as the other tests do (`tab switch in the app (ms):`) and expect each under `BUDGET_MS`.\n\n## If it is over budget\nMeasure where the time goes (`--trace on` locally) and fix the cause; never raise the budget (AGENTS.md, Performance budgets). Record the timings in T-514's follow-up note on this task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-514"
+      ],
+      "files": [
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-12T19:36:30Z",
+      "updated_at": "2026-11-12T19:36:38Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-12T19:36:30Z"
+        }
+      ],
+      "sprint": "The desktop app",
+      "components": [
+        "dashboard"
+      ]
     }
   ]
 }
