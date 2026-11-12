@@ -94,6 +94,16 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   checked on those platforms by T-519.
 
 ### Changed
+- **Switching to a project shown before is instant, and a tab keeps its name** (Hakan: the tab's title changed three
+  times on a switch, settling where it started). A switch of project made the page fetch the workspace's list, then
+  empty every view (the title "Task Dashboard"), then load the project from scratch, even one shown seconds before;
+  and the chosen tab's label was the page's title, still the previous project's for a moment. Now the page keeps the
+  last eight projects it showed, as loaded (`state.svelte.ts`, `#kept`): going back to one shows it at once, with its
+  view, and the load that follows finds it unchanged or brings the change; an answer for a project no longer shown is
+  dropped. Every tab is named by the project in its own address (its own name once shown, else the workspace's), and
+  a project loading for the first time is titled by its name, not "Task Dashboard". Back to a 500-task project in
+  the app: 62 ms, from 240–290. `app.spec.ts` checks the labels never change, the window's title never says "Task
+  Dashboard" and a project shown before is never empty on the way back.
 - **Switching projects is faster** (T-525): going back to a large project (500 tasks), in the app's tabs or the
   project picker, took 240–290 ms on a developer Mac, over the 200 ms interaction budget; now 140–200 ms, with the
   test's own data transport. The graph keeps the layouts of the last four shapes, not just the last (dagre took

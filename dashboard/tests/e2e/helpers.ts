@@ -540,6 +540,8 @@ export class TasksServer {
   windowShell = { system_menu_bar: true, system_window_buttons: true };
   /** The window commands the page called (T-513), in order */
   windowCalls: string[] = [];
+  /** How many times the page asked the app for a project's tasks (`project_tasks`) */
+  projectTaskRequests = 0;
   /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
   restoredTabs: { addresses: string[]; active: number } | null = null;
   /** The tabs the page last kept for the next start (`save_tabs`) */
@@ -633,6 +635,7 @@ export class TasksServer {
       case 'search':
         return { ok: this.search(String(args.q ?? '')) };
       case 'project_tasks': {
+        this.projectTaskRequests++;
         if (!body) return unknown;
         const archived = (args.filters as { archived?: boolean } | undefined)?.archived;
         if (archived)

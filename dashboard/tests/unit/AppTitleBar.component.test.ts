@@ -20,7 +20,7 @@ describe('AppTitleBar (T-513)', () => {
   beforeEach(() => {
     resetAppShell();
     loadIntoDashboard(standard);
-    appTabs.start('/');
+    appTabs.start('/projects/fixture/kanban');
   });
   afterEach(() => clearMocks());
 
@@ -31,6 +31,15 @@ describe('AppTitleBar (T-513)', () => {
     expect(container.querySelector('#window-buttons')).toBeNull();
     expect(container.querySelector('#app-menus')).toBeNull();
     expect(container.querySelector('#dashboard-title')).toHaveTextContent('Standard Project');
+  });
+
+  it('names each tab by the page in its own address, chosen or not (T-525): the overview’s tab is the overview', async () => {
+    app({ system_menu_bar: true, system_window_buttons: true });
+    appTabs.open('/');
+    const { container } = render(AppTitleBar, { title: 'Standard Project' });
+    // The page still shows the project (its title), but the chosen tab is the overview's: named so at once
+    expect(container.querySelector('#dashboard-title')).toHaveTextContent('Projects Overview');
+    expect(container.querySelector('.app-tab-name')).toHaveTextContent('Standard Project');
   });
 
   it('on Windows and Linux draws its own buttons and the app’s menus', async () => {

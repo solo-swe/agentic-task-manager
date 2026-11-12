@@ -170,6 +170,63 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
   });
 
+  test('a switch of tab shows the project at once, its name steady; one shown before needs no load (T-525)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Minimal Project');
+    tasksServer.use('standard');
+    tasksServer.restoredTabs = {
+      addresses: [`/projects/${tasksServer.projectId}/kanban`, '/projects/second/kanban'],
+      active: 0,
+    };
+    await page.goto('/');
+    const tabs = page.locator('.title-bar-tab [role="tab"]');
+    await expect(tabs).toHaveCount(2);
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    // What the switches show: the tabs' labels whenever they change, and whether the board was ever empty
+    await page.evaluate(() => {
+      const w = window as unknown as { __labels: string[]; __empty: boolean };
+      const strip = document.querySelector('.title-bar-tabs')!;
+      const labels = () =>
+        [...strip.querySelectorAll('.title-bar-tab')]
+          .map((t) => (t.textContent ?? '').replace(/[×\s]+/g, ' ').trim())
+          .join(' | ');
+      w.__labels = [labels()];
+      w.__empty = false;
+      new MutationObserver(() => {
+        if (labels() !== w.__labels.at(-1)) w.__labels.push(labels());
+        // The first project's board (the minimal one's is empty in its active sprint, as it should be)
+        const first = document.querySelector('#dashboard-title')?.textContent === 'Standard Project';
+        if (first && !document.querySelector('#kanban .kanban-card')) w.__empty = true;
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    });
+    const seen = () =>
+      page.evaluate(() => {
+        const w = window as unknown as { __labels: string[]; __empty: boolean };
+        return { __labels: w.__labels, __empty: w.__empty };
+      });
+    const titles = tasksServer.windowTitles.length;
+
+    // A project not shown yet: loaded; its tab keeps its name (the workspace's, then its own: the same here)
+    const asked = tasksServer.projectTaskRequests;
+    await tabs.nth(1).click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Minimal Project');
+    await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(asked);
+    await expect(page.locator('#kanban')).toContainText('To Do');
+    // Back to the first: shown from what was kept, before any answer, so its board is never empty
+    const loads = tasksServer.projectTaskRequests;
+    await tabs.nth(0).click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    expect((await seen()).__empty).toBe(false);
+    // Its load still asks (a change since would show), and finds nothing new
+    await expect.poll(() => tasksServer.projectTaskRequests).toBeGreaterThan(loads);
+    // The labels never changed, and the window's title went only to each project's name: never "Task Dashboard"
+    expect((await seen()).__labels).toEqual(['Standard Project | Minimal Project']);
+    expect(tasksServer.windowTitles.slice(titles)).not.toContain('Task Dashboard');
+  });
+
   test('tabs are addresses (T-514): + opens the overview, a click goes back, × closes, the menu steps', async ({
     page,
     tasksServer,

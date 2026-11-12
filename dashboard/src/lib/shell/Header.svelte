@@ -15,13 +15,16 @@
   import { inApp } from '../api/http';
 
   const onProject = $derived(dashboard.route.page === 'project');
-  // A project's page is titled by its name alone (T-271); while loading, and without a name, "Task Dashboard"
+  // A project's page is titled by its name alone (T-271); while loading, the name it had (kept, or as the workspace
+  // lists it: T-525, the title no longer flips to "Task Dashboard" and back on a switch), and without one "Task
+  // Dashboard"
+  const route = $derived(dashboard.route);
   const title = $derived(
-    onProject
+    route.page === 'project'
       ? dashboard.loaded
         ? dashboard.projectName
-        : 'Task Dashboard'
-      : dashboard.route.page === 'overview'
+        : (dashboard.nameOf(route.id) ?? 'Task Dashboard')
+      : route.page === 'overview'
         ? 'Projects Overview'
         : 'Task Dashboard',
   );

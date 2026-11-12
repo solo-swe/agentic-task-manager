@@ -39,11 +39,6 @@
     document.title = title;
     void setWindowTitle(title);
   });
-
-  const project = $derived.by(() => {
-    const route = dashboard.route;
-    return route.page === 'project' ? dashboard.projects.find((p) => p.id === route.id) : undefined;
-  });
 </script>
 
 <!-- A mouse-down on the bar's free space drags the window (a pointer gesture, as the system's title bar's) -->
@@ -75,15 +70,19 @@
     onmove={tabs.move}
   >
     {#snippet label(tab)}
+      <!-- Every tab, chosen or not, by the project in its own address (T-525): its logo and its name as its page
+           titles it (kept once shown), so a tab's label doesn't change when it is chosen, while the page still shows
+           the tab before -->
+      {@const id = tabProject(tab.address)}
+      {@const listed = id === null ? undefined : dashboard.projects.find((p) => p.id === id)}
+      {@const name = listed ? (dashboard.nameOf(listed.id) ?? listed.name) : id === null ? 'Projects Overview' : title}
+      {#if listed}<ProjectLogo project={listed} size={16} />{:else}<Logo size={16} />{/if}
       {#if tab.id === appTabs.active}
-        <!-- The page shown: its project's logo (atm's on the other pages), its title, and the project chooser -->
-        {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} />{/if}
-        <h1 id="dashboard-title">{title}</h1>
+        <!-- The tab shown: its name is the page's heading, and the project chooser -->
+        <h1 id="dashboard-title">{name}</h1>
         {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
       {:else}
-        {@const other = dashboard.projects.find((p) => p.id === tabProject(tab.address))}
-        {#if other}<ProjectLogo project={other} size={16} />{:else}<Logo size={16} />{/if}
-        <span class="app-tab-name">{other?.name ?? 'Projects Overview'}</span>
+        <span class="app-tab-name">{name}</span>
       {/if}
     {/snippet}
   </TitleBarTabs>
