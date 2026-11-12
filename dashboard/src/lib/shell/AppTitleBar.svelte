@@ -127,27 +127,29 @@
     display: flex;
     min-width: 0;
   }
-  /* A tab in the title bar, as Notion's: the bar's full height, between thin lines; the active one in the page's
-     background, over the bar's bottom line, so it joins the page under it */
+  /* A tab in the title bar, as Notion's: one fixed width for every tab, the bar's full height, between thin lines;
+     the active one in the page's background, over the bar's bottom line, so it joins the page under it. The name
+     takes the room left (cut short with …), the project chooser sits at the tab's right end */
   .app-tab {
     align-items: center;
     border-left: 1px solid var(--border);
     border-right: 1px solid var(--border);
     display: flex;
+    flex: 0 0 220px;
     gap: var(--space-2);
     --hairline: 1px;
     margin-bottom: calc(-1 * var(--hairline));
-    max-width: 260px;
-    min-width: 160px;
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-2) 0 var(--space-4);
   }
   .app-tab[aria-selected='true'] {
     background: var(--bg);
   }
   .app-tab h1 {
+    flex: 1;
     font-size: var(--text-sm);
     font-weight: 600;
     margin: 0;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
