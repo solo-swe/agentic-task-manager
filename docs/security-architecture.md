@@ -896,6 +896,23 @@ Three new commands, each on the calling window only (I25), one new file, the app
   most 80 characters); nothing the page sends reaches one. The page gets **no permission of the plugin's** (I25's
   test checks the capability lists only the app's commands), so it can't send, ask for or list notifications.
 
+**Release 0.36.0 (the sprint The desktop app, T-511 to T-520, T-525).** The checklist:
+- **Skills and `docs/agent/`:** unchanged against `main` (nor the CLI's commands), so there is nothing for the agent
+  sandbox or a written review to check.
+- **Entry points, fields, CI permissions:** the app's windows and shell (T-511: `shell`, `set_title`,
+  `open_window`), its menus (T-512: `subscribe_menu`, `menu`, `menu_state`), its title bar (T-513: `minimize`,
+  `toggle_maximize`, `close_window`, `start_dragging`), its windows coming back (T-518: `save_tabs`, `restored_tabs`,
+  `windows.json`) and what needs the user (T-520: `needs_you`, the notification plugin), each in I25's capability and
+  recorded above, with its checks. The capability names `main` and `window-*` only. One new plugin, approved, sent
+  from Rust; the page gets none of its permissions. No new CI permission.
+- **What ships is what is described:** the dashboard in the browser keeps its look (the app's UI is the app's only);
+  its project switches and the overview's needs-you list changed for both. T-522 installs this release through 0.35.0's
+  updater with the user.
+- **Checks run:** `cargo test` (260), clippy, fmt and deny; the unit tests with coverage (1323); the CLI suite (599;
+  `serve.test.mjs`'s v2 routes test once failed on its first request while the whole suite ran, and the file passed
+  run alone, 46 of 46, as in 0.35.0); the functional e2e suite (434); CI on the branch, the Linux screenshots and the three platforms' Rust jobs included
+  (green; the Windows build compiles the badge's overlay icon, which only Windows uses).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

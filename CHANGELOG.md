@@ -4,23 +4,12 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
-## [Unreleased]
+## [0.36.0] - 2026-11-12
 
-### Development
-- **`cargo tauri dev` follows the dashboard's sources:** its `beforeDevCommand` starts `pnpm run watch:page`
-  (`dashboard/build/watch-page.ts`), which builds the page again a few seconds after a change; the Tauri CLI's server
-  reloads the window. A page change no longer needs a build and a restart.
-
-### Changed
-- **The app's windows** (T-511, step 1 of `docs/app-desktop-ui-design.md`): the groundwork for several windows and
-  the page's own shell, with no visible change yet. The app's windows are `main` and `window-<n>`, both in the
-  capability (`"windows": ["main", "window-*"]`). Subscriptions belong to the window whose page made them: a page
-  loading again or a window closing ends only its own (`AppState::unwatch_window`, replacing `unwatch_all`), and
-  `unsubscribe` ends only the calling window's. Links go to each window's page (`Links` by window); deep links and a
-  second instance go to the window in front (the last focused), or a new one when none is open. Three new commands,
-  each acting on the calling window: `shell` (`{ system_menu_bar, system_window_buttons }`, what the window has of
-  the platform's own), `set_title` (the page sets it with `document.title`, `lib/api/shell.ts`), and
-  `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
+The atm app as a desktop app (`docs/app-desktop-ui-design.md`, T-511 to T-520): one row of tabs in the window's own
+title bar, a sidebar of the workspace's projects, a status bar, the menus, Settings as a sheet, windows that come back
+as they were, and what needs you on the app's icon and as notifications. The browser dashboard keeps its look; it
+gets the faster project switches and the fixes.
 
 ### Added
 - **The app's windows come back as they were** (T-518, step 8, §7): each window's frame (place, size, maximized) and
@@ -111,11 +100,25 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   already did), so a reload or a switch builds no view nobody sees; reloads got faster too. `performance.spec.ts`
   times the app's tabs: a click on each, ⌃Tab round them, and a switch to another project and back; and the List
   among the browser's tab switches.
+- **The app's windows** (T-511, step 1 of `docs/app-desktop-ui-design.md`): the groundwork for several windows and
+  the page's own shell. The app's windows are `main` and `window-<n>`, both in the capability (`"windows": ["main",
+  "window-*"]`). Subscriptions belong to the window whose page made them: a page loading again or a window closing
+  ends only its own (`AppState::unwatch_window`, replacing `unwatch_all`), and `unsubscribe` ends only the calling
+  window's. Links go to each window's page (`Links` by window); deep links and a second instance go to the window in
+  front (the last focused), or a new one when none is open. Three new commands, each acting on the calling window:
+  `shell` (`{ system_menu_bar, system_window_buttons }`, what the window has of the platform's own), `set_title` (the
+  page sets it with `document.title`, `lib/api/shell.ts`), and `open_window(address)`, which takes only one of the
+  dashboard's pages, checked as a deep link is.
 
 ### Fixed
 - **The overview's "N need you" list showed under the next card** when it ran past its own card (a long list, or a
   narrow window): a hovered card's lift (a transform) kept the list in the card's own layer. The card is now over the
   others while its list is open; `projects.spec.ts` checks the whole list is on top, with motion on.
+
+### Development
+- **`cargo tauri dev` follows the dashboard's sources:** its `beforeDevCommand` starts `pnpm run watch:page`
+  (`dashboard/build/watch-page.ts`), which builds the page again a few seconds after a change; the Tauri CLI's server
+  reloads the window. A page change no longer needs a build and a restart.
 
 ## [0.35.0] - 2026-11-10
 
