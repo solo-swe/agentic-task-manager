@@ -104,6 +104,7 @@
   }
   .app-tab-new {
     align-self: center;
+    flex: 0 0 28px;
     background: none;
     border: none;
     border-radius: var(--radius-sm);
