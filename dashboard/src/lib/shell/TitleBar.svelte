@@ -23,8 +23,9 @@
     charts?: Snippet;
     /** The second row, below everything else */
     below?: Snippet;
-    /** In the atm app, inside the tab (T-513): the tab carries the title, the app's title bar the window's title,
-     * and View ▸ Reload the reload button; the subtitle, the charts and the ⋯ stay */
+    /** In the atm app, inside the tab (T-513): only the subtitle line; the tab carries the title and the project
+     * picker, the app's title bar the charts and the ⋯, View ▸ Reload the reload button, Help ▸ What's New the
+     * version chip */
     inTab?: boolean;
   }
   let { title, selector = true, subtitle, charts, below, inTab = false }: Props = $props();
@@ -49,33 +50,39 @@
 
 <svelte:window onscroll={() => (scrolled = compactAt(window.scrollY))} />
 
-<header class="topbar" class:scrolled class:in-tab={inTab}>
-  <div class="title-block">
-    <div class="title-row">
-      <!-- In the app the tab is labelled with them (T-513); the pickers stay until the sidebar (T-515) -->
-      {#if !inTab}
+{#if inTab}
+  <!-- In the app, inside the tab (T-513): only the subtitle line, on top of the tab's content; the tab label has the
+       title, its logo and the project picker, the app's title bar the charts and the ⋯ (AppTitleBar) -->
+  <header class="topbar in-tab">
+    <p class="subtitle" id="subtitle">{@render subtitle()}</p>
+    {@render below?.()}
+  </header>
+{:else}
+  <header class="topbar" class:scrolled>
+    <div class="title-block">
+      <div class="title-row">
         {#if project}<ProjectLogo {project} size={26} />{/if}
         <h1 id="dashboard-title">{title}</h1>
-      {/if}
-      {#if selector}<ProjectSelector />{/if}
-      <WorkspaceSelector />
-      {#if version}
-        <button
-          class="version-chip"
-          class:unseen={dashboard.releaseNotesUnseen}
-          id="version-chip"
-          title="What's new"
-          onclick={() => dashboard.openWhatsNew()}
-          >v{version}{#if dashboard.releaseNotesUnseen}<span class="version-new">new</span>{/if}</button
-        >
-      {/if}
+        {#if selector}<ProjectSelector />{/if}
+        <WorkspaceSelector />
+        {#if version}
+          <button
+            class="version-chip"
+            class:unseen={dashboard.releaseNotesUnseen}
+            id="version-chip"
+            title="What's new"
+            onclick={() => dashboard.openWhatsNew()}
+            >v{version}{#if dashboard.releaseNotesUnseen}<span class="version-new">new</span>{/if}</button
+          >
+        {/if}
+      </div>
+      <p class="subtitle" id="subtitle">{@render subtitle()}</p>
     </div>
-    <p class="subtitle" id="subtitle">{@render subtitle()}</p>
-  </div>
-  {@render charts?.()}
-  <div class="topbar-controls">
-    {#if !inTab}<RefreshMenu />{/if}
-    <SettingsMenu />
-  </div>
-  {@render below?.()}
-</header>
+    {@render charts?.()}
+    <div class="topbar-controls">
+      <RefreshMenu />
+      <SettingsMenu />
+    </div>
+    {@render below?.()}
+  </header>
+{/if}

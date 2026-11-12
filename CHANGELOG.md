@@ -34,8 +34,10 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `tauri.conf.json`); on Windows and Linux the window has no decorations (`windows::dress`, with Windows 11's shadow)
   and the page draws the menus (`AppMenus.svelte`, Bits UI's menubar, from `menu`) and its minimize, maximize and
   close buttons (new commands `minimize`, `toggle_maximize`, `close_window`), and a + (a new window until tabs,
-  T-514); the overview's tab has atm's logo. Everything else is inside the tab: the page's header as the browser's,
-  without its title and reload button (`TitleBar`'s `inTab`: View ▸ Reload has it), pinned under the app's bar.
+  T-514); the overview's tab has atm's logo, and the tab's label the project picker. At the bar's right end, on the
+  tab's line: the workspace picker, search and Filters, the Progress and Activity pills and the ⋯. Inside the tab
+  only the subtitle line (`TitleBar`'s `inTab`), on top of the views; no reload button (View ▸ Reload) or version
+  chip (Help ▸ What's New) in the app.
   Dragging the bar moves the window (`start_dragging`), a double click maximizes it. The Windows and Linux paths are
   checked on those platforms by T-519.
 

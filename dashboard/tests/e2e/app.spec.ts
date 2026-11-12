@@ -69,9 +69,13 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#dashboard-title')).toHaveCount(1);
     await expect(page.locator('#app-tab-new')).toBeVisible();
     await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
+    // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
+    // the tab only the subtitle line; no reload button or version chip
+    await expect(page.locator('#app-tab-current #project-selector')).toBeVisible();
+    await expect(page.locator('#app-titlebar-end #filters')).toBeVisible();
     await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
-    await expect(page.locator('.topbar.in-tab #filters')).toBeVisible();
     await expect(page.locator('#reload-btn')).toHaveCount(0);
+    await expect(page.locator('#version-chip')).toHaveCount(0);
     await expect(page.locator('#window-buttons')).toHaveCount(0);
     await expect(page.locator('#app-menus')).toHaveCount(0);
     await page.locator('#tab-list').click();

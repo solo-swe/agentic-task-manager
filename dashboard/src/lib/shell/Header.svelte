@@ -10,6 +10,8 @@
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
   import AppTitleBar from './AppTitleBar.svelte';
+  import SettingsMenu from './SettingsMenu.svelte';
+  import WorkspaceSelector from './WorkspaceSelector.svelte';
   import { inApp } from '../api/http';
 
   const onProject = $derived(dashboard.route.page === 'project');
@@ -38,8 +40,22 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs; the page's header is then inside the tab -->
-{#if inApp}<AppTitleBar {title} />{/if}
+<!-- The atm app's own title bar (T-513): the window's, its tabs, and at its right end what the browser's title bar has
+     at its right (search and Filters, the charts, the ⋯); inside the tab, only the subtitle line -->
+{#snippet appEnd()}
+  <WorkspaceSelector />
+  {#if onProject}
+    {#if dashboard.loaded}
+      <Filters />
+      <ProgressWidget />
+      <ActivityWidget />
+    {/if}
+  {:else if dashboard.route.page === 'overview'}
+    <OverviewActivity />
+  {/if}
+  <SettingsMenu />
+{/snippet}
+{#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
 {#if onProject}
   <TitleBar {title} inTab={inApp}>
     {#snippet subtitle()}

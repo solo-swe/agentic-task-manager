@@ -5,7 +5,8 @@
   // (T-514 adds the others), and a +. Everything else is inside the tab: the page's own header (TitleBar, `inTab`)
   // with its subtitle, search and Filters, Progress and Activity, and the ⋯ settings. Dragging the bar moves the
   // window, a double click maximizes it. The browser keeps its own title bar.
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
+  import ProjectSelector from './ProjectSelector.svelte';
   import {
     appShell,
     closeWindow,
@@ -21,7 +22,7 @@
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import AppMenus from './AppMenus.svelte';
 
-  let { title }: { title: string } = $props();
+  let { title, end }: { title: string; end?: Snippet } = $props();
 
   // Until the app says, neither the platform's buttons nor the page's: nothing drawn twice
   let shell = $state<AppShell | null>(null);
@@ -54,10 +55,14 @@
       <!-- A project's logo; on the overview and the other pages, atm's -->
       {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} id="app-tab-logo" />{/if}
       <h1 id="dashboard-title">{title}</h1>
+      <!-- The project picker, in the tab's label -->
+      {#if dashboard.projects.length > 0}<ProjectSelector />{/if}
     </div>
     <!-- A new tab (T-514); until tabs exist, a new window at the overview -->
     <button class="app-tab-new" id="app-tab-new" title="New Tab" onclick={() => void openWindow('/')}>+</button>
   </div>
+  <!-- At the bar's right end, on the tab's line: search and Filters, the charts, the ⋯ -->
+  <div class="app-titlebar-end" id="app-titlebar-end" data-no-drag>{@render end?.()}</div>
   {#if shell && !shell.system_window_buttons}
     <div class="window-buttons" id="window-buttons">
       <button class="window-button" id="window-minimize" title="Minimize" onclick={() => void minimizeWindow()}
@@ -89,6 +94,13 @@
     user-select: none;
     /* Over the page's header pinned under it */
     z-index: 50;
+  }
+  .app-titlebar-end {
+    align-items: center;
+    display: flex;
+    gap: var(--space-3);
+    margin-left: auto;
+    min-width: 0;
   }
   .app-tab-new {
     align-self: center;
@@ -144,7 +156,6 @@
     align-self: stretch;
     align-items: center;
     display: flex;
-    margin-left: auto;
   }
   .window-button {
     background: none;

@@ -570,14 +570,15 @@ h1 {
     padding 0.2s ease,
     box-shadow 0.2s ease;
 }
-/* In the atm app, inside the tab (T-513): under the app's title bar (40px), pinned just below it */
+/* In the atm app, inside the tab (T-513): the subtitle line alone, pinned under the app's title bar (40px), right on
+   top of the tab's content, with no hairline */
 .topbar.in-tab {
   top: 40px;
   margin-top: 0;
-  padding-top: var(--space-5);
+  padding: var(--space-3) var(--space-9) var(--space-2);
 }
 .topbar.in-tab::before {
-  top: calc(var(--space-5) + 42px);
+  display: none;
 }
 /* A hairline under the title row, edge to edge (T-323): the title and the pills share the band above it, the
    subtitle sits below. 24px padding + the 36px title row + 6px */

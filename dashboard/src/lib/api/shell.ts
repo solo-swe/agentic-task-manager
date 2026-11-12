@@ -59,7 +59,9 @@ export const startDragging = () => windowCommand('start_dragging');
 export function onBarMouseDown(e: MouseEvent): void {
   if (e.button !== 0) return;
   const target = e.target as Element | null;
-  if (target?.closest('button, a, input, select, textarea, [role="menuitem"], [role="menubar"], [role="tab"]')) return;
+  const controls =
+    'button, a, input, select, textarea, [role="menuitem"], [role="menubar"], [role="tab"], [data-no-drag]';
+  if (target?.closest(controls)) return;
   e.preventDefault();
   void (e.detail === 2 ? toggleMaximizeWindow() : startDragging());
 }
