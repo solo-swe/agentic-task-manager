@@ -15,6 +15,7 @@
   import LandingPage from './lib/shell/LandingPage.svelte';
   import UpdateNotice from './lib/shell/UpdateNotice.svelte';
   import Sidebar from './lib/shell/Sidebar.svelte';
+  import SettingsSheet from './lib/dialogs/SettingsSheet.svelte';
   import { inApp } from './lib/api/http';
 
   onMount(() => {
@@ -54,3 +55,5 @@
 <AboutDialog />
 <AgentsDialog />
 <HelpDialog />
+<!-- The app's Settings, a sheet (T-517); the browser's are the ⋯ popup -->
+{#if inApp}<SettingsSheet />{/if}

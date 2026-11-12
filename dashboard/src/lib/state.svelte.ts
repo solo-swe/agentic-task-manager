@@ -190,6 +190,14 @@ export class DashboardState {
     setPref('sidebarOpen', this.sidebarOpen);
   }
 
+  /** The app's icon shows the needs-you count (Settings, T-517; the badge itself is T-518's); remembered */
+  needsYouBadge = $state(getPref('needsYouBadge', true));
+
+  setNeedsYouBadge(on: boolean) {
+    this.needsYouBadge = on;
+    setPref('needsYouBadge', on);
+  }
+
   /** A project's page is shown */
   get onProject(): boolean {
     return this.route.page === 'project';

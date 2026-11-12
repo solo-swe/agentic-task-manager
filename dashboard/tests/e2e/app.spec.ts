@@ -56,6 +56,45 @@ test.describe('the dashboard in the atm app', () => {
     await expect(page.locator('#about-overlay')).toHaveClass(/open/);
   });
 
+  test('Settings is a sheet (T-517): from the menu’s Settings… and the ⋯, with the badge’s switch', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+    // No popup in the app: the sheet only
+    await expect(page.locator('#settings-menu')).toHaveCount(0);
+
+    await tasksServer.chooseMenu({ kind: 'settings' });
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    const sheet = page.locator('#settings-sheet');
+    await expect(sheet.locator('#mode-control')).toBeVisible();
+    await expect(sheet.locator('#theme-select')).toBeVisible();
+    await expect(sheet.locator('#doc-style-select')).toBeVisible();
+    await expect(sheet.locator('#reset-view')).toBeVisible();
+    // The badge's switch, remembered
+    const badge = sheet.locator('#needs-you-badge-check');
+    await expect(badge).toBeChecked();
+    await sheet.locator('label:has(#needs-you-badge-check)').click();
+    await expect(badge).not.toBeChecked();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('atm-dashboard') ?? '{}').needsYouBadge)).toBe(
+      false,
+    );
+    // A setting applies at once
+    await sheet.locator('[data-mode="dark"]').click();
+    await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
+
+    // The title bar's ⋯ opens it too
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#settings-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings-overlay')).not.toHaveClass(/open/);
+  });
+
   test('the title bar (T-513): on macOS the system’s buttons and menu bar; elsewhere the page draws them', async ({
     page,
     tasksServer,

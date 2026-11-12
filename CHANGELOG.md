@@ -23,6 +23,15 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   `open_window(address)`, which takes only one of the dashboard's pages, checked as a deep link is.
 
 ### Added
+- **The app's Settings sheet** (T-517, step 7, §6): the menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux)
+  and the title bar's ⋯ open a sheet over the window (a Bits UI dialog, `dialogs/SettingsSheet.svelte`) with the
+  mode, theme, document style and Reset this project's view, and a new switch, App icon ▸ Show what needs you (the
+  `needsYouBadge` preference, on by default; T-518 draws the badge). The controls are one component,
+  `shell/SettingsPanel.svelte`, which the browser's ⋯ popup shows unchanged. The dashboard file's size check is
+  raised from 850 to 900 KiB for the app's UI this sprint adds (decided with Hakan).
+- **Search and Filters in the app's tab** (T-516): on the subtitle's line, before it, the Filters button its icon
+  alone (its name kept for screen readers) and its popup opening to the right; the title bar keeps the tabs, the
+  workspace picker, the pills and the ⋯.
 - **The app's status bar** (T-516, step 6, §5; the minimal one Hakan chose): in the app the footer is a one-line
   status bar at the window's bottom: "Up to date" (or that the project can't be read) and the agents at work (a click
   opens the Agents view, the project's or the overview's) at the left; the archive and problem notices, the copyright,

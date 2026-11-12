@@ -82,8 +82,9 @@ looked wrong): the window buttons (macOS: the system's, at the left; Windows and
 the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at its left.
 A tab's label is its project's logo and name (or "Projects Overview"), nothing else.
 
-**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker, search and Filters, the Progress and
-Activity pills and the ⋯ settings (until the sheet, §6). The tab's label has the project picker after the name. The
+**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker, the Progress and Activity pills and the ⋯,
+which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
+its icon alone (Hakan, T-516). The tab's label has the project picker after the name. The
 version chip goes (Help ▸ What's New). **Inside the tab** only the subtitle line (counts, archived, the needs-you
 chip), directly on top of the views (Graph, Kanban, List, …), with no hairline. The overview's tab is labelled with
 atm's logo. **No reload button:** the page reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the
@@ -258,7 +259,8 @@ the window in front.
 - **Shortcuts are the menu's accelerators** (§1a), shown in the menu; on macOS remappable in System Settings. The
   page's own keys in the browser stay; in the app the page leaves the ones the menu has to it, so none fires twice.
 - **Settings** (⌘,) opens the settings as a sheet over the window: the ⋯ menu's content (mode, theme, document style,
-  reset the view), laid out as a settings pane. The ⋯ menu stays in the browser. A settings window of its own would
+  reset the view), laid out as a settings pane, with the badge's switch (§7). The ⋯ popup stays in the browser; in
+  the app the title bar's ⋯ opens the sheet too (T-517: easier to find than the menu alone). A settings window of its own would
   be a second page sharing the preferences through `localStorage` (one origin, so other windows see a change through
   the `storage` event); it is the next step if the sheet feels wrong.
 

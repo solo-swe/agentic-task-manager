@@ -35,6 +35,8 @@ export interface Prefs {
   sidebarOpen: boolean;
   /** The app's sidebar's width, in pixels (T-515) */
   sidebarWidth: number;
+  /** The app's icon shows the workspace's needs-you count (T-517's switch, T-518's badge) */
+  needsYouBadge: boolean;
 }
 
 function storage(): Storage | null {

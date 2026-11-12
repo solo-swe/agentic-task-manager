@@ -14,8 +14,9 @@ const BUILT = TARGET;
 // (decided with Hakan, 2026-11-03), and from 600 KiB in 0.31.0 for SvelteKit's runtime (about 60 kB, 23 kB gzipped;
 // decided with Hakan, T-428). Raised from 650 KiB in 0.31.0 for Bits UI (about 150 kB; T-431): the size is no longer
 // a target, until the move to Rust and Tauri sets the new ones (decided with Hakan, 2026-11-06); this only catches
-// a runaway build
-const MAX_BYTES = 850 * 1024;
+// a runaway build. Raised from 850 KiB in 0.36.0 for the desktop app's own UI (menus, sidebar, title bar and tabs,
+// status bar, Settings sheet; decided with Hakan, T-517)
+const MAX_BYTES = 900 * 1024;
 
 test.describe('shipped dashboard file', () => {
   const html = () => readFileSync(BUILT, 'utf8');

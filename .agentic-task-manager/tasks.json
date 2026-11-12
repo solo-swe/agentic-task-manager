@@ -18906,7 +18906,7 @@
       "description": "Step 6 of [the desktop app design](docs/app-desktop-ui-design.md) ([§5](docs/app-desktop-ui-design.md#5-the-status-bar)).\n\n## Change\nIn the app only, the footer becomes a one-line status bar (about 24 px, tokens only):\n- **left:** \"Up to date\" while the app watches the project (T-506), or why not; the agents at work (from `claims`), \"2 agents working\", a click opens the Agents view;\n- **middle:** the active sprint's name and progress (`ProgressWidget`'s numbers, as text);\n- **right:** the archive and problems notices (as now) and the version, which opens What's new.\n\nGitHub, Help, About and Connect your agents are in the menus (step 2), so they leave the app's footer. The browser keeps its footer.\n\n## Checks\nComponent tests for the status bar; the app e2e specs; by hand on macOS.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-512"
       ],
@@ -18915,7 +18915,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T13:58:12Z",
+      "updated_at": "2026-11-12T14:17:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18930,7 +18930,17 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-12T13:31:32Z",
       "started_by": "claude:34798264",
-      "commit": "6b814525ed558ecbba00996d4c0364d9b15a50ba"
+      "commit": "0853c1f80f81669236d7bbdc9100671c98f5ca6c",
+      "completed_at": "2026-11-12T14:17:26Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T14:17:26Z",
+          "kind": "outcome",
+          "text": "The app’s status bar (live state, agents working, notices, copyright, version, GitHub, Help, About) in place of the footer; also search and Filters inside the tab before the subtitle, an icon-only Filters button, its popup opening rightwards. Browser UI unchanged: 84 screenshots pass.",
+          "by": "claude:34798264"
+        }
+      ]
     },
     {
       "id": "T-517",
@@ -18945,7 +18955,7 @@
       "description": "Step 7 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)). Decided: a sheet first; a window of its own only if the sheet feels wrong.\n\n## Change\nThe menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux) opens a sheet over the window (a Bits UI dialog): the ⋯ menu's content (mode, theme, document style, reset the view) laid out as a settings pane, plus the badge's on/off switch for step 8. The ⋯ menu stays in the browser; in the app it leaves the header.\n\n## Checks\nComponent tests for the sheet; the app e2e specs; by hand on macOS.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-512"
       ],
@@ -18954,7 +18964,7 @@
         "dashboard/src/lib/dialogs/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-12T14:17:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18966,7 +18976,9 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T14:17:31Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-518",
