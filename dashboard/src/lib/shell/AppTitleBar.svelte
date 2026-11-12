@@ -67,12 +67,15 @@
 </header>
 
 <style>
+  /* The window's own title bar: everything on its middle line, macOS's traffic lights too (trafficLightPosition's
+     y, 26, centres them at 20 px: macOS makes their strip the buttons' height plus y, and centres them in it) */
   .app-titlebar {
-    align-items: flex-end;
+    align-items: center;
     background: var(--surface2);
+    border-bottom: 1px solid var(--border);
     display: flex;
     gap: var(--space-3);
-    height: 38px;
+    height: 40px;
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
@@ -85,23 +88,22 @@
     padding-left: var(--traffic-lights);
   }
   .app-tabs {
-    align-self: stretch;
-    align-items: flex-end;
+    align-items: center;
     display: flex;
     gap: var(--space-1);
     min-width: 0;
   }
-  /* The tab joins the page under it: the page's background, rounded at the top */
+  /* A tab in the title bar, as Notion's: a rounded chip on the bar's middle line, the active one lighter */
   .app-tab {
     align-items: center;
-    background: var(--bg);
-    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    background: var(--surface);
+    border-radius: var(--radius-md);
     display: flex;
     gap: var(--space-2);
-    height: 30px;
+    height: 28px;
     max-width: 240px;
     min-width: 0;
-    padding: 0 var(--space-4);
+    padding: 0 var(--space-3);
   }
   .app-tab h1 {
     font-size: var(--text-sm);
@@ -112,7 +114,8 @@
     white-space: nowrap;
   }
   .window-buttons {
-    align-self: flex-start;
+    align-self: stretch;
+    align-items: center;
     display: flex;
     margin-left: auto;
   }
