@@ -66,6 +66,43 @@ export function onBarMouseDown(e: MouseEvent): void {
   void (e.detail === 2 ? toggleMaximizeWindow() : startDragging());
 }
 
+/** A window's tabs as the app keeps them for the next start (T-518): their addresses, in order, and the active one */
+export interface KeptTabs {
+  addresses: string[];
+  active: number;
+}
+
+/** The tabs the window comes back with when the app starts (once; none for a new window or a reload) */
+export async function restoredTabs(): Promise<KeptTabs | null> {
+  try {
+    const kept = await invoke<KeptTabs | null>('restored_tabs');
+    if (!kept) return null;
+    const addresses = kept.addresses.map(linkTarget).filter((a): a is string => a !== null);
+    return addresses.length ? { addresses, active: Math.min(kept.active, addresses.length - 1) } : null;
+  } catch (e) {
+    console.error('Asking the app for the window’s tabs failed:', e);
+    return null;
+  }
+}
+
+/** The window's tabs, for the app to bring back next time (T-518) */
+export async function saveTabs(tabs: KeptTabs): Promise<void> {
+  try {
+    await invoke('save_tabs', { tabs });
+  } catch (e) {
+    console.error('Keeping the window’s tabs failed:', e);
+  }
+}
+
+/** The app's badge (T-518): `count` on its icon, none (or 0) for no badge */
+export async function setBadge(count: number | null): Promise<void> {
+  try {
+    await invoke('set_badge', { count: count && count > 0 ? count : null });
+  } catch (e) {
+    console.error('Setting the app’s badge failed:', e);
+  }
+}
+
 /** Open a new window at `address`, one of the dashboard's pages (the app checks it again); whether it opened */
 export async function openWindow(address: string): Promise<boolean> {
   const target = linkTarget(address);

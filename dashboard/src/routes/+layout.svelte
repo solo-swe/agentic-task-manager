@@ -28,6 +28,8 @@
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
   import { listenForMenu, reportMenuState } from '../lib/api/menu';
+  import { restoredTabs, saveTabs, setBadge } from '../lib/api/shell';
+  import { needsYou } from '../lib/projects';
   import { appTabs } from '../lib/app-tabs.svelte';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
   import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
@@ -69,11 +71,16 @@
     // In the atm app: the window's tabs, from the page shown (T-514); its atm:// links open their page, the one it was
     // started with here, later ones in a new tab (T-459); its menu's items do what their controls do (T-512)
     if (inApp) {
-      appTabs.start(addressOf(location));
-      void listenForLinks(
-        (address) => navigate(address),
-        (address) => tabs.open(address),
-      ).catch((e) => console.error('Deep links:', e));
+      // As the app starts, the window's tabs as they were when it last quit (T-518): the active one is shown, and a
+      // link the app was started with opens in a new tab of them
+      void restoredTabs().then((restored) => {
+        const back = appTabs.start(addressOf(location), restored);
+        if (back) navigate(back, { replace: true });
+        void listenForLinks(
+          (address) => (back ? tabs.open(address) : navigate(address)),
+          (address) => tabs.open(address),
+        ).catch((e) => console.error('Deep links:', e));
+      });
       void listenForMenu((action) => runMenuAction(action, dashboard, undefined, tabs)).catch((e) =>
         console.error('The menu:', e),
       );
@@ -83,6 +90,17 @@
   // In the atm app, what the menu shows checked follows the page (T-512)
   $effect(() => {
     if (inApp) void reportMenuState(menuStateOf(dashboard));
+  });
+
+  // In the atm app, the window's tabs are kept for the next start as they change (T-518)
+  $effect(() => {
+    if (inApp && appTabs.tabs.length > 0) void saveTabs(appTabs.kept);
+  });
+
+  // In the atm app, the workspace's needs-you count on the app's icon, unless Settings turns it off (T-518)
+  const waiting = $derived(dashboard.projects.filter((p) => !p.missing).reduce((n, p) => n + needsYou(p), 0));
+  $effect(() => {
+    if (inApp && dashboard.projectsLoaded) void setBadge(dashboard.needsYouBadge ? waiting : null);
   });
 
   // In the atm app the page reacts to changes (T-506): the app says when the workspace's list or the open project's

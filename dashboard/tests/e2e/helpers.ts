@@ -540,6 +540,12 @@ export class TasksServer {
   windowShell = { system_menu_bar: true, system_window_buttons: true };
   /** The window commands the page called (T-513), in order */
   windowCalls: string[] = [];
+  /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
+  restoredTabs: { addresses: string[]; active: number } | null = null;
+  /** The tabs the page last kept for the next start (`save_tabs`) */
+  savedTabs: { addresses: string[]; active: number } | null = null;
+  /** The badges the page set (`set_badge`), in order: a count, or null for none */
+  badges: (number | null)[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -718,6 +724,18 @@ export class TasksServer {
         };
       case 'set_title':
         this.windowTitles.push(String(args.title));
+        return { ok: null };
+      // The windows' tabs kept for the next start, and the badge (T-518)
+      case 'restored_tabs': {
+        const restored = this.restoredTabs;
+        this.restoredTabs = null;
+        return { ok: restored };
+      }
+      case 'save_tabs':
+        this.savedTabs = args.tabs as { addresses: string[]; active: number };
+        return { ok: null };
+      case 'set_badge':
+        this.badges.push((args.count as number | null) ?? null);
         return { ok: null };
       // The menu (T-512)
       case 'subscribe_menu':

@@ -86,6 +86,24 @@ describe('the app’s tabs (T-514): a tab is an address', () => {
     expect(addresses(fresh)).toEqual(['/']);
   });
 
+  it('comes back with the tabs the app kept (T-518): the active one to go to; a reload keeps its own', () => {
+    const storage = memory();
+    const tabs = new AppTabs(storage);
+    expect(tabs.start('/', { addresses: ['/projects/a', '/board'], active: 1 })).toBe('/board');
+    expect(addresses(tabs)).toEqual(['/projects/a', '/board']);
+    expect(tabs.kept).toEqual({ addresses: ['/projects/a', '/board'], active: 1 });
+    tabs.select(tabs.tabs[0].id);
+    expect(tabs.kept.active).toBe(0);
+    // A reload: the window's own tabs, whatever the app says
+    const reloaded = new AppTabs(storage);
+    expect(reloaded.start('/projects/a', { addresses: ['/x'], active: 0 })).toBeNull();
+    expect(addresses(reloaded)).toEqual(['/projects/a', '/board']);
+    // Nothing kept, or an active place out of range
+    expect(new AppTabs().start('/', null)).toBeNull();
+    const out = new AppTabs();
+    expect(out.start('/', { addresses: ['/a', '/b'], active: 9 })).toBe('/a');
+  });
+
   it('names a tab’s project from its address', () => {
     expect(tabProject('/projects/abc/list?task=T-1')).toBe('abc');
     expect(tabProject('/w/work/projects/abc')).toBe('abc');

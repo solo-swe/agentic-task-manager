@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use crate::links::Links;
 use crate::menu::Menus;
+use crate::session::Session;
 use atm_lib::Workspaces;
 use atm_lib::query::Filters;
 use atm_lib::workspaces::{Member, Workspace};
@@ -49,6 +50,8 @@ pub struct AppState {
     next_window: AtomicU32,
     /// Each window's page's menu channel and what its menu shows (T-512)
     menus: Menus,
+    /// The windows' frames and tabs, kept for the next start (T-518)
+    session: Session,
 }
 
 impl AppState {
@@ -63,7 +66,14 @@ impl AppState {
             front: Mutex::new(None),
             next_window: AtomicU32::new(1),
             menus: Menus::default(),
+            session: Session::default(),
         }
+    }
+
+    /// The windows as they are, kept for the next start.
+    #[must_use]
+    pub fn session(&self) -> &Session {
+        &self.session
     }
 
     /// Each window's menu channel and state.

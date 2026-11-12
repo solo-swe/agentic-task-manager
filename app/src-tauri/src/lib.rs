@@ -4,13 +4,18 @@
 //! edited by hand). The window may call only the commands its capability lists (`capabilities/main.json`).
 
 pub mod assets;
+pub mod badge;
 pub mod commands;
 pub mod links;
 pub mod menu;
+pub mod session;
 pub mod updates;
 pub mod windows;
 
 use tauri::Manager;
+
+use badge::set_badge;
+use session::{restored_tabs, save_tabs};
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
@@ -59,6 +64,9 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         toggle_maximize::<tauri::Wry>,
         close_window::<tauri::Wry>,
         start_dragging::<tauri::Wry>,
+        save_tabs::<tauri::Wry>,
+        restored_tabs::<tauri::Wry>,
+        set_badge::<tauri::Wry>,
     ])
 }
 
@@ -93,7 +101,10 @@ pub fn run() {
             // The main window's frame for the page's title bar (T-513); new windows get theirs as they are made
             if let Some(window) = app.get_webview_window(windows::MAIN) {
                 windows::dress(&window);
+                app.state::<AppState>().session().opened(window.label());
             }
+            // The windows as they were when the app last quit, with their tabs (T-518)
+            session::restore(app.handle());
             Ok(())
         })
         .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))
@@ -111,11 +122,30 @@ pub fn run() {
                         menu::refresh(app);
                     }
                 }
+                // A window closed by the user (or its page's last tab) is forgotten; one destroyed as the app quits
+                // is kept, to come back (T-518)
+                tauri::WindowEvent::CloseRequested { .. } => state.session().closing(&label),
                 tauri::WindowEvent::Destroyed => {
                     state.window_closed(&label);
+                    if state.session().destroyed(&label) {
+                        let _ = state.session().write();
+                    }
+                }
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    if let Some(frame) = app
+                        .get_webview_window(&label)
+                        .as_ref()
+                        .and_then(session::frame_of)
+                    {
+                        state.session().framed(&label, frame);
+                    }
                 }
                 _ => {}
             }
+        }
+        // The windows' last frames, as the app quits
+        tauri::RunEvent::Exit => {
+            let _ = app.state::<AppState>().session().write();
         }
         // macOS hands the app the links it is opened with (the scheme is in Info.plist), started by one or running
         #[cfg(target_os = "macos")]

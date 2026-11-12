@@ -1,6 +1,6 @@
 // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
 // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
-import { addressOf, expect, loadFixture, test } from './helpers';
+import { addressOf, expect, loadFixture, summary, test } from './helpers';
 
 test.describe('the dashboard in the atm app', () => {
   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
@@ -296,6 +296,50 @@ test.describe('the dashboard in the atm app', () => {
     await expect(harness.locator('.agents-harness-state')).toHaveText('Connected');
     await expect(harness.locator('.agents-connect')).toHaveText('Connect Claude Code again');
     expect(tasksServer.agentCalls).toEqual(['agents_status', 'connect_agents claude', 'agents_status']);
+  });
+
+  test('windows come back with their tabs (T-518): the active one shown, a start link in a new tab; changes are kept', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const first = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: [first, '/projects/second/list'], active: 1 };
+    tasksServer.link('/board');
+    await page.goto('/');
+    // The two tabs, the second active, then the start link's tab after it
+    await expect(page.locator('.title-bar-tab')).toHaveCount(3);
+    await expect.poll(() => addressOf(page)).toMatch(/^\/board(\?|$)/);
+    await expect(page.locator('.title-bar-tab').nth(0)).toContainText('Standard Project');
+    await expect(page.locator('.title-bar-tab').nth(1)).toContainText('Second Project');
+    // What the window shows is kept for the next start
+    await expect
+      .poll(() => tasksServer.savedTabs)
+      .toEqual({ addresses: [first, '/projects/second/list', '/board'], active: 2 });
+    await page.locator('.title-bar-tab').nth(0).locator('[role="tab"]').click();
+    await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
+  });
+
+  test('the needs-you badge (T-518): the workspace’s count on the app’s icon, off in Settings', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    // Two in review and one blocked on the user in another project of the workspace
+    tasksServer.addProject(
+      'second',
+      'minimal',
+      'Second Project',
+      summary({ needs_you: { review: 2, blocked_on_user: 1 } }),
+    );
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    await expect.poll(() => tasksServer.badges.at(-1)).toBe(3);
+    await tasksServer.chooseMenu({ kind: 'settings' });
+    await page.locator('label:has(#needs-you-badge-check)').click();
+    await expect.poll(() => tasksServer.badges.at(-1)).toBeNull();
   });
 
   test('deep links (T-459): the one the app was started with opens its page; a later one too; anything else is ignored', async ({

@@ -79,6 +79,7 @@ pub fn build_window<R: Runtime>(
         }
     }?;
     dress(&window);
+    app.state::<AppState>().session().opened(label);
     Ok(window)
 }
 
