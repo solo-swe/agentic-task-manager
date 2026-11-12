@@ -65,14 +65,19 @@ test.describe('the dashboard in the atm app', () => {
     await page.goto('/');
     // One row: the tab, labelled with the project's name, and a +; the page's header, its subtitle, Filters and the
     // charts are inside the tab, under it, without a second title
-    await expect(page.locator('#app-titlebar #app-tab-current #dashboard-title')).toHaveText('Standard Project');
+    await expect(page.locator('#app-titlebar #app-tab-current-label #dashboard-title')).toHaveText('Standard Project');
     await expect(page.locator('#dashboard-title')).toHaveCount(1);
     await expect(page.locator('#app-tab-new')).toBeVisible();
+    await expect(page.locator('#app-titlebar [role="tab"]')).toHaveCount(1);
     await expect(page.locator('#app-titlebar .view-tab')).toHaveCount(0);
     // The tab's label has the project picker; the bar's right end search and Filters, the charts and the ⋯; inside
     // the tab only the subtitle line; no reload button or version chip
-    await expect(page.locator('#app-tab-current #project-selector')).toBeVisible();
-    await expect(page.locator('#app-tab-current #other-projects-need')).toHaveCount(0);
+    await expect(page.locator('#app-tab-current-label #project-selector')).toBeVisible();
+    await expect(page.locator('#app-tab-current-label #other-projects-need')).toHaveCount(0);
+    // The chooser in the tab opens its menu (its click isn't the tab's)
+    await page.locator('#app-tab-current-label #project-selector').click();
+    await expect(page.locator('#project-menu')).toBeVisible();
+    await page.keyboard.press('Escape');
     await expect(page.locator('#app-titlebar-end #filters')).toBeVisible();
     await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
     await expect(page.locator('#reload-btn')).toHaveCount(0);

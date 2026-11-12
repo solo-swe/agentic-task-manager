@@ -20,6 +20,7 @@
   import { dashboard } from '../state.svelte';
   import Logo from '../ui/Logo.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
+  import TitleBarTabs from '../ui/TitleBarTabs.svelte';
   import AppMenus from './AppMenus.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
@@ -50,17 +51,23 @@
   onmousedown={onBarMouseDown}
 >
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
-  <div class="app-tabs" role="tablist" aria-label="Tabs">
-    <div class="app-tab" role="tab" aria-selected="true" id="app-tab-current">
+  <!-- The tabs (the reusable strip, ui/TitleBarTabs): for now the one, the page shown; a + for a new one (T-514; until
+       tabs exist, a new window at the overview) -->
+  <TitleBarTabs
+    tabs={[{ id: 'current' }]}
+    active="current"
+    idPrefix="app-tab-"
+    onselect={() => {}}
+    onnew={() => void openWindow('/')}
+  >
+    {#snippet label()}
       <!-- A project's logo; on the overview and the other pages, atm's -->
       {#if project}<ProjectLogo {project} size={16} />{:else}<Logo size={16} id="app-tab-logo" />{/if}
       <h1 id="dashboard-title">{title}</h1>
-      <!-- The project picker, in the tab's label -->
-      {#if dashboard.projects.length > 0}<ProjectSelector badge={false} />{/if}
-    </div>
-    <!-- A new tab (T-514); until tabs exist, a new window at the overview -->
-    <button class="app-tab-new" id="app-tab-new" title="New Tab" onclick={() => void openWindow('/')}>+</button>
-  </div>
+      <!-- The project chooser, a quiet chevron at the label's end -->
+      {#if dashboard.projects.length > 0}<span class="app-tab-chooser"><ProjectSelector badge={false} /></span>{/if}
+    {/snippet}
+  </TitleBarTabs>
   <!-- At the bar's right end, on the tab's line: search and Filters, the charts, the ⋯ -->
   <div class="app-titlebar-end" id="app-titlebar-end" data-no-drag>{@render end?.()}</div>
   {#if shell && !shell.system_window_buttons}
@@ -102,50 +109,13 @@
     margin-left: auto;
     min-width: 0;
   }
-  .app-tab-new {
-    align-self: center;
-    flex: 0 0 28px;
-    background: none;
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    font-size: var(--text-lg);
-    height: 28px;
-    margin-left: var(--space-1);
-    width: 28px;
-  }
-  .app-tab-new:hover {
-    background: var(--surface);
-    color: var(--text);
-  }
   /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
   .app-titlebar.system-buttons {
     --traffic-lights: 88px;
     padding-left: var(--traffic-lights);
   }
-  .app-tabs {
-    align-self: stretch;
-    display: flex;
-    min-width: 0;
-  }
-  /* A tab in the title bar, as Notion's: one fixed width for every tab, the bar's full height, between thin lines;
-     the active one in the page's background, over the bar's bottom line, so it joins the page under it. The name
-     takes the room left (cut short with …), the project chooser sits at the tab's right end */
-  .app-tab {
-    align-items: center;
-    border-left: 1px solid var(--border);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex: 0 0 220px;
-    gap: var(--space-2);
-    --hairline: 1px;
-    margin-bottom: calc(-1 * var(--hairline));
-    padding: 0 var(--space-2) 0 var(--space-4);
-  }
-  .app-tab[aria-selected='true'] {
-    background: var(--bg);
-  }
-  .app-tab h1 {
+  /* atm's tab label: the name takes the room left (cut short with …), the chooser sits at its right end */
+  h1 {
     flex: 1;
     font-size: var(--text-sm);
     font-weight: 600;
@@ -154,6 +124,18 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* The project chooser in the tab: a quiet chevron, no border or background (the browser's keeps its own) */
+  .app-tab-chooser :global(.project-switch) {
+    background: none;
+    border: none;
+    height: 22px;
+    width: 22px;
+  }
+  .app-tab-chooser :global(.project-switch:hover),
+  .app-tab-chooser :global(.project-switch[aria-expanded='true']) {
+    background: var(--surface);
+    border-radius: var(--radius-sm);
   }
   .window-buttons {
     align-self: stretch;
