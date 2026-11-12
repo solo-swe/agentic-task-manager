@@ -67,11 +67,11 @@
   {/if}
 {/snippet}
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs; before the tabs a project's search and Filters, at its
-     right end the rest of what the browser's title bar has at its right (the workspace picker, the pills, the ⋯);
-     inside the tab, only the subtitle line -->
-{#snippet appStart()}
-  {#if onProject && dashboard.loaded}{@render projectSearch()}{/if}
+<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the rest of what the browser's title
+     bar has at its right (the workspace picker, the pills, the ⋯); inside the tab, the subtitle line, a project's
+     search and Filters before it (Hakan) -->
+{#snippet tabSearch()}
+  {#if dashboard.loaded}{@render projectSearch()}{/if}
 {/snippet}
 {#snippet appEnd()}
   <WorkspaceSelector />
@@ -82,9 +82,9 @@
   {/if}
   <SettingsMenu />
 {/snippet}
-{#if inApp}<AppTitleBar {title} start={appStart} end={appEnd} />{/if}
+{#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
 {#if onProject}
-  <TitleBar {title} inTab={inApp} charts={projectCharts}>
+  <TitleBar {title} inTab={inApp} charts={projectCharts} lead={tabSearch}>
     {#snippet subtitle()}
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->

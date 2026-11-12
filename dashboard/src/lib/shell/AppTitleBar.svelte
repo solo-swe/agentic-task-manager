@@ -25,7 +25,7 @@
   import Icon from '../ui/Icon.svelte';
   import AppMenus from './AppMenus.svelte';
 
-  let { title, start, end }: { title: string; start?: Snippet; end?: Snippet } = $props();
+  let { title, end }: { title: string; end?: Snippet } = $props();
 
   const tabs = tabActions();
 
@@ -64,8 +64,6 @@
     aria-pressed={dashboard.sidebarOpen}
     onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
   >
-  <!-- After the sidebar's button, before the tabs: a project's search and Filters (Hakan) -->
-  {#if start}<div class="app-titlebar-start" id="app-titlebar-start" data-no-drag>{@render start()}</div>{/if}
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -89,7 +87,7 @@
       {/if}
     {/snippet}
   </TitleBarTabs>
-  <!-- At the bar's right end, on the tab's line: search and Filters, the charts, the ⋯ -->
+  <!-- At the bar's right end, on the tab's line: the workspace picker, the charts, the ⋯ -->
   <div class="app-titlebar-end" id="app-titlebar-end" data-no-drag>{@render end?.()}</div>
   {#if shell && !shell.system_window_buttons}
     <div class="window-buttons" id="window-buttons">
@@ -124,29 +122,6 @@
     user-select: none;
     /* Over the page's header pinned under it */
     z-index: 50;
-  }
-  .app-titlebar-start {
-    align-items: center;
-    display: flex;
-    flex: 0 0 auto;
-  }
-  /* The Filters popup opens from the bar's left end: under its button, to the right (the browser's, at the title
-     bar's right end, opens to the left) */
-  .app-titlebar-start :global(.filter-panel) {
-    left: 0;
-    right: auto;
-  }
-  /* In the bar, the Filters button is its icon: the label is for screen readers only (Hakan) */
-  .app-titlebar-start :global(.filters-label) {
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    position: absolute;
-    white-space: nowrap;
-    width: 1px;
-  }
-  .app-titlebar-start:empty {
-    display: none;
   }
   .app-titlebar-end {
     align-items: center;

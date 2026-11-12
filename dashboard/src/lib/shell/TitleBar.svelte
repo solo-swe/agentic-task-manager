@@ -27,8 +27,10 @@
      * picker, the app's title bar the charts and the ⋯, View ▸ Reload the reload button, Help ▸ What's New the
      * version chip */
     inTab?: boolean;
+    /** Inside the tab, before the subtitle, on its line (a project's search and Filters) */
+    lead?: Snippet;
   }
-  let { title, selector = true, subtitle, charts, below, inTab = false }: Props = $props();
+  let { title, selector = true, subtitle, charts, below, inTab = false, lead }: Props = $props();
 
   const version = dashboardVersion();
   // The open project, as api/projects lists it: its logo goes next to the title
@@ -54,7 +56,10 @@
   <!-- In the app, inside the tab (T-513): only the subtitle line, on top of the tab's content; the tab label has the
        title, its logo and the project picker, the app's title bar the charts and the ⋯ (AppTitleBar) -->
   <header class="topbar in-tab">
-    <p class="subtitle" id="subtitle">{@render subtitle()}</p>
+    <div class="in-tab-row">
+      {@render lead?.()}
+      <p class="subtitle" id="subtitle">{@render subtitle()}</p>
+    </div>
     {@render below?.()}
   </header>
 {:else}

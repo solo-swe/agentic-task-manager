@@ -582,6 +582,30 @@ h1 {
 .topbar.in-tab::before {
   display: none;
 }
+/* Inside the tab, one line: a project's search and Filters, then the subtitle (Hakan) */
+.topbar.in-tab .in-tab-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-9);
+}
+.topbar.in-tab .in-tab-row .subtitle {
+  margin-bottom: 0;
+}
+/* The Filters button is its icon there: the label is for screen readers only */
+.topbar.in-tab .filters-label {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+/* Its popup opens under it, to the right (the browser's, at the title bar's right end, opens to the left) */
+.topbar.in-tab .filter-panel {
+  left: 0;
+  right: auto;
+}
 /* A hairline under the title row, edge to edge (T-323): the title and the pills share the band above it, the
    subtitle sits below. 24px padding + the 36px title row + 6px */
 .topbar::before {

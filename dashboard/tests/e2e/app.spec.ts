@@ -78,14 +78,17 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('.title-bar-tab.selected #project-selector').click();
     await expect(page.locator('#project-menu')).toBeVisible();
     await page.keyboard.press('Escape');
-    // Search and Filters after the sidebar's button, before the tabs; the pills at the right end
-    await expect(page.locator('#app-titlebar-start #filters')).toBeVisible();
-    await expect(page.locator('#app-titlebar-end #filters')).toHaveCount(0);
+    // Search and Filters inside the tab, on the subtitle's line, before it; not in the title bar
+    await expect(page.locator('.topbar.in-tab .in-tab-row #filters')).toBeVisible();
+    await expect(page.locator('#app-titlebar #filters')).toHaveCount(0);
     expect(
       await page.evaluate(() => {
-        const at = (s: string) => document.querySelector(s)!.getBoundingClientRect().left;
+        const box = (s: string) => document.querySelector(s)!.getBoundingClientRect();
+        const filters = box('.in-tab-row #filters');
+        const subtitle = box('.in-tab-row #subtitle');
         return (
-          at('#app-sidebar-toggle') < at('#app-titlebar-start') && at('#app-titlebar-start') < at('.title-bar-tabs')
+          filters.right <= subtitle.left &&
+          Math.abs(filters.top + filters.height / 2 - (subtitle.top + subtitle.height / 2)) < 4
         );
       }),
     ).toBe(true);

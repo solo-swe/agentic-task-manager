@@ -18915,7 +18915,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T13:53:06Z",
+      "updated_at": "2026-11-12T13:58:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18930,7 +18930,7 @@
       "sprint": "The desktop app",
       "started_at": "2026-11-12T13:31:32Z",
       "started_by": "claude:34798264",
-      "commit": "effb86544f73f705620de61723215d9f1a9926e7"
+      "commit": "6b814525ed558ecbba00996d4c0364d9b15a50ba"
     },
     {
       "id": "T-517",
