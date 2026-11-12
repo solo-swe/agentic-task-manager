@@ -19321,7 +19321,7 @@
       "description": "T-514's outcome says switching the app's title-bar tabs (a tab is an address: a switch navigates the window's one page) was never timed on a large project. Add the timing to [the performance spec](dashboard/tests/e2e/performance.spec.ts), beside its `switching tabs` test, with the same budget (`BUDGET_MS`: 200 ms locally, twice that in CI).\n\n## Change\n- In the app (`tasksServer.asApp()`), with the `large-500` fixture and a second project: open tabs on the Kanban, the List and the Graph of the large project and on the second project, then time each `.title-bar-tab` click until its page is shown (its view's first card or node visible, the title the tab's project), as the spec times its views.\n- Also time ⌃Tab (the menu's Next Tab, `chooseMenu({ kind: 'next_tab' })`) once round the tabs.\n- Log the timings as the other tests do (`tab switch in the app (ms):`) and expect each under `BUDGET_MS`.\n\n## If it is over budget\nMeasure where the time goes (`--trace on` locally) and fix the cause; never raise the budget (AGENTS.md, Performance budgets). Record the timings in T-514's follow-up note on this task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-514"
       ],
@@ -19329,9 +19329,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-12T19:36:30Z",
-      "updated_at": "2026-11-12T19:36:38Z",
+      "updated_at": "2026-11-12T19:43:33Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "The desktop app",
@@ -19341,7 +19341,9 @@
       "sprint": "The desktop app",
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-12T19:43:33Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

@@ -47,6 +47,81 @@ function largeArchive() {
   };
 }
 
+/** Wait until `done()` holds and two frames have been painted; the ms since `window.__started` (set before the action) */
+function sinceStarted(page: Page, done: string) {
+  return page.evaluate(async (done) => {
+    const check = new Function(`return (${done})`) as () => boolean;
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    while (!check()) await frame();
+    await frame();
+    await frame();
+    return performance.now() - (window as unknown as { __started: number }).__started;
+  }, done);
+}
+
+test.describe('performance in the app: its tabs (T-525)', () => {
+  // The large project's Kanban, List and Graph, and a small second project, in the window's tabs (T-514), as the app
+  // brings them back at its start (T-518)
+  const LARGE = 'Performance Project';
+  const shown = (title: string, view: string) =>
+    `document.querySelector('#dashboard-title')?.textContent === ${JSON.stringify(title)} && ${view}`;
+  const KANBAN = "document.querySelector('#kanban .kanban-card')?.offsetParent";
+  const LIST = "document.querySelector('#panel-list:not([hidden]) .task-card')?.offsetParent";
+  const GRAPH = "document.querySelector('#panel-graph:not([hidden]) #dep-graph .graph-node')";
+  const tabs = [
+    { name: 'kanban', done: shown(LARGE, KANBAN) },
+    { name: 'list', done: shown(LARGE, LIST) },
+    { name: 'graph', done: shown(LARGE, GRAPH) },
+    // The page is titled by the project's own name (its tasks.json's), the minimal fixture's
+    { name: 'second project', done: shown('Minimal Project', KANBAN) },
+  ];
+
+  test.beforeEach(async ({ page, tasksServer }) => {
+    await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
+    await tasksServer.asApp();
+    tasksServer.use('large-500');
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    const large = `/projects/${tasksServer.projectId}`;
+    tasksServer.restoredTabs = {
+      addresses: [`${large}/kanban`, `${large}/list`, `${large}/graph`, '/projects/second/kanban'],
+      active: 0,
+    };
+    await page.goto('/');
+    await expect(page.locator('.title-bar-tab')).toHaveCount(4);
+    await expect(page.locator('#kanban .kanban-card').first()).toBeVisible();
+  });
+
+  test('a click on a tab, and Next Tab round them all', async ({ page, tasksServer }) => {
+    const timings: Record<string, number> = {};
+    // A click on each tab from the one before it, then on the first (another project, then the large one again: its
+    // data loaded again and its Kanban drawn; its graph's layout kept, and the hidden graph not drawn, T-525)
+    const round = [1, 2, 3, 0].map((i) => [i, tabs[i]] as const);
+    for (const [i, tab] of round) {
+      timings[i === 0 ? 'back to the large project' : tab.name] = await page.evaluate(
+        async ([i, done]) => {
+          const check = new Function(`return (${done})`) as () => boolean;
+          const frame = () => new Promise((r) => requestAnimationFrame(r));
+          const start = performance.now();
+          (document.querySelectorAll('.title-bar-tab [role="tab"]')[i] as HTMLElement).click();
+          while (!check()) await frame();
+          await frame();
+          await frame();
+          return performance.now() - start;
+        },
+        [i, tab.done] as const,
+      );
+    }
+    // Next Tab (⌃Tab, the menu's) from the first tab round them all, back to it
+    for (const [i, tab] of round) {
+      await page.evaluate(() => ((window as unknown as { __started: number }).__started = performance.now()));
+      await tasksServer.chooseMenu({ kind: 'next_tab' });
+      timings[`next tab: ${i === 0 ? 'back to the large project' : tab.name}`] = await sinceStarted(page, tab.done);
+    }
+    console.log('tab switch in the app (ms):', JSON.stringify(timings));
+    for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
+  });
+});
+
 test.describe('performance with 500 tasks and a large archive', () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
@@ -54,7 +129,7 @@ test.describe('performance with 500 tasks and a large archive', () => {
     data.meta = { ...data.meta, archived: ARCHIVE_SIZE };
     tasksServer.archive(largeArchive());
     await openDashboard(page, tasksServer, data);
-    await expect(page.locator('.task-card')).toHaveCount(500);
+    await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
   });
 
   test('the views that need history load it once, then switch within budget', async ({ page, tasksServer }) => {
@@ -81,7 +156,7 @@ test.describe('performance with 500 tasks', () => {
   test.beforeEach(async ({ page, tasksServer }) => {
     await page.clock.setFixedTime(new Date('2026-04-20T12:00:00Z'));
     await openDashboard(page, tasksServer, 'large-500');
-    await expect(page.locator('.task-card')).toHaveCount(500);
+    await expect(page.locator('#kanban .kanban-card').first()).toBeAttached();
   });
 
   test('switching tabs', async ({ page }) => {
@@ -90,7 +165,13 @@ test.describe('performance with 500 tasks', () => {
       progress: await timeAction(page, '#tab-progress', "document.querySelector('#burndown svg')?.isConnected"),
       // Mounted when selected: the timeline is built from scratch
       agents: await timeAction(page, '#tab-agents', "document.querySelector('#panel-agents .agents-grid')"),
-      graph: await timeAction(page, '#tab-graph', "document.querySelector('#panel-graph:not([hidden]) #dep-graph')"),
+      // Drawn when selected (T-525): its nodes, as the List's rows
+      graph: await timeAction(
+        page,
+        '#tab-graph',
+        "document.querySelector('#panel-graph:not([hidden]) #dep-graph .graph-node')",
+      ),
+      list: await timeAction(page, '#tab-list', "document.querySelector('#panel-list .task-card')?.offsetParent"),
     };
     console.log('tab switch (ms):', JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);
@@ -98,15 +179,18 @@ test.describe('performance with 500 tasks', () => {
 
   test('a reload that changes the data, on every tab', async ({ page, tasksServer }) => {
     const data = loadFixture('large-500');
-    const changed = "document.querySelector('.task-card[data-id=\"T-301\"]')?.classList.contains('status-done')";
+    // The change shows in the Kanban, which stays mounted under every view (the List is built only while it is shown,
+    // T-525): the task in its new status's column. Two statuses whose columns show every card
+    const changed = (status: string) =>
+      `document.querySelector('#kanban .kanban-column[data-status="${status}"] .kanban-card[data-id="T-301"]')`;
     const timings: Record<string, number> = {};
     for (const tab of ['graph', 'kanban', 'progress']) {
       await page.locator(`#tab-${tab}`).click();
       // Alternate the data so every reload really changes something
-      const status = tab === 'kanban' ? 'in_progress' : 'done';
+      const status = tab === 'kanban' ? 'in_progress' : 'blocked';
       data.tasks.find((t) => t.id === 'T-301')!.status = status;
       tasksServer.use(data);
-      timings[tab] = await timeAction(page, '#reload-btn', changed.replace("'status-done'", `'status-${status}'`));
+      timings[tab] = await timeAction(page, '#reload-btn', changed(status));
     }
     console.log('reload (ms):', JSON.stringify(timings));
     for (const [tab, ms] of Object.entries(timings)) expect(ms, tab).toBeLessThan(BUDGET_MS);

@@ -49,14 +49,17 @@ test.describe('edge cases', () => {
     expect(errors).toEqual([]);
   });
 
+  // The List's card, then the graph's node (each view's built only while it is shown, T-525)
   test('long names are truncated to 22 characters in the graph only', async ({ page }) => {
+    await expect(card(page, 'T-004').locator('.task-name')).toContainText('and then some');
+    await page.locator('#tab-graph').click();
     await expect(graphNode(page, 'T-004')).toContainText('A very long task name…');
     await expect(graphNode(page, 'T-004')).not.toContainText('keeps going');
-    await expect(card(page, 'T-004').locator('.task-name')).toContainText('and then some');
   });
 
   test('unicode survives in cards and graph', async ({ page }) => {
     await expect(card(page, 'T-005').locator('.task-name')).toHaveText('Ünïcödé naïve café 🚀 任务');
+    await page.locator('#tab-graph').click();
     await expect(graphNode(page, 'T-005')).toContainText('Ünïcödé naïve café 🚀…');
   });
 

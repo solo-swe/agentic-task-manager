@@ -35,7 +35,8 @@ test.describe('claims', () => {
 
   test('expired claims, and claims on tasks that are not in progress, are not shown', async ({ page, tasksServer }) => {
     tasksServer.claims([claim('T-005', { lease_expires_at: minutesFromNow(-1) }), claim('T-006')]);
-    await openDashboard(page, tasksServer, 'standard');
+    // The List's cards (built only while it is shown, T-525)
+    await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     await expect(page.locator('.task-card')).toHaveCount(12);
     await expect(page.locator('.task-claim')).toHaveCount(0);
   });
@@ -43,14 +44,14 @@ test.describe('claims', () => {
   test('without claims.json the dashboard works as before', async ({ page, tasksServer }) => {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
-    await openDashboard(page, tasksServer, 'standard');
+    await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     await expect(page.locator('.task-card')).toHaveCount(12);
     await expect(page.locator('.task-claim')).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 
   test('a reload picks up new claims', async ({ page, tasksServer }) => {
-    await openDashboard(page, tasksServer, 'standard');
+    await openDashboard(page, tasksServer, 'standard', { tab: 'list' });
     await expect(page.locator('.task-claim')).toHaveCount(0);
     tasksServer.claims([claim('T-005', { agent: 'bob@laptop:/src/proj', branch: null })]);
     await page.locator('#reload-btn').click();

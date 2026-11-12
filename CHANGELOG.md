@@ -93,6 +93,15 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   Dragging the bar moves the window (`start_dragging`), a double click maximizes it. The Windows and Linux paths are
   checked on those platforms by T-519.
 
+### Changed
+- **Switching projects is faster** (T-525): going back to a large project (500 tasks), in the app's tabs or the
+  project picker, took 240–290 ms on a developer Mac, over the 200 ms interaction budget; now 140–200 ms, with the
+  test's own data transport. The graph keeps the layouts of the last four shapes, not just the last (dagre took
+  ~100 ms of it); the hidden Graph draws its nodes, and the List its rows, only while shown (as Agents and Project
+  already did), so a reload or a switch builds no view nobody sees; reloads got faster too. `performance.spec.ts`
+  times the app's tabs: a click on each, ⌃Tab round them, and a switch to another project and back; and the List
+  among the browser's tab switches.
+
 ### Fixed
 - **The overview's "N need you" list showed under the next card** when it ran past its own card (a long list, or a
   narrow window): a hovered card's lift (a transform) kept the list in the card's own layer. The card is now over the

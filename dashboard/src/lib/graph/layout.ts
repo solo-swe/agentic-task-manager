@@ -97,9 +97,21 @@ function place(tasks: Task[], visible: Set<string>): Placement {
   };
 }
 
-// The last placement: a reload that only changes statuses or names (every few seconds while agents work) reuses it,
-// since dagre is the costly part of drawing the graph
-let last: { key: string; placement: Placement } | null = null;
+// The last few placements, the latest last: a reload that only changes statuses or names (every few seconds while
+// agents work) reuses one, since dagre is the costly part of drawing the graph (~100 ms for 500 tasks); and so does
+// going back to a project shown before, in the app's tabs or the project picker (T-525)
+const KEPT = 4;
+const placements = new Map<string, Placement>();
+
+/** The placement of the shape `key`, kept or made now */
+function placementOf(key: string, tasks: Task[], visible: Set<string>): Placement {
+  const kept = placements.get(key);
+  placements.delete(key);
+  const placement = kept ?? place(tasks, visible);
+  placements.set(key, placement);
+  if (placements.size > KEPT) placements.delete(placements.keys().next().value!);
+  return placement;
+}
 
 /**
  * Laid out by dagre, left to right: ranks by dependency (network simplex, so a task sits close to what it feeds),
@@ -109,9 +121,7 @@ export function layoutGraph(tasks: Task[]): GraphLayout {
   if (tasks.length === 0) return { width: 0, height: 0, nodes: [], edges: [] };
 
   const visible = new Set(tasks.map((t) => t.id));
-  const key = shapeKey(tasks, visible);
-  if (last?.key !== key) last = { key, placement: place(tasks, visible) };
-  const { width, height, centers, edges } = last.placement;
+  const { width, height, centers, edges } = placementOf(shapeKey(tasks, visible), tasks, visible);
   const nodes = tasks.map((task) => {
     const { x: cx, y: cy } = centers.get(task.id)!;
     return { task, x: cx - NODE_W / 2, y: cy - NODE_H / 2, cx, cy, label: truncate(task.name, LABEL_MAX) };

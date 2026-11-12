@@ -284,7 +284,9 @@
     onpointercancel={endDrag}
     onclickcapture={onClickCapture}
   >
-    {#if dashboard.loaded}
+    <!-- Drawn only while the graph is shown (T-525): its panel stays mounted while hidden, keeping its view (FR-2.4),
+         but a project's 500 nodes needn't be built for another view, or a switch of project -->
+    {#if dashboard.loaded && dashboard.tab === 'graph'}
       {#if empty}
         <text x="20" y="54" fill="var(--text-muted)" font-size="14">No tasks match current filters</text>
       {:else}
