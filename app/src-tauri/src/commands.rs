@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::badge::NeedsYou;
 use crate::links::Links;
 use crate::menu::Menus;
 use crate::session::Session;
@@ -52,6 +53,8 @@ pub struct AppState {
     menus: Menus,
     /// The windows' frames and tabs, kept for the next start (T-518)
     session: Session,
+    /// The needs-you counts seen last, for the notifications (T-520)
+    needs_you: NeedsYou,
 }
 
 impl AppState {
@@ -67,7 +70,14 @@ impl AppState {
             next_window: AtomicU32::new(1),
             menus: Menus::default(),
             session: Session::default(),
+            needs_you: NeedsYou::default(),
         }
+    }
+
+    /// The needs-you counts seen last.
+    #[must_use]
+    pub fn needs_you(&self) -> &NeedsYou {
+        &self.needs_you
     }
 
     /// The windows as they are, kept for the next start.
@@ -333,6 +343,15 @@ fn workspace(workspaces: &Workspaces, id: &str) -> Result<Arc<Workspace>, AppErr
 
 fn member(workspaces: &Workspaces, w: &str, p: &str) -> Result<Member, AppError> {
     Ok(workspace(workspaces, w)?.member(p)?)
+}
+
+/// Workspace `w`'s projects as `list_projects` lists them, without making it the one opened last (the badge and the
+/// notifications read them, T-520).
+///
+/// # Errors
+/// No such workspace.
+pub fn listed_projects(workspaces: &Workspaces, w: &str) -> Result<Vec<Value>, AppError> {
+    Ok(workspace(workspaces, w)?.listing().projects())
 }
 
 /// `GET /api/v2/workspaces`: the workspaces, how many projects each lists, and the one opened last.

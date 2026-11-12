@@ -28,8 +28,7 @@
   import { inApp } from '../lib/api/http';
   import { listenForLinks } from '../lib/api/links';
   import { listenForMenu, reportMenuState } from '../lib/api/menu';
-  import { restoredTabs, saveTabs, setBadge } from '../lib/api/shell';
-  import { needsYou } from '../lib/projects';
+  import { reportNeedsYou, restoredTabs, saveTabs } from '../lib/api/shell';
   import { appTabs } from '../lib/app-tabs.svelte';
   import { menuStateOf, runMenuAction } from '../lib/menu-actions';
   import { arrived, currentAddress, navigate, useRouter, type EntryState } from '../lib/navigation';
@@ -97,10 +96,13 @@
     if (inApp && appTabs.tabs.length > 0) void saveTabs(appTabs.kept);
   });
 
-  // In the atm app, the workspace's needs-you count on the app's icon, unless Settings turns it off (T-518)
-  const waiting = $derived(dashboard.projects.filter((p) => !p.missing).reduce((n, p) => n + needsYou(p), 0));
+  // In the atm app, what needs the user: the workspace's count on the app's icon and a notification when it goes up,
+  // each unless Settings turns it off (T-518, T-520). Told again whenever the workspace's projects change; the app
+  // reads the counts itself
   $effect(() => {
-    if (inApp && dashboard.projectsLoaded) void setBadge(dashboard.needsYouBadge ? waiting : null);
+    if (!inApp || !dashboard.projectsLoaded) return;
+    void dashboard.projects;
+    void reportNeedsYou(dashboard.workspace, dashboard.needsYouBadge, dashboard.needsYouNotify);
   });
 
   // In the atm app the page reacts to changes (T-506): the app says when the workspace's list or the open project's

@@ -37,6 +37,8 @@ export interface Prefs {
   sidebarWidth: number;
   /** The app's icon shows the workspace's needs-you count (T-517's switch, T-518's badge) */
   needsYouBadge: boolean;
+  /** The app notifies when a project's needs-you count goes up (T-520) */
+  needsYouNotify: boolean;
 }
 
 function storage(): Storage | null {

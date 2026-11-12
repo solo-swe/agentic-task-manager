@@ -544,8 +544,9 @@ export class TasksServer {
   restoredTabs: { addresses: string[]; active: number } | null = null;
   /** The tabs the page last kept for the next start (`save_tabs`) */
   savedTabs: { addresses: string[]; active: number } | null = null;
-  /** The badges the page set (`set_badge`), in order: a count, or null for none */
-  badges: (number | null)[] = [];
+  /** What the page told the app about what needs you (`needs_you`, T-518, T-520), in order: the workspace it shows,
+   * and whether the badge and the notifications are on (the app reads the counts itself) */
+  needsYouCalls: { workspace: string; badge: boolean; notify: boolean }[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -734,8 +735,8 @@ export class TasksServer {
       case 'save_tabs':
         this.savedTabs = args.tabs as { addresses: string[]; active: number };
         return { ok: null };
-      case 'set_badge':
-        this.badges.push((args.count as number | null) ?? null);
+      case 'needs_you':
+        this.needsYouCalls.push(args as { workspace: string; badge: boolean; notify: boolean });
         return { ok: null };
       // The menu (T-512)
       case 'subscribe_menu':

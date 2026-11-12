@@ -99,9 +99,9 @@
     {#each DOC_STYLES as style (style.id)}<option value={style.id}>{style.name}</option>{/each}
   </select>
 </div>
-<!-- The app's icon: the needs-you count on it (T-518), or nothing -->
+<!-- What needs you, from the app: the count on its icon (T-518) and a notification when it goes up (T-520) -->
 {#if inApp}
-  <div class="menu-label">App icon</div>
+  <div class="menu-label">What needs you</div>
   <div class="settings-row">
     <label class="auto-refresh-toggle" title="The number of tasks that need you, on the app's icon"
       ><input
@@ -109,7 +109,17 @@
         id="needs-you-badge-check"
         checked={dashboard.needsYouBadge}
         onchange={(e) => dashboard.setNeedsYouBadge(e.currentTarget.checked)}
-      /><span class="toggle-track"></span> Show what needs you</label
+      /><span class="toggle-track"></span> On the app’s icon</label
+    >
+  </div>
+  <div class="settings-row">
+    <label class="auto-refresh-toggle" title="A notification when a task in a project starts needing you"
+      ><input
+        type="checkbox"
+        id="needs-you-notify-check"
+        checked={dashboard.needsYouNotify}
+        onchange={(e) => dashboard.setNeedsYouNotify(e.currentTarget.checked)}
+      /><span class="toggle-track"></span> As notifications</label
     >
   </div>
 {/if}

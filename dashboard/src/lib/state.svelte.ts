@@ -198,6 +198,14 @@ export class DashboardState {
     setPref('needsYouBadge', on);
   }
 
+  /** The app notifies when a project's needs-you count goes up (Settings, T-520); remembered */
+  needsYouNotify = $state(getPref('needsYouNotify', true));
+
+  setNeedsYouNotify(on: boolean) {
+    this.needsYouNotify = on;
+    setPref('needsYouNotify', on);
+  }
+
   /** A project's page is shown */
   get onProject(): boolean {
     return this.route.page === 'project';

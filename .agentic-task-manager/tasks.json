@@ -19093,7 +19093,7 @@
       "description": "Left out of [the desktop app design](docs/app-desktop-ui-design.md)'s steps by decision (§10, item 5): a system notification when a task starts needing the user (in review, blocked on them), off in Settings. It needs a new plugin, `tauri-plugin-notification`, which the [Rust guide](docs/guides/rust.md) asks a yes for: first a short note on the plugin (its permissions, platforms, what I25 says about the page calling it; the app should send notifications from Rust, not the page), then ask Hakan before adding it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-518"
       ],
@@ -19103,7 +19103,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T19:02:16Z",
+      "updated_at": "2026-11-12T19:05:06Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -19115,7 +19115,9 @@
           "from": "2026-11-12T19:02:16Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T19:05:06Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-521",

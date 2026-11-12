@@ -8,9 +8,9 @@ import {
   onBarMouseDown,
   openWindow,
   resetAppShell,
+  reportNeedsYou,
   restoredTabs,
   saveTabs,
-  setBadge,
   setWindowTitle,
 } from '../../src/lib/api/shell';
 
@@ -45,14 +45,10 @@ describe('the app’s window (T-511)', () => {
     answer = null;
     expect(await restoredTabs()).toBeNull();
     await saveTabs({ addresses: ['/board'], active: 0 });
-    await setBadge(3);
-    await setBadge(0);
-    await setBadge(null);
+    await reportNeedsYou('work', true, false);
     expect(calls.slice(3)).toEqual([
       ['save_tabs', { tabs: { addresses: ['/board'], active: 0 } }],
-      ['set_badge', { count: 3 }],
-      ['set_badge', { count: null }],
-      ['set_badge', { count: null }],
+      ['needs_you', { workspace: 'work', badge: true, notify: false }],
     ]);
     // A failure is only logged
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -61,7 +57,7 @@ describe('the app’s window (T-511)', () => {
     });
     expect(await restoredTabs()).toBeNull();
     await saveTabs({ addresses: ['/'], active: 0 });
-    await setBadge(1);
+    await reportNeedsYou('default', true, true);
     expect(logged).toHaveBeenCalledTimes(3);
   });
 

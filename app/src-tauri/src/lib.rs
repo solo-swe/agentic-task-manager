@@ -14,7 +14,7 @@ pub mod windows;
 
 use tauri::Manager;
 
-use badge::set_badge;
+use badge::needs_you;
 use session::{restored_tabs, save_tabs};
 
 use commands::{
@@ -66,7 +66,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         start_dragging::<tauri::Wry>,
         save_tabs::<tauri::Wry>,
         restored_tabs::<tauri::Wry>,
-        set_badge::<tauri::Wry>,
+        needs_you::<tauri::Wry>,
     ])
 }
 
@@ -188,6 +188,9 @@ fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         // Its own updates (T-483), through the two commands in `updates`: the page has no permission of the plugin's.
         // The plugin reads `plugins.updater` in tauri.conf.json when it starts (the key, as `updates.rs` has it)
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // System notifications of what needs the user (T-520), sent by the app from Rust (`badge`): the page has no
+        // permission of the plugin's
+        .plugin(tauri_plugin_notification::init())
 }
 
 /// The app's context (`tauri.conf.json`, the capabilities, the dashboard's files), made once: it can be generated only

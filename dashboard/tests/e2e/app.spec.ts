@@ -1,6 +1,6 @@
 // The dashboard in the atm app (T-457): the same page, its data from the app's commands over Tauri's IPC (mocked here
 // as `@tauri-apps/api/mocks` does, backed by the fixture's data), never from HTTP.
-import { addressOf, expect, loadFixture, summary, test } from './helpers';
+import { addressOf, expect, loadFixture, test } from './helpers';
 
 test.describe('the dashboard in the atm app', () => {
   test('loads its projects and their tasks through the app’s commands, with no request to a server', async ({
@@ -322,24 +322,26 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
   });
 
-  test('the needs-you badge (T-518): the workspace’s count on the app’s icon, off in Settings', async ({
+  test('what needs you (T-518, T-520): the page tells the app its workspace; the badge and notifications, off in Settings', async ({
     page,
     tasksServer,
   }) => {
     await tasksServer.asApp();
     tasksServer.use('standard');
-    // Two in review and one blocked on the user in another project of the workspace
-    tasksServer.addProject(
-      'second',
-      'minimal',
-      'Second Project',
-      summary({ needs_you: { review: 2, blocked_on_user: 1 } }),
-    );
     await page.goto(`/projects/${tasksServer.projectId}/kanban`);
-    await expect.poll(() => tasksServer.badges.at(-1)).toBe(3);
+    // Only the workspace and the two switches: the app reads the counts and writes the notifications itself
+    await expect
+      .poll(() => tasksServer.needsYouCalls.at(-1))
+      .toEqual({ workspace: 'default', badge: true, notify: true });
     await tasksServer.chooseMenu({ kind: 'settings' });
     await page.locator('label:has(#needs-you-badge-check)').click();
-    await expect.poll(() => tasksServer.badges.at(-1)).toBeNull();
+    await expect
+      .poll(() => tasksServer.needsYouCalls.at(-1))
+      .toEqual({ workspace: 'default', badge: false, notify: true });
+    await page.locator('label:has(#needs-you-notify-check)').click();
+    await expect
+      .poll(() => tasksServer.needsYouCalls.at(-1))
+      .toEqual({ workspace: 'default', badge: false, notify: false });
   });
 
   test('deep links (T-459): the one the app was started with opens its page; a later one too; anything else is ignored', async ({

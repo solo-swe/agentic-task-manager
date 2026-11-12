@@ -32,7 +32,12 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   commands `save_tabs` and `restored_tabs` (`session.rs`).
 - **The needs-you badge** (T-518): the workspace's count of tasks that need you (in review, blocked on you, done with
   you) on the app's icon: the Dock on macOS, the launcher on Linux, an overlay icon on the taskbar button on Windows;
-  off with Settings ▸ App icon. New command `set_badge` (`badge.rs`).
+  off with Settings ▸ What needs you ▸ On the app's icon.
+- **Notifications of what needs you** (T-520): a system notification when a project's count goes up ("Second
+  Project: 2 tasks need you"), not at the start nor while an app window is in front; off with Settings ▸ What needs
+  you ▸ As notifications. Sent by the app from Rust with `tauri-plugin-notification` 2.8.0 (new dependency,
+  approved); the page gets none of the plugin's permissions. One command for both, `needs_you(workspace, badge,
+  notify)` (`badge.rs`): the page says only which workspace it shows, the app reads the counts and the names itself.
 - **The app's Settings sheet** (T-517, step 7, §6): the menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux)
   and the title bar's ⋯ open a sheet over the window (a Bits UI dialog, `dialogs/SettingsSheet.svelte`) with the
   mode, theme, document style and Reset this project's view, and a new switch, App icon ▸ Show what needs you (the

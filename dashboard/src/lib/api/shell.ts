@@ -94,12 +94,14 @@ export async function saveTabs(tabs: KeptTabs): Promise<void> {
   }
 }
 
-/** The app's badge (T-518): `count` on its icon, none (or 0) for no badge */
-export async function setBadge(count: number | null): Promise<void> {
+/** What needs the user (T-518, T-520): the page shows `workspace`, whose projects changed; the app reads how many
+ * tasks need the user in them, shows the total on its icon (`badge`) and notifies a project whose count went up
+ * (`notify`). The counts and the notifications' text are the app's own */
+export async function reportNeedsYou(workspace: string, badge: boolean, notify: boolean): Promise<void> {
   try {
-    await invoke('set_badge', { count: count && count > 0 ? count : null });
+    await invoke('needs_you', { workspace, badge, notify });
   } catch (e) {
-    console.error('Setting the app’s badge failed:', e);
+    console.error('Telling the app what needs you failed:', e);
   }
 }
 

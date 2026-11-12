@@ -19,6 +19,7 @@ describe('SettingsSheet', () => {
     loadIntoDashboard(standard);
     dashboard.settingsOpen = false;
     dashboard.setNeedsYouBadge(true);
+    dashboard.setNeedsYouNotify(true);
   });
 
   it('opens with settingsOpen (the menu’s Settings…, the ⋯) and closes back', () => {
@@ -46,6 +47,12 @@ describe('SettingsSheet', () => {
     fireEvent.click(badge);
     flushSync();
     expect(dashboard.needsYouBadge).toBe(false);
+    // And the notifications' (T-520)
+    const notify = sheet.querySelector<HTMLInputElement>('#needs-you-notify-check')!;
+    expect(notify.checked).toBe(true);
+    fireEvent.click(notify);
+    flushSync();
+    expect(dashboard.needsYouNotify).toBe(false);
   });
 
   it('resets the project’s view and closes', () => {

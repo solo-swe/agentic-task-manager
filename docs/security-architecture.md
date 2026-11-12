@@ -876,8 +876,8 @@ from the menu or the app. The Go menu's names are the workspace's projects' (fro
 and the page draws their buttons and the menus (from `menu`); on macOS the configuration's overlay title bar keeps the
 system's buttons.
 
-**Windows come back, and the badge (T-518, `app/src-tauri/src/session.rs`, `badge.rs`).** Three new commands, each
-on the calling window only (I25), and one new file, the app's own:
+**Windows come back, the badge and notifications (T-518, T-520, `app/src-tauri/src/session.rs`, `badge.rs`).**
+Three new commands, each on the calling window only (I25), one new file, the app's own, and one new plugin:
 - **`windows.json`**, in the app's data folder (Tauri's `app_data_dir`, not a project's folder): each window's frame
   and its tabs' addresses, written by the app when they change and read once at the start. Anything that can write
   the user's files can write it, so it is read as untrusted: a file atm can't parse, or of another version, is a
@@ -886,8 +886,15 @@ on the calling window only (I25), and one new file, the app's own:
   addresses for its router, as deep links do (the page checks them again, `linkTarget`).
 - **`save_tabs(tabs)`** keeps the calling window's tabs (checked the same way; none left is refused);
   **`restored_tabs`** answers the tabs it comes back with, once.
-- **`set_badge(count)`** puts a number on the app's icon (macOS's Dock, Linux's launcher; on Windows a 16×16 icon
-  the app draws of it, over the taskbar button). It shows only a count; no text from a project reaches it.
+- **`needs_you(workspace, badge, notify)`** (T-520; it replaced T-518's `set_badge`): the page says only which
+  workspace it shows and whether Settings has the badge and the notifications on. The app reads the counts from that
+  workspace's listing (its own summaries) and puts the total on its icon (macOS's Dock, Linux's launcher; on Windows
+  a 16×16 icon it draws, over the taskbar button).
+- **Notifications** (T-520, `tauri-plugin-notification` 2.8.0, approved 2026-11-12): sent by the app from Rust when
+  a project's count goes up, never at the start, nor while one of its windows is in front. Their text is the app's:
+  "<project>: N tasks need you", the project's name from the user's own registry (control characters dropped, at
+  most 80 characters); nothing the page sends reaches one. The page gets **no permission of the plugin's** (I25's
+  test checks the capability lists only the app's commands), so it can't send, ask for or list notifications.
 
 ## 4. Keeping it current
 
