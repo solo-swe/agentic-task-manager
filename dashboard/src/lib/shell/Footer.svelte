@@ -34,10 +34,25 @@
     >{/if}
 {/snippet}
 
+<!-- The version (What's new), GitHub, Help and About: the browser's footer and the app's status bar both have them -->
+{#snippet links()}
+  <nav class="footer-links" aria-label="About this dashboard">
+    <button class="footer-link" id="footer-version" title="What's new" onclick={() => dashboard.openWhatsNew()}
+      >v{pluginInfo.version}</button
+    >
+    <a class="footer-link" id="footer-github" href={pluginInfo.repository} target="_blank" rel="noopener noreferrer"
+      >GitHub</a
+    >
+    <button class="footer-link" id="footer-help" onclick={() => dashboard.openDialog('help')}>Help</button>
+    <button class="footer-link" id="footer-about" onclick={() => dashboard.openDialog('about')}>About</button>
+  </nav>
+{/snippet}
+
 {#if inApp}
   <!-- In the atm app (T-516), a status bar in place of the footer: whether the page is up to date and the agents at
-       work at the left, the notices and the version at the right. GitHub, Help, About and Connect your agents are in
-       the menus -->
+       work at the left; the notices, the copyright, the version and the links (Hakan: easier to find than the menus')
+       at the right. Connect your agents is in the menu -->
+
   <footer class="status-bar" id="status-bar">
     <span class="status-live" class:off={dashboard.loadError !== null} id="status-live"
       ><span class="status-dot" aria-hidden="true"></span>{dashboard.loadError === null
@@ -51,9 +66,8 @@
     {/if}
     <span class="status-end">
       {@render notices()}
-      <button class="status-item" id="footer-version" title="What's new" onclick={() => dashboard.openWhatsNew()}
-        >v{pluginInfo.version}</button
-      >
+      <span class="footer-copyright">{copyright(pluginInfo)}</span>
+      {@render links()}
     </span>
   </footer>
 {:else}
@@ -65,16 +79,7 @@
       <span class="footer-copyright">{copyright(pluginInfo)}</span>
     </span>
     {@render notices()}
-    <nav class="footer-links" aria-label="About this dashboard">
-      <button class="footer-link" id="footer-version" title="What's new" onclick={() => dashboard.openWhatsNew()}
-        >v{pluginInfo.version}</button
-      >
-      <a class="footer-link" id="footer-github" href={pluginInfo.repository} target="_blank" rel="noopener noreferrer"
-        >GitHub</a
-      >
-      <button class="footer-link" id="footer-help" onclick={() => dashboard.openDialog('help')}>Help</button>
-      <button class="footer-link" id="footer-about" onclick={() => dashboard.openDialog('about')}>About</button>
-    </nav>
+    {@render links()}
   </footer>
 {/if}
 
@@ -129,8 +134,22 @@
     gap: var(--space-4);
     margin-left: auto;
   }
-  .status-end :global(.archive-notice) {
+  /* The footer's notices, copyright and links, at the status bar's size */
+  .status-end :global(:is(.archive-notice, .footer-copyright, .footer-links, .footer-link)) {
     font-size: inherit;
     margin: 0;
+  }
+  .status-end :global(.footer-links) {
+    display: flex;
+    gap: var(--space-1);
+  }
+  .status-end :global(.footer-link) {
+    border-radius: var(--radius-sm);
+    color: inherit;
+    padding: 0 var(--space-2);
+  }
+  .status-end :global(.footer-link:hover) {
+    background: var(--surface);
+    color: var(--text);
   }
 </style>

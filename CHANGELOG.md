@@ -25,10 +25,10 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
 ### Added
 - **The app's status bar** (T-516, step 6, §5; the minimal one Hakan chose): in the app the footer is a one-line
   status bar at the window's bottom: "Up to date" (or that the project can't be read) and the agents at work (a click
-  opens the Agents view, the project's or the overview's) at the left, the archive and problem notices and the version
-  (What's New) at the right. GitHub, Help, About and Connect your agents leave it: the menus have them. The subtitle
-  line and the Progress and Activity pills stay where they are. One component, `Footer.svelte`, with the browser's
-  footer unchanged.
+  opens the Agents view, the project's or the overview's) at the left; the archive and problem notices, the copyright,
+  the version (What's New), GitHub, Help and About at the right (Hakan: easier to find than in the menus). Connect your
+  agents is in the menu. The subtitle line and the Progress and Activity pills stay where they are. One component,
+  `Footer.svelte` (the links a snippet both share), with the browser's footer unchanged.
 - **The app's sidebar** (T-515, step 5, §4): Projects Overview, then the workspace's projects, each with its logo,
   name, its active sprint's progress (the project chooser's bar) and what needs you as a badge; the one shown marked,
   missing ones dimmed (`shell/Sidebar.svelte`, the app only). A click opens a project in this tab; ⌘-click, Ctrl-click or

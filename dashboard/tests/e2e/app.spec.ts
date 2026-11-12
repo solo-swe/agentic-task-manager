@@ -190,7 +190,7 @@ test.describe('the dashboard in the atm app', () => {
     await expect(sidebar).toBeVisible();
   });
 
-  test('the status bar (T-516): up to date, the agents at work, the version; no footer links', async ({
+  test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
     page,
     tasksServer,
   }) => {
@@ -199,11 +199,14 @@ test.describe('the dashboard in the atm app', () => {
     await page.goto('/');
     const bar = page.locator('#status-bar');
     await expect(bar.locator('#status-live')).toHaveText('Up to date');
-    await expect(bar.locator('#footer-version')).toBeVisible();
-    for (const link of ['#footer-github', '#footer-help', '#footer-about', '#site-footer'])
-      await expect(page.locator(link), link).toHaveCount(0);
+    for (const link of ['#footer-version', '#footer-github', '#footer-help', '#footer-about', '.footer-copyright'])
+      await expect(bar.locator(link), link).toBeVisible();
+    await expect(page.locator('#site-footer')).toHaveCount(0);
     await bar.locator('#footer-version').click();
     await expect(page.locator('#whats-new-overlay')).toHaveClass(/open/);
+    await page.keyboard.press('Escape');
+    await bar.locator('#footer-about').click();
+    await expect(page.locator('#about-overlay')).toHaveClass(/open/);
   });
 
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
