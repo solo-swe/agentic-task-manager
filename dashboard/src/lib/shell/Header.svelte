@@ -40,14 +40,21 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
-<!-- The charts at the title bar's right: the browser's title bar and the app's share them -->
+<!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
+     app's in two places (search and Filters before the tabs) -->
+{#snippet projectSearch()}
+  <Filters />
+{/snippet}
+{#snippet projectPills()}
+  <ProgressWidget />
+  <ActivityWidget />
+{/snippet}
 {#snippet projectCharts()}
   {#if dashboard.loaded}
     <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
     <div class="topbar-charts">
-      <Filters />
-      <ProgressWidget />
-      <ActivityWidget />
+      {@render projectSearch()}
+      {@render projectPills()}
     </div>
   {/if}
 {/snippet}
@@ -60,14 +67,22 @@
   {/if}
 {/snippet}
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs, and at its right end what the browser's title bar has
-     at its right (the workspace picker, the charts, the ⋯); inside the tab, only the subtitle line -->
+<!-- The atm app's own title bar (T-513): the window's, its tabs; before the tabs a project's search and Filters, at its
+     right end the rest of what the browser's title bar has at its right (the workspace picker, the pills, the ⋯);
+     inside the tab, only the subtitle line -->
+{#snippet appStart()}
+  {#if onProject && dashboard.loaded}{@render projectSearch()}{/if}
+{/snippet}
 {#snippet appEnd()}
   <WorkspaceSelector />
-  {@render (onProject ? projectCharts : overviewCharts)()}
+  {#if onProject}
+    {#if dashboard.loaded}<div class="topbar-charts">{@render projectPills()}</div>{/if}
+  {:else}
+    {@render overviewCharts()}
+  {/if}
   <SettingsMenu />
 {/snippet}
-{#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
+{#if inApp}<AppTitleBar {title} start={appStart} end={appEnd} />{/if}
 {#if onProject}
   <TitleBar {title} inTab={inApp} charts={projectCharts}>
     {#snippet subtitle()}

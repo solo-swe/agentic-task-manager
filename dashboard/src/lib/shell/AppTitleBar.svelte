@@ -25,7 +25,7 @@
   import Icon from '../ui/Icon.svelte';
   import AppMenus from './AppMenus.svelte';
 
-  let { title, end }: { title: string; end?: Snippet } = $props();
+  let { title, start, end }: { title: string; start?: Snippet; end?: Snippet } = $props();
 
   const tabs = tabActions();
 
@@ -64,6 +64,8 @@
     aria-pressed={dashboard.sidebarOpen}
     onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
   >
+  <!-- After the sidebar's button, before the tabs: a project's search and Filters (Hakan) -->
+  {#if start}<div class="app-titlebar-start" id="app-titlebar-start" data-no-drag>{@render start()}</div>{/if}
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -122,6 +124,14 @@
     user-select: none;
     /* Over the page's header pinned under it */
     z-index: 50;
+  }
+  .app-titlebar-start {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+  }
+  .app-titlebar-start:empty {
+    display: none;
   }
   .app-titlebar-end {
     align-items: center;

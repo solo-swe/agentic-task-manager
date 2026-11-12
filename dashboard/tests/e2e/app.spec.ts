@@ -78,7 +78,17 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('.title-bar-tab.selected #project-selector').click();
     await expect(page.locator('#project-menu')).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(page.locator('#app-titlebar-end #filters')).toBeVisible();
+    // Search and Filters after the sidebar's button, before the tabs; the pills at the right end
+    await expect(page.locator('#app-titlebar-start #filters')).toBeVisible();
+    await expect(page.locator('#app-titlebar-end #filters')).toHaveCount(0);
+    expect(
+      await page.evaluate(() => {
+        const at = (s: string) => document.querySelector(s)!.getBoundingClientRect().left;
+        return (
+          at('#app-sidebar-toggle') < at('#app-titlebar-start') && at('#app-titlebar-start') < at('.title-bar-tabs')
+        );
+      }),
+    ).toBe(true);
     await expect(page.locator('.topbar.in-tab #subtitle')).toContainText('tasks');
     await expect(page.locator('#reload-btn')).toHaveCount(0);
     await expect(page.locator('#version-chip')).toHaveCount(0);
@@ -87,8 +97,10 @@ test.describe('the dashboard in the atm app', () => {
     await page.locator('#tab-list').click();
     await expect.poll(() => addressOf(page)).toMatch(/\/list(\?|$)/);
     // A drag on the bar's free space moves the window; a double click maximizes it
-    await page.locator('#app-titlebar').click({ position: { x: 400, y: 10 } });
-    await page.locator('#app-titlebar').dblclick({ position: { x: 400, y: 10 } });
+    // The bar's free space: just past the +
+    const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
+    await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
+    await page.locator('#app-titlebar').dblclick({ position: { x: free, y: 10 } });
     expect(tasksServer.windowCalls).toContain('start_dragging');
     expect(tasksServer.windowCalls).toContain('toggle_maximize');
 
