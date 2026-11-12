@@ -190,6 +190,22 @@ test.describe('the dashboard in the atm app', () => {
     await expect(sidebar).toBeVisible();
   });
 
+  test('the status bar (T-516): up to date, the agents at work, the version; no footer links', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    const bar = page.locator('#status-bar');
+    await expect(bar.locator('#status-live')).toHaveText('Up to date');
+    await expect(bar.locator('#footer-version')).toBeVisible();
+    for (const link of ['#footer-github', '#footer-help', '#footer-about', '#site-footer'])
+      await expect(page.locator(link), link).toHaveCount(0);
+    await bar.locator('#footer-version').click();
+    await expect(page.locator('#whats-new-overlay')).toHaveClass(/open/);
+  });
+
   test('Connect your agents (T-458): opening it only reads the status; a click connects, saying what it wrote where', async ({
     page,
     tasksServer,
@@ -197,7 +213,9 @@ test.describe('the dashboard in the atm app', () => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     await page.goto('/');
-    await page.locator('#footer-agents').click();
+    // From the menu: atm ▸ Connect Your Agents… (the app's footer is a status bar, T-516)
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await tasksServer.chooseMenu({ kind: 'connect_agents' });
     const harness = page.locator('.agents-harness[data-harness="claude"]');
     await expect(harness.locator('.agents-harness-state')).toHaveText('Not connected');
     expect(tasksServer.agentCalls).toEqual(['agents_status']);
@@ -320,7 +338,9 @@ test.describe('the dashboard in the atm app', () => {
       if (r.url().includes('/compmd/packs/')) modules.push(`${r.frame() === page.mainFrame() ? 'page' : 'frame'}`);
     });
     await page.goto('/');
-    await page.locator('#footer-help').click();
+    // Help ▸ atm Help (the app's footer is a status bar, T-516)
+    await expect(page.locator('#dashboard-title')).not.toBeEmpty();
+    await tasksServer.chooseMenu({ kind: 'help' });
     const svg = page.frameLocator('#help-panel iframe').locator('svg').first();
     await expect(svg).toBeVisible({ timeout: 15_000 });
     await expect(svg).toContainText('In progress');

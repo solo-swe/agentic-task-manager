@@ -18851,7 +18851,7 @@
       "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click (Ctrl-click, a middle click) in a new one; missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Open in a new tab (left from T-514)\nTabs are in (T-514): `tabActions().open(address)` (`lib/tab-actions.ts`) opens one. Besides the sidebar's projects, ⌘-click (Ctrl-click, a middle click) opens in a new tab, in the app only: a task (a card, a list row: its address with `?task=`) and a link to a document (`?doc=`). The browser keeps its own behaviour for these.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-513"
       ],
@@ -18861,7 +18861,7 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T08:16:09Z",
+      "updated_at": "2026-11-12T13:06:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18874,8 +18874,24 @@
         }
       ],
       "sprint": "The desktop app",
-      "started_at": "2026-11-12T08:16:09Z",
-      "started_by": "claude:34798264"
+      "commit": "c38d797d5cf6e5fb3603c8bdec0d03f665503868",
+      "notes": [
+        {
+          "at": "2026-11-12T13:06:24Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-12T13:06:30Z",
+          "kind": "outcome",
+          "text": "Sidebar (shell/Sidebar.svelte, app only): Overview and the projects with progress and needs-you, click here / ⌘-click new tab, toggle (title bar button, View ▸ Show Sidebar), resizable, kept in prefs. Chooser, search and workspace picker stay in the title bar (Hakan). ⌘-click on tasks and document links opens a new tab. Browser screenshots unchanged (84).",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-12T13:06:30Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-12T13:06:30Z",
+      "completed_by": "claude:34798264"
     },
     {
       "id": "T-516",
@@ -18890,7 +18906,7 @@
       "description": "Step 6 of [the desktop app design](docs/app-desktop-ui-design.md) ([§5](docs/app-desktop-ui-design.md#5-the-status-bar)).\n\n## Change\nIn the app only, the footer becomes a one-line status bar (about 24 px, tokens only):\n- **left:** \"Up to date\" while the app watches the project (T-506), or why not; the agents at work (from `claims`), \"2 agents working\", a click opens the Agents view;\n- **middle:** the active sprint's name and progress (`ProgressWidget`'s numbers, as text);\n- **right:** the archive and problems notices (as now) and the version, which opens What's new.\n\nGitHub, Help, About and Connect your agents are in the menus (step 2), so they leave the app's footer. The browser keeps its footer.\n\n## Checks\nComponent tests for the status bar; the app e2e specs; by hand on macOS.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-512"
       ],
@@ -18899,7 +18915,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-12T13:31:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "components": [
@@ -18911,7 +18927,9 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T13:31:32Z",
+      "started_by": "claude:34798264"
     },
     {
       "id": "T-517",
