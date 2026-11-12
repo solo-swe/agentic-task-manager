@@ -93,6 +93,11 @@ The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0,
   Dragging the bar moves the window (`start_dragging`), a double click maximizes it. The Windows and Linux paths are
   checked on those platforms by T-519.
 
+### Fixed
+- **The overview's "N need you" list showed under the next card** when it ran past its own card (a long list, or a
+  narrow window): a hovered card's lift (a transform) kept the list in the card's own layer. The card is now over the
+  others while its list is open; `projects.spec.ts` checks the whole list is on top, with motion on.
+
 ## [0.35.0] - 2026-11-10
 
 Diagrams in the app (CompMD 0.6.0), the app updating itself from the next release on, and the app showing changes

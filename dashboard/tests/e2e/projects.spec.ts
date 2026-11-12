@@ -482,8 +482,13 @@ test.describe('projects', () => {
       tasksServer,
     }) => {
       await page.setViewportSize({ width, height: 900 });
+      // With motion: a hovered card lifts (a transform), which put its list under the next card
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
       const two = summary({ needs_you: { review: 1, blocked_on_user: 1 }, needs_you_tasks: [T4, T5] });
-      tasksServer.addProject('asks', 'v4', 'Asks', two).addProject('more', 'v4', 'More asks', two);
+      // The first card's list longer than the card: it runs over the card under it (or beside it)
+      const long = Array.from({ length: 14 }, (_, n) => ({ ...T4, id: `T-${100 + n}` }));
+      const many = summary({ needs_you: { review: 14, blocked_on_user: 0 }, needs_you_tasks: long });
+      tasksServer.addProject('asks', 'v4', 'Asks', many).addProject('more', 'v4', 'More asks', two);
       await openDashboard(page, tasksServer, 'standard');
       for (const id of ['asks', 'more']) {
         const card = page.locator(`.project-card[data-id="${id}"]`);
@@ -496,6 +501,19 @@ test.describe('projects', () => {
             return box.x >= 0 && box.x + box.width <= width;
           })
           .toBe(true);
+        // On top of the cards around it, the next card's too (Hakan: the first card's list showed under the second's)
+        expect(
+          await menu.evaluate((list) => {
+            const box = list.getBoundingClientRect();
+            const at = [0.05, 0.25, 0.5, 0.75, 0.95];
+            return at.every((fx) =>
+              at.every((fy) => {
+                const hit = document.elementFromPoint(box.x + box.width * fx, box.y + box.height * fy);
+                return !!hit && list.contains(hit);
+              }),
+            );
+          }),
+        ).toBe(true);
         await page.keyboard.press('Escape');
         await expect(menu).toBeHidden();
       }

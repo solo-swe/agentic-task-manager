@@ -5543,6 +5543,11 @@ svg.graph-minimap.hidden {
 .project-card {
   position: relative;
 }
+/* While its list of what needs you is open, the card is over the cards after it, so the list is too (a hovered card's
+   lift, a transform, keeps the list in the card's own layer) */
+.project-card:has(.project-card-need[aria-expanded='true']) {
+  z-index: 10;
+}
 .project-card-badge {
   position: absolute;
   top: 0;
