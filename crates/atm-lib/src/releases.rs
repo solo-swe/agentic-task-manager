@@ -312,6 +312,87 @@ pub fn edit_release(
     Ok(outcome)
 }
 
+/// What a release's rename changed: its IDs, and how many tasks and sprints follow it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenamedRelease {
+    /// Its ID before.
+    pub from: String,
+    /// Its ID now.
+    pub to: String,
+    /// The tasks in tasks.json whose own release it is.
+    pub tasks: usize,
+    /// The archived tasks whose own release it is.
+    pub archived: usize,
+    /// The sprints delivering to it.
+    pub sprints: usize,
+}
+
+/// The objects in `list` whose `release` is `from` take `to`; how many.
+fn rename_release_in(list: Option<&mut Vec<Value>>, from: &str, to: &str) -> usize {
+    let mut n = 0;
+    for entry in list.into_iter().flatten().filter_map(Value::as_object_mut) {
+        if entry.get("release").and_then(Value::as_str) == Some(from) {
+            entry.insert("release".into(), json!(to));
+            n += 1;
+        }
+    }
+    n
+}
+
+/// `atm release rename` (T-497): a release's ID; the tasks (in tasks.json and the archive) and the sprints that name it
+/// follow. Its name, state and dates stay; a task's `updated_at` too, as the rename is the release's.
+///
+/// # Errors
+/// An unknown release, a new ID that isn't one or is another release's.
+pub fn rename_release(project: &mut Project, id: &str, new: &str) -> Result<RenamedRelease> {
+    if !valid_short_id(new) {
+        return Err(invalid(format!(
+            "{}: a release ID is letters, digits, '.', '-' and '_' (at most 64)",
+            repr_str(new)
+        )));
+    }
+    let mut outcome: Option<RenamedRelease> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = Vocabulary::of_document(&work.document)?;
+        let at = stored_release(&work.document, &vocab, id)?;
+        if new == id {
+            return Err(invalid(format!("the release is already {}", repr_str(id))));
+        }
+        if find_release(&vocab, new).is_some() {
+            return Err(invalid(format!(
+                "there is already a release {}",
+                repr_str(new)
+            )));
+        }
+        release_at(&mut work.document, at).insert("id".into(), json!(new));
+        let tasks = rename_release_in(work.document["tasks"].as_array_mut(), id, new);
+        let sprints = rename_release_in(
+            work.document["meta"]
+                .get_mut("sprints")
+                .and_then(Value::as_array_mut),
+            id,
+            new,
+        );
+        let archived = rename_release_in(
+            work.archive()?
+                .get_mut("tasks")
+                .and_then(Value::as_array_mut),
+            id,
+            new,
+        );
+        Vocabulary::of_document(&work.document)?;
+        outcome = Some(RenamedRelease {
+            from: id.to_string(),
+            to: new.to_string(),
+            tasks,
+            archived,
+            sprints,
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
+}
+
 /// `atm release archive`: it leaves the open releases (`atm release list --all` shows it). Returns the release.
 ///
 /// # Errors

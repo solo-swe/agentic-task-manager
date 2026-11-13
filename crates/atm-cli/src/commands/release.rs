@@ -1,5 +1,5 @@
-//! `atm release`: releases (the Python atm's `cli/commands/release.py`): list, add, edit, archive, notes, and how they
-//! print.
+//! `atm release`: releases (the Python atm's `cli/commands/release.py`): list, add, edit, rename, archive, notes, and
+//! how they print.
 
 use std::fmt::Write;
 use std::path::Path;
@@ -7,7 +7,9 @@ use std::path::Path;
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
 use atm_lib::Project;
-use atm_lib::releases::{add_release, archive_release, edit_release, list_releases, release_notes};
+use atm_lib::releases::{
+    add_release, archive_release, edit_release, list_releases, release_notes, rename_release,
+};
 use clap::Subcommand;
 use serde_json::{Value, json};
 
@@ -49,6 +51,13 @@ pub enum ReleaseCommand {
         /// Add, edit: the planned date, YYYY-MM-DD
         #[arg(long, value_name = "DATE")]
         target: Option<String>,
+    },
+    /// Rename a release's ID: its tasks (archived ones too) and the sprints delivering to it follow.
+    Rename {
+        /// The release's ID
+        release_id: String,
+        /// Its new ID (letters, digits, '.', '-', '_')
+        new: String,
     },
     /// Archive a release.
     Archive {
@@ -260,6 +269,38 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
             } else {
                 println!("{}: changed {}", py_str(&release["id"]), changed.join(", "));
             }
+        }
+        ReleaseCommand::Rename { release_id, new } => {
+            if ctx.dry_run {
+                println!("[dry-run] would rename release {release_id} to {new}");
+                return Ok(());
+            }
+            let renamed = rename_release(&mut Project::open(cwd)?, &release_id, &new)?;
+            if ctx.json {
+                print_json(&json!({
+                    "from": renamed.from,
+                    "to": renamed.to,
+                    "tasks": renamed.tasks,
+                    "archived": renamed.archived,
+                    "sprints": renamed.sprints,
+                }));
+                return Ok(());
+            }
+            let n = renamed.tasks + renamed.archived;
+            let mut line = format!(
+                "Renamed the release “{}” to “{}”: {n} task{}",
+                renamed.from,
+                renamed.to,
+                if n == 1 { "" } else { "s" }
+            );
+            if renamed.archived > 0 {
+                let _ = write!(line, " ({} archived)", renamed.archived);
+            }
+            if renamed.sprints > 0 {
+                let s = renamed.sprints;
+                let _ = write!(line, " and {s} sprint{}", if s == 1 { "" } else { "s" });
+            }
+            println!("{line} follow it.");
         }
         ReleaseCommand::Archive { release_id } => {
             if ctx.dry_run {

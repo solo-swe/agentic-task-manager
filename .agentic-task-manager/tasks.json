@@ -17841,7 +17841,7 @@
       "description": "A sprint's name is its identifier and can't be changed today: `atm sprint edit` changes only its goal, release and due date.\n\n## Change\n- `atm sprint rename <old> <new>`, the same form as `atm workspace rename`, in any state (planned, active, closed).\n- Every reference follows: each task's `sprint`, in `tasks.json` and in `tasks-archive.json`, and the other sprints' reports (`report.to`, and any other field naming a sprint).\n- Refused: a name another sprint has, an empty name.\n- The rename lives in atm-lib (`sprints.rs`); the CLI only maps to it.\n\n## Docs\n`docs/agent/commands.md`, and the sprint skills' text if they say a sprint can't be renamed.\n\n## Tests\nA scenario in `tests/scripts/scenarios/sprint-commands.json`: rename an active sprint with tasks (one of them archived) and a closed one that carried tasks to it; check the tasks, the archive and the report follow; a name in use is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/sprints.rs",
@@ -17850,7 +17850,7 @@
         "tests/scripts/scenarios/sprint-commands.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T11:01:15Z",
+      "updated_at": "2026-11-13T11:06:35Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -17865,7 +17865,18 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T11:01:15Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "fa755a510ca53dc903159bc8c47a751ded462c44",
+      "completed_at": "2026-11-13T11:06:35Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:06:35Z",
+          "kind": "outcome",
+          "text": "`atm sprint rename <old> <new>` (atm-lib `rename_sprint`): any state; tasks’ `sprint` and `sprint_history` in tasks.json and the archive, and other sprints’ `report.to`, follow; a name another sprint has or a task’s history keeps, or an empty one, is refused; a change of case is allowed. Six scenarios; docs/agent/commands.md and the plan-sprint skill mention it (a skill change: the release’s security review covers it).",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-497",
@@ -17878,7 +17889,7 @@
       "description": "`atm release edit --name` sets a display name, but a release's ID (what tasks and sprints point to) can't change, so a typo in it (`0.34` for `0.34.0`) stays.\n\n## Change\n- `atm release rename <old> <new>`, the form of `atm workspace rename` and `atm sprint rename`.\n- Every reference follows: tasks' release, in `tasks.json` and `tasks-archive.json`, and sprints' `release`.\n- Refused: an ID in use, an ID that isn't valid (the rule `atm release add` checks).\n- In atm-lib (`releases.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/releases.json`: a release with tasks (one archived) and a sprint delivering to it, renamed; a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/releases.rs",
@@ -17887,7 +17898,7 @@
         "tests/scripts/scenarios/releases.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T11:06:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -17900,7 +17911,9 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:06:39Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-498",
