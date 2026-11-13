@@ -31,9 +31,12 @@
   <div class="update-notice app-update" id="app-update" role="status">
     <div class="app-update-text">
       {#if dashboard.updateStep === 'installed'}
-        <span>atm {dashboard.appUpdate.version} is installed: restart to use it.</span>
+        <span>Agentic Task Manager {dashboard.appUpdate.version} is installed: restart to use it.</span>
       {:else}
-        <span>atm {dashboard.appUpdate.version} is available (you have {dashboard.appUpdate.current_version}).</span>
+        <span
+          >Agentic Task Manager {dashboard.appUpdate.version} is available (you have {dashboard.appUpdate
+            .current_version}).</span
+        >
       {/if}
       {#if step}
         <span class="app-update-step" id="app-update-step">{step}</span>

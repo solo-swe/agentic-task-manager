@@ -546,7 +546,7 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.updateFails = 'the signature does not verify';
     await page.goto('/');
     const bar = page.locator('#app-update');
-    await expect(bar).toContainText('atm 9.9.9 is available (you have 0.34.0).');
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is available (you have 0.34.0).');
     await bar.locator('summary').click();
     await expect(bar.locator('.app-update-notes p')).toHaveText('- One thing.\n- Another.');
     // Nothing is installed until the click
@@ -582,7 +582,7 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.updateInstallHeld = new Promise<void>((resolve) => (finish = resolve));
     await page.goto('/');
     const bar = page.locator('#app-update');
-    await expect(bar).toContainText('atm 9.9.9 is available (you have 0.36.0).');
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is available (you have 0.36.0).');
 
     // Downloading: how much of how much, on a bar; the buttons wait
     await page.locator('#app-update-install').click();
@@ -600,7 +600,7 @@ test.describe('the dashboard in the atm app', () => {
 
     // Still here after the wait: installed, Restart now tries again
     await page.clock.runFor(10_000);
-    await expect(bar).toContainText('atm 9.9.9 is installed: restart to use it.');
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is installed: restart to use it.');
     await page.locator('#app-update-restart').click();
     await expect(bar.locator('#app-update-step')).toHaveText('Restarting…');
     await expect

@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "atm",
+        "title": "Agentic Task Manager",
         "url": "tasks-dashboard.html",
         "width": 1280,
         "height": 860,

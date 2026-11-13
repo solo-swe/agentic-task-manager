@@ -49,13 +49,14 @@
 <Dialog id="agents" title="Connect your agents" {open} onclose={() => dashboard.closeDialog()}>
   {#if !inApp}
     <p class="agents-intro">
-      Let your AI agents use atm: run <code>atm agents install</code> in a terminal. It puts atm's skills where your
-      agent harness reads them (Claude Code: <code>~/.claude/skills</code>); <code>atm agents status</code> shows what is
-      installed.
+      Let your AI agents use Agentic Task Manager: run <code>atm agents install</code> in a terminal. It puts its skills
+      where your agent harness reads them (Claude Code: <code>~/.claude/skills</code>); <code>atm agents status</code> shows
+      what is installed.
     </p>
   {:else}
     <p class="agents-intro">
-      atm's skills let your AI agents use atm. Connecting a harness puts this version's skills where it reads yours, as
+      Its skills let your AI agents use Agentic Task Manager. Connecting a harness puts this version's skills where it
+      reads yours, as
       <code>atm agents install</code> does; nothing happens until you click.
     </p>
     {#if error}<p class="agents-error" id="agents-error" role="alert">{error}</p>{/if}
