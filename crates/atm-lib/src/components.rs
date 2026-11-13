@@ -394,5 +394,116 @@ pub fn edit_component(
     outcome.ok_or_else(|| invalid(format!("no component {}", repr_str(id))))
 }
 
+/// What a component's rename changed: its IDs, and how many tasks follow it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenamedComponent {
+    /// Its ID before.
+    pub from: String,
+    /// Its ID now.
+    pub to: String,
+    /// The tasks in tasks.json that list it.
+    pub tasks: usize,
+    /// The archived tasks that list it.
+    pub archived: usize,
+}
+
+/// The tasks in `list` whose `components` hold `from` hold `to` in its place; how many.
+fn rename_component_in(list: Option<&mut Vec<Value>>, from: &str, to: &str) -> usize {
+    let mut n = 0;
+    for task in list.into_iter().flatten().filter_map(Value::as_object_mut) {
+        let Some(components) = task.get_mut("components").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        let mut changed = false;
+        for entry in components.iter_mut() {
+            if entry.as_str() == Some(from) {
+                *entry = json!(to);
+                changed = true;
+            }
+        }
+        if changed {
+            // A task that listed both keeps one
+            let mut seen = Vec::new();
+            components.retain(|c| {
+                let keep = !seen.contains(c);
+                seen.push(c.clone());
+                keep
+            });
+            n += 1;
+        }
+    }
+    n
+}
+
+/// `atm component rename` (T-498): a component's ID; the tasks that list it, in tasks.json and the archive, follow. Its
+/// label, globs and review mode stay; a task's `updated_at` too, as the rename is the component's.
+///
+/// # Errors
+/// An unknown component, a new ID that isn't one or is another component's.
+pub fn rename_component(project: &mut Project, id: &str, new: &str) -> Result<RenamedComponent> {
+    if !valid_short_id(new) {
+        return Err(invalid(format!(
+            "{}: a component ID is letters, digits, '.', '-' and '_' (at most 64)",
+            repr_str(new)
+        )));
+    }
+    let mut outcome: Option<RenamedComponent> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = Vocabulary::of_document(&work.document)?;
+        let ids: Vec<String> = vocab
+            .components
+            .iter()
+            .map(|c| c.get("id").map(py_str).unwrap_or_default())
+            .collect();
+        let stored = work.document["meta"]["components"]
+            .as_array()
+            .and_then(|list| {
+                list.iter()
+                    .position(|c| c.get("id").and_then(Value::as_str) == Some(id))
+            });
+        let Some(at) = stored.filter(|_| ids.iter().any(|k| k == id)) else {
+            let listed = if ids.is_empty() {
+                "none yet".to_string()
+            } else {
+                ids.join(", ")
+            };
+            return Err(Error::Failed {
+                message: format!("no component {}; the components: {listed}", repr_str(id)),
+                code: 2,
+            });
+        };
+        if new == id {
+            return Err(invalid(format!(
+                "the component is already {}",
+                repr_str(id)
+            )));
+        }
+        if ids.iter().any(|k| k == new) {
+            return Err(invalid(format!(
+                "there is already a component {}",
+                repr_str(new)
+            )));
+        }
+        work.document["meta"]["components"][at]["id"] = json!(new);
+        let tasks = rename_component_in(work.document["tasks"].as_array_mut(), id, new);
+        let archived = rename_component_in(
+            work.archive()?
+                .get_mut("tasks")
+                .and_then(Value::as_array_mut),
+            id,
+            new,
+        );
+        Vocabulary::of_document(&work.document)?;
+        outcome = Some(RenamedComponent {
+            from: id.to_string(),
+            to: new.to_string(),
+            tasks,
+            archived,
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| invalid(format!("no component {}", repr_str(id))))
+}
+
 #[cfg(test)]
 mod tests;

@@ -17889,7 +17889,7 @@
       "description": "`atm release edit --name` sets a display name, but a release's ID (what tasks and sprints point to) can't change, so a typo in it (`0.34` for `0.34.0`) stays.\n\n## Change\n- `atm release rename <old> <new>`, the form of `atm workspace rename` and `atm sprint rename`.\n- Every reference follows: tasks' release, in `tasks.json` and `tasks-archive.json`, and sprints' `release`.\n- Refused: an ID in use, an ID that isn't valid (the rule `atm release add` checks).\n- In atm-lib (`releases.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/releases.json`: a release with tasks (one archived) and a sprint delivering to it, renamed; a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/releases.rs",
@@ -17898,7 +17898,7 @@
         "tests/scripts/scenarios/releases.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T11:06:39Z",
+      "updated_at": "2026-11-13T11:10:53Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -17913,7 +17913,18 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T11:06:39Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9d804a7718ed2c5984bdb6e240548a369b75ca96",
+      "completed_at": "2026-11-13T11:10:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:10:53Z",
+          "kind": "outcome",
+          "text": "`atm release rename <old> <new>` (atm-lib `rename_release`): tasks’ own `release` in tasks.json and the archive, and sprints’ `release`, follow; its name, state and dates stay. Refused: an ID another release has, one that isn’t valid, an unknown release. Four scenarios in releases.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-498",
@@ -17926,7 +17937,7 @@
       "description": "`atm component edit --label` sets the name shown, but the component's ID, which tasks list in `components`, can't change.\n\n## Change\n- `atm component rename <old> <new>`, the same form as the other renames.\n- Every reference follows: tasks' `components`, in `tasks.json` and `tasks-archive.json`.\n- Refused: an ID in use, an invalid ID.\n- In atm-lib (`components.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/components.json`: rename a component given to tasks (one archived); a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/components.rs",
@@ -17935,7 +17946,7 @@
         "tests/scripts/scenarios/components.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T11:11:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -17948,7 +17959,9 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:11:00Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-499",

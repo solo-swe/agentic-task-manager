@@ -29,7 +29,8 @@ to do (`loop next`), 4 the task is claimed by another agent.
 - `atm sprint list|add|edit|rename|start|close|delete|move|backlog`: sprints (planned, started and closed with the
   user); `atm sprint rename <old> <new>` renames one in any state, and its tasks (archived ones too) follow
 - `atm release …`, `atm component …`: releases, and the project's parts by file globs; `atm release rename <old>
-  <new>` changes a release's ID, and its tasks (archived ones too) and sprints follow
+  <new>` changes a release's ID, and its tasks (archived ones too) and sprints follow; `atm component rename <old>
+  <new>` a component's, and the tasks listing it follow
 - `atm db init --meta-file F`: the project and its vocabularies; `atm project workflow set`: how it pushes
 
 ## Maintenance
