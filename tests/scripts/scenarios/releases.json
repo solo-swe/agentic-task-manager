@@ -306,8 +306,14 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {
-            "releases": [{ "id": "0.34", "name": "Typo", "state": "released", "released_at": "2026-11-09T00:00:00Z" }, { "id": "0.35.0" }],
-            "sprints": [{ "id": "A", "state": "closed", "release": "0.34" }, { "id": "B", "release": "0.35.0" }]
+            "releases": [
+              { "id": "0.34", "name": "Typo", "state": "released", "released_at": "2026-11-09T00:00:00Z" },
+              { "id": "0.35.0" }
+            ],
+            "sprints": [
+              { "id": "A", "state": "closed", "release": "0.34" },
+              { "id": "B", "release": "0.35.0" }
+            ]
           },
           "tasks": [
             { "id": "T-2", "status": "done", "release": "0.34", "updated_at": "2026-01-01T00:00:00Z" },
@@ -328,7 +334,10 @@
               { "id": "0.34.0", "name": "Typo", "state": "released", "released_at": "2026-11-09T00:00:00Z" },
               { "id": "0.35.0" }
             ],
-            "sprints": [{ "id": "A", "state": "closed", "release": "0.34.0" }, { "id": "B", "release": "0.35.0" }]
+            "sprints": [
+              { "id": "A", "state": "closed", "release": "0.34.0" },
+              { "id": "B", "release": "0.35.0" }
+            ]
           },
           "tasks": [
             { "id": "T-2", "status": "done", "release": "0.34.0", "updated_at": "2026-01-01T00:00:00Z" },
@@ -336,7 +345,9 @@
             { "id": "T-4", "status": "todo", "release": "0.35.0" }
           ]
         },
-        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done", "release": "0.34.0" }] }
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "release": "0.34.0" }]
+        }
       }
     }
   },
@@ -345,9 +356,18 @@
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
-          "meta": { "releases": [{ "id": "0.36.0" }], "sprints": [{ "id": "A", "state": "closed", "release": "0.36.0" }] },
+          "meta": {
+            "releases": [{ "id": "0.36.0" }],
+            "sprints": [{ "id": "A", "state": "closed", "release": "0.36.0" }]
+          },
           "tasks": [
-            { "id": "T-1", "status": "done", "sprint": "A", "pr": { "number": 47 }, "merged_at": "2026-11-13T03:57:42Z" },
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "A",
+              "pr": { "number": 47 },
+              "merged_at": "2026-11-13T03:57:42Z"
+            },
             { "id": "T-2", "status": "done", "sprint": "A" },
             { "id": "T-3", "status": "skipped", "sprint": "A" }
           ]
@@ -364,7 +384,13 @@
             "sprints": [{ "id": "A", "state": "closed", "release": "0.36.0" }]
           },
           "tasks": [
-            { "id": "T-1", "status": "done", "sprint": "A", "pr": { "number": 47 }, "merged_at": "2026-11-13T03:57:42Z" },
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "A",
+              "pr": { "number": 47 },
+              "merged_at": "2026-11-13T03:57:42Z"
+            },
             { "id": "T-2", "status": "done", "sprint": "A" },
             { "id": "T-3", "status": "skipped", "sprint": "A" }
           ]
@@ -432,7 +458,9 @@
     "setup": {
       "files": {
         ".agentic-task-manager/tasks.json": {
-          "meta": { "releases": [{ "id": "1.0", "name": "First", "state": "released", "released_at": "2026-11-13T00:00:00Z" }] },
+          "meta": {
+            "releases": [{ "id": "1.0", "name": "First", "state": "released", "released_at": "2026-11-13T00:00:00Z" }]
+          },
           "tasks": []
         }
       }

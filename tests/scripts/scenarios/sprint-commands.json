@@ -133,7 +133,11 @@
         ".agentic-task-manager/tasks.json": {
           "meta": {
             "sprints": [
-              { "id": "Old", "state": "closed", "report": { "done": [], "carried": ["T-2"], "added": [], "to": "Now" } },
+              {
+                "id": "Old",
+                "state": "closed",
+                "report": { "done": [], "carried": ["T-2"], "added": [], "to": "Now" }
+              },
               { "id": "Now", "state": "active" }
             ]
           },
@@ -229,7 +233,9 @@
   {
     "name": "atm sprint rename refuses another sprint's name, in any case",
     "setup": {
-      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }, { "id": "B" }] }, "tasks": [] } }
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }, { "id": "B" }] }, "tasks": [] }
+      }
     },
     "args": ["sprint", "rename", "A", "b"],
     "expect": { "exit": 2, "stderrIncludes": ["there is already a sprint 'B'"] }
@@ -255,13 +261,17 @@
   },
   {
     "name": "atm sprint rename refuses an empty name",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
+    },
     "args": ["sprint", "rename", "A", " "],
     "expect": { "exit": 2, "stderrIncludes": ["a sprint needs a name"] }
   },
   {
     "name": "atm sprint rename of an unknown sprint names the sprints",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } }
+    },
     "args": ["sprint", "rename", "Z", "Y"],
     "expect": { "exit": 2, "stderrIncludes": ["no sprint 'Z'; the sprints: A"] }
   },

@@ -459,7 +459,9 @@
             { "id": "T-3", "status": "todo", "components": ["cli"] }
           ]
         },
-        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done", "components": ["dash"] }] }
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "components": ["dash"] }]
+        }
       }
     },
     "args": ["component", "rename", "dash", "dashboard"],
@@ -488,7 +490,10 @@
     "name": "atm component rename refuses another component's ID",
     "setup": {
       "files": {
-        ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }, { "id": "api" }] }, "tasks": [] }
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "components": [{ "id": "cli" }, { "id": "api" }] },
+          "tasks": []
+        }
       }
     },
     "args": ["component", "rename", "cli", "api"],
