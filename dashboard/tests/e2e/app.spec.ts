@@ -446,6 +446,44 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
   });
 
+  test('a tab dragged along the strip moves there and is kept; a plain click still selects; the bar still drags the window (T-532)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const first = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: [first, '/projects/second/list', '/board'], active: 0 };
+    await page.goto('/');
+    const tabs = page.locator('.title-bar-tab');
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(1)).toContainText('Second Project');
+    // Drag the third tab to the first place, with the mouse
+    const third = (await tabs.nth(2).boundingBox())!;
+    const start = (await tabs.nth(0).boundingBox())!;
+    await page.mouse.move(third.x + third.width / 2, third.y + third.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(third.x + third.width / 2 - 40, third.y + third.height / 2, { steps: 4 });
+    await page.mouse.move(start.x + 20, third.y + third.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(tabs.nth(1)).toContainText('Standard Project');
+    await expect(tabs.nth(2)).toContainText('Second Project');
+    // Kept in that order (the tab shown has its scope in its address by now)
+    await expect
+      .poll(() => tasksServer.savedTabs?.addresses.map((a) => a.split('?')[0]))
+      .toEqual(['/board', first, '/projects/second/list']);
+    // The drag didn't select it: the first project's tab is still shown
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    // A plain click selects
+    await tabs.nth(2).locator('[role="tab"]').click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Second Project');
+    // The bar's free space (just past the +) still moves the window
+    const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
+    await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
+    await expect.poll(() => tasksServer.windowCalls).toContain('start_dragging');
+  });
+
   test('what needs you (T-518, T-520): the page tells the app its workspace; the badge and notifications, off in Settings', async ({
     page,
     tasksServer,

@@ -5,7 +5,8 @@
   // tab shows is the app's (`label`); this component knows nothing about atm, so other apps can use it as it is.
   //
   // A WAI-ARIA tablist: the arrows, Home and End move between the tabs and select them, Enter and Space select the one
-  // with focus. Each tab is a button (role tab) filling the tab, its label drawn over it: a click on the label falls
+  // with focus. With `onmove`, a tab is dragged along the strip with the pointer, or moved a place with ⌃⇧ (⌘⇧) and an
+  // arrow (T-532). Each tab is a button (role tab) filling the tab, its label drawn over it: a click on the label falls
   // through to it, and controls of the label's own (a chooser, a link) keep their clicks, beside the button, not in it.
   import type { Snippet } from 'svelte';
 
@@ -45,22 +46,68 @@
   }: Props = $props();
 
   const elements: Record<string, HTMLElement> = {};
-  /** The drag's own data type: a tab of this strip, not a file or text */
-  const DRAG_TYPE = 'application/x-title-bar-tab';
-  let dragging = $state<string | null>(null);
 
-  function ondragstart(e: DragEvent, id: string) {
-    dragging = id;
-    e.dataTransfer?.setData(DRAG_TYPE, id);
-    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+  // Dragging a tab (T-532): with the pointer, not HTML5 drag and drop, which WebKit (the app's webview on macOS and
+  // Linux) never starts from a button. The tab follows the pointer along the strip; the others make room as it passes,
+  // and it lands where it is let go. A press that doesn't move past THRESHOLD is a click.
+  const THRESHOLD = 4;
+  let press: { id: string; from: number; x: number; pointer: number } | null = null;
+  let dragging = $state<string | null>(null);
+  let offset = $state(0);
+  /** A drag just ended: the click the browser sends after it isn't a select */
+  let dropped = false;
+
+  /** Where the dragged tab would land now: its place moved by how many tab widths it went */
+  const target = $derived.by(() => {
+    if (dragging === null || !press) return -1;
+    return Math.max(0, Math.min(tabs.length - 1, press.from + Math.round(offset / width)));
+  });
+
+  /** How far a tab moves aside while another is dragged past it */
+  function shift(index: number, id: string): number {
+    if (dragging === null || !press || id === dragging) return 0;
+    if (press.from < index && index <= target) return -width;
+    if (target <= index && index < press.from) return width;
+    return 0;
   }
 
-  function ondrop(e: DragEvent, index: number) {
-    const id = e.dataTransfer?.getData(DRAG_TYPE) || dragging;
+  function onpointerdown(e: PointerEvent, id: string, index: number) {
+    // A browser may send no click after a drag (Chromium doesn't, WebKit does): a new press starts afresh
+    dropped = false;
+    if (!onmove || e.button !== 0) return;
+    press = { id, from: index, x: e.clientX, pointer: e.pointerId };
+  }
+
+  function onpointermove(e: PointerEvent) {
+    if (!press || e.pointerId !== press.pointer) return;
+    const dx = e.clientX - press.x;
+    if (dragging === null && Math.abs(dx) < THRESHOLD) return;
+    if (dragging === null) {
+      dragging = press.id;
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    }
+    offset = dx;
+  }
+
+  function onpointerup(e: PointerEvent) {
+    if (!press || e.pointerId !== press.pointer) return;
+    const moved = dragging !== null;
+    const { id, from } = press;
+    const to = target;
+    press = null;
     dragging = null;
-    if (!id || !onmove) return;
-    e.preventDefault();
-    onmove(id, index);
+    offset = 0;
+    if (!moved) return;
+    dropped = true;
+    if (to !== from) onmove?.(id, to);
+  }
+
+  function onclick(id: string) {
+    if (dropped) {
+      dropped = false;
+      return;
+    }
+    onselect(id);
   }
 
   /** A middle click closes a tab, as in a browser */
@@ -73,6 +120,17 @@
 
   function onkeydown(e: KeyboardEvent, index: number) {
     const last = tabs.length - 1;
+    // ⌃⇧ (⌘⇧ on macOS) with an arrow moves the focused tab one place, as a drag would
+    if (onmove && e.shiftKey && (e.ctrlKey || e.metaKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      const to = e.key === 'ArrowLeft' ? index - 1 : index + 1;
+      if (to >= 0 && to <= last) {
+        const id = tabs[index].id;
+        onmove(id, to);
+        queueMicrotask(() => elements[id]?.focus());
+      }
+      return;
+    }
     const to =
       e.key === 'ArrowRight'
         ? Math.min(index + 1, last)
@@ -93,7 +151,17 @@
 
 <div class="title-bar-tabs" role="tablist" aria-label={ariaLabel} style:--tab-width="{width}px">
   {#each tabs as tab, index (tab.id)}
-    <div class="title-bar-tab" class:selected={tab.id === active} class:dragging={dragging === tab.id}>
+    <div
+      class="title-bar-tab"
+      class:selected={tab.id === active}
+      class:dragging={dragging === tab.id}
+      class:sliding={dragging !== null && dragging !== tab.id}
+      style:transform={dragging === tab.id
+        ? `translateX(${offset}px)`
+        : shift(index, tab.id)
+          ? `translateX(${shift(index, tab.id)}px)`
+          : undefined}
+    >
       <!-- The tab itself (Enter and Space select it, as a button's click), named by its label; dragged to move it -->
       <button
         bind:this={elements[tab.id]}
@@ -102,15 +170,15 @@
         id="{idPrefix}{tab.id}"
         aria-selected={tab.id === active}
         aria-labelledby="{idPrefix}{tab.id}-label"
+        aria-keyshortcuts={onmove ? 'Control+Shift+ArrowLeft Control+Shift+ArrowRight' : undefined}
         tabindex={tab.id === active ? 0 : -1}
-        draggable={onmove ? 'true' : undefined}
-        onclick={() => onselect(tab.id)}
+        onclick={() => onclick(tab.id)}
         onauxclick={(e) => onauxclick(e, tab.id)}
         onkeydown={(e) => onkeydown(e, index)}
-        ondragstart={(e) => ondragstart(e, tab.id)}
-        ondragend={() => (dragging = null)}
-        ondragover={(e) => dragging && e.preventDefault()}
-        ondrop={(e) => ondrop(e, index)}
+        onpointerdown={(e) => onpointerdown(e, tab.id, index)}
+        {onpointermove}
+        {onpointerup}
+        onpointercancel={onpointerup}
       ></button>
       <div class="title-bar-tab-label" id="{idPrefix}{tab.id}-label">{@render label(tab)}</div>
       {#if onclose}
@@ -158,8 +226,18 @@
   .title-bar-tab.selected {
     background: var(--bg);
   }
+  /* The dragged tab follows the pointer, over the others; they slide aside to make room */
   .title-bar-tab.dragging {
-    opacity: 0.5;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--overlay) 35%, transparent);
+    z-index: 2;
+  }
+  .title-bar-tab.sliding {
+    transition: transform 0.15s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .title-bar-tab.sliding {
+      transition: none;
+    }
   }
   /* The tab's button fills it, under the label */
   .title-bar-tab-select {

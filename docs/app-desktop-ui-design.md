@@ -163,7 +163,10 @@ tab's address, as a click on a project does today. So the dashboard's state stay
 router, deep links and T-506's subscriptions work as they do, and a tab costs nothing while it isn't shown.
 
 - **The tab strip:** each tab its project's logo and name (or the page's title), a close button, and the needs-you
-  count of its project; drag to reorder; the **+**, ⌘T and File ▸ New Tab open the workspace's overview.
+  count of its project; drag to reorder; the **+**, ⌘T and File ▸ New Tab open the workspace's overview. The drag is
+  the page's own, with the pointer (T-532): HTML5 drag and drop never starts from a button in WebKit, the app's webview
+  on macOS and Linux. The tab follows the pointer, the others slide aside, and the order is kept (`save_tabs`); a
+  press that doesn't move is a click, and ⌃⇧← / ⌃⇧→ (⌘⇧ on macOS) move the focused tab a place.
 - **Switching** (a click, ⌃Tab and ⌃⇧Tab, ⌘⇧] and ⌘⇧[; ⌘1–⌘6 stay the views'): the page navigates to the tab's
   address.
   The project's data is loaded again through the commands (the same as switching projects now); the tab keeps what is

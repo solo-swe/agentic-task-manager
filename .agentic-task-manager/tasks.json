@@ -19812,7 +19812,7 @@
       "description": "Users see \"atm\" as the product's name: the app's menu bar (`About atm`, `Quit atm`, in `app/src-tauri/src/menu.rs`), its window title and `productName` (`tauri.conf.json`), the dashboard's titles and About dialog, notifications. Use **Agentic Task Manager** there. The command stays `atm`, and so do commands, paths and text about the command (`atm serve`, `atm agents install`).\n\n## Change\n- The app: the menus (\"About Agentic Task Manager\", \"Quit Agentic Task Manager\", …), the window title, the notifications' and badge's app name. `productName` decides the bundle's name (`Agentic Task Manager.app`): check what that changes for the updater (`latest.json`'s archive, the installed app's path), signing and notarizing (`packaging/`), the Homebrew cask and the release script, so an installed 0.36.0 still updates to it in place; if the bundle's name can't change safely, keep it and change only what the menus and windows show, and say why in the outcome.\n- The dashboard: the page's `<title>`, the About dialog, the empty states and any other text naming the product (not the command).\n- README and the What's new entry say so.\n\n## Tests\nThe app's Rust tests for the menu (its items' labels), unit and e2e tests that read the titles; the update from 0.36.0 is checked by hand at the release, with Hakan (as T-522).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/tauri.conf.json",
@@ -19823,7 +19823,7 @@
         "README.md"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T11:53:15Z",
+      "updated_at": "2026-11-13T11:58:54Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19838,7 +19838,18 @@
         "docs"
       ],
       "started_at": "2026-11-13T11:53:15Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "67574c2520bd42204c7f036afda365db6f511e68",
+      "completed_at": "2026-11-13T11:58:54Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:58:54Z",
+          "kind": "outcome",
+          "text": "“Agentic Task Manager” in the menus, window title, notifications, update notice and agents dialog; Info.plist sets CFBundleName and CFBundleDisplayName (menu bar, Dock, Finder). productName stays atm: the bundle is still atm.app, so the updater, signing and cask need no change. Commands keep atm. Check at the release with Hakan: the menu bar’s name and an update from 0.36.0.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-532",
@@ -19852,7 +19863,7 @@
       "description": "Found by Hakan: the app's tabs (`AppTitleBar.svelte`) can't be reordered by drag and drop. `AppTabs.move(id, to)` ([app-tabs.svelte.ts](dashboard/src/lib/app-tabs.svelte.ts)) exists for it, but nothing in the title bar calls it, and a mouse-down on the bar starts the window's drag (`start_dragging`).\n\n## Change\n- Dragging a tab sideways moves it among the tabs, as a browser's or Finder's tabs do: the others make room as it passes, it lands where it is let go, and the order is saved with the tabs (`save_tabs`, T-518). A click without moving still selects it; a drag on the bar's free space still moves the window.\n- With the keyboard too: a shortcut, or the tab's context, moves the focused tab left or right (choose one that doesn't clash with the menu's, `menu.rs`), and the [desktop UI design](docs/app-desktop-ui-design.md) says how.\n- Within one window; dragging a tab out to another window is not part of this.\n\n## Tests\nUnit tests for the move (`app-tabs`), and an app e2e spec: drag the third tab to the first place, the order shown and saved, a plain click still selects, the bar's free space still drags the window (`windowCalls`).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -19862,9 +19873,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T11:01:00Z",
-      "updated_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T11:58:59Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -19875,7 +19886,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-13T11:58:59Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-533",
