@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 528,
+    "next_id": 532,
     "labels": [
       {
         "id": "architecture",
@@ -1111,6 +1111,12 @@
             "T-525"
           ]
         }
+      },
+      {
+        "id": "Updates and renames",
+        "state": "planned",
+        "goal": "The app updates smoothly and uses CompMD 0.7.0 as recommended, tab and title polish, releases marked released by hand, and renames in the CLI",
+        "release": "0.37.0"
       }
     ],
     "releases": [
@@ -1332,6 +1338,10 @@
       },
       {
         "id": "0.36.0",
+        "state": "planned"
+      },
+      {
+        "id": "0.37.0",
         "state": "planned"
       }
     ],
@@ -17839,13 +17849,20 @@
         "tests/scripts/scenarios/sprint-commands.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-497",
@@ -17867,13 +17884,20 @@
         "tests/scripts/scenarios/releases.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-498",
@@ -17895,13 +17919,20 @@
         "tests/scripts/scenarios/components.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-499",
@@ -17923,13 +17954,20 @@
         "tests/scripts/scenarios/edit.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-500",
@@ -17951,13 +17989,20 @@
         "tests/scripts/scenarios/vocab.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:20Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-501",
@@ -19355,7 +19400,7 @@
     },
     {
       "id": "T-524",
-      "name": "Check atm's app against CompMD's redesigned Tauri plugin and its guidance for Tauri apps",
+      "name": "Update to CompMD 0.7.0 and use it as CompMD recommends, the Tauri integration above all",
       "type": "refactor",
       "priority": "P2",
       "labels": [
@@ -19365,7 +19410,7 @@
       "description": "CompMD is redesigning `tauri-plugin-compmd` and how Tauri apps should use CompMD. **Waits for that redesign task in CompMD** (its release and its documentation for Tauri apps).\n\nOnce it's out, check atm's app against it and bring it up to the standard:\n\n## What to compare\n- **The plugin and its version:** `tauri-plugin-compmd` (pinned with `=` to the `@compmd/*` packages' version, `app/src-tauri/Cargo.toml`), and how the app registers it (`app/src-tauri/src/lib.rs`).\n- **What atm serves itself on `atm:`** (`app/src-tauri/src/assets.rs`, embedded by `app/src-tauri/build.rs`): `compmd.js`, its WebAssembly and the packs' modules. Does the plugin now serve these, or say how an app should?\n- **The page's side** (`dashboard/src/lib/compmd.ts`: `sandboxOptions`, `fetchPackModules`, `moduleUrl`): the frames' `base`, the packs' modules handed over as code checked by their `integrity`. Is this still the recommended way, or does CompMD's API cover it now?\n- **The window's CSP** (`tauri.conf.json`, I26 in `docs/security-architecture.md`): the `atm://localhost/assets/compmd/` and `compmd://localhost/frames/` folders, and their `http://….localhost` forms for Windows.\n- **Caching:** T-508 found WebKit asks again for each `atm:` file (`no-cache`); check against what CompMD now recommends.\n\n## Then\nWhere atm differs from the standard: change it (or record why not), keeping `atm serve` and the app serving the same files with the same headers (`tests/scripts/compmd-host-headers.json`). Update [ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md) (or a new ADR replacing it), I26, and the [Tauri guide](docs/guides/tauri.md). New dependencies or plugin versions need a yes first.\n\n## Checks\nThe app's Rust tests (`the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them`, `the_windows_csp_is_strict`, `assets.rs`'s), `compmd.test.ts`, the app e2e specs, and by hand: diagrams draw in the app (`cargo tauri dev`, and a release bundle).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "todo",
       "dependencies": [],
       "files": [
         "app/src-tauri/Cargo.toml",
@@ -19379,18 +19424,35 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-10T22:42:38Z",
-      "updated_at": "2026-11-10T22:42:44Z",
+      "updated_at": "2026-11-13T04:51:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
       ],
-      "waiting_on": "user",
-      "questions": [
-        "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this."
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
       ],
-      "blocked_at": "2026-11-10T22:42:44Z"
+      "sprint": "Updates and renames",
+      "blocks": [
+        {
+          "from": "2026-11-10T22:42:44Z",
+          "to": "2026-11-13T04:51:11Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-13T04:51:11Z",
+          "kind": "answer",
+          "text": "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this. → CompMD 0.7.0 is out (Hakan, 2026-11-13): update atm to it and use it as CompMD now recommends, the Tauri integration above all.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-525",
@@ -19464,15 +19526,22 @@
         "dashboard/src/lib/shell/UpdateNotice.svelte"
       ],
       "created_at": "2026-11-13T04:33:45Z",
-      "updated_at": "2026-11-13T04:33:45Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-522"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
     },
     {
       "id": "T-527",
@@ -19495,11 +19564,167 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-13T04:38:39Z",
-      "updated_at": "2026-11-13T04:38:39Z",
+      "updated_at": "2026-11-13T04:51:06Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
+        "docs"
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames"
+    },
+    {
+      "id": "T-528",
+      "name": "CI: the app's tab-switch timing test failed on main (Next Tab to the List, 416 and 523 ms against 400)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "CI run 43367214532 on `main` (after 0.36.0) failed `performance.spec.ts` \"performance in the app: its tabs (T-525) › a click on a tab, and Next Tab round them all\": `next tab: list` took 416 ms, then 523 ms on the retry, against CI's 400 ms budget. It passed on PR #47's CI, so it is close to the limit.\n\n## Change\n- Measure it locally (`pnpm exec playwright test performance`, after `pnpm run build`), and find what the switch to the List costs: `TaskGrid` is mounted only while shown (T-525), so it is built on every switch to it.\n- Fix the cause (e.g. keep the List mounted once built, hidden while another view shows, or make its first render cheaper), so the List's switch is well under the budget, as the other views are.\n- Never raise the budget or just re-run (AGENTS.md, CI).\n\n## Tests\nThe timing test itself, run several times locally, and the area specs of the views (`kanban`, `list`, `graph`), then the functional e2e suite once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/tasks/TaskGrid.svelte",
+        "dashboard/src/lib/shell/ViewPanel.svelte",
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T04:52:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-525"
+      ]
+    },
+    {
+      "id": "T-529",
+      "name": "Desktop app: the tab labels slide right and back as the sidebar is shown and hidden",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "In the app's title bar (`AppTitleBar.svelte`), the tabs jump when the sidebar is toggled (`dashboard.sidebarOpen`). Make them slide: to the right as the sidebar opens, back to the left as it closes, in step with the sidebar's own animation (same duration and easing, from the tokens).\n\n## Notes\n- No motion with reduced motion (`prefers-reduced-motion`): they move at once, as now.\n- Animate a transform rather than the layout where possible, so the switch stays cheap (the T-525 timing budget).\n- [The desktop UI design](docs/app-desktop-ui-design.md) gets a line on it.\n\n## Tests\nAn app e2e spec: the tabs' position after the toggle both ways, with motion on (as the overview's need-you list test does) and reduced; then the app specs and the functional suite once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T04:52:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-530",
+      "name": "Desktop app: the Progress and Activity pills move into the project's tab, at the right of the subtitle line",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "In the app, the project's Progress and Activity pills (`projectPills` in `Header.svelte`) belong to the tab's project, so they go into the tab, on the subtitle line (where T-516 put the search and Filters), aligned right; no longer at the title bar's right. The browser keeps them where they are.\n\n## Notes\n- They show only for a project's tab (not the overview), and still open what they open now.\n- On a narrow window they give way before the subtitle text does (it truncates last), and never overlap the search or Filters.\n- [The desktop UI design](docs/app-desktop-ui-design.md) says where they are.\n\n## Tests\nApp e2e: the pills are in the tab's subtitle line, at its right, for a project and not for the overview, and the browser's are unchanged; the area specs, then the functional suite once. Screenshots change in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/Header.svelte",
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T04:52:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-531",
+      "name": "Call it Agentic Task Manager where users see its name (the app's menus and windows, the dashboard), keeping the command atm",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard",
+        "distribution"
+      ],
+      "description": "Users see \"atm\" as the product's name: the app's menu bar (`About atm`, `Quit atm`, in `app/src-tauri/src/menu.rs`), its window title and `productName` (`tauri.conf.json`), the dashboard's titles and About dialog, notifications. Use **Agentic Task Manager** there. The command stays `atm`, and so do commands, paths and text about the command (`atm serve`, `atm agents install`).\n\n## Change\n- The app: the menus (\"About Agentic Task Manager\", \"Quit Agentic Task Manager\", …), the window title, the notifications' and badge's app name. `productName` decides the bundle's name (`Agentic Task Manager.app`): check what that changes for the updater (`latest.json`'s archive, the installed app's path), signing and notarizing (`packaging/`), the Homebrew cask and the release script, so an installed 0.36.0 still updates to it in place; if the bundle's name can't change safely, keep it and change only what the menus and windows show, and say why in the outcome.\n- The dashboard: the page's `<title>`, the About dialog, the empty states and any other text naming the product (not the command).\n- README and the What's new entry say so.\n\n## Tests\nThe app's Rust tests for the menu (its items' labels), unit and e2e tests that read the titles; the update from 0.36.0 is checked by hand at the release, with Hakan (as T-522).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/src/menu.rs",
+        "dashboard/src/app.html",
+        "dashboard/src/lib/dialogs/AboutDialog.svelte",
+        "packaging/README.md",
+        "README.md"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T04:52:06Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
         "docs"
       ]
     }
