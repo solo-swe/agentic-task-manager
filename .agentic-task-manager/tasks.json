@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 535,
+    "next_id": 537,
     "labels": [
       {
         "id": "architecture",
@@ -18033,7 +18033,7 @@
       "description": "A project's statuses, types and priorities are set only with `atm db init --meta-file`, which replaces a whole list: changing an ID there leaves the tasks that use the old one invalid (`atm doctor` reports them).\n\n## Change\n- A rename of one entry's ID (and, separately, its label) that moves every task using it, in `tasks.json` and `tasks-archive.json`: a task's `status` and its history, `type`, `priority`, and `meta.default_priority`.\n- Refused: an ID in use in that list.\n- Propose the command's form so it matches the other renames (sprint, release, component, label).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/vocab.json`: rename a status in use (with history), a type and the default priority; `atm doctor` stays clean.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/settings.rs",
@@ -18042,7 +18042,7 @@
         "tests/scripts/scenarios/vocab.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T13:00:56Z",
+      "updated_at": "2026-11-13T13:06:34Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18057,7 +18057,18 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T13:00:56Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0c619290606508b00101b97eed085dae5e78de6a",
+      "completed_at": "2026-11-13T13:06:34Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T13:06:34Z",
+          "kind": "outcome",
+          "text": "`atm project vocab rename status|type|priority <old> [<new>] [--label L]` (atm-lib `settings::rename_term`): the entry’s ID and/or label; tasks’ status, type or priority (tasks.json and the archive) and meta.default_priority follow; a project on the defaults gets the list written into meta. Refused: an ID another entry has, an unknown entry, nothing to change. Five scenarios in vocab.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-501",
@@ -19997,6 +20008,79 @@
       ],
       "review": "blocker",
       "with": "user"
+    },
+    {
+      "id": "T-535",
+      "name": "Desktop app: the sidebar the window's full height, the title bar and its tabs only to its right (as Notion's)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Hakan on T-529: the tabs sliding with the sidebar lag and don't line up. Notion splits the window instead: the sidebar is a column the window's full height, and the title bar with the tabs belongs to the area right of it, so the tabs move with that area and need no animation of their own.\n\n## Change\n- **The sidebar:** from the window's top (not under the title bar, `top: 40px` in `Sidebar.svelte`), with a top strip of the title bar's height holding the sidebar button, after room for macOS's traffic lights (`trafficLightPosition`); a mouse-down on the strip's free space drags the window, a double click maximizes it (`onBarMouseDown`). On Windows and Linux the page's menus stay at the window's left (decide: the strip or the title bar), the window buttons at the right of the title bar.\n- **The title bar** (`AppTitleBar.svelte`) starts at the sidebar's edge: no margin over the sidebar (`--sidebar-offset`); with the sidebar open it needs no room for the traffic lights, with it closed it does, and the sidebar button is in it.\n- **T-529's sliding margin goes** (the lead's `margin-right`, `--lead-end`, the `$effect` measuring it, its e2e test), and the design doc's line on it is rewritten.\n\n## Tests\nApp e2e: open, the sidebar starts at the window's top and the first tab at its edge, the button in the sidebar's strip; closed, the tabs after the traffic lights' room and the button in the title bar; the strip drags the window. Unit tests (`AppTitleBar`, `Sidebar` components) updated; the full functional suite once. Checked by eye in `cargo tauri dev` with Hakan.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/app.spec.ts",
+        "docs/app-desktop-ui-design.md"
+      ],
+      "created_at": "2026-11-13T14:00:19Z",
+      "updated_at": "2026-11-13T14:00:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T14:00:19Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-529"
+      ]
+    },
+    {
+      "id": "T-536",
+      "name": "Desktop app: macOS's menu bar says Agentic Task Manager in dev builds too (bundle.macOS.bundleName)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "Hakan: `cargo tauri dev` still shows \"atm\" in the menu bar after T-531. Tauri writes `CFBundleName` into the app's Info.plist from `bundle.macOS.bundleName`, else `productName` (\"atm\"), over the key in `app/src-tauri/Info.plist` (tauri-codegen for dev builds; check the bundler does the same).\n\n## Change\n- Set `bundle.macOS.bundleName` to \"Agentic Task Manager\" in `tauri.conf.json`; `productName` stays `atm`, so the bundle's file is still `atm.app` (the updater, signing and the cask).\n- Drop `CFBundleName` from `Info.plist` (one source), keep `CFBundleDisplayName`, and fix its comment.\n- A Rust test that `bundleName` is the app's name (`menu::APP_NAME`) and `productName` stays `atm`.\n\n## Check\nBy hand: `cargo tauri dev` shows Agentic Task Manager in the menu bar (Hakan).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/Info.plist",
+        "app/src-tauri/src/lib.rs"
+      ],
+      "created_at": "2026-11-13T14:00:19Z",
+      "updated_at": "2026-11-13T14:00:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T14:00:19Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "related": [
+        "T-531"
+      ]
     }
   ]
 }
