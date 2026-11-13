@@ -46,6 +46,7 @@
 <header
   class="app-titlebar"
   class:system-buttons={shell?.system_window_buttons && !dashboard.sidebarOpen}
+  class:flush={dashboard.sidebarOpen && shell?.system_menu_bar !== false}
   id="app-titlebar"
   onmousedown={onBarMouseDown}
 >
@@ -121,6 +122,14 @@
     gap: var(--space-3);
     margin-left: auto;
     min-width: 0;
+  }
+  /* With the sidebar open (and no menus of the page's before the tabs), the first tab starts at the sidebar's edge:
+     the sidebar's border is its left line, not a second one beside it */
+  .app-titlebar.flush {
+    padding-left: 0;
+  }
+  .app-titlebar.flush :global(.title-bar-tab:first-child) {
+    border-left: none;
   }
   /* macOS's traffic lights sit over the window's left end (trafficLightPosition in tauri.conf.json): over this bar
      while the sidebar is closed, over the sidebar's top strip while it is open */

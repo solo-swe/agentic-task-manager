@@ -335,7 +335,10 @@ test.describe('the dashboard in the atm app', () => {
     expect(side.y).toBe(0);
     const edge = Math.round(side.x + side.width);
     await expect.poll(async () => Math.round((await box(bar)).x)).toBe(edge);
-    expect((await box(page.locator('.title-bar-tab').first())).x).toBeLessThan(edge + 24);
+    // The first tab starts right at the sidebar's edge, its border the sidebar's: one line there, not two
+    const firstTab = page.locator('.title-bar-tab').first();
+    expect(Math.round((await box(firstTab)).x)).toBe(edge);
+    await expect(firstTab).toHaveCSS('border-left-style', 'none');
     // The button is in the sidebar's top strip, not the bar; the strip drags the window
     await expect(page.locator('#app-sidebar-top #app-sidebar-toggle')).toBeVisible();
     await expect(bar.locator('#app-sidebar-toggle')).toHaveCount(0);
