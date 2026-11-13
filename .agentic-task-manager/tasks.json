@@ -19612,7 +19612,7 @@
       "description": "A release becomes `released` only when `atm vcs pushed` finds every one of its tasks merged in a PR. A release with a task that has no commit (a check done with the user, such as T-521 for 0.35.0 and T-522 for 0.36.0) never does: 0.32.0, 0.35.0 and 0.36.0 still show `planned` though they are out. There is no command to say so by hand.\n\n## Change\n- `atm release edit <id> --released [YYYY-MM-DD]` marks the release released, on the date given (today without one); `--planned` takes it back. It says which of its tasks are not done or not merged, and goes ahead (the user's call), unless a task is still open (to do, in progress, in review, blocked), which it refuses unless `--force`.\n- `atm release list` and the dashboard's release view show a release marked by hand as released, with its date.\n- `docs/agent/` (the release commands) and the release steps in `packaging/README.md` say to run it after publishing, when a release holds such a task.\n\n## Tests\nA scenario in `tests/scripts/scenarios/` (mark, unmark, the refusal for an open task and `--force`, the list's line), and atm-lib's unit tests for the rule.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/release.rs",
@@ -19622,7 +19622,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-13T04:38:39Z",
-      "updated_at": "2026-11-13T11:22:36Z",
+      "updated_at": "2026-11-13T11:42:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19638,7 +19638,17 @@
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T11:14:00Z",
       "started_by": "claude:0f56a916",
-      "commit": "7e5871eaa548952a01bb579c95a70a954b8919a1"
+      "commit": "7e5871eaa548952a01bb579c95a70a954b8919a1",
+      "completed_at": "2026-11-13T11:42:40Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:42:40Z",
+          "kind": "outcome",
+          "text": "`atm release edit <id> --released [YYYY-MM-DD]` (today without a date) and `--planned` (atm-lib `mark_release`): names the tasks done but not merged; refuses while one is open unless `--force`. `atm release list` and the dashboard already show a released release with its date. Seven scenarios and a unit test; docs/agent/commands.md and packaging/README.md (step 5).",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-528",
@@ -19702,7 +19712,7 @@
       "description": "In the app's title bar (`AppTitleBar.svelte`), the tabs jump when the sidebar is toggled (`dashboard.sidebarOpen`). Make them slide: to the right as the sidebar opens, back to the left as it closes, in step with the sidebar's own animation (same duration and easing, from the tokens).\n\n## Notes\n- No motion with reduced motion (`prefers-reduced-motion`): they move at once, as now.\n- Animate a transform rather than the layout where possible, so the switch stays cheap (the T-525 timing budget).\n- [The desktop UI design](docs/app-desktop-ui-design.md) gets a line on it.\n\n## Tests\nAn app e2e spec: the tabs' position after the toggle both ways, with motion on (as the overview's need-you list test does) and reduced; then the app specs and the functional suite once.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -19711,9 +19721,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T11:42:44Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -19724,7 +19734,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-13T11:42:44Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-530",

@@ -312,6 +312,39 @@ test.describe('the dashboard in the atm app', () => {
     await expect(sidebar).toBeVisible();
   });
 
+  test('the tabs slide to the sidebar’s edge as it opens and back as it closes; at once with reduced motion (T-529)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    await page.goto('/');
+    const sidebar = page.locator('#app-sidebar');
+    const firstTab = page.locator('.title-bar-tab').first();
+    const left = async () => Math.round((await firstTab.boundingBox())!.x);
+    const lead = page.locator('#app-titlebar-lead');
+    const edge = async () => {
+      const box = (await sidebar.boundingBox())!;
+      return Math.round(box.x + box.width);
+    };
+    await expect(sidebar).toBeVisible();
+    // Open: the first tab starts at the sidebar's edge
+    await expect.poll(left).toBe(await edge());
+    // Closing it slides them back, by a transition, to just after the lead
+    await page.locator('#app-sidebar-toggle').click();
+    await expect(sidebar).toHaveCount(0);
+    await expect(lead).toHaveCSS('transition-property', 'margin-right');
+    const leadBox = (await lead.boundingBox())!;
+    await expect.poll(left).toBeLessThan(Math.round(leadBox.x + leadBox.width) + 16);
+    // Reduced motion: no transition, the tabs move at once
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(lead).toHaveCSS('transition-duration', '0s');
+    await page.locator('#app-sidebar-toggle').click();
+    await expect(sidebar).toBeVisible();
+    expect(await left()).toBe(await edge());
+  });
+
   test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
     page,
     tasksServer,

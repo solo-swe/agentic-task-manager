@@ -39,6 +39,17 @@
     document.title = title;
     void setWindowTitle(title);
   });
+
+  // Where the lead ends, from the window's left edge (the bar starts there): the tabs move past the sidebar only by
+  // what it covers beyond that (T-529)
+  let lead = $state<HTMLElement>();
+  let leadWidth = $state(0);
+  let leadEnd = $state(0);
+  // Read after the DOM is updated: the shell's answer moves the lead (macOS's traffic lights) without resizing it
+  $effect(() => {
+    void shell;
+    if (lead) leadEnd = lead.offsetLeft + leadWidth;
+  });
 </script>
 
 <!-- A mouse-down on the bar's free space drags the window (a pointer gesture, as the system's title bar's) -->
@@ -47,18 +58,23 @@
   class="app-titlebar"
   class:system-buttons={shell?.system_window_buttons}
   id="app-titlebar"
+  style:--lead-end="{leadEnd}px"
   onmousedown={onBarMouseDown}
 >
-  {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
-  <!-- Show or hide the sidebar (T-515; View ▸ Show Sidebar) -->
-  <button
-    class="app-sidebar-toggle"
-    id="app-sidebar-toggle"
-    title={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-    aria-label={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-    aria-pressed={dashboard.sidebarOpen}
-    onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
-  >
+  <!-- The bar's lead: the menus (Windows, Linux) and the sidebar button. With the sidebar open, the tabs slide to its
+       edge, over the page they show (T-529): the lead's right margin makes up the difference -->
+  <div class="app-titlebar-lead" id="app-titlebar-lead" bind:this={lead} bind:clientWidth={leadWidth}>
+    {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
+    <!-- Show or hide the sidebar (T-515; View ▸ Show Sidebar) -->
+    <button
+      class="app-sidebar-toggle"
+      id="app-sidebar-toggle"
+      title={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
+      aria-label={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
+      aria-pressed={dashboard.sidebarOpen}
+      onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
+    >
+  </div>
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -121,6 +137,21 @@
     user-select: none;
     /* Over the page's header pinned under it */
     z-index: 50;
+  }
+  /* With the sidebar open, the tabs start at its edge: the lead's margin is what the sidebar covers past the lead; it
+     slides as the sidebar opens and closes, at once with reduced motion (T-529) */
+  .app-titlebar-lead {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: var(--space-3);
+    margin-right: max(0px, calc(var(--sidebar-offset, 0px) - var(--lead-end, 0px) - var(--space-3)));
+    transition: margin-right 0.2s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-titlebar-lead {
+      transition: none;
+    }
   }
   .app-titlebar-end {
     align-items: center;

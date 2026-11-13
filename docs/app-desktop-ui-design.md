@@ -210,7 +210,8 @@ changes:
 It is a Svelte component (`shell/Sidebar.svelte`), shown only in the app, from what the page already loads
 (`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the title bar's sidebar button
 toggle it, and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser
-keeps its selectors.
+keeps its selectors. While it is open, the title bar's tabs start at its edge, over the page they show, and slide there
+and back as it opens and closes (T-529; at once with reduced motion).
 
 macOS's translucent sidebar (vibrancy) needs a transparent window and has no equal on the others; it is not proposed.
 
