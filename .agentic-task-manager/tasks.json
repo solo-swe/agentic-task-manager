@@ -19721,7 +19721,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T11:46:11Z",
+      "updated_at": "2026-11-13T12:03:59Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19737,7 +19737,7 @@
       ],
       "started_at": "2026-11-13T11:42:44Z",
       "started_by": "claude:0f56a916",
-      "commit": "5d677a9a2ddd8e2ff65ff44127d24bb72d18bd8d",
+      "commit": "54b90a5572b992ca5162d66ddb731810ba7f1ea8",
       "completed_at": "2026-11-13T11:46:11Z",
       "completed_by": "claude:0f56a916",
       "notes": [
@@ -19745,6 +19745,12 @@
           "at": "2026-11-13T11:46:11Z",
           "kind": "outcome",
           "text": "With the sidebar open, the title bar’s tabs start at its edge: the bar’s lead (menus, sidebar button) gets a right margin of what the sidebar covers past it, transitioned (0.2 s), at once with reduced motion. E2e checks both positions and both motion settings; full functional suite 436 passed; the design doc §4 says so. Worth a look by eye in the app (the margin’s easing).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-13T12:03:59Z",
+          "kind": "note",
+          "text": "Its title bar’s `bind:clientWidth` needs ResizeObserver, which jsdom lacks: AppTitleBar’s component tests failed until 54b90a5 stubbed it in tests/unit/setup.ts (found in T-532; the unit tests weren’t run for T-529).",
           "by": "claude:0f56a916"
         }
       ]
@@ -19913,16 +19919,16 @@
       "description": "Found by Hakan: in the app's sidebar ([Sidebar.svelte](dashboard/src/lib/shell/Sidebar.svelte)) some projects show no progress. Each row draws a bar from `project.summary?.active_sprint?.percent ?? project.summary?.percent ?? 0`.\n\n## Find out\nWhich projects and why, against the overview's cards, which show progress for the same projects: a summary not loaded yet (or not at all) for projects that aren't open, a `percent` of 0 drawn as an empty bar (a sprint just started), a project without sprints, or the bar hidden by the row's layout.\n\n## Change\n- Every project that isn't missing shows its progress as the overview's card does (the active sprint's, else the project's), from the start and as it changes; a project with nothing to count says so rather than showing an empty bar that reads as missing.\n- If the summary is missing for some projects, fix where it is loaded (the app's `list_projects`), not only the sidebar.\n\n## Tests\nAn app e2e spec with several projects (with and without sprints, one just started, one not opened yet): each row's bar matches its card on the overview; unit tests for whatever computes it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/Sidebar.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T11:01:00Z",
-      "updated_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T12:32:04Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -19932,7 +19938,9 @@
       "sprint": "Updates and renames",
       "components": [
         "dashboard"
-      ]
+      ],
+      "started_at": "2026-11-13T12:32:04Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-534",

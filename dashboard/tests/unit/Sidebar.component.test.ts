@@ -42,6 +42,37 @@ describe('Sidebar (T-515)', () => {
     expect(document.documentElement.style.getPropertyValue('--sidebar-offset')).toBe('240px');
   });
 
+  it('every project shows its progress as its card counts it: the active sprint’s, else its own; at 0% too (T-533)', () => {
+    const sprint = (done: number, total: number) => ({
+      id: 'Now',
+      state: 'active' as const,
+      due: null,
+      release: null,
+      done,
+      total,
+      percent: total ? Math.round((100 * done) / total) : 100,
+      goal: null,
+    });
+    dashboard.projects = [
+      project('s', 'Sprinting', { ...summary(80), active_sprint: sprint(1, 4) }),
+      project('z', 'Just started', { ...summary(50), active_sprint: sprint(0, 6) }),
+      project('n', 'No sprints', summary(30)),
+      project('e', 'Empty sprint', { ...summary(60), active_sprint: sprint(0, 0) }),
+      project('u', 'Not summed up', null),
+    ];
+    const { container } = render(Sidebar);
+    const bar = (id: string) => container.querySelector<HTMLElement>(`[data-id="${id}"] .app-sidebar-bar`)!;
+    expect(bar('s').dataset.percent).toBe('25');
+    expect(bar('s').title).toBe('Now: 1 of 4 done (25%)');
+    // 0%: the bar is there, its track drawn, and it says so
+    expect(bar('z').dataset.percent).toBe('0');
+    expect(bar('z').title).toBe('Now: 0 of 6 done (0%)');
+    expect(bar('n').title).toBe('3 of 10 done (30%)');
+    expect(bar('e').title).toBe('Now: no tasks yet');
+    expect(bar('u').title).toBe('Progress not known yet');
+    expect(bar('u').getAttribute('aria-label')).toBe('Progress not known yet');
+  });
+
   it('a click opens a project here; ⌘-click in a new tab', async () => {
     const opened = vi.spyOn(dashboard, 'openProject').mockImplementation(() => {});
     const { container } = render(Sidebar);

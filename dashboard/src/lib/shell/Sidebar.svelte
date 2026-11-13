@@ -4,6 +4,7 @@
   // shown marked, missing ones dimmed. A click opens a project in this tab; ⌘-click (Ctrl-click, a middle click) in a
   // new one. The title bar's sidebar button and View ▸ Show Sidebar show and hide it; its edge resizes it; both are kept
   // in the preferences. The project chooser, search and the workspace picker stay in the title bar (Hakan).
+  import type { ProjectEntry } from '../load';
   import { getPref, setPref } from '../prefs';
   import { needsYou } from '../projects';
   import { dashboard } from '../state.svelte';
@@ -25,6 +26,27 @@
     document.documentElement.style.setProperty('--sidebar-offset', offset);
     return () => document.documentElement.style.removeProperty('--sidebar-offset');
   });
+
+  /** A project's progress as its overview card counts it (T-533): the active sprint's, else the whole project's (the
+   * skipped tasks counted as neither), with what it counts in words */
+  function progressOf(project: ProjectEntry): { percent: number; text: string } {
+    const s = project.summary;
+    if (!s) return { percent: 0, text: 'Progress not known yet' };
+    const sprint = s.active_sprint;
+    if (sprint) {
+      return {
+        percent: sprint.percent,
+        text: sprint.total
+          ? `${sprint.id}: ${sprint.done} of ${sprint.total} done (${sprint.percent}%)`
+          : `${sprint.id}: no tasks yet`,
+      };
+    }
+    const counted = s.total - s.skipped;
+    return {
+      percent: s.percent,
+      text: counted ? `${s.done} of ${counted} done (${s.percent}%)` : 'No tasks yet',
+    };
+  }
 
   /** A project (the overview for null): in a new tab for ⌘-click, Ctrl-click or a middle click, else in this one */
   function open(e: MouseEvent, id: string | null) {
@@ -92,9 +114,14 @@
             <span class="app-sidebar-name">{project.name}</span>
             {#if waiting}<span class="app-sidebar-badge" title="{waiting} need you">{waiting}</span>{/if}
             {#if !project.missing}
-              {@const percent = project.summary?.active_sprint?.percent ?? project.summary?.percent ?? 0}
-              <span class="project-option-bar app-sidebar-bar" aria-label="{percent}% done"
-                ><span class="project-option-fill" style:width="{percent}%"></span></span
+              {@const progress = progressOf(project)}
+              <span
+                class="project-option-bar app-sidebar-bar"
+                role="img"
+                aria-label={progress.text}
+                title={progress.text}
+                data-percent={progress.percent}
+                ><span class="project-option-fill" style:width="{progress.percent}%"></span></span
               >
             {/if}
           </button>
@@ -176,8 +203,11 @@
     font-weight: 600;
     padding: 0 var(--space-2);
   }
-  /* The progress bar, the project chooser's, on its own line under the name */
+  /* The progress bar, the project chooser's, on its own line under the name. Its track is drawn in the border's colour:
+     the chooser's (--surface2) is the sidebar's own background, so a project at 0% (a sprint just started) showed no
+     bar at all (T-533) */
   .app-sidebar-bar {
+    background: var(--border);
     grid-column: 2 / -1;
     width: 100%;
   }

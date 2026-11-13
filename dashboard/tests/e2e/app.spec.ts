@@ -282,6 +282,13 @@ test.describe('the dashboard in the atm app', () => {
     const tabs = page.locator('#app-titlebar [role="tab"]');
     await expect(sidebar.locator('.app-sidebar-item')).toHaveCount(3);
     await expect.poll(() => tasksServer.menuState?.sidebar).toBe(true);
+    // Every project's bar is visible, its empty track too: not the sidebar's own colour (T-533)
+    await expect(sidebar.locator('.app-sidebar-bar')).toHaveCount(2);
+    const colours = await page.evaluate(() => ({
+      sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
+      tracks: [...document.querySelectorAll('.app-sidebar-bar')].map((b) => getComputedStyle(b).backgroundColor),
+    }));
+    for (const track of colours.tracks) expect(track).not.toBe(colours.sidebar);
 
     // A click opens the project here
     await sidebar.locator(`[data-id="${tasksServer.projectId}"]`).click();
