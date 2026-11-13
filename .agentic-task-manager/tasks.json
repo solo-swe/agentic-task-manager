@@ -1114,9 +1114,10 @@
       },
       {
         "id": "Updates and renames",
-        "state": "planned",
+        "state": "active",
         "goal": "The app updates smoothly and uses CompMD 0.7.0 as recommended, tab and title polish, releases marked released by hand, and renames in the CLI",
-        "release": "0.37.0"
+        "release": "0.37.0",
+        "start": "2026-11-13T04:53:49Z"
       }
     ],
     "releases": [
