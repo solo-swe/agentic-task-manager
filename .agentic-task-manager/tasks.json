@@ -1114,10 +1114,40 @@
       },
       {
         "id": "Updates and renames",
-        "state": "active",
+        "state": "closed",
         "goal": "The app updates smoothly and uses CompMD 0.7.0 as recommended, tab and title polish, releases marked released by hand, and renames in the CLI",
         "release": "0.37.0",
-        "start": "2026-11-13T04:53:49Z"
+        "start": "2026-11-13T04:53:49Z",
+        "end": "2026-11-13T18:05:31Z",
+        "report": {
+          "done": [
+            "T-496",
+            "T-497",
+            "T-498",
+            "T-499",
+            "T-500",
+            "T-524",
+            "T-526",
+            "T-527",
+            "T-528",
+            "T-529",
+            "T-530",
+            "T-531",
+            "T-532",
+            "T-533",
+            "T-535",
+            "T-536",
+            "T-537"
+          ],
+          "carried": [],
+          "added": [
+            "T-532",
+            "T-533",
+            "T-535",
+            "T-536",
+            "T-537"
+          ]
+        }
       }
     ],
     "releases": [
