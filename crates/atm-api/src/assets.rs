@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::OnceLock;
 
 use atm_common::sha256::sha256_hex;
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::Response;
 
 use super::{send_conditional, send_error};
@@ -59,9 +59,49 @@ fn etag(path: &str, bytes: &[u8]) -> String {
         .clone()
 }
 
-/// The asset at `path` (after `/assets/`): asked again each time (no-cache), a 304 while it is unchanged. Its folder
-/// is named for the version, so a page never gets another version's file.
-pub fn serve(path: &str, request: &HeaderMap) -> Response {
+/// `CompMD`'s bundle (ADR-006), read once from what `build.rs` embedded; none if it can't be read (the build checks
+/// it has a manifest, so only a broken build), and then every bundle path is a 404.
+fn bundle() -> Option<&'static compmd_host::Bundle> {
+    static BUNDLE: OnceLock<Option<compmd_host::Bundle>> = OnceLock::new();
+    BUNDLE
+        .get_or_init(|| match compmd_host::Bundle::embedded(COMPMD_BUNDLE) {
+            Ok(bundle) => Some(bundle),
+            Err(e) => {
+                eprintln!("atm: CompMD's bundle can't be read: {e}");
+                None
+            }
+        })
+        .as_ref()
+}
+
+/// A file of `CompMD`'s bundle, `compmd/<version>/compmd/<rest>`: answered by `compmd-host`'s `respond`, the serving
+/// contract (`frames/<hash>/…` and `packs/<place>`, `GET` only, each refusal saying why, the headers that sandbox
+/// them, cached for good as their paths name their content), as `CompMD`'s plugin answers it in the app.
+fn serve_bundle(rest: &str, method: &Method) -> Response {
+    let Some(bundle) = bundle() else {
+        return send_error(StatusCode::NOT_FOUND, "not found");
+    };
+    let Ok(request) = axum::http::Request::builder()
+        .method(method.clone())
+        .uri(format!("/{rest}"))
+        .body(())
+    else {
+        return send_error(StatusCode::NOT_FOUND, "not found");
+    };
+    compmd_host::respond(bundle, &compmd_host::NoStore, &request).map(axum::body::Body::from)
+}
+
+/// The asset at `path` (after `/assets/`): `CompMD`'s bundle by its contract (`serve_bundle`); any other asked again
+/// each time (no-cache), a 304 while it is unchanged. Its folder is named for the version, so a page never gets
+/// another version's file.
+pub fn serve(path: &str, method: &Method, request: &HeaderMap) -> Response {
+    if let Some(rest) = path
+        .strip_prefix("compmd/")
+        .and_then(|p| p.strip_prefix(COMPMD_VERSION))
+        .and_then(|p| p.strip_prefix("/compmd/"))
+    {
+        return serve_bundle(rest, method);
+    }
     let Some((bytes, kind)) = find(path) else {
         return send_error(StatusCode::NOT_FOUND, "not found");
     };

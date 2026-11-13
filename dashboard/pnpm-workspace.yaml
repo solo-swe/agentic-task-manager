@@ -1,9 +1,9 @@
 minimumReleaseAgeExclude:
-  - '@compmd/processor@0.6.0'
-  - '@compmd/registry@0.6.0'
-  - '@compmd/render@0.6.0'
-  - '@compmd/sandbox@0.6.0'
-  - '@compmd/vite@0.6.0'
+  - '@compmd/processor@0.7.0'
+  - '@compmd/registry@0.7.0'
+  - '@compmd/render@0.7.0'
+  - '@compmd/sandbox@0.7.0'
+  - '@compmd/vite@0.7.0'
 # pnpm's settings for dashboard/ (a single package, not a workspace of several).
 overrides:
   # GHSA-g3hv-75wg-m249: ESLint and typescript-eslint still ask for 10.x (a development dependency; nothing ships)

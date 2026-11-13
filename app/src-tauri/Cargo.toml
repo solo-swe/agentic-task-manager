@@ -20,6 +20,7 @@ name = "atm_app"
 path = "src/lib.rs"
 
 [build-dependencies]
+tauri-plugin-compmd = { workspace = true, features = ["build"] }
 tauri-build.workspace = true
 
 [dependencies]

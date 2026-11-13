@@ -614,9 +614,9 @@ export class TasksServer {
             : `${protocol}://localhost/${encodeURIComponent(path)}`,
         metadata: { currentWindow: { label: 'main' }, currentWebview: { windowLabel: 'main', label: 'main' } },
       };
-      // What CompMD's plugin gives the page, its frames' base (ADR-005): here the test server's frames, as atm
-      // serve's, since the plugin's own are in the crate
-      w.__COMPMD__ = { base: `${location.origin}/assets/compmd/${version}/compmd/` };
+      // What CompMD's plugin gives the page, the bundle's origin (ADR-006): here the test server's, which serves the
+      // same bundle as atm serve, as the plugin serves it on compmd:
+      w.__COMPMD__ = { origin: `${location.origin}/assets/compmd/${version}/compmd/` };
     }, compmdVersion());
     return this;
   }

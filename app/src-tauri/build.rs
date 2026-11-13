@@ -1,11 +1,19 @@
 //! The app's commands are listed in its manifest, so a window may call one only when its capability allows it
-//! (`capabilities/`, least privilege: docs/guides/tauri.md).
+//! (`capabilities/`, least privilege: docs/guides/tauri.md). Without that list Tauri lets any page call every command,
+//! a page on `CompMD`'s frames' scheme too (`CompMD`'s Tauri chapter).
 //!
 //! On Windows the app needs Common Controls v6 (`windows-app-manifest.xml`). Tauri's build embeds that manifest in
 //! the app's binary only, so the tests' executable would start without it and stop at once
 //! (`STATUS_ENTRYPOINT_NOT_FOUND`); the linker embeds it in every executable of the crate instead.
 
 fn main() {
+    // CompMD's bundle (the sandbox's frames and the packs' modules), which the dashboard's build wrote beside its
+    // compmd.js (`dashboard/vite.compmd.config.ts`), embedded for CompMD's plugin to serve (ADR-006): before Tauri's
+    // own step, as CompMD's guide has it. Without one it warns, and the app shows no diagram
+    tauri_plugin_compmd::build::bundle(format!(
+        "../../dashboard/dist/assets/compmd/{}/compmd",
+        compmd_version().unwrap_or_default()
+    ));
     let manifest = tauri_build::AppManifest::new().commands(&[
         "version",
         "list_workspaces",
@@ -54,17 +62,30 @@ fn main() {
     embed_assets();
 }
 
-/// What the app serves on its `atm:` scheme (`src/assets.rs`, ADR-004): the files of the dashboard's `CompMD` build
-/// that the page loads itself, `compmd.js`, its `WebAssembly` and the packs' built modules, at the paths `atm serve`
-/// gives them. Not the sandbox's frames, which `CompMD`'s plugin serves. Written to `OUT_DIR/atm_assets.rs` as
-/// `ATM_ASSETS`.
+/// Where the dashboard's `CompMD` build is: `dashboard/dist/assets/compmd/<version>/`.
+fn compmd_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd")
+}
+
+/// The `CompMD` version the dashboard was built with: its build's one folder.
+fn compmd_version() -> Option<String> {
+    std::fs::read_dir(compmd_root())
+        .ok()?
+        .flatten()
+        .find(|entry| entry.path().is_dir())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+}
+
+/// What the app serves on its `atm:` scheme (`src/assets.rs`, ADR-006): `CompMD`'s processor and sandbox for the
+/// page, `compmd.js` and its `WebAssembly`, at the paths `atm serve` gives them. Not the sandbox's frames or the
+/// packs' modules: `CompMD`'s plugin serves those, from the bundle `bundle()` embeds. Written to
+/// `OUT_DIR/atm_assets.rs` as `ATM_ASSETS`.
 ///
 /// # Panics
 /// When the dashboard's `CompMD` build is missing: the app would show no Markdown formatted, so the build says so.
 fn embed_assets() {
     use std::fmt::Write as _;
-    let root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dashboard/dist/assets/compmd");
+    let root = compmd_root();
     println!("cargo:rerun-if-changed={}", root.display());
     let mut found = Vec::new();
     for version in std::fs::read_dir(&root).into_iter().flatten().flatten() {
@@ -72,14 +93,10 @@ fn embed_assets() {
         let dir = version.path();
         for file in ["compmd.js", "compmd_wasm_bg.wasm"] {
             if dir.join(file).is_file() {
+                println!("cargo:rerun-if-changed={}", dir.join(file).display());
                 found.push((format!("assets/compmd/{name}/{file}"), dir.join(file)));
             }
         }
-        walk(
-            &dir.join("compmd/packs"),
-            &format!("assets/compmd/{name}/compmd/packs"),
-            &mut found,
-        );
     }
     assert!(
         found.iter().any(|(path, _)| path.ends_with("/compmd.js")),
@@ -102,20 +119,4 @@ fn embed_assets() {
     code.push_str("];\n");
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR"));
     std::fs::write(out.join("atm_assets.rs"), code).expect("the build folder is writable");
-}
-
-/// The `.js` files under `dir` (regular files, reached through no symlink), served under `prefix`
-fn walk(dir: &std::path::Path, prefix: &str, found: &mut Vec<(String, std::path::PathBuf)>) {
-    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        let Ok(kind) = entry.file_type() else {
-            continue;
-        };
-        let served = format!("{prefix}/{name}");
-        if kind.is_dir() {
-            walk(&entry.path(), &served, found);
-        } else if kind.is_file() && entry.path().extension().is_some_and(|ext| ext == "js") {
-            found.push((served, entry.path()));
-        }
-    }
 }

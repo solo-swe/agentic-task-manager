@@ -170,10 +170,12 @@ pub fn run() {
 /// app's context with them, so a plugin that can't start (its configuration, T-483) fails a test, not the app.
 fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
     builder
-        // CompMD's sandbox frames on a scheme of their own, `compmd:`, so they keep their own policy and origin
-        // (ADR-005); the plugin gives the page their `base`
-        .plugin(tauri_plugin_compmd::init())
-        // What atm ships for its page itself (CompMD's processor, its WebAssembly, the packs' modules) on `atm:`
+        // CompMD's bundle (the sandbox's frames, the packs' modules), embedded by build.rs, on a scheme of its own,
+        // `compmd:`, so the frames keep their own policy and origin; the plugin gives the page that origin (ADR-006)
+        .plugin(tauri_plugin_compmd::init(
+            tauri_plugin_compmd::include_bundle!(),
+        ))
+        // What atm ships for its page itself (CompMD's processor and its WebAssembly) on `atm:`
         .register_uri_scheme_protocol(assets::SCHEME, |_context, request| {
             let response = assets::respond(ATM_ASSETS, request.method(), request.uri().path());
             if !response.status().is_success() {
@@ -768,8 +770,9 @@ mod tests {
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 
-    /// ADR-004, T-503: the app serves what its page loads of `CompMD`'s build on `atm:`, at the paths `atm serve`
-    /// gives them and with its headers, the packs' modules too; and no frame document, which `CompMD`'s plugin serves
+    /// ADR-006, T-524: the app serves what its page loads of the dashboard's `CompMD` build on `atm:` (`compmd.js` and
+    /// its `WebAssembly`), at the paths `atm serve` gives them and with its headers; no frame document and no pack's
+    /// module, which `CompMD`'s plugin serves from the bundle
     #[test]
     fn the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them() {
         use tauri::http::Method;
@@ -792,10 +795,6 @@ mod tests {
         for (file, headers) in files {
             let path = format!("/assets/compmd/{compmd}/{file}");
             let response = assets::respond(ATM_ASSETS, &Method::GET, &path);
-            if assets::content_type(file).is_none() {
-                assert_eq!(response.status(), 404, "{path}: a frame is the plugin's");
-                continue;
-            }
             served += 1;
             assert_eq!(response.status(), 200, "{path}");
             for (name, value) in headers.as_object().expect("headers") {
@@ -807,21 +806,14 @@ mod tests {
             }
         }
         assert!(served >= 2, "compmd.js and its WebAssembly");
-        // The Mermaid pack's built module, which the page fetches and gives the sandbox as code
-        let packs: Vec<&str> = ATM_ASSETS
-            .iter()
-            .map(|(path, _)| *path)
-            .filter(|path| path.contains("/compmd/packs/"))
-            .collect();
-        assert!(
-            packs.iter().any(|path| path.ends_with("/mermaid.js")),
-            "{packs:?}"
-        );
-        assert!(
-            ATM_ASSETS
-                .iter()
-                .all(|(path, _)| assets::content_type(path).is_some()),
-            "only scripts and WebAssembly"
+        // Those two alone: the packs' modules are in CompMD's bundle, which its plugin serves
+        let embedded: Vec<&str> = ATM_ASSETS.iter().map(|(path, _)| *path).collect();
+        assert_eq!(
+            embedded,
+            [
+                format!("assets/compmd/{compmd}/compmd.js"),
+                format!("assets/compmd/{compmd}/compmd_wasm_bg.wasm")
+            ]
         );
     }
 

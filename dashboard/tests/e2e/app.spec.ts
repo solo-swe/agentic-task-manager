@@ -658,25 +658,34 @@ test.describe('the dashboard in the atm app', () => {
       .toEqual(['check_update', 'install_update', 'restart_app', 'restart_app']);
   });
 
-  test('a Mermaid diagram draws in the app: the frames from the plugin’s base, the pack’s module given as code (T-503)', async ({
+  test('a Mermaid diagram draws in the app: the frames and the pack’s module from the bundle’s origin CompMD’s plugin gives (ADR-006)', async ({
     page,
     tasksServer,
   }) => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     const modules: string[] = [];
+    const frames: string[] = [];
     page.on('request', (r) => {
-      if (r.url().includes('/compmd/packs/')) modules.push(`${r.frame() === page.mainFrame() ? 'page' : 'frame'}`);
+      const url = r.url();
+      if (url.includes('/compmd/packs/')) modules.push(r.frame() === page.mainFrame() ? 'page' : 'frame');
+      if (/\/compmd\/frames\/[0-9a-f]{16}\/strict\.html$/.test(url)) frames.push(url);
     });
     await page.goto('/');
-    // Help ▸ atm Help (the app's footer is a status bar, T-516)
+    // Help ▸ Help (the app's footer is a status bar, T-516)
     await expect(page.locator('#dashboard-title')).not.toBeEmpty();
     await tasksServer.chooseMenu({ kind: 'help' });
     const svg = page.frameLocator('#help-panel iframe').locator('svg').first();
     await expect(svg).toBeVisible({ timeout: 15_000 });
     await expect(svg).toContainText('In progress');
-    // The page fetched the module once; no frame asked for it by URL
-    expect(modules).toEqual(['page']);
+    // The frame came from the origin the plugin gave the page, under the bundle's hash; the pack's module was loaded
+    // by the frame, by its place, never by the page (no code handed over)
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((url) => url.startsWith(page.url().split('/').slice(0, 3).join('/') + '/assets/compmd/'))).toBe(
+      true,
+    );
+    expect(modules.length).toBeGreaterThan(0);
+    expect(modules.every((by) => by === 'frame')).toBe(true);
     expect(tasksServer.httpRequests).toEqual([]);
   });
 

@@ -8,7 +8,7 @@ import { version as compmdVersion } from 'virtual:atm-compmd';
 import type { Task } from './types';
 import { addressOf, isPagePath } from './address';
 import { convertFileSrc } from '@tauri-apps/api/core';
-import { assetFetch, inApp, type Fetch } from './api/http';
+import { inApp } from './api/http';
 
 /** Links that are safe to follow: web and mail addresses, and anchors in the page. */
 export function safeHref(href: string): boolean {
@@ -182,91 +182,39 @@ function localTimeZone(): string {
 }
 
 /**
- * Where atm's CompMD build comes from (compmd.js, its WebAssembly, the packs' modules): this page's server (atm serve),
- * or in the atm app the app's own asset scheme, which serves them at the same paths (ADR-004, T-503; `assets.rs`).
- * `atm://localhost`, or `http://atm.localhost` on Windows: Tauri's helper knows which. In the app the sandbox's frames
- * come from CompMD's own plugin instead, on `compmd:` (sandboxOptions).
+ * Where atm's CompMD build comes from (compmd.js and its WebAssembly): this page's server (atm serve), or in the atm
+ * app the app's own asset scheme, which serves them at the same paths (ADR-006; `assets.rs`). `atm://localhost`, or
+ * `http://atm.localhost` on Windows: Tauri's helper knows which. The sandbox's frames and the packs' modules are the
+ * bundle's: atm serve's, or in the app CompMD's plugin's, on `compmd:` (sandboxOptions).
  */
 export function compmdOrigin(app = inApp): string {
   return app ? convertFileSrc('', 'atm').replace(/\/$/, '') : location.origin;
 }
 
-/** Where this build's CompMD is served: dist/assets/compmd/<version>/ (embedded in atm, and in the app), at
- * /assets/compmd/<version>/ (§2): the path vite.compmd.config.ts builds it for, from which @compmd/vite gives its
- * frames' and modules' URLs */
+/** Where this build's CompMD is served: dist/assets/compmd/<version>/ (embedded in atm; the app's own build, in the
+ * app), at /assets/compmd/<version>/ (§2) */
 export function compmdAssetUrl(file: string, origin = compmdOrigin()): string {
   return new URL(`/assets/compmd/${compmdVersion}/${file}`, origin).href;
 }
 
-/** The sandbox's `base` (where its frame documents are) as a full URL on CompMD's origin: @compmd/vite gives it from
- * the page's root, which in the app isn't CompMD's origin (ADR-004, H4) */
-export function sandboxBase(base: string, origin = compmdOrigin()): string {
-  return new URL(base, origin).href;
-}
-
 /** Where a pack's built module is (a component's `module`), as the processor gives it */
 export type ModulePlace = unknown;
-/** Where the sandbox gets a built module from (`@compmd/sandbox`'s ModuleSource): its URL and hash, or its code */
-export type ModuleSource = (place: ModulePlace) => { url: string; integrity: string } | { code: Blob } | undefined;
-
-/** The packs' modules the app's page has fetched, by URL, as code for the sandbox (fetchPackModules) */
-const packCode = new Map<string, Blob>();
-
-/** A pack module's URL on atm's asset origin: @compmd/vite gives it from the page's root, already resolved against the
- * page (`tauri://localhost/assets/…` in the app), so only its path is kept */
-export function moduleUrl(url: string, origin: string): string {
-  const { pathname, search } = new URL(url, origin);
-  return new URL(pathname + search, origin).href;
-}
+/** Where the sandbox gets a built module from (`@compmd/sandbox`'s BundleModuleSource): a path under the bundle's
+ * origin, or a URL, with its hash */
+export type ModuleSource = (
+  place: ModulePlace,
+) => { path: string; integrity: string } | { url: string; integrity: string } | undefined;
 
 /**
- * In the app, the packs' built modules the components need, fetched by the page from atm's scheme and checked
- * against the hash @compmd/vite took (the fetch's `integrity`), kept for the sandbox as code (T-503): the frames are
- * CompMD's, on `compmd:`, and load nothing of atm's. One that can't be had is left out and logged: its component then
- * shows its fallback, and the sandbox's `error` says so.
- */
-export async function fetchPackModules(
-  compmd: Pick<CompmdModule, 'sandbox'>,
-  components: readonly unknown[],
-  fetcher: Fetch = assetFetch,
-  origin = compmdOrigin(),
-) {
-  for (const component of components) {
-    const place = (component as { module?: ModulePlace }).module;
-    const source = place === undefined ? undefined : compmd.sandbox.modules(place);
-    if (!source || !('url' in source)) continue;
-    const url = moduleUrl(source.url, origin);
-    if (packCode.has(url)) continue;
-    try {
-      const response = await fetcher(url, { integrity: source.integrity });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`.trim());
-      packCode.set(url, new Blob([await response.arrayBuffer()], { type: 'text/javascript' }));
-    } catch (e) {
-      console.error(`CompMD: a pack’s module couldn’t be fetched (${url}):`, e);
-    }
-  }
-}
-
-/** Forget the fetched modules (tests) */
-export function resetPackModules() {
-  packCode.clear();
-}
-
-/**
- * The sandbox's options, host mode. Under atm serve, @compmd/vite's: the frames and the packs' modules from this server.
- * In the app (T-503), no `base`: CompMD's plugin gives the page its frames' (on `compmd:`, at a path named by their
- * content), and the packs' modules go to the frames as code, which fetchPackModules got first.
+ * The sandbox's options, host mode: @compmd/vite's (`virtual:compmd`'s `sandbox`: the bundle's frames and packs'
+ * modules by their paths), under the bundle's origin, as CompMD 0.7.0 means them (ADR-006). In the app, the `compmd:`
+ * origin CompMD's plugin gives the page (`__COMPMD__`), which the sandbox reads itself; under atm serve, where it
+ * serves the bundle, `/assets/compmd/<version>/compmd/`, which the page gives.
  */
 export function sandboxOptions(compmd: Pick<CompmdModule, 'sandbox'>, app = inApp) {
-  if (!app) return { ...compmd.sandbox, base: sandboxBase(compmd.sandbox.base), page: 'host' as const };
-  const origin = compmdOrigin(true);
-  const modules: ModuleSource = (place) => {
-    const source = compmd.sandbox.modules(place);
-    if (!source || !('url' in source)) return source;
-    const code = packCode.get(moduleUrl(source.url, origin));
-    return code ? { code } : undefined;
-  };
-  return { trusted: compmd.sandbox.trusted, modules, page: 'host' as const };
+  return app
+    ? { ...compmd.sandbox, page: 'host' as const }
+    : { ...compmd.sandbox, origin: compmdAssetUrl('compmd/'), page: 'host' as const };
 }
 
 /** What the served module gives (dashboard/compmd/entry.ts) */
@@ -278,10 +226,11 @@ export interface CompmdModule {
     free(): void;
   };
   request: BaseRequest;
-  sandbox: { base: string; trusted: Readonly<Record<string, unknown>>; modules: ModuleSource };
-  /** `base` may be left out in the app: CompMD's plugin gave the page its frames' (CompMD 0.6.0) */
+  /** No `origin`: the bundle is built for a host that gives it (`out`), the page or CompMD's plugin */
+  sandbox: { origin?: string; frames: string; trusted?: Readonly<Record<string, unknown>>; modules: ModuleSource };
   createSandbox(options: {
-    base?: string;
+    origin?: string;
+    frames: string;
     trusted?: Readonly<Record<string, unknown>>;
     modules: ModuleSource;
     page: 'host';

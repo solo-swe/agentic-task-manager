@@ -1,9 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { inApp } from '../api/http';
   import {
     dashboardAddress,
-    fetchPackModules,
     loadCompmd,
     processText,
     safeHref,
@@ -99,12 +97,10 @@
       .then(async (compmd) => {
         if (key !== rendered) return; // a newer text came in while CompMD loaded
         const { tree, components } = processText(compmd, text, task, path, { localImage, docLink });
-        // In the app the packs' modules go to the frames as code, fetched first (T-503)
-        if (inApp) await fetchPackModules(compmd, components);
-        if (key !== rendered) return;
         if (!view) {
           // Host mode: the text renders here, in the page; a pack's component (a Mermaid diagram) in a strict frame
-          // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c)
+          // of its own. Where the frames and the packs' modules are, with their hashes: sandboxOptions (§3c; in the
+          // app, under the origin CompMD's plugin gives the page, ADR-006)
           view = compmd.createSandbox(sandboxOptions(compmd)).open(target, { components });
           view.on('rendered', () => {
             secureLinks(target);
