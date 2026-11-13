@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 532,
+    "next_id": 534,
     "labels": [
       {
         "id": "architecture",
@@ -19519,7 +19519,7 @@
       "description": "Found in T-522 (0.35.0 updating to 0.36.0): after the click, the app sat on \"Installing…\" with no sign of progress while it downloaded the 33 MB archive, and it did not reopen on the new version: it was installed, and Hakan closed the app himself.\n\n## Change\n- **Progress:** `install_update` ([updates.rs](app/src-tauri/src/updates.rs)) ignores `download_and_install`'s callbacks (`|_, _| {}`, `|| {}`). Send the page the downloaded and total bytes on a channel the command takes, and \"installing\" once the download is done; `UpdateNotice` shows a progress bar and the step (downloading, installing, restarting).\n- **The restart:** find why `app.restart()` didn't bring the app back after the install on macOS (the single-instance plugin, the window-state writes on exit from T-518, or the restart racing the bundle's replacement), and fix it; if a restart can't be made reliable, the notice says the update is installed and offers Restart Now.\n- A failure at any step still says why, and the running app stays as it is.\n\n## Tests\nUnit and e2e (`app.spec.ts`, the IPC mock sending progress); the restart by hand on macOS at the next release, with Hakan (as T-522).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/updates.rs",
@@ -19527,7 +19527,7 @@
         "dashboard/src/lib/shell/UpdateNotice.svelte"
       ],
       "created_at": "2026-11-13T04:33:45Z",
-      "updated_at": "2026-11-13T10:59:01Z",
+      "updated_at": "2026-11-13T11:00:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19548,10 +19548,19 @@
           "at": "2026-11-13T10:58:53Z",
           "kind": "failure",
           "text": "lease expired (claude:0f56a916)"
+        },
+        {
+          "at": "2026-11-13T11:00:31Z",
+          "kind": "outcome",
+          "text": "Progress on a channel (`install_update` sends bytes every 256 KB, then installing); the notice shows Downloading… X of Y MB with a bar, Installing…, Restarting…. The restart is now its own command, `restart_app` (Tauri’s `request_restart`: quits as Quit does, then starts again), instead of `restart()` from the command’s thread; a page still there after 10 s says the update is installed and offers Restart now. The cause on macOS isn’t confirmed: check the restart by hand at the 0.37.0 release.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-13T10:59:01Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c2fb34c93e84e0879759ef5b0d1d8603418d09d9",
+      "completed_at": "2026-11-13T11:00:31Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-527",
@@ -19749,6 +19758,76 @@
       "components": [
         "dashboard",
         "docs"
+      ]
+    },
+    {
+      "id": "T-532",
+      "name": "Desktop app: reorder the title bar's tabs by dragging them",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Found by Hakan: the app's tabs (`AppTitleBar.svelte`) can't be reordered by drag and drop. `AppTabs.move(id, to)` ([app-tabs.svelte.ts](dashboard/src/lib/app-tabs.svelte.ts)) exists for it, but nothing in the title bar calls it, and a mouse-down on the bar starts the window's drag (`start_dragging`).\n\n## Change\n- Dragging a tab sideways moves it among the tabs, as a browser's or Finder's tabs do: the others make room as it passes, it lands where it is let go, and the order is saved with the tabs (`save_tabs`, T-518). A click without moving still selects it; a drag on the bar's free space still moves the window.\n- With the keyboard too: a shortcut, or the tab's context, moves the focused tab left or right (choose one that doesn't clash with the menu's, `menu.rs`), and the [desktop UI design](docs/app-desktop-ui-design.md) says how.\n- Within one window; dragging a tab out to another window is not part of this.\n\n## Tests\nUnit tests for the move (`app-tabs`), and an app e2e spec: drag the third tab to the first place, the order shown and saved, a plain click still selects, the bar's free space still drags the window (`windowCalls`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/app-tabs.svelte.ts",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T11:01:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T11:01:00Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-533",
+      "name": "Desktop app: the sidebar shows every project's progress",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Found by Hakan: in the app's sidebar ([Sidebar.svelte](dashboard/src/lib/shell/Sidebar.svelte)) some projects show no progress. Each row draws a bar from `project.summary?.active_sprint?.percent ?? project.summary?.percent ?? 0`.\n\n## Find out\nWhich projects and why, against the overview's cards, which show progress for the same projects: a summary not loaded yet (or not at all) for projects that aren't open, a `percent` of 0 drawn as an empty bar (a sprint just started), a project without sprints, or the bar hidden by the row's layout.\n\n## Change\n- Every project that isn't missing shows its progress as the overview's card does (the active sprint's, else the project's), from the start and as it changes; a project with nothing to count says so rather than showing an empty bar that reads as missing.\n- If the summary is missing for some projects, fix where it is loaded (the app's `list_projects`), not only the sidebar.\n\n## Tests\nAn app e2e spec with several projects (with and without sprints, one just started, one not opened yet): each row's bar matches its card on the overview; unit tests for whatever computes it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T11:01:00Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T11:01:00Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard"
       ]
     }
   ]
