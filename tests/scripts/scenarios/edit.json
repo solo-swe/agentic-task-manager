@@ -1,5 +1,64 @@
 [
   {
+    "name": "atm label rename: every task with it, archived ones too; one with both keeps one; meta.labels follows (T-499)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "labels": ["ui", { "id": "api", "label": "API" }] },
+          "tasks": [
+            { "id": "T-2", "status": "todo", "labels": ["ui", "app"], "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo", "labels": ["dashboard", "ui"] },
+            { "id": "T-4", "status": "todo", "labels": ["api"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done", "labels": ["ui"] }] }
+      }
+    },
+    "args": ["label", "rename", "ui", "dashboard"],
+    "expect": {
+      "stdout": "Renamed the label ui to dashboard on 3 tasks (1 archived).\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "labels": ["dashboard", { "id": "api", "label": "API" }] },
+          "tasks": [
+            { "id": "T-2", "status": "todo", "labels": ["dashboard", "app"], "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo", "labels": ["dashboard"] },
+            { "id": "T-4", "status": "todo", "labels": ["api"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "labels": ["dashboard"] }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm label rename refuses a new label that breaks the rule",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "labels": ["ui"] }] }
+      }
+    },
+    "args": ["label", "rename", "ui", "User Interface"],
+    "expect": { "exit": 2, "stderrIncludes": ["label 'User Interface': use lowercase letters, digits, - and _"] }
+  },
+  {
+    "name": "atm label rename of a label no task has says so, writing nothing",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "labels": ["ui"] }] }
+      }
+    },
+    "args": ["label", "rename", "iu", "ux"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["no task has the label 'iu'"],
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "labels": ["ui"] }] }
+      }
+    }
+  },
+  {
     "name": "edit: changes the definition and records who and when; the status stays",
     "setup": {
       "files": {

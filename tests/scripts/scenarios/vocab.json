@@ -1,5 +1,98 @@
 [
   {
+    "name": "atm project vocab rename status: the project's own status gets a new ID and label; its tasks, archived ones too, follow (T-500)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "statuses": [
+              { "id": "todo", "label": "To Do", "kind": "todo" },
+              { "id": "doing", "label": "Doing", "kind": "active" },
+              { "id": "review", "label": "Review", "kind": "review" },
+              { "id": "done", "label": "Done", "kind": "done" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "review", "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "review" }] }
+      }
+    },
+    "args": ["project", "vocab", "rename", "status", "review", "awaiting_user", "--label", "Awaiting you"],
+    "expect": {
+      "stdout": "Renamed the status review to awaiting_user (“Awaiting you”): 2 tasks (1 archived) use it.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "statuses": [
+              { "id": "todo", "label": "To Do", "kind": "todo" },
+              { "id": "doing", "label": "Doing", "kind": "active" },
+              { "id": "awaiting_user", "label": "Awaiting you", "kind": "review" },
+              { "id": "done", "label": "Done", "kind": "done" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "awaiting_user", "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "awaiting_user" }] }
+      }
+    }
+  },
+  {
+    "name": "atm project vocab rename type: on the defaults, the list is written with the type renamed (T-500)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "type": "bugfix" }] }
+      }
+    },
+    "args": ["project", "vocab", "rename", "type", "bugfix", "bug", "--json"],
+    "expect": {
+      "json": { "list": "type", "from": "bugfix", "to": "bug", "label": "Bugfix", "tasks": 1, "archived": 0 }
+    }
+  },
+  {
+    "name": "atm project vocab rename priority: the default priority follows, and the label alone can change (T-500)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "todo", "priority": "P2" }] }
+      }
+    },
+    "args": ["project", "vocab", "rename", "priority", "P2", "normal"],
+    "expect": {
+      "stdoutIncludes": ["Renamed the priority P2 to normal", "1 task use it."],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "priorities": [
+              { "id": "P0", "label": "Critical" },
+              { "id": "P1", "label": "High" },
+              { "id": "normal", "label": "Medium" },
+              { "id": "P3", "label": "Low" }
+            ],
+            "default_priority": "normal"
+          },
+          "tasks": [{ "id": "T-1", "status": "todo", "priority": "normal" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm project vocab rename refuses an ID another entry has, and an unknown entry (T-500)",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "args": ["project", "vocab", "rename", "type", "bugfix", "feature"],
+    "expect": { "exit": 2, "stderrIncludes": ["there is already a type feature"] }
+  },
+  {
+    "name": "atm project vocab rename of an unknown entry names the list's",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "args": ["project", "vocab", "rename", "priority", "P9", "P10"],
+    "expect": { "exit": 2, "stderrIncludes": ["no priority P9; the priorities: P0, P1, P2, P3"] }
+  },
+  {
     "name": "a custom vocabulary: start moves a todo-kind task to the first active-kind status; done-kind meets dependencies",
     "setup": {
       "files": {

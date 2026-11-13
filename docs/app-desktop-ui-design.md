@@ -82,9 +82,10 @@ looked wrong): the window buttons (macOS: the system's, at the left; Windows and
 the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at its left.
 A tab's label is its project's logo and name (or "Projects Overview"), nothing else.
 
-**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker, the Progress and Activity pills and the ⋯,
-which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
-its icon alone (Hakan, T-516). The tab's label has the project picker after the name. The
+**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker (the overview's activity on its tab) and the
+⋯, which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
+its icon alone (Hakan, T-516); a project's Progress and Activity pills are inside the tab too, at the subtitle line's
+right end, as they are the tab's project's (Hakan, T-530), and give way first on a narrow tab. The tab's label has the project picker after the name. The
 version chip goes (Help ▸ What's New). **Inside the tab** only the subtitle line (counts, archived, the needs-you
 chip), directly on top of the views (Graph, Kanban, List, …), with no hairline. The overview's tab is labelled with
 atm's logo. **No reload button:** the page reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the
@@ -162,7 +163,10 @@ tab's address, as a click on a project does today. So the dashboard's state stay
 router, deep links and T-506's subscriptions work as they do, and a tab costs nothing while it isn't shown.
 
 - **The tab strip:** each tab its project's logo and name (or the page's title), a close button, and the needs-you
-  count of its project; drag to reorder; the **+**, ⌘T and File ▸ New Tab open the workspace's overview.
+  count of its project; drag to reorder; the **+**, ⌘T and File ▸ New Tab open the workspace's overview. The drag is
+  the page's own, with the pointer (T-532): HTML5 drag and drop never starts from a button in WebKit, the app's webview
+  on macOS and Linux. The tab follows the pointer, the others slide aside, and the order is kept (`save_tabs`); a
+  press that doesn't move is a click, and ⌃⇧← / ⌃⇧→ (⌘⇧ on macOS) move the focused tab a place.
 - **Switching** (a click, ⌃Tab and ⌃⇧Tab, ⌘⇧] and ⌘⇧[; ⌘1–⌘6 stay the views'): the page navigates to the tab's
   address.
   The project's data is loaded again through the commands (the same as switching projects now); the tab keeps what is
@@ -208,9 +212,13 @@ changes:
 - missing projects (a folder without a task file) dimmed, as the overview shows them.
 
 It is a Svelte component (`shell/Sidebar.svelte`), shown only in the app, from what the page already loads
-(`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the title bar's sidebar button
-toggle it, and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser
-keeps its selectors.
+(`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the sidebar button toggle it,
+and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser keeps its
+selectors. **The window is split as Notion's** (Hakan, T-535): the sidebar is a column of the window's full height, its
+top strip the title bar's height, with macOS's traffic lights over it and the sidebar button after them; the strip
+drags the window as the title bar does. The title bar with the tabs is only over the area right of it, so the tabs
+start at the sidebar's edge and move with that area. Closed, the title bar takes the window's width and has the
+button. (T-529 slid the tabs over a full-width bar instead; it lagged and didn't line up.)
 
 macOS's translucent sidebar (vibrancy) needs a transparent window and has no equal on the others; it is not proposed.
 

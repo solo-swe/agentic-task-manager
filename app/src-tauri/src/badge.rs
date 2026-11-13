@@ -16,8 +16,8 @@ use tauri_plugin_notification::NotificationExt;
 
 use crate::commands::{AppError, AppState, listed_projects};
 
-/// A notification's title.
-const TITLE: &str = "atm";
+/// A notification's title: the app's name (T-531).
+const TITLE: &str = crate::menu::APP_NAME;
 /// A project's name in a notification is at most this long.
 const MAX_NAME: usize = 80;
 

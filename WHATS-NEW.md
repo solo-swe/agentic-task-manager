@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.37.0] - 2026-11-13
+
+- The app is called Agentic Task Manager now, in its menus, the Dock and the app switcher; the command is still atm.
+- Updating the app shows how far the download is, and the app restarts on the new version by itself.
+- The app's sidebar runs the full height of the window, and each project's progress is in its own tab.
+- Drag the app's tabs to reorder them.
+- Rename a sprint, a release, a component, a label or a status, and every task follows.
+
 ## [0.36.0] - 2026-11-12
 
 - The app works like a desktop app now: tabs in its title bar, a sidebar of your projects, and a status bar.

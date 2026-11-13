@@ -22,8 +22,8 @@
   import { appTabs, tabProject } from '../app-tabs.svelte';
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
-  import Icon from '../ui/Icon.svelte';
   import AppMenus from './AppMenus.svelte';
+  import SidebarToggle from './SidebarToggle.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
 
@@ -45,20 +45,15 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <header
   class="app-titlebar"
-  class:system-buttons={shell?.system_window_buttons}
+  class:system-buttons={shell?.system_window_buttons && !dashboard.sidebarOpen}
+  class:flush={dashboard.sidebarOpen && shell?.system_menu_bar !== false}
   id="app-titlebar"
   onmousedown={onBarMouseDown}
 >
   {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
-  <!-- Show or hide the sidebar (T-515; View ▸ Show Sidebar) -->
-  <button
-    class="app-sidebar-toggle"
-    id="app-sidebar-toggle"
-    title={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-    aria-label={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-    aria-pressed={dashboard.sidebarOpen}
-    onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
-  >
+  <!-- Show the sidebar (T-515; View ▸ Show Sidebar): here while it is closed; open, its own top strip has the button
+       (T-535) -->
+  {#if !dashboard.sidebarOpen}<SidebarToggle />{/if}
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -102,9 +97,10 @@
 </header>
 
 <style>
-  /* The window's own title bar, from its very top and edge to edge (out of the page's padding, body in app.css):
-     everything on its middle line, macOS's traffic lights too (trafficLightPosition's y, 22, centres them at 20 px,
-     as measured on macOS 26) */
+  /* The window's own title bar, from its very top, edge to edge of the area right of the sidebar (out of the page's
+     padding, body in app.css): the sidebar is a column of the window's full height, as Notion's, so the tabs move
+     with this area and need no animation of their own (T-535). Everything on its middle line, macOS's traffic lights
+     too (trafficLightPosition's y, 22, centres them at 20 px, as measured on macOS 26) */
   .app-titlebar {
     align-items: center;
     background: var(--surface2);
@@ -113,8 +109,6 @@
     gap: var(--space-3);
     height: 40px;
     margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
-    /* Over the sidebar too, from the window's left edge */
-    margin-left: calc(-1 * (var(--space-9) + var(--sidebar-offset, 0px)));
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
@@ -129,25 +123,16 @@
     margin-left: auto;
     min-width: 0;
   }
-  .app-sidebar-toggle {
-    align-items: center;
-    background: none;
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    display: inline-flex;
-    flex: 0 0 28px;
-    height: 28px;
-    justify-content: center;
+  /* With the sidebar open (and no menus of the page's before the tabs), the first tab starts at the sidebar's edge:
+     the sidebar's border is its left line, not a second one beside it */
+  .app-titlebar.flush {
+    padding-left: 0;
   }
-  .app-sidebar-toggle:hover,
-  .app-sidebar-toggle[aria-pressed='true'] {
-    color: var(--text);
+  .app-titlebar.flush :global(.title-bar-tab:first-child) {
+    border-left: none;
   }
-  .app-sidebar-toggle:hover {
-    background: var(--surface);
-  }
-  /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
+  /* macOS's traffic lights sit over the window's left end (trafficLightPosition in tauri.conf.json): over this bar
+     while the sidebar is closed, over the sidebar's top strip while it is open */
   .app-titlebar.system-buttons {
     --traffic-lights: 88px;
     padding-left: var(--traffic-lights);

@@ -282,6 +282,13 @@ test.describe('the dashboard in the atm app', () => {
     const tabs = page.locator('#app-titlebar [role="tab"]');
     await expect(sidebar.locator('.app-sidebar-item')).toHaveCount(3);
     await expect.poll(() => tasksServer.menuState?.sidebar).toBe(true);
+    // Every project's bar is visible, its empty track too: not the sidebar's own colour (T-533)
+    await expect(sidebar.locator('.app-sidebar-bar')).toHaveCount(2);
+    const colours = await page.evaluate(() => ({
+      sidebar: getComputedStyle(document.querySelector('#app-sidebar')!).backgroundColor,
+      tracks: [...document.querySelectorAll('.app-sidebar-bar')].map((b) => getComputedStyle(b).backgroundColor),
+    }));
+    for (const track of colours.tracks) expect(track).not.toBe(colours.sidebar);
 
     // A click opens the project here
     await sidebar.locator(`[data-id="${tasksServer.projectId}"]`).click();
@@ -310,6 +317,78 @@ test.describe('the dashboard in the atm app', () => {
     await expect.poll(() => tasksServer.menuState?.sidebar).toBe(false);
     await tasksServer.chooseMenu({ kind: 'toggle_sidebar' });
     await expect(sidebar).toBeVisible();
+  });
+
+  test('the sidebar is the window’s full height and the title bar only right of it, its tabs from its edge; closed, the bar the whole width (T-535)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    const sidebar = page.locator('#app-sidebar');
+    const bar = page.locator('#app-titlebar');
+    const box = async (l: ReturnType<typeof page.locator>) => (await l.boundingBox())!;
+    await expect(sidebar).toBeVisible();
+    // Open: the sidebar from the window's top, the bar starting at its edge, the first tab right after the bar's start
+    const side = await box(sidebar);
+    expect(side.y).toBe(0);
+    const edge = Math.round(side.x + side.width);
+    await expect.poll(async () => Math.round((await box(bar)).x)).toBe(edge);
+    // The first tab starts right at the sidebar's edge, its border the sidebar's: one line there, not two
+    const firstTab = page.locator('.title-bar-tab').first();
+    expect(Math.round((await box(firstTab)).x)).toBe(edge);
+    await expect(firstTab).toHaveCSS('border-left-style', 'none');
+    // The button is in the sidebar's top strip, not the bar; the strip drags the window
+    await expect(page.locator('#app-sidebar-top #app-sidebar-toggle')).toBeVisible();
+    await expect(bar.locator('#app-sidebar-toggle')).toHaveCount(0);
+    const strip = await box(page.locator('#app-sidebar-top'));
+    expect(strip.height).toBe((await box(bar)).height);
+    await page.mouse.click(side.x + side.width - 10, strip.y + 10);
+    await expect.poll(() => tasksServer.windowCalls).toContain('start_dragging');
+    // Closed: the bar is the window's width from its left edge, with the button
+    await page.locator('#app-sidebar-toggle').click();
+    await expect(sidebar).toHaveCount(0);
+    await expect.poll(async () => Math.round((await box(bar)).x)).toBe(0);
+    await expect(bar.locator('#app-sidebar-toggle')).toBeVisible();
+    // And back
+    await page.locator('#app-sidebar-toggle').click();
+    await expect(sidebar).toBeVisible();
+    await expect.poll(async () => Math.round((await box(bar)).x)).toBe(edge);
+  });
+
+  test('Progress and Activity are the tab’s: at the right of its subtitle line, not in the title bar; they give way on a narrow tab (T-530)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    const trail = page.locator('.topbar.in-tab #in-tab-trail');
+    await expect(trail.locator('#progress-card')).toBeVisible();
+    await expect(trail.locator('#activity-card')).toBeVisible();
+    await expect(page.locator('#app-titlebar #progress-card, #app-titlebar #activity-card')).toHaveCount(0);
+    // On the subtitle's line, at its right end
+    const row = (await page.locator('.topbar.in-tab .in-tab-row').boundingBox())!;
+    const pills = (await trail.boundingBox())!;
+    const subtitle = (await page.locator('#subtitle').boundingBox())!;
+    expect(Math.abs(pills.y + pills.height / 2 - (subtitle.y + subtitle.height / 2))).toBeLessThan(6);
+    expect(Math.round(row.x + row.width - (pills.x + pills.width))).toBeLessThan(2);
+    // They still open what they open
+    await trail.locator('#progress-card').click();
+    await expect(page.locator('#progress-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // A narrow tab: they give way, the subtitle stays
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await expect(trail).toBeVisible();
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(trail).toBeHidden();
+    await expect(page.locator('#subtitle')).toBeVisible();
+    // The overview has none in its tab
+    await page.locator('#app-sidebar .app-sidebar-item').first().click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#in-tab-trail')).toHaveCount(0);
   });
 
   test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
@@ -377,6 +456,46 @@ test.describe('the dashboard in the atm app', () => {
       .toEqual({ addresses: [first, '/projects/second/list', '/board'], active: 2 });
     await page.locator('.title-bar-tab').nth(0).locator('[role="tab"]').click();
     await expect.poll(() => tasksServer.savedTabs?.active).toBe(0);
+  });
+
+  test('a tab dragged along the strip moves there and is kept; a plain click still selects; the bar still drags the window (T-532)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.addProject('second', 'minimal', 'Second Project');
+    tasksServer.use('standard');
+    const first = `/projects/${tasksServer.projectId}/kanban`;
+    tasksServer.restoredTabs = { addresses: [first, '/projects/second/list', '/board'], active: 0 };
+    await page.goto('/');
+    const tabs = page.locator('.title-bar-tab');
+    await expect(tabs).toHaveCount(3);
+    await expect(tabs.nth(1)).toContainText('Second Project');
+    // Drag the third tab to the first place, with the mouse
+    const third = (await tabs.nth(2).boundingBox())!;
+    const start = (await tabs.nth(0).boundingBox())!;
+    await page.mouse.move(third.x + third.width / 2, third.y + third.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(third.x + third.width / 2 - 40, third.y + third.height / 2, { steps: 4 });
+    await page.mouse.move(start.x + 20, third.y + third.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(tabs.nth(1)).toContainText('Standard Project');
+    await expect(tabs.nth(2)).toContainText('Second Project');
+    // Kept in that order (the tab shown has its scope in its address by now)
+    await expect
+      .poll(() => tasksServer.savedTabs?.addresses.map((a) => a.split('?')[0]))
+      .toEqual(['/board', first, '/projects/second/list']);
+    // The drag didn't select it: the first project's tab is still shown
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    // A plain click selects: the tab is chosen and the page goes to its project (not its heading's text, which turns
+    // from the listed name to the project's own once its page loads)
+    await tabs.nth(2).locator('[role="tab"]').click();
+    await expect(tabs.nth(2).locator('[role="tab"]')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/projects/second/list');
+    // The bar's free space (just past the +) still moves the window
+    const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
+    await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
+    await expect.poll(() => tasksServer.windowCalls).toContain('start_dragging');
   });
 
   test('what needs you (T-518, T-520): the page tells the app its workspace; the badge and notifications, off in Settings', async ({
@@ -479,7 +598,7 @@ test.describe('the dashboard in the atm app', () => {
     tasksServer.updateFails = 'the signature does not verify';
     await page.goto('/');
     const bar = page.locator('#app-update');
-    await expect(bar).toContainText('atm 9.9.9 is available (you have 0.34.0).');
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is available (you have 0.34.0).');
     await bar.locator('summary').click();
     await expect(bar.locator('.app-update-notes p')).toHaveText('- One thing.\n- Another.');
     // Nothing is installed until the click
@@ -498,25 +617,77 @@ test.describe('the dashboard in the atm app', () => {
     await expect(bar).toHaveCount(0);
   });
 
-  test('a Mermaid diagram draws in the app: the frames from the plugin’s base, the pack’s module given as code (T-503)', async ({
+  test('the install shows its download’s progress, then restarts; an app still there offers Restart now (T-526)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.clock.install();
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.update = { version: '9.9.9', current_version: '0.36.0', notes: null };
+    const MB = 1024 * 1024;
+    tasksServer.updateProgress = [
+      { step: 'downloading', downloaded: MB / 4, total: 4 * MB },
+      { step: 'downloading', downloaded: MB, total: 4 * MB },
+    ];
+    let finish = () => {};
+    tasksServer.updateInstallHeld = new Promise<void>((resolve) => (finish = resolve));
+    await page.goto('/');
+    const bar = page.locator('#app-update');
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is available (you have 0.36.0).');
+
+    // Downloading: how much of how much, on a bar; the buttons wait
+    await page.locator('#app-update-install').click();
+    await expect(bar.locator('#app-update-step')).toHaveText('Downloading… 1.0 of 4.0 MB');
+    await expect(bar.locator('.app-update-progress')).toHaveAttribute('value', String(MB));
+    await expect(bar.locator('.app-update-progress')).toHaveAttribute('max', String(4 * MB));
+    await expect(page.locator('#app-update-install')).toBeDisabled();
+    await expect(bar.getByRole('button', { name: 'Not now' })).toBeDisabled();
+
+    // Installed: the page asks the app to restart
+    finish();
+    await expect(bar.locator('#app-update-step')).toHaveText('Restarting…');
+    await expect.poll(() => tasksServer.updateCalls).toEqual(['check_update', 'install_update', 'restart_app']);
+    await expect(bar.locator('.app-update-progress')).toHaveCount(0);
+
+    // Still here after the wait: installed, Restart now tries again
+    await page.clock.runFor(10_000);
+    await expect(bar).toContainText('Agentic Task Manager 9.9.9 is installed: restart to use it.');
+    await page.locator('#app-update-restart').click();
+    await expect(bar.locator('#app-update-step')).toHaveText('Restarting…');
+    await expect
+      .poll(() => tasksServer.updateCalls)
+      .toEqual(['check_update', 'install_update', 'restart_app', 'restart_app']);
+  });
+
+  test('a Mermaid diagram draws in the app: the frames and the pack’s module from the bundle’s origin CompMD’s plugin gives (ADR-006)', async ({
     page,
     tasksServer,
   }) => {
     await tasksServer.asApp();
     tasksServer.use('standard');
     const modules: string[] = [];
+    const frames: string[] = [];
     page.on('request', (r) => {
-      if (r.url().includes('/compmd/packs/')) modules.push(`${r.frame() === page.mainFrame() ? 'page' : 'frame'}`);
+      const url = r.url();
+      if (url.includes('/compmd/packs/')) modules.push(r.frame() === page.mainFrame() ? 'page' : 'frame');
+      if (/\/compmd\/frames\/[0-9a-f]{16}\/strict\.html$/.test(url)) frames.push(url);
     });
     await page.goto('/');
-    // Help ▸ atm Help (the app's footer is a status bar, T-516)
+    // Help ▸ Help (the app's footer is a status bar, T-516)
     await expect(page.locator('#dashboard-title')).not.toBeEmpty();
     await tasksServer.chooseMenu({ kind: 'help' });
     const svg = page.frameLocator('#help-panel iframe').locator('svg').first();
     await expect(svg).toBeVisible({ timeout: 15_000 });
     await expect(svg).toContainText('In progress');
-    // The page fetched the module once; no frame asked for it by URL
-    expect(modules).toEqual(['page']);
+    // The frame came from the origin the plugin gave the page, under the bundle's hash; the pack's module was loaded
+    // by the frame, by its place, never by the page (no code handed over)
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((url) => url.startsWith(page.url().split('/').slice(0, 3).join('/') + '/assets/compmd/'))).toBe(
+      true,
+    );
+    expect(modules.length).toBeGreaterThan(0);
+    expect(modules.every((by) => by === 'frame')).toBe(true);
     expect(tasksServer.httpRequests).toEqual([]);
   });
 

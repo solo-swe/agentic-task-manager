@@ -15,17 +15,17 @@ importers:
         specifier: 0.1.1
         version: 0.1.1
       '@compmd/processor':
-        specifier: 0.6.0
-        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+        specifier: 0.7.0
+        version: 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
       '@compmd/render':
-        specifier: 0.6.0
-        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+        specifier: 0.7.0
+        version: 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
       '@compmd/sandbox':
-        specifier: 0.6.0
-        version: 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+        specifier: 0.7.0
+        version: 0.7.0(@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       '@compmd/vite':
-        specifier: 0.6.0
-        version: 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+        specifier: 0.7.0
+        version: 0.7.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       '@dagrejs/dagre':
         specifier: ^3.1.3
         version: 3.1.3
@@ -163,16 +163,16 @@ packages:
   '@comp-markdown/mermaid@0.1.1':
     resolution: {integrity: sha512-EwevqkkUdxOsFLHV85W74wEL+LoyZhaZkmnj8bJax3zLG48uuiGrezFTixCdlS6VQC/GHVU8Ra0vVXjeFftc7Q==}
 
-  '@compmd/processor@0.6.0':
-    resolution: {integrity: sha512-qx7+65H4A8i28nWHY46Q0BHcliY0tclWtT2u9gBf8Uco0theOszyOU88ljNhL87YFO2Tmjv3EsaDChe0dfFVQg==}
+  '@compmd/processor@0.7.0':
+    resolution: {integrity: sha512-h88TWqkDrnZT2y9oJDBHGRk8C2tgZhRRVu+J4WHlBtyjqYV8/StoS6LSL0KgNcfEinHRPPp05rtCwSawjXbgzw==}
 
-  '@compmd/registry@0.6.0':
-    resolution: {integrity: sha512-IQoDjw20pYvVlaEyOnC8Cc99BFwVuwlyS1DAwsAYs94b+wnmka0ePhxc4wtYUJPMgzkAGYtuUIMF9BVhG5jpbg==}
+  '@compmd/registry@0.7.0':
+    resolution: {integrity: sha512-KI/Nwujgj2vHbgouFBWbzcAET237Gi7Z9sikm2h5moFpTEHMU3s4SDiptpAc1eJWMZ14v59Y/pAHyc1FJYHryQ==}
     peerDependencies:
-      '@compmd/processor': ^0.6.0
+      '@compmd/processor': ^0.7.0
 
-  '@compmd/render@0.6.0':
-    resolution: {integrity: sha512-a/cuLY3Yxg3NdQCTbYEH4DNt/jXfT4wP3G5kIqroQvhT1GSayBpawT1z+lyKQ1qK5ED5lgPAKvnErusYLw8Ahg==}
+  '@compmd/render@0.7.0':
+    resolution: {integrity: sha512-T7X4wA2ce2ZQqPmKK9wU/9KBPZZd6xZRL8GABHfJpXRvhzoiRazkeht1BPH3baqttUr1d3NWBIfEHKUhUwMLFQ==}
     peerDependencies:
       react: ^19
       react-dom: ^19
@@ -185,17 +185,17 @@ packages:
       svelte:
         optional: true
 
-  '@compmd/sandbox@0.6.0':
-    resolution: {integrity: sha512-9Hdv1XAVfJP4khSa1qMBbt9UPPhfQIV+ebwXhNYLX//FG9YbA+neFrBKsHjK+YcrmS/gTNw4Xf7/pWi5Flc1iw==}
+  '@compmd/sandbox@0.7.0':
+    resolution: {integrity: sha512-hoDsRybAPGdnes4QSjCMGzb4B4d3jSR3kSIdjz6TNY14AhEVVAGUPJtoSy6rbKrFUW6xm8ISj4zDIRErBd6Mdw==}
     peerDependencies:
-      '@compmd/processor': ^0.6.0
+      '@compmd/processor': ^0.7.0
       vite: '>=8'
     peerDependenciesMeta:
       vite:
         optional: true
 
-  '@compmd/vite@0.6.0':
-    resolution: {integrity: sha512-6G38bOPFL3//YFrdG2q6cxN4xOF5g9HURRoPxjftSuLT7Eo5EVxeErm1mK2nXj7wTbIFuPduOr5QN290zlNMWA==}
+  '@compmd/vite@0.7.0':
+    resolution: {integrity: sha512-BGIaa53he/Chr3Z6dINDYG8UnraedfzPXCJorccu66c4xvNQqc0r6ijo4WVYCNd4lDIWNwj1GDzxFdr34xzioA==}
     peerDependencies:
       react: ^19
       react-dom: ^19
@@ -798,6 +798,9 @@ packages:
     resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
     engines: {node: '>=10'}
 
+  any-promise@1.3.0:
+    resolution: {integrity: sha512-7UvmKalWRt1wgjL1RrGxoSJW/0QZFIegpeGvZG9kjp8vrRu55XTHbwnqq2GpXm9uLbcuhxm3IqX9OB4MZR1b2A==}
+
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
 
@@ -860,6 +863,10 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
+
+  commander@4.1.1:
+    resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
+    engines: {node: '>= 6'}
 
   cookie@2.0.1:
     resolution: {integrity: sha512-yuToqVvRrj6pfDXREyQAAv8SkAEk/8GS3jQRTiUMm66TVtBYmqQeoEjL2Lmq8Rpo6271vH76InTChTitEAm65w==}
@@ -1233,6 +1240,9 @@ packages:
     resolution: {integrity: sha512-utWOt/GHzuUxnLKxB6dk81RoOeoNeHgbrXiuGk4yyF5qlRz+iIVWu56E2fqGHFrXz0QNUhLB/8nKqvRH66JKGQ==}
     engines: {node: '>=10'}
 
+  lines-and-columns@1.2.4:
+    resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
+
   locate-character@3.0.0:
     resolution: {integrity: sha512-SW13ws7BjaeJ6p7Q6CO2nchbYEc3X3J6WrmTTDto7yMPqVSZTUyY5Tjbid+Ab8gLnATtygYtiDIJGQRRn2ZOiA==}
 
@@ -1300,6 +1310,9 @@ packages:
   ms@2.1.3:
     resolution: {integrity: sha512-6FlzubTLZG3J2a/NVCAleEhjzq5oxgHyaCU9yYXvcLsvoVaHJq/s5xXI6/XXP6tz7R9xAOtHnSO/tXtF3WRTlA==}
 
+  mz@2.7.0:
+    resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
+
   nanoid@3.3.20:
     resolution: {integrity: sha512-uKdg2G3GNCKQn9byYOpxbGqrT2fGO5KRt5J/8b3pok8rT6qxGWF6hxMyJiEYtAf+FVyYuD9hRaDqX5uPFYJ4ZQ==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
@@ -1307,6 +1320,10 @@ packages:
 
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
+
+  object-assign@4.1.1:
+    resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
+    engines: {node: '>=0.10.0'}
 
   obug@2.2.1:
     resolution: {integrity: sha512-XrsrhT5sybtKI6wakr2SPOlGZWWYbUXZ7a0jT8/QOeAPau+1X/bSegNe5YR75oJmEZQbKningirmGOEJCIk61Q==}
@@ -1351,6 +1368,10 @@ packages:
   picomatch@4.0.7:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
+
+  pirates@4.0.7:
+    resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
+    engines: {node: '>= 6'}
 
   playwright-core@1.64.1:
     resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
@@ -1508,6 +1529,11 @@ packages:
   style-to-object@1.0.14:
     resolution: {integrity: sha512-LIN7rULI0jBscWQYaSswptyderlarFkjQ+t79nzty8tcIAceVomEVlLzH5VP4Cmsv6MtKhs7qaAiwlcp+Mgaxw==}
 
+  sucrase@3.35.1:
+    resolution: {integrity: sha512-DhuTmvZWux4H1UOnWMB3sk0sbaCVOoQZjv8u1rDoTV0HTdGem9hkAZtl4JZy8P2z4Bg0nT+YMeOFyVr4zcG5Tw==}
+    engines: {node: '>=16 || 14 >=14.17'}
+    hasBin: true
+
   svelte-check@4.7.7:
     resolution: {integrity: sha512-Ge2IMdeTpbJuzNFGRiiMg0RWgbScysKQu7xwcyFJ22+DU9F5nPX51+Q3gHmGqRxYQMx2knreVWt5oCtfe0vf2g==}
     engines: {node: '>= 18.0.0'}
@@ -1531,6 +1557,10 @@ packages:
     peerDependencies:
       svelte: ^5.30.2
 
+  svelte@5.57.2:
+    resolution: {integrity: sha512-1YiPCAXT0Ct6g1vOMmSLa0Nsc3QRMvtDF32ihgglGVrugIuIK38RyDiFNXVDhtQ81TJjSO57NdMw6DyYLqSGDQ==}
+    engines: {node: '>=18'}
+
   svelte@5.57.3:
     resolution: {integrity: sha512-5mAftM3SoDV9X0zdF386F9p2pv8iKOwi/KfBS1XnBAkVCKFzVOLHUoa8iGWAt4buoicLmyWVRpuuD5wplXOQsg==}
     engines: {node: '>=18'}
@@ -1541,6 +1571,13 @@ packages:
   temml@0.14.0:
     resolution: {integrity: sha512-tz1LW/5IZpThK8c7ZpdTSH/n56eAj+ThirLieErtKxYC3EKCIiB4sKdRUehAgH+fQmvIKqMfP3gqTLBdLpy9zw==}
     engines: {node: '>=18.13.0'}
+
+  thenify-all@1.6.0:
+    resolution: {integrity: sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==}
+    engines: {node: '>=0.8'}
+
+  thenify@3.3.1:
+    resolution: {integrity: sha512-RVZSIV5IG10Hk3enotrhvz0T9em6cyHBLkH/YAZuKqd8hRkKhSfCGIcP2KUY0EPxndzANBmNllzWPwak+bheSw==}
 
   tinybench@6.2.2:
     resolution: {integrity: sha512-nIZ2N2dFpjBsg2hgitKu7mA+FvsIJuGJOwysRngmVRRmWgR/UyPjwJj8c/fT/dhm8EkHnF5EOogRf+0Z2qrimA==}
@@ -1585,6 +1622,9 @@ packages:
     engines: {node: '>=18.12'}
     peerDependencies:
       typescript: '>=4.8.4'
+
+  ts-interface-checker@0.1.13:
+    resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
 
   type-check@0.4.0:
     resolution: {integrity: sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==}
@@ -1844,50 +1884,58 @@ snapshots:
 
   '@comp-markdown/mermaid@0.1.1': {}
 
-  '@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+  '@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
     dependencies:
-      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/render': 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
     transitivePeerDependencies:
       - react
       - react-dom
       - svelte
 
-  '@compmd/registry@0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
+  '@compmd/registry@0.7.0(@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))':
     dependencies:
-      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/processor': 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
 
-  '@compmd/render@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
+  '@compmd/render@0.7.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))':
+    optionalDependencies:
+      svelte: 5.57.2(@typescript-eslint/types@8.72.1)
+
+  '@compmd/render@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))':
     optionalDependencies:
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
 
-  '@compmd/sandbox@0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+  '@compmd/sandbox@0.7.0(@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
     dependencies:
-      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/processor': 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/render': 0.7.0(svelte@5.57.2(@typescript-eslint/types@8.72.1))
       '@shikijs/core': 4.5.0
       '@shikijs/engine-javascript': 4.5.0
       '@shikijs/langs': 4.5.0
       '@shikijs/themes': 4.5.0
       es-module-lexer: 2.3.2
+      sucrase: 3.35.1
+      svelte: 5.57.2(@typescript-eslint/types@8.72.1)
       temml: 0.14.0
     optionalDependencies:
       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
     transitivePeerDependencies:
+      - '@typescript-eslint/types'
       - react
       - react-dom
-      - svelte
 
-  '@compmd/vite@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
+  '@compmd/vite@0.7.0(@typescript-eslint/types@8.72.1)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))':
     dependencies:
-      '@compmd/processor': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/registry': 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
-      '@compmd/render': 0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
-      '@compmd/sandbox': 0.6.0(@compmd/processor@0.6.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(svelte@5.57.3(@typescript-eslint/types@8.72.1))(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
+      '@compmd/processor': 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/registry': 0.7.0(@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))
+      '@compmd/render': 0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1))
+      '@compmd/sandbox': 0.7.0(@compmd/processor@0.7.0(svelte@5.57.3(@typescript-eslint/types@8.72.1)))(@typescript-eslint/types@8.72.1)(vite@8.3.5(@types/node@26.6.6)(yaml@2.9.1))
       semver: 7.8.5
       vite: 8.3.5(@types/node@26.6.6)(yaml@2.9.1)
       yaml: 2.9.1
     optionalDependencies:
       svelte: 5.57.3(@typescript-eslint/types@8.72.1)
+    transitivePeerDependencies:
+      - '@typescript-eslint/types'
 
   '@csstools/color-helpers@6.1.2': {}
 
@@ -2399,6 +2447,8 @@ snapshots:
 
   ansi-styles@5.2.0: {}
 
+  any-promise@1.3.0: {}
+
   aria-query@5.3.0:
     dependencies:
       dequal: 2.0.3
@@ -2461,6 +2511,8 @@ snapshots:
   clsx@2.1.1: {}
 
   comma-separated-tokens@2.0.3: {}
+
+  commander@4.1.1: {}
 
   cookie@2.0.1: {}
 
@@ -2816,6 +2868,8 @@ snapshots:
 
   lilconfig@2.1.0: {}
 
+  lines-and-columns@1.2.4: {}
+
   locate-character@3.0.0: {}
 
   locate-path@6.0.0:
@@ -2886,9 +2940,17 @@ snapshots:
 
   ms@2.1.3: {}
 
+  mz@2.7.0:
+    dependencies:
+      any-promise: 1.3.0
+      object-assign: 4.1.1
+      thenify-all: 1.6.0
+
   nanoid@3.3.20: {}
 
   natural-compare@1.4.0: {}
+
+  object-assign@4.1.1: {}
 
   obug@2.2.1: {}
 
@@ -2930,6 +2992,8 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@4.0.7: {}
+
+  pirates@4.0.7: {}
 
   playwright-core@1.64.1: {}
 
@@ -3078,6 +3142,16 @@ snapshots:
     dependencies:
       inline-style-parser: 0.2.7
 
+  sucrase@3.35.1:
+    dependencies:
+      '@jridgewell/gen-mapping': 0.3.13
+      commander: 4.1.1
+      lines-and-columns: 1.2.4
+      mz: 2.7.0
+      pirates: 4.0.7
+      tinyglobby: 0.2.17
+      ts-interface-checker: 0.1.13
+
   svelte-check@4.7.7(picomatch@4.0.7)(svelte@5.57.3(@typescript-eslint/types@8.72.1))(typescript@6.0.3):
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
@@ -3112,6 +3186,26 @@ snapshots:
     transitivePeerDependencies:
       - '@sveltejs/kit'
 
+  svelte@5.57.2(@typescript-eslint/types@8.72.1):
+    dependencies:
+      '@jridgewell/remapping': 2.3.5
+      '@jridgewell/sourcemap-codec': 1.6.0
+      '@sveltejs/acorn-typescript': 1.0.13(acorn@8.19.0)
+      '@types/estree': 1.0.9
+      acorn: 8.19.0
+      aria-query: 5.3.1
+      axobject-query: 4.1.0
+      clsx: 2.1.1
+      devalue: 5.9.4
+      esm-env: 1.2.2
+      esrap: 2.4.0(@typescript-eslint/types@8.72.1)
+      is-reference: 3.0.3
+      locate-character: 3.0.0
+      magic-string: 0.30.21
+      zimmerframe: 1.1.5
+    transitivePeerDependencies:
+      - '@typescript-eslint/types'
+
   svelte@5.57.3(@typescript-eslint/types@8.72.1):
     dependencies:
       '@jridgewell/remapping': 2.3.5
@@ -3135,6 +3229,14 @@ snapshots:
   tabbable@6.5.1: {}
 
   temml@0.14.0: {}
+
+  thenify-all@1.6.0:
+    dependencies:
+      thenify: 3.3.1
+
+  thenify@3.3.1:
+    dependencies:
+      any-promise: 1.3.0
 
   tinybench@6.2.2: {}
 
@@ -3168,6 +3270,8 @@ snapshots:
   ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
       typescript: 6.0.3
+
+  ts-interface-checker@0.1.13: {}
 
   type-check@0.4.0:
     dependencies:

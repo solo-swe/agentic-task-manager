@@ -444,6 +444,78 @@
     "expect": { "exit": 2, "stderrIncludes": ["no component 'api'; the components: cli"] }
   },
   {
+    "name": "atm component rename: the tasks listing it, archived ones too, follow; its label and globs stay (T-498)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "components": [
+              { "id": "dash", "label": "Dashboard", "paths": ["dashboard/**"], "review": "async" },
+              { "id": "cli", "paths": ["crates/**"] }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "todo", "components": ["cli", "dash"], "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo", "components": ["cli"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "components": ["dash"] }]
+        }
+      }
+    },
+    "args": ["component", "rename", "dash", "dashboard"],
+    "expect": {
+      "stdout": "Renamed the component dash to dashboard: 2 tasks (1 archived) follow it.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "components": [
+              { "id": "dashboard", "label": "Dashboard", "paths": ["dashboard/**"], "review": "async" },
+              { "id": "cli", "paths": ["crates/**"] }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "todo", "components": ["cli", "dashboard"], "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "todo", "components": ["cli"] }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "components": ["dashboard"] }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm component rename refuses another component's ID",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "components": [{ "id": "cli" }, { "id": "api" }] },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["component", "rename", "cli", "api"],
+    "expect": { "exit": 2, "stderrIncludes": ["there is already a component 'api'"] }
+  },
+  {
+    "name": "atm component rename refuses an ID that isn't one",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] } }
+    },
+    "args": ["component", "rename", "cli", "the cli"],
+    "expect": { "exit": 2, "stderrIncludes": ["'the cli': a component ID is letters, digits"] }
+  },
+  {
+    "name": "atm component rename of an unknown component names them",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "components": [{ "id": "cli" }] }, "tasks": [] } }
+    },
+    "args": ["component", "rename", "api", "server"],
+    "expect": { "exit": 2, "stderrIncludes": ["no component 'api'; the components: cli"] }
+  },
+  {
     "name": "components edit --assign on a component without globs is refused (T-326)",
     "setup": {
       "files": {

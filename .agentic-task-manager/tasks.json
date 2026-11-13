@@ -1,6 +1,6 @@
 {
   "meta": {
-    "project": "ATM Dashboard",
+    "project": "Agentic Task Manager",
     "created": "2026-10-22",
     "description": "Phases 0-6: Svelte 5 migration (docs/svelte-migration-plan.md, done). Phases 7-9: dashboard v2 (docs/dashboard-v2-requirements.md, done). Phases 10-12: v3 (docs/v3-requirements.md, design for parallel agents in docs/parallel-agents-design.md): 10 = 0.10.0 project folder, helper launcher, /atm:serve, update instructions; 11 = 0.11.0 parallel agents; 12 = 0.12.0 filter counts, saved views, light/dark modes, themes. Every task must leave `npm run verify` (in dashboard/) and the helper's test suite (tests/scripts) green: a behaviour change lands together with the tests it changes. The helper is plugin/scripts/atm.py: Python 3.9+, standard library only (docs/helper-runtime-proposal.md). Phase 13 = 0.13.0: footer, Help and About, priorities, project vocabularies, In Review (docs/v4-requirements.md).",
     "id": "cb66fd8c",
@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 528,
+    "next_id": 538,
     "labels": [
       {
         "id": "architecture",
@@ -1111,6 +1111,43 @@
             "T-525"
           ]
         }
+      },
+      {
+        "id": "Updates and renames",
+        "state": "closed",
+        "goal": "The app updates smoothly and uses CompMD 0.7.0 as recommended, tab and title polish, releases marked released by hand, and renames in the CLI",
+        "release": "0.37.0",
+        "start": "2026-11-13T04:53:49Z",
+        "end": "2026-11-13T18:05:31Z",
+        "report": {
+          "done": [
+            "T-496",
+            "T-497",
+            "T-498",
+            "T-499",
+            "T-500",
+            "T-524",
+            "T-526",
+            "T-527",
+            "T-528",
+            "T-529",
+            "T-530",
+            "T-531",
+            "T-532",
+            "T-533",
+            "T-535",
+            "T-536",
+            "T-537"
+          ],
+          "carried": [],
+          "added": [
+            "T-532",
+            "T-533",
+            "T-535",
+            "T-536",
+            "T-537"
+          ]
+        }
       }
     ],
     "releases": [
@@ -1332,6 +1369,10 @@
       },
       {
         "id": "0.36.0",
+        "state": "planned"
+      },
+      {
+        "id": "0.37.0",
         "state": "planned"
       }
     ],
@@ -17830,7 +17871,7 @@
       "description": "A sprint's name is its identifier and can't be changed today: `atm sprint edit` changes only its goal, release and due date.\n\n## Change\n- `atm sprint rename <old> <new>`, the same form as `atm workspace rename`, in any state (planned, active, closed).\n- Every reference follows: each task's `sprint`, in `tasks.json` and in `tasks-archive.json`, and the other sprints' reports (`report.to`, and any other field naming a sprint).\n- Refused: a name another sprint has, an empty name.\n- The rename lives in atm-lib (`sprints.rs`); the CLI only maps to it.\n\n## Docs\n`docs/agent/commands.md`, and the sprint skills' text if they say a sprint can't be renamed.\n\n## Tests\nA scenario in `tests/scripts/scenarios/sprint-commands.json`: rename an active sprint with tasks (one of them archived) and a closed one that carried tasks to it; check the tasks, the archive and the report follow; a name in use is refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/sprints.rs",
@@ -17839,13 +17880,37 @@
         "tests/scripts/scenarios/sprint-commands.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:01:15Z",
+      "started_by": "claude:0f56a916",
+      "commit": "fa755a510ca53dc903159bc8c47a751ded462c44",
+      "completed_at": "2026-11-13T11:06:35Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:06:35Z",
+          "kind": "outcome",
+          "text": "`atm sprint rename <old> <new>` (atm-lib `rename_sprint`): any state; tasks’ `sprint` and `sprint_history` in tasks.json and the archive, and other sprints’ `report.to`, follow; a name another sprint has or a task’s history keeps, or an empty one, is refused; a change of case is allowed. Six scenarios; docs/agent/commands.md and the plan-sprint skill mention it (a skill change: the release’s security review covers it).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-497",
@@ -17858,7 +17923,7 @@
       "description": "`atm release edit --name` sets a display name, but a release's ID (what tasks and sprints point to) can't change, so a typo in it (`0.34` for `0.34.0`) stays.\n\n## Change\n- `atm release rename <old> <new>`, the form of `atm workspace rename` and `atm sprint rename`.\n- Every reference follows: tasks' release, in `tasks.json` and `tasks-archive.json`, and sprints' `release`.\n- Refused: an ID in use, an ID that isn't valid (the rule `atm release add` checks).\n- In atm-lib (`releases.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/releases.json`: a release with tasks (one archived) and a sprint delivering to it, renamed; a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/releases.rs",
@@ -17867,13 +17932,37 @@
         "tests/scripts/scenarios/releases.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:06:39Z",
+      "started_by": "claude:0f56a916",
+      "commit": "9d804a7718ed2c5984bdb6e240548a369b75ca96",
+      "completed_at": "2026-11-13T11:10:53Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:10:53Z",
+          "kind": "outcome",
+          "text": "`atm release rename <old> <new>` (atm-lib `rename_release`): tasks’ own `release` in tasks.json and the archive, and sprints’ `release`, follow; its name, state and dates stay. Refused: an ID another release has, one that isn’t valid, an unknown release. Four scenarios in releases.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-498",
@@ -17886,7 +17975,7 @@
       "description": "`atm component edit --label` sets the name shown, but the component's ID, which tasks list in `components`, can't change.\n\n## Change\n- `atm component rename <old> <new>`, the same form as the other renames.\n- Every reference follows: tasks' `components`, in `tasks.json` and `tasks-archive.json`.\n- Refused: an ID in use, an invalid ID.\n- In atm-lib (`components.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/components.json`: rename a component given to tasks (one archived); a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/components.rs",
@@ -17895,13 +17984,37 @@
         "tests/scripts/scenarios/components.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:11:00Z",
+      "started_by": "claude:0f56a916",
+      "commit": "881e98024bf2a285ae63195a6c4048a21774c0b2",
+      "completed_at": "2026-11-13T11:13:50Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:13:50Z",
+          "kind": "outcome",
+          "text": "`atm component rename <old> <new>` (atm-lib `rename_component`): tasks’ `components` in tasks.json and the archive follow (a task listing both keeps one); its label, globs and review stay. Refused: an ID another component has, one that isn’t valid, an unknown component. Four scenarios in components.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-499",
@@ -17914,7 +18027,7 @@
       "description": "Labels are per task (`atm task edit --add-label/--remove-label`): renaming one (`ui` to `dashboard`) means editing every task by hand.\n\n## Change\n- A rename of a label on every task that has it, in `tasks.json` and `tasks-archive.json`. Propose where it lives (`atm task relabel <old> <new>`, or a small `atm label` group with `list` and `rename`) and pick the one that fits the other renames.\n- A task that already has the new label keeps one.\n- The new label follows the label rule (lowercase letters, digits, `-`, `_`, at most 32 characters).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario: tasks with the old label, one with both, one archived.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/edit.rs",
@@ -17923,13 +18036,37 @@
         "tests/scripts/scenarios/edit.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T12:56:44Z",
+      "started_by": "claude:0f56a916",
+      "commit": "80a336761e046b4eeb95717dcc0ec5876d7e4112",
+      "completed_at": "2026-11-13T13:00:51Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T13:00:51Z",
+          "kind": "outcome",
+          "text": "`atm label rename <old> <new>`, a small `atm label` group (like the other renames, room for `list` later): atm-lib `edit::relabel` renames it on every task, tasks.json and the archive, and in meta.labels; a task with both keeps one; the new label follows the rule; a label no task has is refused. Three scenarios in edit.json; the command tree test lists `label`; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-500",
@@ -17942,7 +18079,7 @@
       "description": "A project's statuses, types and priorities are set only with `atm db init --meta-file`, which replaces a whole list: changing an ID there leaves the tasks that use the old one invalid (`atm doctor` reports them).\n\n## Change\n- A rename of one entry's ID (and, separately, its label) that moves every task using it, in `tasks.json` and `tasks-archive.json`: a task's `status` and its history, `type`, `priority`, and `meta.default_priority`.\n- Refused: an ID in use in that list.\n- Propose the command's form so it matches the other renames (sprint, release, component, label).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/vocab.json`: rename a status in use (with history), a type and the default priority; `atm doctor` stays clean.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/settings.rs",
@@ -17951,13 +18088,37 @@
         "tests/scripts/scenarios/vocab.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-08T21:25:20Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T13:00:56Z",
+      "started_by": "claude:0f56a916",
+      "commit": "0c619290606508b00101b97eed085dae5e78de6a",
+      "completed_at": "2026-11-13T13:06:34Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T13:06:34Z",
+          "kind": "outcome",
+          "text": "`atm project vocab rename status|type|priority <old> [<new>] [--label L]` (atm-lib `settings::rename_term`): the entry’s ID and/or label; tasks’ status, type or priority (tasks.json and the archive) and meta.default_priority follow; a project on the defaults gets the list written into meta. Refused: an ID another entry has, an unknown entry, nothing to change. Five scenarios in vocab.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-501",
@@ -19355,7 +19516,7 @@
     },
     {
       "id": "T-524",
-      "name": "Check atm's app against CompMD's redesigned Tauri plugin and its guidance for Tauri apps",
+      "name": "Update to CompMD 0.7.0 and use it as CompMD recommends, the Tauri integration above all",
       "type": "refactor",
       "priority": "P2",
       "labels": [
@@ -19365,7 +19526,7 @@
       "description": "CompMD is redesigning `tauri-plugin-compmd` and how Tauri apps should use CompMD. **Waits for that redesign task in CompMD** (its release and its documentation for Tauri apps).\n\nOnce it's out, check atm's app against it and bring it up to the standard:\n\n## What to compare\n- **The plugin and its version:** `tauri-plugin-compmd` (pinned with `=` to the `@compmd/*` packages' version, `app/src-tauri/Cargo.toml`), and how the app registers it (`app/src-tauri/src/lib.rs`).\n- **What atm serves itself on `atm:`** (`app/src-tauri/src/assets.rs`, embedded by `app/src-tauri/build.rs`): `compmd.js`, its WebAssembly and the packs' modules. Does the plugin now serve these, or say how an app should?\n- **The page's side** (`dashboard/src/lib/compmd.ts`: `sandboxOptions`, `fetchPackModules`, `moduleUrl`): the frames' `base`, the packs' modules handed over as code checked by their `integrity`. Is this still the recommended way, or does CompMD's API cover it now?\n- **The window's CSP** (`tauri.conf.json`, I26 in `docs/security-architecture.md`): the `atm://localhost/assets/compmd/` and `compmd://localhost/frames/` folders, and their `http://….localhost` forms for Windows.\n- **Caching:** T-508 found WebKit asks again for each `atm:` file (`no-cache`); check against what CompMD now recommends.\n\n## Then\nWhere atm differs from the standard: change it (or record why not), keeping `atm serve` and the app serving the same files with the same headers (`tests/scripts/compmd-host-headers.json`). Update [ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md) (or a new ADR replacing it), I26, and the [Tauri guide](docs/guides/tauri.md). New dependencies or plugin versions need a yes first.\n\n## Checks\nThe app's Rust tests (`the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them`, `the_windows_csp_is_strict`, `assets.rs`'s), `compmd.test.ts`, the app e2e specs, and by hand: diagrams draw in the app (`cargo tauri dev`, and a release bundle).",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/Cargo.toml",
@@ -19379,18 +19540,50 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-10T22:42:38Z",
-      "updated_at": "2026-11-10T22:42:44Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
       ],
-      "waiting_on": "user",
-      "questions": [
-        "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this."
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
       ],
-      "blocked_at": "2026-11-10T22:42:44Z"
+      "sprint": "Updates and renames",
+      "blocks": [
+        {
+          "from": "2026-11-10T22:42:44Z",
+          "to": "2026-11-13T04:51:11Z",
+          "on": "user"
+        }
+      ],
+      "notes": [
+        {
+          "at": "2026-11-13T04:51:11Z",
+          "kind": "answer",
+          "text": "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this. → CompMD 0.7.0 is out (Hakan, 2026-11-13): update atm to it and use it as CompMD now recommends, the Tauri integration above all.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-13T16:53:16Z",
+          "kind": "outcome",
+          "text": "CompMD 0.7.0 as its Tauri chapter has it (ADR-006 replaces ADR-005): one build writes compmd.js and the bundle (out, source compmd://localhost/); the app embeds it (build::bundle, init(include_bundle!())); atm serve answers it with compmd-host’s respond; the page passes only the origin, in the browser. Packs load in frames by place; atm: serves only compmd.js and wasm. Rust, CLI 628, e2e 438 pass. By hand with Hakan: a diagram in cargo tauri dev and a release bundle.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-13T14:18:30Z",
+      "started_by": "claude:0f56a916",
+      "commit": "745c54aadf3c304f205591c456a84b051a8267b4",
+      "completed_at": "2026-11-13T16:53:16Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-525",
@@ -19456,7 +19649,7 @@
       "description": "Found in T-522 (0.35.0 updating to 0.36.0): after the click, the app sat on \"Installing…\" with no sign of progress while it downloaded the 33 MB archive, and it did not reopen on the new version: it was installed, and Hakan closed the app himself.\n\n## Change\n- **Progress:** `install_update` ([updates.rs](app/src-tauri/src/updates.rs)) ignores `download_and_install`'s callbacks (`|_, _| {}`, `|| {}`). Send the page the downloaded and total bytes on a channel the command takes, and \"installing\" once the download is done; `UpdateNotice` shows a progress bar and the step (downloading, installing, restarting).\n- **The restart:** find why `app.restart()` didn't bring the app back after the install on macOS (the single-instance plugin, the window-state writes on exit from T-518, or the restart racing the bundle's replacement), and fix it; if a restart can't be made reliable, the notice says the update is installed and offers Restart Now.\n- A failure at any step still says why, and the running app stays as it is.\n\n## Tests\nUnit and e2e (`app.spec.ts`, the IPC mock sending progress); the restart by hand on macOS at the next release, with Hakan (as T-522).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/updates.rs",
@@ -19464,15 +19657,44 @@
         "dashboard/src/lib/shell/UpdateNotice.svelte"
       ],
       "created_at": "2026-11-13T04:33:45Z",
-      "updated_at": "2026-11-13T04:33:45Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
       "related": [
         "T-522"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "notes": [
+        {
+          "at": "2026-11-13T10:58:53Z",
+          "kind": "failure",
+          "text": "lease expired (claude:0f56a916)"
+        },
+        {
+          "at": "2026-11-13T11:00:31Z",
+          "kind": "outcome",
+          "text": "Progress on a channel (`install_update` sends bytes every 256 KB, then installing); the notice shows Downloading… X of Y MB with a bar, Installing…, Restarting…. The restart is now its own command, `restart_app` (Tauri’s `request_restart`: quits as Quit does, then starts again), instead of `restart()` from the command’s thread; a page still there after 10 s says the update is installed and offers Restart now. The cause on macOS isn’t confirmed: check the restart by hand at the 0.37.0 release.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-13T10:59:01Z",
+      "started_by": "claude:0f56a916",
+      "commit": "c2fb34c93e84e0879759ef5b0d1d8603418d09d9",
+      "completed_at": "2026-11-13T11:00:31Z",
+      "completed_by": "claude:0f56a916",
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     },
     {
       "id": "T-527",
@@ -19485,7 +19707,7 @@
       "description": "A release becomes `released` only when `atm vcs pushed` finds every one of its tasks merged in a PR. A release with a task that has no commit (a check done with the user, such as T-521 for 0.35.0 and T-522 for 0.36.0) never does: 0.32.0, 0.35.0 and 0.36.0 still show `planned` though they are out. There is no command to say so by hand.\n\n## Change\n- `atm release edit <id> --released [YYYY-MM-DD]` marks the release released, on the date given (today without one); `--planned` takes it back. It says which of its tasks are not done or not merged, and goes ahead (the user's call), unless a task is still open (to do, in progress, in review, blocked), which it refuses unless `--force`.\n- `atm release list` and the dashboard's release view show a release marked by hand as released, with its date.\n- `docs/agent/` (the release commands) and the release steps in `packaging/README.md` say to run it after publishing, when a release holds such a task.\n\n## Tests\nA scenario in `tests/scripts/scenarios/` (mark, unmark, the refusal for an open task and `--force`, the list's line), and atm-lib's unit tests for the rule.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/release.rs",
@@ -19495,13 +19717,554 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-13T04:38:39Z",
-      "updated_at": "2026-11-13T04:38:39Z",
+      "updated_at": "2026-11-13T18:09:41Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:51:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:14:00Z",
+      "started_by": "claude:0f56a916",
+      "commit": "7e5871eaa548952a01bb579c95a70a954b8919a1",
+      "completed_at": "2026-11-13T11:42:40Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:42:40Z",
+          "kind": "outcome",
+          "text": "`atm release edit <id> --released [YYYY-MM-DD]` (today without a date) and `--planned` (atm-lib `mark_release`): names the tasks done but not merged; refuses while one is open unless `--force`. `atm release list` and the dashboard already show a released release with its date. Seven scenarios and a unit test; docs/agent/commands.md and packaging/README.md (step 5).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-528",
+      "name": "CI: the app's tab-switch timing test failed on main (Next Tab to the List, 416 and 523 ms against 400)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "dashboard"
+      ],
+      "description": "CI run 43367214532 on `main` (after 0.36.0) failed `performance.spec.ts` \"performance in the app: its tabs (T-525) › a click on a tab, and Next Tab round them all\": `next tab: list` took 416 ms, then 523 ms on the retry, against CI's 400 ms budget. It passed on PR #47's CI, so it is close to the limit.\n\n## Change\n- Measure it locally (`pnpm exec playwright test performance`, after `pnpm run build`), and find what the switch to the List costs: `TaskGrid` is mounted only while shown (T-525), so it is built on every switch to it.\n- Fix the cause (e.g. keep the List mounted once built, hidden while another view shows, or make its first render cheaper), so the List's switch is well under the budget, as the other views are.\n- Never raise the budget or just re-run (AGENTS.md, CI).\n\n## Tests\nThe timing test itself, run several times locally, and the area specs of the views (`kanban`, `list`, `graph`), then the functional e2e suite once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/tasks/TaskGrid.svelte",
+        "dashboard/src/lib/shell/ViewPanel.svelte",
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-525"
+      ],
+      "started_at": "2026-11-13T07:04:52Z",
+      "started_by": "claude:0f56a916",
+      "commit": "fcabf3c4da0667fa3213fa227a02bc51c666ef13",
+      "completed_at": "2026-11-13T07:14:43Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T07:14:43Z",
+          "kind": "outcome",
+          "text": "The List’s rows off screen are no longer laid out or painted until they near the view (`content-visibility: auto` on `.task-card`): the switch to the List of 500 tasks went from 100–120 ms to 52–89 ms locally (CI’s budget 400). Full functional e2e: 434 passed.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-529",
+      "name": "Desktop app: the tab labels slide right and back as the sidebar is shown and hidden",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "In the app's title bar (`AppTitleBar.svelte`), the tabs jump when the sidebar is toggled (`dashboard.sidebarOpen`). Make them slide: to the right as the sidebar opens, back to the left as it closes, in step with the sidebar's own animation (same duration and easing, from the tokens).\n\n## Notes\n- No motion with reduced motion (`prefers-reduced-motion`): they move at once, as now.\n- Animate a transform rather than the layout where possible, so the switch stays cheap (the T-525 timing budget).\n- [The desktop UI design](docs/app-desktop-ui-design.md) gets a line on it.\n\n## Tests\nAn app e2e spec: the tabs' position after the toggle both ways, with motion on (as the overview's need-you list test does) and reduced; then the app specs and the functional suite once.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-13T11:42:44Z",
+      "started_by": "claude:0f56a916",
+      "commit": "54b90a5572b992ca5162d66ddb731810ba7f1ea8",
+      "completed_at": "2026-11-13T11:46:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:46:11Z",
+          "kind": "outcome",
+          "text": "With the sidebar open, the title bar’s tabs start at its edge: the bar’s lead (menus, sidebar button) gets a right margin of what the sidebar covers past it, transitioned (0.2 s), at once with reduced motion. E2e checks both positions and both motion settings; full functional suite 436 passed; the design doc §4 says so. Worth a look by eye in the app (the margin’s easing).",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-13T12:03:59Z",
+          "kind": "note",
+          "text": "Its title bar’s `bind:clientWidth` needs ResizeObserver, which jsdom lacks: AppTitleBar’s component tests failed until 54b90a5 stubbed it in tests/unit/setup.ts (found in T-532; the unit tests weren’t run for T-529).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-530",
+      "name": "Desktop app: the Progress and Activity pills move into the project's tab, at the right of the subtitle line",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "In the app, the project's Progress and Activity pills (`projectPills` in `Header.svelte`) belong to the tab's project, so they go into the tab, on the subtitle line (where T-516 put the search and Filters), aligned right; no longer at the title bar's right. The browser keeps them where they are.\n\n## Notes\n- They show only for a project's tab (not the overview), and still open what they open now.\n- On a narrow window they give way before the subtitle text does (it truncates last), and never overlap the search or Filters.\n- [The desktop UI design](docs/app-desktop-ui-design.md) says where they are.\n\n## Tests\nApp e2e: the pills are in the tab's subtitle line, at its right, for a project and not for the overview, and the browser's are unchanged; the area specs, then the functional suite once. Screenshots change in the release task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/Header.svelte",
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-13T11:46:15Z",
+      "started_by": "claude:0f56a916",
+      "commit": "1ee6bf0a20880a09cd14ee6c4a67c867bafea741",
+      "completed_at": "2026-11-13T11:53:06Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:53:06Z",
+          "kind": "outcome",
+          "text": "In the app, a project’s Progress and Activity are in its tab, at the subtitle line’s right end (TitleBar’s new `trail` snippet), no longer in the title bar; the overview keeps its activity there; under 720 px of tab they give way (a container query). The browser is unchanged. E2e: placement, the panel opens, narrow, the overview; 437 passed. The Linux screenshots of the app’s title bar may change: regenerate in the release task.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-531",
+      "name": "Call it Agentic Task Manager where users see its name (the app's menus and windows, the dashboard), keeping the command atm",
+      "type": "polish",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "dashboard",
+        "distribution"
+      ],
+      "description": "Users see \"atm\" as the product's name: the app's menu bar (`About atm`, `Quit atm`, in `app/src-tauri/src/menu.rs`), its window title and `productName` (`tauri.conf.json`), the dashboard's titles and About dialog, notifications. Use **Agentic Task Manager** there. The command stays `atm`, and so do commands, paths and text about the command (`atm serve`, `atm agents install`).\n\n## Change\n- The app: the menus (\"About Agentic Task Manager\", \"Quit Agentic Task Manager\", …), the window title, the notifications' and badge's app name. `productName` decides the bundle's name (`Agentic Task Manager.app`): check what that changes for the updater (`latest.json`'s archive, the installed app's path), signing and notarizing (`packaging/`), the Homebrew cask and the release script, so an installed 0.36.0 still updates to it in place; if the bundle's name can't change safely, keep it and change only what the menus and windows show, and say why in the outcome.\n- The dashboard: the page's `<title>`, the About dialog, the empty states and any other text naming the product (not the command).\n- README and the What's new entry say so.\n\n## Tests\nThe app's Rust tests for the menu (its items' labels), unit and e2e tests that read the titles; the update from 0.36.0 is checked by hand at the release, with Hakan (as T-522).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/src/menu.rs",
+        "dashboard/src/app.html",
+        "dashboard/src/lib/dialogs/AboutDialog.svelte",
+        "packaging/README.md",
+        "README.md"
+      ],
+      "created_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T04:52:06Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-13T11:53:15Z",
+      "started_by": "claude:0f56a916",
+      "commit": "67574c2520bd42204c7f036afda365db6f511e68",
+      "completed_at": "2026-11-13T11:58:54Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:58:54Z",
+          "kind": "outcome",
+          "text": "“Agentic Task Manager” in the menus, window title, notifications, update notice and agents dialog; Info.plist sets CFBundleName and CFBundleDisplayName (menu bar, Dock, Finder). productName stays atm: the bundle is still atm.app, so the updater, signing and cask need no change. Commands keep atm. Check at the release with Hakan: the menu bar’s name and an update from 0.36.0.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-532",
+      "name": "Desktop app: reorder the title bar's tabs by dragging them",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Found by Hakan: the app's tabs (`AppTitleBar.svelte`) can't be reordered by drag and drop. `AppTabs.move(id, to)` ([app-tabs.svelte.ts](dashboard/src/lib/app-tabs.svelte.ts)) exists for it, but nothing in the title bar calls it, and a mouse-down on the bar starts the window's drag (`start_dragging`).\n\n## Change\n- Dragging a tab sideways moves it among the tabs, as a browser's or Finder's tabs do: the others make room as it passes, it lands where it is let go, and the order is saved with the tabs (`save_tabs`, T-518). A click without moving still selects it; a drag on the bar's free space still moves the window.\n- With the keyboard too: a shortcut, or the tab's context, moves the focused tab left or right (choose one that doesn't clash with the menu's, `menu.rs`), and the [desktop UI design](docs/app-desktop-ui-design.md) says how.\n- Within one window; dragging a tab out to another window is not part of this.\n\n## Tests\nUnit tests for the move (`app-tabs`), and an app e2e spec: drag the third tab to the first place, the order shown and saved, a plain click still selects, the bar's free space still drags the window (`windowCalls`).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/app-tabs.svelte.ts",
+        "dashboard/src/app.css",
+        "docs/app-desktop-ui-design.md",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T11:01:00Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "started_at": "2026-11-13T11:58:59Z",
+      "started_by": "claude:0f56a916",
+      "commit": "20999e29e1023d12aee341e3f214b5d774a9df88",
+      "completed_at": "2026-11-13T12:03:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T12:03:11Z",
+          "kind": "outcome",
+          "text": "The cause: HTML5 drag and drop, which WebKit (the app on macOS and Linux) never starts from a button; the tests ran in Chromium. Now a pointer drag in TitleBarTabs: the tab follows the pointer, the others slide aside (instant with reduced motion), the order is saved; a press under 4 px is a click; ⌃⇧/⌘⇧ with an arrow moves the focused tab. Unit and e2e (a real mouse drag); 438 passed. Try it by eye in the app.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-533",
+      "name": "Desktop app: the sidebar shows every project's progress",
+      "type": "bugfix",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Found by Hakan: in the app's sidebar ([Sidebar.svelte](dashboard/src/lib/shell/Sidebar.svelte)) some projects show no progress. Each row draws a bar from `project.summary?.active_sprint?.percent ?? project.summary?.percent ?? 0`.\n\n## Find out\nWhich projects and why, against the overview's cards, which show progress for the same projects: a summary not loaded yet (or not at all) for projects that aren't open, a `percent` of 0 drawn as an empty bar (a sprint just started), a project without sprints, or the bar hidden by the row's layout.\n\n## Change\n- Every project that isn't missing shows its progress as the overview's card does (the active sprint's, else the project's), from the start and as it changes; a project with nothing to count says so rather than showing an empty bar that reads as missing.\n- If the summary is missing for some projects, fix where it is loaded (the app's `list_projects`), not only the sidebar.\n\n## Tests\nAn app e2e spec with several projects (with and without sprints, one just started, one not opened yet): each row's bar matches its card on the overview; unit tests for whatever computes it.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/tests/e2e/app.spec.ts"
+      ],
+      "created_at": "2026-11-13T11:01:00Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T11:01:00Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-13T12:32:04Z",
+      "started_by": "claude:0f56a916",
+      "commit": "ab38a76a0390822176c8062cb304b7343c694b95",
+      "completed_at": "2026-11-13T12:56:40Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T12:56:40Z",
+          "kind": "outcome",
+          "text": "The cause: the sidebar’s bar used the project chooser’s track colour (--surface2), the sidebar’s own background, so a project at 0% (a sprint just started) showed no bar. The track is now --border; each bar says what it counts on hover (the active sprint’s done of total, else the project’s; “no tasks yet”, “not known yet”). Unit and e2e tests; full suite 433 passed, What’s new’s 5 timed out under load and pass alone.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-534",
+      "name": "Design: two task IDs (a UUID and a project key, ATM-123) and dependencies across projects",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "cli"
+      ],
+      "description": "Hakan wants tasks to have two IDs, as JIRA does: a **UUID** for technical reasons, and a **key** for people, a project prefix and a number instead of `T-`: `ASB-001` (Agentic Status Bar), `ATM-001` (Agentic Task Manager), `FIG-001` (Fig), `LFB-001` (Learn Forever Blog). Keys let a task refer to another project's: `LFB-005` blocked by `ATM-978`.\n\nDesign it with Hakan, as an ADR replacing the current ID scheme (`docs/adr/`), then break the work into tasks with `/atm-create-tasks`.\n\n## To settle\n- **The two IDs:** `uid` (a UUID, never shown, never changed) and the key (`ATM-978`); the prefix in `meta` (e.g. `meta.key`), chosen at `atm db init`, unique across the workspace's projects; keys unique within the project. Which one the files, the API, the app's commands and the dashboard's addresses use.\n- **Migration:** `atm db migrate` gives each task a UUID and rekeys `T-527` as `ATM-527`, keeping the numbers; dependencies, `related`, notes, commit trailers, PR records and links follow. Old IDs stay resolvable as aliases (commit messages and PRs say `T-527`). The archive too.\n- **Merges and parallel agents:** the merge driver matches tasks by UUID; two branches that both add a task never collide, and the key of one is renumbered on merge (as today's driver renumbers).\n- **Across projects:** a dependency or `related` entry naming another project's key, resolved through the workspace's projects (`projects.json`): its status shown, an unfinished one an unmet dependency for the loop; a project missing, renamed or rekeyed; the dashboard's link to it; `atm doctor`'s checks. Reading another project's task folder is a new entry point (`docs/security-architecture.md`).\n- **Where IDs show:** the CLI and `atm docs`, the dashboard (cards, links, the graph, addresses), the app, commit templates and `atm vcs` parsing (`code.rs`'s mention of a task ID), the skills.\n\n## Output\nThe ADR, reviewed with Hakan, and the implementation tasks (data model, migrate, merge driver, cross-project resolution, dashboard, docs, skills), added through `/atm-create-tasks`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/adr/",
+        "crates/atm-common/schema/task.schema.json",
+        "crates/atm-common/schema/meta.schema.json",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-13T11:37:44Z",
+      "updated_at": "2026-11-13T11:37:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "docs"
+      ],
+      "review": "blocker",
+      "with": "user"
+    },
+    {
+      "id": "T-535",
+      "name": "Desktop app: the sidebar the window's full height, the title bar and its tabs only to its right (as Notion's)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "Hakan on T-529: the tabs sliding with the sidebar lag and don't line up. Notion splits the window instead: the sidebar is a column the window's full height, and the title bar with the tabs belongs to the area right of it, so the tabs move with that area and need no animation of their own.\n\n## Change\n- **The sidebar:** from the window's top (not under the title bar, `top: 40px` in `Sidebar.svelte`), with a top strip of the title bar's height holding the sidebar button, after room for macOS's traffic lights (`trafficLightPosition`); a mouse-down on the strip's free space drags the window, a double click maximizes it (`onBarMouseDown`). On Windows and Linux the page's menus stay at the window's left (decide: the strip or the title bar), the window buttons at the right of the title bar.\n- **The title bar** (`AppTitleBar.svelte`) starts at the sidebar's edge: no margin over the sidebar (`--sidebar-offset`); with the sidebar open it needs no room for the traffic lights, with it closed it does, and the sidebar button is in it.\n- **T-529's sliding margin goes** (the lead's `margin-right`, `--lead-end`, the `$effect` measuring it, its e2e test), and the design doc's line on it is rewritten.\n\n## Tests\nApp e2e: open, the sidebar starts at the window's top and the first tab at its edge, the button in the sidebar's strip; closed, the tabs after the traffic lights' room and the button in the title bar; the strip drags the window. Unit tests (`AppTitleBar`, `Sidebar` components) updated; the full functional suite once. Checked by eye in `cargo tauri dev` with Hakan.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/shell/AppTitleBar.svelte",
+        "dashboard/src/lib/shell/Sidebar.svelte",
+        "dashboard/src/app.css",
+        "dashboard/tests/e2e/app.spec.ts",
+        "docs/app-desktop-ui-design.md"
+      ],
+      "created_at": "2026-11-13T14:00:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T14:00:19Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "related": [
+        "T-529"
+      ],
+      "started_at": "2026-11-13T14:01:16Z",
+      "started_by": "claude:0f56a916",
+      "commit": "c0f486e6ab214c28f220ee41eae86a1b55ab30e2",
+      "completed_at": "2026-11-13T14:08:26Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T14:08:26Z",
+          "kind": "outcome",
+          "text": "The window split as Notion’s: the sidebar from the window’s top, a 40 px strip with the traffic lights’ room and the sidebar button (it drags the window); the title bar and tabs only right of it (no margin over it, no traffic-light room while it is open). Closed, the bar is full width with the button. T-529’s sliding margin and its measuring are gone. Unit, e2e (positions, strip drag); 438 passed. On Windows and Linux the menus stay in the title bar. Check by eye in cargo tauri dev.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-536",
+      "name": "Desktop app: macOS's menu bar says Agentic Task Manager in dev builds too (bundle.macOS.bundleName)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app"
+      ],
+      "description": "Hakan: `cargo tauri dev` still shows \"atm\" in the menu bar after T-531. Tauri writes `CFBundleName` into the app's Info.plist from `bundle.macOS.bundleName`, else `productName` (\"atm\"), over the key in `app/src-tauri/Info.plist` (tauri-codegen for dev builds; check the bundler does the same).\n\n## Change\n- Set `bundle.macOS.bundleName` to \"Agentic Task Manager\" in `tauri.conf.json`; `productName` stays `atm`, so the bundle's file is still `atm.app` (the updater, signing and the cask).\n- Drop `CFBundleName` from `Info.plist` (one source), keep `CFBundleDisplayName`, and fix its comment.\n- A Rust test that `bundleName` is the app's name (`menu::APP_NAME`) and `productName` stays `atm`.\n\n## Check\nBy hand: `cargo tauri dev` shows Agentic Task Manager in the menu bar (Hakan).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/Info.plist",
+        "app/src-tauri/src/lib.rs"
+      ],
+      "created_at": "2026-11-13T14:00:19Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T14:00:19Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "related": [
+        "T-531"
+      ],
+      "started_at": "2026-11-13T14:00:26Z",
+      "started_by": "claude:0f56a916",
+      "commit": "fe9626cebb0d38a32b2f15e203475c5565351ef3",
+      "completed_at": "2026-11-13T14:01:16Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T14:01:16Z",
+          "kind": "outcome",
+          "text": "`bundle.macOS.bundleName: Agentic Task Manager` in tauri.conf.json: Tauri writes CFBundleName from it (else productName) in dev builds and bundles, over Info.plist, which no longer has its own CFBundleName. productName stays atm (atm.app). A Rust test checks both. Check by hand in `cargo tauri dev` (restart it: the config is read at build).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
+    },
+    {
+      "id": "T-537",
+      "name": "Desktop app: the macOS bundle is Agentic Task Manager.app, so the Dock and ⌘-Tab name it",
+      "type": "polish",
+      "priority": "P1",
+      "description": "The Dock and ⌘-Tab name an app after its bundle's file, not its `CFBundleName` (which the menu bar shows, T-536). The bundle is `atm.app` (`productName`), so a release shows \"atm\". Agreed with Hakan: rename the bundle; dev builds (no bundle) keep showing `atm-app`.\n\n## Change\n- `app/src-tauri/tauri.conf.json`: `productName` \"Agentic Task Manager\"; `bundle.macOS.bundleName` is then redundant (drop it). `mainBinaryName`, the identifier and the bundled CLI (`Contents/MacOS/atm`) stay.\n- `packaging/homebrew-cask.sh`: `app` and `binary` paths, `name`; the cask token stays `atm-app`.\n- `.github/workflows/release.yml`: the updater archive and its signature are `Agentic Task Manager.app.tar.gz(.sig)`; the published asset names stay `atm-app-<version>-universal.*`.\n- Comments and docs: `Info.plist`, `menu.rs`, `updater-manifest.mjs`, `packaging/README.md`.\n\n## Tests\n- `lib.rs`'s config test; `tests/scripts/packaging.test.mjs`'s cask rows.\n\nAn update from 0.36.0 replaces the app where it is, so the old `atm.app` keeps its name until reinstalled; the release notes say so.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/tauri.conf.json",
+        "app/src-tauri/Info.plist",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/menu.rs",
+        "packaging/homebrew-cask.sh",
+        "packaging/updater-manifest.mjs",
+        "packaging/README.md",
+        ".github/workflows/release.yml",
+        "tests/scripts/packaging.test.mjs"
+      ],
+      "created_at": "2026-11-13T17:01:52Z",
+      "updated_at": "2026-11-13T18:09:41Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Updates and renames",
+          "from": "2026-11-13T17:01:52Z"
+        }
+      ],
+      "sprint": "Updates and renames",
+      "related": [
+        "T-536"
+      ],
+      "started_at": "2026-11-13T17:02:04Z",
+      "started_by": "claude:0f56a916",
+      "commit": "342c8bbb41b6194f845d54ca95c3ad172360ea39",
+      "completed_at": "2026-11-13T17:04:14Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T17:04:14Z",
+          "kind": "outcome",
+          "text": "productName is Agentic Task Manager (bundle Agentic Task Manager.app; bundleName dropped); cask, release workflow, updater archive, tests and docs updated. Dev builds still show atm-app in the Dock. Check at the release: the Dock and ⌘-Tab name, and the cask install.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 49,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
+      }
     }
   ]
 }

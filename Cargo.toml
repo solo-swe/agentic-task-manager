@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.36.0"
+version = "0.37.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -24,9 +24,12 @@ atm-db = { path = "crates/atm-db" }
 atm-vcs = { path = "crates/atm-vcs" }
 atm-lib = { path = "crates/atm-lib" }
 atm-api = { path = "crates/atm-api" }
-# CompMD in a Tauri app (ADR-004, T-503): CompMD's own plugin, its sandbox frames on a compmd: scheme, at
-# content-hashed paths. Its version is @compmd/sandbox's (dashboard/package.json): they are released together
-tauri-plugin-compmd = "=0.6.0"
+# CompMD in a Tauri app (ADR-006, T-524): CompMD's own plugin serves the bundle the page's build wrote (the frames and
+# the packs) on a compmd: scheme, embedded by the app's build.rs (the `build` feature). Its version is
+# @compmd/sandbox's (dashboard/package.json): they are released together
+tauri-plugin-compmd = "=0.7.0"
+# CompMD's serving contract, which atm serve answers its bundle with as the plugin does in the app (ADR-006)
+compmd-host = "=0.7.0"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }

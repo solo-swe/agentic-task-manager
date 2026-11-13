@@ -148,7 +148,7 @@ async fn handle(State(served): State<Arc<Served>>, request: Request) -> Response
         );
     }
     if let Some(rest) = path.strip_prefix(assets::PREFIX) {
-        return assets::serve(rest, request.headers());
+        return assets::serve(rest, request.method(), request.headers());
     }
     if path == APP_VERSION {
         // SvelteKit's own check for a new deployment (when the tab regains focus): the page's version is atm's

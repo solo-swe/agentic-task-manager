@@ -1,6 +1,7 @@
 # ADR-005: CompMD's Tauri plugin for the frames, atm's own scheme for what atm ships
 
-- **Status:** accepted, 2026-11-09; replaces [ADR-004](ADR-004-compmd-in-tauri-through-its-own-protocol.md)
+- **Status:** replaced by [ADR-006](ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md) (CompMD 0.7.0, 2026-11-13);
+  accepted, 2026-11-09; replaces [ADR-004](ADR-004-compmd-in-tauri-through-its-own-protocol.md)
 - **Decided by:** Hakan Serce
 - **Context:** T-503, T-508, ADR-004 (the problem, its check and its alternatives, which still hold), CompMD's
   [Tauri plugin design](https://github.com/comp-markdown/compmd/blob/main/docs/tauri-plugin.md),

@@ -11,6 +11,7 @@ publish.workspace = true
 atm-common.workspace = true
 atm-lib.workspace = true
 axum.workspace = true
+compmd-host.workspace = true
 tokio.workspace = true
 serde_json.workspace = true
 

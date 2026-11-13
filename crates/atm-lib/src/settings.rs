@@ -266,6 +266,179 @@ pub fn unset_logo(project: &mut Project) -> Result<bool> {
     Ok(removed)
 }
 
+/// One of a project's vocabularies (T-500).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VocabList {
+    /// `meta.statuses`: a task's `status`.
+    Status,
+    /// `meta.types`: a task's `type`.
+    Type,
+    /// `meta.priorities`: a task's `priority`, and `meta.default_priority`.
+    Priority,
+}
+
+impl VocabList {
+    /// The list in `meta`.
+    #[must_use]
+    pub const fn meta_key(self) -> &'static str {
+        match self {
+            Self::Status => "statuses",
+            Self::Type => "types",
+            Self::Priority => "priorities",
+        }
+    }
+
+    /// The task field that names an entry.
+    #[must_use]
+    pub const fn task_field(self) -> &'static str {
+        match self {
+            Self::Status => "status",
+            Self::Type => "type",
+            Self::Priority => "priority",
+        }
+    }
+}
+
+/// What renaming a vocabulary entry changed: its ID and label after, and how many tasks follow it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenamedTerm {
+    /// Its ID before.
+    pub from: String,
+    /// Its ID now (the same when only its label changed).
+    pub to: String,
+    /// Its label now.
+    pub label: Value,
+    /// The tasks in tasks.json that use it.
+    pub tasks: usize,
+    /// The archived tasks that use it.
+    pub archived: usize,
+}
+
+/// The tasks in `list` whose `field` is `from` get `to`; how many.
+fn rename_field(list: Option<&mut Vec<Value>>, field: &str, from: &str, to: &str) -> usize {
+    let mut n = 0;
+    for task in list.into_iter().flatten().filter_map(Value::as_object_mut) {
+        if task.get(field).and_then(Value::as_str) == Some(from) {
+            task.insert(field.into(), json!(to));
+            n += 1;
+        }
+    }
+    n
+}
+
+/// `atm project vocab rename` (T-500): an entry of the statuses, types or priorities gets the ID `new` (and, given, the
+/// label `label`); every task using it follows, in tasks.json and the archive, and `meta.default_priority`. A project on
+/// the defaults gets the list written into `meta`, the entry renamed in it. A task's `updated_at` stays.
+///
+/// # Errors
+/// An unknown entry, an ID another entry has, nothing to change, a list the vocabulary check refuses.
+pub fn rename_term(
+    project: &mut Project,
+    list: VocabList,
+    from: &str,
+    new: Option<&str>,
+    label: Option<&str>,
+) -> Result<RenamedTerm> {
+    let to = new.map_or(from, atm_common::py::strip).to_string();
+    if to.is_empty() {
+        return Err(Error::Invalid("the new ID is empty".into()));
+    }
+    if to == from && label.is_none() {
+        return Err(Error::Invalid(format!(
+            "nothing to change: give a new ID or --label for {from}"
+        )));
+    }
+    let mut outcome: Option<RenamedTerm> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = atm_common::Vocabulary::of_document(&work.document)?;
+        // The list as it is in effect: meta's, else the defaults, as objects
+        let entries: Vec<Map<String, Value>> = match list {
+            VocabList::Status => vocab
+                .statuses
+                .iter()
+                .map(|s| {
+                    let mut m = Map::new();
+                    m.insert("id".into(), json!(s.id));
+                    m.insert("label".into(), s.label.clone());
+                    m.insert("kind".into(), json!(s.kind.as_str()));
+                    m
+                })
+                .collect(),
+            VocabList::Type | VocabList::Priority => {
+                let terms = if list == VocabList::Type {
+                    &vocab.types
+                } else {
+                    &vocab.priorities
+                };
+                terms
+                    .iter()
+                    .map(|t| {
+                        let mut m = Map::new();
+                        m.insert("id".into(), json!(t.id));
+                        m.insert("label".into(), t.label.clone());
+                        m
+                    })
+                    .collect()
+            }
+        };
+        let ids: Vec<&str> = entries
+            .iter()
+            .filter_map(|e| e.get("id").and_then(Value::as_str))
+            .collect();
+        let Some(at) = ids.iter().position(|id| *id == from) else {
+            return Err(Error::Failed {
+                message: format!(
+                    "no {} {from}; the {}: {}",
+                    list.task_field(),
+                    list.meta_key(),
+                    ids.join(", ")
+                ),
+                code: 2,
+            });
+        };
+        if to != from && ids.contains(&to.as_str()) {
+            return Err(Error::Invalid(format!(
+                "there is already a {} {to}",
+                list.task_field()
+            )));
+        }
+        let mut entries = entries;
+        entries[at].insert("id".into(), json!(to));
+        if let Some(label) = label {
+            entries[at].insert("label".into(), json!(label));
+        }
+        let renamed_label = entries[at].get("label").cloned().unwrap_or(Value::Null);
+        let meta = meta_mut(&mut work.document);
+        meta.insert(
+            list.meta_key().into(),
+            Value::Array(entries.into_iter().map(Value::Object).collect()),
+        );
+        if list == VocabList::Priority && vocab.default_priority == from {
+            meta.insert("default_priority".into(), json!(to));
+        }
+        let field = list.task_field();
+        let tasks = rename_field(work.document["tasks"].as_array_mut(), field, from, &to);
+        let archived = rename_field(
+            work.archive()?
+                .get_mut("tasks")
+                .and_then(Value::as_array_mut),
+            field,
+            from,
+            &to,
+        );
+        atm_common::Vocabulary::of_document(&work.document)?;
+        outcome = Some(RenamedTerm {
+            from: from.to_string(),
+            to: to.clone(),
+            label: renamed_label,
+            tasks,
+            archived,
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| Error::Invalid(format!("no {} {from}", list.task_field())))
+}
+
 #[cfg(test)]
 mod tests {
     use super::relative_to;

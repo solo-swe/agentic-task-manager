@@ -8,8 +8,9 @@ on PATH), and `brew upgrade`. The app will also bring its own updates, through T
 agentic-status-bar, not a Tauri app, uses Sparkle).
 
 **The app and the formula are one or the other** (T-460): the app's DMG bundles the `atm` CLI built with it
-(`atm.app/Contents/MacOS/atm`), and its cask links that onto PATH, so the CLI agents run and the atm inside the app are
-always the same build. Someone with the formula uninstalls it before installing the app (`brew uninstall
+(`Agentic Task Manager.app/Contents/MacOS/atm`), and its cask links that onto PATH, so the CLI agents run and the atm
+inside the app are always the same build. The bundle is named for the app (`productName`, T-537), as the Dock and ⌘-Tab
+show its file's name; until 0.36.0 it was `atm.app`, which an app updated in place keeps until it is reinstalled. Someone with the formula uninstalls it before installing the app (`brew uninstall
 solo-swe/tap/atm`), as the cask's caveats say: a cask can declare a conflict only with another cask (the
 [Cask Cookbook](https://docs.brew.sh/Cask-Cookbook#stanza-conflicts_with); Homebrew refuses `conflicts_with formula:`,
 which 0.34.0's first cask had). With the formula still installed, the cask installs the app but leaves the formula's
@@ -56,6 +57,11 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 4. Check the draft, then publish it. `.github/workflows/homebrew.yml` writes the formula and the cask to the tap, and
    `.github/workflows/skills.yml` the skills to `solo-swe/skills` (`npx skills add solo-swe/skills`); both can also be
    run by hand with a tag. Without its deploy key, the Skills workflow says so and does nothing.
+5. Record it: `atm vcs pushed --pr <n>` records the release PR's merge, and releases the release once all its tasks
+   are merged. A release holding a task with no commit (a check done with the user, such as the update's) stays
+   planned; once it is published, mark it by hand: `atm release edit <version> --released` (today, or
+   `--released YYYY-MM-DD`; it names the tasks done but not merged, and refuses while one is still open unless
+   `--force`). `--planned` takes it back.
 
 ## Secrets and keys
 

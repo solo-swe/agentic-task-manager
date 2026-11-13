@@ -18,6 +18,11 @@ use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 
 use crate::commands::{AppError, AppState};
 
+/// The name users see (T-531): the menus, the window, the notifications, macOS's menu bar (`Info.plist`'s
+/// `CFBundleName`) and the bundle's file (`productName`: `Agentic Task Manager.app`, which the Dock and ⌘-Tab show,
+/// T-537). The command stays `atm`, and the app's program `atm-app`.
+pub const APP_NAME: &str = "Agentic Task Manager";
+
 /// What a menu item asks for: the page does it (all but `quit` and `new_window`, which the app does).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
@@ -252,9 +257,9 @@ pub fn definition(platform: Platform, state: &MenuState, places: &Places) -> Vec
     let mut menus = Vec::new();
     if mac {
         menus.push(bar_menu(
-            "atm",
+            APP_NAME,
             vec![
-                item(A::About, "About atm", None),
+                item(A::About, &format!("About {APP_NAME}"), None),
                 item(A::CheckForUpdates, "Check for Updates…", None),
                 MenuEntry::Separator,
                 item(A::Settings, "Settings…", Some("CmdOrCtrl+Comma")),
@@ -266,7 +271,7 @@ pub fn definition(platform: Platform, state: &MenuState, places: &Places) -> Vec
                 system(SystemItem::HideOthers),
                 system(SystemItem::ShowAll),
                 MenuEntry::Separator,
-                item(A::Quit, "Quit atm", Some("CmdOrCtrl+Q")),
+                item(A::Quit, &format!("Quit {APP_NAME}"), Some("CmdOrCtrl+Q")),
             ],
         ));
     }
@@ -429,16 +434,20 @@ pub fn definition(platform: Platform, state: &MenuState, places: &Places) -> Vec
         entries: window,
     });
     let mut help = vec![
-        item(A::Help, "atm Help", pick("CmdOrCtrl+Shift+Slash", "F1")),
+        item(
+            A::Help,
+            &format!("{APP_NAME} Help"),
+            pick("CmdOrCtrl+Shift+Slash", "F1"),
+        ),
         item(A::WhatsNew, "What's New", None),
         MenuEntry::Separator,
-        item(A::GitHub, "atm on GitHub", None),
+        item(A::GitHub, &format!("{APP_NAME} on GitHub"), None),
         item(A::CompMd, "CompMD", None),
     ];
     if !mac {
         help.extend([
             MenuEntry::Separator,
-            item(A::About, "About atm", None),
+            item(A::About, &format!("About {APP_NAME}"), None),
             item(A::CheckForUpdates, "Check for Updates…", None),
         ]);
     }
@@ -589,7 +598,7 @@ fn predefined<R: Runtime>(
         S::Paste => PredefinedMenuItem::paste(app, None),
         S::SelectAll => PredefinedMenuItem::select_all(app, None),
         S::Services => PredefinedMenuItem::services(app, None),
-        S::Hide => PredefinedMenuItem::hide(app, None),
+        S::Hide => PredefinedMenuItem::hide(app, Some(&format!("Hide {APP_NAME}"))),
         S::HideOthers => PredefinedMenuItem::hide_others(app, None),
         S::ShowAll => PredefinedMenuItem::show_all(app, None),
         S::Minimize => PredefinedMenuItem::minimize(app, None),
@@ -741,6 +750,44 @@ mod tests {
             every_item(&def.entries, &mut out);
         }
         out
+    }
+
+    /// The labels name the app as users know it (T-531): Agentic Task Manager, never atm (the command's name)
+    #[test]
+    fn the_menus_call_the_app_agentic_task_manager() {
+        fn labels(entries: &[MenuEntry], out: &mut Vec<String>) {
+            for entry in entries {
+                match entry {
+                    MenuEntry::Item { label, .. } => out.push(label.clone()),
+                    MenuEntry::Submenu { label, entries, .. } => {
+                        out.push(label.clone());
+                        labels(entries, out);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for platform in [Platform::Mac, Platform::Windows, Platform::Linux] {
+            let mut all = Vec::new();
+            for def in definition(platform, &MenuState::default(), &Places::default()) {
+                all.push(def.label.clone());
+                labels(&def.entries, &mut all);
+            }
+            assert!(
+                all.iter()
+                    .all(|l| !l.split(|c: char| !c.is_alphanumeric()).any(|w| w == "atm")),
+                "{platform:?}: {all:?}"
+            );
+            for wanted in [
+                "About Agentic Task Manager",
+                "Agentic Task Manager Help",
+                "Agentic Task Manager on GitHub",
+            ] {
+                assert!(all.iter().any(|l| l == wanted), "{platform:?}: no {wanted}");
+            }
+        }
+        let mac = definition(Platform::Mac, &MenuState::default(), &Places::default());
+        assert_eq!(mac[0].label, APP_NAME);
     }
 
     #[test]

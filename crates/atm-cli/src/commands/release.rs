@@ -1,5 +1,5 @@
-//! `atm release`: releases (the Python atm's `cli/commands/release.py`): list, add, edit, archive, notes, and how they
-//! print.
+//! `atm release`: releases (the Python atm's `cli/commands/release.py`): list, add, edit, rename, archive, notes, and
+//! how they print.
 
 use std::fmt::Write;
 use std::path::Path;
@@ -7,7 +7,10 @@ use std::path::Path;
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
 use atm_lib::Project;
-use atm_lib::releases::{add_release, archive_release, edit_release, list_releases, release_notes};
+use atm_lib::releases::{
+    Mark, add_release, archive_release, edit_release, list_releases, mark_release, release_notes,
+    rename_release,
+};
 use clap::Subcommand;
 use serde_json::{Value, json};
 
@@ -49,6 +52,22 @@ pub enum ReleaseCommand {
         /// Add, edit: the planned date, YYYY-MM-DD
         #[arg(long, value_name = "DATE")]
         target: Option<String>,
+        /// It shipped: mark it released, on DATE (YYYY-MM-DD) or today
+        #[arg(long, value_name = "DATE", num_args = 0..=1, default_missing_value = "", conflicts_with = "planned")]
+        released: Option<String>,
+        /// Mark it planned again
+        #[arg(long)]
+        planned: bool,
+        /// With --released: even with tasks still open in it
+        #[arg(long)]
+        force: bool,
+    },
+    /// Rename a release's ID: its tasks (archived ones too) and the sprints delivering to it follow.
+    Rename {
+        /// The release's ID
+        release_id: String,
+        /// Its new ID (letters, digits, '.', '-', '_')
+        new: String,
     },
     /// Archive a release.
     Archive {
@@ -235,7 +254,22 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
             release_id,
             name,
             target,
+            released,
+            planned,
+            force,
         } => {
+            let mark = match (&released, planned) {
+                (Some(date), _) => Some(Mark::Released(
+                    Some(date.as_str()).filter(|d| !d.is_empty()),
+                )),
+                (None, true) => Some(Mark::Planned),
+                (None, false) => None,
+            };
+            if force && !matches!(mark, Some(Mark::Released(_))) {
+                return Err(atm_common::Error::Invalid(
+                    "--force goes with --released".into(),
+                ));
+            }
             if ctx.dry_run {
                 let mut parts = vec![release_id.clone()];
                 if let Some(name) = &name {
@@ -244,22 +278,103 @@ pub fn run(command: ReleaseCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 if let Some(target) = &target {
                     parts.push(format!("--target {target}"));
                 }
+                match &mark {
+                    Some(Mark::Released(date)) => {
+                        parts.push(format!("--released {}", date.unwrap_or("(today)")));
+                    }
+                    Some(Mark::Planned) => parts.push("--planned".into()),
+                    None => {}
+                }
                 println!("[dry-run] would edit release {}", parts.join(" "));
                 return Ok(());
             }
-            let (release, changed) = edit_release(
-                &mut Project::open(cwd)?,
-                &release_id,
-                name.as_deref(),
-                target.as_deref(),
-            )?;
-            if ctx.json {
-                print_json(&release);
-            } else if changed.is_empty() {
-                println!("{}: nothing changed", py_str(&release["id"]));
+            let mut project = Project::open(cwd)?;
+            let fields = name.is_some() || target.is_some() || mark.is_none();
+            let (mut release, changed) = if fields {
+                edit_release(
+                    &mut project,
+                    &release_id,
+                    name.as_deref(),
+                    target.as_deref(),
+                )?
             } else {
-                println!("{}: changed {}", py_str(&release["id"]), changed.join(", "));
+                (Value::Null, Vec::new())
+            };
+            let marked = match &mark {
+                Some(mark) => Some(mark_release(&mut project, &release_id, mark, force)?),
+                None => None,
+            };
+            if let Some(marked) = &marked {
+                release = marked.release.clone();
             }
+            if ctx.json {
+                match &marked {
+                    Some(m) => print_json(
+                        &json!({"release": release, "open": m.open, "unmerged": m.unmerged}),
+                    ),
+                    None => print_json(&release),
+                }
+                return Ok(());
+            }
+            let id = py_str(&release["id"]);
+            if fields {
+                if changed.is_empty() && marked.is_none() {
+                    println!("{id}: nothing changed");
+                } else if !changed.is_empty() {
+                    println!("{id}: changed {}", changed.join(", "));
+                }
+            }
+            if let Some(marked) = &marked {
+                if matches!(mark, Some(Mark::Planned)) {
+                    println!("{id}: planned");
+                } else {
+                    let day = text(&release, "released_at")
+                        .map(|at| at.chars().take(10).collect::<String>())
+                        .unwrap_or_default();
+                    println!("{id}: released {day}");
+                    if !marked.unmerged.is_empty() {
+                        println!(
+                            "  done but not merged in a PR: {}",
+                            marked.unmerged.join(", ")
+                        );
+                    }
+                    if !marked.open.is_empty() {
+                        println!("  still open (--force): {}", marked.open.join(", "));
+                    }
+                }
+            }
+        }
+        ReleaseCommand::Rename { release_id, new } => {
+            if ctx.dry_run {
+                println!("[dry-run] would rename release {release_id} to {new}");
+                return Ok(());
+            }
+            let renamed = rename_release(&mut Project::open(cwd)?, &release_id, &new)?;
+            if ctx.json {
+                print_json(&json!({
+                    "from": renamed.from,
+                    "to": renamed.to,
+                    "tasks": renamed.tasks,
+                    "archived": renamed.archived,
+                    "sprints": renamed.sprints,
+                }));
+                return Ok(());
+            }
+            let n = renamed.tasks + renamed.archived;
+            let mut line = format!(
+                "Renamed the release “{}” to “{}”: {n} task{}",
+                renamed.from,
+                renamed.to,
+                if n == 1 { "" } else { "s" }
+            );
+            if renamed.archived > 0 {
+                let _ = write!(line, " ({} archived)", renamed.archived);
+            }
+            if renamed.sprints > 0 {
+                let s = renamed.sprints;
+                let _ = write!(line, " and {s} sprint{}", if s == 1 { "" } else { "s" });
+            }
+            println!("{line} follow it.");
         }
         ReleaseCommand::Archive { release_id } => {
             if ctx.dry_run {

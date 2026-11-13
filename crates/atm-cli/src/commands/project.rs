@@ -45,6 +45,98 @@ pub enum ProjectCommand {
     /// The project's summary, as the dashboard's overview gets it (JSON).
     #[command(hide = true)]
     Summary,
+    /// The project's vocabularies: its statuses, types and priorities.
+    #[command(subcommand)]
+    Vocab(VocabCommand),
+}
+
+/// The vocabulary commands (T-500).
+#[derive(Debug, Subcommand)]
+pub enum VocabCommand {
+    /// Rename a status, a type or a priority: the tasks using it, archived ones too, follow.
+    Rename {
+        /// Which list: status, type or priority
+        #[arg(value_parser = ["status", "type", "priority"])]
+        list: String,
+        /// The entry's ID
+        id: String,
+        /// Its new ID (leave out to change only its label)
+        new: Option<String>,
+        /// Its new label, as the dashboard shows it
+        #[arg(long)]
+        label: Option<String>,
+    },
+}
+
+fn vocab(command: VocabCommand, ctx: Context, cwd: &Path) -> Result<()> {
+    use atm_lib::settings::{VocabList, rename_term};
+    let VocabCommand::Rename {
+        list,
+        id,
+        new,
+        label,
+    } = command;
+    let which = match list.as_str() {
+        "status" => VocabList::Status,
+        "type" => VocabList::Type,
+        _ => VocabList::Priority,
+    };
+    if ctx.dry_run {
+        println!(
+            "[dry-run] would rename the {list} {id}{}{}",
+            new.as_deref()
+                .map(|n| format!(" to {n}"))
+                .unwrap_or_default(),
+            label
+                .as_deref()
+                .map(|l| format!(" (label {l})"))
+                .unwrap_or_default()
+        );
+        return Ok(());
+    }
+    let renamed = rename_term(
+        &mut Project::open(cwd)?,
+        which,
+        &id,
+        new.as_deref(),
+        label.as_deref(),
+    )?;
+    if ctx.json {
+        print_json(&serde_json::json!({
+            "list": list,
+            "from": renamed.from,
+            "to": renamed.to,
+            "label": renamed.label,
+            "tasks": renamed.tasks,
+            "archived": renamed.archived,
+        }));
+        return Ok(());
+    }
+    let n = renamed.tasks + renamed.archived;
+    let archived = if renamed.archived > 0 {
+        format!(" ({} archived)", renamed.archived)
+    } else {
+        String::new()
+    };
+    let what = if renamed.from == renamed.to {
+        format!(
+            "Relabelled the {list} {} “{}”",
+            renamed.from,
+            py_str(&renamed.label)
+        )
+    } else {
+        format!(
+            "Renamed the {list} {} to {} (“{}”)",
+            renamed.from,
+            renamed.to,
+            py_str(&renamed.label)
+        )
+    };
+    println!(
+        "{what}: {n} task{}{archived} use it.",
+        if n == 1 { "" } else { "s" }
+    );
+    Ok(())
 }
 
 /// Run a project command in `cwd`.
@@ -85,6 +177,7 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             print_json(&atm_lib::summary::project_summary(&Project::open(cwd)?)?);
             Ok(())
         }
+        ProjectCommand::Vocab(command) => vocab(command, ctx, cwd),
     }
 }
 

@@ -301,6 +301,224 @@
     }
   },
   {
+    "name": "atm release rename: its tasks, archived ones too, and the sprint delivering to it follow (T-497)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [
+              { "id": "0.34", "name": "Typo", "state": "released", "released_at": "2026-11-09T00:00:00Z" },
+              { "id": "0.35.0" }
+            ],
+            "sprints": [
+              { "id": "A", "state": "closed", "release": "0.34" },
+              { "id": "B", "release": "0.35.0" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "done", "release": "0.34", "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "done", "sprint": "A" },
+            { "id": "T-4", "status": "todo", "release": "0.35.0" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": { "tasks": [{ "id": "T-1", "status": "done", "release": "0.34" }] }
+      }
+    },
+    "args": ["release", "rename", "0.34", "0.34.0"],
+    "expect": {
+      "stdout": "Renamed the release “0.34” to “0.34.0”: 2 tasks (1 archived) and 1 sprint follow it.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [
+              { "id": "0.34.0", "name": "Typo", "state": "released", "released_at": "2026-11-09T00:00:00Z" },
+              { "id": "0.35.0" }
+            ],
+            "sprints": [
+              { "id": "A", "state": "closed", "release": "0.34.0" },
+              { "id": "B", "release": "0.35.0" }
+            ]
+          },
+          "tasks": [
+            { "id": "T-2", "status": "done", "release": "0.34.0", "updated_at": "2026-01-01T00:00:00Z" },
+            { "id": "T-3", "status": "done", "sprint": "A" },
+            { "id": "T-4", "status": "todo", "release": "0.35.0" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [{ "id": "T-1", "status": "done", "release": "0.34.0" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm release edit --released: marked by hand, naming its tasks done but not merged; list shows it released (T-527)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [{ "id": "0.36.0" }],
+            "sprints": [{ "id": "A", "state": "closed", "release": "0.36.0" }]
+          },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "A",
+              "pr": { "number": 47 },
+              "merged_at": "2026-11-13T03:57:42Z"
+            },
+            { "id": "T-2", "status": "done", "sprint": "A" },
+            { "id": "T-3", "status": "skipped", "sprint": "A" }
+          ]
+        }
+      }
+    },
+    "args": ["release", "edit", "0.36.0", "--released", "2026-11-13"],
+    "expect": {
+      "stdout": "0.36.0: released 2026-11-13\n  done but not merged in a PR: T-2\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [{ "id": "0.36.0", "state": "released", "released_at": "2026-11-13T00:00:00Z" }],
+            "sprints": [{ "id": "A", "state": "closed", "release": "0.36.0" }]
+          },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "A",
+              "pr": { "number": 47 },
+              "merged_at": "2026-11-13T03:57:42Z"
+            },
+            { "id": "T-2", "status": "done", "sprint": "A" },
+            { "id": "T-3", "status": "skipped", "sprint": "A" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm release list shows a release marked by hand as released, with its date (T-527)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "0.36.0", "state": "released", "released_at": "2026-11-13T00:00:00Z" }] },
+          "tasks": [{ "id": "T-2", "status": "done", "release": "0.36.0" }]
+        }
+      }
+    },
+    "args": ["release", "list"],
+    "expect": { "stdout": "0.36.0 · released · released 2026-11-13: 1 task (done 1); done 1\n" }
+  },
+  {
+    "name": "atm release edit --released refuses a release with tasks still open, naming them; nothing changes (T-527)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [
+            { "id": "T-1", "status": "in_review", "release": "1.0" },
+            { "id": "T-2", "status": "blocked", "release": "1.0" }
+          ]
+        }
+      }
+    },
+    "args": ["release", "edit", "1.0", "--released"],
+    "expect": {
+      "exit": 2,
+      "stderrIncludes": ["T-1, T-2 are still open in the release '1.0'", "--force"],
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [
+            { "id": "T-1", "status": "in_review", "release": "1.0" },
+            { "id": "T-2", "status": "blocked", "release": "1.0" }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm release edit --released --force marks it with tasks open, today without a date (T-527)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0" }] },
+          "tasks": [{ "id": "T-1", "status": "todo", "release": "1.0" }]
+        }
+      }
+    },
+    "env": { "ATM_NOW": "2026-11-14T10:00:00Z" },
+    "args": ["release", "edit", "1.0", "--released", "--force"],
+    "expect": { "stdout": "1.0: released 2026-11-14\n  still open (--force): T-1\n" }
+  },
+  {
+    "name": "atm release edit --planned takes a release back to planned, without its date (T-527)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "releases": [{ "id": "1.0", "name": "First", "state": "released", "released_at": "2026-11-13T00:00:00Z" }]
+          },
+          "tasks": []
+        }
+      }
+    },
+    "args": ["release", "edit", "1.0", "--planned"],
+    "expect": {
+      "stdout": "1.0: planned\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "releases": [{ "id": "1.0", "name": "First", "state": "planned" }] },
+          "tasks": []
+        }
+      }
+    }
+  },
+  {
+    "name": "atm release edit --released with a date that isn't one, and --force alone, are refused (T-527)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
+    },
+    "args": ["release", "edit", "1.0", "--released", "13/11/2026"],
+    "expect": { "exit": 2, "stderrIncludes": ["--released '13/11/2026': use a date, YYYY-MM-DD"] }
+  },
+  {
+    "name": "atm release edit --force without --released is refused (T-527)",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
+    },
+    "args": ["release", "edit", "1.0", "--force"],
+    "expect": { "exit": 2, "stderrIncludes": ["--force goes with --released"] }
+  },
+  {
+    "name": "atm release rename refuses another release's ID",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }, { "id": "2.0" }] }, "tasks": [] }
+      }
+    },
+    "args": ["release", "rename", "1.0", "2.0"],
+    "expect": { "exit": 2, "stderrIncludes": ["there is already a release '2.0'"] }
+  },
+  {
+    "name": "atm release rename refuses an ID that isn't one, and an unknown release",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
+    },
+    "args": ["release", "rename", "1.0", "1 0"],
+    "expect": { "exit": 2, "stderrIncludes": ["'1 0': a release ID is letters, digits"] }
+  },
+  {
+    "name": "atm release rename of an unknown release names the releases",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } }
+    },
+    "args": ["release", "rename", "9.9", "9.9.0"],
+    "expect": { "exit": 2, "stderrIncludes": ["no release '9.9'; the releases: 1.0"] }
+  },
+  {
     "name": "atm releases archive; an archived release isn't archived again",
     "setup": {
       "files": { ".agentic-task-manager/tasks.json": { "meta": { "releases": [{ "id": "1.0" }] }, "tasks": [] } },

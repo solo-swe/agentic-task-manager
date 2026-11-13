@@ -53,7 +53,7 @@ describe('the command tree', () => {
       assert.equal(help.code, 0, help.stderr);
       // The command names, in the order the Commands section lists them
       assert.deepEqual(commandsOf(help.stdout), [
-        ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'project', 'sprint'],
+        ...['task', 'loop', 'claim', 'vcs', 'release', 'component', 'label', 'project', 'sprint'],
         ...['workspace', 'db', 'doctor', 'service', 'completion', 'agents'],
         ...['help', 'docs', 'version'],
       ]);

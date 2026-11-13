@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 use atm_common::components::{component_ids, suggest_components};
 use atm_common::edits::{set_sprint, status_for};
-use atm_common::py::{py_repr, py_str, truthy};
+use atm_common::py::{py_repr, py_str, repr_str, truthy};
 use atm_common::time::now_iso;
 use atm_common::vocabulary::REVIEW_MODES;
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
@@ -95,15 +95,17 @@ fn py_list(value: Option<&Value>, key: &str) -> Result<Vec<Value>> {
     }
 }
 
+/// The label rule: lowercase letters, digits, `-` and `_`, at most 32 characters.
+fn valid_label(label: &str) -> bool {
+    (1..=32).contains(&label.len())
+        && label
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
+}
+
 fn check_labels(labels: &[Value]) -> Result<()> {
-    let valid = |label: &str| {
-        (1..=32).contains(&label.len())
-            && label
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-')
-    };
     for label in labels {
-        if !label.as_str().is_some_and(valid) {
+        if !label.as_str().is_some_and(valid_label) {
             return Err(Error::Invalid(format!(
                 "label {}: use lowercase letters, digits, - and _ (at most 32 characters)",
                 py_repr(label)
@@ -779,6 +781,94 @@ pub fn edit_existing_task(project: &mut Project, task_id: &str, edit: &TaskEdit)
         Ok(())
     })?;
     edited.ok_or_else(|| Error::failed(format!("no change to {task_id}")))
+}
+
+/// What a label's rename changed: how many tasks follow it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RelabeledTasks {
+    /// The tasks in tasks.json that had it.
+    pub tasks: usize,
+    /// The archived tasks that had it.
+    pub archived: usize,
+}
+
+/// The tasks in `list` with the label `from` get `to` in its place (one, if they had both); how many.
+fn relabel_in(list: Option<&mut Vec<Value>>, from: &str, to: &str) -> usize {
+    let mut n = 0;
+    for task in list.into_iter().flatten().filter_map(Value::as_object_mut) {
+        let Some(labels) = task.get_mut("labels").and_then(Value::as_array_mut) else {
+            continue;
+        };
+        if !labels.iter().any(|l| l.as_str() == Some(from)) {
+            continue;
+        }
+        let had_new = labels.iter().any(|l| l.as_str() == Some(to));
+        if had_new {
+            labels.retain(|l| l.as_str() != Some(from));
+        } else {
+            for label in labels.iter_mut().filter(|l| l.as_str() == Some(from)) {
+                *label = json!(to);
+            }
+        }
+        n += 1;
+    }
+    n
+}
+
+/// `atm label rename` (T-499): the label `from` becomes `to` on every task that has it, in tasks.json and the archive,
+/// and in `meta.labels` (a text or an entry's `id`). A task's `updated_at` stays, as for the other renames.
+///
+/// # Errors
+/// A new label that breaks the rule, the same label, a label no task has.
+pub fn relabel(project: &mut Project, from: &str, to: &str) -> Result<RelabeledTasks> {
+    if !valid_label(to) {
+        return Err(Error::Invalid(format!(
+            "label {}: use lowercase letters, digits, - and _ (at most 32 characters)",
+            repr_str(to)
+        )));
+    }
+    if from == to {
+        return Err(Error::Invalid(format!(
+            "the label is already {}",
+            repr_str(from)
+        )));
+    }
+    let mut outcome: Option<RelabeledTasks> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let tasks = relabel_in(work.document["tasks"].as_array_mut(), from, to);
+        let archived = relabel_in(
+            work.archive()?
+                .get_mut("tasks")
+                .and_then(Value::as_array_mut),
+            from,
+            to,
+        );
+        if tasks + archived == 0 {
+            return Err(Error::Failed {
+                message: format!("no task has the label {}", repr_str(from)),
+                code: 2,
+            });
+        }
+        if let Some(entries) = work
+            .document
+            .get_mut("meta")
+            .and_then(|m| m.get_mut("labels"))
+            .and_then(Value::as_array_mut)
+        {
+            for entry in entries.iter_mut() {
+                if entry.as_str() == Some(from) {
+                    *entry = json!(to);
+                } else if let Some(object) = entry.as_object_mut()
+                    && object.get("id").and_then(Value::as_str) == Some(from)
+                {
+                    object.insert("id".into(), json!(to));
+                }
+            }
+        }
+        outcome = Some(RelabeledTasks { tasks, archived });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| Error::Invalid(format!("no label {}", repr_str(from))))
 }
 
 #[cfg(test)]

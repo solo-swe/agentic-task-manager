@@ -164,9 +164,10 @@ brew install solo-swe/tap/atm
 
 `brew upgrade` gets a new version.
 
-### The atm app (macOS)
+### The Agentic Task Manager app (macOS)
 
-The dashboard in a window of its own, with the `atm` CLI built with it:
+The dashboard in a window of its own, with the `atm` CLI built with it. It is called Agentic Task Manager in the menu
+bar, the Dock and Finder (its file is `atm.app`); the command stays `atm`:
 
 ```bash
 brew install --cask solo-swe/tap/atm-app

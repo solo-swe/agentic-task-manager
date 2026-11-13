@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "atm",
+  "productName": "Agentic Task Manager",
   "mainBinaryName": "atm-app",
   "identifier": "com.solo-swe.atm",
   "build": {
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "atm",
+        "title": "Agentic Task Manager",
         "url": "tasks-dashboard.html",
         "width": 1280,
         "height": 860,

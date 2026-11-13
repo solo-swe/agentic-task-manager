@@ -1,5 +1,5 @@
 {
-  "about": "What a host sends with CompMD's files (docs/tauri-compmd-design.md §3, H1 and H2), by path under CompMD's version folder. atm serve is checked against all of it (serve.test.mjs); the app's atm: scheme against its script and WebAssembly rows (app/src-tauri/src/lib.rs), as the app's frames are CompMD's plugin's (ADR-005). null: the header is not sent.",
+  "about": "What a host sends with CompMD's files (ADR-006), by path under CompMD's version folder. `files`: the page's own, compmd.js and its WebAssembly, which atm serves (and the app on atm:) with its headers; serve.test.mjs checks atm serve, app/src-tauri/src/lib.rs the app's atm: scheme. `bundle`: CompMD 0.7.0's serving contract (hosting.md, decision 8), which compmd-host's `respond` sends for the bundle under compmd/, in atm serve as in the app's plugin; {hash} is the frames' hash in the bundle's manifest. null: the header is not sent.",
   "files": {
     "compmd.js": {
       "content-type": "text/javascript; charset=utf-8",
@@ -14,19 +14,39 @@
       "x-content-type-options": "nosniff",
       "cache-control": "no-cache",
       "content-security-policy": null
-    },
-    "compmd/strict.html": {
+    }
+  },
+  "bundle": {
+    "compmd/frames/{hash}/strict.html": {
       "content-type": "text/html; charset=utf-8",
       "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
       "x-content-type-options": "nosniff",
-      "cache-control": "no-cache",
+      "cache-control": "max-age=31536000, immutable",
       "content-security-policy": "sandbox allow-scripts"
     },
-    "compmd/permissive.html": {
+    "compmd/frames/{hash}/permissive.html": {
       "content-type": "text/html; charset=utf-8",
       "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
       "x-content-type-options": "nosniff",
-      "cache-control": "no-cache",
+      "cache-control": "max-age=31536000, immutable",
+      "content-security-policy": "sandbox allow-scripts"
+    },
+    "compmd/frames/{hash}/runtime.js": {
+      "content-type": "text/javascript; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "max-age=31536000, immutable",
+      "content-security-policy": "sandbox allow-scripts"
+    },
+    "compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js": {
+      "content-type": "text/javascript; charset=utf-8",
+      "access-control-allow-origin": "*",
+      "access-control-expose-headers": "*",
+      "x-content-type-options": "nosniff",
+      "cache-control": "max-age=31536000, immutable",
       "content-security-policy": "sandbox allow-scripts"
     }
   }

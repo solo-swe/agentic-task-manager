@@ -259,18 +259,19 @@ dependencies = [
 
 [[package]]
 name = "atm-api"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-common",
  "atm-lib",
  "axum",
+ "compmd-host",
  "serde_json",
  "tokio",
 ]
 
 [[package]]
 name = "atm-app"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -293,7 +294,7 @@ dependencies = [
 
 [[package]]
 name = "atm-cli"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-api",
  "atm-common",
@@ -307,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "atm-common"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "dirs",
  "jiff",
@@ -317,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "atm-db"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-common",
  "serde_json",
@@ -327,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "atm-lib"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-common",
  "atm-db",
@@ -338,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "atm-vcs"
-version = "0.36.0"
+version = "0.37.0"
 dependencies = [
  "atm-common",
  "serde_json",
@@ -738,6 +739,31 @@ checksum = "4356eba6976435498d05a311ee9fc486da3bc81c200d3f0d7dd9703b41913f92"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "compmd-host"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7edb1da4cba93d5c41dcba12440b7ea29673ff2727bf23e1ce8a52fac37b8c1"
+dependencies = [
+ "compmd-pack",
+ "http",
+ "semver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "compmd-pack"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4694865c08d733295d080c46cdf905ee90dadba9d4b3c14bdb1f384f65651f3b"
+dependencies = [
+ "semver",
+ "serde",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4249,14 +4275,14 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-compmd"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af047ab72eb59cc8561e0171cc3c66ec270b5602c52d4ca9a66edf801d76c2eb"
+checksum = "f325e999ae3b4130379e0cf5fa7733f754cc6b3b0555e2fee7f97decaf390fbd"
 dependencies = [
- "serde",
+ "compmd-host",
  "serde_json",
  "tauri",
- "tauri-plugin",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

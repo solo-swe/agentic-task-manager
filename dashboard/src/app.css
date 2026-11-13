@@ -591,6 +591,27 @@ h1 {
 }
 .topbar.in-tab .in-tab-row .subtitle {
   margin-bottom: 0;
+  min-width: 0;
+}
+/* A project's Progress and Activity at the line's right end (T-530): the tab's project's; on a narrow tab they give way
+   first, so the subtitle and what needs you stay */
+.topbar.in-tab .in-tab-row {
+  container-type: inline-size;
+  /* A size container doesn't take its width from what it holds: the header's whole row */
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.topbar.in-tab .in-tab-trail {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-6);
+  margin-left: auto;
+}
+@container (max-width: 720px) {
+  .topbar.in-tab .in-tab-trail {
+    display: none;
+  }
 }
 /* The Filters button is its icon there: the label is for screen readers only */
 .topbar.in-tab .filters-label {
@@ -2000,6 +2021,9 @@ button.menu-trigger:hover,
     border-color 0.15s,
     background 0.15s;
   position: relative;
+  /* A row off screen isn't laid out or painted until it nears the view (T-528): a list of hundreds is drawn at once */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 .task-card > .task-id {
   line-height: 21px;
@@ -5298,6 +5322,17 @@ svg.graph-minimap.hidden {
 .app-update-error {
   color: var(--red);
   font-size: var(--text-sm);
+}
+/* The install's step and the download's bar (T-526) */
+.app-update-step {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.app-update-progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
 }
 
 /* Pages without a project: the overview, how to add a project, an unknown project (LandingPage.svelte). A column

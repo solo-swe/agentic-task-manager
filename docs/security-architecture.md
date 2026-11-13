@@ -104,7 +104,7 @@ with the task that adds it.
 | # | Invariant | Enforced by |
 |---|---|---|
 | I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518) | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`; `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions) |
-| I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-005, T-503), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving only the frames embedded in the crate at a path named by their hash, `GET` only, sandboxed; and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only what `build.rs` embedded from the dashboard's CompMD build (`compmd.js`, its `.wasm`, the packs' `.js` modules; no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module goes to the frames only as code the page fetched with the hash `@compmd/vite` pinned (`integrity`). `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`, which `serve.test.mjs` checks `atm serve` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts` |
+| I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-006, T-524), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving the bundle the dashboard's build wrote and the app's `build.rs` embedded (the frames under their hash, the packs by their place) by CompMD's serving contract (`compmd-host`'s `respond`: `GET` only, a `404` with why for anything else, the manifest included, every file sandboxed); and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only `compmd.js` and its `.wasm` from the dashboard's CompMD build (no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module loads in a frame by its place, checked against the `sha384` the bundle's manifest pins; the page never fetches one. `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`'s page rows, whose bundle rows `serve.test.mjs` checks `atm serve`'s `respond` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts`, and its diagram drawn from the plugin's origin |
 | I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12); the commands write nothing but the last opened workspace (`list_projects`, as its route) and, on the user's click only, the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write) | `each_command_answers_what_its_rest_route_does`; `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests |
 | I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links" |
 | I29 | **The app users run is the reviewed build, with one `atm` on PATH**: the DMG is built on a `v*` tag in the release workflow's `app-macos` job (read-only token, the dashboard built from the lockfile first), signed and notarized (the app and its bundled CLI by Tauri's bundler, the DMG by `notarize-dmg.sh`, stapled), its checksum in `SHA256SUMS`; an update the app installs (T-483) is the same job's build, its archive signed with the updater key and checked against the key built into the app, on the user's click only; the cask links the app's own CLI, and its caveats say to uninstall the formula first (a cask can declare conflicts only with casks); it installs nothing into agent harnesses | `release.yml` (`ci-workflow.test.ts`'s checks of every workflow); `packaging.test.mjs` "the Homebrew cask…" |
@@ -800,10 +800,14 @@ build (I29):
   secret (`TAURI_SIGNING_PRIVATE_KEY`, with its password), read only in the `app-macos` job, which has the read-only
   token; the manifest itself isn't trusted for anything but where to look (its notes show as plain text). The archive
   is the same signed, notarized `atm.app` as the DMG's.
-- **Only on the user's click.** The page gets two commands, `check_update` and `install_update` (in the main window's
-  capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install. The app looks for
-  an update on start and at most every six hours; installing (and the restart into it) happens only from the bar's
-  *Install and restart*. A debug build finds no update.
+- **Only on the user's click.** The page gets three commands, `check_update`, `install_update` and `restart_app` (in
+  the main window's capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install.
+  The app looks for an update on start and at most every six hours; installing happens only from the bar's
+  *Install and restart*. A debug build finds no update. `install_update` sends the page its progress on a channel the
+  page hands it (bytes downloaded, then "installing"; T-526), and no longer restarts the app itself: the page then
+  calls `restart_app`, which asks the app to quit as Quit does and starts it again (Tauri's `request_restart`). It
+  takes no argument and only restarts the running app, into whatever is installed: from a page, it is no more than
+  the menu's Quit and opening the app again.
 - **The key pair** was made by Hakan on his machine (minisign `D2392A7664649507`). A first pair was replaced before
   use because its private half was pasted into an agent session; `updates.rs`'s test checks that `PUBKEY` is a public
   key, not a secret one.
@@ -813,7 +817,8 @@ build (I29):
   Security.framework on macOS) rather than rustls, whose root certificates come as a crate under a licence `deny.toml`
   doesn't list; `cargo deny` passes with no change to it.
 - Tests: the update manifest's generation (`packaging.test.mjs`), the cask's `auto_updates`, the capability listing
-  exactly the app's commands, and `app.spec.ts` (offered, installed only on the click, a failure shown, Not now kept).
+  exactly the app's commands, and `app.spec.ts` (offered, installed only on the click, a failure shown, Not now kept;
+  the download's progress, the restart, and Restart now when the app is still there, T-526).
   The update flow end to end is checked by hand with the user: 0.35.0's release has the manifest and the signed
   archive and offers no update (T-521); the first release after it is installed through the updater (T-522).
 
@@ -833,6 +838,23 @@ build (I29):
 - `pnpm install` added the five `@compmd/*@0.6.0` packages to `minimumReleaseAgeExclude` in
   `dashboard/pnpm-workspace.yaml`: released the same day, by CompMD's author (atm's). The exclusion can go once they
   are past the minimum age.
+
+**CompMD 0.7.0: one bundle for both hosts, served by CompMD's contract (T-524, ADR-006).** Replaces the section above
+where it differs:
+- **The bundle** (`dist/assets/compmd/<version>/compmd/`: `manifest.json`, `frames/<hash>/`, `packs/<place>`) is built
+  once by `@compmd/vite` with `out`, for both hosts. The app embeds it for CompMD's plugin (`build::bundle`,
+  `init(include_bundle!())`), which serves it on `compmd:` and gives the page the origin (`__COMPMD__`, an
+  initialization script in the main frame only); `atm serve` embeds it in `atm-api` and answers
+  `/assets/compmd/<version>/compmd/` with `compmd-host`'s `respond` (a new dependency of `atm-api`, CompMD's own crate,
+  MIT, pinned `=0.7.0`). One contract for both: `GET` only, the bundle's frames and packs and nothing else (the
+  manifest is a `404`), each file `sandbox allow-scripts`, CORS `*`, `nosniff`, cached for good.
+- **The packs' modules are no longer handed to the frames as code:** a frame loads each by its place from the bundle's
+  origin, checked against the hash the manifest pins, so the page fetches no pack module (`fetchPackModules` and
+  `assetFetch` are gone), and `atm:` serves only `compmd.js` and its WebAssembly.
+- **The window's policy is unchanged** (I26): it already allows what CompMD's `cspFor` gives (the `compmd:` origin as
+  `frame-src`, its `frames/` for `script-src` and `connect-src`, never its `packs/`).
+- `minimumReleaseAgeExclude` names the five `@compmd/*@0.7.0` packages instead: released the same day, by CompMD's
+  author.
 
 **Release 0.35.0 (T-523).** The checklist:
 - **Skills and `docs/agent/`:** unchanged against `main` (nor the CLI's commands), so there is nothing for the agent
@@ -912,6 +934,30 @@ Three new commands, each on the calling window only (I25), one new file, the app
   `serve.test.mjs`'s v2 routes test once failed on its first request while the whole suite ran, and the file passed
   run alone, 46 of 46, as in 0.35.0); the functional e2e suite (434); CI on the branch, the Linux screenshots and the three platforms' Rust jobs included
   (green; the Windows build compiles the badge's overlay icon, which only Windows uses).
+
+**Release 0.37.0 (the sprint Updates and renames, T-496 to T-500, T-524, T-526 to T-533, T-535 to T-537).** The
+checklist:
+- **Skill and `docs/agent/` changed** (`skills/atm-plan-sprint/SKILL.md`, `docs/agent/commands.md`). No API key is
+  used for the agent sandbox, so this written review takes the live run's place: the plan-sprint skill names
+  `atm sprint rename` beside `atm sprint edit`, under its rule that only a change the user agreed to is made;
+  `atm docs commands` lists the renames (sprint, release, component, label, vocabulary entry) and
+  `atm release edit --released`, the last "only when the user says the release is out". None reads a path, a URL or
+  outside text, or runs anything; each changes only the task files' own fields, under their lock. No skill's
+  pre-approvals change (`skills/claude-code.json`), so none of them runs without the user's permission.
+- **Entry points, fields, CI permissions:** the new CLI commands read no path or URL. `atm serve` answers CompMD's
+  bundle with `compmd-host`'s `respond` and the app's plugin serves it (T-524, ADR-006: recorded above with I26 and
+  its checks, `tests/scripts/compmd-host-headers.json`); the window's CSP is unchanged. One app command, `restart_app`
+  (T-526, recorded above), in I25's capability. One new dependency of `atm serve`, `compmd-host` 0.7.0 (CompMD's own
+  crate, MIT, which the plugin already brought into the lockfile; part of adopting 0.7.0, T-524). The release workflow takes the updater's
+  archive under the bundle's new name (T-537); no new CI permission.
+- **What ships is what is described:** the app's title bar, sidebar and pills changed (the app only); the browser
+  dashboard's List lays out its rows off screen lazily (T-528), as the regenerated List screenshots show. The update
+  from 0.36.0 (its progress and restart, T-526), a diagram in a release bundle (T-524) and the app's name in the menu
+  bar, the Dock and ⌘-Tab (T-531, T-536, T-537) are checked by hand at the release with the user.
+- **Checks run:** `cargo test` (265), clippy, fmt and deny; the unit tests with coverage (1328); `pnpm run check`; the
+  CLI suite (628); the functional e2e suite (437 of 438: What's new's test named 0.27.0, which 0.37.0's entry
+  moves out of the ten releases it shows; it now checks the oldest one shown, and passes); the Linux screenshots in Docker (84; the List's five
+  regenerated).
 
 ## 4. Keeping it current
 

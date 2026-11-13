@@ -65,16 +65,19 @@ atm's own rules for the atm app, the desktop distribution proposed in
     refused): `dangerousDisableAssetCspModification: ["style-src"]` leaves it as written;
   - **every debug build** (`cargo run`, `cargo tauri dev`, the tests) uses `devCsp`, not `csp`: the same policy plus only
     the CLI's live-reload socket. A test keeps the two in step.
-- **CompMD from two schemes** ([ADR-005](../adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md)):
-  - **the sandbox's frames** from CompMD's own plugin, `tauri_plugin_compmd::init()` (crates.io, pinned to the
-    `@compmd/sandbox` version: bump them together), on `compmd://localhost/frames/<hash>/` (`http://compmd.localhost`
-    on Windows and Android); it gives the page their `base`, so the page names none;
-  - **what atm ships for the page** (`compmd.js`, its WebAssembly, the packs' built modules) from the app's own `atm:`
-    scheme (`src/assets.rs`; `atm://localhost`, `http://atm.localhost` on Windows and Android), at the paths `atm serve`
-    uses and with its headers for scripts (`tests/scripts/compmd-host-headers.json`). `build.rs` embeds them from the
-    dashboard's build, and fails without it. The page gets the origin from `convertFileSrc('', 'atm')`
-    (`compmdOrigin`), and gives the frames the packs' modules as code it fetched and checked (`sandboxOptions`,
-    `fetchPackModules` in `lib/compmd.ts`).
+- **CompMD from two schemes** ([ADR-006](../adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md), CompMD 0.7.0's
+  [Tauri chapter](https://compmd.hakanserce.com/guides/developers/a-tauri-app/)):
+  - **CompMD's bundle** (the sandbox's frames under their hash, the packs by their place) from CompMD's own plugin
+    (crates.io, pinned to the `@compmd/*` version: bump them together), on `compmd://localhost/`
+    (`http://compmd.localhost` on Windows and Android). The dashboard's build writes the bundle
+    (`vite.compmd.config.ts`, `out` and `source`), `build.rs` embeds it (`tauri_plugin_compmd::build::bundle`, before
+    Tauri's step), and `with_plugins` registers `tauri_plugin_compmd::init(include_bundle!())`, which serves it by
+    CompMD's contract and gives the page the origin (`__COMPMD__`): the page names none, and fetches no pack;
+  - **what atm ships for the page** (`compmd.js` and its WebAssembly) from the app's own `atm:` scheme
+    (`src/assets.rs`; `atm://localhost`, `http://atm.localhost` on Windows and Android), at the paths `atm serve` uses
+    and with its headers for scripts (`tests/scripts/compmd-host-headers.json`). `build.rs` embeds them from the
+    dashboard's build, and fails without it. The page gets that origin from `convertFileSrc('', 'atm')`
+    (`compmdOrigin` in `lib/compmd.ts`).
 
   The window's policy names those two folders in `script-src` and `connect-src`, never an origin. Don't serve CompMD
   from Tauri's own protocol, and don't loosen the window's policy for it (`blob:` in `script-src` is CVE-2026-95626's

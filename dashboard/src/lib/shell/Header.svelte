@@ -70,24 +70,23 @@
   {/if}
 {/snippet}
 
-<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the rest of what the browser's title
-     bar has at its right (the workspace picker, the pills, the ⋯); inside the tab, the subtitle line, a project's
-     search and Filters before it (Hakan) -->
+<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the workspace picker, the overview's
+     activity and the ⋯; inside the tab, the subtitle line, a project's search and Filters before it (Hakan) and its
+     Progress and Activity at its right end: they are the tab's project's (T-530) -->
 {#snippet tabSearch()}
   {#if dashboard.loaded}{@render projectSearch()}{/if}
 {/snippet}
+{#snippet tabPills()}
+  {#if dashboard.loaded}{@render projectPills()}{/if}
+{/snippet}
 {#snippet appEnd()}
   <WorkspaceSelector />
-  {#if onProject}
-    {#if dashboard.loaded}<div class="topbar-charts">{@render projectPills()}</div>{/if}
-  {:else}
-    {@render overviewCharts()}
-  {/if}
+  {#if !onProject}{@render overviewCharts()}{/if}
   <SettingsMenu />
 {/snippet}
 {#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
 {#if onProject}
-  <TitleBar {title} inTab={inApp} charts={projectCharts} lead={tabSearch}>
+  <TitleBar {title} inTab={inApp} charts={projectCharts} lead={tabSearch} trail={inApp ? tabPills : undefined}>
     {#snippet subtitle()}
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // The atm app's update manifest for a release (T-483): `latest.json`, which the app's updater reads from the latest
 // published release (app/src-tauri/src/updates.rs). It names the release's signed app archive (Tauri's updater
-// artifact, `atm.app.tar.gz`, one universal archive for both Mac architectures) with its signature, and the version's
+// artifact, `Agentic Task Manager.app.tar.gz`, one universal archive for both Mac architectures) with its signature, and the version's
 // What's new as its notes, which the app shows before it asks to install. The release workflow writes it next to the
 // archive; nothing in it is trusted without the signature, which the app checks against its built-in public key.
 //

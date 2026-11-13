@@ -1,11 +1,13 @@
-//! `atm component`: the project's components (the Python atm's `cli/commands/component.py`): list, add, edit.
+//! `atm component`: the project's components (the Python atm's `cli/commands/component.py`): list, add, edit, rename.
 
 use std::path::Path;
 
 use atm_common::Result;
 use atm_common::py::{py_str, truthy};
 use atm_lib::Project;
-use atm_lib::components::{Moved, add_component, edit_component, list_components};
+use atm_lib::components::{
+    Moved, add_component, edit_component, list_components, rename_component,
+};
 use clap::Subcommand;
 use serde_json::{Value, json};
 
@@ -55,6 +57,13 @@ pub enum ComponentCommand {
         /// Also give it to every task whose files its globs match
         #[arg(long)]
         assign: bool,
+    },
+    /// Rename a component's ID: the tasks listing it, archived ones too, follow.
+    Rename {
+        /// The component's ID
+        component_id: String,
+        /// Its new ID (letters, digits, '.', '-', '_')
+        new: String,
     },
 }
 
@@ -231,6 +240,34 @@ pub fn run(command: ComponentCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 parts.join(", ")
             };
             println!("{component_id}: {text}");
+        }
+        ComponentCommand::Rename { component_id, new } => {
+            if ctx.dry_run {
+                println!("[dry-run] would rename component {component_id} to {new}");
+                return Ok(());
+            }
+            let renamed = rename_component(&mut Project::open(cwd)?, &component_id, &new)?;
+            if ctx.json {
+                print_json(&json!({
+                    "from": renamed.from,
+                    "to": renamed.to,
+                    "tasks": renamed.tasks,
+                    "archived": renamed.archived,
+                }));
+                return Ok(());
+            }
+            let n = renamed.tasks + renamed.archived;
+            let archived = if renamed.archived > 0 {
+                format!(" ({} archived)", renamed.archived)
+            } else {
+                String::new()
+            };
+            println!(
+                "Renamed the component {} to {}: {n} task{}{archived} follow it.",
+                renamed.from,
+                renamed.to,
+                if n == 1 { "" } else { "s" }
+            );
         }
     }
     Ok(())
