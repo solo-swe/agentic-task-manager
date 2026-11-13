@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 534,
+    "next_id": 535,
     "labels": [
       {
         "id": "architecture",
@@ -19622,7 +19622,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-13T04:38:39Z",
-      "updated_at": "2026-11-13T11:14:00Z",
+      "updated_at": "2026-11-13T11:22:36Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19637,7 +19637,8 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T11:14:00Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "7e5871eaa548952a01bb579c95a70a954b8919a1"
     },
     {
       "id": "T-528",
@@ -19870,6 +19871,36 @@
       "components": [
         "dashboard"
       ]
+    },
+    {
+      "id": "T-534",
+      "name": "Design: two task IDs (a UUID and a project key, ATM-123) and dependencies across projects",
+      "type": "docs",
+      "priority": "P1",
+      "labels": [
+        "architecture",
+        "cli"
+      ],
+      "description": "Hakan wants tasks to have two IDs, as JIRA does: a **UUID** for technical reasons, and a **key** for people, a project prefix and a number instead of `T-`: `ASB-001` (Agentic Status Bar), `ATM-001` (Agentic Task Manager), `FIG-001` (Fig), `LFB-001` (Learn Forever Blog). Keys let a task refer to another project's: `LFB-005` blocked by `ATM-978`.\n\nDesign it with Hakan, as an ADR replacing the current ID scheme (`docs/adr/`), then break the work into tasks with `/atm-create-tasks`.\n\n## To settle\n- **The two IDs:** `uid` (a UUID, never shown, never changed) and the key (`ATM-978`); the prefix in `meta` (e.g. `meta.key`), chosen at `atm db init`, unique across the workspace's projects; keys unique within the project. Which one the files, the API, the app's commands and the dashboard's addresses use.\n- **Migration:** `atm db migrate` gives each task a UUID and rekeys `T-527` as `ATM-527`, keeping the numbers; dependencies, `related`, notes, commit trailers, PR records and links follow. Old IDs stay resolvable as aliases (commit messages and PRs say `T-527`). The archive too.\n- **Merges and parallel agents:** the merge driver matches tasks by UUID; two branches that both add a task never collide, and the key of one is renumbered on merge (as today's driver renumbers).\n- **Across projects:** a dependency or `related` entry naming another project's key, resolved through the workspace's projects (`projects.json`): its status shown, an unfinished one an unmet dependency for the loop; a project missing, renamed or rekeyed; the dashboard's link to it; `atm doctor`'s checks. Reading another project's task folder is a new entry point (`docs/security-architecture.md`).\n- **Where IDs show:** the CLI and `atm docs`, the dashboard (cards, links, the graph, addresses), the app, commit templates and `atm vcs` parsing (`code.rs`'s mention of a task ID), the skills.\n\n## Output\nThe ADR, reviewed with Hakan, and the implementation tasks (data model, migrate, merge driver, cross-project resolution, dashboard, docs, skills), added through `/atm-create-tasks`.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/adr/",
+        "crates/atm-common/schema/task.schema.json",
+        "crates/atm-common/schema/meta.schema.json",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-13T11:37:44Z",
+      "updated_at": "2026-11-13T11:37:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "docs"
+      ],
+      "review": "blocker",
+      "with": "user"
     }
   ]
 }
