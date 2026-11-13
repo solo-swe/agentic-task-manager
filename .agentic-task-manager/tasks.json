@@ -1310,7 +1310,12 @@
       },
       {
         "id": "0.32.0",
-        "state": "planned"
+        "state": "released",
+        "pr": {
+          "number": 40,
+          "url": "https://github.com/solo-swe/agentic-task-manager/pull/40"
+        },
+        "released_at": "2026-11-08T07:02:27Z"
       },
       {
         "id": "0.34.0",
