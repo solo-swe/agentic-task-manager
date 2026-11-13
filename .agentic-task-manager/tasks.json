@@ -18641,9 +18641,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-10T23:47:14Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18667,7 +18667,11 @@
           "text": "Windows main and window-<n> (capability window-*); subscriptions and links per window; deep links and second instance to the window in front; shell, set_title, open_window (checked as a deep link). Not checked by hand in a window yet: open the app and confirm the title follows the project.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-512",
@@ -18693,9 +18697,9 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-11T05:11:32Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18724,7 +18728,11 @@
       "started_by": "claude:34798264",
       "commit": "1bd0a5a306f29561b911da615da12ab4242690cb",
       "completed_at": "2026-11-11T05:11:32Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-513",
@@ -18752,9 +18760,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T04:20:39Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18778,7 +18786,11 @@
           "text": "App title bar: two rows (AppTitleBar.svelte), macOS overlay with room for the traffic lights, page-drawn menus and window buttons on Windows/Linux (decorations off), start_dragging/double click, view switcher in the toolbar. To check by hand: trafficLightPosition {16, 20} and the 80 px room are guesses; drag, double click, full screen.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-514",
@@ -18805,9 +18817,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T04:29:46Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18836,7 +18848,11 @@
       "started_by": "claude:34798264",
       "commit": "57fb2e8f8c2568317ff99f5daee3a0361f4ee624",
       "completed_at": "2026-11-12T04:29:46Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-515",
@@ -18861,9 +18877,9 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T13:06:30Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18891,7 +18907,11 @@
       "started_at": "2026-11-12T13:06:30Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-12T13:06:30Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-516",
@@ -18915,9 +18935,9 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T14:17:26Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18940,7 +18960,11 @@
           "text": "The app’s status bar (live state, agents working, notices, copyright, version, GitHub, Help, About) in place of the footer; also search and Filters inside the tab before the subtitle, an icon-only Filters button, its popup opening rightwards. Browser UI unchanged: 84 screenshots pass.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-517",
@@ -18964,9 +18988,9 @@
         "dashboard/src/lib/dialogs/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T17:05:05Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18994,7 +19018,11 @@
       "started_at": "2026-11-12T17:04:59Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-12T17:05:05Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-518",
@@ -19019,9 +19047,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T18:43:35Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "docs"
       ],
@@ -19050,7 +19078,11 @@
           "text": "Changed with Hakan: the last window closed with its button is kept and comes back, as after ⌘Q (closing it is closing the app); a window closed while another is open is still forgotten, and a new window opened after the last closed starts again.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-519",
@@ -19103,9 +19135,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-12T19:34:41Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "docs"
       ],
@@ -19128,7 +19160,11 @@
           "text": "Notifications from Rust (tauri-plugin-notification =2.8.0, approved): \"<project>: N tasks need you\" when a project’s count rises, not at start nor while an app window is focused; the page gets no plugin permission. set_badge became needs_you(workspace, badge, notify): the app reads counts and names itself. Settings ▸ What needs you has both switches. By hand on macOS (a notification appears from the bundled app) is Hakan’s.",
           "by": "claude:34798264"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-521",
@@ -19329,7 +19365,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-12T19:36:30Z",
-      "updated_at": "2026-11-12T20:02:11Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19354,7 +19390,11 @@
           "text": "Timed the app’s tabs on 500 tasks (performance.spec.ts): same-project switches 45–110 ms; back from another project was 240–290 ms, over budget. Fixed: the graph keeps the last 4 layouts (dagre ~100 ms), the hidden Graph and List are not drawn (List mounted only while shown). Now 140–200 ms with the mock’s ~55 ms transport; List switch 108–175; reloads faster. Specs that read hidden views open them. Close to the budget under the full local suite: watch it.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     }
   ]
 }
