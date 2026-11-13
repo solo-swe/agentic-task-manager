@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 527,
+    "next_id": 528,
     "labels": [
       {
         "id": "architecture",
@@ -19467,6 +19467,35 @@
       ],
       "related": [
         "T-522"
+      ]
+    },
+    {
+      "id": "T-527",
+      "name": "Mark a release released by hand: atm release edit --released",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "cli"
+      ],
+      "description": "A release becomes `released` only when `atm vcs pushed` finds every one of its tasks merged in a PR. A release with a task that has no commit (a check done with the user, such as T-521 for 0.35.0 and T-522 for 0.36.0) never does: 0.32.0, 0.35.0 and 0.36.0 still show `planned` though they are out. There is no command to say so by hand.\n\n## Change\n- `atm release edit <id> --released [YYYY-MM-DD]` marks the release released, on the date given (today without one); `--planned` takes it back. It says which of its tasks are not done or not merged, and goes ahead (the user's call), unless a task is still open (to do, in progress, in review, blocked), which it refuses unless `--force`.\n- `atm release list` and the dashboard's release view show a release marked by hand as released, with its date.\n- `docs/agent/` (the release commands) and the release steps in `packaging/README.md` say to run it after publishing, when a release holds such a task.\n\n## Tests\nA scenario in `tests/scripts/scenarios/` (mark, unmark, the refusal for an open task and `--force`, the list's line), and atm-lib's unit tests for the rule.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/commands/release.rs",
+        "crates/atm-lib/src/releases.rs",
+        "docs/agent/",
+        "packaging/README.md",
+        "tests/scripts/scenarios/"
+      ],
+      "created_at": "2026-11-13T04:38:39Z",
+      "updated_at": "2026-11-13T04:38:39Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "cli",
+        "docs"
       ]
     }
   ]
