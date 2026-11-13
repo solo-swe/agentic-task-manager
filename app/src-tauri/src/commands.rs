@@ -10,7 +10,10 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::badge::NeedsYou;
 use crate::links::Links;
+use crate::menu::Menus;
+use crate::session::Session;
 use atm_lib::Workspaces;
 use atm_lib::query::Filters;
 use atm_lib::workspaces::{Member, Workspace};
@@ -19,21 +22,39 @@ use notify_debouncer_full::{DebounceEventResult, Debouncer, RecommendedCache, ne
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use specta::Type;
-use tauri::State;
 use tauri::ipc::Channel;
+use tauri::{Runtime, State, WebviewWindow};
 
 /// How long the watcher waits for a burst of changes (an atm command writes a file or two, git many) to settle.
 const SETTLE: Duration = Duration::from_millis(300);
 
 type Watcher = Debouncer<notify::RecommendedWatcher, RecommendedCache>;
 
-/// What every command shares: the user's workspaces, opened when the app starts, and the live subscriptions.
+/// A live subscription: the window whose page made it, and its watcher.
+struct Subscription {
+    window: String,
+    /// Held only: it watches until it is dropped
+    _watcher: Watcher,
+}
+
+/// What every command shares: the user's workspaces, opened when the app starts, the live subscriptions (each its
+/// window's, T-511), the links for each window's page, and which window is in front.
 pub struct AppState {
     workspaces: Workspaces,
-    subscriptions: Mutex<HashMap<u32, Watcher>>,
+    subscriptions: Mutex<HashMap<u32, Subscription>>,
     next: AtomicU32,
-    /// The deep links the app was opened with (T-459)
+    /// The deep links the app was opened with (T-459), and each new window's first page
     links: Links,
+    /// The window focused last
+    front: Mutex<Option<String>>,
+    /// The next `window-<n>`'s number
+    next_window: AtomicU32,
+    /// Each window's page's menu channel and what its menu shows (T-512)
+    menus: Menus,
+    /// The windows' frames and tabs, kept for the next start (T-518)
+    session: Session,
+    /// The needs-you counts seen last, for the notifications (T-520)
+    needs_you: NeedsYou,
 }
 
 impl AppState {
@@ -45,7 +66,73 @@ impl AppState {
             subscriptions: Mutex::new(HashMap::new()),
             next: AtomicU32::new(1),
             links: Links::default(),
+            front: Mutex::new(None),
+            next_window: AtomicU32::new(1),
+            menus: Menus::default(),
+            session: Session::default(),
+            needs_you: NeedsYou::default(),
         }
+    }
+
+    /// The needs-you counts seen last.
+    #[must_use]
+    pub fn needs_you(&self) -> &NeedsYou {
+        &self.needs_you
+    }
+
+    /// The windows as they are, kept for the next start.
+    #[must_use]
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// Each window's menu channel and state.
+    #[must_use]
+    pub fn menus(&self) -> &Menus {
+        &self.menus
+    }
+
+    /// A label for a new window, `window-<n>`, never one used before.
+    #[must_use]
+    pub fn new_window_label(&self) -> String {
+        format!(
+            "{}{}",
+            crate::windows::PREFIX,
+            self.next_window.fetch_add(1, Ordering::Relaxed)
+        )
+    }
+
+    /// The window focused last, if it is still open.
+    #[must_use]
+    pub fn front(&self) -> Option<String> {
+        self.front
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
+    /// `window` came to the front.
+    pub fn focused(&self, window: &str) {
+        *self
+            .front
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(window.to_owned());
+    }
+
+    /// `window` closed: its subscriptions end, its links go nowhere, and it is no longer in front. How many
+    /// subscriptions ended.
+    pub fn window_closed(&self, window: &str) -> usize {
+        self.links.forget(window);
+        self.menus.forget(window);
+        let mut front = self
+            .front
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if front.as_deref() == Some(window) {
+            *front = None;
+        }
+        drop(front);
+        self.unwatch_window(window)
     }
 
     /// Its deep links.
@@ -60,10 +147,11 @@ impl AppState {
         &self.workspaces
     }
 
-    /// Watch `folders` (those that are there; not their subfolders), sending `message` on `channel` once each burst of
-    /// changes has settled. The subscription's ID, for `unsubscribe`.
+    /// Watch `folders` (those that are there; not their subfolders) for `window`'s page, sending `message` on `channel`
+    /// once each burst of changes has settled. The subscription's ID, for `unsubscribe`.
     fn watch(
         &self,
+        window: &str,
         folders: &[PathBuf],
         channel: Channel<Changed>,
         message: Changed,
@@ -84,28 +172,42 @@ impl AppState {
         self.subscriptions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(id, watcher);
+            .insert(
+                id,
+                Subscription {
+                    window: window.to_owned(),
+                    _watcher: watcher,
+                },
+            );
         Ok(id)
     }
 
-    /// End subscription `id` (its watcher stops when dropped). Whether there was one.
-    fn unwatch(&self, id: u32) -> bool {
-        self.subscriptions
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .remove(&id)
-            .is_some()
-    }
-
-    /// End every subscription: the window's page is loading again (a reload, ⌘R), and the page that made them is gone
-    /// without saying so (a channel to it doesn't fail, its messages only find no callback). How many there were.
-    pub fn unwatch_all(&self) -> usize {
+    /// End `window`'s subscription `id` (its watcher stops when dropped); another window's stays. Whether there was
+    /// one.
+    fn unwatch(&self, window: &str, id: u32) -> bool {
         let mut subscriptions = self
             .subscriptions
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let ended = subscriptions.len();
-        subscriptions.clear();
+        if subscriptions.get(&id).is_some_and(|s| s.window == window) {
+            subscriptions.remove(&id).is_some()
+        } else {
+            false
+        }
+    }
+
+    /// End every subscription of `window`: its page is loading again (a reload, ⌘R) or the window closed, and the page
+    /// that made them is gone without saying so (a channel to it doesn't fail, its messages only find no callback).
+    /// Other windows' stay. How many ended.
+    pub fn unwatch_window(&self, window: &str) -> usize {
+        let mut subscriptions = self
+            .subscriptions
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let before = subscriptions.len();
+        subscriptions.retain(|_, s| s.window != window);
+        let ended = before - subscriptions.len();
+        drop(subscriptions);
         ended
     }
 }
@@ -241,6 +343,15 @@ fn workspace(workspaces: &Workspaces, id: &str) -> Result<Arc<Workspace>, AppErr
 
 fn member(workspaces: &Workspaces, w: &str, p: &str) -> Result<Member, AppError> {
     Ok(workspace(workspaces, w)?.member(p)?)
+}
+
+/// Workspace `w`'s projects as `list_projects` lists them, without making it the one opened last (the badge and the
+/// notifications read them, T-520).
+///
+/// # Errors
+/// No such workspace.
+pub fn listed_projects(workspaces: &Workspaces, w: &str) -> Result<Vec<Value>, AppError> {
+    Ok(workspace(workspaces, w)?.listing().projects())
 }
 
 /// `GET /api/v2/workspaces`: the workspaces, how many projects each lists, and the one opened last.
@@ -480,7 +591,8 @@ pub async fn logo(
 /// No such workspace; a folder that can't be watched.
 #[tauri::command]
 #[specta::specta]
-pub async fn subscribe_workspace(
+pub async fn subscribe_workspace<R: Runtime>(
+    window: WebviewWindow<R>,
     state: State<'_, AppState>,
     workspace: String,
     channel: Channel<Changed>,
@@ -492,7 +604,7 @@ pub async fn subscribe_workspace(
         workspace,
         project: None,
     };
-    state.watch(&folders, channel, message)
+    state.watch(window.label(), &folders, channel, message)
 }
 
 /// Be told on `channel` when a project's data changes. The subscription's ID.
@@ -501,7 +613,8 @@ pub async fn subscribe_workspace(
 /// No such workspace or project; a folder that can't be watched.
 #[tauri::command]
 #[specta::specta]
-pub async fn subscribe_project(
+pub async fn subscribe_project<R: Runtime>(
+    window: WebviewWindow<R>,
     state: State<'_, AppState>,
     workspace: String,
     project: String,
@@ -512,7 +625,7 @@ pub async fn subscribe_project(
         workspace,
         project: Some(project),
     };
-    state.watch(&folders, channel, message)
+    state.watch(window.label(), &folders, channel, message)
 }
 
 /// `atm agents status`: per harness atm knows, whether it is installed here, and each of atm's skills' state in the
@@ -545,28 +658,33 @@ pub async fn connect_agents(harness: String) -> Result<Json, AppError> {
     ))
 }
 
-/// Be told on `channel` the dashboard address of each `atm://` link the app is opened with (T-459); the answer is the
-/// one it was started with, if any.
+/// Be told on `channel` the dashboard address of each `atm://` link the app opens in the calling window (T-459,
+/// T-511); the answer is the one waiting for it, if any (a link the app was started with, a new window's first page).
 ///
 /// # Errors
 /// None: a `Result`, as every async command with state is.
 #[tauri::command]
 #[specta::specta]
-pub async fn subscribe_links(
+pub async fn subscribe_links<R: Runtime>(
+    window: WebviewWindow<R>,
     state: State<'_, AppState>,
     channel: Channel<String>,
 ) -> Result<Option<String>, AppError> {
-    Ok(state.links.subscribe(channel))
+    Ok(state.links.subscribe(window.label(), channel))
 }
 
-/// End a subscription. Whether there was one.
+/// End one of the calling window's subscriptions. Whether there was one.
 ///
 /// # Errors
 /// None: a `Result`, as every async command with state is.
 #[tauri::command]
 #[specta::specta]
-pub async fn unsubscribe(state: State<'_, AppState>, id: u32) -> Result<bool, AppError> {
-    Ok(state.unwatch(id))
+pub async fn unsubscribe<R: Runtime>(
+    window: WebviewWindow<R>,
+    state: State<'_, AppState>,
+    id: u32,
+) -> Result<bool, AppError> {
+    Ok(state.unwatch(window.label(), id))
 }
 
 #[cfg(test)]
@@ -590,7 +708,9 @@ mod tests {
         };
         // A folder that isn't there is skipped, not an error
         let folders = [dir.clone(), dir.join("not-there")];
-        let id = state.watch(&folders, channel, message).expect("watching");
+        let id = state
+            .watch("main", &folders, channel, message)
+            .expect("watching");
         std::thread::sleep(Duration::from_millis(200));
         std::fs::write(dir.join("tasks.json"), "{}").expect("a change");
         let body = received
@@ -603,13 +723,16 @@ mod tests {
             serde_json::from_str::<Value>(&text).expect("json"),
             json!({"workspace": "work", "project": "abcd1234"})
         );
-        assert!(state.unwatch(id) && !state.unwatch(id));
+        // Only its own window ends it
+        assert!(!state.unwatch("window-1", id));
+        assert!(state.unwatch("main", id) && !state.unwatch("main", id));
         std::fs::remove_dir_all(&dir).expect("clean up");
     }
 
-    /// T-506: a page that reloads leaves its subscriptions behind; the page load ends them all
+    /// T-506, T-511: a page that reloads, or a window that closes, leaves its subscriptions behind; they end, and
+    /// another window's stay
     #[test]
-    fn the_page_loading_again_ends_every_subscription() {
+    fn a_window_loading_again_or_closing_ends_its_own_subscriptions() {
         let dir = std::env::temp_dir().join(format!("atm-app-unwatch-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a folder");
@@ -618,17 +741,33 @@ mod tests {
             workspace: "default".into(),
             project: None,
         };
-        let ids: Vec<u32> = (0..2)
-            .map(|_| {
-                let channel = Channel::new(|_| Ok(()));
-                state
-                    .watch(std::slice::from_ref(&dir), channel, message.clone())
-                    .expect("watching")
-            })
-            .collect();
-        assert_eq!(state.unwatch_all(), 2);
-        assert!(ids.iter().all(|id| !state.unwatch(*id)));
-        assert_eq!(state.unwatch_all(), 0);
+        let subscribe = |window: &str| {
+            let channel = Channel::new(|_| Ok(()));
+            state
+                .watch(window, std::slice::from_ref(&dir), channel, message.clone())
+                .expect("watching")
+        };
+        let mains = [subscribe("main"), subscribe("main")];
+        let other = subscribe("window-1");
+        assert_eq!(state.unwatch_window("main"), 2);
+        assert!(mains.iter().all(|id| !state.unwatch("main", *id)));
+        assert_eq!(state.unwatch_window("main"), 0);
+        // The other window's is still there, until it closes
+        state.focused("window-1");
+        assert_eq!(state.front().as_deref(), Some("window-1"));
+        assert_eq!(state.window_closed("window-1"), 1);
+        assert!(!state.unwatch("window-1", other));
+        assert_eq!(state.front(), None);
         std::fs::remove_dir_all(&dir).expect("clean up");
+    }
+
+    #[test]
+    fn new_windows_are_numbered_and_never_reuse_a_label() {
+        let state = AppState::new(Workspaces::at(&std::env::temp_dir()));
+        assert_eq!(state.new_window_label(), "window-1");
+        assert_eq!(state.new_window_label(), "window-2");
+        state.focused("main");
+        state.window_closed("window-2");
+        assert_eq!(state.front().as_deref(), Some("main"));
     }
 }

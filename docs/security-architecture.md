@@ -103,7 +103,7 @@ with the task that adds it.
 
 | # | Invariant | Enforced by |
 |---|---|---|
-| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands` |
+| I25 | **Only the window's own page calls the app, and only its commands**: the main window's capability allows exactly the commands in `build.rs`'s manifest, one permission each, no core or plugin API and no remote URL; a page from anywhere else, CompMD's sandbox frames included, is refused. The capability covers `main` and the windows the app opens, `window-<n>` (T-511), and no other label. A command about a window (`set_title`, the subscriptions, `unsubscribe`, `subscribe_links`) acts on the window that calls it, never on one it names; `open_window` takes only one of the dashboard's pages, checked as a deep link is (I28), as do `save_tabs` and the windows' file the app reads at the start (T-518) | `app/src-tauri/src/lib.rs` `the_capability_allows_exactly_the_apps_commands`, `the_main_windows_capability_lets_it_call_the_commands`, `a_window_the_app_opens_has_the_main_windows_capability_and_no_other`; `windows.rs`'s tests (`open_window`'s check); `session.rs`'s (the file and the tabs checked); `commands.rs`'s (a window ends only its own subscriptions) |
 | I26 | **The window's page has the server's strict CSP** (I13): `default-src 'none'`, scripts only the bundle's hashes and two folders, by path, with `'wasm-unsafe-eval'`: atm's CompMD build on the app's `atm:` scheme (`atm://localhost/assets/compmd/`) and CompMD's frames (`compmd://localhost/frames/`), each also in its `http://….localhost` form for Windows; never `blob:`, `data:` or `'self'`; frames only CompMD's origin; images only the app's own or `data:` (the app's logos come as `data:`, T-457); connections only to Tauri's IPC and the same two folders; `frame-ancestors 'none'`; `freezePrototype`, no global Tauri object. Tauri doesn't modify `style-src` (`dangerousDisableAssetCspModification: ["style-src"]`): its nonce made `'unsafe-inline'` ignored, the same allowance the server's policy makes. Debug builds use `devCsp`, the same policy plus only the CLI's live-reload socket (`ws://127.0.0.1:1430/__tauri_cli`). **Two schemes are entry points** (ADR-005, T-503), which any page in the webview can request: **`compmd:`**, CompMD's plugin (`tauri-plugin-compmd`, crates.io, pinned), serving only the frames embedded in the crate at a path named by their hash, `GET` only, sandboxed; and **`atm:`**, the app's own (`app/src-tauri/src/assets.rs`), serving only what `build.rs` embedded from the dashboard's CompMD build (`compmd.js`, its `.wasm`, the packs' `.js` modules; no HTML, no file reached through a symlink), by exact path of plain segments, `GET` and `HEAD` only, every refusal a `404` or `405` with its reason, logged, with `atm serve`'s headers for those files (I11: readable cross-origin, `nosniff`). A pack's module goes to the frames only as code the page fetched with the hash `@compmd/vite` pinned (`integrity`). `atm:` is also the deep links' scheme (T-459), but no asset address opens a page. Neither is IPC: a page or frame on them can't call the app's commands (I25) | `the_windows_csp_is_strict` (devCsp in step); `the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them` (`atm:` against `tests/scripts/compmd-host-headers.json`, which `serve.test.mjs` checks `atm serve` against); `assets.rs`'s tests (refusals, no deep link); `the_main_windows_capability_lets_it_call_the_commands` (refused from `compmd:` and `atm:` in both forms); `the_page_is_served_with_a_policy_it_works_under`; `compmd.test.ts` (the sandbox's options, the modules' hashes); the e2e `cspGuard` on `app.spec.ts` |
 | I27 | **The app's reads are atm serve's**: each command answers what its REST route does, through the same atm-lib call with the same checks (I11, I12); the commands write nothing but the last opened workspace (`list_projects`, as its route) and, on the user's click only, the skills (`connect_agents`, through `atm agents install`'s code: a harness atm knows, nothing replaced that atm didn't write) | `each_command_answers_what_its_rest_route_does`; `app.spec.ts` "Connect your agents" (opening the dialog only reads); atm-lib's `agents.rs` tests |
 | I28 | **A deep link is an address, never a request**: an `atm://` link becomes a dashboard address only when its path is one of the dashboard's pages, without `.`/`..`, empty segments, a fragment or other characters (4 KB at most), and the page navigates to it only if it is one of its pages; nothing is fetched, read or run because of a link | `app/src-tauri/src/links.rs`'s tests; `tests/unit/links.test.ts`; `app.spec.ts` "deep links" |
@@ -849,6 +849,69 @@ build (I29):
   (599; `serve.test.mjs`'s symlink test once failed on its first request, before its check, while the whole suite
   ran, and the file passed run alone, 46 of 46); the functional e2e suite (423); the Linux screenshots in Docker (84,
   no baseline changed).
+
+**The app's windows (T-511, `docs/app-desktop-ui-design.md`).** Three new commands and windows besides `main` (I25):
+- **The windows:** `window-<n>`, opened by the app (`open_window`), share the main window's capability
+  (`"windows": ["main", "window-*"]`); a window by any other label can call nothing. Each is one page with its own
+  subscriptions and links: a page loading again or a window closing ends only its own, and `unsubscribe` ends only the
+  calling window's.
+- **`open_window(address)`** takes only one of the dashboard's pages, checked as a deep link is (`link_address`,
+  I28), and gives it to the new window's page on its link channel: nothing is fetched or run because of it. Deep links
+  and a second instance go to the window in front.
+- **`shell`** says what the window has of the platform's own (a constant per platform), **`set_title`** sets the
+  calling window's title (no control characters, at most 200 characters). Neither names a window.
+
+**The app's menus (T-512, `app/src-tauri/src/menu.rs`).** Defined in Rust, with `tauri::menu` (no plugin). Three new
+commands, each acting on the calling window (I25): `subscribe_menu` (a channel of `MenuAction`s, a closed enum),
+`menu` (the definition, for the page to draw on Windows and Linux) and `menu_state` (what the menu shows checked: a
+view name, three booleans and a workspace ID, only compared and shown). An item sends its action to the page of the
+window in front, which does what the same control does; Quit and New Window the app does itself. The page opens
+only the two fixed addresses of Help ▸ atm on GitHub and CompMD (`pluginInfo.repository`, CompMD's site), never one
+from the menu or the app. The Go menu's names are the workspace's projects' (from the user's own registry).
+
+**The app's title bar (T-513).** Four new commands, each on the calling window only and taking nothing (I25):
+`minimize`, `toggle_maximize`, `close_window` (as the system's close button: the app's close handling runs) and
+`start_dragging`, which the page's bars call in place of Tauri's drag region (that needs the core permission
+`core:window:allow-start-dragging`, which the page doesn't get). On Windows and Linux the windows have no decorations
+and the page draws their buttons and the menus (from `menu`); on macOS the configuration's overlay title bar keeps the
+system's buttons.
+
+**Windows come back, the badge and notifications (T-518, T-520, `app/src-tauri/src/session.rs`, `badge.rs`).**
+Three new commands, each on the calling window only (I25), one new file, the app's own, and one new plugin:
+- **`windows.json`**, in the app's data folder (Tauri's `app_data_dir`, not a project's folder): each window's frame
+  and its tabs' addresses, written by the app when they change and read once at the start. Anything that can write
+  the user's files can write it, so it is read as untrusted: a file atm can't parse, or of another version, is a
+  fresh start; every address is checked as a deep link is (`link_address`, I28) and an unchecked one dropped; at most
+  20 windows of 50 tabs; a frame of an odd size, or off every screen, is dropped. Addresses reach a page only as
+  addresses for its router, as deep links do (the page checks them again, `linkTarget`).
+- **`save_tabs(tabs)`** keeps the calling window's tabs (checked the same way; none left is refused);
+  **`restored_tabs`** answers the tabs it comes back with, once.
+- **`needs_you(workspace, badge, notify)`** (T-520; it replaced T-518's `set_badge`): the page says only which
+  workspace it shows and whether Settings has the badge and the notifications on. The app reads the counts from that
+  workspace's listing (its own summaries) and puts the total on its icon (macOS's Dock, Linux's launcher; on Windows
+  a 16×16 icon it draws, over the taskbar button).
+- **Notifications** (T-520, `tauri-plugin-notification` 2.8.0, approved 2026-11-12): sent by the app from Rust when
+  a project's count goes up, never at the start, nor while one of its windows is in front. Their text is the app's:
+  "<project>: N tasks need you", the project's name from the user's own registry (control characters dropped, at
+  most 80 characters); nothing the page sends reaches one. The page gets **no permission of the plugin's** (I25's
+  test checks the capability lists only the app's commands), so it can't send, ask for or list notifications.
+
+**Release 0.36.0 (the sprint The desktop app, T-511 to T-520, T-525).** The checklist:
+- **Skills and `docs/agent/`:** unchanged against `main` (nor the CLI's commands), so there is nothing for the agent
+  sandbox or a written review to check.
+- **Entry points, fields, CI permissions:** the app's windows and shell (T-511: `shell`, `set_title`,
+  `open_window`), its menus (T-512: `subscribe_menu`, `menu`, `menu_state`), its title bar (T-513: `minimize`,
+  `toggle_maximize`, `close_window`, `start_dragging`), its windows coming back (T-518: `save_tabs`, `restored_tabs`,
+  `windows.json`) and what needs the user (T-520: `needs_you`, the notification plugin), each in I25's capability and
+  recorded above, with its checks. The capability names `main` and `window-*` only. One new plugin, approved, sent
+  from Rust; the page gets none of its permissions. No new CI permission.
+- **What ships is what is described:** the dashboard in the browser keeps its look (the app's UI is the app's only);
+  its project switches and the overview's needs-you list changed for both. T-522 installs this release through 0.35.0's
+  updater with the user.
+- **Checks run:** `cargo test` (260), clippy, fmt and deny; the unit tests with coverage (1323); the CLI suite (599;
+  `serve.test.mjs`'s v2 routes test once failed on its first request while the whole suite ran, and the file passed
+  run alone, 46 of 46, as in 0.35.0); the functional e2e suite (434); CI on the branch, the Linux screenshots and the three platforms' Rust jobs included
+  (green; the Windows build compiles the badge's overlay icon, which only Windows uses).
 
 ## 4. Keeping it current
 

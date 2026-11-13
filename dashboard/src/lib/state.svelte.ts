@@ -77,6 +77,17 @@ import { DEFAULT_VOCABULARY, resolveVocabulary, type Vocabulary } from './vocab'
 import { loadWorktrees, mergeWorktrees, type Worktree, type WorktreesResult } from './worktrees';
 import { clearView, defaultView, projectKey, readView, sanitizeView, writeView, type SavedView } from './view-store';
 
+/** A project as last loaded, kept to show it again at once (T-525) */
+interface KeptProject {
+  loaded: LoadedTasks;
+  validators: Validators | undefined;
+  claims: ClaimMap;
+  worktrees: Worktree[];
+  worktreesValidators: Validators | undefined;
+}
+/** How many projects are kept */
+const KEPT_PROJECTS = 8;
+
 const RELOAD_SPIN_MS = 400;
 /** A filter group with nothing selected ("All"), for the groups the Progress tab doesn't apply */
 const NO_VALUES = emptyFilters().status;
@@ -179,6 +190,37 @@ export class DashboardState {
   archiveLoaded = $state(false);
   /** Search, the lists and the graph include archived tasks ("Include archived") */
   includeArchived = $state(false);
+  /** The ⋯ settings popup and the Filters popup are open: their buttons, and in the app the menu (T-512) */
+  settingsOpen = $state(false);
+  filtersOpen = $state(false);
+  /** The app's sidebar is shown (T-515): its button, View ▸ Show Sidebar; remembered */
+  sidebarOpen = $state(getPref('sidebarOpen', true));
+
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+    setPref('sidebarOpen', this.sidebarOpen);
+  }
+
+  /** The app's icon shows the needs-you count (Settings, T-517; the badge itself is T-518's); remembered */
+  needsYouBadge = $state(getPref('needsYouBadge', true));
+
+  setNeedsYouBadge(on: boolean) {
+    this.needsYouBadge = on;
+    setPref('needsYouBadge', on);
+  }
+
+  /** The app notifies when a project's needs-you count goes up (Settings, T-520); remembered */
+  needsYouNotify = $state(getPref('needsYouNotify', true));
+
+  setNeedsYouNotify(on: boolean) {
+    this.needsYouNotify = on;
+    setPref('needsYouNotify', on);
+  }
+
+  /** A project's page is shown */
+  get onProject(): boolean {
+    return this.route.page === 'project';
+  }
   /** tasks.json's tasks, then the archived ones it doesn't have: the history views use these */
   history = $derived(
     this.archive.length ? [...this.tasks, ...this.archive.filter((t) => !this.taskMap.has(t.id))] : this.tasks,
@@ -322,6 +364,13 @@ export class DashboardState {
   #mainTasks: Task[] = [];
   #worktrees: Worktree[] = [];
   #worktreesValidators: Validators | undefined;
+  /** The tasks as last loaded (what `tasks` was made from) */
+  #loaded: LoadedTasks | undefined;
+  /** The projects shown lately, by workspace and ID, as last loaded (T-525): going back to one (an app tab, the
+   * picker, Back) shows it at once, and the load that follows finds it unchanged or brings what changed. Not
+   * reactive: nothing draws from it (keptNames is what the tabs show) */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  #kept = new Map<string, KeptProject>();
 
   /**
    * A view needs history (D-5.2): load the archive now, and keep it current with the polls from then on. Failures
@@ -402,10 +451,60 @@ export class DashboardState {
     this.peeking = false;
     // The landing page showing the one project: the address becomes the project's, so tabs and links name it
     if (projectOf(currentAddress()) === null) navigate(withProject(currentAddress(), this.route.id), { replace: true });
-    if (this.route.id !== this.projectId) this.switchProject(this.route.id);
+    if (this.route.id !== this.projectId) {
+      this.switchProject(this.route.id);
+      this.showKept(this.route.id);
+    }
     // The project page wasn't shown, so nothing followed the tab in the link that opened it
     if (namesView(currentAddress())) this.tab = viewOf(currentAddress());
     return this.route.id;
+  }
+
+  /** The key a project is kept under: its workspace's and its own */
+  #keptKey(id: string): string {
+    return `${this.workspace}/${id}`;
+  }
+
+  /** Show project `id` at once from what was kept of it, with its saved view, the page's view and task from the
+   * address (T-525); the load that follows brings what changed. Whether it was kept. */
+  private showKept(id: string): boolean {
+    const kept = this.#kept.get(this.#keptKey(id));
+    if (!kept) return false;
+    this.#validators = kept.validators;
+    this.#worktreesValidators = kept.worktreesValidators;
+    this.#worktrees = kept.worktrees;
+    this.apply(kept.loaded, kept.claims);
+    this.restoreView();
+    if (namesView(currentAddress())) this.tab = viewOf(currentAddress());
+    this.loaded = true;
+    const task = taskOf(currentAddress());
+    if (task) this.openDetail(task);
+    return true;
+  }
+
+  /** The kept projects' own names (their tasks.json's), by key: the app's tabs name a project as its page does */
+  keptNames = $state.raw<Record<string, string>>({});
+
+  /** Project `id`'s name: its own, once loaded (its page's title), else as the workspace lists it; none when unknown */
+  nameOf(id: string): string | undefined {
+    return this.keptNames[this.#keptKey(id)] ?? this.projects.find((p) => p.id === id)?.name;
+  }
+
+  /** Keep project `id` as loaded now, the latest of the few kept */
+  #keep(id: string) {
+    if (!this.#loaded) return;
+    const key = this.#keptKey(id);
+    if (this.keptNames[key] !== this.#loaded.projectName)
+      this.keptNames = { ...this.keptNames, [key]: this.#loaded.projectName };
+    this.#kept.delete(key);
+    this.#kept.set(key, {
+      loaded: this.#loaded,
+      validators: this.#validators,
+      claims: this.claims,
+      worktrees: this.#worktrees,
+      worktreesValidators: this.#worktreesValidators,
+    });
+    if (this.#kept.size > KEPT_PROJECTS) this.#kept.delete(this.#kept.keys().next().value!);
   }
 
   /** Forget the shown project's data and view state, so the next load brings in `id`'s files and saved view. */
@@ -431,6 +530,7 @@ export class DashboardState {
     this.#worktrees = [];
     this.#worktreesValidators = undefined;
     this.meta = undefined;
+    this.#loaded = undefined;
     this.vocab = DEFAULT_VOCABULARY;
     this.projectName = DEFAULT_PROJECT_NAME;
     this.detailOpen = false;
@@ -446,8 +546,7 @@ export class DashboardState {
     id: string | null,
     { needsYou = false, task, view }: { needsYou?: boolean; task?: string; view?: ViewId } = {},
   ) {
-    // Another project's sprints are not this one's: its own saved Sprint filter applies
-    let address = withSprintParam(withProject(currentAddress(), id, this.overviewTab), null);
+    let address = this.projectAddress(id);
     if (id !== null && needsYou) {
       address = withView(address, 'kanban');
       this.#pendingNeedsYou = true;
@@ -455,6 +554,13 @@ export class DashboardState {
     // The task's details open once its project has loaded (fetchAndApply)
     if (id !== null && task) address = withTask(address, task);
     navigate(address);
+  }
+
+  /** Where project `id` (the overview for null) is, from here: what openProject goes to, and the app opens in a new
+   * tab (T-515) */
+  projectAddress(id: string | null): string {
+    // Another project's sprints are not this one's: its own saved Sprint filter applies
+    return withSprintParam(withProject(currentAddress(), id, this.overviewTab), null);
   }
 
   /** The address changed (a link, Back, or the dashboard's own move): pick up the dialog, the document, the tab and
@@ -479,6 +585,18 @@ export class DashboardState {
       if (this.peeking) {
         this.peeking = false;
         this.detailOpen = false;
+      }
+      // A project of this workspace shown lately: at once, from what was kept of it, before the workspace's list and
+      // its files are asked again (T-525: each switch of tab waited for both, showing nothing meanwhile)
+      if (
+        route.page === 'project' &&
+        route.id !== this.projectId &&
+        workspaceOf(address) === this.workspace &&
+        this.#kept.has(this.#keptKey(route.id))
+      ) {
+        this.route = route;
+        this.switchProject(route.id);
+        this.showKept(route.id);
       }
       void this.reload();
       return;
@@ -506,10 +624,10 @@ export class DashboardState {
     this.newVersionReady = newBuildReady(dashboardBuild(), server, dismissed);
   }
 
-  /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS; one put off ("Not
-   * now") isn't offered again, a newer one is */
-  async checkAppUpdate(now = Date.now()) {
-    if (!this.live || now - this.#updateCheckedAt < UPDATE_CHECK_MS) return;
+  /** In the atm app (T-483): look for a newer version of the app, at most every UPDATE_CHECK_MS (now, `force`d by
+   * the menu's Check for Updates, T-512); one put off ("Not now") isn't offered again, a newer one is */
+  async checkAppUpdate(now = Date.now(), force = false) {
+    if (!this.live || (!force && now - this.#updateCheckedAt < UPDATE_CHECK_MS)) return;
     this.#updateCheckedAt = now;
     const update = await checkAppUpdate();
     const dismissed = getPref('dismissedAppUpdate', '');
@@ -571,7 +689,8 @@ export class DashboardState {
       this.loadedAt = Date.now();
       return;
     }
-    await this.loadProjectData(project);
+    // Another project by now: its own load shows it
+    if (!(await this.loadProjectData(project))) return;
     const first = !this.loaded;
     if (first) this.restoreView();
     if (this.#pendingNeedsYou) {
@@ -605,8 +724,8 @@ export class DashboardState {
   }
 
   /** The project's tasks, claims and worktrees, applied to the state (the project's page, or a task opened on the
-   * Omniboard) */
-  private async loadProjectData(project: string) {
+   * Omniboard); whether they were (not when another project is shown by the time they come) */
+  private async loadProjectData(project: string): Promise<boolean> {
     const [result, claims, trees] = await Promise.all([
       // The validators are this project's (switchProject forgets another's), from its page or the Omniboard
       loadTasks(project, browserFetch, this.#validators),
@@ -624,6 +743,8 @@ export class DashboardState {
       this.#worktreesValidators = trees.validators;
       this.#worktrees = trees.worktrees;
     }
+    // Another project shown meanwhile (a quick switch of tab): this one's answer is not the page's
+    if (project !== this.projectId) return false;
     if (result.unchanged) {
       // tasks.json is as it was: keep the tasks (no re-parse, no re-render); claims and the clock still move
       this.claims = claims;
@@ -633,6 +754,8 @@ export class DashboardState {
       this.#validators = result.validators;
       this.apply(result.loaded, claims);
     }
+    this.#keep(project);
+    return true;
   }
 
   /** Select an overview tab: remembered per browser, and in the URL so Back returns to the other */
@@ -908,6 +1031,7 @@ export class DashboardState {
     this.fileProblems = loaded.problems ?? [];
     this.archiveHint = loaded.archiveHint ?? null;
     this.meta = loaded.meta;
+    this.#loaded = loaded;
     this.vocab = resolveVocabulary(loaded.meta);
     this.#mainTasks = loaded.tasks;
     this.tasks = loaded.tasks;

@@ -13,6 +13,8 @@ body {
   background: var(--bg);
   color: var(--text);
   padding: var(--space-9);
+  /* Room for the atm app's sidebar when it is open (T-515: Sidebar.svelte sets it; nothing in the browser) */
+  padding-left: calc(var(--space-9) + var(--sidebar-offset, 0px));
   line-height: 1.5;
   min-height: 100vh;
   display: flex;
@@ -569,6 +571,40 @@ h1 {
   transition:
     padding 0.2s ease,
     box-shadow 0.2s ease;
+}
+/* In the atm app, inside the tab (T-513): the subtitle line alone, pinned under the app's title bar (40px), right on
+   top of the tab's content, with no hairline */
+.topbar.in-tab {
+  top: 40px;
+  margin-top: 0;
+  padding: var(--space-3) var(--space-9) var(--space-5);
+}
+.topbar.in-tab::before {
+  display: none;
+}
+/* Inside the tab, one line: a project's search and Filters, then the subtitle (Hakan) */
+.topbar.in-tab .in-tab-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  margin-bottom: var(--space-9);
+}
+.topbar.in-tab .in-tab-row .subtitle {
+  margin-bottom: 0;
+}
+/* The Filters button is its icon there: the label is for screen readers only */
+.topbar.in-tab .filters-label {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+/* Its popup opens under it, to the right (the browser's, at the title bar's right end, opens to the left) */
+.topbar.in-tab .filter-panel {
+  left: 0;
+  right: auto;
 }
 /* A hairline under the title row, edge to edge (T-323): the title and the pills share the band above it, the
    subtitle sits below. 24px padding + the 36px title row + 6px */
@@ -5506,6 +5542,11 @@ svg.graph-minimap.hidden {
 /* What needs you (T-335): a badge on the card's top right corner, half outside it, over the cards around it */
 .project-card {
   position: relative;
+}
+/* While its list of what needs you is open, the card is over the cards after it, so the list is too (a hovered card's
+   lift, a transform, keeps the list in the card's own layer) */
+.project-card:has(.project-card-need[aria-expanded='true']) {
+  z-index: 10;
 }
 .project-card-badge {
   position: absolute;

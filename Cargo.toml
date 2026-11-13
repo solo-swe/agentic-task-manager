@@ -9,7 +9,7 @@ resolver = "3"
 # atm's version, the one source (T-477): the dashboard is stamped with it, and CHANGELOG.md and WHATS-NEW.md need an
 # entry for it (dashboard/scripts/check-versions.mjs). The dashboard's About dialog shows the description, the author,
 # the licence and the repository
-version = "0.35.0"
+version = "0.36.0"
 description = "File-based task management for agentic development. Decompose requirements into tasks, execute them in loops, and watch progress on a live HTML dashboard."
 authors = ["Hakan Serce <hakanserce@gmail.com>"]
 edition = "2024"
@@ -57,6 +57,9 @@ tauri-plugin-single-instance = "2.5.5"
 # system's TLS (native-tls: Security.framework on macOS) rather than rustls, whose root certificates come as a crate
 # under a licence deny.toml doesn't list (webpki-root-certs, CDLA-Permissive-2.0)
 tauri-plugin-updater = { version = "2.14.1", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+# The app's notifications of what needs the user (T-520, approved 2026-11-12): sent from Rust only, the page gets no
+# permission of the plugin's; pinned to the newest release at least two weeks old then
+tauri-plugin-notification = "=2.8.0"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"

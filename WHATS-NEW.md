@@ -2,6 +2,14 @@
 
 The short version, for people using atm. The full list of changes, for developers, is in CHANGELOG.md.
 
+## [0.36.0] - 2026-11-12
+
+- The app works like a desktop app now: tabs in its title bar, a sidebar of your projects, and a status bar.
+- Open a project or a task in a new tab with ⌘-click, and switch back to a project instantly.
+- The app's windows and tabs come back as they were when you start it again.
+- The app's icon shows how many tasks need you, and a notification tells you when one starts to; both can be turned off.
+- Settings open from the app's menu (⌘,), and its menus have shortcuts for the views, tabs and windows.
+
 ## [0.35.0] - 2026-11-10
 
 - Diagrams in task details and documents now draw in the app, as they do in the browser.

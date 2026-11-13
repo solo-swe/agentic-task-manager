@@ -11,12 +11,16 @@ export function linkTarget(address: unknown): string | null {
   return isPagePath(path) && !address.includes('#') ? address : null;
 }
 
-/** Listen for the app's links, `go` to each (the one it was started with first, if any) */
-export async function listenForLinks(go: (address: string) => void): Promise<void> {
+/** Listen for the app's links: `go` to the one it was started with, if any, and `later` (else `go`) to each that comes
+ * while it runs (the app opens those in a new tab, T-514) */
+export async function listenForLinks(
+  go: (address: string) => void,
+  later: (address: string) => void = go,
+): Promise<void> {
   const channel = new Channel<string>();
   channel.onmessage = (address) => {
     const target = linkTarget(address);
-    if (target) go(target);
+    if (target) later(target);
   };
   const first = linkTarget(await invoke<string | null>('subscribe_links', { channel }));
   if (first) go(first);

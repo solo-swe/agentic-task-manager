@@ -4,7 +4,121 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
-## [Unreleased]
+## [0.36.0] - 2026-11-12
+
+The atm app as a desktop app (`docs/app-desktop-ui-design.md`, T-511 to T-520): one row of tabs in the window's own
+title bar, a sidebar of the workspace's projects, a status bar, the menus, Settings as a sheet, windows that come back
+as they were, and what needs you on the app's icon and as notifications. The browser dashboard keeps its look; it
+gets the faster project switches and the fixes.
+
+### Added
+- **The app's windows come back as they were** (T-518, step 8, §7): each window's frame (place, size, maximized) and
+  its tabs (addresses, order, the active one) are kept in `windows.json` in the app's data folder as they change, and
+  opened again at the start; a link the app was started with opens in a new tab of the first window. A window closed
+  while another is open is forgotten; the windows open when the app quits come back, and so does the last one closed
+  with its button (Hakan: that is closing the app), until a new window opens. The file is read as untrusted (every
+  address checked as a deep link is, a frame off every screen dropped, an unreadable file a fresh start). New
+  commands `save_tabs` and `restored_tabs` (`session.rs`).
+- **The needs-you badge** (T-518): the workspace's count of tasks that need you (in review, blocked on you, done with
+  you) on the app's icon: the Dock on macOS, the launcher on Linux, an overlay icon on the taskbar button on Windows;
+  off with Settings ▸ What needs you ▸ On the app's icon.
+- **Notifications of what needs you** (T-520): a system notification when a project's count goes up ("Second
+  Project: 2 tasks need you"), not at the start nor while an app window is in front; off with Settings ▸ What needs
+  you ▸ As notifications. Sent by the app from Rust with `tauri-plugin-notification` 2.8.0 (new dependency,
+  approved); the page gets none of the plugin's permissions. One command for both, `needs_you(workspace, badge,
+  notify)` (`badge.rs`): the page says only which workspace it shows, the app reads the counts and the names itself.
+- **The app's Settings sheet** (T-517, step 7, §6): the menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux)
+  and the title bar's ⋯ open a sheet over the window (a Bits UI dialog, `dialogs/SettingsSheet.svelte`) with the
+  mode, theme, document style and Reset this project's view, and a new switch, App icon ▸ Show what needs you (the
+  `needsYouBadge` preference, on by default; T-518 draws the badge). The controls are one component,
+  `shell/SettingsPanel.svelte`, which the browser's ⋯ popup shows unchanged. The dashboard file's size check is
+  raised from 850 to 900 KiB for the app's UI this sprint adds (decided with Hakan).
+- **Search and Filters in the app's tab** (T-516): on the subtitle's line, before it, the Filters button its icon
+  alone (its name kept for screen readers) and its popup opening to the right; the title bar keeps the tabs, the
+  workspace picker, the pills and the ⋯.
+- **The app's status bar** (T-516, step 6, §5; the minimal one Hakan chose): in the app the footer is a one-line
+  status bar at the window's bottom: "Up to date" (or that the project can't be read) and the agents at work (a click
+  opens the Agents view, the project's or the overview's) at the left; the archive and problem notices, the copyright,
+  the version (What's New), GitHub, Help and About at the right (Hakan: easier to find than in the menus). Connect your
+  agents is in the menu. The subtitle line and the Progress and Activity pills stay where they are. One component,
+  `Footer.svelte` (the links a snippet both share), with the browser's footer unchanged.
+- **The app's sidebar** (T-515, step 5, §4): Projects Overview, then the workspace's projects, each with its logo,
+  name, its active sprint's progress (the project chooser's bar) and what needs you as a badge; the one shown marked,
+  missing ones dimmed (`shell/Sidebar.svelte`, the app only). A click opens a project in this tab; ⌘-click, Ctrl-click or
+  a middle click in a new one. The title bar's sidebar button and View ▸ Show Sidebar (the menu's check follows it)
+  show and hide it; its edge (a button: drag it, or the arrows) resizes it, 180 to 420 px; both kept in the
+  preferences (`sidebarOpen`, `sidebarWidth`). The page and the title bar make room for it with `--sidebar-offset`,
+  which only the app sets. As Hakan chose, the project chooser, search and the workspace picker stay in the title bar.
+  ⌘-click (Ctrl-click, a middle click) on a task's card or row, or on a link to a document, opens it in a new tab too
+  (`lib/new-tab-clicks.ts`, the app only); `dashboard.projectAddress` is the address `openProject` goes to.
+- **Tabs in the app** (T-514, step 4, §3): a tab is an address (`lib/app-tabs.svelte.ts`): the window keeps one page
+  and one dashboard state, switching tabs goes to the tab's address, and the active tab follows the page as it moves.
+  The + (and File ▸ New Tab, ⌘T) opens the workspace's overview in a new tab; × or a middle click closes a tab (Close
+  Tab, ⌘W, the active one), and closing the last one closes the window; Next and Previous Tab step round them; Move Tab
+  to New Window opens a window at the tab's address and takes the tab out; tabs can be dragged into another order. A
+  link that reaches the running app opens in a new tab (the one it started with, in the first). The tabs last over a
+  reload (the window's `sessionStorage`). The strip is the reusable `ui/TitleBarTabs.svelte`, which knows nothing of
+  atm: tabs, the active one, a label snippet, and optional close, new and move; atm's label is in `AppTitleBar`.
+- **The app's menus** (T-512, step 2 of `docs/app-desktop-ui-design.md`, §6): one definition in Rust
+  (`app/src-tauri/src/menu.rs`, `tauri::menu`), the menu bar on macOS: atm, File, Edit, View, Go (Back, Forward, the
+  overview, the workspace's projects, the workspaces), Window and Help, with their shortcuts (`CmdOrCtrl+…`, and each
+  platform's own for Back, Forward, the sidebar, Help and Quit). On Windows and Linux it is attached and hidden, for
+  the page to draw (T-513). An item sends the window in front an action (`subscribe_menu`); the page does what the
+  control does (`lib/menu-actions.ts`): the views, the dialogs, What's new, Check for Updates (now, not on its six-hour
+  turn), Settings and Show Filters (their popups), Include Archived Tasks, Find, Copy Link to This Page (its `atm://`
+  link), Reload, Back and Forward, and the two links in Help. Quit and New Window the app does. The page reports what
+  the menu shows checked (`menu_state`); `menu` gives the definition. Tabs (T-514) and the sidebar (T-515) items do
+  nothing yet.
+- **The app's title bar** (T-513, step 3, §2): in the app, one row drawn by the page, as a browser's tab strip
+  (`AppTitleBar.svelte`; the browser's title bar is unchanged): the tab, labelled with the project's logo and name,
+  with room for macOS's traffic lights (`titleBarStyle: "Overlay"`, `hiddenTitle`, `trafficLightPosition` in
+  `tauri.conf.json`); on Windows and Linux the window has no decorations (`windows::dress`, with Windows 11's shadow)
+  and the page draws the menus (`AppMenus.svelte`, Bits UI's menubar, from `menu`) and its minimize, maximize and
+  close buttons (new commands `minimize`, `toggle_maximize`, `close_window`), and a + (a new window until tabs,
+  T-514); the overview's tab has atm's logo, and the tab's label the project picker. At the bar's right end, on the
+  tab's line: the workspace picker, search and Filters, the Progress and Activity pills and the ⋯. Inside the tab
+  only the subtitle line (`TitleBar`'s `inTab`), on top of the views; no reload button (View ▸ Reload) or version
+  chip (Help ▸ What's New) in the app.
+  Dragging the bar moves the window (`start_dragging`), a double click maximizes it. The Windows and Linux paths are
+  checked on those platforms by T-519.
+
+### Changed
+- **Switching to a project shown before is instant, and a tab keeps its name** (Hakan: the tab's title changed three
+  times on a switch, settling where it started). A switch of project made the page fetch the workspace's list, then
+  empty every view (the title "Task Dashboard"), then load the project from scratch, even one shown seconds before;
+  and the chosen tab's label was the page's title, still the previous project's for a moment. Now the page keeps the
+  last eight projects it showed, as loaded (`state.svelte.ts`, `#kept`): going back to one shows it at once, with its
+  view, and the load that follows finds it unchanged or brings the change; an answer for a project no longer shown is
+  dropped. Every tab is named by the project in its own address (its own name once shown, else the workspace's), and
+  a project loading for the first time is titled by its name, not "Task Dashboard". Back to a 500-task project in
+  the app: 62 ms, from 240–290. `app.spec.ts` checks the labels never change, the window's title never says "Task
+  Dashboard" and a project shown before is never empty on the way back.
+- **Switching projects is faster** (T-525): going back to a large project (500 tasks), in the app's tabs or the
+  project picker, took 240–290 ms on a developer Mac, over the 200 ms interaction budget; now 140–200 ms, with the
+  test's own data transport. The graph keeps the layouts of the last four shapes, not just the last (dagre took
+  ~100 ms of it); the hidden Graph draws its nodes, and the List its rows, only while shown (as Agents and Project
+  already did), so a reload or a switch builds no view nobody sees; reloads got faster too. `performance.spec.ts`
+  times the app's tabs: a click on each, ⌃Tab round them, and a switch to another project and back; and the List
+  among the browser's tab switches.
+- **The app's windows** (T-511, step 1 of `docs/app-desktop-ui-design.md`): the groundwork for several windows and
+  the page's own shell. The app's windows are `main` and `window-<n>`, both in the capability (`"windows": ["main",
+  "window-*"]`). Subscriptions belong to the window whose page made them: a page loading again or a window closing
+  ends only its own (`AppState::unwatch_window`, replacing `unwatch_all`), and `unsubscribe` ends only the calling
+  window's. Links go to each window's page (`Links` by window); deep links and a second instance go to the window in
+  front (the last focused), or a new one when none is open. Three new commands, each acting on the calling window:
+  `shell` (`{ system_menu_bar, system_window_buttons }`, what the window has of the platform's own), `set_title` (the
+  page sets it with `document.title`, `lib/api/shell.ts`), and `open_window(address)`, which takes only one of the
+  dashboard's pages, checked as a deep link is.
+
+### Fixed
+- **The overview's "N need you" list showed under the next card** when it ran past its own card (a long list, or a
+  narrow window): a hovered card's lift (a transform) kept the list in the card's own layer. The card is now over the
+  others while its list is open; `projects.spec.ts` checks the whole list is on top, with motion on.
+
+### Development
+- **`cargo tauri dev` follows the dashboard's sources:** its `beforeDevCommand` starts `pnpm run watch:page`
+  (`dashboard/build/watch-page.ts`), which builds the page again a few seconds after a change; the Tauri CLI's server
+  reloads the window. A page change no longer needs a build and a restart.
 
 ## [0.35.0] - 2026-11-10
 

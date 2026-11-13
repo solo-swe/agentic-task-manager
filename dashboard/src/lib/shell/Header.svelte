@@ -9,15 +9,22 @@
   import OverviewActivity from '../overview/OverviewActivity.svelte';
   import ProgressWidget from '../progress/ProgressWidget.svelte';
   import TitleBar from './TitleBar.svelte';
+  import AppTitleBar from './AppTitleBar.svelte';
+  import SettingsMenu from './SettingsMenu.svelte';
+  import WorkspaceSelector from './WorkspaceSelector.svelte';
+  import { inApp } from '../api/http';
 
   const onProject = $derived(dashboard.route.page === 'project');
-  // A project's page is titled by its name alone (T-271); while loading, and without a name, "Task Dashboard"
+  // A project's page is titled by its name alone (T-271); while loading, the name it had (kept, or as the workspace
+  // lists it: T-525, the title no longer flips to "Task Dashboard" and back on a switch), and without one "Task
+  // Dashboard"
+  const route = $derived(dashboard.route);
   const title = $derived(
-    onProject
+    route.page === 'project'
       ? dashboard.loaded
         ? dashboard.projectName
-        : 'Task Dashboard'
-      : dashboard.route.page === 'overview'
+        : (dashboard.nameOf(route.id) ?? 'Task Dashboard')
+      : route.page === 'overview'
         ? 'Projects Overview'
         : 'Task Dashboard',
   );
@@ -36,8 +43,51 @@
   const present = $derived(dashboard.projects.filter((p) => !p.missing));
 </script>
 
+<!-- A project's search and Filters, and its Progress and Activity pills: the browser's title bar has them together, the
+     app's in two places (search and Filters before the tabs) -->
+{#snippet projectSearch()}
+  <Filters />
+{/snippet}
+{#snippet projectPills()}
+  <ProgressWidget />
+  <ActivityWidget />
+{/snippet}
+{#snippet projectCharts()}
+  {#if dashboard.loaded}
+    <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
+    <div class="topbar-charts">
+      {@render projectSearch()}
+      {@render projectPills()}
+    </div>
+  {/if}
+{/snippet}
+{#snippet overviewCharts()}
+  {#if dashboard.route.page === 'overview'}
+    <!-- Every project's activity together (T-328) -->
+    <div class="topbar-charts">
+      <OverviewActivity />
+    </div>
+  {/if}
+{/snippet}
+
+<!-- The atm app's own title bar (T-513): the window's, its tabs; at its right end the rest of what the browser's title
+     bar has at its right (the workspace picker, the pills, the ⋯); inside the tab, the subtitle line, a project's
+     search and Filters before it (Hakan) -->
+{#snippet tabSearch()}
+  {#if dashboard.loaded}{@render projectSearch()}{/if}
+{/snippet}
+{#snippet appEnd()}
+  <WorkspaceSelector />
+  {#if onProject}
+    {#if dashboard.loaded}<div class="topbar-charts">{@render projectPills()}</div>{/if}
+  {:else}
+    {@render overviewCharts()}
+  {/if}
+  <SettingsMenu />
+{/snippet}
+{#if inApp}<AppTitleBar {title} end={appEnd} />{/if}
 {#if onProject}
-  <TitleBar {title}>
+  <TitleBar {title} inTab={inApp} charts={projectCharts} lead={tabSearch}>
     {#snippet subtitle()}
       {#if dashboard.loaded}
         <!-- One text node when nothing is archived, as before the archive existed (screenshots compare glyphs exactly) -->
@@ -67,32 +117,14 @@
         Loading tasks.json…
       {/if}
     {/snippet}
-    {#snippet charts()}
-      {#if dashboard.loaded}
-        <!-- Search and the Filters popup sit with the charts (T-323): no row of their own -->
-        <div class="topbar-charts">
-          <Filters />
-          <ProgressWidget />
-          <ActivityWidget />
-        </div>
-      {/if}
-    {/snippet}
   </TitleBar>
 {:else}
-  <TitleBar {title} selector={dashboard.projects.length > 0}>
+  <TitleBar {title} selector={dashboard.projects.length > 0} inTab={inApp} charts={overviewCharts}>
     {#snippet subtitle()}
       {#if !dashboard.projectsLoaded}
         Loading projects…
       {:else}
         {present.length} project{present.length === 1 ? '' : 's'}
-      {/if}
-    {/snippet}
-    {#snippet charts()}
-      {#if dashboard.route.page === 'overview'}
-        <!-- Every project's activity together (T-328) -->
-        <div class="topbar-charts">
-          <OverviewActivity />
-        </div>
       {/if}
     {/snippet}
   </TitleBar>

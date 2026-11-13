@@ -483,6 +483,25 @@ export class TasksServer {
     );
   }
 
+  /** The page's menu channel (T-512), and what it last reported the menu shows */
+  private menuChannel: number | null = null;
+  private menuMessages = 0;
+  menuState: Record<string, unknown> | null = null;
+
+  /** A menu item chosen: its action on the page's menu channel, as the app sends it */
+  async chooseMenu(action: { kind: string; id?: string }) {
+    if (this.menuChannel === null) throw new Error('the page has not subscribed to the menu');
+    const index = this.menuMessages++;
+    await this.page.evaluate(
+      ([id, message, at]) => {
+        const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+          .__atmCallbacks;
+        callbacks[id as number]({ index: at, message });
+      },
+      [this.menuChannel, action, index] as const,
+    );
+  }
+
   /** The page's live change subscriptions (T-506), by ID: what each watches and its channel */
   subscriptions = new Map<number, { workspace: string; project: string | null; channel: number }>();
   private nextSubscription = 0;
@@ -515,6 +534,21 @@ export class TasksServer {
 
   /** The app's agent commands the page called, in order (`agents_status`, `connect_agents <harness>`) */
   agentCalls: string[] = [];
+  /** The titles the page gave its window (`set_title`, T-511), in order */
+  windowTitles: string[] = [];
+  /** What the window has of the platform's own (`shell`): macOS's by default, `{false, false}` for Windows' */
+  windowShell = { system_menu_bar: true, system_window_buttons: true };
+  /** The window commands the page called (T-513), in order */
+  windowCalls: string[] = [];
+  /** How many times the page asked the app for a project's tasks (`project_tasks`) */
+  projectTaskRequests = 0;
+  /** The tabs the window comes back with as the app starts (`restored_tabs`, T-518), answered once */
+  restoredTabs: { addresses: string[]; active: number } | null = null;
+  /** The tabs the page last kept for the next start (`save_tabs`) */
+  savedTabs: { addresses: string[]; active: number } | null = null;
+  /** What the page told the app about what needs you (`needs_you`, T-518, T-520), in order: the workspace it shows,
+   * and whether the badge and the notifications are on (the app reads the counts itself) */
+  needsYouCalls: { workspace: string; badge: boolean; notify: boolean }[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -601,6 +635,7 @@ export class TasksServer {
       case 'search':
         return { ok: this.search(String(args.q ?? '')) };
       case 'project_tasks': {
+        this.projectTaskRequests++;
         if (!body) return unknown;
         const archived = (args.filters as { archived?: boolean } | undefined)?.archived;
         if (archived)
@@ -661,6 +696,58 @@ export class TasksServer {
           },
         };
       }
+      // The window (T-511): macOS's, as the app on a Mac answers
+      case 'shell':
+        return { ok: this.windowShell };
+      case 'minimize':
+      case 'toggle_maximize':
+      case 'close_window':
+      case 'start_dragging':
+        this.windowCalls.push(command);
+        return { ok: null };
+      // A short definition of the app's menus (its own tests check the whole one)
+      case 'menu':
+        return {
+          ok: [
+            {
+              label: 'View',
+              windows: false,
+              entries: [
+                {
+                  type: 'item',
+                  action: { kind: 'show_list' },
+                  label: 'List',
+                  accelerator: 'CmdOrCtrl+Digit3',
+                  checked: false,
+                },
+                { type: 'separator' },
+                { type: 'item', action: { kind: 'reload' }, label: 'Reload', accelerator: null, checked: null },
+              ],
+            },
+          ],
+        };
+      case 'set_title':
+        this.windowTitles.push(String(args.title));
+        return { ok: null };
+      // The windows' tabs kept for the next start, and the badge (T-518)
+      case 'restored_tabs': {
+        const restored = this.restoredTabs;
+        this.restoredTabs = null;
+        return { ok: restored };
+      }
+      case 'save_tabs':
+        this.savedTabs = args.tabs as { addresses: string[]; active: number };
+        return { ok: null };
+      case 'needs_you':
+        this.needsYouCalls.push(args as { workspace: string; badge: boolean; notify: boolean });
+        return { ok: null };
+      // The menu (T-512)
+      case 'subscribe_menu':
+        this.menuChannel = channelId(args.channel);
+        return { ok: null };
+      case 'menu_state':
+        this.menuState = args.shown as Record<string, unknown>;
+        return { ok: null };
       case 'logo': {
         const svg = this.logos.get(project);
         return svg ? { ok: { content_type: 'image/svg+xml', data: [...Buffer.from(svg)] } } : { ok: null };

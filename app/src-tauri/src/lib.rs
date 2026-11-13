@@ -4,18 +4,29 @@
 //! edited by hand). The window may call only the commands its capability lists (`capabilities/main.json`).
 
 pub mod assets;
+pub mod badge;
 pub mod commands;
 pub mod links;
+pub mod menu;
+pub mod session;
 pub mod updates;
+pub mod windows;
 
 use tauri::Manager;
+
+use badge::needs_you;
+use session::{restored_tabs, save_tabs};
 
 use commands::{
     AppState, agents_status, claims, connect_agents, document, file, list_projects,
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use menu::{menu, menu_state, subscribe_menu};
 use updates::{check_update, install_update};
+use windows::{
+    close_window, minimize, open_window, set_title, shell, start_dragging, toggle_maximize,
+};
 
 // What the app serves on its own `atm:` scheme (`assets`), embedded by build.rs
 include!(concat!(env!("OUT_DIR"), "/atm_assets.rs"));
@@ -35,28 +46,32 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         document,
         file,
         logo,
-        subscribe_workspace,
-        subscribe_project,
-        unsubscribe,
+        subscribe_workspace::<tauri::Wry>,
+        subscribe_project::<tauri::Wry>,
+        unsubscribe::<tauri::Wry>,
         agents_status,
         connect_agents,
-        subscribe_links,
+        subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
+        shell,
+        set_title::<tauri::Wry>,
+        open_window::<tauri::Wry>,
+        subscribe_menu::<tauri::Wry>,
+        menu::<tauri::Wry>,
+        menu_state::<tauri::Wry>,
+        minimize::<tauri::Wry>,
+        toggle_maximize::<tauri::Wry>,
+        close_window::<tauri::Wry>,
+        start_dragging::<tauri::Wry>,
+        save_tabs::<tauri::Wry>,
+        restored_tabs::<tauri::Wry>,
+        needs_you::<tauri::Wry>,
     ])
 }
 
-/// Bring the main window to the front (opened again, or by a link).
-fn focus<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.unminimize();
-        let _ = window.show();
-        let _ = window.set_focus();
-    }
-}
-
-/// Start the app: one instance (opening it again focuses the running window), the user's registry in its state, the
-/// `atm://` links it is opened with sent to its page (T-459).
+/// Start the app: one instance (opening it again focuses the window in front), the user's registry in its state, the
+/// `atm://` links it is opened with sent to the page of the window in front (T-459, T-511).
 ///
 /// # Panics
 /// When Tauri can't start (no window system, a broken build).
@@ -65,34 +80,88 @@ pub fn run() {
     // The single instance first, so a second instance stops before it sets anything up
     let first =
         tauri::Builder::default().plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            focus(app);
+            if let Some(window) = windows::front_or_new(app) {
+                windows::focus(&window);
+            }
         }));
     let app = with_plugins(first)
         .manage(AppState::new(atm_lib::Workspaces::open()))
         .invoke_handler(commands.invoke_handler())
-        // The window's page loading again (a reload) ends the old page's subscriptions (T-506): it can't say so itself
+        // A window's page loading again (a reload) ends that page's subscriptions (T-506, T-511): it can't say so
+        // itself; other windows' stay
         .on_page_load(|webview, payload| {
             if payload.event() == tauri::webview::PageLoadEvent::Started {
-                webview.state::<AppState>().unwatch_all();
+                webview.state::<AppState>().unwatch_window(webview.label());
             }
         })
         .setup(move |app| {
             commands.mount_events(app);
+            // The menus (T-512): macOS's menu bar; on Windows and Linux hidden, for the page to draw
+            menu::refresh(app.handle());
+            // The main window's frame for the page's title bar (T-513); new windows get theirs as they are made
+            if let Some(window) = app.get_webview_window(windows::MAIN) {
+                windows::dress(&window);
+                app.state::<AppState>().session().opened(window.label());
+            }
+            // The windows as they were when the app last quit, with their tabs (T-518)
+            session::restore(app.handle());
             Ok(())
         })
+        .on_menu_event(|app, event| menu::chosen(app, event.id().as_ref()))
         .build(context())
         .expect("the atm app");
-    app.run(|app, event| {
-        // macOS hands the app the links it is opened with (the scheme is in Info.plist), started by one or running
-        #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Opened { urls } = event {
+    app.run(|app, event| match event {
+        // The window in front is the one links, a second instance and the menu go to; a closed one's subscriptions end
+        tauri::RunEvent::WindowEvent { label, event, .. } => {
             let state = app.state::<AppState>();
-            if urls.iter().any(|url| state.links().open(url.as_str())) {
-                focus(app);
+            match event {
+                tauri::WindowEvent::Focused(true) => {
+                    let changed = state.front().as_deref() != Some(label.as_str());
+                    state.focused(&label);
+                    if changed {
+                        menu::refresh(app);
+                    }
+                }
+                // A window closed by the user (or its page's last tab) is forgotten; one destroyed as the app quits
+                // is kept, to come back (T-518)
+                tauri::WindowEvent::CloseRequested { .. } => state.session().closing(&label),
+                tauri::WindowEvent::Destroyed => {
+                    state.window_closed(&label);
+                    if state.session().destroyed(&label) {
+                        let _ = state.session().write();
+                    }
+                }
+                tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                    if let Some(frame) = app
+                        .get_webview_window(&label)
+                        .as_ref()
+                        .and_then(session::frame_of)
+                    {
+                        state.session().framed(&label, frame);
+                    }
+                }
+                _ => {}
             }
         }
-        #[cfg(not(target_os = "macos"))]
-        let _ = (app, event);
+        // The windows' last frames, as the app quits
+        tauri::RunEvent::Exit => {
+            let _ = app.state::<AppState>().session().write();
+        }
+        // macOS hands the app the links it is opened with (the scheme is in Info.plist), started by one or running
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Opened { urls } => {
+            let Some(window) = windows::front_or_new(app) else {
+                return;
+            };
+            let state = app.state::<AppState>();
+            if urls
+                .iter()
+                .any(|url| state.links().open(window.label(), url.as_str()))
+            {
+                windows::focus(&window);
+            }
+        }
+        _ => {}
     });
 }
 
@@ -119,6 +188,9 @@ fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         // Its own updates (T-483), through the two commands in `updates`: the page has no permission of the plugin's.
         // The plugin reads `plugins.updater` in tauri.conf.json when it starts (the key, as `updates.rs` has it)
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // System notifications of what needs the user (T-520), sent by the app from Rust (`badge`): the page has no
+        // permission of the plugin's
+        .plugin(tauri_plugin_notification::init())
 }
 
 /// The app's context (`tauri.conf.json`, the capabilities, the dashboard's files), made once: it can be generated only
@@ -183,7 +255,8 @@ mod tests {
         commands.sort();
         let capability: Value = serde_json::from_str(include_str!("../capabilities/main.json"))
             .expect("capabilities/main.json");
-        assert_eq!(capability["windows"], json!(["main"]));
+        // The main window and the ones the app opens (T-511), nothing else
+        assert_eq!(capability["windows"], json!(["main", "window-*"]));
         let mut allowed: Vec<String> = capability["permissions"]
             .as_array()
             .expect("permissions")
@@ -450,6 +523,7 @@ mod tests {
         };
         vec![
             ("version", json!({}), json!(atm_common::VERSION)),
+            ("shell", json!({}), json!(windows::shell_of())),
             ("list_workspaces", json!({}), workspaces_of(workspaces)),
             (
                 "search",
@@ -531,6 +605,7 @@ mod tests {
             .manage(AppState::new(atm_lib::Workspaces::at(&home)))
             .invoke_handler(tauri::generate_handler![
                 version,
+                shell,
                 list_workspaces,
                 list_projects,
                 search,
@@ -626,6 +701,58 @@ mod tests {
             ),
         );
         assert!(remote.is_err(), "connect_agents answered a remote page");
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// I25, T-511: a window the app opens (`window-<n>`) may call the commands as the main window does; a window by any
+    /// other label may call none
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn a_window_the_app_opens_has_the_main_windows_capability_and_no_other() {
+        let home = scratch("windows");
+        let app = tauri::test::mock_builder()
+            .manage(AppState::new(atm_lib::Workspaces::at(&home)))
+            .invoke_handler(tauri::generate_handler![
+                version,
+                shell,
+                list_workspaces,
+                unsubscribe
+            ])
+            .build(context())
+            .expect("the mock app");
+        let window = |label: &str| {
+            tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::default())
+                .build()
+                .expect("a window")
+        };
+        let (opened, stranger) = (window("window-1"), window("other"));
+        for (command, args) in [
+            ("version", json!({})),
+            ("shell", json!({})),
+            ("list_workspaces", json!({})),
+            ("unsubscribe", json!({"id": 1})),
+        ] {
+            let request = || tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: "tauri://localhost".parse().expect("a URL"),
+                body: tauri::ipc::InvokeBody::Json(args.clone()),
+                headers: tauri::http::HeaderMap::default(),
+                invoke_key: tauri::test::INVOKE_KEY.to_string(),
+            };
+            assert!(
+                tauri::test::get_ipc_response(&opened, request()).is_ok(),
+                "{command} from window-1"
+            );
+            assert!(
+                tauri::test::get_ipc_response(&stranger, request()).is_err(),
+                "{command} answered a window the capability doesn't name"
+            );
+        }
         std::fs::remove_dir_all(&home).expect("clean up");
     }
 

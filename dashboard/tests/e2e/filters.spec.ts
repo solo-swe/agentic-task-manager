@@ -88,6 +88,9 @@ test.describe('filters', () => {
     await expect(page.locator('.task-card')).toHaveCount(0);
     await expect(page.locator('#phases')).toContainText('No tasks match current filters');
     await expect(matchCount(page)).toHaveText('0 of 12 tasks');
+    // The graph says so when it is shown (it is drawn only then, T-525)
+    await closeFilters(page);
+    await page.locator('#tab-graph').click();
     await expect(page.locator('#dep-graph')).toContainText('No tasks match current filters');
   });
 });

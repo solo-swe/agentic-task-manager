@@ -57,7 +57,9 @@
       <KanbanBoard />
     </div>
     <div class="view-panel" id="panel-list" role="tabpanel" aria-labelledby="tab-list" hidden={view !== 'list'}>
-      <TaskGrid />
+      <!-- Mounted only while selected, like the Agents tab (T-525): a row per task would otherwise be built again on
+           every reload and project switch for a view nobody sees; its folds and its sort are the dashboard state's -->
+      {#if view === 'list'}<TaskGrid />{/if}
     </div>
     <div class="view-panel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" hidden={view !== 'agents'}>
       <!-- Mounted only while selected: its ~2 elements per task would otherwise re-render on every reload, and its

@@ -83,6 +83,17 @@ describe('layoutGraph', () => {
     expect(rewired.edges).toHaveLength(2);
   });
 
+  it('keeps the last few shapes: going back to a project shown before lays out nothing again (T-525)', () => {
+    const shape = (n: number) => [task(`p${n}`), task(`q${n}`, [`p${n}`])];
+    const large = layoutGraph(shape(0));
+    // Another project, then back: the same placement
+    layoutGraph(shape(1));
+    expect(layoutGraph(shape(0)).edges).toBe(large.edges);
+    // Four others since: it was let go
+    for (const n of [1, 2, 3, 4]) layoutGraph(shape(n));
+    expect(layoutGraph(shape(0)).edges).not.toBe(large.edges);
+  });
+
   it('is empty for no tasks', () => {
     expect(layoutGraph([])).toEqual({ width: 0, height: 0, nodes: [], edges: [] });
   });

@@ -11,6 +11,10 @@
 
   const OVERVIEW = '';
 
+  /** `badge`: the other projects' needs-you count on the button (the browser's title bar); the app's tab label
+   * shows none (T-513) */
+  let { badge = true }: { badge?: boolean } = $props();
+
   let open = $state(false);
   let query = $state('');
   let active = $state(OVERVIEW);
@@ -20,7 +24,7 @@
     p.summary ? p.summary.needs_you.review + p.summary.needs_you.blocked_on_user : 0;
   /** What needs the user in the other projects: the badge on the button */
   const othersNeed = $derived(
-    dashboard.projects.filter((p) => p.id !== current && !p.missing).reduce((n, p) => n + needsYou(p), 0),
+    badge ? dashboard.projects.filter((p) => p.id !== current && !p.missing).reduce((n, p) => n + needsYou(p), 0) : 0,
   );
   const shown = $derived(dashboard.projects.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase())));
   /** The options in order: Projects Overview (unless filtered out), then the projects that match and are there */

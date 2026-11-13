@@ -84,6 +84,12 @@ atm's own rules for the atm app, the desktop distribution proposed in
   nothing, and logs the cause; keep both when changing it.
 - **Check the app in a window, both ways:** `cargo tauri dev` (the CLI's server) and `cargo run -p atm-app`
   (`tauri://localhost`, as the bundle), before a task that changes the window is done.
+- **`cargo tauri dev` follows the dashboard's sources:** it starts `pnpm run watch:page` (`beforeDevCommand`,
+  `dashboard/build/watch-page.ts`), which builds the page again a few seconds after a change in `dashboard/src/`, the
+  schemas or `docs/help.md`; the CLI's server serves `dashboard/dist/` and reloads the window when the page is
+  written. No restart for a page change; a Rust change, or CompMD's runtime (`pnpm run build`, embedded by
+  `build.rs`), still needs one. `cargo run -p atm-app` shows the page as it was last built. (The command finds the
+  dashboard with `git rev-parse`, in `sh`: on Windows, run `pnpm run watch:page` in `dashboard/` yourself.)
 
 ## Platform features
 

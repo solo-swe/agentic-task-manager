@@ -77,18 +77,18 @@ page keeps the browser's header and footer.
 
 ## 2. The title bar
 
-**Two rows, drawn by the page, the same on all three:**
+**One row, drawn by the page, the same on all three** (Hakan, on T-513's first try: a second row under the title bar
+looked wrong): the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the right),
+the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at its left.
+A tab's label is its project's logo and name (or "Projects Overview"), nothing else.
 
-- **the title bar:** the window buttons (macOS: the system's, at the left; Windows and Linux: the page's, at the
-  right), the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at
-  its left;
-- **the toolbar** under it, right of the sidebar: the view switcher (Graph, Kanban, List, …) as a segmented control,
-  then the Filters popup and the needs-you chip.
-
-The project's logo and name are the **active tab's title** (or "Projects Overview"), not repeated in the toolbar; the
-active sprint is in the status bar (§5); search is at the top of the sidebar (§4). **No reload button:** the page
-reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the menu for the rare change the watcher
-missed.
+**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker, the Progress and Activity pills and the ⋯,
+which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
+its icon alone (Hakan, T-516). The tab's label has the project picker after the name. The
+version chip goes (Help ▸ What's New). **Inside the tab** only the subtitle line (counts, archived, the needs-you
+chip), directly on top of the views (Graph, Kanban, List, …), with no hairline. The overview's tab is labelled with
+atm's logo. **No reload button:** the page reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the
+menu for the rare change the watcher missed.
 
 The window on macOS (the menu bar is the system's, at the top of the screen):
 
@@ -96,7 +96,7 @@ The window on macOS (the menu bar is the system's, at the top of the screen):
 ┌────────────────────────────────────────────────────────────────────────────────────────────────────┐
 │ o o o  [=]  │ ▣ atm (2)   × │ ▣ compmd    × │ Projects Overview × │ +                              │  title bar: tabs
 ├────────────────────────┬───────────────────────────────────────────────────────────────────────────┤
-│ Search…           ⌘F   │ [ Graph | Kanban | List | Agents | Progress | Project ]  Filters  (2)     │  toolbar
+│ Search…           ⌘F   │ Graph  Kanban  List │ Agents  Progress  Project       (2)  Filters  ⋯     │  the tab's header
 │ ▾ Personal             ├───────────────────────────────────────────────────────────────────────────┤
 │   Projects Overview    │ Sprint: The atm app, continued ▾      3 of 6 done  ▓▓▓▓▓▓░░░░             │  scope bar (as now)
 │ ▸ ▣ atm           (2)  │                                                                           │
@@ -259,7 +259,8 @@ the window in front.
 - **Shortcuts are the menu's accelerators** (§1a), shown in the menu; on macOS remappable in System Settings. The
   page's own keys in the browser stay; in the app the page leaves the ones the menu has to it, so none fires twice.
 - **Settings** (⌘,) opens the settings as a sheet over the window: the ⋯ menu's content (mode, theme, document style,
-  reset the view), laid out as a settings pane. The ⋯ menu stays in the browser. A settings window of its own would
+  reset the view), laid out as a settings pane, with the badge's switch (§7). The ⋯ popup stays in the browser; in
+  the app the title bar's ⋯ opens the sheet too (T-517: easier to find than the menu alone). A settings window of its own would
   be a second page sharing the preferences through `localStorage` (one origin, so other windows see a change through
   the `storage` event); it is the next step if the sheet feels wrong.
 

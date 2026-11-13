@@ -73,12 +73,13 @@ test.describe('Progress widget', () => {
     await panel.locator('.go-to-link[data-go="active"]').click();
     await expect(panel).toHaveCount(0);
     await expect(page.locator('#tab-kanban')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.locator('.task-card')).toHaveCount(1);
+    // The Kanban's cards (the List's are built only while it is shown, T-525)
+    await expect(page.locator('#kanban .kanban-card')).toHaveCount(1);
 
     // A status in the legend does the same
     await progressPill(page).click();
     await panel.locator('.status-legend-link[data-status="todo"]').click();
-    await expect(page.locator('.task-card')).toHaveCount(1);
+    await expect(page.locator('#kanban .kanban-card')).toHaveCount(1);
 
     await progressPill(page).click();
     await panel.locator('.go-to-link[data-go="progress"]').click();

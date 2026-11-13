@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 524,
+    "next_id": 526,
     "labels": [
       {
         "id": "architecture",
@@ -1062,16 +1062,34 @@
       },
       {
         "id": "The atm app, continued",
-        "state": "active",
+        "state": "closed",
         "goal": "Diagrams in the app (CompMD 0.6.0), in-app updates, the macOS 26 icon, and the app reacting to changes instead of polling",
         "release": "0.35.0",
-        "start": "2026-11-09T11:02:25Z"
+        "start": "2026-11-09T11:02:25Z",
+        "end": "2026-11-10T23:28:48Z",
+        "report": {
+          "done": [
+            "T-483",
+            "T-503",
+            "T-506",
+            "T-508",
+            "T-510",
+            "T-521",
+            "T-523"
+          ],
+          "carried": [],
+          "added": [
+            "T-521",
+            "T-523"
+          ]
+        }
       },
       {
         "id": "The desktop app",
-        "state": "planned",
+        "state": "active",
         "goal": "The atm app as a desktop app, the same on macOS, Windows and Linux: tabs, sidebar, status bar, menus, the title bar (docs/app-desktop-ui-design.md)",
-        "release": "0.36.0"
+        "release": "0.36.0",
+        "start": "2026-11-10T23:28:49Z"
       }
     ],
     "releases": [
@@ -17099,7 +17117,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-08T01:21:48Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T17:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -17174,7 +17192,8 @@
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
-      }
+      },
+      "merged_at": "2026-11-10T17:16:11Z"
     },
     {
       "id": "T-484",
@@ -18069,7 +18088,7 @@
         "dashboard/src/lib/documents/CompMd.svelte"
       ],
       "created_at": "2026-11-08T23:19:40Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T17:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18136,7 +18155,8 @@
       "started_at": "2026-11-09T16:24:52Z",
       "started_by": "claude:34798264",
       "completed_at": "2026-11-09T17:03:07Z",
-      "completed_by": "claude:34798264"
+      "completed_by": "claude:34798264",
+      "merged_at": "2026-11-10T17:16:11Z"
     },
     {
       "id": "T-504",
@@ -18298,7 +18318,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T17:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18359,7 +18379,8 @@
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
-      }
+      },
+      "merged_at": "2026-11-10T17:16:11Z"
     },
     {
       "id": "T-507",
@@ -18421,7 +18442,7 @@
         "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md"
       ],
       "created_at": "2026-11-09T02:26:10Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T17:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18470,7 +18491,8 @@
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
-      }
+      },
+      "merged_at": "2026-11-10T17:16:11Z"
     },
     {
       "id": "T-509",
@@ -18545,7 +18567,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T09:50:27Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T17:16:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18592,7 +18614,8 @@
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
-      }
+      },
+      "merged_at": "2026-11-10T17:16:11Z"
     },
     {
       "id": "T-511",
@@ -18606,7 +18629,7 @@
       "description": "Step 1 of [the desktop app design](docs/app-desktop-ui-design.md) (§9, accepted in T-510): the groundwork for several windows and the page's own shell. **No visible change yet.**\n\n## Change\n- **Windows:** `main` and `window-<n>`; `capabilities/main.json` names them (`\"windows\": [\"main\", \"window-*\"]`), and I25's tests check a `window-` window as they check `main` ([§3](docs/app-desktop-ui-design.md#3-tabs)).\n- **Subscriptions belong to a window:** `AppState` keeps them by the webview's label; `unwatch_all` becomes `unwatch_window` (a page loading again ends only its own window's), and a window closing ends its own.\n- **Deep links and the second instance** go to the window in front (the last focused); with no window, a new one. A deep link opens in a new tab once tabs exist (step 4); until then it navigates that window, as now.\n- **New commands**, each in `build.rs`'s manifest with one permission, acting on the calling window only (never a label):\n  - `shell` → `{ system_menu_bar, system_window_buttons }` from `cfg!(target_os)` ([§1a](docs/app-desktop-ui-design.md#1a-platforms));\n  - `set_title` (`Window::set_title`): the page calls it when `document.title` changes;\n  - `open_window(address)`: checks the address with `link_address` (T-459's check) before making the window.\n- The page: a small `lib/app-shell.ts` (or beside `lib/api/`) reading `shell` once, for the later steps.\n\n## Checks\nRust tests for the window registry, `unwatch_window` and `open_window`'s check; the app e2e specs (`dashboard/tests/e2e/app.spec.ts`); by hand in a window (`cargo tauri dev`, `cargo run -p atm-app`). `docs/security-architecture.md` gains the commands and the `window-` windows (I25).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/lib.rs",
@@ -18618,9 +18641,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18631,7 +18654,24 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-10T23:29:01Z",
+      "started_by": "claude:34798264",
+      "commit": "1299029199ad4d8b568bcd0bdd82e9f0bc939067",
+      "completed_at": "2026-11-10T23:47:14Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-10T23:47:14Z",
+          "kind": "outcome",
+          "text": "Windows main and window-<n> (capability window-*); subscriptions and links per window; deep links and second instance to the window in front; shell, set_title, open_window (checked as a deep link). Not checked by hand in a window yet: open the app and confirm the title follows the project.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-512",
@@ -18645,7 +18685,7 @@
       "description": "Step 2 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)).\n\n## Change\n- **One menu definition** in Rust (`tauri::menu`, no plugin): the table of §6 (atm, File, Edit, View, Go, Window, Help), `CheckMenuItem`s for the toggles, `PredefinedMenuItem`s for the system's items, `AboutMetadata` for About; accelerators written as `CmdOrCtrl+…`, with each platform's own where §1a's table differs.\n- **macOS:** it is the app's menu bar. **Windows and Linux:** attach it and hide it (`hide_menu`); the page draws it in step 3.\n- **Commands:** `subscribe_menu` (a channel of `MenuAction`s, a closed enum, generated into `.generated/app/bindings.ts` by tauri-specta), `menu` (the items, labels, shortcuts and check marks, for the page to draw), `menu_state` (the page tells the app its checked view, sidebar and archived toggles; the app updates the items while that window is in front). The Go menu's projects and workspaces come from `AppState`.\n- **The page** maps each action to what its control does now (`dashboard.selectTab`, `openDialog`, `navigate`); in the app it leaves the menu's keys to the menu, so none fires twice.\n- GitHub, Help, About, Connect your agents, What's new and Check for Updates (T-483's `UpdateNotice`) reachable from the menu. New Tab / Close Tab / New Window items can send their actions already; tabs come in step 4.\n\n## Checks\nRust tests for the definition (every action has an item, no accelerator twice) and `menu`'s output; unit tests for the page's action mapping; the app e2e specs; by hand on macOS. `docs/security-architecture.md` gains the commands.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-511"
       ],
@@ -18657,9 +18697,9 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18670,11 +18710,33 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "notes": [
+        {
+          "at": "2026-11-11T05:10:06Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-11T05:11:32Z",
+          "kind": "outcome",
+          "text": "Menus defined once in Rust (menu.rs): macOS menu bar, hidden on Windows/Linux; subscribe_menu, menu, menu_state; the page maps actions (menu-actions.ts). Not checked by hand yet: open the app, try each menu item and shortcut (muda builds menus only on the main thread, so no unit test builds the native one).",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-11T05:10:11Z",
+      "started_by": "claude:34798264",
+      "commit": "1bd0a5a306f29561b911da615da12ab4242690cb",
+      "completed_at": "2026-11-11T05:11:32Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-513",
-      "name": "Desktop app: the title bar (two rows, macOS overlay, the page's window buttons and menus elsewhere)",
+      "name": "Desktop app: the title bar (one row of tabs, macOS overlay, the page’s window buttons and menus elsewhere)",
       "type": "feature",
       "priority": "P1",
       "labels": [
@@ -18685,7 +18747,7 @@
       "description": "Step 3 of [the desktop app design](docs/app-desktop-ui-design.md) ([§2](docs/app-desktop-ui-design.md#2-the-title-bar), with its wireframes).\n\n## Change\n- **Two rows, in the app only** (`TitleBar.svelte` gets an app variant; the browser's header is unchanged): the title bar (room for the window buttons, the sidebar button `[=]`, a place for the tabs of step 4 and the `+`; on Windows and Linux the menus of step 2 at its left), and the toolbar (the view switcher as a segmented control, Filters, the needs-you chip). The logo and name are the window's title for now (the active tab's once tabs exist); no reload button (View ▸ Reload stays). The charts, version chip and ⋯ menu leave the app's header (to the status bar and menus).\n- **macOS:** `titleBarStyle: \"Overlay\"`, `hiddenTitle: true`, `trafficLightPosition` centring the lights in the first row (`tauri.conf.json` and `WebviewWindowBuilder` for new windows).\n- **Windows and Linux:** `decorations: false`; the page's minimize, maximize and close call new commands `minimize`, `toggle_maximize` (`is_maximized`, then `maximize` or `unmaximize`) and `close_window` (`Window::close`); `set_shadow(true)` on Windows.\n- **Dragging:** a `start_dragging` command the bars call on a mouse-down outside their controls; a double click calls `toggle_maximize`. No `data-tauri-drag-region` (it needs a core permission, ruled out by I25).\n- The menus drawn by the page on Windows and Linux use `menu` and send the same actions (Bits UI menus).\n\nThe Windows and Linux spike (snap layouts, edge resizing, Alt+Space, accelerators with a hidden menu) is its own task; build those paths here so they compile and are covered by unit tests.\n\n## Checks\nComponent tests for the app title bar in each `shell` mode; the app e2e specs; by hand on macOS (lights placed, drag, double click, full screen). `docs/security-architecture.md` gains the window commands.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-512"
       ],
@@ -18698,9 +18760,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "docs"
@@ -18711,7 +18773,24 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-11T13:51:45Z",
+      "started_by": "claude:34798264",
+      "commit": "a47c90594a3f3c27d040954aecce1207a7dc6bb8",
+      "completed_at": "2026-11-11T14:20:35Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-11T14:20:35Z",
+          "kind": "outcome",
+          "text": "App title bar: two rows (AppTitleBar.svelte), macOS overlay with room for the traffic lights, page-drawn menus and window buttons on Windows/Linux (decorations off), start_dragging/double click, view switcher in the toolbar. To check by hand: trafficLightPosition {16, 20} and the 80 px room are guesses; drag, double click, full screen.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-514",
@@ -18726,7 +18805,7 @@
       "description": "Step 4 of [the desktop app design](docs/app-desktop-ui-design.md) ([§3](docs/app-desktop-ui-design.md#3-tabs)). Decided: a tab is an **address**, one page and one dashboard state per window, not a state per tab.\n\n## Change\n- **The strip** in the title bar: each tab its project's logo and name (or the page's title), the needs-you count, a close button; drag to reorder; `+`, ⌘T and File ▸ New Tab open the workspace's overview.\n- **Switching** (a click, ⌃Tab / ⌃⇧Tab, ⌘⇧] / ⌘⇧[) navigates to the tab's address through `lib/navigation.ts`; the tab keeps its address, the preferences keep the rest.\n- **Open in a new tab:** ⌘-click (Ctrl-click, middle click) on a project, a task, a document link; deep links open in a new tab of the window in front.\n- **Close Tab** (⌘W); closing the last one closes the window.\n- **Move Tab to New Window** (the tab's context menu, the Window menu): `open_window` on its address, and the tab leaves this window.\n- The window's title and `set_title` follow the active tab.\n\n## Measure\nA switch between two tabs of a large project within the e2e budget (200 ms, `tests/e2e/performance.spec.ts`). If it isn't, keep the last few projects' data in `state.svelte.ts` (a cache), not a state per tab.\n\n## Checks\nUnit tests for the tab list (open, close, reorder, move, the active one); the app e2e specs and the performance spec; by hand on macOS with two windows.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-513"
       ],
@@ -18738,9 +18817,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18750,7 +18829,30 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "notes": [
+        {
+          "at": "2026-11-12T04:20:45Z",
+          "kind": "note",
+          "text": "Build the tab strip on ui/TitleBarTabs.svelte (T-513, Hakan: reusable in other apps, knows nothing of atm): give it the tabs, onclose and onnew; atm’s label stays in AppTitleBar. Add drag to reorder there, with the browser’s own drag and drop.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-12T04:29:46Z",
+          "kind": "outcome",
+          "text": "Tabs as addresses (app-tabs.svelte.ts, tab-actions.ts) in the reusable ui/TitleBarTabs: +/⌘T, × and middle click, ⌘W, Next/Previous Tab, Move Tab to New Window, drag to reorder, later links in a new tab, kept over a reload. Not done: ⌘-click to open in a new tab (needs the sidebar’s list, T-515), and the measured switch on a large project.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-12T04:23:24Z",
+      "started_by": "claude:34798264",
+      "commit": "57fb2e8f8c2568317ff99f5daee3a0361f4ee624",
+      "completed_at": "2026-11-12T04:29:46Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-515",
@@ -18762,10 +18864,10 @@
         "desktop-ui",
         "ux"
       ],
-      "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click in a new one (once step 4 is in); missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.",
+      "description": "Step 5 of [the desktop app design](docs/app-desktop-ui-design.md) ([§4](docs/app-desktop-ui-design.md#4-the-side-panel)).\n\n## Change\nA new `shell/Sidebar.svelte`, in the app only, from what the page already loads (`dashboard.projects`, the overview's summaries):\n- at the very top, **search** (⌘F, Edit ▸ Find): the open project's tasks as now; on the overview, every project's (the app's `search` command);\n- the workspace (`WorkspaceSelector`'s content as a menu);\n- **Overview**, then each project: logo, name, the active sprint's progress as a thin bar, the needs-you count as a badge; the open one marked; a click opens it in this tab, ⌘-click (Ctrl-click, a middle click) in a new one; missing projects dimmed.\n- The title bar's `[=]` and View ▸ Show Sidebar (⌃⌘S, Ctrl+B) toggle it; its edge resizes it; both kept in `lib/prefs.ts`. `menu_state` reports it.\n\nThe browser keeps its selectors. No vibrancy.\n\n## Open in a new tab (left from T-514)\nTabs are in (T-514): `tabActions().open(address)` (`lib/tab-actions.ts`) opens one. Besides the sidebar's projects, ⌘-click (Ctrl-click, a middle click) opens in a new tab, in the app only: a task (a card, a list row: its address with `?task=`) and a link to a document (`?doc=`). The browser keeps its own behaviour for these.\n\n## Checks\nComponent tests (`Sidebar.component.test.ts`); the app e2e specs; by hand on macOS.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-513"
       ],
@@ -18775,9 +18877,9 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18787,7 +18889,29 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "commit": "c38d797d5cf6e5fb3603c8bdec0d03f665503868",
+      "notes": [
+        {
+          "at": "2026-11-12T13:06:24Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-12T13:06:30Z",
+          "kind": "outcome",
+          "text": "Sidebar (shell/Sidebar.svelte, app only): Overview and the projects with progress and needs-you, click here / ⌘-click new tab, toggle (title bar button, View ▸ Show Sidebar), resizable, kept in prefs. Chooser, search and workspace picker stay in the title bar (Hakan). ⌘-click on tasks and document links opens a new tab. Browser screenshots unchanged (84).",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-12T13:06:30Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-12T13:06:30Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-516",
@@ -18802,7 +18926,7 @@
       "description": "Step 6 of [the desktop app design](docs/app-desktop-ui-design.md) ([§5](docs/app-desktop-ui-design.md#5-the-status-bar)).\n\n## Change\nIn the app only, the footer becomes a one-line status bar (about 24 px, tokens only):\n- **left:** \"Up to date\" while the app watches the project (T-506), or why not; the agents at work (from `claims`), \"2 agents working\", a click opens the Agents view;\n- **middle:** the active sprint's name and progress (`ProgressWidget`'s numbers, as text);\n- **right:** the archive and problems notices (as now) and the version, which opens What's new.\n\nGitHub, Help, About and Connect your agents are in the menus (step 2), so they leave the app's footer. The browser keeps its footer.\n\n## Checks\nComponent tests for the status bar; the app e2e specs; by hand on macOS.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-512"
       ],
@@ -18811,9 +18935,9 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18823,7 +18947,24 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T13:31:32Z",
+      "started_by": "claude:34798264",
+      "commit": "0853c1f80f81669236d7bbdc9100671c98f5ca6c",
+      "completed_at": "2026-11-12T14:17:26Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T14:17:26Z",
+          "kind": "outcome",
+          "text": "The app’s status bar (live state, agents working, notices, copyright, version, GitHub, Help, About) in place of the footer; also search and Filters inside the tab before the subtitle, an icon-only Filters button, its popup opening rightwards. Browser UI unchanged: 84 screenshots pass.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-517",
@@ -18838,7 +18979,7 @@
       "description": "Step 7 of [the desktop app design](docs/app-desktop-ui-design.md) ([§6](docs/app-desktop-ui-design.md#6-menus-and-shortcuts)). Decided: a sheet first; a window of its own only if the sheet feels wrong.\n\n## Change\nThe menu's Settings… (⌘,; File ▸ Settings… on Windows and Linux) opens a sheet over the window (a Bits UI dialog): the ⋯ menu's content (mode, theme, document style, reset the view) laid out as a settings pane, plus the badge's on/off switch for step 8. The ⋯ menu stays in the browser; in the app it leaves the header.\n\n## Checks\nComponent tests for the sheet; the app e2e specs; by hand on macOS.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-512"
       ],
@@ -18847,9 +18988,9 @@
         "dashboard/src/lib/dialogs/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -18859,7 +19000,29 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "commit": "4b4a47fd5e5ccf52624ad7774b53396f4327cac9",
+      "notes": [
+        {
+          "at": "2026-11-12T17:04:54Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-12T17:05:05Z",
+          "kind": "outcome",
+          "text": "Settings… (⌘,) and the app’s ⋯ open a sheet (dialogs/SettingsSheet) with mode, theme, document style, reset view and the new App icon ▸ Show what needs you switch (needsYouBadge pref, for T-518); one SettingsPanel shared with the browser’s ⋯ popup, which is unchanged. Size check raised to 900 KiB (Hakan). Screenshots not run locally (Docker’s npm registry access failing); CI runs them on push.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-12T17:04:59Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-12T17:05:05Z",
+      "completed_by": "claude:34798264",
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-518",
@@ -18873,7 +19036,7 @@
       "description": "Step 8 of [the desktop app design](docs/app-desktop-ui-design.md) ([§7](docs/app-desktop-ui-design.md#7-window-state-and-the-badge)), the same on the three desktops.\n\n## Change\n- **Windows come back as they were:** each window's size and place, its tabs (addresses, order) and the active one. The app writes the windows' list to a file in its own data folder when it changes and opens them again at the start (no `tauri-plugin-window-state`: it keeps frames, not tabs). A deep link the app was started with opens in a new tab of the first window. A saved address is checked with `link_address` before it is opened.\n- **The badge:** the workspace's needs-you count (in review, blocked on the user), off in Settings (step 7). macOS and Linux: `Window::set_badge_count` (`None` removes it); Windows: `Window::set_overlay_icon` with a small icon of the count.\n- No Dock menu or jump list (no Tauri API).\n\n## Checks\nRust tests for the saved list (write, read, a bad file ignored, addresses checked); the app e2e specs; by hand on macOS (quit and start again; the Dock badge).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-514",
         "T-517"
@@ -18884,9 +19047,9 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:18:15Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "docs"
       ],
@@ -18896,7 +19059,30 @@
           "from": "2026-11-09T23:18:15Z"
         }
       ],
-      "sprint": "The desktop app"
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T17:50:07Z",
+      "started_by": "claude:34798264",
+      "commit": "023d80793b2304dc5b493274449be430109f1042",
+      "completed_at": "2026-11-12T18:35:43Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T18:35:43Z",
+          "kind": "outcome",
+          "text": "Windows come back (session.rs: windows.json in the app data folder, frames and tabs, checked as deep links, off-screen frames dropped; closed windows forgotten, those open at quit kept); a start link opens in a new tab; the needs-you badge (badge.rs: set_badge_count, Windows overlay icon), off in Settings. New commands save_tabs, restored_tabs, set_badge; security doc updated. By hand on macOS (quit and start again, the Dock badge) is Hakan’s.",
+          "by": "claude:34798264"
+        },
+        {
+          "at": "2026-11-12T18:43:28Z",
+          "kind": "note",
+          "text": "Changed with Hakan: the last window closed with its button is kept and comes back, as after ⌘Q (closing it is closing the app); a window closed while another is open is still forgotten, and a new window opened after the last closed starts again.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-519",
@@ -18939,7 +19125,7 @@
       "description": "Left out of [the desktop app design](docs/app-desktop-ui-design.md)'s steps by decision (§10, item 5): a system notification when a task starts needing the user (in review, blocked on them), off in Settings. It needs a new plugin, `tauri-plugin-notification`, which the [Rust guide](docs/guides/rust.md) asks a yes for: first a short note on the plugin (its permissions, platforms, what I25 says about the page calling it; the app should send notifications from Rust, not the page), then ask Hakan before adding it.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-518"
       ],
@@ -18949,12 +19135,36 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-09T23:15:09Z",
+      "updated_at": "2026-11-13T03:45:42Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-12T19:02:16Z"
+        }
+      ],
+      "sprint": "The desktop app",
+      "started_at": "2026-11-12T19:05:06Z",
+      "started_by": "claude:34798264",
+      "commit": "ec27de41016ccca52400d009eb405b4215693aca",
+      "completed_at": "2026-11-12T19:34:41Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-12T19:34:41Z",
+          "kind": "outcome",
+          "text": "Notifications from Rust (tauri-plugin-notification =2.8.0, approved): \"<project>: N tasks need you\" when a project’s count rises, not at start nor while an app window is focused; the page gets no plugin permission. set_badge became needs_you(workspace, badge, notify): the app reads counts and names itself. Settings ▸ What needs you has both switches. By hand on macOS (a notification appears from the bundled app) is Hakan’s.",
+          "by": "claude:34798264"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
+      }
     },
     {
       "id": "T-521",
@@ -18968,14 +19178,14 @@
       "description": "Follow-up of T-483 (in-app updates, approved), done with Hakan when 0.35.0 is released.\n\n## Check\n- The 0.35.0 GitHub release (draft, then published) has `latest.json` and the signed `atm.app.tar.gz` (with its `.sig`) attached; `latest.json` names 0.35.0, the archive's URL on that release, and the signature from the `.sig`.\n- The released app, installed (from the release download and from the Homebrew cask), checks for updates and finds none, with no error.\n\nRecord the result in a note. A problem found is fixed in the release branch before the release is published, or becomes a task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [],
       "files": [
         ".github/workflows/release.yml",
         "packaging/README.md"
       ],
       "created_at": "2026-11-10T01:56:18Z",
-      "updated_at": "2026-11-10T01:56:21Z",
+      "updated_at": "2026-11-10T23:02:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -18988,6 +19198,18 @@
       "with": "user",
       "components": [
         "ci"
+      ],
+      "started_at": "2026-11-10T23:02:30Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-10T23:02:37Z",
+      "completed_by": "claude:34798264",
+      "notes": [
+        {
+          "at": "2026-11-10T23:02:37Z",
+          "kind": "outcome",
+          "text": "Checked with Hakan: the 0.35.0 release has latest.json (0.35.0, both Mac architectures, the signature by key D2392A7664649507, inline as Tauri writes it) and atm-app-0.35.0-universal.app.tar.gz; the app from the cask on his Mac finds no update, with no error.",
+          "by": "claude:34798264"
+        }
       ]
     },
     {
@@ -19035,7 +19257,7 @@
       "description": "`dev/0.35.0` to `main`, tagged, built, signed and published. The process is in [packaging/README.md](packaging/README.md); the last one was T-509.\n\n## On `dev/0.35.0`\n- **Version:** `0.35.0` in `Cargo.toml` (`[workspace.package]`), and `Cargo.lock` after `cargo build`.\n- **CHANGELOG.md:** the `[Unreleased]` entries become `## [0.35.0] - <date>`; check they say what shipped (T-503 diagrams in the app with CompMD 0.6.0, T-506, T-483, T-508; T-510's design).\n- **WHATS-NEW.md:** a `## [0.35.0]` entry, 3–6 plain bullets of at most 180 characters each (`release-notes.test.ts`): diagrams in the app, the app updating itself (from the next release on), the app showing changes as they happen.\n- **Screenshots:** regenerate the Linux baselines once (`pnpm run test:e2e:visual:update`, Docker), and look at the ones that changed.\n- **Security checklist** (`docs/security-architecture.md` §3): skills or `docs/agent/` changed since `main` → a written review in §3.3 instead of the live sandbox run. New entry points this release (the updater, which downloads and installs code; the app's subscription commands; the `atm:` scheme) are in the doc: check they describe what shipped.\n- **Checks:** `pnpm run verify` in `dashboard/`; `cargo test`, `cargo clippy --all-targets -- -D warnings`, `cargo fmt --all --check` and `cargo deny check` from the root.\n\n## The PR\n- Open it with `/atm-push`: `dev/0.35.0` to `main`. The required checks must pass.\n- The user merges it, or says to merge it. Then record the merge (`atm vcs pushed --pr <n> --at <mergedAt>`).\n\n## The release (with the user's go-ahead)\n- `packaging/release.sh 0.35.0 --push` on an up-to-date `main`; watch the Release run. **The updater's artifacts are made for the first time** (the signed `.app.tar.gz` and `latest.json`): if the job fails, fix it on a branch and tag again, never by hand.\n- Check the draft (the CLI's archives, the DMG, the app archive and its signature, `latest.json`, `SHA256SUMS`), then publish it; T-521 checks the updater's side with the user.\n- Watch the Homebrew and Skills workflows (formula, cask with `auto_updates true`, skills `atm-v0.35.0`).\n- Check with the user, on a Mac: `brew upgrade` gives 0.35.0, the app opens, diagrams draw in it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "Cargo.toml",
@@ -19046,7 +19268,7 @@
         "dashboard/tests/e2e/__screenshots__/"
       ],
       "created_at": "2026-11-10T16:52:51Z",
-      "updated_at": "2026-11-10T17:02:43Z",
+      "updated_at": "2026-11-10T23:02:37Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:34798264",
       "sprint_history": [
@@ -19060,12 +19282,118 @@
         "dashboard",
         "docs"
       ],
-      "started_at": "2026-11-10T16:52:58Z",
-      "started_by": "claude:34798264",
       "commit": "da39f858f8c199d182d7fa4362cf3574d58cee83",
       "pr": {
         "number": 44,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/44"
+      },
+      "merged_at": "2026-11-10T17:16:11Z",
+      "notes": [
+        {
+          "at": "2026-11-10T22:42:44Z",
+          "kind": "failure",
+          "text": "lease expired (claude:34798264)"
+        },
+        {
+          "at": "2026-11-10T23:02:37Z",
+          "kind": "outcome",
+          "text": "Released 0.35.0: PR #44 merged, v0.35.0 published (CLI archives, notarized DMG, the signed update archive and latest.json, SHA256SUMS); formula and cask in the tap, skills atm-v0.35.0. Checked on Hakan’s Mac: brew upgrade gives 0.35.0, the app opens, diagrams draw, no update found.",
+          "by": "claude:34798264"
+        }
+      ],
+      "started_at": "2026-11-10T22:42:50Z",
+      "started_by": "claude:34798264",
+      "completed_at": "2026-11-10T23:02:37Z",
+      "completed_by": "claude:34798264"
+    },
+    {
+      "id": "T-524",
+      "name": "Check atm's app against CompMD's redesigned Tauri plugin and its guidance for Tauri apps",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "compmd"
+      ],
+      "description": "CompMD is redesigning `tauri-plugin-compmd` and how Tauri apps should use CompMD. **Waits for that redesign task in CompMD** (its release and its documentation for Tauri apps).\n\nOnce it's out, check atm's app against it and bring it up to the standard:\n\n## What to compare\n- **The plugin and its version:** `tauri-plugin-compmd` (pinned with `=` to the `@compmd/*` packages' version, `app/src-tauri/Cargo.toml`), and how the app registers it (`app/src-tauri/src/lib.rs`).\n- **What atm serves itself on `atm:`** (`app/src-tauri/src/assets.rs`, embedded by `app/src-tauri/build.rs`): `compmd.js`, its WebAssembly and the packs' modules. Does the plugin now serve these, or say how an app should?\n- **The page's side** (`dashboard/src/lib/compmd.ts`: `sandboxOptions`, `fetchPackModules`, `moduleUrl`): the frames' `base`, the packs' modules handed over as code checked by their `integrity`. Is this still the recommended way, or does CompMD's API cover it now?\n- **The window's CSP** (`tauri.conf.json`, I26 in `docs/security-architecture.md`): the `atm://localhost/assets/compmd/` and `compmd://localhost/frames/` folders, and their `http://….localhost` forms for Windows.\n- **Caching:** T-508 found WebKit asks again for each `atm:` file (`no-cache`); check against what CompMD now recommends.\n\n## Then\nWhere atm differs from the standard: change it (or record why not), keeping `atm serve` and the app serving the same files with the same headers (`tests/scripts/compmd-host-headers.json`). Update [ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md) (or a new ADR replacing it), I26, and the [Tauri guide](docs/guides/tauri.md). New dependencies or plugin versions need a yes first.\n\n## Checks\nThe app's Rust tests (`the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them`, `the_windows_csp_is_strict`, `assets.rs`'s), `compmd.test.ts`, the app e2e specs, and by hand: diagrams draw in the app (`cargo tauri dev`, and a release bundle).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "blocked",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/Cargo.toml",
+        "app/src-tauri/src/lib.rs",
+        "app/src-tauri/src/assets.rs",
+        "app/src-tauri/build.rs",
+        "app/src-tauri/tauri.conf.json",
+        "dashboard/src/lib/compmd.ts",
+        "docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-10T22:42:38Z",
+      "updated_at": "2026-11-10T22:42:44Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:34798264",
+      "components": [
+        "dashboard",
+        "docs"
+      ],
+      "waiting_on": "user",
+      "questions": [
+        "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this."
+      ],
+      "blocked_at": "2026-11-10T22:42:44Z"
+    },
+    {
+      "id": "T-525",
+      "name": "Desktop app: time switching the app's tabs on a large project",
+      "type": "test",
+      "priority": "P2",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "T-514's outcome says switching the app's title-bar tabs (a tab is an address: a switch navigates the window's one page) was never timed on a large project. Add the timing to [the performance spec](dashboard/tests/e2e/performance.spec.ts), beside its `switching tabs` test, with the same budget (`BUDGET_MS`: 200 ms locally, twice that in CI).\n\n## Change\n- In the app (`tasksServer.asApp()`), with the `large-500` fixture and a second project: open tabs on the Kanban, the List and the Graph of the large project and on the second project, then time each `.title-bar-tab` click until its page is shown (its view's first card or node visible, the title the tab's project), as the spec times its views.\n- Also time ⌃Tab (the menu's Next Tab, `chooseMenu({ kind: 'next_tab' })`) once round the tabs.\n- Log the timings as the other tests do (`tab switch in the app (ms):`) and expect each under `BUDGET_MS`.\n\n## If it is over budget\nMeasure where the time goes (`--trace on` locally) and fix the cause; never raise the budget (AGENTS.md, Performance budgets). Record the timings in T-514's follow-up note on this task.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "done",
+      "dependencies": [
+        "T-514"
+      ],
+      "files": [
+        "dashboard/tests/e2e/performance.spec.ts"
+      ],
+      "created_at": "2026-11-12T19:36:30Z",
+      "updated_at": "2026-11-13T03:45:42Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "The desktop app",
+          "from": "2026-11-12T19:36:30Z"
+        }
+      ],
+      "sprint": "The desktop app",
+      "components": [
+        "dashboard"
+      ],
+      "started_at": "2026-11-12T19:43:33Z",
+      "started_by": "claude:0f56a916",
+      "commit": "6ee0fbe246af127e2be9565684f76a4622a9d89a",
+      "completed_at": "2026-11-12T20:02:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-12T20:02:11Z",
+          "kind": "outcome",
+          "text": "Timed the app’s tabs on 500 tasks (performance.spec.ts): same-project switches 45–110 ms; back from another project was 240–290 ms, over budget. Fixed: the graph keeps the last 4 layouts (dagre ~100 ms), the hidden Graph and List are not drawn (List mounted only while shown). Now 140–200 ms with the mock’s ~55 ms transport; List switch 108–175; reloads faster. Specs that read hidden views open them. Close to the budget under the full local suite: watch it.",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "pr": {
+        "number": 47,
+        "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
       }
     }
   ]

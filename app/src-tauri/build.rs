@@ -25,6 +25,19 @@ fn main() {
         "subscribe_links",
         "check_update",
         "install_update",
+        "shell",
+        "set_title",
+        "open_window",
+        "subscribe_menu",
+        "menu",
+        "menu_state",
+        "minimize",
+        "toggle_maximize",
+        "close_window",
+        "start_dragging",
+        "save_tabs",
+        "restored_tabs",
+        "needs_you",
     ]);
     let mut attributes = tauri_build::Attributes::new().app_manifest(manifest);
     let msvc = std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|env| env == "msvc");

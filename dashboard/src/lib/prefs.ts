@@ -31,6 +31,14 @@ export interface Prefs {
   boardScope: string;
   /** Where the document viewer is and how big (lib/documents.ts ViewerGeometry), or null for its default */
   documentViewer: { x: number; y: number; w: number; h: number } | null;
+  /** The app's sidebar is shown (T-515) */
+  sidebarOpen: boolean;
+  /** The app's sidebar's width, in pixels (T-515) */
+  sidebarWidth: number;
+  /** The app's icon shows the workspace's needs-you count (T-517's switch, T-518's badge) */
+  needsYouBadge: boolean;
+  /** The app notifies when a project's needs-you count goes up (T-520) */
+  needsYouNotify: boolean;
 }
 
 function storage(): Storage | null {

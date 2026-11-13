@@ -65,7 +65,6 @@
   // The badge: the groups that narrow the board within its sprints (the scope bar shows the Sprint choice)
   const badge = $derived(selected.filter((s) => s.group !== 'sprint').length);
 
-  let open = $state(false);
   let search = $state<HTMLInputElement>();
   // Groups showing all their values, and the text the Labels group is narrowed by
   let expanded = $state<FilterGroup[]>([]);
@@ -133,7 +132,8 @@
          closes it ("clear", "+N" and a chip's × remove themselves when clicked, but the click started inside), and
          focus goes back to the button -->
     <span class="menu-anchor filter-anchor">
-      <Popover.Root bind:open>
+      <!-- Open from its button, and in the app from the menu's Show Filters (T-512) -->
+      <Popover.Root bind:open={dashboard.filtersOpen}>
         <Popover.Trigger>
           {#snippet child({ props })}
             <button
@@ -142,7 +142,7 @@
               class:filtered={badge > 0}
               id="filters-toggle"
               title="Filter the tasks"
-              ><Icon name="sliders-horizontal" size={14} /> Filters{#if badge}<span
+              ><Icon name="sliders-horizontal" size={14} /> <span class="filters-label">Filters</span>{#if badge}<span
                   class="filters-badge"
                   id="filters-badge">{badge}</span
                 >{/if}
@@ -153,7 +153,7 @@
         <!-- Always in the page (hidden while closed), so what it holds stays readable: the counts, the chips -->
         <Popover.ContentStatic forceMount id="filter-panel" role="dialog" aria-label="Filters">
           {#snippet child({ props })}
-            <div {...props} class="filter-panel" hidden={!open}>
+            <div {...props} class="filter-panel" hidden={!dashboard.filtersOpen}>
               <div class="filter-panel-head">
                 <span class="match-count" id="match-count" aria-live="polite"
                   ><strong>{dashboard.filtered.length}</strong> of {dashboard.base.length} tasks</span

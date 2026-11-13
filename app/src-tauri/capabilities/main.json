@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "The main window: the app's own commands, the reads (and their subscriptions), connecting agents and installing an update on the user's click, nothing else (no core or plugin APIs: the updater only through the app's two commands)",
-  "windows": ["main"],
+  "description": "The app's windows (main, and window-<n> it opens, T-511): the app's own commands, the reads (and their subscriptions), connecting agents and installing an update on the user's click, the window's own shell, title and a new window at one of the dashboard's pages, its tabs kept for the next start and what needs the user (the app's badge and notifications, which the app sends itself), nothing else (no core or plugin APIs: the updater only through the app's two commands)",
+  "windows": ["main", "window-*"],
   "permissions": [
     "allow-version",
     "allow-list-workspaces",
@@ -21,6 +21,19 @@
     "allow-connect-agents",
     "allow-subscribe-links",
     "allow-check-update",
-    "allow-install-update"
+    "allow-install-update",
+    "allow-shell",
+    "allow-set-title",
+    "allow-open-window",
+    "allow-subscribe-menu",
+    "allow-menu",
+    "allow-menu-state",
+    "allow-minimize",
+    "allow-toggle-maximize",
+    "allow-close-window",
+    "allow-start-dragging",
+    "allow-save-tabs",
+    "allow-restored-tabs",
+    "allow-needs-you"
   ]
 }

@@ -4,7 +4,8 @@
   "mainBinaryName": "atm-app",
   "identifier": "com.solo-swe.atm",
   "build": {
-    "frontendDist": "../../dashboard/dist"
+    "frontendDist": "../../dashboard/dist",
+    "beforeDevCommand": "pnpm --dir \"$(git rev-parse --show-toplevel)/dashboard\" run watch:page"
   },
   "app": {
     "windows": [
@@ -15,7 +16,10 @@
         "width": 1280,
         "height": 860,
         "minWidth": 720,
-        "minHeight": 480
+        "minHeight": 480,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 16, "y": 22 }
       }
     ],
     "withGlobalTauri": false,
