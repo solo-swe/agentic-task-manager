@@ -591,6 +591,27 @@ h1 {
 }
 .topbar.in-tab .in-tab-row .subtitle {
   margin-bottom: 0;
+  min-width: 0;
+}
+/* A project's Progress and Activity at the line's right end (T-530): the tab's project's; on a narrow tab they give way
+   first, so the subtitle and what needs you stay */
+.topbar.in-tab .in-tab-row {
+  container-type: inline-size;
+  /* A size container doesn't take its width from what it holds: the header's whole row */
+  flex: 1 1 100%;
+  min-width: 0;
+}
+.topbar.in-tab .in-tab-trail {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--space-6);
+  margin-left: auto;
+}
+@container (max-width: 720px) {
+  .topbar.in-tab .in-tab-trail {
+    display: none;
+  }
 }
 /* The Filters button is its icon there: the label is for screen readers only */
 .topbar.in-tab .filters-label {

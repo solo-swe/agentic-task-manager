@@ -29,8 +29,10 @@
     inTab?: boolean;
     /** Inside the tab, before the subtitle, on its line (a project's search and Filters) */
     lead?: Snippet;
+    /** Inside the tab, at the right end of the subtitle's line (a project's Progress and Activity, T-530) */
+    trail?: Snippet;
   }
-  let { title, selector = true, subtitle, charts, below, inTab = false, lead }: Props = $props();
+  let { title, selector = true, subtitle, charts, below, inTab = false, lead, trail }: Props = $props();
 
   const version = dashboardVersion();
   // The open project, as api/projects lists it: its logo goes next to the title
@@ -59,6 +61,7 @@
     <div class="in-tab-row">
       {@render lead?.()}
       <p class="subtitle" id="subtitle">{@render subtitle()}</p>
+      {#if trail}<div class="in-tab-trail" id="in-tab-trail">{@render trail()}</div>{/if}
     </div>
     {@render below?.()}
   </header>

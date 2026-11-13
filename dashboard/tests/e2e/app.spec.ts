@@ -345,6 +345,40 @@ test.describe('the dashboard in the atm app', () => {
     expect(await left()).toBe(await edge());
   });
 
+  test('Progress and Activity are the tab’s: at the right of its subtitle line, not in the title bar; they give way on a narrow tab (T-530)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.goto(`/projects/${tasksServer.projectId}/kanban`);
+    const trail = page.locator('.topbar.in-tab #in-tab-trail');
+    await expect(trail.locator('#progress-card')).toBeVisible();
+    await expect(trail.locator('#activity-card')).toBeVisible();
+    await expect(page.locator('#app-titlebar #progress-card, #app-titlebar #activity-card')).toHaveCount(0);
+    // On the subtitle's line, at its right end
+    const row = (await page.locator('.topbar.in-tab .in-tab-row').boundingBox())!;
+    const pills = (await trail.boundingBox())!;
+    const subtitle = (await page.locator('#subtitle').boundingBox())!;
+    expect(Math.abs(pills.y + pills.height / 2 - (subtitle.y + subtitle.height / 2))).toBeLessThan(6);
+    expect(Math.round(row.x + row.width - (pills.x + pills.width))).toBeLessThan(2);
+    // They still open what they open
+    await trail.locator('#progress-card').click();
+    await expect(page.locator('#progress-panel')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // A narrow tab: they give way, the subtitle stays
+    await page.setViewportSize({ width: 1100, height: 900 });
+    await expect(trail).toBeVisible();
+    await page.setViewportSize({ width: 900, height: 900 });
+    await expect(trail).toBeHidden();
+    await expect(page.locator('#subtitle')).toBeVisible();
+    // The overview has none in its tab
+    await page.locator('#app-sidebar .app-sidebar-item').first().click();
+    await expect(page.locator('#dashboard-title')).toHaveText('Projects Overview');
+    await expect(page.locator('#in-tab-trail')).toHaveCount(0);
+  });
+
   test('the status bar (T-516): up to date, the agents at work, the copyright, the version and the links', async ({
     page,
     tasksServer,

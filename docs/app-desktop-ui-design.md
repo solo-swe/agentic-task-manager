@@ -82,9 +82,10 @@ looked wrong): the window buttons (macOS: the system's, at the left; Windows and
 the sidebar button, **the tabs** (§3) and a **+** for a new one; on Windows and Linux, the menus (§6) at its left.
 A tab's label is its project's logo and name (or "Projects Overview"), nothing else.
 
-**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker, the Progress and Activity pills and the ⋯,
-which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
-its icon alone (Hakan, T-516). The tab's label has the project picker after the name. The
+**On the tab's line, right-aligned** (Hakan, T-513): the workspace picker (the overview's activity on its tab) and the
+⋯, which opens the Settings sheet (§6). Search and Filters are inside the tab, before the subtitle, the Filters button
+its icon alone (Hakan, T-516); a project's Progress and Activity pills are inside the tab too, at the subtitle line's
+right end, as they are the tab's project's (Hakan, T-530), and give way first on a narrow tab. The tab's label has the project picker after the name. The
 version chip goes (Help ▸ What's New). **Inside the tab** only the subtitle line (counts, archived, the needs-you
 chip), directly on top of the views (Graph, Kanban, List, …), with no hairline. The overview's tab is labelled with
 atm's logo. **No reload button:** the page reflects changes as they happen (T-506), and View ▸ Reload (⌘R) stays in the

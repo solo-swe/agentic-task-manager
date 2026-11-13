@@ -19712,7 +19712,7 @@
       "description": "In the app's title bar (`AppTitleBar.svelte`), the tabs jump when the sidebar is toggled (`dashboard.sidebarOpen`). Make them slide: to the right as the sidebar opens, back to the left as it closes, in step with the sidebar's own animation (same duration and easing, from the tokens).\n\n## Notes\n- No motion with reduced motion (`prefers-reduced-motion`): they move at once, as now.\n- Animate a transform rather than the layout where possible, so the switch stays cheap (the T-525 timing budget).\n- [The desktop UI design](docs/app-desktop-ui-design.md) gets a line on it.\n\n## Tests\nAn app e2e spec: the tabs' position after the toggle both ways, with motion on (as the overview's need-you list test does) and reduced; then the app specs and the functional suite once.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -19721,7 +19721,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T11:42:44Z",
+      "updated_at": "2026-11-13T11:46:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19736,7 +19736,18 @@
         "docs"
       ],
       "started_at": "2026-11-13T11:42:44Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "5d677a9a2ddd8e2ff65ff44127d24bb72d18bd8d",
+      "completed_at": "2026-11-13T11:46:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:46:11Z",
+          "kind": "outcome",
+          "text": "With the sidebar open, the title bar’s tabs start at its edge: the bar’s lead (menus, sidebar button) gets a right margin of what the sidebar covers past it, transitioned (0.2 s), at once with reduced motion. E2e checks both positions and both motion settings; full functional suite 436 passed; the design doc §4 says so. Worth a look by eye in the app (the margin’s easing).",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-530",
@@ -19750,7 +19761,7 @@
       "description": "In the app, the project's Progress and Activity pills (`projectPills` in `Header.svelte`) belong to the tab's project, so they go into the tab, on the subtitle line (where T-516 put the search and Filters), aligned right; no longer at the title bar's right. The browser keeps them where they are.\n\n## Notes\n- They show only for a project's tab (not the overview), and still open what they open now.\n- On a narrow window they give way before the subtitle text does (it truncates last), and never overlap the search or Filters.\n- [The desktop UI design](docs/app-desktop-ui-design.md) says where they are.\n\n## Tests\nApp e2e: the pills are in the tab's subtitle line, at its right, for a project and not for the overview, and the browser's are unchanged; the area specs, then the functional suite once. Screenshots change in the release task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/Header.svelte",
@@ -19760,9 +19771,9 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T11:46:15Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -19773,7 +19784,9 @@
       "components": [
         "dashboard",
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-13T11:46:15Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-531",
