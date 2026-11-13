@@ -354,6 +354,135 @@ pub fn edit_sprint(
     Ok(outcome)
 }
 
+/// What a sprint's rename changed: its names, and how many tasks and sprint reports follow it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Renamed {
+    /// Its name before.
+    pub from: String,
+    /// Its name now.
+    pub to: String,
+    /// The tasks in tasks.json that name it (their sprint or their history).
+    pub tasks: usize,
+    /// The archived tasks that name it.
+    pub archived: usize,
+    /// The other sprints whose report carried tasks to it.
+    pub reports: usize,
+}
+
+/// A task's sprint and its history entries named `from` take the name `to`; whether any did.
+fn rename_in_task(task: &mut Value, from: &str, to: &str) -> bool {
+    let same = |v: &Value| {
+        v.as_str()
+            .is_some_and(|s| s.to_lowercase() == from.to_lowercase())
+    };
+    let Some(task) = task.as_object_mut() else {
+        return false;
+    };
+    let mut changed = false;
+    if task.get("sprint").is_some_and(same) {
+        task.insert("sprint".into(), json!(to));
+        changed = true;
+    }
+    if let Some(history) = task.get_mut("sprint_history").and_then(Value::as_array_mut) {
+        for entry in history.iter_mut().filter_map(Value::as_object_mut) {
+            if entry.get("sprint").is_some_and(same) {
+                entry.insert("sprint".into(), json!(to));
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
+/// `atm sprint rename` (T-496): a sprint's name, in any state; every task that names it (in tasks.json and the
+/// archive, its sprint and its history) and the reports that carried tasks to it follow. A task's `updated_at` stays:
+/// the rename is the sprint's, not a change to the task.
+///
+/// # Errors
+/// An unknown sprint; an empty or too long name, or one another sprint has or had (a task's history names it).
+pub fn rename_sprint(project: &mut Project, name: &str, new: &str) -> Result<Renamed> {
+    let mut outcome: Option<Renamed> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = Vocabulary::of_document(&work.document)?;
+        let at = stored_sprint(&work.document, &vocab, name)?;
+        let from = sprint_id(sprint_at(&mut work.document, at));
+        let to = atm_common::py::strip(new).to_string();
+        if to.is_empty() {
+            return Err(invalid("a sprint needs a name"));
+        }
+        if to.chars().count() > MAX_SPRINT_NAME {
+            return Err(invalid(format!(
+                "a sprint name is at most {MAX_SPRINT_NAME} characters"
+            )));
+        }
+        if to == from {
+            return Err(invalid(format!(
+                "the sprint is already called {}",
+                repr_str(&from)
+            )));
+        }
+        let archived = work.archive()?["tasks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        // Another sprint's name, or one tasks' histories keep from a sprint deleted since: their records would merge
+        let same_sprint = |n: &str| n.to_lowercase() == from.to_lowercase();
+        if let Some(taken) = taken_names(&work.document, &archived)
+            .into_iter()
+            .find(|n| n.to_lowercase() == to.to_lowercase() && !same_sprint(n))
+        {
+            return Err(invalid(format!(
+                "there is already a sprint {} (or tasks' history names one)",
+                repr_str(&taken)
+            )));
+        }
+        sprint_at(&mut work.document, at).insert("id".into(), json!(to));
+        let tasks = work
+            .tasks()
+            .iter_mut()
+            .map(|t| rename_in_task(t, &from, &to))
+            .filter(|changed| *changed)
+            .count();
+        let mut reports = 0;
+        for sprint in sprints_mut(&mut work.document)
+            .iter_mut()
+            .filter_map(|s| s.get_mut("report"))
+            .filter_map(Value::as_object_mut)
+        {
+            if sprint
+                .get("to")
+                .and_then(Value::as_str)
+                .is_some_and(same_sprint)
+            {
+                sprint.insert("to".into(), json!(to));
+                reports += 1;
+            }
+        }
+        let archived = match work
+            .archive()?
+            .get_mut("tasks")
+            .and_then(Value::as_array_mut)
+        {
+            Some(list) => list
+                .iter_mut()
+                .map(|t| rename_in_task(t, &from, &to))
+                .filter(|changed| *changed)
+                .count(),
+            None => 0,
+        };
+        Vocabulary::of_document(&work.document)?;
+        outcome = Some(Renamed {
+            from: from.clone(),
+            to: to.clone(),
+            tasks,
+            archived,
+            reports,
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| not_found(format!("no sprint {}", repr_str(name))))
+}
+
 /// `atm sprint start`: make a planned sprint the active one (one at a time). Returns the sprint.
 ///
 /// # Errors

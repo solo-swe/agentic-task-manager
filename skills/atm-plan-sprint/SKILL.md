@@ -71,7 +71,7 @@ atm sprint add '<name>' --goal '<goal>' [--release '<release>'] [--due YYYY-MM-D
 ```
 
 For a planned one, change only what the user agreed to change: `atm sprint edit '<name>' --goal '…'` (an empty value
-removes a field). An active sprint is planned the same way: tasks can be pulled into it or pushed out of it at any
+removes a field), or its name with `atm sprint rename '<name>' '<new name>'` (its tasks follow). An active sprint is planned the same way: tasks can be pulled into it or pushed out of it at any
 time.
 
 A sprint created by mistake (an empty one, or a duplicate) can go, **only when the user asks**:

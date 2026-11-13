@@ -26,7 +26,8 @@ to do (`loop next`), 4 the task is claimed by another agent.
 
 ## Defining work
 - `atm task add` (`--json-file F` for many) and `atm task edit <id>`: a task's definition (never its status)
-- `atm sprint list|add|edit|start|close|delete|move|backlog`: sprints (planned, started and closed with the user)
+- `atm sprint list|add|edit|rename|start|close|delete|move|backlog`: sprints (planned, started and closed with the
+  user); `atm sprint rename <old> <new>` renames one in any state, and its tasks (archived ones too) follow
 - `atm release …`, `atm component …`: releases, and the project's parts by file globs
 - `atm db init --meta-file F`: the project and its vocabularies; `atm project workflow set`: how it pushes
 

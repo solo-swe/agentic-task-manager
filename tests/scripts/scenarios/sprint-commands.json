@@ -127,6 +127,145 @@
     "expect": { "stdout": "A: changed goal, due\n" }
   },
   {
+    "name": "atm sprint rename: an active sprint's tasks, archived ones and the report that carried tasks to it follow (T-496)",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              { "id": "Old", "state": "closed", "report": { "done": [], "carried": ["T-2"], "added": [], "to": "Now" } },
+              { "id": "Now", "state": "active" }
+            ]
+          },
+          "tasks": [
+            {
+              "id": "T-2",
+              "status": "todo",
+              "sprint": "Now",
+              "updated_at": "2026-01-01T00:00:00Z",
+              "sprint_history": [
+                { "sprint": "Old", "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z" },
+                { "sprint": "Now", "from": "2026-01-02T00:00:00Z" }
+              ]
+            },
+            { "id": "T-3", "status": "todo", "sprint": "Old" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "now",
+              "sprint_history": [{ "sprint": "now", "from": "2026-01-02T00:00:00Z" }]
+            }
+          ]
+        }
+      }
+    },
+    "args": ["sprint", "rename", "now", "Updates"],
+    "expect": {
+      "stdout": "Renamed the sprint “Now” to “Updates”: 2 tasks (1 archived) and 1 sprint report follow it.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": {
+            "sprints": [
+              {
+                "id": "Old",
+                "state": "closed",
+                "report": { "done": [], "carried": ["T-2"], "added": [], "to": "Updates" }
+              },
+              { "id": "Updates", "state": "active" }
+            ]
+          },
+          "tasks": [
+            {
+              "id": "T-2",
+              "status": "todo",
+              "sprint": "Updates",
+              "updated_at": "2026-01-01T00:00:00Z",
+              "sprint_history": [
+                { "sprint": "Old", "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z" },
+                { "sprint": "Updates", "from": "2026-01-02T00:00:00Z" }
+              ]
+            },
+            { "id": "T-3", "status": "todo", "sprint": "Old" }
+          ]
+        },
+        ".agentic-task-manager/tasks-archive.json": {
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "done",
+              "sprint": "Updates",
+              "sprint_history": [{ "sprint": "Updates", "from": "2026-01-02T00:00:00Z" }]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprint rename: a closed sprint too, and a change of case only",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "old work", "state": "closed" }] },
+          "tasks": [{ "id": "T-1", "status": "done", "sprint": "old work" }]
+        }
+      }
+    },
+    "args": ["sprint", "rename", "old work", "Old Work"],
+    "expect": {
+      "stdout": "Renamed the sprint “old work” to “Old Work”: 1 task follow it.\n",
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "Old Work", "state": "closed" }] },
+          "tasks": [{ "id": "T-1", "status": "done", "sprint": "Old Work" }]
+        }
+      }
+    }
+  },
+  {
+    "name": "atm sprint rename refuses another sprint's name, in any case",
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }, { "id": "B" }] }, "tasks": [] } }
+    },
+    "args": ["sprint", "rename", "A", "b"],
+    "expect": { "exit": 2, "stderrIncludes": ["there is already a sprint 'B'"] }
+  },
+  {
+    "name": "atm sprint rename refuses the name of a deleted sprint a task's history keeps",
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "meta": { "sprints": [{ "id": "A" }] },
+          "tasks": [
+            {
+              "id": "T-1",
+              "status": "todo",
+              "sprint_history": [{ "sprint": "Gone", "from": "2026-01-01T00:00:00Z", "to": "2026-01-02T00:00:00Z" }]
+            }
+          ]
+        }
+      }
+    },
+    "args": ["sprint", "rename", "A", "gone"],
+    "expect": { "exit": 2, "stderrIncludes": ["there is already a sprint 'Gone'"] }
+  },
+  {
+    "name": "atm sprint rename refuses an empty name",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } } },
+    "args": ["sprint", "rename", "A", " "],
+    "expect": { "exit": 2, "stderrIncludes": ["a sprint needs a name"] }
+  },
+  {
+    "name": "atm sprint rename of an unknown sprint names the sprints",
+    "setup": { "files": { ".agentic-task-manager/tasks.json": { "meta": { "sprints": [{ "id": "A" }] }, "tasks": [] } } },
+    "args": ["sprint", "rename", "Z", "Y"],
+    "expect": { "exit": 2, "stderrIncludes": ["no sprint 'Z'; the sprints: A"] }
+  },
+  {
     "name": "atm sprints start makes a planned sprint active and records its start",
     "setup": {
       "files": {

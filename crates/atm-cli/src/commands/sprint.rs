@@ -1,5 +1,5 @@
-//! `atm sprint`: sprints (the Python atm's `cli/commands/sprint.py`): list, add, edit, start, close, delete, move,
-//! backlog, and how they print.
+//! `atm sprint`: sprints (the Python atm's `cli/commands/sprint.py`): list, add, edit, rename, start, close, delete,
+//! move, backlog, and how they print.
 
 use std::fmt::Write;
 use std::path::Path;
@@ -10,7 +10,7 @@ use atm_lib::Project;
 use atm_lib::actor::agent_identity;
 use atm_lib::sprints::{
     Closed, Deleted, add_sprint, backlog_tasks, close_sprint, delete_sprint, edit_sprint,
-    list_sprints, move_tasks, start_sprint,
+    list_sprints, move_tasks, rename_sprint, start_sprint,
 };
 use clap::Subcommand;
 use serde_json::{Value, json};
@@ -62,6 +62,16 @@ pub enum SprintCommand {
         /// The planned end, YYYY-MM-DD (empty: remove it)
         #[arg(long, value_name = "DATE")]
         due: Option<String>,
+        /// Who you are (default: ATM_AGENT, else this session)
+        #[arg(long)]
+        agent: Option<String>,
+    },
+    /// Rename a sprint, in any state: its tasks, archived ones too, and the reports naming it follow.
+    Rename {
+        /// The sprint's name
+        name: String,
+        /// Its new name
+        new: String,
         /// Who you are (default: ATM_AGENT, else this session)
         #[arg(long)]
         agent: Option<String>,
@@ -336,6 +346,37 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 println!("{}: nothing changed", py_str(&sprint["id"]));
             } else {
                 println!("{}: changed {}", py_str(&sprint["id"]), changed.join(", "));
+            }
+        }
+        SprintCommand::Rename { name, new, agent } => {
+            if dry(ctx, &format!("rename the sprint {name} to {new}")) {
+                return Ok(());
+            }
+            let renamed = rename_sprint(&mut actor_project(agent.as_deref(), cwd)?, &name, &new)?;
+            if ctx.json {
+                print_json(&json!({
+                    "from": renamed.from,
+                    "to": renamed.to,
+                    "tasks": renamed.tasks,
+                    "archived": renamed.archived,
+                    "reports": renamed.reports,
+                }));
+            } else {
+                let n = (renamed.tasks + renamed.archived) as u64;
+                let mut line = format!(
+                    "Renamed the sprint “{}” to “{}”: {n} task{}",
+                    renamed.from,
+                    renamed.to,
+                    plural(n)
+                );
+                if renamed.archived > 0 {
+                    let _ = write!(line, " ({} archived)", renamed.archived);
+                }
+                if renamed.reports > 0 {
+                    let r = renamed.reports as u64;
+                    let _ = write!(line, " and {r} sprint report{}", plural(r));
+                }
+                println!("{line} follow it.");
             }
         }
         SprintCommand::Start { name, agent } => {
