@@ -35,15 +35,19 @@ test.describe("What's new", () => {
     // Only the newest releases (build/changelog.ts); the rest are linked
     expect(versions).toEqual(entries.slice(0, RECENT_RELEASES).map((e) => e.version));
 
-    const v0270 = panel(page).locator('.release[data-version="0.27.0"]');
-    await expect(v0270.locator('> h4')).toHaveText(/^v0\.27\.0\s*2026-11-03$/);
-    // Rendered with CompMD; plain bullets: no Added / Changed / Fixed headings
-    await expect(v0270.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
-    await expect(v0270.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
-    await expect(v0270.locator('.compmd-page li')).toHaveCount(
-      entries.find((e) => e.version === '0.27.0')!.sections.flatMap((s) => s.items).length,
+    // The oldest release shown (a fixed one would drop out of the list as releases come)
+    const oldest = entries[RECENT_RELEASES - 1];
+    const items = oldest.sections.flatMap((s) => s.items);
+    const release = panel(page).locator(`.release[data-version="${oldest.version}"]`);
+    await expect(release.locator('> h4')).toHaveText(
+      new RegExp(`^v${oldest.version.replace(/\./g, '\\.')}\\s*${oldest.date}$`),
     );
-    await expect(v0270.locator('li').first()).toContainText('no longer blanks the dashboard');
+    // Rendered with CompMD; plain bullets: no Added / Changed / Fixed headings
+    await expect(release.locator('.compmd')).toHaveAttribute('data-compmd', 'ready');
+    await expect(release.locator('.compmd-page :is(h1, h2, h3, h4, h5, h6)')).toHaveCount(0);
+    await expect(release.locator('.compmd-page li')).toHaveCount(items.length);
+    // Its first bullet's words, up to any Markdown
+    await expect(release.locator('li').first()).toContainText(items[0].split(/[`*_[\]]/)[0].trim());
   });
 
   test('older releases are a link to every release’s notes, in a new tab', async ({ page }) => {

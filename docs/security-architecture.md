@@ -935,6 +935,30 @@ Three new commands, each on the calling window only (I25), one new file, the app
   run alone, 46 of 46, as in 0.35.0); the functional e2e suite (434); CI on the branch, the Linux screenshots and the three platforms' Rust jobs included
   (green; the Windows build compiles the badge's overlay icon, which only Windows uses).
 
+**Release 0.37.0 (the sprint Updates and renames, T-496 to T-500, T-524, T-526 to T-533, T-535 to T-537).** The
+checklist:
+- **Skill and `docs/agent/` changed** (`skills/atm-plan-sprint/SKILL.md`, `docs/agent/commands.md`). No API key is
+  used for the agent sandbox, so this written review takes the live run's place: the plan-sprint skill names
+  `atm sprint rename` beside `atm sprint edit`, under its rule that only a change the user agreed to is made;
+  `atm docs commands` lists the renames (sprint, release, component, label, vocabulary entry) and
+  `atm release edit --released`, the last "only when the user says the release is out". None reads a path, a URL or
+  outside text, or runs anything; each changes only the task files' own fields, under their lock. No skill's
+  pre-approvals change (`skills/claude-code.json`), so none of them runs without the user's permission.
+- **Entry points, fields, CI permissions:** the new CLI commands read no path or URL. `atm serve` answers CompMD's
+  bundle with `compmd-host`'s `respond` and the app's plugin serves it (T-524, ADR-006: recorded above with I26 and
+  its checks, `tests/scripts/compmd-host-headers.json`); the window's CSP is unchanged. One app command, `restart_app`
+  (T-526, recorded above), in I25's capability. One new dependency of `atm serve`, `compmd-host` 0.7.0 (CompMD's own
+  crate, MIT, which the plugin already brought into the lockfile; part of adopting 0.7.0, T-524). The release workflow takes the updater's
+  archive under the bundle's new name (T-537); no new CI permission.
+- **What ships is what is described:** the app's title bar, sidebar and pills changed (the app only); the browser
+  dashboard's List lays out its rows off screen lazily (T-528), as the regenerated List screenshots show. The update
+  from 0.36.0 (its progress and restart, T-526), a diagram in a release bundle (T-524) and the app's name in the menu
+  bar, the Dock and ⌘-Tab (T-531, T-536, T-537) are checked by hand at the release with the user.
+- **Checks run:** `cargo test` (265), clippy, fmt and deny; the unit tests with coverage (1328); `pnpm run check`; the
+  CLI suite (628); the functional e2e suite (437 of 438: What's new's test named 0.27.0, which 0.37.0's entry
+  moves out of the ten releases it shows; it now checks the oldest one shown, and passes); the Linux screenshots in Docker (84; the List's five
+  regenerated).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

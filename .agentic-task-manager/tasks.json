@@ -20127,7 +20127,7 @@
       "description": "The Dock and ⌘-Tab name an app after its bundle's file, not its `CFBundleName` (which the menu bar shows, T-536). The bundle is `atm.app` (`productName`), so a release shows \"atm\". Agreed with Hakan: rename the bundle; dev builds (no bundle) keep showing `atm-app`.\n\n## Change\n- `app/src-tauri/tauri.conf.json`: `productName` \"Agentic Task Manager\"; `bundle.macOS.bundleName` is then redundant (drop it). `mainBinaryName`, the identifier and the bundled CLI (`Contents/MacOS/atm`) stay.\n- `packaging/homebrew-cask.sh`: `app` and `binary` paths, `name`; the cask token stays `atm-app`.\n- `.github/workflows/release.yml`: the updater archive and its signature are `Agentic Task Manager.app.tar.gz(.sig)`; the published asset names stay `atm-app-<version>-universal.*`.\n- Comments and docs: `Info.plist`, `menu.rs`, `updater-manifest.mjs`, `packaging/README.md`.\n\n## Tests\n- `lib.rs`'s config test; `tests/scripts/packaging.test.mjs`'s cask rows.\n\nAn update from 0.36.0 replaces the app where it is, so the old `atm.app` keeps its name until reinstalled; the release notes say so.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "app/src-tauri/tauri.conf.json",
@@ -20141,7 +20141,7 @@
         "tests/scripts/packaging.test.mjs"
       ],
       "created_at": "2026-11-13T17:01:52Z",
-      "updated_at": "2026-11-13T17:02:04Z",
+      "updated_at": "2026-11-13T17:04:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20155,7 +20155,18 @@
         "T-536"
       ],
       "started_at": "2026-11-13T17:02:04Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "342c8bbb41b6194f845d54ca95c3ad172360ea39",
+      "completed_at": "2026-11-13T17:04:14Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T17:04:14Z",
+          "kind": "outcome",
+          "text": "productName is Agentic Task Manager (bundle Agentic Task Manager.app; bundleName dropped); cask, release workflow, updater archive, tests and docs updated. Dev builds still show atm-app in the Dock. Check at the release: the Dock and ⌘-Tab name, and the cask install.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

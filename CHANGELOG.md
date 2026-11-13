@@ -4,6 +4,59 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.37.0] - 2026-11-13
+
+Updates and renames: the app's update shows its progress and restarts by itself, CompMD 0.7.0 used as its Tauri
+chapter recommends, the app called Agentic Task Manager, its sidebar and tabs reworked, and renames in the CLI.
+
+### Added
+- **Renames** (T-496 to T-500), each in atm-lib, every reference following in `tasks.json` and the archive:
+  - `atm sprint rename <old> <new>` (any state; tasks' `sprint` and `sprint_history`, other sprints' `report.to`);
+  - `atm release rename <old> <new>` (tasks' and sprints' `release`; its name, state and dates stay);
+  - `atm component rename <old> <new>` (tasks' `components`; its label, globs and review stay);
+  - `atm label rename <old> <new>`, a new `atm label` group (every task, and `meta.labels`; a task with both keeps
+    one);
+  - `atm project vocab rename status|type|priority <old> [<new>] [--label L]` (an entry's ID and/or label; tasks'
+    status, type or priority and `meta.default_priority` follow; a project on the defaults gets the list written).
+  Each refuses an ID in use, one that isn't valid and an unknown one. The plan-sprint skill mentions
+  `atm sprint rename`.
+- **Mark a release released by hand** (T-527): `atm release edit <id> --released [YYYY-MM-DD]` (today without a date)
+  and `--planned`, for a release holding a task with no commit (a check done with the user). It names the tasks done
+  but not merged, and refuses while one is open unless `--force`. `packaging/README.md`'s step 5 says when.
+- **Reorder the app's tabs by dragging them** (T-532): a pointer drag in `TitleBarTabs` (WebKit never starts an HTML5
+  drag from a button): the others slide aside, the order is saved; a press under 4 px is a click; ⌃⇧ (⌘⇧ on macOS)
+  with an arrow moves the focused tab.
+
+### Changed
+- **CompMD 0.7.0** (T-524, [ADR-006](docs/adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md), replacing
+  ADR-005), as its Tauri chapter recommends: one build (`vite.compmd.config.ts`, `out` and `source`) writes
+  `compmd.js` and CompMD's bundle (manifest, frames, packs); the app embeds the bundle for `tauri-plugin-compmd` 0.7.0
+  (`build::bundle`, `init(include_bundle!())`), and `atm serve` answers it with `compmd-host` 0.7.0's `respond`
+  (CompMD's own crate, the plugin's dependency already); the page passes the origin only in the browser. Packs load
+  inside the frames, so the page no longer fetches their modules, and the app's `atm:` scheme serves only `compmd.js`
+  and its WebAssembly. The window's CSP is unchanged.
+- **Agentic Task Manager** (T-531, T-536, T-537): the name users see in the app's menus, window title, notifications,
+  update notice and agents dialog, and the dashboard's; the command stays `atm`. `productName` is
+  "Agentic Task Manager", so macOS's menu bar (`CFBundleName`) says it, dev builds too, and the bundle is
+  `Agentic Task Manager.app`, the name the Dock and ⌘-Tab show. The Homebrew cask (still `atm-app`) installs it and
+  links its `atm`; the release's asset names are unchanged. An app updated from 0.36.0 keeps its `atm.app` file
+  until it is reinstalled.
+- **The app's sidebar the window's full height** (T-535, as Notion's): a 40 px strip at its top with the traffic
+  lights' room and the sidebar button (it drags the window); the title bar and its tabs start at its edge. Closed,
+  the title bar is the window's width, with the button. (T-529's sliding of the tabs, which this replaces, is gone.)
+- **The Progress and Activity pills are in the project's tab** (T-530), at the right of its subtitle line (the
+  title bar's `trail` snippet), giving way under 720 px; the overview keeps its activity in the title bar. The browser
+  is unchanged.
+
+### Fixed
+- **The app's update** (T-526): `install_update` sends its progress on a channel (bytes every 256 KB, then
+  installing), and the notice shows Downloading… X of Y MB with a bar, Installing…, Restarting…. The restart is its own
+  command, `restart_app` (Tauri's `request_restart`), and a page still there after 10 s offers Restart now.
+- **The sidebar showed no progress for some projects** (T-533): a project at 0% drew its bar on a track the colour of
+  the sidebar. The track is now `--border`, and each bar says what it counts on hover.
+- **The app's switch to the List was near CI's budget** (T-528; 416 and 523 ms against 400 on `main`): the List's
+  rows off screen are no longer laid out until they near the view (`content-visibility: auto`), 52–89 ms locally.
+
 ## [0.36.0] - 2026-11-12
 
 The atm app as a desktop app (`docs/app-desktop-ui-design.md`, T-511 to T-520): one row of tabs in the window's own
