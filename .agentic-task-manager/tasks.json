@@ -1,6 +1,6 @@
 {
   "meta": {
-    "project": "ATM Dashboard",
+    "project": "Agentic Task Manager",
     "created": "2026-10-22",
     "description": "Phases 0-6: Svelte 5 migration (docs/svelte-migration-plan.md, done). Phases 7-9: dashboard v2 (docs/dashboard-v2-requirements.md, done). Phases 10-12: v3 (docs/v3-requirements.md, design for parallel agents in docs/parallel-agents-design.md): 10 = 0.10.0 project folder, helper launcher, /atm:serve, update instructions; 11 = 0.11.0 parallel agents; 12 = 0.12.0 filter counts, saved views, light/dark modes, themes. Every task must leave `npm run verify` (in dashboard/) and the helper's test suite (tests/scripts) green: a behaviour change lands together with the tests it changes. The helper is plugin/scripts/atm.py: Python 3.9+, standard library only (docs/helper-runtime-proposal.md). Phase 13 = 0.13.0: footer, Help and About, priorities, project vocabularies, In Review (docs/v4-requirements.md).",
     "id": "cb66fd8c",
@@ -19476,7 +19476,7 @@
       "description": "CompMD is redesigning `tauri-plugin-compmd` and how Tauri apps should use CompMD. **Waits for that redesign task in CompMD** (its release and its documentation for Tauri apps).\n\nOnce it's out, check atm's app against it and bring it up to the standard:\n\n## What to compare\n- **The plugin and its version:** `tauri-plugin-compmd` (pinned with `=` to the `@compmd/*` packages' version, `app/src-tauri/Cargo.toml`), and how the app registers it (`app/src-tauri/src/lib.rs`).\n- **What atm serves itself on `atm:`** (`app/src-tauri/src/assets.rs`, embedded by `app/src-tauri/build.rs`): `compmd.js`, its WebAssembly and the packs' modules. Does the plugin now serve these, or say how an app should?\n- **The page's side** (`dashboard/src/lib/compmd.ts`: `sandboxOptions`, `fetchPackModules`, `moduleUrl`): the frames' `base`, the packs' modules handed over as code checked by their `integrity`. Is this still the recommended way, or does CompMD's API cover it now?\n- **The window's CSP** (`tauri.conf.json`, I26 in `docs/security-architecture.md`): the `atm://localhost/assets/compmd/` and `compmd://localhost/frames/` folders, and their `http://….localhost` forms for Windows.\n- **Caching:** T-508 found WebKit asks again for each `atm:` file (`no-cache`); check against what CompMD now recommends.\n\n## Then\nWhere atm differs from the standard: change it (or record why not), keeping `atm serve` and the app serving the same files with the same headers (`tests/scripts/compmd-host-headers.json`). Update [ADR-005](docs/adr/ADR-005-compmds-tauri-plugin-and-atms-asset-scheme.md) (or a new ADR replacing it), I26, and the [Tauri guide](docs/guides/tauri.md). New dependencies or plugin versions need a yes first.\n\n## Checks\nThe app's Rust tests (`the_pages_compmd_files_come_from_atms_scheme_as_atm_serve_sends_them`, `the_windows_csp_is_strict`, `assets.rs`'s), `compmd.test.ts`, the app e2e specs, and by hand: diagrams draw in the app (`cargo tauri dev`, and a release bundle).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "app/src-tauri/Cargo.toml",
@@ -19490,7 +19490,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-10T22:42:38Z",
-      "updated_at": "2026-11-13T04:51:14Z",
+      "updated_at": "2026-11-13T14:18:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19518,7 +19518,9 @@
           "text": "Waiting on CompMD’s Tauri plugin redesign: is it released, with its guidance for Tauri apps? Answer with the version (and the CompMD task or docs) to unblock this. → CompMD 0.7.0 is out (Hakan, 2026-11-13): update atm to it and use it as CompMD now recommends, the Tauri integration above all.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-13T14:18:30Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-525",
@@ -20021,7 +20023,7 @@
       "description": "Hakan on T-529: the tabs sliding with the sidebar lag and don't line up. Notion splits the window instead: the sidebar is a column the window's full height, and the title bar with the tabs belongs to the area right of it, so the tabs move with that area and need no animation of their own.\n\n## Change\n- **The sidebar:** from the window's top (not under the title bar, `top: 40px` in `Sidebar.svelte`), with a top strip of the title bar's height holding the sidebar button, after room for macOS's traffic lights (`trafficLightPosition`); a mouse-down on the strip's free space drags the window, a double click maximizes it (`onBarMouseDown`). On Windows and Linux the page's menus stay at the window's left (decide: the strip or the title bar), the window buttons at the right of the title bar.\n- **The title bar** (`AppTitleBar.svelte`) starts at the sidebar's edge: no margin over the sidebar (`--sidebar-offset`); with the sidebar open it needs no room for the traffic lights, with it closed it does, and the sidebar button is in it.\n- **T-529's sliding margin goes** (the lead's `margin-right`, `--lead-end`, the `$effect` measuring it, its e2e test), and the design doc's line on it is rewritten.\n\n## Tests\nApp e2e: open, the sidebar starts at the window's top and the first tab at its edge, the button in the sidebar's strip; closed, the tabs after the traffic lights' room and the button in the title bar; the strip drags the window. Unit tests (`AppTitleBar`, `Sidebar` components) updated; the full functional suite once. Checked by eye in `cargo tauri dev` with Hakan.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -20031,7 +20033,7 @@
         "docs/app-desktop-ui-design.md"
       ],
       "created_at": "2026-11-13T14:00:19Z",
-      "updated_at": "2026-11-13T14:01:16Z",
+      "updated_at": "2026-11-13T14:08:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20049,7 +20051,18 @@
         "T-529"
       ],
       "started_at": "2026-11-13T14:01:16Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c0f486e6ab214c28f220ee41eae86a1b55ab30e2",
+      "completed_at": "2026-11-13T14:08:26Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T14:08:26Z",
+          "kind": "outcome",
+          "text": "The window split as Notion’s: the sidebar from the window’s top, a 40 px strip with the traffic lights’ room and the sidebar button (it drags the window); the title bar and tabs only right of it (no margin over it, no traffic-light room while it is open). Closed, the bar is full width with the button. T-529’s sliding margin and its measuring are gone. Unit, e2e (positions, strip drag); 438 passed. On Windows and Linux the menus stay in the title bar. Check by eye in cargo tauri dev.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-536",
