@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { resetAppShell } from '../../src/lib/api/shell';
 import { appTabs } from '../../src/lib/app-tabs.svelte';
 import AppTitleBar from '../../src/lib/shell/AppTitleBar.svelte';
+import { dashboard } from '../../src/lib/state.svelte';
 import standard from '../fixtures/standard.json';
 import { loadIntoDashboard } from './components.helpers';
 
@@ -24,13 +25,20 @@ describe('AppTitleBar (T-513)', () => {
   });
   afterEach(() => clearMocks());
 
-  it('on macOS leaves room for the system’s buttons and draws no menus', async () => {
+  it('on macOS leaves room for the system’s buttons while the sidebar is closed, and draws no menus (T-535)', async () => {
     app({ system_menu_bar: true, system_window_buttons: true });
+    dashboard.sidebarOpen = false;
     const { container } = render(AppTitleBar, { title: 'Standard Project' });
     await waitFor(() => expect(container.querySelector('.app-titlebar.system-buttons')).not.toBeNull());
+    // Closed, the sidebar button is in the bar
+    expect(container.querySelector('#app-sidebar-toggle')).not.toBeNull();
     expect(container.querySelector('#window-buttons')).toBeNull();
     expect(container.querySelector('#app-menus')).toBeNull();
     expect(container.querySelector('#dashboard-title')).toHaveTextContent('Standard Project');
+    // Open, the traffic lights and the button are over the sidebar's strip instead
+    dashboard.sidebarOpen = true;
+    await waitFor(() => expect(container.querySelector('.app-titlebar.system-buttons')).toBeNull());
+    expect(container.querySelector('#app-sidebar-toggle')).toBeNull();
   });
 
   it('names each tab by the page in its own address, chosen or not (T-525): the overview’s tab is the overview', async () => {

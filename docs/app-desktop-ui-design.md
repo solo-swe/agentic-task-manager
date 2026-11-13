@@ -212,10 +212,13 @@ changes:
 - missing projects (a folder without a task file) dimmed, as the overview shows them.
 
 It is a Svelte component (`shell/Sidebar.svelte`), shown only in the app, from what the page already loads
-(`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the title bar's sidebar button
-toggle it, and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser
-keeps its selectors. While it is open, the title bar's tabs start at its edge, over the page they show, and slide there
-and back as it opens and closes (T-529; at once with reduced motion).
+(`dashboard.projects`, the overview's summaries). View ▸ Show Sidebar (⌃⌘S, Ctrl+B) and the sidebar button toggle it,
+and dragging its edge resizes it; both are kept in the page's preferences (`lib/prefs.ts`). The browser keeps its
+selectors. **The window is split as Notion's** (Hakan, T-535): the sidebar is a column of the window's full height, its
+top strip the title bar's height, with macOS's traffic lights over it and the sidebar button after them; the strip
+drags the window as the title bar does. The title bar with the tabs is only over the area right of it, so the tabs
+start at the sidebar's edge and move with that area. Closed, the title bar takes the window's width and has the
+button. (T-529 slid the tabs over a full-width bar instead; it lagged and didn't line up.)
 
 macOS's translucent sidebar (vibrancy) needs a transparent window and has no equal on the others; it is not proposed.
 

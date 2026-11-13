@@ -8,8 +8,8 @@ if (typeof document !== 'undefined' && !('fonts' in document)) {
   Object.defineProperty(document, 'fonts', { value: fonts });
 }
 
-// jsdom has no ResizeObserver, which Svelte's `bind:clientWidth` uses (the app's title bar, T-529): one that never
-// reports, as jsdom lays nothing out
+// jsdom has no ResizeObserver, which Svelte's `bind:clientWidth` and friends use: one that never reports, as jsdom lays
+// nothing out
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class {
     observe() {}

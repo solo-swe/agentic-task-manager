@@ -22,8 +22,8 @@
   import { appTabs, tabProject } from '../app-tabs.svelte';
   import { tabActions } from '../tab-actions';
   import TitleBarTabs from '../ui/TitleBarTabs.svelte';
-  import Icon from '../ui/Icon.svelte';
   import AppMenus from './AppMenus.svelte';
+  import SidebarToggle from './SidebarToggle.svelte';
 
   let { title, end }: { title: string; end?: Snippet } = $props();
 
@@ -39,42 +39,20 @@
     document.title = title;
     void setWindowTitle(title);
   });
-
-  // Where the lead ends, from the window's left edge (the bar starts there): the tabs move past the sidebar only by
-  // what it covers beyond that (T-529)
-  let lead = $state<HTMLElement>();
-  let leadWidth = $state(0);
-  let leadEnd = $state(0);
-  // Read after the DOM is updated: the shell's answer moves the lead (macOS's traffic lights) without resizing it
-  $effect(() => {
-    void shell;
-    if (lead) leadEnd = lead.offsetLeft + leadWidth;
-  });
 </script>
 
 <!-- A mouse-down on the bar's free space drags the window (a pointer gesture, as the system's title bar's) -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <header
   class="app-titlebar"
-  class:system-buttons={shell?.system_window_buttons}
+  class:system-buttons={shell?.system_window_buttons && !dashboard.sidebarOpen}
   id="app-titlebar"
-  style:--lead-end="{leadEnd}px"
   onmousedown={onBarMouseDown}
 >
-  <!-- The bar's lead: the menus (Windows, Linux) and the sidebar button. With the sidebar open, the tabs slide to its
-       edge, over the page they show (T-529): the lead's right margin makes up the difference -->
-  <div class="app-titlebar-lead" id="app-titlebar-lead" bind:this={lead} bind:clientWidth={leadWidth}>
-    {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
-    <!-- Show or hide the sidebar (T-515; View ▸ Show Sidebar) -->
-    <button
-      class="app-sidebar-toggle"
-      id="app-sidebar-toggle"
-      title={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-      aria-label={dashboard.sidebarOpen ? 'Hide the sidebar' : 'Show the sidebar'}
-      aria-pressed={dashboard.sidebarOpen}
-      onclick={() => dashboard.toggleSidebar()}><Icon name="panel-left" size={16} /></button
-    >
-  </div>
+  {#if shell && !shell.system_menu_bar}<AppMenus />{/if}
+  <!-- Show the sidebar (T-515; View ▸ Show Sidebar): here while it is closed; open, its own top strip has the button
+       (T-535) -->
+  {#if !dashboard.sidebarOpen}<SidebarToggle />{/if}
   <!-- The window's tabs (T-514), each an address (lib/app-tabs.svelte.ts), in the reusable strip (ui/TitleBarTabs) -->
   <TitleBarTabs
     tabs={appTabs.tabs}
@@ -118,9 +96,10 @@
 </header>
 
 <style>
-  /* The window's own title bar, from its very top and edge to edge (out of the page's padding, body in app.css):
-     everything on its middle line, macOS's traffic lights too (trafficLightPosition's y, 22, centres them at 20 px,
-     as measured on macOS 26) */
+  /* The window's own title bar, from its very top, edge to edge of the area right of the sidebar (out of the page's
+     padding, body in app.css): the sidebar is a column of the window's full height, as Notion's, so the tabs move
+     with this area and need no animation of their own (T-535). Everything on its middle line, macOS's traffic lights
+     too (trafficLightPosition's y, 22, centres them at 20 px, as measured on macOS 26) */
   .app-titlebar {
     align-items: center;
     background: var(--surface2);
@@ -129,29 +108,12 @@
     gap: var(--space-3);
     height: 40px;
     margin: calc(-1 * var(--space-9)) calc(-1 * var(--space-9)) 0;
-    /* Over the sidebar too, from the window's left edge */
-    margin-left: calc(-1 * (var(--space-9) + var(--sidebar-offset, 0px)));
     padding: 0 var(--space-2) 0 var(--space-3);
     position: sticky;
     top: 0;
     user-select: none;
     /* Over the page's header pinned under it */
     z-index: 50;
-  }
-  /* With the sidebar open, the tabs start at its edge: the lead's margin is what the sidebar covers past the lead; it
-     slides as the sidebar opens and closes, at once with reduced motion (T-529) */
-  .app-titlebar-lead {
-    align-items: center;
-    display: flex;
-    flex: 0 0 auto;
-    gap: var(--space-3);
-    margin-right: max(0px, calc(var(--sidebar-offset, 0px) - var(--lead-end, 0px) - var(--space-3)));
-    transition: margin-right 0.2s ease;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .app-titlebar-lead {
-      transition: none;
-    }
   }
   .app-titlebar-end {
     align-items: center;
@@ -160,25 +122,8 @@
     margin-left: auto;
     min-width: 0;
   }
-  .app-sidebar-toggle {
-    align-items: center;
-    background: none;
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--text-muted);
-    display: inline-flex;
-    flex: 0 0 28px;
-    height: 28px;
-    justify-content: center;
-  }
-  .app-sidebar-toggle:hover,
-  .app-sidebar-toggle[aria-pressed='true'] {
-    color: var(--text);
-  }
-  .app-sidebar-toggle:hover {
-    background: var(--surface);
-  }
-  /* macOS's traffic lights sit over the bar's left end (trafficLightPosition in tauri.conf.json) */
+  /* macOS's traffic lights sit over the window's left end (trafficLightPosition in tauri.conf.json): over this bar
+     while the sidebar is closed, over the sidebar's top strip while it is open */
   .app-titlebar.system-buttons {
     --traffic-lights: 88px;
     padding-left: var(--traffic-lights);
