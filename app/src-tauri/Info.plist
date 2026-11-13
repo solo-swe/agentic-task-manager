@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!-- Merged into the app's Info.plist by Tauri (the bundler, and dev builds): the atm:// links the app opens (T-459,
-     src/links.rs), and the name Finder and the Dock show (T-531). CFBundleName, the menu bar's, isn't here: Tauri writes
-     it from tauri.conf.json's bundle.macOS.bundleName over this file (T-536). The bundle's file stays atm.app
-     (productName), which the updater, the signing and the Homebrew cask name -->
+     src/links.rs), and the app's display name (T-531). CFBundleName, the menu bar's, isn't here: Tauri writes it from
+     tauri.conf.json's productName over this file (T-536), which also names the bundle's file, Agentic Task Manager.app,
+     the name the Dock and ⌘-Tab show (T-537) -->
 <plist version="1.0">
 <dict>
   <key>CFBundleDisplayName</key>

@@ -29,7 +29,7 @@ cask "atm-app" do
   sha256 "$sha"
 
   url "https://github.com/solo-swe/agentic-task-manager/releases/download/v#{version}/atm-app-#{version}-universal.dmg"
-  name "atm"
+  name "Agentic Task Manager"
   desc "Agentic Task Manager: file-based tasks for agentic development, and their dashboard"
   homepage "https://github.com/solo-swe/agentic-task-manager"
 
@@ -39,9 +39,9 @@ cask "atm-app" do
   # The app updates itself (T-483), its atm CLI with it: brew leaves an installed one alone
   auto_updates true
 
-  app "atm.app"
+  app "Agentic Task Manager.app"
   # The app's own atm CLI goes on PATH: the formula's would be a second one
-  binary "#{appdir}/atm.app/Contents/MacOS/atm"
+  binary "#{appdir}/Agentic Task Manager.app/Contents/MacOS/atm"
 
   caveats <<~CAVEATS
     The app brings its own atm CLI. If the atm formula is installed, uninstall it

@@ -70,8 +70,10 @@ describe('packaging', () => {
           'url "https://github.com/solo-swe/agentic-task-manager/releases/download/v#{version}/atm-app-#{version}-universal.dmg"',
         ),
       );
-      assert.match(r.stdout, /^ {2}app "atm\.app"$/m);
-      assert.ok(r.stdout.includes('binary "#{appdir}/atm.app/Contents/MacOS/atm"'));
+      // The bundle is named for the app (productName, T-537): the Dock and ⌘-Tab show its file's name
+      assert.match(r.stdout, /^ {2}name "Agentic Task Manager"$/m);
+      assert.match(r.stdout, /^ {2}app "Agentic Task Manager\.app"$/m);
+      assert.ok(r.stdout.includes('binary "#{appdir}/Agentic Task Manager.app/Contents/MacOS/atm"'));
       // A cask declares conflicts only with casks (Homebrew refuses `conflicts_with formula:`), and `depends_on macos:`
       // only for a minimum newer than Homebrew's own: the caveats say to remove the formula
       assert.doesNotMatch(r.stdout, /conflicts_with/);
@@ -99,7 +101,7 @@ describe('packaging', () => {
     const manifest = (args) =>
       spawnSync('node', [script('updater-manifest.mjs'), ...args], { cwd: REPO, encoding: 'utf8' });
     try {
-      const sig = path.join(dir, 'atm.app.tar.gz.sig');
+      const sig = path.join(dir, 'Agentic Task Manager.app.tar.gz.sig');
       fs.writeFileSync(sig, 'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZQ==\n');
       const notes = path.join(dir, 'WHATS-NEW.md');
       fs.writeFileSync(

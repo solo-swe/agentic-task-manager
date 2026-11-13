@@ -19,8 +19,8 @@ use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 use crate::commands::{AppError, AppState};
 
 /// The name users see (T-531): the menus, the window, the notifications, macOS's menu bar (`Info.plist`'s
-/// `CFBundleName`). The command stays `atm`, and so does the bundle's file name (`productName`: `atm.app`, which the
-/// updater's archive, the signing and the Homebrew cask name).
+/// `CFBundleName`) and the bundle's file (`productName`: `Agentic Task Manager.app`, which the Dock and ⌘-Tab show,
+/// T-537). The command stays `atm`, and the app's program `atm-app`.
 pub const APP_NAME: &str = "Agentic Task Manager";
 
 /// What a menu item asks for: the page does it (all but `quit` and `new_window`, which the app does).

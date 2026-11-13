@@ -355,14 +355,16 @@ mod tests {
         assert_eq!(conf["identifier"], atm_common::home::APP_ID);
     }
 
-    /// macOS's menu bar shows `CFBundleName`, which Tauri writes from `bundle.macOS.bundleName` (else `productName`),
-    /// dev builds too: the app's name. The bundle's file stays `atm.app`, which the updater and the cask name (T-536)
+    /// `productName` is the app's name: Tauri writes macOS's `CFBundleName` from it (the menu bar's, dev builds too:
+    /// T-536), and it names the bundle's file, `Agentic Task Manager.app`, which the Dock and ⌘-Tab show (T-537).
+    /// The main program stays `atm-app` (dev builds have no bundle, so their Dock shows that) and the CLI `atm`
     #[test]
-    fn the_menu_bar_names_the_app_and_its_file_stays_atm() {
+    fn the_app_and_its_bundle_are_named_agentic_task_manager() {
         let conf: serde_json::Value =
             serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
-        assert_eq!(conf["bundle"]["macOS"]["bundleName"], menu::APP_NAME);
-        assert_eq!(conf["productName"], "atm");
+        assert_eq!(conf["productName"], menu::APP_NAME);
+        assert_eq!(conf["mainBinaryName"], "atm-app");
+        assert!(conf["bundle"]["macOS"]["bundleName"].is_null());
         assert!(!include_str!("../Info.plist").contains("<key>CFBundleName</key>"));
     }
 
