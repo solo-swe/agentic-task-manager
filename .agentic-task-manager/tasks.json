@@ -17985,7 +17985,7 @@
       "description": "Labels are per task (`atm task edit --add-label/--remove-label`): renaming one (`ui` to `dashboard`) means editing every task by hand.\n\n## Change\n- A rename of a label on every task that has it, in `tasks.json` and `tasks-archive.json`. Propose where it lives (`atm task relabel <old> <new>`, or a small `atm label` group with `list` and `rename`) and pick the one that fits the other renames.\n- A task that already has the new label keeps one.\n- The new label follows the label rule (lowercase letters, digits, `-`, `_`, at most 32 characters).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario: tasks with the old label, one with both, one archived.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/edit.rs",
@@ -17994,7 +17994,7 @@
         "tests/scripts/scenarios/edit.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T12:56:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18007,7 +18007,9 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T12:56:44Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-500",
@@ -19919,14 +19921,14 @@
       "description": "Found by Hakan: in the app's sidebar ([Sidebar.svelte](dashboard/src/lib/shell/Sidebar.svelte)) some projects show no progress. Each row draws a bar from `project.summary?.active_sprint?.percent ?? project.summary?.percent ?? 0`.\n\n## Find out\nWhich projects and why, against the overview's cards, which show progress for the same projects: a summary not loaded yet (or not at all) for projects that aren't open, a `percent` of 0 drawn as an empty bar (a sprint just started), a project without sprints, or the bar hidden by the row's layout.\n\n## Change\n- Every project that isn't missing shows its progress as the overview's card does (the active sprint's, else the project's), from the start and as it changes; a project with nothing to count says so rather than showing an empty bar that reads as missing.\n- If the summary is missing for some projects, fix where it is loaded (the app's `list_projects`), not only the sidebar.\n\n## Tests\nAn app e2e spec with several projects (with and without sprints, one just started, one not opened yet): each row's bar matches its card on the overview; unit tests for whatever computes it.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/Sidebar.svelte",
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T11:01:00Z",
-      "updated_at": "2026-11-13T12:32:04Z",
+      "updated_at": "2026-11-13T12:56:40Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19940,7 +19942,18 @@
         "dashboard"
       ],
       "started_at": "2026-11-13T12:32:04Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "ab38a76a0390822176c8062cb304b7343c694b95",
+      "completed_at": "2026-11-13T12:56:40Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T12:56:40Z",
+          "kind": "outcome",
+          "text": "The cause: the sidebar’s bar used the project chooser’s track colour (--surface2), the sidebar’s own background, so a project at 0% (a sprint just started) showed no bar. The track is now --border; each bar says what it counts on hover (the active sprint’s done of total, else the project’s; “no tasks yet”, “not known yet”). Unit and e2e tests; full suite 433 passed, What’s new’s 5 timed out under load and pass alone.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-534",

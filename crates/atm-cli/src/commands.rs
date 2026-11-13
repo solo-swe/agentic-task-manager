@@ -7,6 +7,7 @@ pub mod completion;
 pub mod component;
 pub mod db;
 pub mod detach;
+pub mod label;
 pub mod loop_;
 pub mod maintenance;
 pub mod meta;
