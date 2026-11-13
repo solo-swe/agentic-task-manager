@@ -487,9 +487,11 @@ test.describe('the dashboard in the atm app', () => {
       .toEqual(['/board', first, '/projects/second/list']);
     // The drag didn't select it: the first project's tab is still shown
     await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
-    // A plain click selects
+    // A plain click selects: the tab is chosen and the page goes to its project (not its heading's text, which turns
+    // from the listed name to the project's own once its page loads)
     await tabs.nth(2).locator('[role="tab"]').click();
-    await expect(page.locator('#dashboard-title')).toHaveText('Second Project');
+    await expect(tabs.nth(2).locator('[role="tab"]')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/projects/second/list');
     // The bar's free space (just past the +) still moves the window
     const free = await page.evaluate(() => document.querySelector('#app-tab-new')!.getBoundingClientRect().right + 16);
     await page.locator('#app-titlebar').click({ position: { x: free, y: 10 } });
