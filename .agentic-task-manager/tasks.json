@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 526,
+    "next_id": 527,
     "labels": [
       {
         "id": "architecture",
@@ -1086,10 +1086,31 @@
       },
       {
         "id": "The desktop app",
-        "state": "active",
+        "state": "closed",
         "goal": "The atm app as a desktop app, the same on macOS, Windows and Linux: tabs, sidebar, status bar, menus, the title bar (docs/app-desktop-ui-design.md)",
         "release": "0.36.0",
-        "start": "2026-11-10T23:28:49Z"
+        "start": "2026-11-10T23:28:49Z",
+        "end": "2026-11-13T04:34:12Z",
+        "report": {
+          "done": [
+            "T-511",
+            "T-512",
+            "T-513",
+            "T-514",
+            "T-515",
+            "T-516",
+            "T-517",
+            "T-518",
+            "T-520",
+            "T-522",
+            "T-525"
+          ],
+          "carried": [],
+          "added": [
+            "T-520",
+            "T-525"
+          ]
+        }
       }
     ],
     "releases": [
@@ -18641,7 +18662,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18671,7 +18692,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-512",
@@ -18697,7 +18719,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18732,7 +18754,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-513",
@@ -18760,7 +18783,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18790,7 +18813,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-514",
@@ -18817,7 +18841,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18852,7 +18876,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-515",
@@ -18877,7 +18902,7 @@
         "dashboard/tests/unit/Sidebar.component.test.ts"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18911,7 +18936,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-516",
@@ -18935,7 +18961,7 @@
         "dashboard/src/lib/shell/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18964,7 +18990,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-517",
@@ -18988,7 +19015,7 @@
         "dashboard/src/lib/dialogs/"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19022,7 +19049,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-518",
@@ -19047,7 +19075,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19082,7 +19110,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-519",
@@ -19135,7 +19164,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T23:14:59Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19164,7 +19193,8 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
     },
     {
       "id": "T-521",
@@ -19224,7 +19254,7 @@
       "description": "Follow-up of T-483 (in-app updates, approved), done with Hakan when 0.36.0 (or the first release after 0.35.0) is published.\n\n## Check\nOn a Mac with 0.35.0 installed (one from the release download, one from the Homebrew cask, which says `auto_updates true`):\n- the app offers the update and asks before installing (never silently);\n- the download's signature is verified against the built-in key (a tampered or wrongly signed archive is refused: check on a draft release, if practical);\n- it installs, restarts on the new version, and the bundled `atm` is the new one too (`atm version`);\n- `brew upgrade` afterwards leaves the cask's app alone.\n\nRecord the result in a note; a problem becomes a task.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "done",
       "dependencies": [
         "T-521"
       ],
@@ -19233,9 +19263,9 @@
         "packaging/README.md"
       ],
       "created_at": "2026-11-10T01:56:18Z",
-      "updated_at": "2026-11-10T01:56:18Z",
+      "updated_at": "2026-11-13T04:33:23Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "The desktop app",
@@ -19243,7 +19273,19 @@
         }
       ],
       "sprint": "The desktop app",
-      "with": "user"
+      "with": "user",
+      "started_at": "2026-11-13T04:33:23Z",
+      "started_by": "claude:0f56a916",
+      "completed_at": "2026-11-13T04:33:23Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T04:33:23Z",
+          "kind": "outcome",
+          "text": "Checked with Hakan on 0.36.0 (published 2026-11-13): 0.35.0 offered the update and asked first; it downloaded the signed archive and installed it; the app and its bundled atm report 0.36.0; brew upgrade leaves the cask app alone. Gap: no progress shown while it downloads (33 MB), and the app did not restart by itself (Hakan closed it): a follow-up task.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-523",
@@ -19365,7 +19407,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-12T19:36:30Z",
-      "updated_at": "2026-11-13T03:45:42Z",
+      "updated_at": "2026-11-13T04:33:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19394,7 +19436,38 @@
       "pr": {
         "number": 47,
         "url": "https://github.com/solo-swe/agentic-task-manager/pull/47"
-      }
+      },
+      "merged_at": "2026-11-13T03:57:42Z"
+    },
+    {
+      "id": "T-526",
+      "name": "Desktop app: the update shows its download's progress, and the app restarts by itself after installing",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "distribution"
+      ],
+      "description": "Found in T-522 (0.35.0 updating to 0.36.0): after the click, the app sat on \"Installing…\" with no sign of progress while it downloaded the 33 MB archive, and it did not reopen on the new version: it was installed, and Hakan closed the app himself.\n\n## Change\n- **Progress:** `install_update` ([updates.rs](app/src-tauri/src/updates.rs)) ignores `download_and_install`'s callbacks (`|_, _| {}`, `|| {}`). Send the page the downloaded and total bytes on a channel the command takes, and \"installing\" once the download is done; `UpdateNotice` shows a progress bar and the step (downloading, installing, restarting).\n- **The restart:** find why `app.restart()` didn't bring the app back after the install on macOS (the single-instance plugin, the window-state writes on exit from T-518, or the restart racing the bundle's replacement), and fix it; if a restart can't be made reliable, the notice says the update is installed and offers Restart Now.\n- A failure at any step still says why, and the running app stays as it is.\n\n## Tests\nUnit and e2e (`app.spec.ts`, the IPC mock sending progress); the restart by hand on macOS at the next release, with Hakan (as T-522).",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "app/src-tauri/src/updates.rs",
+        "dashboard/src/lib/api/updates.ts",
+        "dashboard/src/lib/shell/UpdateNotice.svelte"
+      ],
+      "created_at": "2026-11-13T04:33:45Z",
+      "updated_at": "2026-11-13T04:33:45Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "Hakan Serce",
+      "components": [
+        "dashboard"
+      ],
+      "related": [
+        "T-522"
+      ]
     }
   ]
 }
