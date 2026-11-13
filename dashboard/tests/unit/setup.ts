@@ -7,3 +7,13 @@ if (typeof document !== 'undefined' && !('fonts' in document)) {
   const fonts = Object.assign(new EventTarget(), { ready: Promise.resolve(), status: 'loaded' });
   Object.defineProperty(document, 'fonts', { value: fonts });
 }
+
+// jsdom has no ResizeObserver, which Svelte's `bind:clientWidth` uses (the app's title bar, T-529): one that never
+// reports, as jsdom lays nothing out
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}

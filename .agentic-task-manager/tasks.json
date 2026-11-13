@@ -19863,7 +19863,7 @@
       "description": "Found by Hakan: the app's tabs (`AppTitleBar.svelte`) can't be reordered by drag and drop. `AppTabs.move(id, to)` ([app-tabs.svelte.ts](dashboard/src/lib/app-tabs.svelte.ts)) exists for it, but nothing in the title bar calls it, and a mouse-down on the bar starts the window's drag (`start_dragging`).\n\n## Change\n- Dragging a tab sideways moves it among the tabs, as a browser's or Finder's tabs do: the others make room as it passes, it lands where it is let go, and the order is saved with the tabs (`save_tabs`, T-518). A click without moving still selects it; a drag on the bar's free space still moves the window.\n- With the keyboard too: a shortcut, or the tab's context, moves the focused tab left or right (choose one that doesn't clash with the menu's, `menu.rs`), and the [desktop UI design](docs/app-desktop-ui-design.md) says how.\n- Within one window; dragging a tab out to another window is not part of this.\n\n## Tests\nUnit tests for the move (`app-tabs`), and an app e2e spec: drag the third tab to the first place, the order shown and saved, a plain click still selects, the bar's free space still drags the window (`windowCalls`).",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/shell/AppTitleBar.svelte",
@@ -19873,7 +19873,7 @@
         "dashboard/tests/e2e/app.spec.ts"
       ],
       "created_at": "2026-11-13T11:01:00Z",
-      "updated_at": "2026-11-13T11:58:59Z",
+      "updated_at": "2026-11-13T12:03:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19888,7 +19888,18 @@
         "docs"
       ],
       "started_at": "2026-11-13T11:58:59Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "20999e29e1023d12aee341e3f214b5d774a9df88",
+      "completed_at": "2026-11-13T12:03:11Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T12:03:11Z",
+          "kind": "outcome",
+          "text": "The cause: HTML5 drag and drop, which WebKit (the app on macOS and Linux) never starts from a button; the tests ran in Chromium. Now a pointer drag in TitleBarTabs: the tab follows the pointer, the others slide aside (instant with reduced motion), the order is saved; a press under 4 px is a click; ⌃⇧/⌘⇧ with an arrow moves the focused tab. Unit and e2e (a real mouse drag); 438 passed. Try it by eye in the app.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-533",
