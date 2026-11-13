@@ -353,6 +353,17 @@ mod tests {
         assert_eq!(conf["identifier"], atm_common::home::APP_ID);
     }
 
+    /// macOS's menu bar shows CFBundleName, which Tauri writes from bundle.macOS.bundleName (else productName), dev
+    /// builds too: the app's name. The bundle's file stays atm.app, which the updater and the cask name (T-536)
+    #[test]
+    fn the_menu_bar_names_the_app_and_its_file_stays_atm() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
+        assert_eq!(conf["bundle"]["macOS"]["bundleName"], menu::APP_NAME);
+        assert_eq!(conf["productName"], "atm");
+        assert!(!include_str!("../Info.plist").contains("<key>CFBundleName</key>"));
+    }
+
     #[test]
     fn an_empty_state_folder_has_only_default_with_no_projects() {
         let home = scratch("empty");

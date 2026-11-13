@@ -20060,7 +20060,7 @@
       "description": "Hakan: `cargo tauri dev` still shows \"atm\" in the menu bar after T-531. Tauri writes `CFBundleName` into the app's Info.plist from `bundle.macOS.bundleName`, else `productName` (\"atm\"), over the key in `app/src-tauri/Info.plist` (tauri-codegen for dev builds; check the bundler does the same).\n\n## Change\n- Set `bundle.macOS.bundleName` to \"Agentic Task Manager\" in `tauri.conf.json`; `productName` stays `atm`, so the bundle's file is still `atm.app` (the updater, signing and the cask).\n- Drop `CFBundleName` from `Info.plist` (one source), keep `CFBundleDisplayName`, and fix its comment.\n- A Rust test that `bundleName` is the app's name (`menu::APP_NAME`) and `productName` stays `atm`.\n\n## Check\nBy hand: `cargo tauri dev` shows Agentic Task Manager in the menu bar (Hakan).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "app/src-tauri/tauri.conf.json",
@@ -20068,9 +20068,9 @@
         "app/src-tauri/src/lib.rs"
       ],
       "created_at": "2026-11-13T14:00:19Z",
-      "updated_at": "2026-11-13T14:00:19Z",
+      "updated_at": "2026-11-13T14:00:26Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -20080,7 +20080,9 @@
       "sprint": "Updates and renames",
       "related": [
         "T-531"
-      ]
+      ],
+      "started_at": "2026-11-13T14:00:26Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
