@@ -17937,7 +17937,7 @@
       "description": "`atm component edit --label` sets the name shown, but the component's ID, which tasks list in `components`, can't change.\n\n## Change\n- `atm component rename <old> <new>`, the same form as the other renames.\n- Every reference follows: tasks' `components`, in `tasks.json` and `tasks-archive.json`.\n- Refused: an ID in use, an invalid ID.\n- In atm-lib (`components.rs`); the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/components.json`: rename a component given to tasks (one archived); a clash refused.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/components.rs",
@@ -17946,7 +17946,7 @@
         "tests/scripts/scenarios/components.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T11:11:00Z",
+      "updated_at": "2026-11-13T11:13:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -17961,7 +17961,18 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T11:11:00Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "881e98024bf2a285ae63195a6c4048a21774c0b2",
+      "completed_at": "2026-11-13T11:13:50Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T11:13:50Z",
+          "kind": "outcome",
+          "text": "`atm component rename <old> <new>` (atm-lib `rename_component`): tasks’ `components` in tasks.json and the archive follow (a task listing both keeps one); its label, globs and review stay. Refused: an ID another component has, one that isn’t valid, an unknown component. Four scenarios in components.json; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-499",
@@ -19601,7 +19612,7 @@
       "description": "A release becomes `released` only when `atm vcs pushed` finds every one of its tasks merged in a PR. A release with a task that has no commit (a check done with the user, such as T-521 for 0.35.0 and T-522 for 0.36.0) never does: 0.32.0, 0.35.0 and 0.36.0 still show `planned` though they are out. There is no command to say so by hand.\n\n## Change\n- `atm release edit <id> --released [YYYY-MM-DD]` marks the release released, on the date given (today without one); `--planned` takes it back. It says which of its tasks are not done or not merged, and goes ahead (the user's call), unless a task is still open (to do, in progress, in review, blocked), which it refuses unless `--force`.\n- `atm release list` and the dashboard's release view show a release marked by hand as released, with its date.\n- `docs/agent/` (the release commands) and the release steps in `packaging/README.md` say to run it after publishing, when a release holds such a task.\n\n## Tests\nA scenario in `tests/scripts/scenarios/` (mark, unmark, the refusal for an open task and `--force`, the list's line), and atm-lib's unit tests for the rule.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/release.rs",
@@ -19611,7 +19622,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-13T04:38:39Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T11:14:00Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19624,7 +19635,9 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T11:14:00Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-528",

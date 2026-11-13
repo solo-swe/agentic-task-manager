@@ -31,6 +31,9 @@ to do (`loop next`), 4 the task is claimed by another agent.
 - `atm release …`, `atm component …`: releases, and the project's parts by file globs; `atm release rename <old>
   <new>` changes a release's ID, and its tasks (archived ones too) and sprints follow; `atm component rename <old>
   <new>` a component's, and the tasks listing it follow
+- `atm release edit <id> --released [YYYY-MM-DD]`: a published release marked released by hand, when a task with no
+  commit (a check done with the user) keeps `atm vcs pushed` from doing it; refused while a task of it is open, unless
+  `--force`; `--planned` takes it back. Only when the user says the release is out
 - `atm db init --meta-file F`: the project and its vocabularies; `atm project workflow set`: how it pushes
 
 ## Maintenance

@@ -54,3 +54,35 @@ fn a_release_takes_the_tasks_of_its_pull_requests() {
         "no release '2.0'; the releases: 1.0"
     );
 }
+
+/// T-527: a release marked by hand. Open tasks refuse it unless forced, done but unmerged ones are only named, a
+/// skipped one counts as neither; planned again drops its date
+#[test]
+fn a_release_is_marked_released_by_hand_and_open_tasks_refuse_it() {
+    let mut p = project(
+        json!([
+            {"id": "T-1", "status": "done", "release": "1.0", "pr": {"number": 7}, "merged_at": "2026-11-13T03:00:00Z"},
+            {"id": "T-2", "status": "done", "release": "1.0"},
+            {"id": "T-3", "status": "skipped", "release": "1.0"},
+            {"id": "T-4", "status": "blocked", "release": "1.0"}
+        ]),
+        json!({"releases": [{"id": "1.0"}]}),
+    );
+    let refused =
+        mark_release(&mut p, "1.0", &Mark::Released(Some("2026-11-13")), false).unwrap_err();
+    assert!(
+        refused
+            .to_string()
+            .starts_with("T-4 is still open in the release '1.0'"),
+        "{refused}"
+    );
+    assert!(mark_release(&mut p, "1.0", &Mark::Released(Some("13/11/2026")), true).is_err());
+    let marked = mark_release(&mut p, "1.0", &Mark::Released(Some("2026-11-13")), true).unwrap();
+    assert_eq!(marked.open, ["T-4"]);
+    assert_eq!(marked.unmerged, ["T-2"]);
+    assert_eq!(marked.release["state"], json!("released"));
+    assert_eq!(marked.release["released_at"], json!("2026-11-13T00:00:00Z"));
+    let planned = mark_release(&mut p, "1.0", &Mark::Planned, false).unwrap();
+    assert_eq!(planned.release, json!({"id": "1.0", "state": "planned"}));
+    assert!(mark_release(&mut p, "2.0", &Mark::Planned, false).is_err());
+}

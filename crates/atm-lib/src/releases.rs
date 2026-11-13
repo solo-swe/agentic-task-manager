@@ -4,7 +4,7 @@
 
 use atm_common::ids::valid_short_id;
 use atm_common::py::{py_str, repr_str};
-use atm_common::time::parse_iso;
+use atm_common::time::{now_iso, parse_iso};
 use atm_common::vocabulary::is_date;
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
 use atm_db::working::Working;
@@ -310,6 +310,105 @@ pub fn edit_release(
         Ok(())
     })?;
     Ok(outcome)
+}
+
+/// What marking a release by hand did: the release after it, and its tasks that weren't merged.
+#[derive(Debug, Clone)]
+pub struct MarkedRelease {
+    /// The release, released or planned.
+    pub release: Value,
+    /// Its tasks still open (to do, in progress, in review, blocked): marked released only with `force`.
+    pub open: Vec<String>,
+    /// Its tasks done but not merged in a PR (a check with the user has no commit).
+    pub unmerged: Vec<String>,
+}
+
+/// How marking a release by hand changes it (T-527).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Mark<'a> {
+    /// Released on this date (YYYY-MM-DD), or now.
+    Released(Option<&'a str>),
+    /// Planned again: its release date goes.
+    Planned,
+}
+
+/// `atm release edit --released [DATE]` / `--planned` (T-527): a release shipped although `atm vcs pushed` can't see
+/// it (a task with no commit, such as a check done with the user, keeps it planned), or back to planned. Its tasks
+/// still open refuse the mark unless `force`; those done but not merged are only reported.
+///
+/// # Errors
+/// An unknown release, a date that isn't YYYY-MM-DD, open tasks without `force`.
+pub fn mark_release(
+    project: &mut Project,
+    id: &str,
+    mark: &Mark,
+    force: bool,
+) -> Result<MarkedRelease> {
+    if let Mark::Released(Some(date)) = mark
+        && !is_date(&json!(date))
+    {
+        return Err(invalid(format!(
+            "--released {}: use a date, YYYY-MM-DD",
+            repr_str(date)
+        )));
+    }
+    let mut outcome: Option<MarkedRelease> = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let vocab = Vocabulary::of_document(&work.document)?;
+        let at = stored_release(&work.document, &vocab, id)?;
+        let mut tasks: Vec<Value> = work.document["tasks"].as_array().cloned().unwrap_or_default();
+        tasks.extend(work.archive()?["tasks"].as_array().cloned().unwrap_or_default());
+        let rid = json!(id);
+        let mine: Vec<&Task> = tasks
+            .iter()
+            .filter_map(Value::as_object)
+            .filter(|t| vocab.effective_release(t).as_ref() == Some(&rid))
+            .collect();
+        let id_of = |t: &&Task| t.get("id").map(py_str).unwrap_or_default();
+        let open: Vec<String> = mine
+            .iter()
+            .filter(|t| !matches!(vocab.kind_of(t.get("status")), Some(Kind::Done | Kind::Skipped)))
+            .map(id_of)
+            .collect();
+        let unmerged: Vec<String> = mine
+            .iter()
+            .filter(|t| vocab.kind_of(t.get("status")) == Some(Kind::Done))
+            .filter(|t| !t.get("merged_at").is_some_and(atm_common::py::truthy))
+            .map(id_of)
+            .collect();
+        let release = release_at(&mut work.document, at);
+        match mark {
+            Mark::Released(date) => {
+                if !open.is_empty() && !force {
+                    let n = open.len();
+                    return Err(invalid(format!(
+                        "{} {} still open in the release {}: finish {}, move {} to another release, or mark it with --force",
+                        open.join(", "),
+                        if n == 1 { "is" } else { "are" },
+                        repr_str(id),
+                        if n == 1 { "it" } else { "them" },
+                        if n == 1 { "it" } else { "them" },
+                    )));
+                }
+                let when = date.map_or_else(now_iso, |d| format!("{d}T00:00:00Z"));
+                release.insert("state".into(), json!("released"));
+                release.insert("released_at".into(), json!(when));
+            }
+            Mark::Planned => {
+                release.insert("state".into(), json!("planned"));
+                release.shift_remove("released_at");
+            }
+        }
+        let release = Value::Object(release.clone());
+        Vocabulary::of_document(&work.document)?;
+        outcome = Some(MarkedRelease {
+            release,
+            open: open.clone(),
+            unmerged: unmerged.clone(),
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| invalid(format!("no release {}", repr_str(id))))
 }
 
 /// What a release's rename changed: its IDs, and how many tasks and sprints follow it.

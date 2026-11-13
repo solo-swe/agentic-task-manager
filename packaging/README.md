@@ -56,6 +56,11 @@ every `cargo build`). Locally, without signing: `cargo build --release -p atm-cl
 4. Check the draft, then publish it. `.github/workflows/homebrew.yml` writes the formula and the cask to the tap, and
    `.github/workflows/skills.yml` the skills to `solo-swe/skills` (`npx skills add solo-swe/skills`); both can also be
    run by hand with a tag. Without its deploy key, the Skills workflow says so and does nothing.
+5. Record it: `atm vcs pushed --pr <n>` records the release PR's merge, and releases the release once all its tasks
+   are merged. A release holding a task with no commit (a check done with the user, such as the update's) stays
+   planned; once it is published, mark it by hand: `atm release edit <version> --released` (today, or
+   `--released YYYY-MM-DD`; it names the tasks done but not merged, and refuses while one is still open unless
+   `--force`). `--planned` takes it back.
 
 ## Secrets and keys
 
