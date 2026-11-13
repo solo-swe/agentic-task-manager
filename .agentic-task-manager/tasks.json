@@ -17985,7 +17985,7 @@
       "description": "Labels are per task (`atm task edit --add-label/--remove-label`): renaming one (`ui` to `dashboard`) means editing every task by hand.\n\n## Change\n- A rename of a label on every task that has it, in `tasks.json` and `tasks-archive.json`. Propose where it lives (`atm task relabel <old> <new>`, or a small `atm label` group with `list` and `rename`) and pick the one that fits the other renames.\n- A task that already has the new label keeps one.\n- The new label follows the label rule (lowercase letters, digits, `-`, `_`, at most 32 characters).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario: tasks with the old label, one with both, one archived.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/edit.rs",
@@ -17994,7 +17994,7 @@
         "tests/scripts/scenarios/edit.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T12:56:44Z",
+      "updated_at": "2026-11-13T13:00:51Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18009,7 +18009,18 @@
       ],
       "sprint": "Updates and renames",
       "started_at": "2026-11-13T12:56:44Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "80a336761e046b4eeb95717dcc0ec5876d7e4112",
+      "completed_at": "2026-11-13T13:00:51Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T13:00:51Z",
+          "kind": "outcome",
+          "text": "`atm label rename <old> <new>`, a small `atm label` group (like the other renames, room for `list` later): atm-lib `edit::relabel` renames it on every task, tasks.json and the archive, and in meta.labels; a task with both keeps one; the new label follows the rule; a label no task has is refused. Three scenarios in edit.json; the command tree test lists `label`; docs/agent/commands.md.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-500",
@@ -18022,7 +18033,7 @@
       "description": "A project's statuses, types and priorities are set only with `atm db init --meta-file`, which replaces a whole list: changing an ID there leaves the tasks that use the old one invalid (`atm doctor` reports them).\n\n## Change\n- A rename of one entry's ID (and, separately, its label) that moves every task using it, in `tasks.json` and `tasks-archive.json`: a task's `status` and its history, `type`, `priority`, and `meta.default_priority`.\n- Refused: an ID in use in that list.\n- Propose the command's form so it matches the other renames (sprint, release, component, label).\n- In atm-lib; the CLI maps to it.\n\n## Docs\n`docs/agent/commands.md`.\n\n## Tests\nA scenario in `tests/scripts/scenarios/vocab.json`: rename a status in use (with history), a type and the default priority; `atm doctor` stays clean.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/settings.rs",
@@ -18031,7 +18042,7 @@
         "tests/scripts/scenarios/vocab.json"
       ],
       "created_at": "2026-11-08T21:25:11Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T13:00:56Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18044,7 +18055,9 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "started_at": "2026-11-13T13:00:56Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-501",

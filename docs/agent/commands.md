@@ -32,6 +32,8 @@ to do (`loop next`), 4 the task is claimed by another agent.
   <new>` changes a release's ID, and its tasks (archived ones too) and sprints follow; `atm component rename <old>
   <new>` a component's, and the tasks listing it follow
 - `atm label rename <old> <new>`: a label on every task that has it, archived ones too
+- `atm project vocab rename status|type|priority <old> [<new>] [--label L]`: a vocabulary entry's ID or label; the
+  tasks using it (archived ones too) and the default priority follow
 - `atm release edit <id> --released [YYYY-MM-DD]`: a published release marked released by hand, when a task with no
   commit (a check done with the user) keeps `atm vcs pushed` from doing it; refused while a task of it is open, unless
   `--force`; `--planned` takes it back. Only when the user says the release is out
