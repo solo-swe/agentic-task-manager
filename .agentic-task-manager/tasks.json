@@ -19592,7 +19592,7 @@
       "description": "CI run 43367214532 on `main` (after 0.36.0) failed `performance.spec.ts` \"performance in the app: its tabs (T-525) › a click on a tab, and Next Tab round them all\": `next tab: list` took 416 ms, then 523 ms on the retry, against CI's 400 ms budget. It passed on PR #47's CI, so it is close to the limit.\n\n## Change\n- Measure it locally (`pnpm exec playwright test performance`, after `pnpm run build`), and find what the switch to the List costs: `TaskGrid` is mounted only while shown (T-525), so it is built on every switch to it.\n- Fix the cause (e.g. keep the List mounted once built, hidden while another view shows, or make its first render cheaper), so the List's switch is well under the budget, as the other views are.\n- Never raise the budget or just re-run (AGENTS.md, CI).\n\n## Tests\nThe timing test itself, run several times locally, and the area specs of the views (`kanban`, `list`, `graph`), then the functional e2e suite once.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/tasks/TaskGrid.svelte",
@@ -19600,9 +19600,9 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T04:52:06Z",
+      "updated_at": "2026-11-13T07:04:52Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Updates and renames",
@@ -19615,7 +19615,9 @@
       ],
       "related": [
         "T-525"
-      ]
+      ],
+      "started_at": "2026-11-13T07:04:52Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-529",

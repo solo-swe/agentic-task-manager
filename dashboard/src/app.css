@@ -2000,6 +2000,9 @@ button.menu-trigger:hover,
     border-color 0.15s,
     background 0.15s;
   position: relative;
+  /* A row off screen isn't laid out or painted until it nears the view (T-528): a list of hundreds is drawn at once */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 96px;
 }
 .task-card > .task-id {
   line-height: 21px;
