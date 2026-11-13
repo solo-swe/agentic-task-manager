@@ -353,8 +353,8 @@ mod tests {
         assert_eq!(conf["identifier"], atm_common::home::APP_ID);
     }
 
-    /// macOS's menu bar shows CFBundleName, which Tauri writes from bundle.macOS.bundleName (else productName), dev
-    /// builds too: the app's name. The bundle's file stays atm.app, which the updater and the cask name (T-536)
+    /// macOS's menu bar shows `CFBundleName`, which Tauri writes from `bundle.macOS.bundleName` (else `productName`),
+    /// dev builds too: the app's name. The bundle's file stays `atm.app`, which the updater and the cask name (T-536)
     #[test]
     fn the_menu_bar_names_the_app_and_its_file_stays_atm() {
         let conf: serde_json::Value =
