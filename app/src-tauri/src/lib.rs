@@ -23,7 +23,7 @@ use commands::{
     subscribe_workspace, unsubscribe, version, worktrees,
 };
 use menu::{menu, menu_state, subscribe_menu};
-use updates::{check_update, install_update};
+use updates::{check_update, install_update, restart_app};
 use windows::{
     close_window, minimize, open_window, set_title, shell, start_dragging, toggle_maximize,
 };
@@ -54,6 +54,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         subscribe_links::<tauri::Wry>,
         check_update,
         install_update,
+        restart_app,
         shell,
         set_title::<tauri::Wry>,
         open_window::<tauri::Wry>,

@@ -529,6 +529,10 @@ export class TasksServer {
   /** The update the app's `check_update` finds (T-483), and why `install_update` fails, if it should */
   update: { version: string; current_version: string; notes: string | null } | null = null;
   updateFails: string | null = null;
+  /** What `install_update` sends on its progress channel before it returns (T-526) */
+  updateProgress: unknown[] = [];
+  /** `install_update` returns once this settles: a test holds it to look at the download's progress */
+  updateInstallHeld: Promise<unknown> = Promise.resolve();
   /** The update commands the page called, in order */
   updateCalls: string[] = [];
 
@@ -582,7 +586,7 @@ export class TasksServer {
       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
     });
     await this.page.exposeFunction('__atmInvoke', (command: string, args: Record<string, unknown>) =>
-      this.answerCommand(command, args),
+      command === 'install_update' ? this.answerInstall(args) : this.answerCommand(command, args),
     );
     await this.page.addInitScript((version) => {
       const w = window as unknown as Record<string, unknown> & {
@@ -615,6 +619,26 @@ export class TasksServer {
       w.__COMPMD__ = { base: `${location.origin}/assets/compmd/${version}/compmd/` };
     }, compmdVersion());
     return this;
+  }
+
+  /** `install_update` (T-526): its progress on the page's channel (`updateProgress`, in order), then, once
+   * `updateInstallHeld` lets it go, installed (true), or why it failed (`updateFails`) */
+  private async answerInstall(args: Record<string, unknown>): Promise<{ ok?: unknown; error?: unknown }> {
+    this.updateCalls.push('install_update');
+    if (this.updateFails) return { error: { kind: 'failed', message: this.updateFails } };
+    const channel = channelId(args.progress);
+    for (const [index, message] of this.updateProgress.entries()) {
+      await this.page.evaluate(
+        ([id, message, at]) => {
+          const callbacks = (window as unknown as { __atmCallbacks: Record<number, (m: unknown) => void> })
+            .__atmCallbacks;
+          callbacks[id as number]({ index: at, message });
+        },
+        [channel, message, index] as const,
+      );
+    }
+    await this.updateInstallHeld;
+    return { ok: true };
   }
 
   /** What the app's command answers: `{ok}`, or `{error}` as its `AppError` */
@@ -671,9 +695,9 @@ export class TasksServer {
       case 'check_update':
         this.updateCalls.push(command);
         return { ok: this.update };
-      case 'install_update':
+      case 'restart_app':
         this.updateCalls.push(command);
-        return this.updateFails ? { error: { kind: 'failed', message: this.updateFails } } : { ok: null };
+        return { ok: null };
       case 'agents_status':
         this.agentCalls.push(command);
         return { ok: [this.harnessStatus()] };

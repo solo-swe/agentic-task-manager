@@ -19519,7 +19519,7 @@
       "description": "Found in T-522 (0.35.0 updating to 0.36.0): after the click, the app sat on \"Installing…\" with no sign of progress while it downloaded the 33 MB archive, and it did not reopen on the new version: it was installed, and Hakan closed the app himself.\n\n## Change\n- **Progress:** `install_update` ([updates.rs](app/src-tauri/src/updates.rs)) ignores `download_and_install`'s callbacks (`|_, _| {}`, `|| {}`). Send the page the downloaded and total bytes on a channel the command takes, and \"installing\" once the download is done; `UpdateNotice` shows a progress bar and the step (downloading, installing, restarting).\n- **The restart:** find why `app.restart()` didn't bring the app back after the install on macOS (the single-instance plugin, the window-state writes on exit from T-518, or the restart racing the bundle's replacement), and fix it; if a restart can't be made reliable, the notice says the update is installed and offers Restart Now.\n- A failure at any step still says why, and the running app stays as it is.\n\n## Tests\nUnit and e2e (`app.spec.ts`, the IPC mock sending progress); the restart by hand on macOS at the next release, with Hakan (as T-522).",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "app/src-tauri/src/updates.rs",
@@ -19527,7 +19527,7 @@
         "dashboard/src/lib/shell/UpdateNotice.svelte"
       ],
       "created_at": "2026-11-13T04:33:45Z",
-      "updated_at": "2026-11-13T04:51:06Z",
+      "updated_at": "2026-11-13T10:59:01Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -19542,7 +19542,16 @@
           "from": "2026-11-13T04:51:06Z"
         }
       ],
-      "sprint": "Updates and renames"
+      "sprint": "Updates and renames",
+      "notes": [
+        {
+          "at": "2026-11-13T10:58:53Z",
+          "kind": "failure",
+          "text": "lease expired (claude:0f56a916)"
+        }
+      ],
+      "started_at": "2026-11-13T10:59:01Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-527",
@@ -19592,7 +19601,7 @@
       "description": "CI run 43367214532 on `main` (after 0.36.0) failed `performance.spec.ts` \"performance in the app: its tabs (T-525) › a click on a tab, and Next Tab round them all\": `next tab: list` took 416 ms, then 523 ms on the retry, against CI's 400 ms budget. It passed on PR #47's CI, so it is close to the limit.\n\n## Change\n- Measure it locally (`pnpm exec playwright test performance`, after `pnpm run build`), and find what the switch to the List costs: `TaskGrid` is mounted only while shown (T-525), so it is built on every switch to it.\n- Fix the cause (e.g. keep the List mounted once built, hidden while another view shows, or make its first render cheaper), so the List's switch is well under the budget, as the other views are.\n- Never raise the budget or just re-run (AGENTS.md, CI).\n\n## Tests\nThe timing test itself, run several times locally, and the area specs of the views (`kanban`, `list`, `graph`), then the functional e2e suite once.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/tasks/TaskGrid.svelte",
@@ -19600,7 +19609,7 @@
         "dashboard/tests/e2e/performance.spec.ts"
       ],
       "created_at": "2026-11-13T04:52:06Z",
-      "updated_at": "2026-11-13T07:04:52Z",
+      "updated_at": "2026-11-13T07:14:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -19617,7 +19626,18 @@
         "T-525"
       ],
       "started_at": "2026-11-13T07:04:52Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "fcabf3c4da0667fa3213fa227a02bc51c666ef13",
+      "completed_at": "2026-11-13T07:14:43Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-13T07:14:43Z",
+          "kind": "outcome",
+          "text": "The List’s rows off screen are no longer laid out or painted until they near the view (`content-visibility: auto` on `.task-card`): the switch to the List of 500 tasks went from 100–120 ms to 52–89 ms locally (CI’s budget 400). Full functional e2e: 434 passed.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-529",

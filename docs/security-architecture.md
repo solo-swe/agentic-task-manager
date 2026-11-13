@@ -800,10 +800,14 @@ build (I29):
   secret (`TAURI_SIGNING_PRIVATE_KEY`, with its password), read only in the `app-macos` job, which has the read-only
   token; the manifest itself isn't trusted for anything but where to look (its notes show as plain text). The archive
   is the same signed, notarized `atm.app` as the DMG's.
-- **Only on the user's click.** The page gets two commands, `check_update` and `install_update` (in the main window's
-  capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install. The app looks for
-  an update on start and at most every six hours; installing (and the restart into it) happens only from the bar's
-  *Install and restart*. A debug build finds no update.
+- **Only on the user's click.** The page gets three commands, `check_update`, `install_update` and `restart_app` (in
+  the main window's capability, I25), not the plugin's API: it can't choose the endpoint, the key or what to install.
+  The app looks for an update on start and at most every six hours; installing happens only from the bar's
+  *Install and restart*. A debug build finds no update. `install_update` sends the page its progress on a channel the
+  page hands it (bytes downloaded, then "installing"; T-526), and no longer restarts the app itself: the page then
+  calls `restart_app`, which asks the app to quit as Quit does and starts it again (Tauri's `request_restart`). It
+  takes no argument and only restarts the running app, into whatever is installed: from a page, it is no more than
+  the menu's Quit and opening the app again.
 - **The key pair** was made by Hakan on his machine (minisign `D2392A7664649507`). A first pair was replaced before
   use because its private half was pasted into an agent session; `updates.rs`'s test checks that `PUBKEY` is a public
   key, not a secret one.
@@ -813,7 +817,8 @@ build (I29):
   Security.framework on macOS) rather than rustls, whose root certificates come as a crate under a licence `deny.toml`
   doesn't list; `cargo deny` passes with no change to it.
 - Tests: the update manifest's generation (`packaging.test.mjs`), the cask's `auto_updates`, the capability listing
-  exactly the app's commands, and `app.spec.ts` (offered, installed only on the click, a failure shown, Not now kept).
+  exactly the app's commands, and `app.spec.ts` (offered, installed only on the click, a failure shown, Not now kept;
+  the download's progress, the restart, and Restart now when the app is still there, T-526).
   The update flow end to end is checked by hand with the user: 0.35.0's release has the manifest and the signed
   archive and offers no update (T-521); the first release after it is installed through the updater (T-522).
 

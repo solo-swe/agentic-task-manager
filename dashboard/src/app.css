@@ -5302,6 +5302,17 @@ svg.graph-minimap.hidden {
   color: var(--red);
   font-size: var(--text-sm);
 }
+/* The install's step and the download's bar (T-526) */
+.app-update-step {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.app-update-progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}
 
 /* Pages without a project: the overview, how to add a project, an unknown project (LandingPage.svelte). A column
    taking the rest of the window, so the board can fill it (T-265). No room above: the overview's tabs sit right

@@ -1,5 +1,12 @@
 import { browserFetch, inApp } from './api/http';
-import { checkAppUpdate, installAppUpdate, UPDATE_CHECK_MS, type AppUpdate } from './api/updates';
+import {
+  checkAppUpdate,
+  installAppUpdate,
+  RESTART_WAIT_MS,
+  restartApp,
+  UPDATE_CHECK_MS,
+  type AppUpdate,
+} from './api/updates';
 import { apiWorkspace, DEFAULT_WORKSPACE, setApiWorkspace } from './api/workspace';
 import { loadClaims, type ClaimMap } from './claims';
 import {
@@ -125,8 +132,15 @@ export class DashboardState {
   newVersionReady = $state(false);
   /** In the atm app, a newer version of the app it can install (T-483): a bar offers it, never installs by itself */
   appUpdate = $state.raw<AppUpdate | null>(null);
-  /** The offered update is being downloaded and installed; then the app restarts */
-  installingUpdate = $state(false);
+  /** Where the offered update's install is (T-526): downloading, installing, restarting, or installed and waiting for
+   * Restart Now (the app didn't restart by itself); null before the click and after a failure */
+  updateStep = $state<'downloading' | 'installing' | 'restarting' | 'installed' | null>(null);
+  /** The download's bytes so far, and the archive's size when the app knows it */
+  updateDownload = $state.raw<{ downloaded: number; total: number | null } | null>(null);
+  /** The install has started and not failed: the bar's buttons wait */
+  get installingUpdate() {
+    return this.updateStep !== null && this.updateStep !== 'installed';
+  }
   /** Why the last install failed, shown on the bar */
   updateError = $state<string | null>(null);
   #updateCheckedAt = 0;
@@ -634,14 +648,34 @@ export class DashboardState {
     this.appUpdate = update && update.version !== dismissed ? update : null;
   }
 
-  /** Install the offered update, on the user's click: the app restarts into it, or the bar says why it couldn't */
+  /** Install the offered update, on the user's click, showing how it goes: the app restarts into it, or the bar says
+   * why it couldn't */
   async installAppUpdate() {
     if (!this.appUpdate || this.installingUpdate) return;
-    this.installingUpdate = true;
+    this.updateStep = 'downloading';
+    this.updateDownload = null;
     this.updateError = null;
-    this.updateError = await installAppUpdate();
-    this.installingUpdate = false;
-    if (this.updateError === null) this.appUpdate = null; // nothing was left to install
+    const result = await installAppUpdate((p) => {
+      if (p.step === 'downloading') this.updateDownload = { downloaded: p.downloaded, total: p.total };
+      else this.updateStep = 'installing';
+    });
+    if ('error' in result) {
+      this.updateStep = null;
+      this.updateError = result.error;
+    } else if (!result.installed) {
+      this.updateStep = null;
+      this.appUpdate = null; // nothing was left to install
+    } else await this.restartApp();
+  }
+
+  /** Restart into the installed update (after the install, or Restart Now): the app quits and starts again; a page
+   * still here after RESTART_WAIT_MS offers Restart Now */
+  async restartApp(wait = RESTART_WAIT_MS) {
+    this.updateStep = 'restarting';
+    await restartApp();
+    setTimeout(() => {
+      if (this.updateStep === 'restarting') this.updateStep = 'installed';
+    }, wait);
   }
 
   /** "Not now" on the app's update: not offered again until a newer version */

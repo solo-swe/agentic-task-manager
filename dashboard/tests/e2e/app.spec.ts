@@ -498,6 +498,49 @@ test.describe('the dashboard in the atm app', () => {
     await expect(bar).toHaveCount(0);
   });
 
+  test('the install shows its download’s progress, then restarts; an app still there offers Restart now (T-526)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await page.clock.install();
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    tasksServer.update = { version: '9.9.9', current_version: '0.36.0', notes: null };
+    const MB = 1024 * 1024;
+    tasksServer.updateProgress = [
+      { step: 'downloading', downloaded: MB / 4, total: 4 * MB },
+      { step: 'downloading', downloaded: MB, total: 4 * MB },
+    ];
+    let finish = () => {};
+    tasksServer.updateInstallHeld = new Promise<void>((resolve) => (finish = resolve));
+    await page.goto('/');
+    const bar = page.locator('#app-update');
+    await expect(bar).toContainText('atm 9.9.9 is available (you have 0.36.0).');
+
+    // Downloading: how much of how much, on a bar; the buttons wait
+    await page.locator('#app-update-install').click();
+    await expect(bar.locator('#app-update-step')).toHaveText('Downloading… 1.0 of 4.0 MB');
+    await expect(bar.locator('.app-update-progress')).toHaveAttribute('value', String(MB));
+    await expect(bar.locator('.app-update-progress')).toHaveAttribute('max', String(4 * MB));
+    await expect(page.locator('#app-update-install')).toBeDisabled();
+    await expect(bar.getByRole('button', { name: 'Not now' })).toBeDisabled();
+
+    // Installed: the page asks the app to restart
+    finish();
+    await expect(bar.locator('#app-update-step')).toHaveText('Restarting…');
+    await expect.poll(() => tasksServer.updateCalls).toEqual(['check_update', 'install_update', 'restart_app']);
+    await expect(bar.locator('.app-update-progress')).toHaveCount(0);
+
+    // Still here after the wait: installed, Restart now tries again
+    await page.clock.runFor(10_000);
+    await expect(bar).toContainText('atm 9.9.9 is installed: restart to use it.');
+    await page.locator('#app-update-restart').click();
+    await expect(bar.locator('#app-update-step')).toHaveText('Restarting…');
+    await expect
+      .poll(() => tasksServer.updateCalls)
+      .toEqual(['check_update', 'install_update', 'restart_app', 'restart_app']);
+  });
+
   test('a Mermaid diagram draws in the app: the frames from the plugin’s base, the pack’s module given as code (T-503)', async ({
     page,
     tasksServer,

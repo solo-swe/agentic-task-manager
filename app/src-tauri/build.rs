@@ -25,6 +25,7 @@ fn main() {
         "subscribe_links",
         "check_update",
         "install_update",
+        "restart_app",
         "shell",
         "set_title",
         "open_window",

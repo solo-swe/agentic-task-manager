@@ -22,6 +22,7 @@
     "allow-subscribe-links",
     "allow-check-update",
     "allow-install-update",
+    "allow-restart-app",
     "allow-shell",
     "allow-set-title",
     "allow-open-window",
