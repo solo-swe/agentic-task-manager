@@ -1148,6 +1148,13 @@
             "T-537"
           ]
         }
+      },
+      {
+        "id": "Keys and reach",
+        "state": "active",
+        "goal": "Design task keys like ATM-123 with dependencies across projects, atm in every agent harness, readable CLI output, and live updates in the browser",
+        "release": "0.38.0",
+        "start": "2026-11-14T13:59:30Z"
       }
     ],
     "releases": [
@@ -1379,6 +1386,10 @@
           "url": "https://github.com/solo-swe/agentic-task-manager/pull/49"
         },
         "released_at": "2026-11-13T18:38:50Z"
+      },
+      {
+        "id": "0.38.0",
+        "state": "planned"
       }
     ],
     "migrations": [
@@ -13291,9 +13302,9 @@
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-06T20:53:42Z",
+      "updated_at": "2026-11-14T13:59:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "cli",
         "docs"
@@ -13303,11 +13314,16 @@
           "sprint": "Rust and distribution",
           "from": "2026-11-06T20:02:02Z",
           "to": "2026-11-06T20:53:41Z"
+        },
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-14T13:59:30Z"
         }
       ],
       "related": [
         "T-415"
-      ]
+      ],
+      "sprint": "Keys and reach"
     },
     {
       "id": "T-414",
@@ -17482,9 +17498,16 @@
         "docs/agent/"
       ],
       "created_at": "2026-11-08T08:30:53Z",
-      "updated_at": "2026-11-08T08:30:53Z",
+      "updated_at": "2026-11-14T13:59:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce"
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-14T13:59:30Z"
+        }
+      ],
+      "sprint": "Keys and reach"
     },
     {
       "id": "T-489",
@@ -18603,14 +18626,21 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-09T02:17:51Z",
+      "updated_at": "2026-11-14T13:59:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard",
         "api",
         "docs"
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-14T13:59:30Z"
+        }
+      ],
+      "sprint": "Keys and reach"
     },
     {
       "id": "T-508",
@@ -20116,14 +20146,21 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-13T11:37:44Z",
-      "updated_at": "2026-11-13T11:37:44Z",
+      "updated_at": "2026-11-14T13:59:30Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "components": [
         "docs"
       ],
       "review": "blocker",
-      "with": "user"
+      "with": "user",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-14T13:59:30Z"
+        }
+      ],
+      "sprint": "Keys and reach"
     },
     {
       "id": "T-535",
