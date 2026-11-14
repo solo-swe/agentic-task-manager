@@ -1372,11 +1372,13 @@
       },
       {
         "id": "0.35.0",
-        "state": "planned"
+        "state": "released",
+        "released_at": "2026-11-10T00:00:00Z"
       },
       {
         "id": "0.36.0",
-        "state": "planned"
+        "state": "released",
+        "released_at": "2026-11-12T00:00:00Z"
       },
       {
         "id": "0.37.0",
