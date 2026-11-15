@@ -1,6 +1,6 @@
 # ADR-007: Tasks stored by UUID, shown by a project key (ATM-527), with dependencies across projects
 
-- **Status:** proposed, 2026-11-14 (T-534), for review with Hakan
+- **Status:** accepted, 2026-11-15 (T-534)
 - **Decided by:** Hakan Serce (T-534: "stored as UUID, displayed as human-readable", the number permanently tied to the
   UUID, the prefix a project's short name of 3 to 6 letters and digits, a migration that changes it any time, a
   clash shown by UUID with a warning; provisional keys until merged, with a marker)
