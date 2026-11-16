@@ -217,9 +217,18 @@ fn check_task(
     }
     check_resolution(vocab, task, known, errors);
     for dep in list("dependencies") {
-        if let Some(dep) = dep.as_str()
-            && !known.contains(dep)
-        {
+        let Some(dep) = dep.as_str() else {
+            continue;
+        };
+        if atm_common::rules::is_foreign_reference(dep) {
+            // Another project's task (ADR-007 §7): found among the registered projects, or reported
+            if crate::foreign::status(dep).is_none() {
+                warnings.push(format!(
+                    "{task_id}: depends on {dep}, another project's task that can't be found (its project not \
+                     registered, or the task gone); it counts as not done"
+                ));
+            }
+        } else if !known.contains(dep) {
             errors.push(format!("{task_id}: depends on {dep}, which doesn't exist"));
         }
     }

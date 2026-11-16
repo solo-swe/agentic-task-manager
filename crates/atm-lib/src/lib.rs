@@ -12,6 +12,7 @@ pub mod code;
 pub mod components;
 pub mod documents;
 pub mod edit;
+pub mod foreign;
 pub mod leases;
 pub mod loop_rules;
 pub mod maintenance;

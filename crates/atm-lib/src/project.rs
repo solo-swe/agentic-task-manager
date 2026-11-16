@@ -57,6 +57,8 @@ impl Project {
     fn opened(opened: atm_db::Opened) -> Result<Self> {
         // The version control is checked on open, so a project naming one atm doesn't know is refused at once
         atm_vcs::open(&opened.root, &opened.settings.vcs)?;
+        // Another project's task, a dependency of one here, is looked up among the registered projects (ADR-007 §7)
+        crate::foreign::install();
         Ok(Self {
             store: opened.store,
             actor: None,
@@ -108,6 +110,37 @@ impl Project {
             .and_then(serde_json::Value::as_str)
             .unwrap_or(reference)
             .to_string())
+    }
+
+    /// A dependency or related task to store (ADR-007 §5, §7): a task of this project by [`Project::resolve_task`], or,
+    /// when the key's prefix is another registered project's, that task as `<project id>:<UUID>`.
+    ///
+    /// # Errors
+    /// No task of either; several projects with that key.
+    pub fn resolve_dependency(&self, reference: &str) -> Result<String> {
+        match self.resolve_task(reference) {
+            Ok(id) => Ok(id),
+            Err(e) => {
+                if !atm_common::keys::keys_format(self.store.document()?) {
+                    return Err(e);
+                }
+                match crate::foreign::resolve_in_other_project(reference, self.root())? {
+                    Some(id) => Ok(id),
+                    None => Err(e),
+                }
+            }
+        }
+    }
+
+    /// [`Project::resolve_dependency`] for several.
+    ///
+    /// # Errors
+    /// As [`Project::resolve_dependency`].
+    pub fn resolve_dependencies(&self, references: &[String]) -> Result<Vec<String>> {
+        references
+            .iter()
+            .map(|r| self.resolve_dependency(r))
+            .collect()
     }
 
     /// [`Project::resolve_task`] for several.

@@ -215,6 +215,49 @@ test('a key becomes final once its task is on origin’s base branch, read from 
   }
 });
 
+test('a dependency on another registered project’s task, by its key: waits until it is done there (T-544)', () => {
+  const home = tempDir('atm-home-');
+  const env = { ATM_HOME: home };
+  const project = (id, name, key, tasks) => {
+    const root = makeProject({ files: { [FILE]: { meta: { id, project: name }, tasks } } });
+    assert.equal(runAtm(['db', 'migrate'], root, env).code, 0, 'registered');
+    assert.equal(runAtm(['project', 'key', 'set', key], root, env).code, 0);
+    return root;
+  };
+  const atm = project('aaaa1111', 'Agentic Task Manager', 'ATM', [
+    { id: 'T-1', name: 'the API', type: 'feature', status: 'todo' },
+  ]);
+  const blog = project('bbbb2222', 'Learn Forever Blog', 'LFB', [
+    { id: 'T-1', name: 'a post about it', type: 'feature', status: 'todo' },
+  ]);
+  const run = (root, args) => runAtm(args, root, env);
+  try {
+    const edit = run(blog, ['task', 'edit', 'LFB-1', '--add-dep', 'ATM-1']);
+    assert.equal(edit.code, 0, edit.stderr);
+    const apiUuid = read(atm, FILE).tasks[0].id;
+    assert.deepEqual(read(blog, FILE).tasks[0].dependencies, [`aaaa1111:${apiUuid}`], 'the project’s ID and the UUID');
+    // It waits for ATM-1, shown by its key
+    assert.match(run(blog, ['task', 'details', 'LFB-1']).stdout, /depends on: ATM-1 \(todo\)/);
+    assert.equal(run(blog, ['loop', 'next']).code, 3, 'nothing ready: LFB-1 waits for ATM-1');
+    // Done there: ready here
+    assert.equal(run(atm, ['task', 'state', 'ATM-1', 'in_progress']).code, 0);
+    assert.equal(run(atm, ['task', 'state', 'ATM-1', 'done']).code, 0);
+    assert.match(run(blog, ['loop', 'next']).stdout, /LFB-1 a post about it/);
+    // The other project gone: it counts as not done, and doctor says why
+    removeDir(atm);
+    assert.equal(run(blog, ['loop', 'next']).code, 3);
+    assert.match(run(blog, ['doctor']).stdout, /another project's task that can't be found/);
+    // A key no registered project has
+    const none = run(blog, ['task', 'edit', 'LFB-1', '--add-dep', 'FIG-1']);
+    assert.notEqual(none.code, 0);
+    assert.match(none.stderr, /FIG isn't this project's key/);
+  } finally {
+    removeDir(atm);
+    removeDir(blog);
+    removeDir(home);
+  }
+});
+
 test('migrate --keys on a copy of this repository’s own task files loses nothing', () => {
   const own = JSON.parse(fs.readFileSync(path.join(REPO, FILE), 'utf8'));
   const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));

@@ -741,6 +741,20 @@ only its file, never a project's.
   skill's pre-approvals narrow: `atm workspace list` and `atm workspace projects` (reads) replace `atm project
   list|add|remove|prune`, so an agent serving the dashboard no longer has the list's writes pre-approved.
 
+**Dependencies across projects (T-544, ADR-007 §7).** A new entry point: atm reads *another* project's task folder,
+when a task here depends on (or is related to) a task there, stored as `<project id>:<UUID>` and written by its key
+(`atm task edit LFB-5 --add-dep ATM-978`).
+- **Only projects the user registered** (`workspaces/<w>.json` in atm's state folder, as `atm workspace add-project`
+  and every skill's `atm db migrate` record them), found by their `meta.id` or `meta.key`; a reference can't name a
+  path, so task text can't point atm at a folder (`crates/atm-lib/src/foreign.rs`).
+- **Read through the same store and its checks** (`Workspace::project_tolerant`: the task folder's symlink rules, the
+  file's format check), read only, for the task's status, name and key: nothing in it is run, followed or written.
+- **What can't be found counts as not done**: a project not registered, gone, or the task not there leaves the
+  dependency unmet for `atm loop next` and `atm task state … in_progress`, and `atm doctor` warns, so a deleted or
+  unregistered project can't release work by its absence.
+- Checked by `tests/scripts/keys.test.mjs` (a dependency across two registered projects waits until it is done
+  there; the other project removed: not done, and doctor's warning).
+
 **The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
 `connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
 Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,

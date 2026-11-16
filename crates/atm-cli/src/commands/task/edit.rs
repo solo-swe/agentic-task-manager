@@ -133,8 +133,9 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
     let stored = project.resolve_task(&args.task_id)?;
     // Tasks named by key, alias or UUID are stored by UUID (ADR-007 §5); a reference to take away that names no task
     // (a dangling one) is taken away as written
-    change.add_dependencies = project.resolve_tasks(&change.add_dependencies)?;
-    change.add_related = project.resolve_tasks(&change.add_related)?;
+    // Another project's task too, by its key (ADR-007 §7)
+    change.add_dependencies = project.resolve_dependencies(&change.add_dependencies)?;
+    change.add_related = project.resolve_dependencies(&change.add_related)?;
     let loose = |refs: &[String]| -> Vec<String> {
         refs.iter()
             .map(|r| project.resolve_task(r).unwrap_or_else(|_| r.clone()))

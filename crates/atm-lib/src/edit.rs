@@ -795,7 +795,11 @@ fn edit_task(
                 "{task_id} can't be related to itself"
             )));
         }
-        if !known.contains(other) && !archived.has(work, &json!(other))? {
+        // Another project's task was found there when it was named by its key (ADR-007 §7)
+        if !known.contains(other)
+            && !atm_common::rules::is_foreign_reference(other)
+            && !archived.has(work, &json!(other))?
+        {
             return Err(Error::Invalid(format!(
                 "{task_id} can't be related to {other}, which doesn't exist"
             )));
@@ -815,7 +819,10 @@ fn edit_task(
     }
     let mut missing = Vec::new();
     for dep in &edit.add_dependencies {
-        if !known.contains(dep) && !archived.has(work, &json!(dep))? {
+        if !known.contains(dep)
+            && !atm_common::rules::is_foreign_reference(dep)
+            && !archived.has(work, &json!(dep))?
+        {
             missing.push(dep.clone());
         }
     }

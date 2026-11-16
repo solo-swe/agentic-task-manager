@@ -82,6 +82,16 @@ pub fn view_task(
                 status: old.get("status").cloned(),
                 archived: true,
             }
+        } else if let Some((_, status)) = atm_common::rules::is_foreign_reference(d)
+            .then(|| crate::foreign::status(d))
+            .flatten()
+        {
+            // Another project's task, its status there (ADR-007 §7)
+            Dependency {
+                id: d.into(),
+                status: Some(status),
+                archived: false,
+            }
         } else {
             Dependency {
                 id: d.into(),
@@ -151,7 +161,8 @@ pub fn show_tasks(project: &Project, ids: &[TaskId]) -> Result<Vec<TaskView>> {
             let archive: Vec<Task> = store.list_archived()?.into_iter().cloned().collect();
             let label = |id: &str| {
                 atm_common::keys::resolve(document, &archive, id).map_or_else(
-                    |_| id.to_string(),
+                    // Another project's task by its key there (ADR-007 §7)
+                    |_| crate::foreign::label(id).unwrap_or_else(|| id.to_string()),
                     |f| {
                         atm_common::keys::label_of(&Value::Object(atm_common::keys::with_key(
                             document, f.task,

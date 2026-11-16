@@ -113,9 +113,30 @@ impl Vocabulary {
     }
 }
 
+/// What another project's task is (ADR-007 §7): `Some((done, status))` when it can be found, None when it can't (a
+/// project not registered, missing, a task not there). atm-lib installs it ([`set_foreign_status`]), which reads the
+/// other project; this crate does no IO.
+pub type ForeignStatus = fn(&str) -> Option<(bool, Value)>;
+
+static FOREIGN_STATUS: std::sync::OnceLock<ForeignStatus> = std::sync::OnceLock::new();
+
+/// Install how another project's task is looked up (once; later calls change nothing).
+pub fn set_foreign_status(lookup: ForeignStatus) {
+    let _ = FOREIGN_STATUS.set(lookup);
+}
+
+/// Whether a reference names another project's task: `<project id>:<UUID>` (ADR-007 §7).
+#[must_use]
+pub fn is_foreign_reference(reference: &str) -> bool {
+    reference
+        .split_once(':')
+        .is_some_and(|(project, uuid)| !project.is_empty() && crate::ids::valid_task_uuid(uuid))
+}
+
 /// The dependencies a task still waits for: those that don't have a done-kind status yet, with their status (None
 /// for one without), and unknown IDs (status "missing"). A dependency only in the archive is done (DM-3.1):
-/// `archived(id)` says whether the archive has it.
+/// `archived(id)` says whether the archive has it. Another project's task (`<project id>:<UUID>`, ADR-007 §7) is
+/// looked up there, read only: done, or waited for with its status, or missing when it can't be found.
 ///
 /// # Errors
 /// When `archived` can't read the archive.
@@ -142,6 +163,13 @@ pub fn unfinished_dependencies(
             Some(live) => {
                 if vocab.kind_of(live.get("status")) != Some(Kind::Done) {
                     found.push((dep.to_string(), live.get("status").cloned()));
+                }
+            }
+            None if is_foreign_reference(dep) => {
+                match FOREIGN_STATUS.get().and_then(|lookup| lookup(dep)) {
+                    Some((true, _)) => {}
+                    Some((false, status)) => found.push((dep.to_string(), Some(status))),
+                    None => found.push((dep.to_string(), Some(Value::String("missing".into())))),
                 }
             }
             None => {
