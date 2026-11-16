@@ -5179,7 +5179,7 @@
       "description": "Make atm work in the harnesses beyond Claude Code through the model agreed in [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) (T-426): one set of portable skills, placed by `atm agents install`. No per-harness adapters: the earlier design ([multi-harness-support.md](docs/multi-harness-support.md): `plugin/open-code/`, `install.sh`, `skills.json`) is not built.\n\nThe harnesses: Codex CLI, Cursor, Gemini CLI, GitHub Copilot (VS Code and CLI), OpenCode, Windsurf (Devin) and Goose. What their documentation said on 2026-11-06 is in the distribution doc's §5 and sources; check it again before relying on it.\n\n## For each harness\n- **Install:** `atm agents install --harness <h>` puts the skills where it reads them (`~/.agents/skills/` for all of these); the skills show up and can be invoked by name (`atm-do-task`, …).\n- **Links or copies:** whether it follows the symlinks atm writes. Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have known bugs: confirm that atm copies for them, and whether any other harness needs copies.\n- **Duplicates:** whether it lists atm's skills twice, from `~/.agents/skills/` and `~/.claude/skills/` (expected in Cursor, OpenCode, Goose and VS Code Copilot), and that `atm agents status` says so.\n- **A task end to end:** `/atm-do-task` on a sample project: the skill checks `atm --version`, claims a task, keeps the claim alive through atm's own renewal ([porting-to-rust.md](docs/porting-to-rust.md) §4) and `atm claim hold` for a long command, commits and finishes it.\n- **Permissions:** how the harness asks before running `atm` commands, and whether the skills' instructions need anything for it (Claude Code's pre-approvals are `allowed-tools`, which only Claude Code reads).\n\n## Outcome\n- A support table in the distribution doc (§5): per harness, verified or not, links or copies, duplicates, known issues, with the version tried.\n- Fixes to `atm agents` where a harness needs one (its folder, copying, detection), each with a test.\n- A plugin for a harness only if users need something a skill can't do there (the distribution doc §6); proposed to Hakan first, never built here.\n- `docs/multi-harness-support.md` replaced by a pointer to the distribution doc, or removed.\n\n## Depends on\nThe tasks that build the thin skills, `atm docs` and `atm agents install|status|uninstall` (the distribution rollout's steps 1 to 3), once they exist.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-440",
         "T-441",
@@ -5190,7 +5190,7 @@
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-16T03:02:43Z",
+      "updated_at": "2026-11-16T22:24:32Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -5212,13 +5212,23 @@
         "T-415"
       ],
       "sprint": "Keys and reach",
-      "started_at": "2026-11-16T03:02:36Z",
-      "started_by": "claude:0f56a916",
-      "waiting_on": "user",
-      "questions": [
-        "Trying each harness (Codex CLI, Cursor, Gemini CLI, Copilot, OpenCode, Windsurf, Goose) needs them installed and signed in on your Mac: which do you have, and shall we go through them together (`/atm-do-task T-413`)? The loop can’t verify them alone."
+      "blocks": [
+        {
+          "from": "2026-11-16T03:02:43Z",
+          "to": "2026-11-16T22:24:25Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-16T03:02:43Z"
+      "notes": [
+        {
+          "at": "2026-11-16T22:24:25Z",
+          "kind": "answer",
+          "text": "Trying each harness (Codex CLI, Cursor, Gemini CLI, Copilot, OpenCode, Windsurf, Goose) needs them installed and signed in on your Mac: which do you have, and shall we go through them together (`/atm-do-task T-413`)? The loop can’t verify them alone. → Cover Codex CLI (free ChatGPT plan), GitHub Copilot (CLI and VS Code), Cursor (free Hobby plan), Antigravity CLI (Gemini CLI’s replacement on Homebrew) and OpenCode; all installed and signed in on Hakan’s machine. Windsurf and Goose are left out (low use).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-16T22:24:32Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-414",
@@ -13284,7 +13294,7 @@
       "description": "[The freshness design](docs/cross-project-freshness-design.md) §3 and §5.5, option **L** (P6): watching for changes is the store's job, behind the abstraction, so a store that isn't files (a `JiraStore`) works the same.\n\n## Change\n- **atm-db's `Store` trait:** `subscribe(on_change) -> Subscription` (dropping it ends it), replacing `watch_folders()`. Its documentation says `on_change` runs on the store's own thread, and that every store must push or poll.\n- **`JsonGitStore`:** watches its own folders (the task folder, the claims store, the working copies' task files) with `notify` and its debouncer, settled 300 ms, the code now in the app (`app/src-tauri/src/commands.rs`, `AppState::watch`). `notify` and `notify-debouncer-full` move from the app to atm-db (same versions, already approved; no new dependency).\n- **`MemoryStore`:** told by its own writes.\n- **`poll_stamp(store, interval, on_change)`** in atm-db: a helper an implementation may use when it can't push (none needs it yet: test it on its own). No polling default in the trait (Hakan, round 1).\n- **The registry** (`workspaces/<w>.json`): a subscription for \"the list changed\".\n- **atm-lib:** a workspace's changes are its members' subscriptions merged, plus the registry's; the app's `subscribe_workspace` and `subscribe_project` use that. Nothing above atm-db names a folder to watch.\n- Behaviour unchanged for the user: the app is told of the same changes as now (the open workspace's own projects); the browser polls.\n- `docs/layered-architecture.md` and `docs/guides/tauri.md` (Streams) say where watching lives.\n\n## Tests\natm-db: the JSON store's subscription tells a change in its task file and its claims and stops when dropped; `poll_stamp` tells a stamp change; the memory store tells its writes. atm-lib: a workspace subscription merges its members' and the registry's. The app's existing subscription tests (`a_subscription_says_when_a_watched_folder_changes…`, `a_window_loading_again…`) pass unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-db/src/interface.rs",
@@ -13298,7 +13308,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T19:38:11Z",
+      "updated_at": "2026-11-16T19:52:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13312,7 +13322,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T19:38:11Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9c82ec5b8aa42993c28696a5e4a4bc85d0810e2e",
+      "completed_at": "2026-11-16T19:52:26Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T19:52:26Z",
+          "kind": "outcome",
+          "text": "`Store::subscribe(on_change)` in atm-db replaces `watch_folders`: the JSON store watches its own folders (notify, moved from the app), the memory store tells its writes, `poll_stamp` for stores that poll; the registry subscribes to the workspaces folder; atm-lib merges them (`Workspace::subscribe`, `Member::subscribe`). The app’s messages are the same; a burst touching two projects may now send two",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

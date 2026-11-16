@@ -150,7 +150,8 @@ enum Command {
         #[arg(value_parser = ["bash", "zsh", "fish", "powershell"])]
         shell: String,
     },
-    /// Install atm's skills where your agent harnesses read them (Claude Code for now)
+    /// Install atm's skills where your agent harnesses read them (Claude Code, Codex, Copilot, Cursor, OpenCode,
+    /// Gemini CLI, Antigravity)
     #[command(subcommand)]
     Agents(AgentsCommand),
     /// Show the list of commands.

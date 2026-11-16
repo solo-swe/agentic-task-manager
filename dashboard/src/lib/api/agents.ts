@@ -6,14 +6,18 @@ import { invoke } from '@tauri-apps/api/core';
 /** A skill's state where a harness reads the user's skills */
 export type SkillState = 'linked' | 'copied' | 'missing' | 'stale' | "not atm's";
 
-/** A harness, as `atm agents status` reports it for the user's folder */
+/** A harness (a folder agent tools read skills from), as `atm agents status` reports it for the user's folder */
 export interface HarnessStatus {
   harness: string;
   label: string;
-  /** Whether the harness is installed here (its folder in the home folder) */
+  /** Whether one of the tools that read it is installed here */
   detected: boolean;
   folder: string;
   skills: { skill: string; path: string; state: SkillState }[];
+  /** The tools that read it (T-413: one folder is shared by several) */
+  tools?: { tool: string; label: string; detected: boolean }[];
+  /** The tools found here that would list atm's skills twice, from this folder and another they read */
+  duplicates?: string[];
 }
 
 /** What connecting wrote, and what it left alone */

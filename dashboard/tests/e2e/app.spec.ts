@@ -434,6 +434,30 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.agentCalls).toEqual(['agents_status', 'connect_agents claude', 'agents_status']);
   });
 
+  test('Connect your agents (T-413): the shared folder names the tools found here, and a tool that lists the skills twice', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    tasksServer.use('standard');
+    await page.goto('/');
+    await expect(page.locator('#dashboard-title')).toHaveText('Standard Project');
+    await tasksServer.chooseMenu({ kind: 'connect_agents' });
+    const shared = page.locator('.agents-harness[data-harness="agents"]');
+    await expect(shared.locator('.agents-harness-tools')).toHaveText('Found here: Codex, Cursor');
+    // Claude Code's folder is its own: no list of tools
+    await expect(page.locator('.agents-harness[data-harness="claude"] .agents-harness-tools')).toHaveCount(0);
+    await expect(shared.locator('.agents-harness-twice')).toHaveCount(0);
+
+    await shared.locator('.agents-connect').click();
+    await expect(shared.locator('.agents-harness-state')).toHaveText('Connected');
+    await expect(shared.locator('.agents-harness-twice')).toHaveCount(0);
+    await page.locator('.agents-harness[data-harness="claude"] .agents-connect').click();
+    await expect(shared.locator('.agents-harness-twice')).toHaveText(
+      "Cursor also reads another folder atm is in, so it lists atm's skills twice.",
+    );
+  });
+
   test('windows come back with their tabs (T-518): the active one shown, a start link in a new tab; changes are kept', async ({
     page,
     tasksServer,

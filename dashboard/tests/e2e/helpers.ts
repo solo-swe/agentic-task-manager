@@ -582,25 +582,36 @@ export class TasksServer {
   needsYouCalls: { workspace: string; badge: boolean; notify: boolean }[] = [];
   /** The external links the page asked the app to open in the user's browser (`open_url`, T-551), in order */
   openedUrls: string[] = [];
-  /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
-  private agentsConnected = false;
+  /** The harnesses that have atm's skills (connect_agents adds one) */
+  private agentsConnected = new Set<string>();
 
-  /** Claude Code's status, as `agents_status` reports it */
+  /** The harnesses' status, as `agents_status` reports it: Claude Code's folder, and the one Codex and Cursor (found
+   * here) share with others, Cursor listing atm's skills twice once both have them (T-413) */
   private harnessStatus() {
-    return {
-      harness: 'claude',
-      label: 'Claude Code',
+    const harness = (id: string, label: string, folder: string, tools: [string, string, boolean][]) => ({
+      harness: id,
+      label,
       detected: true,
       scope: 'user',
-      folder: '/Users/me/.claude/skills',
+      folder,
       version: '0.0.0',
       skills: AGENT_SKILLS.map((skill) => ({
         skill,
-        path: `/Users/me/.claude/skills/${skill}`,
-        state: this.agentsConnected ? 'linked' : 'missing',
+        path: `${folder}/${skill}`,
+        state: this.agentsConnected.has(id) ? 'linked' : 'missing',
         version: null,
       })),
-    };
+      tools: tools.map(([tool, label, detected]) => ({ tool, label, detected })),
+      duplicates: id === 'agents' && this.agentsConnected.size === 2 ? ['Cursor'] : [],
+    });
+    return [
+      harness('claude', 'Claude Code', '/Users/me/.claude/skills', [['claude', 'Claude Code', true]]),
+      harness('agents', 'Codex, Copilot, Cursor, OpenCode and Gemini CLI', '/Users/me/.agents/skills', [
+        ['codex', 'Codex', true],
+        ['copilot', 'Copilot CLI', false],
+        ['cursor', 'Cursor', true],
+      ]),
+    ];
   }
 
   /**
@@ -735,19 +746,20 @@ export class TasksServer {
         return { ok: null };
       case 'agents_status':
         this.agentCalls.push(command);
-        return { ok: [this.harnessStatus()] };
+        return { ok: this.harnessStatus() };
       case 'connect_agents': {
-        this.agentCalls.push(`${command} ${String(args.harness)}`);
-        if (args.harness !== 'claude')
-          return { error: { kind: 'invalid', message: `no harness '${String(args.harness)}'` } };
-        const before = this.agentsConnected;
-        this.agentsConnected = true;
+        const id = String(args.harness);
+        this.agentCalls.push(`${command} ${id}`);
+        const status = this.harnessStatus().find((h) => h.harness === id);
+        if (!status) return { error: { kind: 'invalid', message: `no harness '${id}'` } };
+        const before = this.agentsConnected.has(id);
+        this.agentsConnected.add(id);
         return {
           ok: {
             written: AGENT_SKILLS.map((skill) => ({
-              harness: 'claude',
+              harness: id,
               skill,
-              path: `/Users/me/.claude/skills/${skill}`,
+              path: `${status.folder}/${skill}`,
               how: 'link',
               action: before ? 'unchanged' : 'installed',
             })),

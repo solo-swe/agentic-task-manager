@@ -644,6 +644,15 @@ tool's folder (`~/.claude/skills/`, or with `--project` the project's `.claude/s
 - **What the skills carry** is reviewed with the skills (T-441 above): Claude Code's copy adds the same pre-approvals
   the plugin's copy has, from `skills/claude-code.json`.
 
+**More harnesses' folders (T-413).** The same command, the same bounds, into two more folders of a table built into
+atm: `~/.agents/skills/` (Codex, Copilot CLI, Cursor, OpenCode and Gemini CLI read it; a project's `.agents/skills/`
+with `--project`) and Antigravity's `~/.gemini/config/skills/`. Without `--harness` it writes Claude Code's folder
+and the shared one, and Antigravity's only when Antigravity CLI is found (`~/.gemini/antigravity-cli`); detection
+only checks that a path exists, it reads nothing there. Their copies are the portable core alone: no pre-approval,
+as no other harness reads `allowed-tools` the way Claude Code does (Copilot CLI's would pre-approve commands, so atm
+leaves it out). A tool name (`--harness codex`) only picks its folder; `uninstall` of a folder several tools share
+removes it for all of them, as `--harness`'s help says. Written review: no new command, path read, URL or permission.
+
 **The release machinery (T-452, `packaging/README.md`).** The first workflows that publish anything, so the first
 CI permission beyond reading and the first secrets:
 - **Who can release:** a `v*` tag runs `.github/workflows/release.yml`, and only people who can push tags can make
@@ -775,7 +784,7 @@ with only this project open.
 
 **The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
 `connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
-Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
+Claude Code, `~/.agents/skills` for the tools that share it, `~/.gemini/config/skills` for Antigravity: T-413), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,
 or `Invalid` before anything is written; a folder in the way that atm didn't write is refused, never replaced; every
 path written recorded in `agents.json` and listed back). It runs only on the user's click in the dialog; opening it
 calls only `agents_status`, a read (`app.spec.ts` checks the calls). The main window's capability allows both; a page
@@ -1033,7 +1042,8 @@ Such a PR adds the threat (with its boundary) and, if it needs one, the invarian
     (stapled); `spctl -a -vv atm.app` says "Notarized Developer ID"; `atm` from the cask runs and is the app's
     (`readlink $(which atm)`); `open 'atm://projects/<id>/list'` opens that page, running or not; `open
     'atm://api/projects'` and `open 'atm://projects/../x'` change nothing; the window's DevTools are off in the release
-    build; Connect your agents writes only under `~/.claude/skills` and `atm agents status` agrees.
+    build; Connect your agents writes only under the folder of the harness clicked (`~/.claude/skills`,
+    `~/.agents/skills` or `~/.gemini/config/skills`, T-413) and `atm agents status` agrees.
   - **In-app updates** (T-483) will add an entry point that downloads and installs code: its own review when it lands
     (blocked on the plugin, the key and the Homebrew choice).
   - **Windows and Linux** (T-482 and later): deep links need the deep-link plugin there; I28's checks are the same.

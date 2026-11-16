@@ -6,7 +6,11 @@
 //! copied there instead with `copy`, where a link can't be made, and always for a project (whose copy is committed for
 //! a team, so it can't point into one person's home folder). What install wrote is recorded (`<state>/agents.json`),
 //! so uninstall removes exactly that and status can say what is missing or stale. A folder atm didn't write is never
-//! touched. Harnesses are a table: Claude Code for now; another is one more entry (T-413).
+//! touched.
+//!
+//! Harnesses are a table of the folders they read (T-413): several tools read the same one (Codex, Copilot, Cursor,
+//! `OpenCode` and Gemini CLI all read `~/.agents/skills`), so atm installs into a folder once, whichever of its tools
+//! was named, and status says which tools read each folder, and which of them would list atm's skills twice.
 
 use std::fs;
 
@@ -23,35 +27,129 @@ use crate::project::Project;
 
 const RECORD: &str = "agents.json";
 
-/// An agent harness atm can install its skills into.
+/// A tool that reads a harness folder's skills.
+#[derive(Debug)]
+pub struct Tool {
+    /// Its ID (`--harness` takes it too).
+    pub id: &'static str,
+    /// Its name, for people.
+    pub label: &'static str,
+    /// What it leaves in the home folder once installed and run (atm says so; installing doesn't need it).
+    detect: &'static str,
+    /// The other harness folders it also reads, listing atm's skills twice when atm is in both.
+    also: &'static [&'static str],
+}
+
+/// A folder agent harnesses read skills from, and the tools that read it: what atm installs into.
 #[derive(Debug)]
 pub struct Harness {
     /// Its ID (`--harness`).
     pub id: &'static str,
     /// Its name, for people.
     pub label: &'static str,
-    /// Where it is installed, in the home folder (atm says so; installing doesn't need it).
-    detect: &'static str,
     /// Where it reads the user's skills, in the home folder.
     user_dir: &'static str,
-    /// Where it reads a project's skills, from the project's root.
-    project_dir: &'static str,
+    /// Where it reads a project's skills, from the project's root (none when another harness's folder is the same).
+    project_dir: Option<&'static str>,
     /// Whether it reads `allowed-tools` in a skill's frontmatter.
     allowed_tools: bool,
     /// Whether it follows symlinked skill folders.
     links: bool,
+    /// Whether `atm agents install` without `--harness` installs into it even when none of its tools is found.
+    default: bool,
+    /// The tools that read it.
+    pub tools: &'static [Tool],
 }
 
-/// The harnesses atm knows.
-pub static HARNESSES: &[Harness] = &[Harness {
-    id: "claude",
-    label: "Claude Code",
-    detect: ".claude",
-    user_dir: ".claude/skills",
-    project_dir: ".claude/skills",
-    allowed_tools: true,
-    links: true,
-}];
+/// The harnesses atm knows, as the tools' versions tried in T-413 read them (docs/better-way-to-distribute-atm.md §5).
+pub static HARNESSES: &[Harness] = &[
+    Harness {
+        id: "claude",
+        label: "Claude Code",
+        user_dir: ".claude/skills",
+        project_dir: Some(".claude/skills"),
+        allowed_tools: true,
+        links: true,
+        default: true,
+        tools: &[Tool {
+            id: "claude",
+            label: "Claude Code",
+            detect: ".claude",
+            also: &[],
+        }],
+    },
+    Harness {
+        id: "agents",
+        label: "Codex, Copilot, Cursor, OpenCode and Gemini CLI",
+        user_dir: ".agents/skills",
+        project_dir: Some(".agents/skills"),
+        allowed_tools: false,
+        links: true,
+        default: true,
+        tools: &[
+            Tool {
+                id: "codex",
+                label: "Codex",
+                detect: ".codex",
+                also: &[],
+            },
+            Tool {
+                id: "copilot",
+                label: "Copilot CLI",
+                detect: ".copilot",
+                also: &[],
+            },
+            Tool {
+                id: "cursor",
+                label: "Cursor",
+                detect: ".cursor",
+                also: &["claude"],
+            },
+            // It reads ~/.claude/skills too, but lists a skill once by its name
+            Tool {
+                id: "opencode",
+                label: "OpenCode",
+                detect: ".config/opencode",
+                also: &[],
+            },
+            Tool {
+                id: "gemini",
+                label: "Gemini CLI",
+                detect: ".gemini/settings.json",
+                also: &[],
+            },
+        ],
+    },
+    Harness {
+        id: "antigravity",
+        label: "Antigravity",
+        user_dir: ".gemini/config/skills",
+        // A project's are in .agents/skills, the agents harness's
+        project_dir: None,
+        allowed_tools: false,
+        links: true,
+        default: false,
+        tools: &[Tool {
+            id: "antigravity",
+            label: "Antigravity CLI",
+            detect: ".gemini/antigravity-cli",
+            also: &[],
+        }],
+    },
+];
+
+impl Tool {
+    fn detected(&self) -> bool {
+        in_home(self.detect).exists()
+    }
+}
+
+impl Harness {
+    /// Whether one of its tools is installed here.
+    fn detected(&self) -> bool {
+        self.tools.iter().any(Tool::detected)
+    }
+}
 
 /// The project's folder, for `--project`: its working copy (where its task folder is).
 #[must_use]
@@ -59,20 +157,55 @@ pub fn project_folder(project: &Project) -> Option<PathBuf> {
     project.store().working_copy().map(Path::to_path_buf)
 }
 
-fn harnesses(harness: Option<&str>) -> Result<Vec<&'static Harness>> {
+/// The IDs `--harness` takes: each harness's, then each tool's that isn't one already.
+#[must_use]
+pub fn harness_ids() -> Vec<(&'static str, &'static str)> {
+    let mut ids: Vec<(&str, &str)> = HARNESSES.iter().map(|h| (h.id, h.label)).collect();
+    for h in HARNESSES {
+        for t in h.tools {
+            if !ids.iter().any(|(id, _)| *id == t.id) {
+                ids.push((t.id, t.label));
+            }
+        }
+    }
+    ids
+}
+
+/// The harness `id` names: a harness, or the one a tool reads.
+fn named(id: &str) -> Result<&'static Harness> {
+    HARNESSES
+        .iter()
+        .find(|h| h.id == id)
+        .or_else(|| {
+            HARNESSES
+                .iter()
+                .find(|h| h.tools.iter().any(|t| t.id == id))
+        })
+        .ok_or_else(|| {
+            let known: Vec<&str> = harness_ids().into_iter().map(|(id, _)| id).collect();
+            Error::Invalid(format!(
+                "no harness '{id}' (atm knows: {})",
+                known.join(", ")
+            ))
+        })
+}
+
+/// The harnesses to install into: the one named, else those installed by default and those whose tools are here.
+fn to_install(harness: Option<&str>) -> Result<Vec<&'static Harness>> {
+    match harness {
+        None => Ok(HARNESSES
+            .iter()
+            .filter(|h| h.default || h.detected())
+            .collect()),
+        Some(id) => named(id).map(|h| vec![h]),
+    }
+}
+
+/// The harnesses to uninstall from: the one named, else all of them.
+fn to_uninstall(harness: Option<&str>) -> Result<Vec<&'static Harness>> {
     match harness {
         None => Ok(HARNESSES.iter().collect()),
-        Some(id) => HARNESSES
-            .iter()
-            .find(|h| h.id == id)
-            .map(|h| vec![h])
-            .ok_or_else(|| {
-                let known: Vec<&str> = HARNESSES.iter().map(|h| h.id).collect();
-                Error::Invalid(format!(
-                    "no harness '{id}' (atm knows: {})",
-                    known.join(", ")
-                ))
-            }),
+        Some(id) => named(id).map(|h| vec![h]),
     }
 }
 
@@ -172,11 +305,14 @@ fn link(source: &Path, path: &Path) -> std::io::Result<()> {
     }
 }
 
-/// Where a harness reads skills: the folder, and the scope (`user` or `project`).
-fn target(harness: &Harness, project_dir: Option<&Path>) -> (PathBuf, &'static str) {
+/// Where a harness reads skills: the folder, and the scope (`user` or `project`); none for a project whose folder is
+/// another harness's.
+fn target(harness: &Harness, project_dir: Option<&Path>) -> Option<(PathBuf, &'static str)> {
     match project_dir {
-        Some(project) => (absolute(project).join(harness.project_dir), "project"),
-        None => (in_home(harness.user_dir), "user"),
+        Some(project) => harness
+            .project_dir
+            .map(|dir| (absolute(project).join(dir), "project")),
+        None => Some((in_home(harness.user_dir), "user")),
     }
 }
 
@@ -197,8 +333,10 @@ pub struct Installed {
     pub refused: Vec<Value>,
 }
 
-/// Write the skills for the harnesses (one, or all) and link or copy them where each reads them: the user's folder,
-/// or `project_dir`'s with a project. Idempotent; a folder in the way that atm didn't write is refused, not replaced.
+/// Write the skills for the harnesses and link or copy them where each reads them: the user's folder, or
+/// `project_dir`'s with a project. `harness` names one (or a tool that reads it); without it, those installed by
+/// default and those whose tools are here. Idempotent; a folder in the way that atm didn't write is refused, not
+/// replaced.
 ///
 /// # Errors
 /// `Invalid` for a harness atm doesn't know; a folder or file that can't be written.
@@ -211,8 +349,10 @@ pub fn install_skills(
     let mut record = read_record();
     let mut written = Vec::new();
     let mut refused = Vec::new();
-    for h in harnesses(harness)? {
-        let (folder, scope) = target(h, project_dir);
+    for h in to_install(harness)? {
+        let Some((folder, scope)) = target(h, project_dir) else {
+            continue;
+        };
         let source_root = state_dir().join("skills").join(h.id);
         for (name, core) in SKILLS {
             let text = skill_text(h, name, core);
@@ -271,7 +411,7 @@ pub fn install_skills(
 /// # Errors
 /// `Invalid` for a harness atm doesn't know; something that can't be removed.
 pub fn uninstall_skills(harness: Option<&str>, project_dir: Option<&Path>) -> Result<Vec<String>> {
-    let wanted: Vec<&str> = harnesses(harness)?.into_iter().map(|h| h.id).collect();
+    let wanted: Vec<&str> = to_uninstall(harness)?.into_iter().map(|h| h.id).collect();
     let project =
         // `/`: the paths recorded are as atm shows them, on every platform
         project_dir.map(|p| format!("{}/", absolute(p).shown()));
@@ -309,20 +449,24 @@ pub fn uninstall_skills(harness: Option<&str>, project_dir: Option<&Path>) -> Re
     Ok(removed)
 }
 
-/// Per harness and scope: whether the harness is installed here, and each skill's state where it reads them:
+/// Per harness and scope: whether one of its tools is installed here, and each skill's state where it reads them:
 /// linked, copied, missing, stale (a copy of another version, or a link whose skill is gone) or "not atm's".
-/// `project_dir` adds that project's. Each report is {harness, label, detected, scope, folder, version, skills}.
+/// `project_dir` adds that project's. Each report is {harness, label, detected, scope, folder, version, skills,
+/// tools: [{tool, label, detected}], duplicates: [the tools found here that list atm's skills twice, from this folder
+/// and another they read]}.
 #[must_use]
 pub fn skills_status(project_dir: Option<&Path>, version: &str) -> Vec<Value> {
     let record = read_record();
-    let mut report = Vec::new();
+    let mut report: Vec<Value> = Vec::new();
     for h in HARNESSES {
         let mut scopes: Vec<Option<&Path>> = vec![None];
         if project_dir.is_some() {
             scopes.push(project_dir);
         }
         for where_ in scopes {
-            let (folder, scope) = target(h, where_);
+            let Some((folder, scope)) = target(h, where_) else {
+                continue;
+            };
             let skills: Vec<Value> = SKILLS
                 .iter()
                 .map(|(name, core)| {
@@ -349,18 +493,63 @@ pub fn skills_status(project_dir: Option<&Path>, version: &str) -> Vec<Value> {
                     json!({"skill": name, "path": key, "state": state, "version": installed})
                 })
                 .collect();
+            let tools: Vec<Value> = h
+                .tools
+                .iter()
+                .map(|t| json!({"tool": t.id, "label": t.label, "detected": t.detected()}))
+                .collect();
             report.push(json!({
                 "harness": h.id,
                 "label": h.label,
-                "detected": in_home(h.detect).is_dir(),
+                "detected": h.detected(),
                 "scope": scope,
                 "folder": folder.shown(),
                 "version": version,
                 "skills": skills,
+                "tools": tools,
+                "duplicates": [],
             }));
         }
     }
+    mark_duplicates(&mut report);
     report
+}
+
+/// Whether atm's skills are in the report's folder (linked, copied or stale).
+fn has_skills(report: &Value) -> bool {
+    report["skills"].as_array().is_some_and(|s| {
+        s.iter()
+            .any(|s| matches!(s["state"].as_str(), Some("linked" | "copied" | "stale")))
+    })
+}
+
+/// Fill each report's `duplicates`: the tools found here that read its folder and another of the same scope, atm's
+/// skills being in both.
+fn mark_duplicates(report: &mut [Value]) {
+    let filled = |id: &str, scope: &Value| {
+        report
+            .iter()
+            .any(|r| r["harness"] == id && r["scope"] == *scope && has_skills(r))
+    };
+    let marks: Vec<Vec<&str>> = report
+        .iter()
+        .map(|r| {
+            let Some(h) = HARNESSES.iter().find(|h| r["harness"] == h.id) else {
+                return Vec::new();
+            };
+            if !has_skills(r) {
+                return Vec::new();
+            }
+            h.tools
+                .iter()
+                .filter(|t| t.detected() && t.also.iter().any(|other| filled(other, &r["scope"])))
+                .map(|t| t.label)
+                .collect()
+        })
+        .collect();
+    for (r, labels) in report.iter_mut().zip(marks) {
+        r["duplicates"] = json!(labels);
+    }
 }
 
 #[cfg(test)]
@@ -387,9 +576,43 @@ mod tests {
     #[test]
     fn an_unknown_harness_names_the_known_ones() {
         assert_eq!(
-            harnesses(Some("nope")).unwrap_err(),
-            Error::Invalid("no harness 'nope' (atm knows: claude)".into())
+            to_install(Some("nope")).unwrap_err(),
+            Error::Invalid(
+                "no harness 'nope' (atm knows: claude, agents, antigravity, codex, copilot, cursor, opencode, gemini)"
+                    .into()
+            )
         );
-        assert_eq!(harnesses(None).unwrap().len(), HARNESSES.len());
+        assert_eq!(to_uninstall(None).unwrap().len(), HARNESSES.len());
+    }
+
+    #[test]
+    fn a_tool_names_the_folder_it_reads() {
+        for (tool, harness) in [
+            ("codex", "agents"),
+            ("cursor", "agents"),
+            ("agents", "agents"),
+            ("antigravity", "antigravity"),
+            ("claude", "claude"),
+        ] {
+            assert_eq!(to_install(Some(tool)).unwrap()[0].id, harness, "{tool}");
+        }
+    }
+
+    #[test]
+    fn only_claude_code_gets_the_pre_approvals() {
+        let (name, core) = SKILLS[0];
+        for h in &HARNESSES[1..] {
+            assert_eq!(skill_text(h, name, core), core, "{}", h.id);
+        }
+    }
+
+    #[test]
+    fn every_tool_id_is_unique_and_no_folder_is_written_twice_for_a_project() {
+        let ids: Vec<&str> = harness_ids().into_iter().map(|(id, _)| id).collect();
+        let unique: std::collections::BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(unique.len(), ids.len());
+        let project: Vec<&str> = HARNESSES.iter().filter_map(|h| h.project_dir).collect();
+        let unique: std::collections::BTreeSet<&str> = project.iter().copied().collect();
+        assert_eq!(unique.len(), project.len());
     }
 }
