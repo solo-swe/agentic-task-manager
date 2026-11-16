@@ -75,6 +75,42 @@ impl Workspaces {
         json!({"workspaces": list, "recent": self.recent()})
     }
 
+    /// The registered projects, in any workspace, whose short name (`meta.key`, ADR-007 §2) is `key` in any case, other
+    /// than the one in `except`: `(workspace, project's name)`, for `atm project key set`'s warning. A project that
+    /// can't be read is left out.
+    #[must_use]
+    pub fn key_users(&self, key: &str, except: &Path) -> Vec<(String, String)> {
+        let except = std::fs::canonicalize(except).unwrap_or_else(|_| except.to_path_buf());
+        let mut found = Vec::new();
+        for id in self.ids() {
+            let Some(workspace) = self.get(&id) else {
+                continue;
+            };
+            for entry in workspace.entries() {
+                let path = folder(&entry);
+                if std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone()) == except {
+                    continue;
+                }
+                let Ok(project) = Workspace::project_tolerant(&entry) else {
+                    continue;
+                };
+                let Ok(document) = project.store().document() else {
+                    continue;
+                };
+                if atm_common::keys::project_key(document)
+                    .is_some_and(|k| k.eq_ignore_ascii_case(key))
+                {
+                    let name = entry
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or_else(|| entry["id"].as_str().unwrap_or_default());
+                    found.push((id.clone(), name.to_string()));
+                }
+            }
+        }
+        found
+    }
+
     /// The workspace `id`, if there is one.
     #[must_use]
     pub fn get(&self, id: &str) -> Option<Arc<Workspace>> {

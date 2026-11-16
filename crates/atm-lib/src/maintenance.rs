@@ -85,18 +85,41 @@ impl StoreMaintenance {
     }
 
     /// `atm db migrate` (and `atm service`, before it shows a project): bring the task folder up to date. With
-    /// `register_it`, the project joins the default workspace too (every skill runs migrate first).
+    /// `register_it`, the project joins the default workspace too (every skill runs migrate first). With `keys`, the
+    /// task file moves to task keys too (ADR-007 §6; `atm db migrate --keys` until every command takes keys, T-543),
+    /// reported as `task_keys`.
     ///
     /// # Errors
     /// The task folder's checks, a file that can't be moved, read or written.
-    pub fn migrate(&self, register_it: bool) -> Result<Migration> {
+    pub fn migrate(&self, register_it: bool, keys: bool) -> Result<Migration> {
         let paths = self.paths()?;
-        let result = atm_db::jsongit::migrate::migrate(&paths)?;
+        let mut result = atm_db::jsongit::migrate::migrate(&paths)?;
         let tasks_exists = paths.tasks.is_file();
         if register_it && tasks_exists {
             atm_db::registry::register(&paths, true)?;
         }
-        let lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
+        let mut lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
+        if keys && tasks_exists {
+            let report = atm_db::jsongit::migrate::migrate_to_keys(&paths)?;
+            result.insert(
+                "task_keys".into(),
+                report.as_ref().map_or(serde_json::Value::Null, |r| {
+                    serde_json::json!({
+                        "key": r.key,
+                        "old_prefix": r.old_prefix,
+                        "tasks": r.tasks,
+                        "archived": r.archived,
+                        "renumbered": r.renumbered.iter()
+                            .map(|(old, n)| serde_json::json!({"from": old, "number": n}))
+                            .collect::<Vec<_>>(),
+                    })
+                }),
+            );
+            if let Some(report) = report {
+                lines.retain(|l| l != "Nothing to migrate.");
+                lines.extend(atm_db::jsongit::migrate::describe_keys_migration(&report));
+            }
+        }
         Ok(Migration {
             result,
             lines,

@@ -19,7 +19,11 @@ use super::{Context, print_json};
 #[derive(Debug, Subcommand)]
 pub enum DbCommand {
     /// Move tasks.json into .agentic-task-manager/ and set up the folder.
-    Migrate,
+    Migrate {
+        /// Also move the task file to task keys: tasks stored by UUID, shown as <KEY>-<number> (ADR-007)
+        #[arg(long)]
+        keys: bool,
+    },
     /// git's merge driver for tasks.json (git runs it; `db init` registers it).
     #[command(hide = true)]
     MergeDriver {
@@ -255,14 +259,14 @@ fn init(ctx: Context, cwd: &Path, meta_file: Option<&str>) -> Result<()> {
 /// What the store refuses.
 pub fn run(command: DbCommand, ctx: Context, cwd: &Path) -> Result<u8> {
     match command {
-        DbCommand::Migrate => {
+        DbCommand::Migrate { keys } => {
             if ctx.dry_run {
                 println!(
                     "[dry-run] would move tasks.json into .agentic-task-manager/ and set up the folder"
                 );
                 return Ok(0);
             }
-            let migration = maintenance(cwd)?.migrate(true)?;
+            let migration = maintenance(cwd)?.migrate(true, keys)?;
             if ctx.json {
                 print_json(&Value::Object(migration.result));
             } else {

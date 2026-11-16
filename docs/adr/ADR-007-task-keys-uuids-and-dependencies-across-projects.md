@@ -26,7 +26,8 @@ A task's ID today is one string, `T-527`, both what people read and what the fil
 
 ### 1. Two identities: a UUID stored, a key shown
 
-- **`id` is the task's UUID** (version 7, so it sorts by creation), given once and never changed. Every reference in
+- **`id` is the task's UUID** (version 7 for a new task, so it sorts by creation; version 8 for one the first
+  migration converted, §6), given once and never changed. Every reference in
   the files is a UUID: `dependencies`, `related`, claims, the archive, notes that point at a task. Keeping the field
   name `id` keeps every lookup by `id` as it is; only its value changes.
 - **`number`** is the task's number in its project (an integer, no padding), given from `meta.next_number`.
@@ -37,7 +38,7 @@ A task's ID today is one string, `T-527`, both what people read and what the fil
 ### 2. The project's short name
 
 - **`meta.key`**, beside `meta.project` (the name): 3 to 6 ASCII letters and digits, kept as written (`ATM`,
-  `TaskMan`), matched without regard to case. `atm db init` asks for it on a new project and suggests the name's
+  `TskMan`), matched without regard to case. `atm db init` asks for it on a new project and suggests the name's
   initials (Agentic Task Manager: `ATM`).
 - **`meta.key_history`**: the project's earlier prefixes, oldest first (`["T", "ATM"]`), so an old key still finds
   its task (§5).
@@ -75,17 +76,25 @@ alias resolves to the task it moved to.
 ### 6. Changing the prefix is a migration, the first time and later
 
 - **`atm project key set <KEY>`** sets `meta.key` and pushes the old one onto `meta.key_history`. Numbers don't
-  change, nor does any reference; only how keys read. `T-527` becomes `ATM-527`, later `TaskMan-527`, and all three
+  change, nor does any reference; only how keys read. `T-527` becomes `ATM-527`, later `TskMan-527`, and all three
   find it.
 - **The first migration** (`atm db migrate` on a file without UUIDs) gives every task, archived ones too, a UUID and
-  its number (the trailing digits of its ID, when every ID has the file's prefix; an ID that doesn't fit, `T-P1-03`,
-  gets the next free number and keeps its old ID as an alias), rewrites the references to UUIDs, keys the claims by
-  UUID, sets `meta.key` (the name's initials when they make 3 to 6 letters, else the old prefix, to change with
-  `atm project key set`), puts the old prefix in `meta.key_history`, and marks every task final (they are all on the
-  base branch or on branches made from it; a task only on a branch is checked again by the next `atm vcs pushed`).
-- **The file format changes**, so `tasks.json` says which version wrote it and an older atm refuses it with "this
-  project needs atm 0.N or later". The merge driver migrates an old side first, as it turned phases into sprints, so
-  a branch made before the migration still merges.
+  its number (the trailing digits of its ID, when the ID has the file's prefix and the number is free; an ID that
+  doesn't fit, `T-P1-03`, gets the next number atm never gave, above `meta.next_id`, and keeps its old ID as an alias),
+  rewrites the references to UUIDs (`dependencies`, `related`, `duplicate_of`, the sprints' reports), keys the claims
+  by UUID, sets `meta.key` (one the file names, else the name's initials when they make 3 to 6 letters, else the old
+  prefix, to change with `atm project key set`), puts the old prefix in `meta.key_history`, and marks every task
+  final (they are all on the base branch or on branches made from it).
+- **The same in every clone** (T-540): each clone and worktree migrates its own copy, so a converted task's UUID is
+  worked out, not random: a version-8 UUID from the project's `meta.id` and the task's old ID. Two branches that both
+  migrate give each task the same UUID and number, and merge task by task.
+- **Opt-in first** (T-540): `atm db migrate --keys` until every command takes keys (T-543), then `atm db migrate`
+  itself.
+- **The file format changes** (`meta.format`: 2), and an atm that knows formats refuses a newer one ("upgrade atm to
+  work on this project"). atm 0.37 and older don't check it, and would read a format-2 file as one of IDs (UUIDs pass
+  their ID rule) and give new tasks `T-` IDs: the skills require atm 0.38 or later (T-547) and the release notes say to
+  upgrade every clone. The merge driver migrates an old side first, as it turned phases into sprints, so a branch made
+  before the migration still merges.
 
 ### 7. Dependencies across projects
 

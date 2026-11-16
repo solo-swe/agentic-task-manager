@@ -326,6 +326,79 @@ fn rename_field(list: Option<&mut Vec<Value>>, field: &str, from: &str, to: &str
     n
 }
 
+/// What [`set_project_key`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KeySet {
+    /// The key before (none for a project without one).
+    pub from: Option<String>,
+    /// The key now.
+    pub to: String,
+    /// The earlier keys, oldest first, that still find tasks (`meta.key_history`).
+    pub history: Vec<String>,
+}
+
+/// `atm project key set` (ADR-007 §6): the project's short name, its tasks' key prefix, becomes `key` (3 to 6
+/// letters and digits). In a keys-format file the old key moves onto `meta.key_history`, so its keys still find their
+/// tasks; numbers and references don't change, only how keys read. A key going back to one in the history leaves it.
+/// A legacy file just records it, for its migration to use.
+///
+/// # Errors
+/// A key that isn't 3 to 6 letters and digits; the same key it has.
+pub fn set_project_key(project: &mut Project, key: &str) -> Result<KeySet> {
+    let key = atm_common::py::strip(key).to_string();
+    if !atm_common::ids::valid_project_key(&key) {
+        return Err(Error::Invalid(format!(
+            "{} isn't a project key: 3 to 6 letters and digits (ATM)",
+            atm_common::py::repr_str(&key)
+        )));
+    }
+    let mut outcome = None;
+    project.store_mut().change(&mut |work: &mut Working| {
+        let keyed = atm_common::keys::keys_format(&work.document);
+        if !work.document.get("meta").is_some_and(Value::is_object) {
+            work.document["meta"] = json!({});
+        }
+        let Some(meta) = work.document["meta"].as_object_mut() else {
+            return Err(Error::failed("meta isn't an object"));
+        };
+        let from = meta.get("key").and_then(Value::as_str).map(String::from);
+        if from.as_deref() == Some(key.as_str()) {
+            return Err(Error::Invalid(format!(
+                "the project's key is {key} already"
+            )));
+        }
+        let mut history: Vec<String> = meta
+            .get("key_history")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .filter(|h| !h.eq_ignore_ascii_case(&key))
+            .map(String::from)
+            .collect();
+        if keyed
+            && let Some(old) = &from
+            && !old.eq_ignore_ascii_case(&key)
+            && !history.iter().any(|h| h.eq_ignore_ascii_case(old))
+        {
+            history.push(old.clone());
+        }
+        meta.insert("key".into(), json!(key));
+        if history.is_empty() {
+            meta.shift_remove("key_history");
+        } else {
+            meta.insert("key_history".into(), json!(history));
+        }
+        outcome = Some(KeySet {
+            from: from.clone(),
+            to: key.clone(),
+            history: history.clone(),
+        });
+        Ok(())
+    })?;
+    outcome.ok_or_else(|| Error::failed("the key wasn't set"))
+}
+
 /// `atm project vocab rename` (T-500): an entry of the statuses, types or priorities gets the ID `new` (and, given, the
 /// label `label`); every task using it follows, in tasks.json and the archive, and `meta.default_priority`. A project on
 /// the defaults gets the list written into `meta`, the entry renamed in it. A task's `updated_at` stays.

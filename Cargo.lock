@@ -325,6 +325,7 @@ dependencies = [
  "serde_json",
  "signal-hook",
  "sysinfo",
+ "uuid",
 ]
 
 [[package]]

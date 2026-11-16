@@ -20449,7 +20449,7 @@
       "description": "ADR-007 §5. One resolver, in atm-lib, that every command and the API use: a current key (`ATM-527`, any case), a key with a prefix in `meta.key_history` (`T-527`), a task's own alias (`ATM-538` that moved), or the UUID; the archive too. An unknown or ambiguous reference says which and why.\n\n## Also\n- Sorting by number (`natural_cmp` users: `loop_rules.rs`, `summary.rs`) instead of the ID's text.\n- `edit.rs`'s `split_id`/`id_format` and the default `T-` go: a new task takes `meta.next_number`, provisional (`key_final: false`); `create-tasks`' placeholders (`new-1`) still resolve within the file.\n\n## Tests\nUnit tests for each form, the archive, a moved alias, and refusals.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-538"
       ],
@@ -20459,7 +20459,7 @@
         "crates/atm-common/src/rules.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:06:14Z",
+      "updated_at": "2026-11-16T03:11:42Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20470,7 +20470,18 @@
       ],
       "sprint": "Keys and reach",
       "started_at": "2026-11-16T03:06:14Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "3865a24e0a5062cd8267dcababb8a950962e6e48",
+      "completed_at": "2026-11-16T03:11:42Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T03:11:42Z",
+          "kind": "outcome",
+          "text": "atm-common keys.rs: resolve (UUID, key any case, earlier prefix, alias; archive too; a current key wins over an alias; ambiguity and misses say why), key_of, task_order, next_task_number. Keys-format task add: UUID, next number, provisional, references by key stored as UUIDs; archive moves next_number. Loop and summary order by number. Legacy files unchanged (split_id/id_format stay until T-540 migrates every file). Commands still match IDs exactly: T-543 wires them to resolve.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-540",
@@ -20483,7 +20494,7 @@
       "description": "ADR-007 §6.\n\n## The first migration (`atm db migrate`)\nEvery task, archived ones too: a UUID, its number from the ID's trailing digits (an ID that doesn't fit the file's prefix gets the next free number and keeps its old ID as an alias), references rewritten to UUIDs (`dependencies`, `related`, notes pointing at a task, claims keyed by UUID), `meta.key` from the name's initials when they make 3 to 6 letters (else the old prefix), the old prefix into `meta.key_history`, every task final, the format version set. Says what it did.\n\n## `atm project key set <KEY>`\nSets `meta.key`, pushes the old one onto `meta.key_history`; numbers and references unchanged. Warns (doesn't refuse) when another project in the user's workspaces uses the key. `atm db init` asks for a key on a new project, suggesting the initials.\n\n## Tests\nScenarios: migrate a file with dependencies, related, claims, an archive and an odd ID; then `key set` twice, and every old key still finds its task. A test that migrates a copy of this repository's own file and loses nothing.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-538",
         "T-539"
@@ -20495,7 +20506,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:06:14Z",
+      "updated_at": "2026-11-16T03:11:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20515,7 +20526,9 @@
           "text": "From T-538: atm 0.37 and older have no format check and would read a format-2 file as valid (UUIDs pass its ID rule) and give new tasks T- IDs. Guard: the migration should make the file unreadable to them, or the skills’ version check (T-547) require 0.38.0. Also ADR-007 §2/§6 give TaskMan as an example, which is 7 letters, over the 3–6 rule: fix the example.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-16T03:11:43Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-541",
@@ -20610,7 +20623,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:23Z",
+      "updated_at": "2026-11-16T03:32:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20622,6 +20635,14 @@
       "sprint": "Keys and reach",
       "components": [
         "cli"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-16T03:32:45Z",
+          "kind": "note",
+          "text": "From T-540: the migration is opt-in (`atm db migrate --keys`) until commands take keys; this task makes it part of plain `atm db migrate`, and makes `atm db init` create new projects in format 2 with meta.key (a --meta-file key, else the name’s initials via `suggested_key`). The CLI suite then runs on migrated files: scenarios naming T-… keep working through key_history.",
+          "by": "claude:0f56a916"
+        }
       ]
     },
     {
@@ -20764,7 +20785,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:25Z",
+      "updated_at": "2026-11-16T03:32:46Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20776,6 +20797,14 @@
       "sprint": "Keys and reach",
       "components": [
         "docs"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-16T03:32:46Z",
+          "kind": "note",
+          "text": "From T-538/T-540: atm 0.37 and older can’t refuse a format-2 file. The skills’ version check should require atm 0.38.0 or later, and the release notes say to upgrade every clone and worktree before migrating. Document `atm db migrate --keys` (until T-543 folds it in) and `atm project key show|set`.",
+          "by": "claude:0f56a916"
+        }
       ]
     },
     {

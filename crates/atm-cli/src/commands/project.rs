@@ -48,6 +48,97 @@ pub enum ProjectCommand {
     /// The project's vocabularies: its statuses, types and priorities.
     #[command(subcommand)]
     Vocab(VocabCommand),
+    /// The project's key, its tasks' prefix (ATM in ATM-527): print it, or set it.
+    #[command(subcommand)]
+    Key(KeyCommand),
+}
+
+/// The project key commands (ADR-007, T-540).
+#[derive(Debug, Subcommand)]
+pub enum KeyCommand {
+    /// Print the project's key and the earlier ones that still find tasks.
+    Show,
+    /// Set the project's key (3 to 6 letters and digits): numbers stay, and the old key still finds each task.
+    Set {
+        /// The new key
+        key: String,
+    },
+}
+
+fn key(command: KeyCommand, ctx: Context, cwd: &Path) -> Result<()> {
+    match command {
+        KeyCommand::Show => {
+            let project = Project::open(cwd)?;
+            let document = project.store().document()?;
+            let key = atm_common::keys::project_key(document).map(String::from);
+            let history = document["meta"]
+                .get("key_history")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
+            if ctx.json {
+                print_json(&serde_json::json!({
+                    "key": key,
+                    "history": history,
+                    "format": atm_common::ids::file_format(document),
+                }));
+            } else {
+                match key {
+                    Some(k) => println!("key: {k}"),
+                    None => println!("key: none yet (set one with atm project key set <KEY>)"),
+                }
+                let earlier: Vec<String> = history
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(py_str)
+                    .collect();
+                if !earlier.is_empty() {
+                    println!("earlier, still finding tasks: {}", earlier.join(", "));
+                }
+            }
+            Ok(())
+        }
+        KeyCommand::Set { key } => {
+            if ctx.dry_run {
+                println!("[dry-run] would set the project's key to {key}");
+                return Ok(());
+            }
+            let mut project = Project::open(cwd)?;
+            let root = project
+                .store()
+                .working_copy()
+                .map_or_else(|| cwd.to_path_buf(), Path::to_path_buf);
+            let set = atm_lib::settings::set_project_key(&mut project, &key)?;
+            let others = atm_lib::workspaces::Workspaces::open().key_users(&set.to, &root);
+            if ctx.json {
+                print_json(&serde_json::json!({
+                    "from": set.from,
+                    "to": set.to,
+                    "history": set.history,
+                    "also_used_by": others
+                        .iter()
+                        .map(|(w, p)| serde_json::json!({"workspace": w, "project": p}))
+                        .collect::<Vec<_>>(),
+                }));
+            } else {
+                match &set.from {
+                    Some(from) => println!(
+                        "The project's key is {} now (was {from}; {from}-<number> still finds each task).",
+                        set.to
+                    ),
+                    None => println!("The project's key is {} now.", set.to),
+                }
+                for (workspace, project) in &others {
+                    eprintln!(
+                        "warning: {project} (workspace {workspace}) uses the key {} too: its keys and this project's \
+                         would read the same across the workspace; give one another key",
+                        set.to
+                    );
+                }
+            }
+            Ok(())
+        }
+    }
 }
 
 /// The vocabulary commands (T-500).
@@ -178,6 +269,7 @@ pub fn run(command: ProjectCommand, ctx: Context, cwd: &Path) -> Result<()> {
             Ok(())
         }
         ProjectCommand::Vocab(command) => vocab(command, ctx, cwd),
+        ProjectCommand::Key(command) => key(command, ctx, cwd),
     }
 }
 
