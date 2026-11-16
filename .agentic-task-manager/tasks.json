@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 549,
+    "next_id": 551,
     "labels": [
       {
         "id": "architecture",
@@ -14663,7 +14663,8 @@
       "use_cases": [],
       "status": "todo",
       "dependencies": [
-        "T-427"
+        "T-427",
+        "T-550"
       ],
       "files": [
         "dashboard/package.json",
@@ -14672,9 +14673,9 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-09T21:11:02Z",
+      "updated_at": "2026-11-16T06:38:52Z",
       "created_by": "Hakan Serce",
-      "updated_by": "claude:34798264",
+      "updated_by": "claude:0f56a916",
       "components": [
         "dashboard"
       ],
@@ -14698,7 +14699,14 @@
           "to": "2026-11-09T21:11:02Z",
           "on": "user"
         }
-      ]
+      ],
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T06:38:23Z"
+        }
+      ],
+      "sprint": "Keys and reach"
     },
     {
       "id": "T-437",
@@ -17499,7 +17507,7 @@
       "description": "atm's plain output (without `--json`) is hard to scan. For example, `atm project status` prints the per-sprint, per-type and per-label counts as one long comma-separated line each, and the blocked and waiting lists as long lines joined with `;`. Make it read well in a terminal without changing what it says or what `--json` returns.\n\n## First, a design with the user\nPropose the look before changing code: a before/after of `atm project status`, `atm task list`, `atm task details`, `atm sprint list`, `atm release list` and `atm doctor`. Decide:\n- **Alignment:** columns padded to the widest value (IDs, statuses, priorities), long names cut or wrapped to the terminal's width, and sections with a heading and indented lines instead of `a, b, c` runs.\n- **Styling:** bold headings, colour for status kinds and priorities, dimmed secondary text. Only when standard output is a terminal; never with `NO_COLOR`, `--json`, or output going to a pipe or file.\n- **What `project status` leads with:** the active sprint and what's next first; the long breakdowns (all sprints, types, labels) shorter, or behind a flag.\n- **Dependencies:** terminal width and colour either hand-written or from a crate (e.g. `anstyle`, already in the tree through clap). Any new crate is proposed first.\n\n## Agents read this output too\nThe skills relay what atm prints, and agents act on it. Keep it plain text when it isn't a terminal, keep each fact on a line agents can find, and check `docs/agent/` and the skills that quote output. A change to output agents act on follows AGENTS.md's security checklist (the written review in `docs/security-architecture.md` §3.3).\n\n## Tests\nThe scenarios' exact `stdout` expectations change with the new layout: update them in one place per command. Add a test that a pipe gets no escape codes and that `NO_COLOR` turns colour off.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/",
@@ -17507,7 +17515,7 @@
         "docs/agent/"
       ],
       "created_at": "2026-11-08T08:30:53Z",
-      "updated_at": "2026-11-16T06:05:44Z",
+      "updated_at": "2026-11-16T06:29:33Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17542,18 +17550,26 @@
           "kind": "note",
           "text": "Approved: Design approved in Crit (no comments); anstream, anstyle and terminal_size confirmed (Hakan, 2026-11-16)",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T06:29:33Z",
+          "kind": "outcome",
+          "text": "Built as `docs/cli-output-design.md` (accepted in Crit): `output.rs` (styles, aligned tables cut on a terminal, `--color`), the six commands rewritten, `project status --all`; scenarios updated, `output.test.mjs` added. Release task: the §3.3 written review of the changed output agents read",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T06:05:44Z",
       "started_by": "claude:0f56a916",
-      "commit": "dfbab34c45349227bff0e0895465084ebd477e07",
+      "commit": "c392e2e7f33cf85537a32f69d18d9365f63b3763",
       "reviews": [
         {
           "from": "2026-11-16T05:48:40Z",
           "to": "2026-11-16T06:05:38Z",
           "outcome": "approved"
         }
-      ]
+      ],
+      "completed_at": "2026-11-16T06:29:33Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-489",
@@ -21018,6 +21034,86 @@
           "text": "compmd.dev everywhere (menu link, About dialog, help.md, README, Tauri guide, ADR-006, tests); the About dialog now uses atm’s own COMPMD_URL, as CompMD 0.7.0’s package still names its old homepage. CHANGELOG past entries kept. Unit 1351, e2e passed.",
           "by": "claude:0f56a916"
         }
+      ]
+    },
+    {
+      "id": "T-549",
+      "name": "Task keys on the overview and the All projects board, and other projects' tasks by key with status and link",
+      "type": "feature",
+      "priority": "P2",
+      "labels": [
+        "task-keys",
+        "dashboard"
+      ],
+      "description": "What T-546 left ([ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md) §3, §7).\n\n## Change\n- **The project summary has keys:** `atm_lib::summary::project_summary` (what `atm project summary` and the overview get) gives each task it lists its key and whether it is final, as the task views do (`with_key`). The overview's project cards and the All projects board show the key (`ui/TaskKey.svelte`, the provisional mark included) where they show an ID today.\n- **Another project's task, even when that project isn't loaded:** a dependency or related task in another registered project (`<project meta.id>:<UUID>`) shows its key, its status and a link that opens it in its project (a new tab in the app), from the server rather than from the page's loaded projects: a read route (or a field in the task's view) that resolves it with `atm_lib::foreign`. A project that isn't registered, or a task it no longer has, says why.\n- `docs/multi-project-api.md` for a new route, and `docs/security-architecture.md` if it is a new entry point.\n\n## Tests\nRust: the summary's keys (atm-lib). Unit and e2e: a card and the board with keys (a provisional one marked), another project's task shown with key, status and link while only this project is open, and the missing cases. The CLI suite if `atm project summary` changes.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/summary.rs",
+        "crates/atm-lib/src/foreign.rs",
+        "crates/atm-api/src/",
+        "dashboard/src/lib/overview/",
+        "dashboard/src/lib/details/",
+        "dashboard/tests/",
+        "docs/multi-project-api.md"
+      ],
+      "created_at": "2026-11-16T06:38:45Z",
+      "updated_at": "2026-11-16T06:38:50Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T06:38:45Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "related": [
+        "T-546"
+      ],
+      "components": [
+        "dashboard",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-550",
+      "name": "CompMD 0.7.1 and @comp-markdown/mermaid 0.1.2",
+      "type": "infra",
+      "priority": "P2",
+      "labels": [
+        "compmd",
+        "dashboard"
+      ],
+      "description": "Upgrade CompMD from 0.7.0 to 0.7.1, everywhere it is pinned together ([ADR-006](docs/adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md)), and the mermaid pack from 0.1.1 to 0.1.2. Approved by Hakan.\n\n## Change\n- `dashboard/package.json`: `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to `0.7.1`, `@comp-markdown/mermaid` to `0.1.2`; `pnpm install` (not `--frozen-lockfile`) updates `pnpm-lock.yaml`.\n- `Cargo.toml`: `tauri-plugin-compmd` and `compmd-host` to `=0.7.1` (the comments say they move with the packages); `Cargo.lock` follows.\n- Read CompMD 0.7.1's changelog (in its packages, as installed) for anything atm must change; the serving contract's headers (`tests/scripts/compmd-host-headers.json`) if they changed.\n- `CHANGELOG.md` mentions it in the release task.\n\n## Tests\n`pnpm run build` (the mermaid pack's `integrity` is a `sha512-…` in `compmd.js`), `pnpm run check`, unit tests and the functional e2e suite (diagrams draw), `cargo build`, `cargo test`, the CLI suite (`serve.test.mjs` checks the bundle's headers), `cargo deny check`; the app in a window (`cargo run -p atm-app`) shows a diagram.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/package.json",
+        "dashboard/pnpm-lock.yaml",
+        "Cargo.toml",
+        "Cargo.lock",
+        "tests/scripts/compmd-host-headers.json"
+      ],
+      "created_at": "2026-11-16T06:38:45Z",
+      "updated_at": "2026-11-16T06:38:51Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T06:38:45Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
+        "dashboard",
+        "cli"
       ]
     }
   ]
