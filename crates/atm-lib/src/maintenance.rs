@@ -85,46 +85,50 @@ impl StoreMaintenance {
     }
 
     /// `atm db migrate` (and `atm service`, before it shows a project): bring the task folder up to date. With
-    /// `register_it`, the project joins the default workspace too (every skill runs migrate first). With `keys`, the
-    /// task file moves to task keys too (ADR-007 §6; `atm db migrate --keys` until every command takes keys, T-543),
-    /// reported as `task_keys`.
+    /// `register_it`, the project joins the default workspace too (every skill runs migrate first). Task IDs are left
+    /// as they are: giving them keys is `atm project key set` ([`StoreMaintenance::migrate_to_keys`]).
     ///
     /// # Errors
     /// The task folder's checks, a file that can't be moved, read or written.
-    pub fn migrate(&self, register_it: bool, keys: bool) -> Result<Migration> {
+    pub fn migrate(&self, register_it: bool) -> Result<Migration> {
         let paths = self.paths()?;
-        let mut result = atm_db::jsongit::migrate::migrate(&paths)?;
+        let result = atm_db::jsongit::migrate::migrate(&paths)?;
         let tasks_exists = paths.tasks.is_file();
         if register_it && tasks_exists {
             atm_db::registry::register(&paths, true)?;
         }
-        let mut lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
-        if keys && tasks_exists {
-            let report = atm_db::jsongit::migrate::migrate_to_keys(&paths)?;
-            result.insert(
-                "task_keys".into(),
-                report.as_ref().map_or(serde_json::Value::Null, |r| {
-                    serde_json::json!({
-                        "key": r.key,
-                        "old_prefix": r.old_prefix,
-                        "tasks": r.tasks,
-                        "archived": r.archived,
-                        "renumbered": r.renumbered.iter()
-                            .map(|(old, n)| serde_json::json!({"from": old, "number": n}))
-                            .collect::<Vec<_>>(),
-                    })
-                }),
-            );
-            if let Some(report) = report {
-                lines.retain(|l| l != "Nothing to migrate.");
-                lines.extend(atm_db::jsongit::migrate::describe_keys_migration(&report));
-            }
-        }
+        let lines = atm_db::jsongit::migrate::describe_migration(&result, &paths);
         Ok(Migration {
             result,
             lines,
             tasks_exists,
         })
+    }
+
+    /// The first task-keys migration (ADR-007 §6), which `atm project key set` runs on a project of IDs (`T-527`):
+    /// every task stored by UUID, numbered, the references and claims rewritten, the files staged. Its report as JSON
+    /// (`{key, old_prefix, tasks, archived, renumbered}`) and in words; none when the project has keys already.
+    ///
+    /// # Errors
+    /// The task folder's checks, files that can't be read or written.
+    pub fn migrate_to_keys(&self) -> Result<Option<(serde_json::Value, Vec<String>)>> {
+        let paths = self.paths()?;
+        let Some(r) = atm_db::jsongit::migrate::migrate_to_keys(&paths)? else {
+            return Ok(None);
+        };
+        let json = serde_json::json!({
+            "key": r.key,
+            "old_prefix": r.old_prefix,
+            "tasks": r.tasks,
+            "archived": r.archived,
+            "renumbered": r.renumbered.iter()
+                .map(|(old, n)| serde_json::json!({"from": old, "number": n}))
+                .collect::<Vec<_>>(),
+        });
+        Ok(Some((
+            json,
+            atm_db::jsongit::migrate::describe_keys_migration(&r),
+        )))
     }
 
     /// `atm _lock-test <seconds>`: hold the task folder's lock for `seconds`, logging `acquire <pid>` and

@@ -176,7 +176,7 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
         opts.duplicate_of = Some(project.resolve_task(duplicate)?);
     }
     let result = change_task_status(&mut project, command, task_id, &opts)?;
-    report(command, &result, ctx);
+    report(command, &result, ctx, cwd);
     Ok(())
 }
 
@@ -192,7 +192,8 @@ fn report_expired(expired: &[Value]) {
 }
 
 /// Print what a status change did, as the Python atm's `run_status` prints it.
-pub fn report(command: Command, result: &StatusChange, ctx: Context) {
+pub fn report(command: Command, result: &StatusChange, ctx: Context, cwd: &Path) {
+    let say = |line: &str| crate::commands::say(cwd, line);
     report_expired(&result.expired);
     if ctx.json {
         let mut out = result.task.clone();
@@ -210,22 +211,22 @@ pub fn report(command: Command, result: &StatusChange, ctx: Context) {
         return;
     }
     let text = |v: Option<&Value>| atm_common::py::py_str_opt(v);
-    println!(
+    say(&format!(
         "{}: {} -> {}",
         text(result.task.get("id")),
         atm_common::py::py_str(&result.previous),
         text(result.task.get("status"))
-    );
+    ));
     if let Some(stranded) = &result.stranded {
-        println!("  {stranded}");
+        say(&format!("  {stranded}"));
     }
     if command == Command::Start
         && let Some(view) = &result.view
     {
-        println!("{}", render_task(view));
+        say(&render_task(view));
     }
     if !result.unblocked.is_empty() {
-        println!("Now ready: {}", result.unblocked.join(", "));
+        say(&format!("Now ready: {}", result.unblocked.join(", ")));
     }
     if let Some(hint) = &result.hint {
         println!("{}", text(hint.get("text")));

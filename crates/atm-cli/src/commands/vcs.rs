@@ -175,10 +175,13 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 .next()
                 .unwrap_or_default()
                 .to_string();
-            println!(
-                "{}: committed {} {first}",
-                py_str(&result["task"]),
-                &sha[..7.min(sha.len())]
+            super::say(
+                cwd,
+                &format!(
+                    "{}: committed {} {first}",
+                    py_str(&result["task"]),
+                    &sha[..7.min(sha.len())]
+                ),
             );
             let listed: Vec<String> = result["files"]
                 .as_array()
@@ -212,7 +215,10 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             if ctx.json {
                 print_json(&json!({"tasks": recorded, "pr": {"number": number, "url": url}}));
             } else {
-                println!("{}: in PR #{number} ({url})", recorded.join(", "));
+                super::say(
+                    cwd,
+                    &format!("{}: in PR #{number} ({url})", recorded.join(", ")),
+                );
             }
         }
         VcsCommand::Pushed { pr, at, agent } => {

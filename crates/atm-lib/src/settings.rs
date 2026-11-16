@@ -42,6 +42,15 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
         .collect();
     let mut keys: Vec<String> = new.keys().cloned().collect();
     keys.sort();
+    // The project's short name, its tasks' key prefix (ADR-007 §2)
+    if let Some(key) = new.get("key")
+        && !key.as_str().is_some_and(atm_common::ids::valid_project_key)
+    {
+        return Err(Error::Invalid(format!(
+            "meta.key {} isn't a project key: 3 to 6 letters and digits (ATM)",
+            atm_common::py::py_repr(key)
+        )));
+    }
     if !project.store().exists() {
         let mut meta = Map::new();
         meta.insert(
@@ -49,6 +58,19 @@ pub fn init_meta(project: &mut Project, new: &Map<String, Value>) -> Result<(boo
             json!(&atm_common::time::format_iso(atm_common::time::now())[..10]),
         );
         meta.extend(new);
+        // A new project starts with task keys (ADR-007): its key given, else from its name
+        if !meta.contains_key("key") {
+            let name = meta
+                .get("project")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            meta.insert(
+                "key".into(),
+                json!(atm_db::jsongit::migrate::suggested_key(name, None)),
+            );
+        }
+        meta.insert("format".into(), json!(atm_common::ids::KEYS_FORMAT));
+        meta.insert("next_number".into(), json!(1));
         let document = json!({"meta": meta, "tasks": []});
         // Refused, naming the problem, before anything is written
         atm_common::Vocabulary::of_document(&document)?;

@@ -88,8 +88,9 @@ alias resolves to the task it moved to.
 - **The same in every clone** (T-540): each clone and worktree migrates its own copy, so a converted task's UUID is
   worked out, not random: a version-8 UUID from the project's `meta.id` and the task's old ID. Two branches that both
   migrate give each task the same UUID and number, and merge task by task.
-- **Opt-in first** (T-540): `atm db migrate --keys` until every command takes keys (T-543), then `atm db migrate`
-  itself.
+- **By `atm project key set <KEY>`** (T-543), the one migration feature, as Hakan put it: on a project of IDs it is
+  the first migration, with the key chosen; on one with keys, a change of prefix. `atm db migrate` leaves IDs alone,
+  so no project changes its tasks' IDs until someone sets its key. A new project (`atm db init`) starts with keys.
 - **The file format changes** (`meta.format`: 2), and an atm that knows formats refuses a newer one ("upgrade atm to
   work on this project"). atm 0.37 and older don't check it, and would read a format-2 file as one of IDs (UUIDs pass
   their ID rule) and give new tasks `T-` IDs: the skills require atm 0.38 or later (T-547) and the release notes say to

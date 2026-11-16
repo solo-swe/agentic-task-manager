@@ -234,7 +234,7 @@ fn ensure_server(home: &Path, port: u64) -> Result<(Map<String, Value>, bool)> {
 fn serve_start(cwd: &Path, port: u16, overview: bool) -> Result<String> {
     let mut project = None;
     if !overview {
-        let migration = super::db::maintenance(cwd)?.migrate(false, false)?;
+        let migration = super::db::maintenance(cwd)?.migrate(false)?;
         for line in &migration.lines {
             if line != "Nothing to migrate." {
                 println!("{line}");

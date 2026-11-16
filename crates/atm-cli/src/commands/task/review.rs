@@ -117,6 +117,6 @@ pub fn run(command: ReviewCommand, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let stored = project.resolve_task(&task_id)?;
     let result = change_task_status(&mut project, command, &stored, &options)?;
-    report(command, &result, ctx);
+    report(command, &result, ctx, cwd);
     Ok(())
 }

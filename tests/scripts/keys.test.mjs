@@ -1,4 +1,4 @@
-// Task keys (ADR-007, T-540): `atm db migrate --keys` turns a task file of IDs (T-527) into one stored by UUID and
+// Task keys (ADR-007, T-540, T-543): `atm project key set` turns a task file of IDs (T-527) into one stored by UUID and
 // shown by the project's key (ATM-527), and `atm project key set` changes the key. What a scenario can't say with one
 // fixed output: the UUIDs are worked out (the same in every clone), and this repository's own file must come through
 // whole.
@@ -29,9 +29,12 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
   const roots = [makeProject({ files, git: true, commit: true }), makeProject({ files, git: true, commit: true })];
   try {
     const [root, clone] = roots;
-    const r = runAtm(['db', 'migrate', '--keys', '--json'], root);
+    // Plain migrate leaves IDs alone; setting a key gives the tasks keys
+    runAtm(['db', 'migrate'], root);
+    assert.equal(read(root, FILE).tasks[0].id, 'T-007');
+    const r = runAtm(['project', 'key', 'set', 'LFB', '--json'], root);
     assert.equal(r.code, 0, r.stderr);
-    const keys = JSON.parse(r.stdout).task_keys;
+    const keys = JSON.parse(r.stdout).migrated;
     assert.deepEqual(keys, {
       key: 'LFB',
       old_prefix: 'T',
@@ -58,17 +61,19 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
     assert.deepEqual(seven.related, [odd.id]);
 
     // Another clone of the same file migrates to the same UUIDs, so their branches merge task by task
-    assert.equal(runAtm(['db', 'migrate', '--keys'], clone).code, 0);
+    assert.equal(runAtm(['project', 'key', 'set', 'LFB'], clone).code, 0);
     assert.deepEqual(read(clone, FILE).tasks, doc.tasks);
-
-    // Again: nothing more to do
-    const again = runAtm(['db', 'migrate', '--keys', '--json'], root);
-    assert.equal(JSON.parse(again.stdout).task_keys, null);
 
     // The key changes; the old ones are kept, in order, so their keys still find the tasks
     const set = runAtm(['project', 'key', 'set', 'Blog', '--json'], root);
     assert.equal(set.code, 0, set.stderr);
-    assert.deepEqual(JSON.parse(set.stdout), { from: 'LFB', to: 'Blog', history: ['T', 'LFB'], also_used_by: [] });
+    assert.deepEqual(JSON.parse(set.stdout), {
+      from: 'LFB',
+      to: 'Blog',
+      history: ['T', 'LFB'],
+      migrated: null,
+      also_used_by: [],
+    });
     assert.equal(runAtm(['project', 'key', 'set', 'LFB'], root).code, 0);
     const show = JSON.parse(runAtm(['project', 'key', 'show', '--json'], root).stdout);
     assert.deepEqual(show, { key: 'LFB', history: ['T', 'Blog'], format: 2 });
@@ -104,7 +109,7 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
     return r.stdout;
   };
   try {
-    ok(['db', 'migrate', '--keys']);
+    ok(['project', 'key', 'set', 'ATM']);
     const two = read(root, FILE).tasks[1];
     // A new task: a UUID, the next number, provisional
     const dir = path.join(root, '..', `${path.basename(root)}-new`);
@@ -113,7 +118,7 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
       path.join(dir, 'new.json'),
       JSON.stringify([{ name: 'three', type: 'feature', dependencies: ['ATM-2'] }]),
     );
-    ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]);
+    assert.match(ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]), /^Added ~ATM-3 three$/m);
     removeDir(dir);
     const three = read(root, FILE).tasks[2];
     assert.equal(three.number, 3);
@@ -147,7 +152,9 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
     const waiting = runAtm(['task', 'state', 'ATM-3', 'in_progress'], root);
     assert.match(waiting.stderr, /can't start ~ATM-3: waiting on ATM-2 \(todo\)/);
     // A state change and an edit by key
-    ok(['task', 'state', 'ATM-2', 'in_progress']);
+    assert.match(ok(['task', 'state', 'ATM-2', 'in_progress']), /^ATM-2: todo -> in_progress$/m);
+    assert.match(ok(['task', 'note', 'ATM-2', 'a note']), /^ATM-2: note added \(1 in all\)$/m);
+    assert.match(ok(['task', 'deps', 'ATM-3']), /^~ATM-3 waits for: ATM-2 \(in_progress\)$/m);
     assert.equal(read(root, FILE).tasks[1].status, 'in_progress');
     ok(['task', 'edit', 'T-002', '--add-related', 'ATM-1']);
     assert.deepEqual(read(root, FILE).tasks[1].related, [read(root, FILE).tasks[0].id]);
@@ -168,7 +175,7 @@ test('migrate --keys on a copy of this repository’s own task files loses nothi
   const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));
   const root = makeProject({ files: { [FILE]: own, [ARCHIVE]: ownArchive } });
   try {
-    const r = runAtm(['db', 'migrate', '--keys', '--json'], root);
+    const r = runAtm(['project', 'key', 'set', 'ATM', '--json'], root);
     assert.equal(r.code, 0, r.stderr);
     const doc = read(root, FILE);
     const archived = read(root, ARCHIVE);

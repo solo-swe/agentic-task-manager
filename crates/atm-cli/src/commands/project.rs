@@ -108,25 +108,49 @@ fn key(command: KeyCommand, ctx: Context, cwd: &Path) -> Result<()> {
                 .store()
                 .working_copy()
                 .map_or_else(|| cwd.to_path_buf(), Path::to_path_buf);
-            let set = atm_lib::settings::set_project_key(&mut project, &key)?;
+            // A project of IDs (T-527) gets task keys now, with this key: the first migration (ADR-007 §6)
+            let legacy = !atm_common::keys::keys_format(project.store().document()?);
+            let current =
+                atm_common::keys::project_key(project.store().document()?).map(String::from);
+            let set = if legacy && current.as_deref() == Some(key.trim()) {
+                atm_lib::settings::KeySet {
+                    from: None,
+                    to: key.trim().to_string(),
+                    history: Vec::new(),
+                }
+            } else {
+                atm_lib::settings::set_project_key(&mut project, &key)?
+            };
+            let migrated = if legacy {
+                super::db::maintenance(cwd)?.migrate_to_keys()?
+            } else {
+                None
+            };
             let others = atm_lib::workspaces::Workspaces::open().key_users(&set.to, &root);
             if ctx.json {
                 print_json(&serde_json::json!({
                     "from": set.from,
                     "to": set.to,
                     "history": set.history,
+                    "migrated": migrated.as_ref().map(|(json, _)| json.clone()),
                     "also_used_by": others
                         .iter()
                         .map(|(w, p)| serde_json::json!({"workspace": w, "project": p}))
                         .collect::<Vec<_>>(),
                 }));
             } else {
-                match &set.from {
-                    Some(from) => println!(
-                        "The project's key is {} now (was {from}; {from}-<number> still finds each task).",
-                        set.to
-                    ),
-                    None => println!("The project's key is {} now.", set.to),
+                if let Some((_, lines)) = &migrated {
+                    for line in lines {
+                        println!("{line}");
+                    }
+                } else {
+                    match &set.from {
+                        Some(from) => println!(
+                            "The project's key is {} now (was {from}; {from}-<number> still finds each task).",
+                            set.to
+                        ),
+                        None => println!("The project's key is {} now.", set.to),
+                    }
                 }
                 for (workspace, project) in &others {
                     eprintln!(

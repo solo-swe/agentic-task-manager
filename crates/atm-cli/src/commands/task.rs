@@ -154,8 +154,11 @@ fn deps(task_id: &str, ctx: Context, cwd: &Path) -> Result<()> {
             items.join(", ")
         }
     };
-    println!("{task_id} waits for: {}", line("waits_for"));
-    println!("{task_id} is waited on by: {}", line("waited_on_by"));
+    super::say(cwd, &format!("{task_id} waits for: {}", line("waits_for")));
+    super::say(
+        cwd,
+        &format!("{task_id} is waited on by: {}", line("waited_on_by")),
+    );
     Ok(())
 }
 

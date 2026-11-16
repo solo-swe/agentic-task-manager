@@ -85,10 +85,6 @@ pub fn describe_keys_migration(report: &KeysReport) -> Vec<String> {
             report.key
         ));
     }
-    lines.push(format!(
-        "Change the key with `atm project key set <KEY>` (3 to 6 letters and digits); {} is from the project's name.",
-        report.key
-    ));
     lines
 }
 

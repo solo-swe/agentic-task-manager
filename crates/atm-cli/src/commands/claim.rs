@@ -229,9 +229,12 @@ fn heartbeat(
     if ctx.json {
         print_json(&claim);
     } else {
-        println!(
-            "{task_id}: lease extended to {}",
-            py_str_opt(claim.get("lease_expires_at"))
+        super::say(
+            cwd,
+            &format!(
+                "{task_id}: lease extended to {}",
+                py_str_opt(claim.get("lease_expires_at"))
+            ),
         );
     }
     Ok(())
@@ -314,10 +317,13 @@ fn hold(args: &HoldArgs, ctx: Context, cwd: &Path) -> Result<()> {
     if ctx.json {
         print_json(&held);
     } else {
-        println!(
-            "{}: holding the claim while this shell runs (pid {shell}), until {until} at most; lease now to {}",
-            args.task_id,
-            py_str_opt(renewed.claim.get("lease_expires_at"))
+        super::say(
+            cwd,
+            &format!(
+                "{}: holding the claim while this shell runs (pid {shell}), until {until} at most; lease now to {}",
+                args.task_id,
+                py_str_opt(renewed.claim.get("lease_expires_at"))
+            ),
         );
     }
     Ok(())

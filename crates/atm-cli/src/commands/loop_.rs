@@ -135,11 +135,14 @@ fn next(args: NextArgs, ctx: Context, cwd: &Path) -> Result<u8> {
             .get("sprint")
             .filter(|s| truthy(s))
             .map_or_else(|| "backlog".to_string(), py_str);
-        println!(
-            "{verb}: {} {} ({where_}, {})",
-            py_str_opt(task.get("id")),
-            task.get("name").map_or_else(String::new, py_str),
-            py_str_opt(task.get("type"))
+        super::say(
+            cwd,
+            &format!(
+                "{verb}: {} {} ({where_}, {})",
+                py_str_opt(task.get("id")),
+                task.get("name").map_or_else(String::new, py_str),
+                py_str_opt(task.get("type"))
+            ),
         );
     } else {
         println!(

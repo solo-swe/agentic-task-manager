@@ -386,7 +386,7 @@ describe('merge driver: task keys', () => {
 
   test('two branches each adding a task keep both; the incoming one takes the next number, its old key an alias', () => {
     withRepo((root) => {
-      assert.equal(runAtm(['db', 'migrate', '--keys'], root).code, 0);
+      assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
       git(['commit', '-q', '-am', 'task keys'], root);
       const next = read(root).meta.next_number;
       git(['switch', '-q', '-c', 'other'], root);
@@ -416,7 +416,7 @@ describe('merge driver: task keys', () => {
       write(root, theirs);
       git(['commit', '-q', '-am', 'other, still T- IDs'], root);
       git(['switch', '-q', 'main'], root);
-      assert.equal(runAtm(['db', 'migrate', '--keys'], root).code, 0);
+      assert.equal(runAtm(['project', 'key', 'set', 'MERGE'], root).code, 0);
       git(['commit', '-q', '-am', 'task keys'], root);
       const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
       assert.equal(r.status, 0, r.stdout + r.stderr);

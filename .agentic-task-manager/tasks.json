@@ -20645,7 +20645,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:38:10Z",
+      "updated_at": "2026-11-16T03:45:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20664,10 +20664,17 @@
           "kind": "note",
           "text": "From T-540: the migration is opt-in (`atm db migrate --keys`) until commands take keys; this task makes it part of plain `atm db migrate`, and makes `atm db init` create new projects in format 2 with meta.key (a --meta-file key, else the name’s initials via `suggested_key`). The CLI suite then runs on migrated files: scenarios naming T-… keep working through key_history.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T03:45:58Z",
+          "kind": "note",
+          "text": "Part 1 committed: Project::resolve_task at every command’s task arguments; with_key/label_of in views (list, details, --json key/key_final); errors label UUIDs (main.rs labelled); commit {id} = key, {uuid}; --record accepts key/alias/old prefix. Left: stdout confirmations (state report, loop next Claimed, task add Added, vcs commit line, claim lines) still print UUIDs; API views carry key for the dashboard (task_views does); migrate default + db init format 2.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T03:38:10Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "264f6447493299beaafbfac0e7f106a87e7a3b43"
     },
     {
       "id": "T-544",
