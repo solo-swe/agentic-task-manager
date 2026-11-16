@@ -13293,7 +13293,7 @@
       "description": "Make atm work in the harnesses beyond Claude Code through the model agreed in [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) (T-426): one set of portable skills, placed by `atm agents install`. No per-harness adapters: the earlier design ([multi-harness-support.md](docs/multi-harness-support.md): `plugin/open-code/`, `install.sh`, `skills.json`) is not built.\n\nThe harnesses: Codex CLI, Cursor, Gemini CLI, GitHub Copilot (VS Code and CLI), OpenCode, Windsurf (Devin) and Goose. What their documentation said on 2026-11-06 is in the distribution doc's §5 and sources; check it again before relying on it.\n\n## For each harness\n- **Install:** `atm agents install --harness <h>` puts the skills where it reads them (`~/.agents/skills/` for all of these); the skills show up and can be invoked by name (`atm-do-task`, …).\n- **Links or copies:** whether it follows the symlinks atm writes. Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have known bugs: confirm that atm copies for them, and whether any other harness needs copies.\n- **Duplicates:** whether it lists atm's skills twice, from `~/.agents/skills/` and `~/.claude/skills/` (expected in Cursor, OpenCode, Goose and VS Code Copilot), and that `atm agents status` says so.\n- **A task end to end:** `/atm-do-task` on a sample project: the skill checks `atm --version`, claims a task, keeps the claim alive through atm's own renewal ([porting-to-rust.md](docs/porting-to-rust.md) §4) and `atm claim hold` for a long command, commits and finishes it.\n- **Permissions:** how the harness asks before running `atm` commands, and whether the skills' instructions need anything for it (Claude Code's pre-approvals are `allowed-tools`, which only Claude Code reads).\n\n## Outcome\n- A support table in the distribution doc (§5): per harness, verified or not, links or copies, duplicates, known issues, with the version tried.\n- Fixes to `atm agents` where a harness needs one (its folder, copying, detection), each with a test.\n- A plugin for a harness only if users need something a skill can't do there (the distribution doc §6); proposed to Hakan first, never built here.\n- `docs/multi-harness-support.md` replaced by a pointer to the distribution doc, or removed.\n\n## Depends on\nThe tasks that build the thin skills, `atm docs` and `atm agents install|status|uninstall` (the distribution rollout's steps 1 to 3), once they exist.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-440",
         "T-441",
@@ -13304,7 +13304,7 @@
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-14T13:59:30Z",
+      "updated_at": "2026-11-16T03:02:43Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -13325,7 +13325,14 @@
       "related": [
         "T-415"
       ],
-      "sprint": "Keys and reach"
+      "sprint": "Keys and reach",
+      "started_at": "2026-11-16T03:02:36Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "Trying each harness (Codex CLI, Cursor, Gemini CLI, Copilot, OpenCode, Windsurf, Goose) needs them installed and signed in on your Mac: which do you have, and shall we go through them together (`/atm-do-task T-413`)? The loop can’t verify them alone."
+      ],
+      "blocked_at": "2026-11-16T03:02:43Z"
     },
     {
       "id": "T-414",
@@ -20139,7 +20146,7 @@
       "description": "Hakan wants tasks to have two IDs, as JIRA does: a **UUID** for technical reasons, and a **key** for people, a project prefix and a number instead of `T-`: `ASB-001` (Agentic Status Bar), `ATM-001` (Agentic Task Manager), `FIG-001` (Fig), `LFB-001` (Learn Forever Blog). Keys let a task refer to another project's: `LFB-005` blocked by `ATM-978`.\n\nDesign it with Hakan, as an ADR replacing the current ID scheme (`docs/adr/`), then break the work into tasks with `/atm-create-tasks`.\n\n## To settle\n- **The two IDs:** `uid` (a UUID, never shown, never changed) and the key (`ATM-978`); the prefix in `meta` (e.g. `meta.key`), chosen at `atm db init`, unique across the workspace's projects; keys unique within the project. Which one the files, the API, the app's commands and the dashboard's addresses use.\n- **Migration:** `atm db migrate` gives each task a UUID and rekeys `T-527` as `ATM-527`, keeping the numbers; dependencies, `related`, notes, commit trailers, PR records and links follow. Old IDs stay resolvable as aliases (commit messages and PRs say `T-527`). The archive too.\n- **Merges and parallel agents:** the merge driver matches tasks by UUID; two branches that both add a task never collide, and the key of one is renumbered on merge (as today's driver renumbers).\n- **Across projects:** a dependency or `related` entry naming another project's key, resolved through the workspace's projects (`projects.json`): its status shown, an unfinished one an unmet dependency for the loop; a project missing, renamed or rekeyed; the dashboard's link to it; `atm doctor`'s checks. Reading another project's task folder is a new entry point (`docs/security-architecture.md`).\n- **Where IDs show:** the CLI and `atm docs`, the dashboard (cards, links, the graph, addresses), the app, commit templates and `atm vcs` parsing (`code.rs`'s mention of a task ID), the skills.\n\n## Output\nThe ADR, reviewed with Hakan, and the implementation tasks (data model, migrate, merge driver, cross-project resolution, dashboard, docs, skills), added through `/atm-create-tasks`.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/adr/",
@@ -20148,7 +20155,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-13T11:37:44Z",
-      "updated_at": "2026-11-15T11:16:13Z",
+      "updated_at": "2026-11-16T03:02:31Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -20165,7 +20172,7 @@
       "sprint": "Keys and reach",
       "started_at": "2026-11-15T11:16:13Z",
       "started_by": "claude:0f56a916",
-      "commit": "392fee975ed7238da4eb26766854471e1218ef13",
+      "commit": "159a7482a85e0c1e099057f225987d21804160e7",
       "notes": [
         {
           "at": "2026-11-14T14:39:50Z",
@@ -20178,6 +20185,24 @@
           "kind": "note",
           "text": "Approved: Approved by Hakan in the session; next: the implementation tasks",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-15T11:20:38Z",
+          "kind": "review",
+          "text": "Approved ADR-007; the implementation tasks are added (T-538 to T-547). Only marking it done is left.",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T03:02:31Z",
+          "kind": "note",
+          "text": "Approved: Approved by Hakan; nothing left",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T03:02:31Z",
+          "kind": "outcome",
+          "text": "ADR-007 accepted by Hakan; implementation in T-538 to T-547 (this sprint, label task-keys).",
+          "by": "claude:0f56a916"
         }
       ],
       "reviews": [
@@ -20185,8 +20210,16 @@
           "from": "2026-11-14T14:39:50Z",
           "to": "2026-11-15T11:13:01Z",
           "outcome": "approved"
+        },
+        {
+          "from": "2026-11-15T11:20:38Z",
+          "to": "2026-11-16T03:02:31Z",
+          "outcome": "approved"
         }
-      ]
+      ],
+      "review_requested_at": "2026-11-15T11:20:38Z",
+      "completed_at": "2026-11-16T03:02:31Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-535",
@@ -20363,7 +20396,7 @@
       "description": "[ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md) §1, §2, §3, §6.\n\n## Change\n- `task.schema.json`: `id` a UUID (version 7), `number` (integer), `key_final` (boolean), `aliases` (former keys); `dependencies` and `related` lists of UUIDs (or `<project id>:<UUID>`, §7).\n- `meta.schema.json`: `key` (3 to 6 ASCII letters and digits), `key_history`, `next_number` (replacing `next_id`), and the file's format version.\n- atm-common: the types (`TaskId` holding a UUID, a `Key` built from `meta.key` and `number`), `valid_project_key`, UUID v7 generation (a new crate only with Hakan's yes; else hand-written from the time and random bytes).\n- atm-db: the loader accepts the new format and refuses a file of a newer format with \"this project needs atm 0.N or later\"; an old-format file is left to the migration (next tasks), never half-read.\n\n## Tests\nUnit tests for the types and validation; a scenario that a newer-format file is refused with that message.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-common/schema/task.schema.json",
@@ -20372,9 +20405,9 @@
         "crates/atm-db/src/jsongit/files.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:19Z",
+      "updated_at": "2026-11-16T03:02:43Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Keys and reach",
@@ -20384,7 +20417,17 @@
       "sprint": "Keys and reach",
       "related": [
         "T-534"
-      ]
+      ],
+      "notes": [
+        {
+          "at": "2026-11-16T03:02:31Z",
+          "kind": "note",
+          "text": "Hakan approved the uuid crate for UUID v7 (2026-11-16).",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-16T03:02:43Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-539",

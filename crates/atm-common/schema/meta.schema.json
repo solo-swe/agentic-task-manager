@@ -7,6 +7,24 @@
   "properties": {
     "id": { "type": "string", "description": "The project's ID (8 hex characters, set by atm init)" },
     "project": { "type": "string", "description": "The project's name" },
+    "format": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The file's format: 2 since task keys (tasks stored by UUID, ADR-007); absent, 1. An atm refuses a newer format than it reads"
+    },
+    "key": {
+      "type": "string",
+      "description": "The project's short name, its tasks' key prefix: 3 to 6 ASCII letters and digits (ATM, ADR-007 §2)"
+    },
+    "key_history": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Its earlier key prefixes, oldest first (T, then ATM), so an old key still finds its task (ADR-007 §6)"
+    },
+    "next_number": {
+      "type": "integer",
+      "description": "The number the next new task gets (format 2; ADR-007 §1)"
+    },
     "description": { "type": "string", "description": "One line about the project" },
     "created": { "type": "string" },
     "repository": { "type": "string", "description": "The repository's web address, for commit and PR links" },
@@ -30,7 +48,7 @@
     "workflow": { "$ref": "#/$defs/Workflow" },
     "archive": { "$ref": "#/$defs/ArchiveSettings" },
     "archived": { "type": "integer", "description": "How many tasks tasks-archive.json holds (DM-5.4)" },
-    "next_id": { "type": "integer", "description": "The number the next new task gets" },
+    "next_id": { "type": "integer", "description": "Before task keys (format 1): the number the next new task's ID gets" },
     "sprints": { "type": "array", "items": { "$ref": "#/$defs/Sprint" }, "description": "In order" },
     "releases": { "type": "array", "items": { "$ref": "#/$defs/Release" }, "description": "In order" },
     "components": { "type": "array", "items": { "$ref": "#/$defs/Component" } },
