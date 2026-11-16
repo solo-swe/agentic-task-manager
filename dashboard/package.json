@@ -4,6 +4,18 @@
   "version": "0.0.0",
   "description": "Source for the Agentic Task Manager dashboard. Builds to a single self-contained HTML file.",
   "type": "module",
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.14.0",
+      "onFail": "download"
+    },
+    "runtime": {
+      "name": "node",
+      "version": "24",
+      "onFail": "download"
+    }
+  },
   "scripts": {
     "generate": "node build/generate.ts",
     "dev": "pnpm run generate && vite",

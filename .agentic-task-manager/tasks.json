@@ -14661,7 +14661,7 @@
       "description": "T-427 moved the dashboard to pnpm without the `devEngines` pins the [Svelte guide](docs/guides/svelte.md#toolchain) asks for, because of a CompMD bug: with `devEngines`, pnpm 12 writes `pnpm-lock.yaml` as two YAML documents (the pinned pnpm and Node first, then the packages), and `@compmd/vite` 0.5.0 reads only the first document that has `packages` (`dist/packs.js`, `integrities`). The mermaid pack's `integrity` then becomes `null` in `plugin/assets/compmd/<version>/compmd.js`, and its pin is lost.\n\n**Wait for** a `@compmd/vite` release that reads every document of the lockfile. Until then this task stays in the backlog.\n\n## Change\n- Bump `@compmd/vite` (and the other `@compmd/*` packages it goes with) to that release.\n- Add `devEngines` to `dashboard/package.json`: `packageManager` pnpm 12.14.0 (or the version in use then) and `runtime` node 24, both with `\"onFail\": \"download\"`, as in the guide; `pnpm install` records them in the lockfile.\n- Update the guide's example version if it changed, and AGENTS.md if it says the pins are missing.\n\n## Tests\n`pnpm run build`, then `compmd.js` holds the mermaid pack's `integrity` (a `sha512-…`, not `null`); `pnpm run check` passes (it fails on a stale CompMD build); unit and functional e2e tests; CI green.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-427",
         "T-550"
@@ -14673,7 +14673,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-16T06:38:52Z",
+      "updated_at": "2026-11-16T06:55:22Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -14706,7 +14706,9 @@
           "from": "2026-11-16T06:38:23Z"
         }
       ],
-      "sprint": "Keys and reach"
+      "sprint": "Keys and reach",
+      "started_at": "2026-11-16T06:55:22Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-437",
@@ -21100,7 +21102,7 @@
       "description": "Upgrade CompMD from 0.7.0 to 0.7.1, everywhere it is pinned together ([ADR-006](docs/adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md)), and the mermaid pack from 0.1.1 to 0.1.2. Approved by Hakan.\n\n## Change\n- `dashboard/package.json`: `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to `0.7.1`, `@comp-markdown/mermaid` to `0.1.2`; `pnpm install` (not `--frozen-lockfile`) updates `pnpm-lock.yaml`.\n- `Cargo.toml`: `tauri-plugin-compmd` and `compmd-host` to `=0.7.1` (the comments say they move with the packages); `Cargo.lock` follows.\n- Read CompMD 0.7.1's changelog (in its packages, as installed) for anything atm must change; the serving contract's headers (`tests/scripts/compmd-host-headers.json`) if they changed.\n- `CHANGELOG.md` mentions it in the release task.\n\n## Tests\n`pnpm run build` (the mermaid pack's `integrity` is a `sha512-…` in `compmd.js`), `pnpm run check`, unit tests and the functional e2e suite (diagrams draw), `cargo build`, `cargo test`, the CLI suite (`serve.test.mjs` checks the bundle's headers), `cargo deny check`; the app in a window (`cargo run -p atm-app`) shows a diagram.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21110,7 +21112,7 @@
         "tests/scripts/compmd-host-headers.json"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T06:46:45Z",
+      "updated_at": "2026-11-16T06:55:16Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -21125,7 +21127,18 @@
         "cli"
       ],
       "started_at": "2026-11-16T06:46:45Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "6f6245811d484143b4f6052bb0a18958e9a404ee",
+      "completed_at": "2026-11-16T06:55:16Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T06:55:16Z",
+          "kind": "outcome",
+          "text": "CompMD 0.7.1 (packages, `tauri-plugin-compmd`, `compmd-host`) and mermaid 0.1.2 (also pinned in `compmd.config.json`); the release-age exclusions moved to the new versions. No changelog ships in the packages; all suites pass. Not checked: a diagram in the app window (`cargo run -p atm-app`)",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
