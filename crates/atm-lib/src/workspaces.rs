@@ -329,6 +329,14 @@ impl Member {
         task_snapshot(&Workspace::project_tolerant(&self.entry)?, filters)
     }
 
+    /// What the other projects its tasks name are now ([`foreign::named_version`]): with [`Member::stamp`], what its
+    /// task views depend on, for the tasks route's `ETag` (docs/cross-project-freshness-design.md §5.3 D). Null when
+    /// it can't be opened.
+    #[must_use]
+    pub fn others_version(&self) -> Value {
+        Workspace::project_tolerant(&self.entry).map_or(Value::Null, |p| foreign::named_version(&p))
+    }
+
     /// The claims of all its worktrees, from the shared claims store.
     #[must_use]
     pub fn claims(&self) -> Vec<Value> {
@@ -586,7 +594,17 @@ impl Workspace {
             .iter()
             .map(|l| l.as_ref().map_or(Value::Null, |(file, _)| file_stamp(file)))
             .collect();
-        let stamp = json!([self.stamp(), stamps, trees, logo_stamps]);
+        // The other projects each one's tasks name: their summaries (waiting, next) show them
+        let others: Vec<Value> = entries
+            .iter()
+            .zip(&stamps)
+            .map(|(e, s)| {
+                s.as_ref()
+                    .and_then(|_| Self::project(e).ok())
+                    .map_or(Value::Null, |p| foreign::named_version(&p))
+            })
+            .collect();
+        let stamp = json!([self.stamp(), stamps, trees, logo_stamps, others]);
         Listing {
             workspace: self,
             entries,

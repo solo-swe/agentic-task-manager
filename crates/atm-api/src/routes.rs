@@ -194,7 +194,9 @@ fn task_filters(query: &str) -> Filters {
 
 /// A project's tasks the filters keep, each with its derived values, and in the same snapshot its meta and how big
 /// its task data is. Read tolerantly: the dashboard shows a malformed task file, with what is wrong with it (T-377).
-/// The `ETag` changes with the task data, the archive and the query.
+/// The `ETag` changes with the task data, the archive, the query, and the task data of the other projects its tasks
+/// name (docs/cross-project-freshness-design.md §5.3 D): a poll sees another project's change, and still gets a 304
+/// for anything else.
 fn api_tasks(member: &Member, query: &str, request: &HeaderMap) -> Response {
     if too_large(&member.stamp) {
         // Each request reads the whole task data into memory: a runaway file is refused, not served
@@ -203,7 +205,8 @@ fn api_tasks(member: &Member, query: &str, request: &HeaderMap) -> Response {
     let tag = etag(&json!([
         member.stamp["tasks"],
         member.stamp["archive"],
-        query
+        query,
+        member.others_version()
     ]));
     if unchanged(request, &tag) {
         return not_modified(&tag, &[]);

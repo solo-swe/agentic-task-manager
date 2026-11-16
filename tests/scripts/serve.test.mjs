@@ -1655,6 +1655,70 @@ describe('serve', () => {
     atm(['service', 'stop'], a);
   });
 
+  test('a poll with its ETag sees a change in a project its tasks name, and still gets a 304 for anything else (T-554)', async () => {
+    const atm = atmIn(home());
+    const keyed = (id, name, key) => {
+      const root = project({
+        meta: { id, project: name },
+        tasks: [{ id: 'T-1', name: `${name}'s first`, type: 'feature', status: 'todo' }],
+      });
+      assert.equal(atm(['db', 'migrate'], root).code, 0);
+      assert.equal(atm(['project', 'key', 'set', key], root).code, 0);
+      assert.equal(atm(['workspace', 'add-project'], root).code, 0);
+      return root;
+    };
+    const b = keyed('bbbb5540', 'Tool', 'ATM');
+    const c = keyed('cccc5540', 'Client', 'CLI');
+    const a = keyed('aaaa5540', 'Blog', 'LFB');
+    assert.equal(atm(['task', 'edit', 'LFB-1', '--add-dep', 'ATM-1'], a).code, 0);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], a).code, 0);
+    const base = `http://localhost:${port}`;
+    // A poll as the page makes it: with the ETag of its last answer
+    const poll = async (url, tag) => {
+      const response = await fetch(`${base}${url}`, tag ? { headers: { 'if-none-match': tag } } : {});
+      return {
+        status: response.status,
+        tag: response.headers.get('etag'),
+        body: response.status === 200 ? await response.json() : null,
+      };
+    };
+    const tasks = '/api/v1/projects/aaaa5540/tasks';
+    const overview = '/api/projects';
+
+    let t = await poll(tasks);
+    let o = await poll(overview);
+    assert.equal(t.status, 200);
+    assert.equal(t.body.tasks[0].derived.ready, false);
+    // Nothing changed: 304s
+    assert.equal((await poll(tasks, t.tag)).status, 304);
+    assert.equal((await poll(overview, o.tag)).status, 304);
+
+    // A change in a project LFB names: a 200 with the new values, on the tasks and on the overview
+    assert.equal(atm(['task', 'state', 'ATM-1', 'in_progress'], b).code, 0);
+    assert.equal(atm(['task', 'state', 'ATM-1', 'done'], b).code, 0);
+    let again = await poll(tasks, t.tag);
+    assert.equal(again.status, 200);
+    assert.equal(again.body.tasks[0].derived.ready, true);
+    t = again;
+    const overviewAgain = await poll(overview, o.tag);
+    assert.equal(overviewAgain.status, 200);
+    o = overviewAgain;
+
+    // A change in a project LFB doesn't name: still a 304 for its tasks (the overview lists it, so it changes there)
+    assert.equal(atm(['task', 'note', 'CLI-1', 'unrelated'], c).code, 0);
+    assert.equal((await poll(tasks, t.tag)).status, 304);
+
+    // A new reference changes LFB's own data, then a change in the project it now names is seen too
+    assert.equal(atm(['task', 'edit', 'LFB-1', '--add-related', 'CLI-1'], a).code, 0);
+    t = await poll(tasks, t.tag);
+    assert.equal(t.status, 200);
+    assert.equal((await poll(tasks, t.tag)).status, 304);
+    assert.equal(atm(['task', 'note', 'CLI-1', 'now it matters'], c).code, 0);
+    assert.equal((await poll(tasks, t.tag)).status, 200);
+    atm(['service', 'stop'], a);
+  });
+
   test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
     const atm = atmIn(home());
     const task = (id, extra = {}) => ({

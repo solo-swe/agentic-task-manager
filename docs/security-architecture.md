@@ -767,8 +767,8 @@ with only this project open.
 - **The dashboard makes a link of it only to its own page** (`/projects/<id>?task=<key>`, or `/w/<w>/…`), built from
   `places`, never from a value of the task; the address is only text for the router (lib/keys.ts `foreignAddress`).
   A reference not found is shown as text, without a link.
-- **Served as the views are**: same Host check, localhost only, read only; the route's `ETag` follows this project's
-  data only, so another project's change shows here once this project's data changes too.
+- **Served as the views are**: same Host check, localhost only, read only; the route's `ETag` also follows the task
+  data of the projects named (T-554), which adds no read beyond the stamps the lookup already takes.
 - Checked by `tests/scripts/keys.test.mjs` (the views and the summary of a task across two registered projects; the
   missing task, the unregistered project) and `dashboard/tests/e2e/keys.spec.ts`.
 

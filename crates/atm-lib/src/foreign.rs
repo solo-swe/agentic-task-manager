@@ -369,6 +369,71 @@ pub fn referenced(project: &Project) -> Vec<String> {
     ids
 }
 
+/// The other projects' IDs a project's tasks name, the archive's too, in `dependencies`, `related` and
+/// `duplicate_of`, each once: everything its task views show of other projects (`derived.foreign`, `ready`). Worked
+/// out on a read of the project and remembered while its task data's stamp is unchanged, so asking costs a stamp
+/// (docs/cross-project-freshness-design.md §5.3 D: a new reference changes the stamp, so it is never missed).
+#[must_use]
+pub fn named_by(project: &Project) -> Vec<String> {
+    type Named = Mutex<HashMap<PathBuf, (Value, Vec<String>)>>;
+    static NAMED: OnceLock<Named> = OnceLock::new();
+    let named = NAMED.get_or_init(Default::default);
+    let Some(root) = project.root().map(Path::to_path_buf) else {
+        return Vec::new();
+    };
+    let stamp = data_stamp(project);
+    if let Some((known, ids)) = named
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(&root)
+        && *known == stamp
+    {
+        return ids.clone();
+    }
+    // Read without the lock; the stamp was taken first, so a change meanwhile is worked out again on the next ask
+    let store = project.store();
+    let tasks: Vec<Task> = store
+        .list_tasks()
+        .unwrap_or_default()
+        .into_iter()
+        .cloned()
+        .chain(
+            store
+                .list_archived()
+                .unwrap_or_default()
+                .into_iter()
+                .cloned(),
+        )
+        .collect();
+    let mut ids: Vec<String> = tasks
+        .iter()
+        .flat_map(|t| {
+            let listed = ["dependencies", "related"]
+                .into_iter()
+                .filter_map(|field| t.get(field).and_then(Value::as_array))
+                .flatten();
+            listed.chain(t.get("duplicate_of"))
+        })
+        .filter_map(Value::as_str)
+        .filter(|r| atm_common::rules::is_foreign_reference(r))
+        .filter_map(|r| r.split_once(':').map(|(id, _)| id.to_string()))
+        .collect();
+    ids.sort();
+    ids.dedup();
+    named
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .insert(root, (stamp, ids.clone()));
+    ids
+}
+
+/// [`version`] of the projects `project`'s tasks name ([`named_by`]): it changes when their task data does, for the
+/// `ETag`s of what shows them (the tasks route, the workspace's list).
+#[must_use]
+pub fn named_version(project: &Project) -> Value {
+    version(&named_by(project))
+}
+
 /// What the projects with these IDs are now, as a value that changes when their task data does (null for one that
 /// can't be found): for a cache of what was worked out from them (a project's summary).
 #[must_use]
