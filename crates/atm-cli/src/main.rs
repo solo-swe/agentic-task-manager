@@ -9,6 +9,23 @@
 // backticks would show too (`in_progress`, `ATM_AGENT`)
 #![allow(clippy::doc_markdown)]
 
+// Everything atm prints goes through `output::clean`, so no control character of task text reaches the terminal:
+// these shadow std's macros in the whole crate (defined before its modules, as macros are scoped by their place).
+macro_rules! println {
+    () => { ::std::println!() };
+    ($($arg:tt)*) => { ::std::println!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! print {
+    ($($arg:tt)*) => { ::std::print!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! eprintln {
+    () => { ::std::eprintln!() };
+    ($($arg:tt)*) => { ::std::eprintln!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+macro_rules! eprint {
+    ($($arg:tt)*) => { ::std::eprint!("{}", crate::output::clean(&::std::format!($($arg)*))) };
+}
+
 mod commands;
 mod output;
 mod process;
@@ -222,7 +239,8 @@ fn renew_own_claims(args: &[OsString], cwd: &Path) {
 /// An error as atm reports it: `atm: <message>` on stderr, or `{"error", "code"}` with `--json`.
 fn report(message: &str, code: u8, as_json: bool) {
     if as_json {
-        eprintln!("{}", to_json(&json!({"error": message, "code": code})));
+        // Exactly, as print_json prints
+        ::std::eprintln!("{}", to_json(&json!({"error": message, "code": code})));
     } else {
         eprintln!("atm: {message}");
     }

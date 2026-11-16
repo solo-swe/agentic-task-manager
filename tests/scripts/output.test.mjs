@@ -59,6 +59,54 @@ describe('styles', () => {
     }
   });
 
+  test('task text can’t drive the terminal: its control characters and escape sequences are dropped, atm’s own styles kept', () => {
+    // Anyone who can change tasks.json writes this (a merged pull request, another agent): an OSC 52 clipboard write,
+    // a screen clear, a window title, a bell, a carriage return over the line, a C1 CSI, and a colour
+    const name = 'Hello \u001b]52;c;cHduZWQ=\u0007 \u001b[2J\u001b[8mhidden\u001b[0m x\ry \u009b31m world';
+    const root = makeProject({
+      files: {
+        '.agentic-task-manager/tasks.json': {
+          meta: { project: 'Escapes \u001b]0;title\u0007' },
+          tasks: [
+            {
+              id: 'T-1',
+              name,
+              status: 'todo',
+              description: 'Body \u001b]0;title\u0007 text\u0007',
+              notes: [{ at: '2026-11-17T00:00:00Z', type: 'note', by: 'x', text: 'note \u001b[1A up' }],
+            },
+          ],
+        },
+      },
+    });
+    try {
+      for (const color of ['always', 'never']) {
+        for (const args of [
+          ['task', 'list'],
+          ['task', 'details', 'T-1'],
+          ['project', 'status'],
+          ['sprint', 'backlog'],
+        ]) {
+          const out = runAtm([...args, '--color', color], root);
+          assert.equal(out.code, 0, `${args.join(' ')}: ${out.stderr}`);
+          const what = `${args.join(' ')} --color ${color}: ${JSON.stringify(out.stdout)}`;
+          // Nothing but SGR sequences of atm's own styles, and no other control character but the line ends
+          const rest = out.stdout.replace(/\u001b\[(?:[0-9]|[34][0-7]|9[0-7]|2[2-4]|39)(?:;[0-9]+)*m/g, '');
+          assert.ok(!/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/.test(rest), what);
+          assert.ok(!out.stdout.includes('\u001b[8m'), what);
+          assert.ok(out.stdout.includes('Hello') && out.stdout.includes('world'), what);
+        }
+      }
+      // The words stay: only the controls go
+      const plain = runAtm(['task', 'list'], root).stdout;
+      assert.match(plain, /Hello \]52;c;cHduZWQ= \[2J\[8mhidden\[0m xy 31m world/);
+      // --json keeps the text exactly, escaped as JSON escapes it
+      assert.equal(JSON.parse(runAtm(['task', 'list', '--json'], root).stdout)[0].name, name);
+    } finally {
+      removeDir(root);
+    }
+  });
+
   test('--json is never styled, even with --color always', () => {
     const root = project();
     try {

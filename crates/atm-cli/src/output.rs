@@ -60,7 +60,54 @@ pub fn width() -> Option<usize> {
 
 /// Print a line, styles and all (anstream turns them into the Windows console's own where it needs to).
 pub fn emit(line: &str) {
-    anstream::println!("{line}");
+    anstream::println!("{}", clean(line));
+}
+
+/// The SGR parameters atm's own styles use (bold, dim, italic, underline and their ends, the 16 colours and the
+/// default one, the reset): nothing that hides, blinks or moves text.
+fn own_sgr(params: &str) -> bool {
+    params.split(';').all(|p| {
+        matches!(
+            p.parse::<u8>(),
+            Ok(0..=4 | 22..=24 | 30..=37 | 39 | 40..=47 | 49 | 90..=97 | 100..=107)
+        ) || p.is_empty()
+    })
+}
+
+/// Text as atm prints it to people (T-413's release review): task text is anyone's who can change `tasks.json`, so
+/// no control character of it reaches the terminal, where an escape sequence could set the clipboard (OSC 52), the
+/// window's title or a link, clear the screen, move the cursor or hide text, and a carriage return could print over a
+/// line. Every control character goes but the line ends and tabs, the rest of its sequence staying as plain text for
+/// the reader to see; with styling on, an SGR sequence of atm's own styles stays (the same in task text: it can only
+/// colour). `--json` is untouched: JSON escapes control characters itself.
+#[must_use]
+pub fn clean(text: &str) -> std::borrow::Cow<'_, str> {
+    let keep = |c: char| c == '\n' || c == '\t' || !c.is_control();
+    if text.chars().all(keep) {
+        return text.into();
+    }
+    let styles = settings().colour;
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if c == '\u{1b}'
+            && styles
+            && let Some(seq) = rest.strip_prefix("\u{1b}[")
+            && let Some(end) = seq.find(|c: char| !(c.is_ascii_digit() || c == ';'))
+            && seq[end..].starts_with('m')
+            && own_sgr(&seq[..end])
+        {
+            let length = 2 + end + 1;
+            out.push_str(&rest[..length]);
+            rest = &rest[length..];
+            continue;
+        }
+        if keep(c) {
+            out.push(c);
+        }
+        rest = &rest[c.len_utf8()..];
+    }
+    out.into()
 }
 
 /// A style, applied when styling is on.

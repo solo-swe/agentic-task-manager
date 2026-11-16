@@ -71,6 +71,7 @@ with the task that adds it.
 | I7 | **A `--file` names one file**: git runs with literal pathspecs; whole-tree pathspecs are refused | `tests/scripts/git.test.mjs` |
 | I8 | **Strings from `tasks.json` that reach a shell are shell-safe**: task IDs and `meta.workflow.base` are checked on load | `tests/scripts/scenarios/security.json` |
 | I9 | **The merge driver's command comes from the clone's own git config**, never from the repository | review (`crates/atm-db/src/jsongit/merge.rs`, `setup.rs`) |
+| I30 | **Task text can't drive the terminal**: everything the CLI prints for people goes through `output::clean` (the crate's own `println!`, `print!`, `eprintln!`, `eprint!` shadow std's), which drops every control character but the line end and the tab, so an escape sequence in task text (a clipboard write, a title, a link, a screen clear, a cursor move) prints as plain text; with styling on, SGR sequences of atm's own styles (colour, bold, dim, underline; never hidden or blinking text) stay. `--json` prints exactly (JSON escapes control characters itself) | `tests/scripts/output.test.mjs` "task text can’t drive the terminal" |
 
 ### Dashboard server (B3, B5)
 
@@ -1016,6 +1017,15 @@ with one new plugin:
   commands, `plugin:opener|open_url` and `open_path`, are refused from the window), and the plugin's script that
   would send the page's link clicks to those commands is left out (`open_js_links_on_click(false)`). In the browser
   (`atm serve`) nothing changes: external links open in a new tab, `noopener noreferrer`.
+
+**The CLI's styled output (T-488, `crates/atm-cli/src/output.rs`).** No new command, path or URL: atm styles its own
+words (`--color auto|always|never`; never in a pipe, with `NO_COLOR` or with `--json`, so agents get plain text, as
+`output.test.mjs` checks) and cuts lines to the terminal's width only on a terminal. Reviewing it for 0.38.0 found
+that task text reached the terminal as written, with this release and every one before it: a task's name, note or
+description (anyone's who can change `tasks.json`) could carry escape sequences the terminal acts on, such as OSC 52,
+which sets the clipboard in many terminals, a window title, an OSC 8 link, a screen clear or hidden text, or a
+carriage return printing over the line. Fixed in the same release: I30. Agents were never at risk (they read the
+bytes as text; the sequences showed as text to them), and the dashboard renders task text with CompMD (I14).
 
 ## 4. Keeping it current
 

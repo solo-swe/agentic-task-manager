@@ -30,9 +30,10 @@ pub struct Context {
     pub dry_run: bool,
 }
 
-/// Print a JSON result, as atm prints JSON.
+/// Print a JSON result, as atm prints JSON: exactly (std's `println!`, not the crate's, which drops control
+/// characters; JSON escapes those it must, and a program reads it, not a terminal).
 pub fn print_json(value: &Value) {
-    println!("{}", to_json(value));
+    ::std::println!("{}", to_json(value));
 }
 
 /// The stored IDs of the tasks these references name (ADR-007 §5, `Project::resolve_task`): in a keys-format project a

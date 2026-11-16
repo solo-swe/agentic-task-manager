@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 556,
+    "next_id": 557,
     "labels": [
       {
         "id": "architecture",
@@ -5179,7 +5179,7 @@
       "description": "Make atm work in the harnesses beyond Claude Code through the model agreed in [better-way-to-distribute-atm.md](docs/better-way-to-distribute-atm.md) (T-426): one set of portable skills, placed by `atm agents install`. No per-harness adapters: the earlier design ([multi-harness-support.md](docs/multi-harness-support.md): `plugin/open-code/`, `install.sh`, `skills.json`) is not built.\n\nThe harnesses: Codex CLI, Cursor, Gemini CLI, GitHub Copilot (VS Code and CLI), OpenCode, Windsurf (Devin) and Goose. What their documentation said on 2026-11-06 is in the distribution doc's §5 and sources; check it again before relying on it.\n\n## For each harness\n- **Install:** `atm agents install --harness <h>` puts the skills where it reads them (`~/.agents/skills/` for all of these); the skills show up and can be invoked by name (`atm-do-task`, …).\n- **Links or copies:** whether it follows the symlinks atm writes. Cursor (home-folder symlinks) and the Copilot CLI (symlinked skills not listed) have known bugs: confirm that atm copies for them, and whether any other harness needs copies.\n- **Duplicates:** whether it lists atm's skills twice, from `~/.agents/skills/` and `~/.claude/skills/` (expected in Cursor, OpenCode, Goose and VS Code Copilot), and that `atm agents status` says so.\n- **A task end to end:** `/atm-do-task` on a sample project: the skill checks `atm --version`, claims a task, keeps the claim alive through atm's own renewal ([porting-to-rust.md](docs/porting-to-rust.md) §4) and `atm claim hold` for a long command, commits and finishes it.\n- **Permissions:** how the harness asks before running `atm` commands, and whether the skills' instructions need anything for it (Claude Code's pre-approvals are `allowed-tools`, which only Claude Code reads).\n\n## Outcome\n- A support table in the distribution doc (§5): per harness, verified or not, links or copies, duplicates, known issues, with the version tried.\n- Fixes to `atm agents` where a harness needs one (its folder, copying, detection), each with a test.\n- A plugin for a harness only if users need something a skill can't do there (the distribution doc §6); proposed to Hakan first, never built here.\n- `docs/multi-harness-support.md` replaced by a pointer to the distribution doc, or removed.\n\n## Depends on\nThe tasks that build the thin skills, `atm docs` and `atm agents install|status|uninstall` (the distribution rollout's steps 1 to 3), once they exist.\n",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-440",
         "T-441",
@@ -5190,7 +5190,7 @@
         "docs/better-way-to-distribute-atm.md"
       ],
       "created_at": "2026-11-04T19:51:37Z",
-      "updated_at": "2026-11-16T22:44:37Z",
+      "updated_at": "2026-11-16T23:02:07Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -5225,11 +5225,19 @@
           "kind": "answer",
           "text": "Trying each harness (Codex CLI, Cursor, Gemini CLI, Copilot, OpenCode, Windsurf, Goose) needs them installed and signed in on your Mac: which do you have, and shall we go through them together (`/atm-do-task T-413`)? The loop can’t verify them alone. → Cover Codex CLI (free ChatGPT plan), GitHub Copilot (CLI and VS Code), Cursor (free Hobby plan), Antigravity CLI (Gemini CLI’s replacement on Homebrew) and OpenCode; all installed and signed in on Hakan’s machine. Windsurf and Goose are left out (low use).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T23:02:07Z",
+          "kind": "outcome",
+          "text": "atm agents installs into ~/.agents/skills (Codex, Copilot CLI, Cursor, OpenCode, Gemini CLI) and Antigravity’s ~/.gemini/config/skills; status names the tools and duplicates. Support table in the distribution doc §5: Codex, OpenCode, Antigravity ran a task; Cursor stopped at the version check; Copilot CLI listed the skills (no run); VS Code and Gemini CLI not tried.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T22:24:32Z",
       "started_by": "claude:0f56a916",
-      "commit": "d20a8338b61b151c97e8463b5d94d93152185268"
+      "commit": "57db7ca656f715979d4da0b59e1d2280b2e014f8",
+      "completed_at": "2026-11-16T23:02:07Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-414",
@@ -13335,6 +13343,41 @@
           "by": "claude:0f56a916"
         }
       ]
+    },
+    {
+      "id": "T-556",
+      "name": "The CLI: task text can't drive the terminal (control characters and escape sequences dropped)",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "cli",
+        "security"
+      ],
+      "description": "Found in 0.38.0's security review of T-488's styled output: task text (a name, a note, a description, anyone's who can change `tasks.json`) reached the terminal as written, so an escape sequence in it could set the clipboard (OSC 52), the window title or a link, clear the screen or hide text, and a carriage return could print over a line.\n\n## Change\n- `output::clean` in `crates/atm-cli/src/output.rs`: drops every control character but the line end and the tab; with styling on, keeps SGR sequences of atm's own styles only.\n- The crate's own `println!`, `print!`, `eprintln!` and `eprint!` (in `main.rs`) shadow std's, so everything printed for people goes through it; `--json` prints exactly.\n- [security-architecture.md](docs/security-architecture.md): invariant I30, and the review entry.\n\n## Tests\n`tests/scripts/output.test.mjs` \"task text can’t drive the terminal\".",
+      "requirements": [],
+      "use_cases": [],
+      "status": "in_progress",
+      "dependencies": [],
+      "files": [
+        "crates/atm-cli/src/output.rs",
+        "crates/atm-cli/src/main.rs",
+        "crates/atm-cli/src/commands.rs",
+        "tests/scripts/output.test.mjs",
+        "docs/security-architecture.md"
+      ],
+      "created_at": "2026-11-16T23:36:48Z",
+      "updated_at": "2026-11-16T23:36:59Z",
+      "created_by": "claude:0f56a916",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T23:36:48Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "started_at": "2026-11-16T23:36:59Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }
