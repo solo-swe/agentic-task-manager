@@ -223,7 +223,8 @@ pub fn report(command: Command, result: &StatusChange, ctx: Context, cwd: &Path)
     if command == Command::Start
         && let Some(view) = &result.view
     {
-        say(&render_task(view));
+        let labels = crate::commands::Labeller::open(cwd);
+        crate::output::emit(&labels.text(&render_task(view, &labels.palette())));
     }
     if !result.unblocked.is_empty() {
         say(&format!("Now ready: {}", result.unblocked.join(", ")));

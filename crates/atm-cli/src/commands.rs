@@ -52,50 +52,89 @@ pub fn resolved(cwd: &std::path::Path, references: &[String]) -> atm_common::Res
 /// people know the task: for the lines atm prints. Text without one, or a project without task keys, unchanged.
 #[must_use]
 pub fn labelled(cwd: &std::path::Path, text: &str) -> String {
-    let is_uuid = |s: &str| atm_common::ids::valid_task_uuid(s);
-    let has_uuid = |s: &str| {
-        s.as_bytes()
-            .windows(36)
-            .any(|w| std::str::from_utf8(w).is_ok_and(is_uuid))
-    };
     if !has_uuid(text) {
         return text.to_string();
     }
-    let Ok(project) = atm_lib::Project::open(cwd) else {
-        return text.to_string();
-    };
-    let Ok(document) = project.store().document() else {
-        return text.to_string();
-    };
-    let archive: Vec<atm_common::Task> = project
-        .store()
-        .list_archived()
-        .map(|a| a.into_iter().cloned().collect())
-        .unwrap_or_default();
-    let mut out = String::new();
-    let mut rest = text;
-    while rest.len() >= 36 {
-        let found = (0..=rest.len() - 36)
-            .filter(|&i| rest.is_char_boundary(i) && rest.is_char_boundary(i + 36))
-            .find(|&i| is_uuid(&rest[i..i + 36]));
-        let Some(i) = found else {
-            break;
-        };
-        out.push_str(&rest[..i]);
-        let uuid = &rest[i..i + 36];
-        match atm_common::keys::resolve(document, &archive, uuid) {
-            Ok(f) => out.push_str(&project.task_label(f.task)),
-            Err(_) => out.push_str(uuid),
-        }
-        rest = &rest[i + 36..];
+    Labeller::open(cwd).text(text)
+}
+
+fn is_uuid(s: &str) -> bool {
+    atm_common::ids::valid_task_uuid(s)
+}
+
+fn has_uuid(s: &str) -> bool {
+    s.as_bytes()
+        .windows(36)
+        .any(|w| std::str::from_utf8(w).is_ok_and(is_uuid))
+}
+
+/// [`labelled`] for many texts of one project: the project opened once.
+pub struct Labeller {
+    project: Option<(atm_lib::Project, Vec<atm_common::Task>)>,
+}
+
+impl Labeller {
+    /// The labeller of the project in `cwd` (one that can't be opened leaves texts as they are).
+    #[must_use]
+    pub fn open(cwd: &std::path::Path) -> Self {
+        let project = atm_lib::Project::open(cwd).ok().map(|project| {
+            let archive: Vec<atm_common::Task> = project
+                .store()
+                .list_archived()
+                .map(|a| a.into_iter().cloned().collect())
+                .unwrap_or_default();
+            (project, archive)
+        });
+        Labeller { project }
     }
-    out.push_str(rest);
-    out
+
+    /// A text with its task UUIDs as labels.
+    #[must_use]
+    pub fn text(&self, text: &str) -> String {
+        if !has_uuid(text) {
+            return text.to_string();
+        }
+        let Some((project, archive)) = &self.project else {
+            return text.to_string();
+        };
+        let Ok(document) = project.store().document() else {
+            return text.to_string();
+        };
+        let mut out = String::new();
+        let mut rest = text;
+        while rest.len() >= 36 {
+            let found = (0..=rest.len() - 36)
+                .filter(|&i| rest.is_char_boundary(i) && rest.is_char_boundary(i + 36))
+                .find(|&i| is_uuid(&rest[i..i + 36]));
+            let Some(i) = found else {
+                break;
+            };
+            out.push_str(&rest[..i]);
+            let uuid = &rest[i..i + 36];
+            match atm_common::keys::resolve(document, archive, uuid) {
+                Ok(f) => out.push_str(&project.task_label(f.task)),
+                Err(_) => out.push_str(uuid),
+            }
+            rest = &rest[i + 36..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    /// The project's palette (its statuses and priorities, for their styles).
+    #[must_use]
+    pub fn palette(&self) -> crate::output::Palette {
+        self.project
+            .as_ref()
+            .and_then(|(p, _)| p.store().document().ok())
+            .map(crate::output::Palette::of_document)
+            .unwrap_or_default()
+    }
 }
 
 /// `println!` of a line as people read it ([`labelled`]).
 pub fn say(cwd: &std::path::Path, line: &str) {
-    println!("{}", labelled(cwd, line));
+    crate::output::emit(&labelled(cwd, line));
 }
 
 /// [`resolved`] for one.

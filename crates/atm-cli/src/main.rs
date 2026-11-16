@@ -10,6 +10,7 @@
 #![allow(clippy::doc_markdown)]
 
 mod commands;
+mod output;
 mod process;
 
 use std::ffi::OsString;
@@ -55,6 +56,18 @@ struct Cli {
     /// Don't execute, just show what would be done
     #[arg(short = 'n', long = "dry-run", global = true)]
     dry_run: bool,
+
+    /// When to style the output: auto (on a terminal, without NO_COLOR), always or never
+    #[arg(
+        long = "color",
+        global = true,
+        value_enum,
+        default_value_t,
+        value_name = "WHEN",
+        hide_possible_values = true,
+        hide_default_value = true
+    )]
+    color: output::ColorWhen,
 
     #[command(subcommand)]
     command: Command,
@@ -298,6 +311,7 @@ fn run(args: &[OsString]) -> u8 {
         Ok(cli) => cli,
         Err(e) => return parse_error(&e, as_json),
     };
+    output::init(cli.color, cli.json);
     let ctx = Context {
         json: cli.json,
         dry_run: cli.dry_run,

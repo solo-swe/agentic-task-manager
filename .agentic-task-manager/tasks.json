@@ -17507,7 +17507,7 @@
         "docs/agent/"
       ],
       "created_at": "2026-11-08T08:30:53Z",
-      "updated_at": "2026-11-16T05:45:19Z",
+      "updated_at": "2026-11-16T06:05:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17530,10 +17530,30 @@
           "kind": "answer",
           "text": "T-488 starts with a design you approve: a before/after of project status, task list, task details, sprint list, release list and doctor, colour only on a terminal (never with NO_COLOR, --json or a pipe), and maybe a crate (anstyle is in the tree already). Shall I draft that proposal for you to review, together in a session? → Yes: write the design and send it for review in Crit (Hakan, 2026-11-16)",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T05:48:40Z",
+          "kind": "review",
+          "text": "Design draft in `docs/cli-output-design.md`, sent to Crit: before/after of the six commands and the decisions in §8 (crates, `--all`, `--color`)",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T06:05:38Z",
+          "kind": "note",
+          "text": "Approved: Design approved in Crit (no comments); anstream, anstyle and terminal_size confirmed (Hakan, 2026-11-16)",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-16T05:45:19Z",
-      "started_by": "claude:0f56a916"
+      "started_at": "2026-11-16T06:05:44Z",
+      "started_by": "claude:0f56a916",
+      "commit": "dfbab34c45349227bff0e0895465084ebd477e07",
+      "reviews": [
+        {
+          "from": "2026-11-16T05:48:40Z",
+          "to": "2026-11-16T06:05:38Z",
+          "outcome": "approved"
+        }
+      ]
     },
     {
       "id": "T-489",
@@ -18640,7 +18660,7 @@
       "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [
         "T-506"
       ],
@@ -18652,7 +18672,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-16T05:45:25Z",
+      "updated_at": "2026-11-16T06:05:52Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18667,13 +18687,23 @@
         }
       ],
       "sprint": "Keys and reach",
-      "started_at": "2026-11-16T04:35:48Z",
-      "started_by": "claude:0f56a916",
-      "waiting_on": "user",
-      "questions": [
-        "axum’s SSE needs a `Stream` type, and atm-api has none. Approve `futures-core` 0.3 as a direct dependency of atm-api (already in Cargo.lock through axum, nothing new downloaded) plus `notify` and `notify-debouncer-full` in atm-lib (the app’s watcher moves there, so the CLI links them too)? Or use a long-poll `GET …/changes` route instead (no new dependency, but not `EventSource`)?"
+      "blocks": [
+        {
+          "from": "2026-11-16T05:45:25Z",
+          "to": "2026-11-16T06:05:44Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-16T05:45:25Z"
+      "notes": [
+        {
+          "at": "2026-11-16T06:05:44Z",
+          "kind": "answer",
+          "text": "axum’s SSE needs a `Stream` type, and atm-api has none. Approve `futures-core` 0.3 as a direct dependency of atm-api (already in Cargo.lock through axum, nothing new downloaded) plus `notify` and `notify-debouncer-full` in atm-lib (the app’s watcher moves there, so the CLI links them too)? Or use a long-poll `GET …/changes` route instead (no new dependency, but not `EventSource`)? → Approved: futures-core 0.3 in atm-api, and notify and notify-debouncer-full in atm-lib (Hakan, 2026-11-16)",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-16T06:05:52Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-508",

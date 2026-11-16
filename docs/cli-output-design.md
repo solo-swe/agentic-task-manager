@@ -1,6 +1,7 @@
 # atm's terminal output: alignment, grouping and styling (T-488)
 
-- **Status:** proposal, for review with Hakan
+- **Status:** accepted, 2026-11-16 (Hakan, in Crit: no comments; the crates in §8.1 confirmed). Built in T-488, with
+  the differences in §9
 - **Task:** T-488
 - **Scope:** the plain output (no `--json`) of `atm project status`, `atm task list`, `atm task details`,
   `atm sprint list`, `atm release list` and `atm doctor`. Then, once these six are agreed, the other commands
@@ -356,3 +357,15 @@ find, and 32 lines of the same sentence help no one.
 5. **`release list`:** sorted by version, and "N not merged" in place of the merged count?
 6. **`doctor`:** grouping same-message warnings?
 7. **`--color auto|always|never`** as a global flag?
+
+## 9. As built: where it differs from §4
+
+- **`project status`'s sections show no priority:** the report's items (`in_progress`, `blocked`, …) carry none, and
+  `--json` stays as it is.
+- **In a pipe a table's name column is as wide as the longest name.** Nothing is cut there, so the column after it
+  (labels, who) lines up after the longest one.
+- **`doctor`'s grouped warning keeps the message's own words:** `warning: its files match no component (…): 32 tasks`,
+  then the IDs. Any warning about one task can be grouped this way, without rewording each message.
+- **`release list`** says "N in a PR" for done tasks in a PR that isn't merged yet, and "N not merged" for done tasks
+  in no PR.
+- **`atm sprint backlog`** prints the same table as `task list`, with the count line.

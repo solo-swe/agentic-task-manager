@@ -386,7 +386,7 @@
       }
     },
     "args": ["task", "list", "--archived"],
-    "expect": { "stdout": "T-1  done  P2  Old\n" }
+    "expect": { "stdout": "T-1  done  P2  Old\n1 task: 1 done\n" }
   },
   {
     "name": "unarchive brings tasks back",

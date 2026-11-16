@@ -189,7 +189,7 @@
       }
     },
     "args": ["task", "list", "--release", "1.0"],
-    "expect": { "stdout": "T-1  todo  P2  In A\nT-2  todo  P2  In B, for 1.0\n" }
+    "expect": { "stdout": "T-1  todo  P2  In A\nT-2  todo  P2  In B, for 1.0\n2 tasks: 2 todo\n" }
   },
   {
     "name": "list --backlog",
@@ -205,7 +205,7 @@
       }
     },
     "args": ["task", "list", "--backlog"],
-    "expect": { "stdout": "T-3  todo  P2  Backlog\n" }
+    "expect": { "stdout": "T-3  todo  P2  Backlog\n1 task: 1 todo\n" }
   },
   {
     "name": "list --sprint of a sprint that doesn't exist is refused",
@@ -231,7 +231,7 @@
     },
     "args": ["project", "status"],
     "expect": {
-      "stdoutIncludes": ["sprint: A (active): 1 of 2 done · due 2026-06-01 · release 1.0\n  goal: Ship it\n"]
+      "stdoutIncludes": ["A · active · release 1.0 · due 2026-06-01 · 1 of 2 done\n  Ship it\n"]
     }
   },
   {

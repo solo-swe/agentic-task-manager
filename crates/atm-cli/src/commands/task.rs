@@ -188,11 +188,38 @@ fn list(args: ListArgs, ctx: Context, cwd: &Path) -> Result<()> {
     } else if rows.is_empty() {
         println!("No tasks match.");
     } else {
-        for line in list_lines(&rows) {
-            println!("{line}");
+        let palette = crate::output::Palette::of_document(project.store().document()?);
+        for line in list_lines(&rows, &palette) {
+            crate::output::emit(&line);
         }
+        crate::output::emit(&crate::output::paint(
+            crate::output::DIM,
+            &count_line(&rows),
+        ));
     }
     Ok(())
+}
+
+/// `4 tasks: 1 in progress, 2 blocked, 1 done`: the list's size by status, in the order they first come.
+#[must_use]
+pub fn count_line(rows: &[Value]) -> String {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for status in rows.iter().map(|r| py_str(&r["status"])) {
+        match counts.iter_mut().find(|(s, _)| *s == status) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((status, 1)),
+        }
+    }
+    let each: Vec<String> = counts
+        .iter()
+        .map(|(s, n)| format!("{n} {}", s.replace('_', " ")))
+        .collect();
+    let n = rows.len();
+    format!(
+        "{n} task{}: {}",
+        if n == 1 { "" } else { "s" },
+        each.join(", ")
+    )
 }
 
 /// The fields `atm task list` shows of a task, from its view (`{task, derived}`), as `--json` prints them.
@@ -230,44 +257,40 @@ pub fn view_row(view: &Value) -> Value {
     row
 }
 
-/// One line per task, as `atm task list` prints them: ID, status, priority, labels, name, the IDs and statuses
-/// padded to the longest.
+/// One line per task, as `atm task list` prints them (docs/cli-output-design.md §4): ID, status, priority, name,
+/// labels, each column padded to its widest; on a terminal the name is cut so the labels fit.
 #[must_use]
-pub fn list_lines(rows: &[Value]) -> Vec<String> {
-    let width = |key: &str| {
-        rows.iter()
-            .map(|r| py_str(&r[key]).chars().count())
-            .max()
-            .unwrap_or(0)
-    };
-    // A task's label (its key, `~` while provisional) where it has one, else its ID
-    let shown = |r: &Value| r.get("label").map_or_else(|| py_str(&r["id"]), py_str);
-    let id_width = rows
-        .iter()
-        .map(|r| shown(r).chars().count())
-        .max()
-        .unwrap_or(0);
-    let status_width = width("status");
-    rows.iter()
-        .map(|t| {
-            let labels = t
-                .get("labels")
-                .filter(|l| truthy(l))
-                .map_or_else(String::new, |l| format!("[{}] ", join(l)));
-            format!(
-                "{:<id_width$}  {:<status_width$}  {}  {labels}{}",
-                shown(t),
-                py_str(&t["status"]),
-                py_str(&t["priority"]),
-                py_str(&t["name"])
-            )
-        })
-        .collect()
+pub fn list_lines(rows: &[Value], palette: &crate::output::Palette) -> Vec<String> {
+    use crate::output::{Cell, DIM, Table};
+    let mut table = Table::new().cut(3);
+    for t in rows {
+        let status = py_str(&t["status"]);
+        let priority = py_str(&t["priority"]);
+        table.row(vec![
+            task_label_cell(t),
+            Cell::styled(&status, palette.status(&status)),
+            Cell::styled(&priority, palette.priority(&priority)),
+            Cell::new(py_str(&t["name"])),
+            Cell::styled(
+                t.get("labels")
+                    .filter(|l| truthy(l))
+                    .map_or_else(String::new, join),
+                DIM,
+            ),
+        ]);
+    }
+    table.lines()
+}
+
+/// A task's label (its key, `~` while provisional) where it has one, else its ID.
+fn task_label_cell(row: &Value) -> crate::output::Cell {
+    crate::output::Cell::new(row.get("label").map_or_else(|| py_str(&row["id"]), py_str))
 }
 
 fn details(task_ids: &[String], ctx: Context, cwd: &Path) -> Result<()> {
     let ids: Vec<TaskId> = task_ids.iter().map(TaskId::new).collect();
-    let views = show_tasks(&Project::open(cwd)?, &ids)?;
+    let project = Project::open(cwd)?;
+    let views = show_tasks(&project, &ids)?;
     if ctx.json {
         // An archived task says so (T-353)
         let tasks = views
@@ -282,13 +305,13 @@ fn details(task_ids: &[String], ctx: Context, cwd: &Path) -> Result<()> {
             .collect();
         print_json(&Value::Array(tasks));
     } else {
-        println!(
-            "{}",
-            views
+        let palette = crate::output::Palette::of_document(project.store().document()?);
+        crate::output::emit(
+            &views
                 .iter()
-                .map(render_task)
+                .map(|v| render_task(v, &palette))
                 .collect::<Vec<_>>()
-                .join("\n\n")
+                .join("\n\n"),
         );
     }
     Ok(())
@@ -307,12 +330,19 @@ fn join(value: &Value) -> String {
     }
 }
 
-/// A task in full, as text: what an agent needs to work on it (`atm task state … in_progress` prints the same).
+/// A task in full, as text (docs/cli-output-design.md §4): what an agent needs to work on it (`atm task state …
+/// in_progress` prints the same). Its heading, its facts in a labelled column (lists one item per line), then its
+/// description and notes as sections.
 #[must_use]
-pub fn render_task(view: &TaskView) -> String {
+pub fn render_task(view: &TaskView, palette: &crate::output::Palette) -> String {
+    use crate::output::{Cell, DIM, Table};
     let task = &view.task;
     let get = |key: &str| task.get(key).filter(|v| truthy(v));
-    let mut lines = heading(view);
+    let mut lines = heading(view, palette);
+    let mut fields: Vec<(&str, Vec<String>)> = Vec::new();
+    if let Some(labels) = get("labels") {
+        fields.push(("labels", vec![join(labels)]));
+    }
     if !view.dependencies.is_empty() {
         let deps: Vec<String> = view
             .dependencies
@@ -327,41 +357,63 @@ pub fn render_task(view: &TaskView) -> String {
                 ),
             })
             .collect();
-        lines.push(format!("  depends on: {}", deps.join(", ")));
+        fields.push(("depends on", deps));
     }
     // How it ended, when it isn't the default, and its relations (SR-2.8)
     if let Some(resolution) = get("resolution") {
         let of = get("duplicate_of").map_or_else(String::new, |d| format!(" (of {})", py_str(d)));
-        lines.push(format!("  resolution: {}{of}", py_str(resolution)));
+        fields.push(("resolution", vec![format!("{}{of}", py_str(resolution))]));
     }
     if !view.related.is_empty() {
-        lines.push(format!("  related: {}", view.related.join(", ")));
+        fields.push(("related", view.related.clone()));
     }
     if !view.duplicated_by.is_empty() {
-        lines.push(format!(
-            "  duplicated by: {}",
-            view.duplicated_by.join(", ")
-        ));
+        fields.push(("duplicated by", view.duplicated_by.clone()));
     }
-    for key in ["requirements", "use_cases", "files"] {
+    for (key, title) in [
+        ("requirements", "requirements"),
+        ("use_cases", "use cases"),
+        ("files", "files"),
+    ] {
         if let Some(items) = get(key) {
-            lines.push(format!("  {}: {}", key.replace('_', " "), join(items)));
+            fields.push((title, entries(items)));
         }
     }
-    lines.extend(who(view));
+    fields.extend(who(view));
     if let Some(commit) = get("commit") {
-        lines.push(format!("  commit: {}", py_str(commit)));
+        fields.push(("commit", vec![py_str(commit)]));
+    }
+    if !fields.is_empty() {
+        let mut table = Table::new().indent(2);
+        for (title, values) in fields {
+            for (n, value) in values.into_iter().enumerate() {
+                let title = if n == 0 { title } else { "" };
+                table.row(vec![Cell::styled(title, DIM), Cell::new(value)]);
+            }
+        }
+        lines.push(String::new());
+        lines.extend(table.lines());
     }
     lines.extend(description_and_notes(task));
     lines.join("\n")
 }
 
-/// The task's first two lines: its ID and name, then its status, sprint, type, priority and labels.
-fn heading(view: &TaskView) -> Vec<String> {
+/// A list's entries as text, one each (a text: itself).
+fn entries(value: &Value) -> Vec<String> {
+    match value {
+        Value::Array(items) => items.iter().map(py_str).collect(),
+        other => vec![py_str(other)],
+    }
+}
+
+/// The task's first two lines: its ID and name, bold, then its status, sprint, type and priority.
+fn heading(view: &TaskView, palette: &crate::output::Palette) -> Vec<String> {
+    use crate::output::{HEADING, paint};
     let task = &view.task;
     let get = |key: &str| task.get(key).filter(|v| truthy(v));
+    let status = py_str_opt(task.get("status"));
     let mut header = vec![
-        py_str_opt(task.get("status")),
+        paint(palette.status(&status), &status),
         get("sprint").map_or_else(|| "backlog".to_string(), py_str),
     ];
     // A task from the archive says so (found in T-277, T-353)
@@ -369,27 +421,27 @@ fn heading(view: &TaskView) -> Vec<String> {
         header.push("archived".into());
     }
     header.push(py_str_opt(task.get("type")));
-    header.push(view.priority.clone());
-    if let Some(labels) = get("labels") {
-        header.push(format!("labels: {}", join(labels)));
-    }
+    header.push(paint(palette.priority(&view.priority), &view.priority));
     vec![
-        format!(
-            "{}  {}",
-            // Its key (`~` while provisional) with task keys, else its ID (ADR-007 §1)
-            atm_common::keys::label_of(&Value::Object(task.clone())),
-            task.get("name").map_or_else(String::new, py_str)
+        paint(
+            HEADING,
+            &format!(
+                "{}  {}",
+                // Its key (`~` while provisional) with task keys, else its ID (ADR-007 §1)
+                atm_common::keys::label_of(&Value::Object(task.clone())),
+                task.get("name").map_or_else(String::new, py_str)
+            ),
         ),
         format!("  {}", header.join(" · ")),
     ]
 }
 
-/// When it was created, started, sent for review and completed, and by whom: one line, or none.
-fn who(view: &TaskView) -> Option<String> {
+/// When it was created, started, sent for review and completed, and by whom: a field each.
+fn who(view: &TaskView) -> Vec<(&'static str, Vec<String>)> {
     let task = &view.task;
     let get = |key: &str| task.get(key).filter(|v| truthy(v));
     let started_by = view.started_by.as_ref().filter(|v| truthy(v));
-    let who: Vec<String> = [
+    [
         ("created", "created_at", get("created_by")),
         ("started", "started_at", started_by),
         ("review requested", "review_requested_at", None),
@@ -398,44 +450,49 @@ fn who(view: &TaskView) -> Option<String> {
     .into_iter()
     .filter_map(|(what, at, by)| {
         get(at).map(|at| {
-            format!("{what} {}", py_str(at))
-                + &by.map_or_else(String::new, |b| format!(" by {}", py_str(b)))
+            (
+                what,
+                vec![py_str(at) + &by.map_or_else(String::new, |b| format!(" by {}", py_str(b)))],
+            )
         })
     })
-    .collect();
-    (!who.is_empty()).then(|| format!("  {}", who.join(" · ")))
+    .collect()
 }
 
-/// The description, indented, then the notes (or, in files from before notes, the last failure).
+/// The description, indented (wrapped on a terminal), then the notes (or, in files from before notes, the last
+/// failure).
 fn description_and_notes(task: &atm_common::Task) -> Vec<String> {
+    use crate::output::{DIM, HEADING, paint, width, wrap};
     let get = |key: &str| task.get(key).filter(|v| truthy(v));
     let mut lines = Vec::new();
     let description = get("description").map_or_else(String::new, py_str);
     let description = strip(&description);
     if !description.is_empty() {
-        lines.push("  description:".into());
-        lines.extend(
-            splitlines(description)
-                .into_iter()
-                .map(|line| format!("    {line}")),
-        );
+        lines.extend([String::new(), paint(HEADING, "  description")]);
+        for line in splitlines(description) {
+            lines.extend(wrap(&format!("    {line}"), width()));
+        }
     }
     if let Some(notes) = get("notes") {
-        lines.push("  notes:".into());
+        lines.extend([String::new(), paint(HEADING, "  notes")]);
         for note in notes.as_array().into_iter().flatten() {
             let field = |key: &str| py_str_opt(note.get(key));
             let by = note
                 .get("by")
                 .filter(|b| truthy(b))
-                .map_or_else(String::new, |b| format!(" ({})", py_str(b)));
+                .map_or_else(String::new, |b| format!("  {}", py_str(b)));
             lines.push(format!(
-                "    {} {}{by}: {}",
-                field("at"),
+                "    {}  {}{}",
+                paint(DIM, &field("at")),
                 field("kind"),
-                field("text")
+                paint(DIM, &by)
             ));
+            for line in splitlines(&field("text")) {
+                lines.extend(wrap(&format!("      {line}"), width()));
+            }
         }
     } else if let Some(failure) = get("last_failure") {
+        lines.push(String::new());
         lines.push(format!(
             "  last failure: {}: {}",
             py_str_opt(failure.get("at")),

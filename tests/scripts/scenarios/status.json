@@ -36,7 +36,7 @@
     },
     "args": ["task", "state", "T-002", "in_progress"],
     "expect": {
-      "stdoutIncludes": ["T-002: todo -> in_progress\nT-002  Task T-002\n", "depends on: T-001 (done)"],
+      "stdoutIncludes": ["T-002: todo -> in_progress\nT-002  Task T-002\n", "depends on  T-001 (done)"],
       "files": {
         ".agentic-task-manager/tasks.json": {
           "meta": {

@@ -33,6 +33,13 @@ compmd-host = "=0.7.0"
 clap = { version = "4.5", features = ["derive"] }
 # Shell completion with atm's own values (task IDs, sprints, …), its dynamic engine (T-451, approved)
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
+# The CLI's styled output (T-488, docs/cli-output-design.md; approved by Hakan): the styles, and stdout with them on or
+# off by NO_COLOR, CLICOLOR_FORCE, TERM and whether it is a terminal. Both already in the tree through clap
+anstyle = "1"
+anstream = "1"
+# The terminal's width, to cut long lines there (T-488; approved by Hakan). Its own dependencies (rustix, windows-sys)
+# are in the tree already
+terminal_size = "0.4"
 # JSON as atm writes it (docs/porting-to-rust.md §3): keys in the order they come, so a task prints as it is stored
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"
@@ -47,7 +54,11 @@ jiff = "0.2"
 uuid = { version = "1.29", features = ["v7"] }
 # `atm service`'s server (T-449, docs/porting-to-rust.md §3): HTTP/1 on localhost; the rest of atm stays synchronous
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
-tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros"] }
+# (`sync`, `time`: the change streams' channels and their limits, T-507)
+tokio = { version = "1", features = ["rt-multi-thread", "net", "signal", "macros", "sync", "time"] }
+# The change streams' `Stream` trait (T-507; approved by Hakan): axum's server-sent events take one. Already in the
+# tree through axum
+futures-core = "0.3"
 # Windows only (T-480, approved): atm's own standard handles made non-inheritable before it starts a background
 # process, so the caller's pipes close when atm exits. Already in the tree through tokio and sysinfo
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console"] }
@@ -69,7 +80,8 @@ tauri-plugin-notification = "=2.8.0"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
-# The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced
+# Live changes (T-456, approved): a watcher on the folders the store reports, its events debounced; atm-lib's since
+# T-507 (approved by Hakan), for the app and atm serve's change streams
 notify = "8.2.1"
 notify-debouncer-full = "0.7.0"
 

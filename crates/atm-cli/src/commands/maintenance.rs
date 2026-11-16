@@ -44,10 +44,10 @@ pub fn doctor(files: bool, ctx: Context, cwd: &Path) -> Result<u8> {
         print_json(&json!({"errors": errors, "warnings": warnings}));
     } else {
         for e in errors {
-            println!("error: {e}");
+            crate::output::emit(&format!("{} {e}", crate::output::error_prefix()));
         }
-        for w in warnings {
-            println!("warning: {w}");
+        for line in warning_lines(warnings, crate::output::width()) {
+            crate::output::emit(&line);
         }
         if errors.is_empty() {
             let count = result
@@ -62,6 +62,120 @@ pub fn doctor(files: bool, ctx: Context, cwd: &Path) -> Result<u8> {
         }
     }
     Ok(u8::from(!errors.is_empty()))
+}
+
+/// The task IDs a line of grouped warnings holds, in a pipe.
+const IDS_PER_LINE: usize = 16;
+
+/// `doctor`'s warnings (docs/cli-output-design.md §4): those about one task each that say the same thing grouped,
+/// the message once with the number of tasks, then their IDs; the rest one per line, in the order they came.
+#[must_use]
+pub fn warning_lines(warnings: &[String], width: Option<usize>) -> Vec<String> {
+    // `T-235: its files match …`: the task and what is said of it
+    let split = |w: &str| {
+        w.split_once(": ")
+            .filter(|(id, _)| is_task_reference(id))
+            .map(|(id, said)| (id.to_string(), said.to_string()))
+    };
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    // A group (by its place in `groups`), or a warning on its own
+    let mut order: Vec<std::result::Result<usize, String>> = Vec::new();
+    for w in warnings {
+        match split(w) {
+            Some((id, said)) => {
+                if let Some(g) = groups.iter().position(|(s, _)| *s == said) {
+                    groups[g].1.push(id);
+                } else {
+                    groups.push((said, vec![id]));
+                    order.push(Ok(groups.len() - 1));
+                }
+            }
+            None => order.push(Err(w.clone())),
+        }
+    }
+    let prefix = crate::output::warning_prefix();
+    let mut lines = Vec::new();
+    for item in order {
+        match item {
+            Err(w) => lines.push(format!("{prefix} {w}")),
+            Ok(g) => {
+                let (said, ids) = &groups[g];
+                if let [id] = ids.as_slice() {
+                    lines.push(format!("{prefix} {id}: {said}"));
+                    continue;
+                }
+                lines.push(format!("{prefix} {said}: {} tasks", ids.len()));
+                let per_line = width.map_or(IDS_PER_LINE, |w| {
+                    let widest = ids.iter().map(|i| i.chars().count()).max().unwrap_or(1);
+                    (w.saturating_sub(2) / (widest + 1)).max(1)
+                });
+                for chunk in ids.chunks(per_line) {
+                    lines.push(format!("  {}", chunk.join(" ")));
+                }
+            }
+        }
+    }
+    lines
+}
+
+/// Whether a warning's first word names a task: an ID or key (`T-235`, `ATM-12`, `~ATM-13`) or a UUID.
+fn is_task_reference(word: &str) -> bool {
+    if atm_common::ids::valid_task_uuid(word) {
+        return true;
+    }
+    let word = word.strip_prefix('~').unwrap_or(word);
+    word.rsplit_once('-').is_some_and(|(prefix, number)| {
+        prefix.starts_with(|c: char| c.is_ascii_alphabetic())
+            && prefix
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-')
+            && !number.is_empty()
+            && number.chars().all(|c| c.is_ascii_digit())
+    })
+}
+
+#[cfg(test)]
+mod warning_tests {
+    use super::{is_task_reference, warning_lines};
+
+    #[test]
+    fn warnings_saying_the_same_of_several_tasks_are_grouped() {
+        let w: Vec<String> = [
+            "T-1: its files match no component",
+            "meta.x: something",
+            "T-2: its files match no component",
+            "T-3: another thing",
+            "T-4: its files match no component",
+        ]
+        .map(String::from)
+        .to_vec();
+        assert_eq!(
+            warning_lines(&w, None),
+            [
+                "warning: its files match no component: 3 tasks",
+                "  T-1 T-2 T-4",
+                "warning: meta.x: something",
+                "warning: T-3: another thing",
+            ]
+        );
+        assert_eq!(warning_lines(&w, Some(10))[1..3], ["  T-1 T-2", "  T-4"]);
+    }
+
+    #[test]
+    fn task_references_are_ids_keys_and_uuids() {
+        for yes in [
+            "T-1",
+            "ATM-538",
+            "~ATM-540",
+            "T-P1-03",
+            "0195f0a4-1b2c-7d3e-8f40-0123456789ab",
+        ] {
+            assert!(is_task_reference(yes), "{yes}");
+        }
+        for no in ["meta.x", "tasks.json", "-1", "T-", "a b-1"] {
+            assert!(!is_task_reference(no), "{no}");
+        }
+    }
 }
 
 /// What `atm service` is asked to do.

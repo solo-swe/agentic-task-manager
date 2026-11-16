@@ -144,7 +144,7 @@ test('commands take a key, an earlier prefix or a UUID, and show keys, provision
     for (const ref of ['ATM-2', 'atm-2', 'T-002', two.id]) {
       const details = ok(['task', 'details', ref]);
       assert.match(details, /^ATM-2  two$/m, ref);
-      assert.match(details, /depends on: ATM-1 \(done\)/, ref);
+      assert.match(details, /depends on {2}ATM-1 \(done\)/, ref);
     }
     assert.equal(JSON.parse(ok(['task', 'details', 'ATM-2', '--json']))[0].key, 'ATM-2');
 
@@ -237,7 +237,7 @@ test('a dependency on another registered project’s task, by its key: waits unt
     const apiUuid = read(atm, FILE).tasks[0].id;
     assert.deepEqual(read(blog, FILE).tasks[0].dependencies, [`aaaa1111:${apiUuid}`], 'the project’s ID and the UUID');
     // It waits for ATM-1, shown by its key
-    assert.match(run(blog, ['task', 'details', 'LFB-1']).stdout, /depends on: ATM-1 \(todo\)/);
+    assert.match(run(blog, ['task', 'details', 'LFB-1']).stdout, /depends on {2}ATM-1 \(todo\)/);
     assert.equal(run(blog, ['loop', 'next']).code, 3, 'nothing ready: LFB-1 waits for ATM-1');
     // Done there: ready here
     assert.equal(run(atm, ['task', 'state', 'ATM-1', 'in_progress']).code, 0);
@@ -291,7 +291,7 @@ test('two projects with one key: refused by key, named by UUID, shown by UUID, w
     // Shown by its UUID's first 8 characters, as ATM-1 would be ambiguous
     assert.match(
       run(blog, ['task', 'details', 'LFB-1']).stdout,
-      new RegExp(`depends on: ${uuid.slice(0, 8)} \\(todo\\)`),
+      new RegExp(`depends on {2}${uuid.slice(0, 8)} \\(todo\\)`),
     );
     // Inside each project its own keys stay, and doctor and status warn
     assert.match(run(first, ['task', 'list']).stdout, /^ATM-1 /m);

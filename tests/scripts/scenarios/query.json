@@ -95,7 +95,7 @@
     },
     "args": ["task", "details", "T-1", "T-2"],
     "expect": {
-      "stdout": "T-1  One\n  done · backlog · feature · P1 · labels: api\n  files: src/a.ts\n  started 2026-05-01T08:00:00Z by alice · completed 2026-05-01T08:30:00Z by alice\n  commit: abc1234\n  description:\n    First line.\n    Second line.\n  notes:\n    2026-05-01T08:30:00Z outcome (alice): Shipped\n\nT-2  Two\n  todo · backlog · feature · P0 · labels: api, ux\n  depends on: T-1 (done)\n"
+      "stdout": "T-1  One\n  done · backlog · feature · P1\n\n  labels     api\n  files      src/a.ts\n  started    2026-05-01T08:00:00Z by alice\n  completed  2026-05-01T08:30:00Z by alice\n  commit     abc1234\n\n  description\n    First line.\n    Second line.\n\n  notes\n    2026-05-01T08:30:00Z  outcome  alice\n      Shipped\n\nT-2  Two\n  todo · backlog · feature · P0\n\n  labels      api, ux\n  depends on  T-1 (done)\n"
     }
   },
   {
@@ -129,7 +129,7 @@
       }
     },
     "args": ["task", "list"],
-    "expect": { "stdout": "T-1  done         P1  [api] One\nT-5  in_progress  P2  Five\n" }
+    "expect": { "stdout": "T-1  done         P1  One   api\nT-5  in_progress  P2  Five\n2 tasks: 1 done, 1 in progress\n" }
   },
   {
     "name": "list --ready: to-do tasks whose dependencies are done",
@@ -263,7 +263,7 @@
       }
     },
     "args": ["task", "list", "--agent", "alice"],
-    "expect": { "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n" }
+    "expect": { "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n2 tasks: 2 done\n" }
   },
   {
     "name": "list with nothing matching",
@@ -334,17 +334,17 @@
         }
       }
     },
-    "args": ["project", "status"],
+    "args": ["project", "status", "--all"],
     "expect": {
       "stdoutIncludes": [
-        "6 tasks: todo 2, in_progress 1, in_review 1, blocked 1, done 1\n",
-        "by type: feature 4, test 1, docs 1\n",
-        "by label: api 1\n",
-        "in progress: T-5 Five (bob)\n",
-        "in review: T-6 Six (since 2026-05-01T09:00:00Z)\n",
-        "blocked: T-4 Four (on user)\n",
-        "waiting on dependencies: T-3 Three (on T-2)\n",
-        "next: T-2 Two\n",
+        "6 tasks: todo 2 · in_progress 1 · in_review 1 · blocked 1 · done 1\n",
+        "By type\n  feature  4\n  test     1\n  docs     1\n",
+        "By label\n  api  1\n",
+        "In progress (1)\n  T-5  Five  bob\n",
+        "In review (1)\n  T-6  Six  since 2026-05-01T09:00:00Z\n",
+        "Blocked (1)\n  T-4  Four  on user\n",
+        "Waiting on dependencies (1)\n  T-3  Three  on T-2\n",
+        "Next\n  T-2  Two\n",
         "file: "
       ]
     }
