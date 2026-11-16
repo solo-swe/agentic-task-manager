@@ -20396,7 +20396,7 @@
       "description": "[ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md) §1, §2, §3, §6.\n\n## Change\n- `task.schema.json`: `id` a UUID (version 7), `number` (integer), `key_final` (boolean), `aliases` (former keys); `dependencies` and `related` lists of UUIDs (or `<project id>:<UUID>`, §7).\n- `meta.schema.json`: `key` (3 to 6 ASCII letters and digits), `key_history`, `next_number` (replacing `next_id`), and the file's format version.\n- atm-common: the types (`TaskId` holding a UUID, a `Key` built from `meta.key` and `number`), `valid_project_key`, UUID v7 generation (a new crate only with Hakan's yes; else hand-written from the time and random bytes).\n- atm-db: the loader accepts the new format and refuses a file of a newer format with \"this project needs atm 0.N or later\"; an old-format file is left to the migration (next tasks), never half-read.\n\n## Tests\nUnit tests for the types and validation; a scenario that a newer-format file is refused with that message.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-common/schema/task.schema.json",
@@ -20405,7 +20405,7 @@
         "crates/atm-db/src/jsongit/files.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:02:43Z",
+      "updated_at": "2026-11-16T03:06:12Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20424,10 +20424,19 @@
           "kind": "note",
           "text": "Hakan approved the uuid crate for UUID v7 (2026-11-16).",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T03:06:12Z",
+          "kind": "outcome",
+          "text": "meta.format (2 = keys; a newer one refused: upgrade atm), UUID v7 ids (uuid crate, approved), number, key_final, aliases, meta.key (3–6 letters and digits), key_history, next_number in the schemas; the loader checks a format-2 file (UUIDs, numbers, meta.key), shows its problems on the dashboard. Unit tests and a scenario.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T03:02:43Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "1e9edb59e11f5ec0318843abf0e6c53f2e03d157",
+      "completed_at": "2026-11-16T03:06:12Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-539",
@@ -20440,7 +20449,7 @@
       "description": "ADR-007 §5. One resolver, in atm-lib, that every command and the API use: a current key (`ATM-527`, any case), a key with a prefix in `meta.key_history` (`T-527`), a task's own alias (`ATM-538` that moved), or the UUID; the archive too. An unknown or ambiguous reference says which and why.\n\n## Also\n- Sorting by number (`natural_cmp` users: `loop_rules.rs`, `summary.rs`) instead of the ID's text.\n- `edit.rs`'s `split_id`/`id_format` and the default `T-` go: a new task takes `meta.next_number`, provisional (`key_final: false`); `create-tasks`' placeholders (`new-1`) still resolve within the file.\n\n## Tests\nUnit tests for each form, the archive, a moved alias, and refusals.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-538"
       ],
@@ -20450,16 +20459,18 @@
         "crates/atm-common/src/rules.rs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:19Z",
+      "updated_at": "2026-11-16T03:06:14Z",
       "created_by": "Hakan Serce",
-      "updated_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
       "sprint_history": [
         {
           "sprint": "Keys and reach",
           "from": "2026-11-15T11:20:19Z"
         }
       ],
-      "sprint": "Keys and reach"
+      "sprint": "Keys and reach",
+      "started_at": "2026-11-16T03:06:14Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-540",
@@ -20484,7 +20495,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:22Z",
+      "updated_at": "2026-11-16T03:06:14Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20496,6 +20507,14 @@
       "sprint": "Keys and reach",
       "components": [
         "cli"
+      ],
+      "notes": [
+        {
+          "at": "2026-11-16T03:06:14Z",
+          "kind": "note",
+          "text": "From T-538: atm 0.37 and older have no format check and would read a format-2 file as valid (UUIDs pass its ID rule) and give new tasks T- IDs. Guard: the migration should make the file unreadable to them, or the skills’ version check (T-547) require 0.38.0. Also ADR-007 §2/§6 give TaskMan as an example, which is 7 letters, over the 3–6 rule: fix the example.",
+          "by": "claude:0f56a916"
+        }
       ]
     },
     {

@@ -10,6 +10,7 @@ pub mod edits;
 pub mod error;
 pub mod home;
 pub mod ids;
+pub mod keys;
 pub mod pathtext;
 pub mod py;
 pub mod repository;

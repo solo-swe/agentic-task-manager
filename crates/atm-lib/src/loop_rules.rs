@@ -5,8 +5,9 @@
 
 use std::collections::HashSet;
 
+use atm_common::keys::task_order;
 use atm_common::py::repr_str;
-use atm_common::rules::{natural_cmp, unfinished_dependencies};
+use atm_common::rules::unfinished_dependencies;
 use atm_common::time::{now, parse_iso};
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
 use serde_json::{Map, Value};
@@ -328,12 +329,8 @@ pub fn loop_order<'t>(
             vocab
                 .priority_rank(a.0.get("priority"))
                 .cmp(&vocab.priority_rank(b.0.get("priority")))
-                .then_with(|| {
-                    natural_cmp(
-                        id_of(a.0).unwrap_or_default(),
-                        id_of(b.0).unwrap_or_default(),
-                    )
-                })
+                // By number (ADR-007), else by ID as before task keys
+                .then_with(|| task_order(a.0, b.0))
         })
     });
     Ok(LoopOrder {

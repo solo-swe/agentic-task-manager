@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 
 use atm_common::archive::{archivable_by, archive_settings, finished_at, in_open_pr, recent_since};
+use atm_common::keys::{keys_format, next_task_number};
 use atm_common::py::{py_str, py_str_opt};
 use atm_common::time::{format_iso, now_iso, parse_iso};
 use atm_common::{Error, Kind, Result, Task, Vocabulary};
@@ -244,12 +245,24 @@ pub fn archive_finished(project: &mut Project, request: &ArchiveRequest) -> Resu
         let ids: Vec<Value> = moving.iter().map(id_of).collect();
         if !moving.is_empty() || !dropped.is_empty() {
             work.moving_into_archive();
-            // New IDs must never come back to an archived ID (DM-2.3)
-            let next = next_free_number(&work.document);
+            // New IDs must never come back to an archived ID (DM-2.3); with task keys, numbers (ADR-007 §1)
             if !work.document.get("meta").is_some_and(Value::is_object) {
                 work.document["meta"] = json!({});
             }
-            work.document["meta"]["next_id"] = json!(next);
+            if keys_format(&work.document) {
+                let archived: Vec<Task> = archive["tasks"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(Value::as_object)
+                    .cloned()
+                    .collect();
+                let next = next_task_number(&work.document, &archived);
+                work.document["meta"]["next_number"] = json!(next);
+            } else {
+                let next = next_free_number(&work.document);
+                work.document["meta"]["next_id"] = json!(next);
+            }
             if !archive.get("meta").is_some_and(Value::is_object) {
                 archive["meta"] = json!({});
             }

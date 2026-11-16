@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 
+use atm_common::keys::number_of;
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
 use atm_common::time::{format_iso, now, parse_iso};
@@ -310,9 +311,13 @@ fn todo_order<'t>(
         )
     };
     entries.sort_by(|a, b| {
-        key(a)
-            .cmp(&key(b))
-            .then_with(|| natural_cmp(&py_str_opt(a.task.get("id")), &py_str_opt(b.task.get("id"))))
+        key(a).cmp(&key(b)).then_with(|| {
+            // By number (ADR-007), else by ID as before task keys
+            match (number_of(a.task), number_of(b.task)) {
+                (Some(x), Some(y)) => x.cmp(&y),
+                _ => natural_cmp(&py_str_opt(a.task.get("id")), &py_str_opt(b.task.get("id"))),
+            }
+        })
     });
     Ok(entries)
 }
