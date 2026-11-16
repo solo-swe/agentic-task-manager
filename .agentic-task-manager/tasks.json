@@ -20494,7 +20494,7 @@
       "description": "ADR-007 §6.\n\n## The first migration (`atm db migrate`)\nEvery task, archived ones too: a UUID, its number from the ID's trailing digits (an ID that doesn't fit the file's prefix gets the next free number and keeps its old ID as an alias), references rewritten to UUIDs (`dependencies`, `related`, notes pointing at a task, claims keyed by UUID), `meta.key` from the name's initials when they make 3 to 6 letters (else the old prefix), the old prefix into `meta.key_history`, every task final, the format version set. Says what it did.\n\n## `atm project key set <KEY>`\nSets `meta.key`, pushes the old one onto `meta.key_history`; numbers and references unchanged. Warns (doesn't refuse) when another project in the user's workspaces uses the key. `atm db init` asks for a key on a new project, suggesting the initials.\n\n## Tests\nScenarios: migrate a file with dependencies, related, claims, an archive and an odd ID; then `key set` twice, and every old key still finds its task. A test that migrates a copy of this repository's own file and loses nothing.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-538",
         "T-539"
@@ -20506,7 +20506,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:11:43Z",
+      "updated_at": "2026-11-16T03:33:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20525,10 +20525,19 @@
           "kind": "note",
           "text": "From T-538: atm 0.37 and older have no format check and would read a format-2 file as valid (UUIDs pass its ID rule) and give new tasks T- IDs. Guard: the migration should make the file unreadable to them, or the skills’ version check (T-547) require 0.38.0. Also ADR-007 §2/§6 give TaskMan as an example, which is 7 letters, over the 3–6 rule: fix the example.",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T03:33:44Z",
+          "kind": "outcome",
+          "text": "atm db migrate --keys (opt-in until T-543): UUIDs v8 from meta.id + old ID (same in every clone), numbers kept (others above next_id, old ID an alias), references, sprint reports and claims rewritten, meta.key from the name, old prefix in key_history, all final. atm project key show|set (warns on a key another registered project uses). Unit tests, keys.test.mjs (incl. this repo’s own file, nothing lost); ADR-007 updated.",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T03:11:43Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "c80ed4a0994b5605d21a156be146549b943a1209",
+      "completed_at": "2026-11-16T03:33:44Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-541",
@@ -20541,7 +20550,7 @@
       "description": "ADR-007 §4, in `crates/atm-db/src/jsongit/merge.rs`.\n\n## Change\n- Tasks matched by `id` (UUID); two branches adding tasks keep both.\n- Same `number` on two tasks: the provisional one takes the next free number (above both sides and `meta.next_number`), of two provisional ones the incoming side's; its old key goes into `aliases`. Two final ones: a conflict, never a guess.\n- No reference rewriting (they are UUIDs); `meta.next_number` merges as the larger.\n- A side still in the old format is migrated first (as phases became sprints), so a branch from before the migration merges.\n- `next_free_id` goes.\n\n## Tests\nReal git merges in `tests/scripts/merge.test.mjs`: both add a task; provisional vs final; two final (conflict); an old-format side.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-540"
       ],
@@ -20550,7 +20559,7 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-15T11:20:23Z",
+      "updated_at": "2026-11-16T03:33:44Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20562,7 +20571,9 @@
       "sprint": "Keys and reach",
       "components": [
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-16T03:33:44Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-542",

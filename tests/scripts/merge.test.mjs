@@ -369,6 +369,67 @@ describe('merge driver: sprints', () => {
   });
 });
 
+// Task keys (ADR-007 §4, T-541): tasks match by UUID; only a provisional number moves
+describe('merge driver: task keys', () => {
+  /** On a branch, add a task with this atm (a UUID and the next number, provisional), and commit. */
+  const add = (root, name) => {
+    const dir = tempDir();
+    try {
+      const file = path.join(dir, 'new.json');
+      fs.writeFileSync(file, JSON.stringify([{ name, type: 'feature' }]));
+      const r = runAtm(['task', 'add', '--json-file', file], root);
+      assert.equal(r.code, 0, r.stderr);
+    } finally {
+      removeDir(dir);
+    }
+  };
+
+  test('two branches each adding a task keep both; the incoming one takes the next number, its old key an alias', () => {
+    withRepo((root) => {
+      assert.equal(runAtm(['db', 'migrate', '--keys'], root).code, 0);
+      git(['commit', '-q', '-am', 'task keys'], root);
+      const next = read(root).meta.next_number;
+      git(['switch', '-q', '-c', 'other'], root);
+      add(root, 'on other');
+      git(['commit', '-q', '-am', 'other'], root);
+      git(['switch', '-q', 'main'], root);
+      add(root, 'on main');
+      git(['commit', '-q', '-am', 'main'], root);
+      const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      const merged = read(root);
+      const onMain = merged.tasks.find((t) => t.name === 'on main');
+      const onOther = merged.tasks.find((t) => t.name === 'on other');
+      assert.ok(onMain && onOther && onMain.id !== onOther.id, 'two tasks, two UUIDs');
+      assert.equal(onMain.number, next, 'ours keeps its number');
+      assert.equal(onOther.number, next + 1);
+      assert.deepEqual(onOther.aliases, [`MERGE-${next}`], 'the key from the name, Merge');
+      assert.equal(merged.meta.next_number, next + 2);
+    });
+  });
+
+  test('a branch made before the migration merges into the migrated main task by task', () => {
+    withRepo((root) => {
+      git(['switch', '-q', '-c', 'other'], root);
+      const theirs = read(root);
+      find(theirs, 'T-015').status = 'done';
+      write(root, theirs);
+      git(['commit', '-q', '-am', 'other, still T- IDs'], root);
+      git(['switch', '-q', 'main'], root);
+      assert.equal(runAtm(['db', 'migrate', '--keys'], root).code, 0);
+      git(['commit', '-q', '-am', 'task keys'], root);
+      const r = spawnSync('git', ['merge', '--no-edit', 'other'], { cwd: root, encoding: 'utf8' });
+      assert.equal(r.status, 0, r.stdout + r.stderr);
+      const merged = read(root);
+      assert.equal(merged.meta.format, 2);
+      assert.equal(merged.tasks.length, BASE.tasks.length, 'no task twice');
+      const t15 = merged.tasks.find((t) => t.number === 15);
+      assert.equal(t15.status, 'done', 'the old branch’s change came through');
+      assert.match(t15.id, /^[0-9a-f-]{36}$/);
+    });
+  });
+});
+
 describe('merge-driver command', () => {
   const files = (base, ours, theirs) => {
     const dir = tempDir();

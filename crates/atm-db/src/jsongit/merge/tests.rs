@@ -150,6 +150,127 @@ fn both_sides_adding_the_same_id_renumbers_theirs_and_its_dependents() {
     );
 }
 
+const A: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80a1";
+const B: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80b2";
+const C: &str = "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f80c3";
+
+/// A keys-format file (ADR-007) with these tasks, next number 5
+fn keyed(tasks: Value) -> Value {
+    let mut file = json!({"meta": {"format": 2, "key": "ATM", "next_number": 5}});
+    file["tasks"] = tasks;
+    file
+}
+
+fn numbers(merged: &Value) -> Vec<(String, u64)> {
+    merged["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["id"].as_str().unwrap()[34..].to_string(),
+                t["number"].as_u64().unwrap(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn keyed_two_branches_adding_a_task_keep_both_and_theirs_takes_the_next_number() {
+    let base = keyed(json!([{"id": A, "number": 4, "key_final": true}]));
+    let ours = keyed(
+        json!([{"id": A, "number": 4, "key_final": true}, {"id": B, "number": 5, "key_final": false}]),
+    );
+    let theirs = keyed(
+        json!([{"id": A, "number": 4, "key_final": true}, {"id": C, "number": 5, "key_final": false}]),
+    );
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(
+        numbers(&merged),
+        [("a1".into(), 4), ("b2".into(), 5), ("c3".into(), 6)]
+    );
+    assert_eq!(
+        merged["tasks"][2]["aliases"],
+        json!(["ATM-5"]),
+        "its old key still finds it"
+    );
+    assert_eq!(merged["tasks"][1].get("aliases"), None);
+    assert_eq!(merged["meta"]["next_number"], json!(7));
+}
+
+#[test]
+fn keyed_a_final_number_never_moves_and_two_final_ones_are_a_conflict() {
+    let base = keyed(json!([]));
+    // Ours added B as 5 on a branch; theirs is main, where C is 5 for good
+    let ours = keyed(json!([{"id": B, "number": 5, "key_final": false}]));
+    let theirs = keyed(json!([{"id": C, "number": 5, "key_final": true}]));
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(numbers(&merged), [("b2".into(), 6), ("c3".into(), 5)]);
+    assert_eq!(merged["tasks"][0]["aliases"], json!(["ATM-5"]));
+
+    let ours = keyed(json!([{"id": B, "number": 5, "key_final": true}]));
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert_eq!(
+        conflicts,
+        [format!(
+            "ATM-5: two final tasks have this number ({B} and {C}); both kept, give one another number by hand"
+        )]
+    );
+    assert_eq!(numbers(&merged), [("b2".into(), 5), ("c3".into(), 5)]);
+}
+
+#[test]
+fn keyed_one_uuid_added_on_both_branches_differently_is_a_conflict_not_two_tasks() {
+    let base = keyed(json!([]));
+    let ours = keyed(json!([{"id": B, "number": 5, "name": "x"}]));
+    let theirs = keyed(json!([{"id": B, "number": 5, "name": "y"}]));
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert_eq!(
+        conflicts,
+        [format!("{B}: added on both branches with different fields")]
+    );
+    assert_eq!(merged["tasks"].as_array().unwrap().len(), 1);
+    assert_eq!(merged["tasks"][0]["name"], json!("x"));
+}
+
+#[test]
+fn a_branch_from_before_the_migration_merges_into_a_migrated_one_task_by_task() {
+    let legacy = |status: &str| {
+        json!({"meta": {"id": "3f2a9c1e", "project": "Agentic Task Manager", "next_id": 3},
+            "tasks": [{"id": "T-001", "status": "done"}, {"id": "T-002", "status": status, "dependencies": ["T-001"]}]})
+    };
+    let base = legacy("todo");
+    // Ours migrated (and changed nothing else); theirs, still old, finished T-002
+    let mut ours = base.clone();
+    super::super::migrate::to_keys_format(&mut ours, &mut json!({"tasks": []}), &mut Map::new())
+        .unwrap();
+    let theirs = legacy("done");
+    let (merged, conflicts) = merge_task_files(&base, &ours, &theirs);
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(merged["meta"]["format"], json!(2));
+    assert_eq!(merged["meta"]["key"], json!("ATM"));
+    let tasks = merged["tasks"].as_array().unwrap();
+    assert_eq!(
+        tasks.len(),
+        2,
+        "the same two tasks, matched by their worked-out UUIDs"
+    );
+    assert_eq!(tasks[1]["number"], json!(2));
+    assert_eq!(
+        tasks[1]["status"],
+        json!("done"),
+        "theirs' change came through"
+    );
+    assert_eq!(tasks[1]["dependencies"], json!([tasks[0]["id"]]));
+    // And the other way round
+    let (merged, conflicts) = merge_task_files(&base, &theirs, &ours);
+    assert!(conflicts.is_empty(), "{conflicts:?}");
+    assert_eq!(merged["meta"]["format"], json!(2));
+    assert_eq!(merged["tasks"][1]["status"], json!("done"));
+}
+
 #[test]
 fn a_field_both_sides_changed_differently_is_a_conflict_and_ours_is_kept() {
     let base = json!({"tasks": [{"id": "T-1", "description": "a"}]});
