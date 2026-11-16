@@ -17499,7 +17499,7 @@
       "description": "atm's plain output (without `--json`) is hard to scan. For example, `atm project status` prints the per-sprint, per-type and per-label counts as one long comma-separated line each, and the blocked and waiting lists as long lines joined with `;`. Make it read well in a terminal without changing what it says or what `--json` returns.\n\n## First, a design with the user\nPropose the look before changing code: a before/after of `atm project status`, `atm task list`, `atm task details`, `atm sprint list`, `atm release list` and `atm doctor`. Decide:\n- **Alignment:** columns padded to the widest value (IDs, statuses, priorities), long names cut or wrapped to the terminal's width, and sections with a heading and indented lines instead of `a, b, c` runs.\n- **Styling:** bold headings, colour for status kinds and priorities, dimmed secondary text. Only when standard output is a terminal; never with `NO_COLOR`, `--json`, or output going to a pipe or file.\n- **What `project status` leads with:** the active sprint and what's next first; the long breakdowns (all sprints, types, labels) shorter, or behind a flag.\n- **Dependencies:** terminal width and colour either hand-written or from a crate (e.g. `anstyle`, already in the tree through clap). Any new crate is proposed first.\n\n## Agents read this output too\nThe skills relay what atm prints, and agents act on it. Keep it plain text when it isn't a terminal, keep each fact on a line agents can find, and check `docs/agent/` and the skills that quote output. A change to output agents act on follows AGENTS.md's security checklist (the written review in `docs/security-architecture.md` §3.3).\n\n## Tests\nThe scenarios' exact `stdout` expectations change with the new layout: update them in one place per command. Add a test that a pipe gets no escape codes and that `NO_COLOR` turns colour off.",
       "requirements": [],
       "use_cases": [],
-      "status": "blocked",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/commands/",
@@ -17507,7 +17507,7 @@
         "docs/agent/"
       ],
       "created_at": "2026-11-08T08:30:53Z",
-      "updated_at": "2026-11-16T03:55:07Z",
+      "updated_at": "2026-11-16T05:45:19Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -17517,13 +17517,23 @@
         }
       ],
       "sprint": "Keys and reach",
-      "started_at": "2026-11-16T03:55:00Z",
-      "started_by": "claude:0f56a916",
-      "waiting_on": "user",
-      "questions": [
-        "T-488 starts with a design you approve: a before/after of project status, task list, task details, sprint list, release list and doctor, colour only on a terminal (never with NO_COLOR, --json or a pipe), and maybe a crate (anstyle is in the tree already). Shall I draft that proposal for you to review, together in a session?"
+      "blocks": [
+        {
+          "from": "2026-11-16T03:55:07Z",
+          "to": "2026-11-16T05:45:18Z",
+          "on": "user"
+        }
       ],
-      "blocked_at": "2026-11-16T03:55:07Z"
+      "notes": [
+        {
+          "at": "2026-11-16T05:45:18Z",
+          "kind": "answer",
+          "text": "T-488 starts with a design you approve: a before/after of project status, task list, task details, sprint list, release list and doctor, colour only on a terminal (never with NO_COLOR, --json or a pipe), and maybe a crate (anstyle is in the tree already). Shall I draft that proposal for you to review, together in a session? → Yes: write the design and send it for review in Crit (Hakan, 2026-11-16)",
+          "by": "claude:0f56a916"
+        }
+      ],
+      "started_at": "2026-11-16T05:45:19Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-489",
@@ -18630,7 +18640,7 @@
       "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "blocked",
       "dependencies": [
         "T-506"
       ],
@@ -18642,7 +18652,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-14T13:59:30Z",
+      "updated_at": "2026-11-16T05:45:25Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18656,7 +18666,14 @@
           "from": "2026-11-14T13:59:30Z"
         }
       ],
-      "sprint": "Keys and reach"
+      "sprint": "Keys and reach",
+      "started_at": "2026-11-16T04:35:48Z",
+      "started_by": "claude:0f56a916",
+      "waiting_on": "user",
+      "questions": [
+        "axum’s SSE needs a `Stream` type, and atm-api has none. Approve `futures-core` 0.3 as a direct dependency of atm-api (already in Cargo.lock through axum, nothing new downloaded) plus `notify` and `notify-debouncer-full` in atm-lib (the app’s watcher moves there, so the CLI links them too)? Or use a long-poll `GET …/changes` route instead (no new dependency, but not `EventSource`)?"
+      ],
+      "blocked_at": "2026-11-16T05:45:25Z"
     },
     {
       "id": "T-508",
@@ -20933,7 +20950,7 @@
       "description": "CompMD's site moved to `https://compmd.dev`. Change every reference to `compmd.hakanserce.com`, keeping the path (`/guides/developers/a-tauri-app/` stays):\n- `dashboard/src/lib/menu-actions.ts` (`COMPMD_URL`, the About dialog's and Help's link)\n- `docs/help.md`, `README.md`\n- `docs/guides/tauri.md`, `docs/adr/ADR-006-…` (a link in an accepted ADR: only the address changes)\n- the tests that check the link: `dashboard/tests/unit/AboutDialog.component.test.ts`, `dashboard/tests/e2e/help.spec.ts`\n\nThen search the repository again (outside `node_modules`, `target`, `dist`, coverage output) to confirm none is left; `CHANGELOG.md`'s past entries stay as written.\n\n## Tests\nThe unit test and the help spec.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/menu-actions.ts",
@@ -20945,7 +20962,7 @@
         "dashboard/tests/e2e/help.spec.ts"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:32:37Z",
+      "updated_at": "2026-11-16T04:35:26Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20960,7 +20977,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T04:32:37Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "8e9f03b77fc658567be2b6da3f00bc3c1187b0d1",
+      "completed_at": "2026-11-16T04:35:26Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T04:35:26Z",
+          "kind": "outcome",
+          "text": "compmd.dev everywhere (menu link, About dialog, help.md, README, Tauri guide, ADR-006, tests); the About dialog now uses atm’s own COMPMD_URL, as CompMD 0.7.0’s package still names its old homepage. CHANGELOG past entries kept. Unit 1351, e2e passed.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }
