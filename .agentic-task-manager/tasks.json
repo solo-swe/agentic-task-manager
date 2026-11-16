@@ -20767,7 +20767,7 @@
       "description": "ADR-007 §8. Where a key would be ambiguous across a workspace (the overview, a dependency on another project, search across projects): the task's UUID (first 8 characters) with the warning \"Two projects in this workspace use the key ATM: rename one with `atm project key set`\"; typing such a key is refused with the same advice; inside a project's own views its keys stay. `atm doctor` and `atm project status` warn too.\n\n## Tests\nScenarios: two projects keyed `ATM`, a dependency across them by UUID, the refusal and the warnings.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-544"
       ],
@@ -20777,7 +20777,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T04:25:07Z",
+      "updated_at": "2026-11-16T04:27:49Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20791,7 +20791,18 @@
         "cli"
       ],
       "started_at": "2026-11-16T04:25:07Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "9313a674b58f57f7d2f358103b8f8f507ba3c9df",
+      "completed_at": "2026-11-16T04:27:49Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T04:27:49Z",
+          "kind": "outcome",
+          "text": "Two registered projects with one key: naming the other’s task by key is refused (rename one); by UUID or <project id>:<UUID> it is found and stored; shown by its UUID’s first 8 characters where the key would be ambiguous; own keys stay inside each project; atm doctor and project status warn (key_warning in --json). keys.test.mjs: three projects.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-546",
@@ -20860,7 +20871,7 @@
       "description": "ADR-007 §9. `docs/agent/` (`atm docs tasks`, `commands`: keys, the `~` mark, aliases, `atm project key set`, references across projects), the skills' examples (`skills/atm-*/SKILL.md`: `T-…` to keys, what a provisional key means for commit messages), `docs/help.md` and README. A skill change: the release's security review gets a written review (`docs/security-architecture.md` §3.3).\n\n## Tests\n`docs.test.mjs` (every command a topic names exists); the skills' tests.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-543"
       ],
@@ -20872,7 +20883,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:54:59Z",
+      "updated_at": "2026-11-16T04:27:50Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20898,7 +20909,9 @@
           "text": "From T-543: the migration is `atm project key set <KEY>` (not db migrate --keys): on a T- project it converts with that key; on a keyed one it changes the prefix. Document it in docs/agent and the skills (create-tasks: a new project gets meta.key, ask the user for it).",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-16T04:27:50Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-548",

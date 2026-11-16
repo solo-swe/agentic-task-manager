@@ -573,6 +573,16 @@ it. atm suggests it when `tasks.json` passes 1 MB or 500 archivable tasks (`meta
 commit of its own. Archived tasks still count as done for dependencies, `atm task details` and `atm task list --archived` read
 them, and `atm db unarchive <id>` brings one back. The dashboard loads the archive only when a view needs history.
 
+### Task keys
+
+Each task is stored by a UUID and shown by its project's key and a number, `ATM-527`
+([ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md)). Keys let a task depend on another
+project's (`atm task edit LFB-5 --add-dep ATM-978`, found among your registered projects). A task added on a branch
+has a provisional key (`~ATM-538`, a draft mark on the dashboard) that may move to another number when the branch
+merges; it is final once on the base branch and never changes after. A project from before keys keeps its IDs until
+`atm project key set <KEY>` gives every task a key with the same number (`T-527` becomes `ATM-527`, and still finds
+it); the same command changes the key later. atm 0.38.0 or later reads such a project: upgrade every clone first.
+
 ---
 
 ## Dashboard
