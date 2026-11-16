@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 551,
+    "next_id": 552,
     "labels": [
       {
         "id": "architecture",
@@ -21074,7 +21074,7 @@
       "description": "What T-546 left ([ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md) §3, §7).\n\n## Change\n- **The project summary has keys:** `atm_lib::summary::project_summary` (what `atm project summary` and the overview get) gives each task it lists its key and whether it is final, as the task views do (`with_key`). The overview's project cards and the All projects board show the key (`ui/TaskKey.svelte`, the provisional mark included) where they show an ID today.\n- **Another project's task, even when that project isn't loaded:** a dependency or related task in another registered project (`<project meta.id>:<UUID>`) shows its key, its status and a link that opens it in its project (a new tab in the app), from the server rather than from the page's loaded projects: a read route (or a field in the task's view) that resolves it with `atm_lib::foreign`. A project that isn't registered, or a task it no longer has, says why.\n- `docs/multi-project-api.md` for a new route, and `docs/security-architecture.md` if it is a new entry point.\n\n## Tests\nRust: the summary's keys (atm-lib). Unit and e2e: a card and the board with keys (a provisional one marked), another project's task shown with key, status and link while only this project is open, and the missing cases. The CLI suite if `atm project summary` changes.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/summary.rs",
@@ -21086,7 +21086,7 @@
         "docs/multi-project-api.md"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T06:59:00Z",
+      "updated_at": "2026-11-16T07:45:04Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -21105,7 +21105,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T06:59:00Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "0d539eb5bb86289d003a3925fbc25ce7306ac2eb",
+      "completed_at": "2026-11-16T07:45:04Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T07:45:04Z",
+          "kind": "outcome",
+          "text": "Keys and `key_final` in the project summary (cards, board, needs-you), `waiting_for_labels`; `derived.foreign` in the task views gives another project’s task its key, name, status and places from the server, or why it’s missing; no new route. Open: the tasks route’s ETag covers only this project, so another project’s change shows on this one’s next change",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-550",
@@ -21155,6 +21166,46 @@
           "text": "CompMD 0.7.1 (packages, `tauri-plugin-compmd`, `compmd-host`) and mermaid 0.1.2 (also pinned in `compmd.config.json`); the release-age exclusions moved to the new versions. No changelog ships in the packages; all suites pass. Not checked: a diagram in the app window (`cargo run -p atm-app`)",
           "by": "claude:0f56a916"
         }
+      ]
+    },
+    {
+      "id": "T-551",
+      "name": "The app: external links (About, Help, repository, PRs) open in the browser",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "app",
+        "desktop-ui"
+      ],
+      "description": "In the atm app, clicking a link in the About dialog does nothing (Hakan, 2026-11-16). The page's external links are plain `<a href target=\"_blank\" rel=\"noopener noreferrer\">` anchors, which the app's webview doesn't open, and the app has no command or plugin that opens a link in the user's browser. So most likely **every** external link in the app is dead, not only the About dialog's: check each place first and list them in the outcome.\n\n## Where the links are\n`dialogs/AboutDialog.svelte` (source, CompMD), `ui/RepoRef.svelte` (commits, PRs), `overview/ProjectCard.svelte`, `kanban/KanbanColumns.svelte`, `progress/ReleaseView.svelte`, `shell/Footer.svelte`, `shell/ProjectTab.svelte`, `dialogs/WhatsNew.svelte`, `documents/DocumentViewer.svelte`, Help's links (rendered by CompMD: `docs/help.md`), and the Help ▸ CompMD menu item (`menu-actions.ts`, `page.open`).\n\n## Change\n- **One way to open an external link in the app**: the page hands `https:` (and `mailto:`) links to the app, which opens them in the system's browser; in the browser nothing changes. Prefer one place that catches every such link (a click handler on the document for external anchors, and `page.open`) over editing each component.\n- **How the app opens them** is a choice to make first: Tauri's opener plugin (`tauri-plugin-opener`) is a **new dependency and needs Hakan's yes** before it is added (docs/guides/tauri.md, Platform features); the alternative is a small command of the app's own. Propose, don't add.\n- **Only web addresses**: the app checks the URL itself (scheme `https`/`http`/`mailto` only, no `file:`, no custom schemes, no `atm:`), never trusts the page's; the capability allows only that command. Links inside rendered task text arrive from CompMD's sandbox as `link` events (compmd-rendering-design.md): they go through the same check.\n- `docs/security-architecture.md`: opening a URL from the page is a new entry point (what is allowed, who checks it). `docs/guides/tauri.md` says how links open.\n\n## Tests\nUnit: the page sends external links to the app and keeps internal ones (`/projects/…`, `#…`) in the page; the app's check refuses other schemes (Rust test). e2e under `asApp()`: clicking the About dialog's source link and a commit link calls the app's command with the URL; in the browser the anchor stays `target=\"_blank\"`. Then check by hand in a window (`cargo run -p atm-app`): About, Help ▸ CompMD, a PR link.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "dashboard/src/lib/dialogs/AboutDialog.svelte",
+        "dashboard/src/lib/menu-actions.ts",
+        "dashboard/src/routes/+layout.svelte",
+        "app/src-tauri/src/commands.rs",
+        "app/src-tauri/capabilities/",
+        "docs/security-architecture.md",
+        "docs/guides/tauri.md",
+        "dashboard/tests/"
+      ],
+      "created_at": "2026-11-16T17:30:21Z",
+      "updated_at": "2026-11-16T17:30:32Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T17:30:21Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
+        "dashboard",
+        "docs"
       ]
     }
   ]
