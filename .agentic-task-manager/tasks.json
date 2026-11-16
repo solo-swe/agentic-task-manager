@@ -18693,7 +18693,7 @@
       "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "done",
+      "status": "skipped",
       "dependencies": [
         "T-506"
       ],
@@ -18705,7 +18705,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-16T06:46:39Z",
+      "updated_at": "2026-11-16T17:50:30Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18739,13 +18739,21 @@
           "kind": "outcome",
           "text": "SSE change streams in `atm serve` (`atm-api/src/changes.rs`, 16 at most, keep-alive 15 s), the watcher moved to `atm_lib::watch`; the browser reloads on a change with backoff and a slow-poll fallback; the refresh interval and auto-refresh gone. Release task: regenerate the settings menu and title bar screenshots",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T17:50:30Z",
+          "kind": "note",
+          "text": "Reopened: Reverted in 1763ae0: Hakan chose design 1 (docs/cross-project-freshness-design.md): the browser polls with its refresh settings, the app is pushed",
+          "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T17:50:30Z",
+          "kind": "note",
+          "text": "Skipped: Not wanted: design 1 of docs/cross-project-freshness-design.md (the browser polls, the app is pushed); reverted in 1763ae0",
+          "by": "claude:0f56a916"
         }
       ],
-      "started_at": "2026-11-16T06:05:52Z",
-      "started_by": "claude:0f56a916",
-      "commit": "1347c30e0ef1c8ca6af2217265032bd2b08821aa",
-      "completed_at": "2026-11-16T06:46:39Z",
-      "completed_by": "claude:0f56a916"
+      "skipped_at": "2026-11-16T17:50:30Z"
     },
     {
       "id": "T-508",
