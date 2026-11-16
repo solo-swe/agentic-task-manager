@@ -1,7 +1,9 @@
 // What each of the app's menu items does on the page (T-512): what the same control does now, the tabs' on the window's
 // tabs (T-514), Show Sidebar on the sidebar (T-515). Quit and New Window the app does itself, except in the menus the
 // page draws (Windows, Linux, T-513).
+import { inApp } from './api/http';
 import type { MenuAction, MenuState, SystemItem } from './api/menu';
+import { openUrl } from './api/shell';
 import type { TabActions } from './tab-actions';
 import { currentAddress } from './navigation';
 import { pluginInfo } from './plugin-info';
@@ -44,7 +46,8 @@ export const pageActions: PageActions = {
   back: () => history.back(),
   forward: () => history.forward(),
   reload: () => location.reload(),
-  open: (url) => void window.open(url, '_blank', 'noopener,noreferrer'),
+  // In the app, in the user's browser (T-551): the window opens no new tab itself
+  open: (url) => void (inApp ? openUrl(url) : window.open(url, '_blank', 'noopener,noreferrer')),
   copy: (text) => navigator.clipboard.writeText(text),
   focusSearch: () => document.querySelector<HTMLInputElement>('#task-search')?.focus(),
 };

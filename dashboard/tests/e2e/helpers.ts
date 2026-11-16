@@ -580,6 +580,8 @@ export class TasksServer {
   /** What the page told the app about what needs you (`needs_you`, T-518, T-520), in order: the workspace it shows,
    * and whether the badge and the notifications are on (the app reads the counts itself) */
   needsYouCalls: { workspace: string; badge: boolean; notify: boolean }[] = [];
+  /** The external links the page asked the app to open in the user's browser (`open_url`, T-551), in order */
+  openedUrls: string[] = [];
   /** Whether the app's Claude Code has atm's skills (connect_agents sets it) */
   private agentsConnected = false;
 
@@ -797,6 +799,9 @@ export class TasksServer {
         return { ok: null };
       case 'needs_you':
         this.needsYouCalls.push(args as { workspace: string; badge: boolean; notify: boolean });
+        return { ok: null };
+      case 'open_url':
+        this.openedUrls.push(String(args.url));
         return { ok: null };
       // The menu (T-512)
       case 'subscribe_menu':

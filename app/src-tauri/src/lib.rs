@@ -6,6 +6,7 @@
 pub mod assets;
 pub mod badge;
 pub mod commands;
+pub mod external;
 pub mod links;
 pub mod menu;
 pub mod session;
@@ -22,6 +23,7 @@ use commands::{
     list_workspaces, logo, project_tasks, search, subscribe_links, subscribe_project,
     subscribe_workspace, unsubscribe, version, worktrees,
 };
+use external::open_url;
 use menu::{menu, menu_state, subscribe_menu};
 use updates::{check_update, install_update, restart_app};
 use windows::{
@@ -68,6 +70,7 @@ pub fn commands() -> tauri_specta::Builder<tauri::Wry> {
         save_tabs::<tauri::Wry>,
         restored_tabs::<tauri::Wry>,
         needs_you::<tauri::Wry>,
+        open_url::<tauri::Wry>,
     ])
 }
 
@@ -194,6 +197,14 @@ fn with_plugins<R: tauri::Runtime>(builder: tauri::Builder<R>) -> tauri::Builder
         // System notifications of what needs the user (T-520), sent by the app from Rust (`badge`): the page has no
         // permission of the plugin's
         .plugin(tauri_plugin_notification::init())
+        // The page's external links in the user's browser (T-551), opened by the app's `open_url` after it checks them
+        // (`external`): the page has no permission of the plugin's, and the plugin's own script, which would send the
+        // page's link clicks to its command, is left out
+        .plugin(
+            tauri_plugin_opener::Builder::new()
+                .open_js_links_on_click(false)
+                .build(),
+        )
 }
 
 /// The app's context (`tauri.conf.json`, the capabilities, the dashboard's files), made once: it can be generated only
@@ -237,6 +248,7 @@ mod tests {
                 && text.contains("subscribeProject")
                 && text.contains("TaskFilters")
                 && text.contains("AppError")
+                && text.contains("openUrl")
         );
     }
 
@@ -768,6 +780,64 @@ mod tests {
                 tauri::test::get_ipc_response(&stranger, request()).is_err(),
                 "{command} answered a window the capability doesn't name"
             );
+        }
+        std::fs::remove_dir_all(&home).expect("clean up");
+    }
+
+    /// T-551: the window opens an external link only through the app's `open_url`, which refuses what isn't a web or
+    /// mail link with a typed error; the opener plugin's own commands are refused, as the page has no permission of
+    /// the plugin's. (Only refusals are asked for here: an accepted URL would open the browser.)
+    #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "T-482: Windows' local origin differs (http://tauri.localhost?)"
+    )]
+    fn the_window_opens_links_only_through_open_url() {
+        let home = scratch("open-url");
+        let app = with_plugins(tauri::test::mock_builder())
+            .manage(AppState::new(atm_lib::Workspaces::at(&home)))
+            .invoke_handler(tauri::generate_handler![open_url])
+            .build(context())
+            .expect("the mock app");
+        let window = tauri::WebviewWindowBuilder::new(&app, "main", tauri::WebviewUrl::default())
+            .build()
+            .expect("a window");
+        let request = |command: &str, url: &str, from: &str| tauri::webview::InvokeRequest {
+            cmd: command.into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: from.parse().expect("a URL"),
+            body: tauri::ipc::InvokeBody::Json(json!({ "url": url })),
+            headers: tauri::http::HeaderMap::default(),
+            invoke_key: tauri::test::INVOKE_KEY.to_string(),
+        };
+        for url in [
+            "file:///etc/passwd",
+            "atm://projects/abc",
+            "javascript:alert(1)",
+        ] {
+            let refused = tauri::test::get_ipc_response(
+                &window,
+                request("open_url", url, "tauri://localhost"),
+            )
+            .expect_err(url);
+            assert_eq!(refused["kind"], json!("refused"), "{url}: {refused}");
+        }
+        let invalid = tauri::test::get_ipc_response(
+            &window,
+            request("open_url", "/projects/abc", "tauri://localhost"),
+        )
+        .expect_err("a path");
+        assert_eq!(invalid["kind"], json!("invalid"), "{invalid}");
+        // The plugin's own commands: no permission, from the window or anywhere else
+        for from in std::iter::once("tauri://localhost").chain(ELSEWHERE) {
+            for command in ["plugin:opener|open_url", "plugin:opener|open_path"] {
+                let refused = tauri::test::get_ipc_response(
+                    &window,
+                    request(command, "https://example.invalid/", from),
+                );
+                assert!(refused.is_err(), "{command} answered a page from {from}");
+            }
         }
         std::fs::remove_dir_all(&home).expect("clean up");
     }

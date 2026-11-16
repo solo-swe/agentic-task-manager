@@ -50,6 +50,15 @@ atm's own rules for the atm app, the desktop distribution proposed in
   page checks them again (`lib/api/links.ts`) and navigates; never fetched or run. On macOS the scheme is in
   `Info.plist` and the links come as `RunEvent::Opened`, without a plugin; Windows and Linux need the deep-link plugin
   when the app ships there.
+- **External links open in the user's browser** (T-551): the webview opens none itself (a `target="_blank"` link
+  does nothing). One click listener on the page (`routes/+layout.svelte`, with the new-tab clicks; `lib/external-links.ts`)
+  takes every click on an `https:`, `http:` or `mailto:` link, before the link's own handlers, and hands the URL to
+  the app's `open_url` (`api/shell.ts` `openUrl`); the menu's links go there too (`menu-actions.ts` `pageActions.open`).
+  The app checks the URL again (`src/external.rs`: those three schemes, a host for the web ones, a typed error for
+  anything else) and opens it with the opener plugin from Rust. The page has none of the plugin's permissions and no
+  `@tauri-apps/plugin-opener`, and the plugin's own click script is off (`open_js_links_on_click(false)`). Links within
+  the page (its addresses, `?task=`, `#…`, a document's relative links) stay its own. A new external link needs
+  nothing: an anchor with `target="_blank" rel="noopener noreferrer"`, as in the browser, works in both.
 
 ## Security
 
@@ -98,7 +107,9 @@ atm's own rules for the atm app, the desktop distribution proposed in
 
 - Platform features (notifications, files, …) are host services: traits in atm-lib, implemented in the app with Tauri
   plugins.
-- Any new plugin is a new dependency and is proposed to the user first ([Rust guide](rust.md)).
+- Any new plugin is a new dependency and is proposed to the user first ([Rust guide](rust.md)). A plugin is used from
+  Rust, behind the app's own commands, and the page gets none of its permissions (the notifications, the updater, the
+  opener).
 - Installing the agent skills is the same code as `atm agents install`
   ([better-way-to-distribute-atm.md](../better-way-to-distribute-atm.md) §4); the app's button calls it, never a second
   implementation.

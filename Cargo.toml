@@ -73,6 +73,10 @@ tauri-plugin-updater = { version = "2.14.1", default-features = false, features 
 # The app's notifications of what needs the user (T-520, approved 2026-11-12): sent from Rust only, the page gets no
 # permission of the plugin's; pinned to the newest release at least two weeks old then
 tauri-plugin-notification = "=2.8.0"
+# The page's external links in the user's browser (T-551, approved by Hakan 2026-11-16): opened from Rust only, by the
+# app's `open_url` command, which checks the URL; the page gets no permission of the plugin's; pinned to the newest
+# release at least two weeks old then
+tauri-plugin-opener = "=2.7.2"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"

@@ -13220,7 +13220,7 @@
       "description": "[The freshness design](docs/cross-project-freshness-design.md) §5.3, option **D**: fixes P2 (the browser's stale 304).\n\n## The bug\n`api_tasks` (`crates/atm-api/src/routes.rs`) builds its ETag from the project's own `tasks` and `archive` stamps and the query. When only a referenced project changes, the browser's poll gets a 304 and keeps the old status, `ready` and `waiting_for`.\n\n## Change\n- **Which projects A references** (the `meta.id`s in its tasks' `dependencies`, `related` and `duplicate_of`, the archive too) is worked out on a full read and remembered by the server **keyed by A's stamp, never by time** (a new reference changes A's stamp, so it is never missed). atm-lib gives it (e.g. `Member::referenced_projects()`), atm-api only uses it.\n- **The ETag** becomes A's stamp, the query, and the referenced projects' `tasks` and `archive` stamps (a project not found counts as null, so it appearing or going changes the tag too).\n- A project with no references costs nothing extra; one with some costs a stamp per referenced project per poll.\n- `docs/multi-project-api.md`: the tasks route's ETag; drop the note T-549 added that another project's change shows only once this one changes.\n\n## Tests\nThe CLI suite (`serve.test.mjs`): A references B; a conditional GET of A's tasks after B's task changes is a **200** with the new values; after a change in an unrelated project C, still a **304**; with nothing changed, a 304; a new reference added to A then B changing: a 200. e2e (`keys.spec.ts`, the real binary's views): the browser's poll (`page.clock`) shows the other project's task done.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-553"
       ],
@@ -13232,7 +13232,7 @@
         "dashboard/tests/e2e/keys.spec.ts"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:32:46Z",
+      "updated_at": "2026-11-16T18:36:08Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13249,7 +13249,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T18:32:46Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "63d5d2f2cd97ddedd09320cbaa187d6c8c18f4c2",
+      "completed_at": "2026-11-16T18:36:08Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T18:36:08Z",
+          "kind": "outcome",
+          "text": "The tasks route’s ETag (and the overview’s) also covers the task data of the projects named in `dependencies`, `related`, `duplicate_of` (archive too; `foreign::named_by`, worked out once per stamp of the project’s own data). A poll sees a named project’s change; an unrelated change stays a 304 (serve.test.mjs). No e2e: the fixture server has no ETags of atm’s",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-555",

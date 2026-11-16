@@ -691,6 +691,64 @@ test.describe('the dashboard in the atm app', () => {
     expect(tasksServer.httpRequests).toEqual([]);
   });
 
+  test('external links open in the user’s browser through the app’s open_url; links within the page stay (T-551)', async ({
+    page,
+    tasksServer,
+  }) => {
+    await tasksServer.asApp();
+    const data = loadFixture('v4');
+    data.meta = { ...data.meta, repository: 'https://github.com/acme/demo' };
+    const task = data.tasks.find((t) => t.id === 'T-003')!;
+    task.description = 'See [the reset docs](https://docs.example/reset) and [the endpoint](#heading).';
+    tasksServer.use(data);
+    await page.goto(`/projects/${tasksServer.projectId}/list?task=T-003`);
+    // A commit link (RepoRef) and a link in the description (CompMD's)
+    const commit = page.locator('#detail-commit a.repo-ref');
+    const href = (await commit.getAttribute('href'))!;
+    expect(href).toMatch(/^https:\/\/github\.com\/acme\/demo\/commit\/0f1e2d3/);
+    await commit.click();
+    await expect.poll(() => tasksServer.openedUrls).toEqual([href]);
+    const description = page.locator('#detail-overlay');
+    await description.getByRole('link', { name: 'the reset docs' }).click();
+    await expect.poll(() => tasksServer.openedUrls.at(-1)).toBe('https://docs.example/reset');
+    // A link within the text stays in the page, and the page stayed where it was
+    await description.getByRole('link', { name: 'the endpoint' }).click();
+    expect(addressOf(page)).toContain('task=T-003');
+    expect(tasksServer.openedUrls).toHaveLength(2);
+    await page.keyboard.press('Escape');
+
+    // About's source link, and Help ▸ CompMD
+    await tasksServer.chooseMenu({ kind: 'about' });
+    const source = page.locator('#about-overlay .about-facts a').first();
+    const repository = (await source.getAttribute('href'))!;
+    expect(repository).toMatch(/^https:\/\//);
+    await source.click();
+    await expect.poll(() => tasksServer.openedUrls.at(-1)).toBe(repository);
+    await page.keyboard.press('Escape');
+    await tasksServer.chooseMenu({ kind: 'compmd' });
+    await expect.poll(() => tasksServer.openedUrls.at(-1)).toBe('https://compmd.dev/');
+    expect(tasksServer.openedUrls).toHaveLength(4);
+  });
+
+  test('in the browser an external link stays a new tab’s, and no app command is called (T-551)', async ({
+    page,
+    tasksServer,
+  }) => {
+    const data = loadFixture('v4');
+    data.meta = { ...data.meta, repository: 'https://github.com/acme/demo' };
+    tasksServer.use(data);
+    await page.goto(`/projects/${tasksServer.projectId}/list?task=T-003`);
+    const commit = page.locator('#detail-commit a.repo-ref');
+    await expect(commit).toHaveAttribute('target', '_blank');
+    await expect(commit).toHaveAttribute('rel', 'noopener noreferrer');
+    await page.keyboard.press('Escape');
+    await page.locator('#footer-about').click();
+    const source = page.locator('#about-overlay .about-facts a').first();
+    await expect(source).toHaveAttribute('target', '_blank');
+    await expect(source).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(tasksServer.openedUrls).toEqual([]);
+  });
+
   test('in the browser there is no button: the dialog gives the command instead', async ({ page, tasksServer }) => {
     tasksServer.use('standard');
     await page.goto('/?agents');
