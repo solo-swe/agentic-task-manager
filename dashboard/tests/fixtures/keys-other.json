@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "project": "Learn Forever Blog",
+    "id": "3f2a9c1e",
+    "format": 2,
+    "key": "LFB",
+    "next_number": 6
+  },
+  "tasks": [
+    {
+      "id": "0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f99",
+      "number": 5,
+      "key_final": false,
+      "name": "Write the post about the onboarding",
+      "type": "feature",
+      "status": "in_progress",
+      "description": "Another project's task, which the keyed project's onboarding waits for.",
+      "dependencies": []
+    }
+  ]
+}

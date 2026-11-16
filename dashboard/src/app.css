@@ -2986,6 +2986,10 @@ button.repo-ref {
 .detail-dep-item:hover {
   background: color-mix(in srgb, var(--text) 10%, transparent);
 }
+/* Another project's task, a link to it there (T-549): it reads as the other dependencies */
+a.detail-dep-item {
+  text-decoration: none;
+}
 .detail-dep-arrow {
   color: var(--accent);
 }

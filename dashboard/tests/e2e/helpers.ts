@@ -55,11 +55,16 @@ const viewCache = new Map<string, string>();
  * a copy of them (T-366): a malformed file is read as far as it can be, with its problems (T-377). A body that isn't a
  * task file at all is served as it is, as atm serve refuses it, so the dashboard's error handling sees it.
  */
-export function asTaskViews(body: string, archive: string | null = null, archived = false): string {
-  const key = JSON.stringify([body, archive, archived]);
+export function asTaskViews(
+  body: string,
+  archive: string | null = null,
+  archived = false,
+  registered: readonly string[] = [],
+): string {
+  const key = JSON.stringify([body, archive, archived, registered]);
   const cached = viewCache.get(key);
   if (cached !== undefined) return cached;
-  const read = atmViews(body, archive, archived);
+  const read = atmViews(body, archive, archived, registered);
   if (!read) return body;
   const views = JSON.stringify({ generated_at: '2026-01-01T00:00:00Z', bytes: body.length, ...read });
   viewCache.set(key, views);
@@ -67,19 +72,36 @@ export function asTaskViews(body: string, archive: string | null = null, archive
 }
 
 /** atm's tolerant read of the files (`atm task list --derived --tolerant`: meta, tasks, problems; with `archived`, the
- * archive's tasks, T-372), or null when even that refuses them (not a task file) */
-function atmViews(body: string, archive: string | null, archived = false): Record<string, unknown> | null {
+ * archive's tasks, T-372), or null when even that refuses them (not a task file). The `registered` projects' task
+ * files are registered in atm's state for the read, so it finds their tasks a reference names (ADR-007 §7, T-549) */
+function atmViews(
+  body: string,
+  archive: string | null,
+  archived = false,
+  registered: readonly string[] = [],
+): Record<string, unknown> | null {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'atm-views-'));
+  const env = { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: os.tmpdir() };
+  const others: string[] = [];
   try {
     mkdirSync(path.join(dir, '.agentic-task-manager'));
     writeFileSync(path.join(dir, '.agentic-task-manager/tasks.json'), body);
     if (archive !== null) writeFileSync(path.join(dir, '.agentic-task-manager/tasks-archive.json'), archive);
+    for (const other of registered) {
+      const folder = mkdtempSync(path.join(os.tmpdir(), 'atm-other-'));
+      others.push(folder);
+      mkdirSync(path.join(folder, '.agentic-task-manager'));
+      writeFileSync(path.join(folder, '.agentic-task-manager/tasks.json'), other);
+      const [program, ...args] = atm(['workspace', 'add-project', 'default', folder]);
+      const added = spawnSync(program, args, { cwd: dir, encoding: 'utf8', env });
+      if (added.status !== 0) throw new Error(`atm workspace add-project failed: ${added.stderr}`);
+    }
     const [program, ...args] = atm(['task', 'list', '--derived', '--tolerant', ...(archived ? ['--archived'] : [])]);
     const r = spawnSync(program, args, {
       cwd: dir,
       encoding: 'utf8',
       maxBuffer: 256 << 20, // thousands of archived tasks are megabytes of JSON (the default, 1 MB, cuts them off)
-      env: { ...process.env, ATM_STATE_DIR: path.join(dir, '.atm-state'), GIT_CEILING_DIRECTORIES: path.dirname(dir) },
+      env,
     });
     if (r.status === 0) return JSON.parse(r.stdout) as Record<string, unknown>;
     // Only what isn't a task file at all may be refused; anything else is a failure to see, not to serve around
@@ -92,7 +114,7 @@ function atmViews(body: string, archive: string | null, archived = false): Recor
     if (!data || typeof data !== 'object' || !Array.isArray((data as TasksData).tasks)) return null;
     throw new Error(`atm task list --derived failed: ${r.error?.message ?? r.stderr}`);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    for (const folder of [dir, ...others]) rmSync(folder, { recursive: true, force: true });
   }
 }
 /** The id of the project the fixture serves by default */
@@ -208,6 +230,9 @@ export class TasksServer {
   private worktreesBody: string | null = null;
   /** Projects besides the default one: their tasks.json and summary, by id */
   private others = new Map<string, { name: string; body: string; summary: Record<string, unknown> | null }>();
+  /** Projects atm itself finds registered when it works out the default project's task views (ADR-007 §7): their
+   * tasks.json. The page isn't told of them: a reference to one of their tasks is shown from what atm read there */
+  private registeredBodies: string[] = [];
   /** Registered projects whose folder is gone: their names, by id */
   private gone = new Map<string, string>();
   /** Projects with a logo: the SVG served at p/<id>/logo, by id; null lists one that fails to load */
@@ -380,7 +405,9 @@ export class TasksServer {
               body: asTaskViews(this.body, this.archiveBody, true),
             });
       }
-      return answerTasks(route, V1_TASKS, (body) => asTaskViews(body, body === this.body ? this.archiveBody : null));
+      return answerTasks(route, V1_TASKS, (body) =>
+        body === this.body ? asTaskViews(body, this.archiveBody, false, this.registeredBodies) : asTaskViews(body),
+      );
     });
     const isDefault = (url: string, pattern: RegExp) => decodeURIComponent(pattern.exec(url)![1]) === this.projectId;
     await this.page.route(ARCHIVE_JSON, (route) => {
@@ -713,7 +740,13 @@ export class TasksServer {
           return this.archiveBody === null || project !== this.projectId
             ? { error: { kind: 'not_found', message: 'not found' } }
             : { ok: views(asTaskViews(body, this.archiveBody, true)) };
-        return { ok: views(asTaskViews(body, project === this.projectId ? this.archiveBody : null)) };
+        return {
+          ok: views(
+            project === this.projectId
+              ? asTaskViews(body, this.archiveBody, false, this.registeredBodies)
+              : asTaskViews(body),
+          ),
+        };
       }
       case 'claims':
         return body ? { ok: { claims: this.claimsBody ? JSON.parse(this.claimsBody).claims : [] } } : unknown;
@@ -833,6 +866,13 @@ export class TasksServer {
   addProject(id: string, data: string | TasksData, name = id, summary: Record<string, unknown> | null = null) {
     this.others.set(id, { name, body: toBody(data), summary });
     asTaskViews(toBody(data)); // worked out now, not during a request
+    return this;
+  }
+
+  /** Register a project (a fixture by name or inline tasks) for atm only, not the page: the default project's task
+   * views show its tasks that a reference names, as atm finds them there (ADR-007 §7, T-549) */
+  registerForAtm(data: string | TasksData) {
+    this.registeredBodies.push(toBody(data));
     return this;
   }
 

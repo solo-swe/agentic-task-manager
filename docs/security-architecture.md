@@ -755,6 +755,23 @@ when a task here depends on (or is related to) a task there, stored as `<project
 - Checked by `tests/scripts/keys.test.mjs` (a dependency across two registered projects waits until it is done
   there; the other project removed: not done, and doctor's warning).
 
+**Other projects' tasks in the task views (T-549, ADR-007 §7).** No new route or command: the views the REST API's
+tasks route (`api/v1/projects/<p>/tasks`, `api/v2/…`) and the app's `project_tasks` give, and `atm task list
+--derived`, carry `derived.foreign`, the other projects' tasks a task names, by reference, so the dashboard shows them
+with only this project open.
+- **The same lookup as above** (`foreign::Lookup`): only registered projects, found by `meta.id`, through the same
+  store, read only; per read the registered list is read once and each reference looked up once.
+- **Only what the dashboard shows leaves the other project**: its `meta.id` and name, the workspaces and IDs it is
+  registered under (`places`), and the task's key, name, status and its kind; no description, notes, paths or
+  anything else. What can't be found says only why (`unregistered`, `missing`).
+- **The dashboard makes a link of it only to its own page** (`/projects/<id>?task=<key>`, or `/w/<w>/…`), built from
+  `places`, never from a value of the task; the address is only text for the router (lib/keys.ts `foreignAddress`).
+  A reference not found is shown as text, without a link.
+- **Served as the views are**: same Host check, localhost only, read only; the route's `ETag` follows this project's
+  data only, so another project's change shows here once this project's data changes too.
+- Checked by `tests/scripts/keys.test.mjs` (the views and the summary of a task across two registered projects; the
+  missing task, the unregistered project) and `dashboard/tests/e2e/keys.spec.ts`.
+
 **The app's "Connect your agents" button (T-458).** The app's one command that writes outside atm's own folders:
 `connect_agents(harness)` puts this version's skills where the harness reads the user's (`~/.claude/skills` for
 Claude Code), through the same atm-lib `install_skills` as `atm agents install`, with its rules (a harness atm knows,

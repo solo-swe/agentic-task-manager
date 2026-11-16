@@ -258,6 +258,72 @@ test('a dependency on another registered project’s task, by its key: waits unt
   }
 });
 
+test('the task views and the summary show another project’s task by its key, status and project (T-549)', () => {
+  const home = tempDir('atm-home-');
+  const env = { ATM_HOME: home };
+  const project = (id, name, key, tasks) => {
+    const root = makeProject({ files: { [FILE]: { meta: { id, project: name }, tasks } } });
+    assert.equal(runAtm(['db', 'migrate'], root, env).code, 0, 'registered');
+    assert.equal(runAtm(['project', 'key', 'set', key], root, env).code, 0);
+    return root;
+  };
+  const atm = project('aaaa1111', 'Agentic Task Manager', 'ATM', [
+    { id: 'T-1', name: 'the API', type: 'feature', status: 'todo' },
+  ]);
+  const blog = project('bbbb2222', 'Learn Forever Blog', 'LFB', [
+    { id: 'T-1', name: 'a post about it', type: 'feature', status: 'todo' },
+  ]);
+  const run = (root, args) => runAtm(args, root, env);
+  const views = () => JSON.parse(run(blog, ['task', 'list', '--derived']).stdout);
+  try {
+    assert.equal(run(blog, ['task', 'edit', 'LFB-1', '--add-dep', 'ATM-1']).code, 0);
+    const apiUuid = read(atm, FILE).tasks[0].id;
+    const ref = `aaaa1111:${apiUuid}`;
+    // A reference to a task that registered project doesn't have, and to a project nobody registered
+    const gone = 'aaaa1111:0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f99';
+    const stranger = 'dddd4444:0193a5b2-7c1d-7e2f-8a3b-4c5d6e7f8f98';
+    const data = read(blog, FILE);
+    data.tasks[0].related = [gone, stranger];
+    fs.writeFileSync(path.join(blog, FILE), JSON.stringify(data, null, 2));
+
+    const foreign = views()[0].derived.foreign;
+    assert.deepEqual(foreign[ref], {
+      project: 'aaaa1111',
+      project_name: 'Agentic Task Manager',
+      places: [{ workspace: 'default', project: 'aaaa1111' }],
+      found: true,
+      name: 'the API',
+      status: 'todo',
+      archived: false,
+      kind: 'todo',
+      key: 'ATM-1',
+      key_final: true,
+      ambiguous: false,
+    });
+    assert.equal(foreign[gone].found, false);
+    assert.equal(foreign[gone].reason, 'missing');
+    assert.equal(foreign[gone].project_name, 'Agentic Task Manager');
+    assert.deepEqual(foreign[stranger], { project: 'dddd4444', found: false, reason: 'unregistered' });
+    // The summary's board names what LFB-1 waits for by its key there, and gives LFB-1's own
+    const card = JSON.parse(run(blog, ['project', 'summary']).stdout).board.todo.cards[0];
+    assert.equal(card.key, 'LFB-1');
+    assert.equal(card.key_final, true);
+    assert.deepEqual(card.waiting_for, [ref]);
+    assert.deepEqual(card.waiting_for_labels, ['ATM-1']);
+    // Done there: done here too
+    assert.equal(run(atm, ['task', 'state', 'ATM-1', 'in_progress']).code, 0);
+    assert.equal(run(atm, ['task', 'state', 'ATM-1', 'done']).code, 0);
+    assert.equal(views()[0].derived.foreign[ref].kind, 'done');
+    // The project gone: unregistered, as far as this project can tell
+    removeDir(atm);
+    assert.equal(views()[0].derived.foreign[ref].reason, 'unregistered');
+  } finally {
+    removeDir(atm);
+    removeDir(blog);
+    removeDir(home);
+  }
+});
+
 test('two projects with one key: refused by key, named by UUID, shown by UUID, warned about (T-545)', () => {
   const home = tempDir('atm-home-');
   const env = { ATM_HOME: home };

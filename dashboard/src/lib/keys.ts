@@ -3,7 +3,10 @@
 // from before task keys has only IDs (`T-001`), shown and matched as they always were. Everything the dashboard shows,
 // orders or looks up a task by goes through here.
 
+import type { ForeignTask } from '$generated/types';
+import { formatAddress } from './address';
 import type { Task } from './types';
+import { KINDS, type StatusKind } from './vocab';
 
 /** What a provisional key's mark says when pointed at (ADR-007 §3) */
 export const PROVISIONAL_TIP = 'Provisional until merged into main: the number may change if another branch took it';
@@ -110,15 +113,69 @@ export interface RefView {
   project?: string;
   /** What pointing at it says, for another project's task */
   tip?: string;
+  /** Another project's task as the server found it there (derived.foreign): its name, status and status's kind */
+  found?: { name: string; status: string | null; kind?: StatusKind };
+  /** Where another project's task opens: its project's page with it open */
+  address?: string;
+  /** Why another project's task can't be shown: its project isn't registered, or has no such task */
+  missing?: string;
+}
+
+/** The dashboard's address of another project's task: its project in `workspace` when that workspace lists it, else
+ * in the first one that does, with the task open by `task` (its key, else its UUID); null when no workspace lists it */
+export function foreignAddress(found: ForeignTask, task: string, workspace: string): string | null {
+  const places = found.places ?? [];
+  const place = places.find((p) => p.workspace === workspace) ?? places[0];
+  if (!place) return null;
+  const params = new URLSearchParams({ project: place.project, task });
+  if (place.workspace !== 'default') params.set('workspace', place.workspace);
+  return formatAddress(params);
+}
+
+/** A status kind the server named, if it is one */
+function asKind(kind: string | undefined): StatusKind | undefined {
+  return (KINDS as readonly string[]).includes(kind ?? '') ? (kind as StatusKind) : undefined;
+}
+
+/** How another project's task (`id`, its UUID, in project `project`) shows from what the server found of it there */
+function foundView(found: ForeignTask, project: string, id: string, workspace: string): RefView {
+  const name = found.project_name || project;
+  if (!found.found) {
+    const missing =
+      found.reason === 'missing' ? `no such task in ${name}` : "its project isn't in your workspaces (or is gone)";
+    return {
+      label: `${name}:${id.slice(0, 8)}`,
+      provisional: false,
+      project,
+      missing,
+      tip: `A task of ${name}: ${missing}`,
+    };
+  }
+  // A key another registered project uses too would be ambiguous: the UUID's first 8 characters instead (ADR-007 §8)
+  const key = typeof found.key === 'string' && found.key !== '' && found.ambiguous !== true ? found.key : null;
+  const label = key ?? (found.ambiguous ? id.slice(0, 8) : `${name}:${id.slice(0, 8)}`);
+  const address = foreignAddress(found, key ?? id, workspace);
+  return {
+    label,
+    provisional: key !== null && found.key_final !== true,
+    project,
+    tip: `${found.name ?? ''} (a task of ${name})`,
+    found: { name: found.name ?? '', status: found.status ?? null, kind: asKind(found.kind) },
+    ...(address ? { address } : {}),
+  };
 }
 
 /** How reference `ref` (a dependency, a related task) shows: this project's task by its key (`own` finds it by ID);
- * another project's (`<project id>:<UUID>`) by its key when that project is listed and its tasks are loaded,
- * otherwise in short (its project's name and the UUID's first 8 characters), saying it isn't loaded here. */
+ * another project's (`<project id>:<UUID>`) as the server found it there (`foreign`, from the task views: its key,
+ * status and where it opens, or why it can't be found); without that, by its key when that project is listed and its
+ * tasks are loaded, otherwise in short (its project's name and the UUID's first 8 characters), saying it isn't loaded
+ * here. */
 export function refView(
   ref: string,
   own: (id: string) => Task | undefined,
   others: readonly OtherProject[] = [],
+  foreign?: (ref: string) => ForeignTask | undefined,
+  workspace = 'default',
 ): RefView {
   const { project, id } = parseRef(ref);
   if (project === null) {
@@ -127,6 +184,8 @@ export function refView(
       ? { label: taskLabel(task), provisional: isProvisional(task), task }
       : { label: shortId(ref), provisional: false };
   }
+  const found = foreign?.(ref);
+  if (found) return foundView(found, project, id, workspace);
   const listed = others.find((p) => p.id.toLowerCase() === project);
   const name = listed?.name || project;
   const task = listed?.tasks?.find((t) => t.id.toLowerCase() === id);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   compareTasks,
   findTask,
+  foreignAddress,
   isProvisional,
   isUuid,
   keyOf,
@@ -138,6 +139,72 @@ describe('references', () => {
       project: '3f2a9c1e',
       tip: 'Library (a task of Lib)',
     });
+  });
+
+  describe('as the server found it there (T-549)', () => {
+    const ref = `3f2a9c1e:${UUID_C}`;
+    const places = [
+      { workspace: 'work', project: 'lib-w' },
+      { workspace: 'default', project: '3f2a9c1e' },
+    ];
+    const found = {
+      project: '3f2a9c1e',
+      project_name: 'Lib',
+      places,
+      found: true,
+      name: 'Library',
+      status: 'in_progress',
+      kind: 'active',
+      archived: false,
+      key: 'LFB-5',
+      key_final: false,
+      ambiguous: false,
+    };
+    const view = (f: object | undefined, workspace?: string) =>
+      refView(ref, own, [], (r) => (r === ref ? (f as never) : undefined), workspace);
+
+    it('by its key, status and kind there, with the address that opens it in its project', () => {
+      expect(view(found)).toEqual({
+        label: 'LFB-5',
+        provisional: true,
+        project: '3f2a9c1e',
+        tip: 'Library (a task of Lib)',
+        found: { name: 'Library', status: 'in_progress', kind: 'active' },
+        address: '/projects/3f2a9c1e?task=LFB-5',
+      });
+      // In another workspace that lists it, there
+      expect(view(found, 'work').address).toBe('/w/work/projects/lib-w?task=LFB-5');
+      expect(view({ ...found, key_final: true }).provisional).toBe(false);
+    });
+
+    it('by its UUID when its key is ambiguous, or its project has no keys; an unknown kind is none', () => {
+      const ambiguous = view({ ...found, ambiguous: true, kind: 'odd' });
+      expect(ambiguous).toMatchObject({
+        label: '0190a1b2',
+        provisional: false,
+        address: `/projects/3f2a9c1e?task=${UUID_C}`,
+      });
+      expect(ambiguous.found?.kind).toBeUndefined();
+      expect(view({ ...found, key: undefined, key_final: undefined }).label).toBe('Lib:0190a1b2');
+      expect(view({ ...found, places: [] }).address).toBeUndefined();
+    });
+
+    it('says why it can’t be found: no such task there, or no such project registered; no address', () => {
+      const missing = view({ project: '3f2a9c1e', project_name: 'Lib', places, found: false, reason: 'missing' });
+      expect(missing).toMatchObject({ label: 'Lib:0190a1b2', missing: 'no such task in Lib' });
+      expect(missing.address).toBeUndefined();
+      expect(missing.found).toBeUndefined();
+      expect(view({ project: '3f2a9c1e', found: false, reason: 'unregistered' })).toMatchObject({
+        label: '3f2a9c1e:0190a1b2',
+        missing: "its project isn't in your workspaces (or is gone)",
+      });
+    });
+  });
+
+  it('builds another project’s address in the workspace shown, else the first that lists it', () => {
+    const found = { project: 'x', found: true, places: [{ workspace: 'w2', project: 'x' }] };
+    expect(foreignAddress(found, 'LFB-5', 'default')).toBe('/w/w2/projects/x?task=LFB-5');
+    expect(foreignAddress({ ...found, places: [] }, 'LFB-5', 'default')).toBeNull();
   });
 
   it('shows another project’s task in short when it isn’t loaded, and says so', () => {

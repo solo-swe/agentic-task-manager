@@ -11,6 +11,8 @@
   import NeedsYouMenu from '../shell/NeedsYouMenu.svelte';
   import ProjectLogo from '../ui/ProjectLogo.svelte';
   import Ring from '../ui/Ring.svelte';
+  import TaskKey from '../ui/TaskKey.svelte';
+  import { taskLabel } from '../keys';
 
   let { project }: { project: ProjectEntry } = $props();
 
@@ -224,8 +226,9 @@
         {/each}
         {#if top}
           {@const id = 'task' in top ? top.task : top.id}
+          {@const shown = { id, key: top.key, key_final: top.key_final }}
           {@const who = 'agent' in top ? [top.agent, top.branch].filter(Boolean).join(' · ') : 'next up'}
-          <li class="project-card-work-line project-card-task" title="{id} {top.name} — {who}">
+          <li class="project-card-work-line project-card-task" title="{taskLabel(shown)} {top.name} — {who}">
             <div class="project-card-task-top">
               {#if working.length}
                 <span class="project-card-label">Now</span>
@@ -233,7 +236,7 @@
               {:else}
                 <span class="project-card-label project-card-next">Next</span>
               {/if}
-              <span class="project-card-work-id">{id}</span>
+              <span class="project-card-work-id"><TaskKey task={shown} /></span>
               {#if 'agent' in top}<span class="project-card-task-who">{top.agent}</span>{/if}
               {#if others}<span class="project-card-more">+{others} more</span>{/if}
             </div>
@@ -277,14 +280,16 @@
         <!-- The task finished last, and when (T-208): replaces the bare "12 m ago" -->
         <span
           class="project-card-last"
-          title="Last finished: {lastDone.id} {lastDone.name}, {new Date(lastDone.completed_at).toLocaleString()}"
+          title="Last finished: {taskLabel(lastDone)} {lastDone.name}, {new Date(
+            lastDone.completed_at,
+          ).toLocaleString()}"
         >
           <!-- When, in the quiet label style (T-335) -->
           <span class="project-card-label project-card-last-when"
             >{formatAgo(lastDone.completed_at, dashboard.loadedAt)}</span
           >
           <Icon name="check" size={13} />
-          <span class="project-card-work-id">{lastDone.id}</span>
+          <span class="project-card-work-id"><TaskKey task={lastDone} /></span>
           <span class="project-card-last-name">{lastDone.name}</span>
         </span>
       {:else}

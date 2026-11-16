@@ -109,7 +109,7 @@ export function needingUser(tasks: Task[], vocab: Vocabulary = DEFAULT_VOCABULAR
 
 /** A task that needs the user, and why: what the "need you" chips list (also atm serve's `needs_you_tasks`) */
 /** A task that needs the user, as the chips list it: with its key when it has one (ADR-007), as a project's own tasks
- * do; a summary's (the overview's cards) has its ID */
+ * and a summary's (the overview's cards, T-549) do */
 export type NeedsYouItem = NeedsYouEntry & Partial<Pick<Task, 'key' | 'key_final'>>;
 
 /** needingUser as the chips list it */

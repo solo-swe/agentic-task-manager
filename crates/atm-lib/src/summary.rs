@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use atm_common::keys::number_of;
+use atm_common::keys::{key_final, key_of, keys_format, label_of, number_of, with_key};
 use atm_common::py::{py_str, py_str_opt, strip, truthy};
 use atm_common::rules::{natural_cmp, unfinished_dependencies};
 use atm_common::time::{format_iso, now, parse_iso};
@@ -241,8 +241,31 @@ fn git_summary(project: &Project, tasks: &[&Task]) -> Value {
     json!({"branch": project.store().branch(), "pr": latest})
 }
 
+/// `entry` with its task's key and whether the key is final (ADR-007 §1, §3), as the task views give them, in a
+/// keys-format project; as it is before task keys, or for no task.
+fn keyed(document: &Value, task: Option<&Task>, mut entry: Value) -> Value {
+    if let Some(task) = task
+        && let Some(key) = key_of(document, task)
+        && let Some(map) = entry.as_object_mut()
+    {
+        map.insert("key".into(), json!(key));
+        map.insert("key_final".into(), json!(key_final(task)));
+    }
+    entry
+}
+
+/// What the summary needs to show tasks by their keys: the document, and how a task it names reads.
+struct Shown<'a> {
+    vocab: &'a Vocabulary,
+    document: &'a Value,
+    /// A task (a dependency) by its label: its key (`~` while provisional), another project's by its key there, else
+    /// its ID.
+    label: &'a dyn Fn(&str) -> String,
+}
+
 /// What a project's Kanban card shows, nothing more, and `extra`.
-fn board_card(vocab: &Vocabulary, task: &Task, extra: &[(&str, Value)]) -> Value {
+fn board_card(shown: &Shown, task: &Task, extra: &[(&str, Value)]) -> Value {
+    let vocab = shown.vocab;
     let labels: Vec<Value> = task
         .get("labels")
         .and_then(Value::as_array)
@@ -259,7 +282,7 @@ fn board_card(vocab: &Vocabulary, task: &Task, extra: &[(&str, Value)]) -> Value
     for (key, value) in extra {
         card[*key] = value.clone();
     }
-    card
+    keyed(shown.document, Some(task), card)
 }
 
 /// A column: its first `cap` cards, and how many there are in all (for "+ N more").
@@ -344,7 +367,7 @@ fn or_null(value: Option<&Value>) -> Value {
 /// without `recent_done` (a sprint's board shows all its tasks).
 #[allow(clippy::too_many_lines)] // reason: one block per column, as the Python atm's board has them
 fn board(
-    vocab: &Vocabulary,
+    shown: &Shown,
     tasks: &[&Task],
     kinds: &[Option<Kind>],
     todo: &[&Todo],
@@ -397,8 +420,13 @@ fn board(
             }
             if !e.waits.is_empty() {
                 extra.push(("waiting_for", json!(e.waits)));
+                // With task keys, the dependencies as people read them (ADR-007 §9)
+                if keys_format(shown.document) {
+                    let labels: Vec<String> = e.waits.iter().map(|d| (shown.label)(d)).collect();
+                    extra.push(("waiting_for_labels", json!(labels)));
+                }
             }
-            board_card(vocab, e.task, &extra)
+            board_card(shown, e.task, &extra)
         })
         .collect();
     let active_cards = active
@@ -406,7 +434,7 @@ fn board(
         .map(|t| {
             let by = claimed_by(t).or_else(|| started_by(t));
             board_card(
-                vocab,
+                shown,
                 t,
                 &[
                     ("by", or_null(by)),
@@ -419,7 +447,7 @@ fn board(
         .iter()
         .map(|t| {
             board_card(
-                vocab,
+                shown,
                 t,
                 &[("since", or_null(since(t, "review_requested_at")))],
             )
@@ -434,7 +462,7 @@ fn board(
                 .and_then(Value::as_array)
                 .map_or(0, Vec::len);
             board_card(
-                vocab,
+                shown,
                 t,
                 &[
                     ("since", or_null(since(t, "blocked_at"))),
@@ -448,7 +476,7 @@ fn board(
         .iter()
         .map(|t| {
             board_card(
-                vocab,
+                shown,
                 t,
                 &[("completed_at", or_null(t.get("completed_at")))],
             )
@@ -609,14 +637,41 @@ pub fn project_summary(project: &Project) -> Result<Value> {
     let working: Vec<Value> = live
         .iter()
         .map(|c| {
-            json!({
+            let task = by_id(c.get("task"));
+            let entry = json!({
                 "task": c.get("task"),
-                "name": capped(by_id(c.get("task")).and_then(|t| t.get("name"))),
+                "name": capped(task.and_then(|t| t.get("name"))),
                 "agent": c.get("agent"),
                 "branch": c.get("branch"),
-            })
+            });
+            keyed(document, task, entry)
         })
         .collect();
+    // A task the summary names (a dependency) as people read it, with task keys: this project's by its key, working
+    // or archived, another project's by its key there (ADR-007 §7), else its ID
+    let label = |id: &str| {
+        let own = by_id(Some(&json!(id))).cloned().or_else(|| {
+            store
+                .get_archived_task(id)
+                .ok()
+                .flatten()
+                .filter(|t| !t.is_empty())
+                .cloned()
+        });
+        match own {
+            Some(t) => label_of(&Value::Object(with_key(document, &t))),
+            // One that can't be found there: its project's ID and the UUID's first 8 characters, as the dashboard
+            // shortens it
+            None if atm_common::rules::is_foreign_reference(id) => crate::foreign::label(id)
+                .unwrap_or_else(|| id.chars().take(id.find(':').unwrap_or(0) + 9).collect()),
+            None => id.to_string(),
+        }
+    };
+    let shown = Shown {
+        vocab,
+        document,
+        label: &label,
+    };
     // What the loop takes next with its default selection, by the very rule `atm loop next` follows
     let order = loop_order(
         vocab,
@@ -632,7 +687,13 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         .ready
         .iter()
         .take(NEXT_TASKS)
-        .map(|t| json!({"id": t.get("id"), "name": capped(t.get("name"))}))
+        .map(|t| {
+            keyed(
+                document,
+                Some(t),
+                json!({"id": t.get("id"), "name": capped(t.get("name"))}),
+            )
+        })
         .collect();
     let todo = todo_order(vocab, &tasks, &kinds, &order.ready, &archived)?;
     let mut last_task: Option<&Task> = None;
@@ -646,7 +707,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         }
     }
     let last_done = last_task.map_or(Value::Null, |t| {
-        json!({"id": t.get("id"), "name": capped(t.get("name")), "completed_at": t.get("completed_at")})
+        let entry = json!({"id": t.get("id"), "name": capped(t.get("name")), "completed_at": t.get("completed_at")});
+        keyed(document, Some(t), entry)
     });
 
     let mut last: Option<i64> = None;
@@ -705,8 +767,8 @@ pub fn project_summary(project: &Project) -> Result<Value> {
             _ => None,
         };
         if let Some(reason) = reason {
-            needs_you_tasks
-                .push(json!({"id": t.get("id"), "name": capped(t.get("name")), "reason": reason}));
+            let entry = json!({"id": t.get("id"), "name": capped(t.get("name")), "reason": reason});
+            needs_you_tasks.push(keyed(document, Some(t), entry));
         }
     }
     let reasons = |r: &str| needs_you_tasks.iter().filter(|n| n["reason"] == r).count();
@@ -724,7 +786,9 @@ pub fn project_summary(project: &Project) -> Result<Value> {
             .iter()
             .filter(|e| in_sprint(vocab, e.task, a))
             .collect();
-        board(vocab, &in_tasks, &in_kinds, &in_todo, current, &live, false)
+        board(
+            &shown, &in_tasks, &in_kinds, &in_todo, current, &live, false,
+        )
     });
 
     Ok(json!({
@@ -748,7 +812,7 @@ pub fn project_summary(project: &Project) -> Result<Value> {
         "description": description(document.get("meta")),
         "last_activity": last.map(format_iso),
         "completions_14d": completions,
-        "board": board(vocab, &tasks, &kinds, &todo_refs, current, &live, true),
+        "board": board(&shown, &tasks, &kinds, &todo_refs, current, &live, true),
         "board_active_sprint": sprint_board,
         "stats": project_stats(project, document, vocab, &tasks, current),
     }))

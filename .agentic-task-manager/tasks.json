@@ -14673,7 +14673,7 @@
         "AGENTS.md"
       ],
       "created_at": "2026-11-06T06:52:44Z",
-      "updated_at": "2026-11-16T06:58:51Z",
+      "updated_at": "2026-11-16T07:41:03Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -14697,6 +14697,12 @@
           "kind": "outcome",
           "text": "`devEngines` pins pnpm 12.14.0 and Node 24 (`onFail: download`), recorded in `pnpm-lock.yaml` (now two documents); CompMD 0.7.1 still pins the packs by hash (no null integrity). AGENTS.md updated. CI green still to see on the next push",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T07:41:03Z",
+          "kind": "note",
+          "text": "Fix (855d3ed): the dev page was blank on Node 24.22 (the pinned Node): the page-policy hold on `writeHead` swallowed the head Node sends from `end`, so every module came without one; and a reload got a 304 whose policy lacked the inline scripts’ hashes. Pages are now never answered 304, a 304 carries no policy; `dev-api.test.mjs` fetches modules and reloads",
+          "by": "claude:0f56a916"
         }
       ],
       "blocks": [
@@ -14715,7 +14721,7 @@
       "sprint": "Keys and reach",
       "started_at": "2026-11-16T06:55:22Z",
       "started_by": "claude:0f56a916",
-      "commit": "0724f087993ae8631647ffb8fce9b70915bbe382",
+      "commit": "855d3ed915928f41036b6f5dd98b3893a4d49b07",
       "completed_at": "2026-11-16T06:58:51Z",
       "completed_by": "claude:0f56a916"
     },

@@ -139,6 +139,16 @@ typed by `api.schema.json` (`TaskViewList`, generated into `dashboard/src/lib/ge
 task's), `priority` (or the default), `effective_review`, `effective_release`, `stage` (a done task's: `done`,
 `in_pr`, `merged`) and `archived`; what doesn't apply is left out.
 
+- **Other projects' tasks** (T-549, ADR-007 §7): a task that names another project's task (`<project id>:<UUID>` in
+  `dependencies`, `related` or `duplicate_of`) has `derived.foreign`, by reference (`ForeignTask`): `{ project,
+  found }`, and when found, the project's `project_name` and `places` (`[{ workspace, project }]`, where it is
+  registered, for a link to its page), and the task's `name`, `status`, `kind` (done when archived), `archived`, and
+  in a project with task keys its `key`, `key_final` and `ambiguous` (another registered project uses the same key:
+  show the UUID instead, ADR-007 §8). Not found, `reason`: `unregistered` (no registered project has that ID, or its folder is
+  gone) or `missing` (the project has no such task; its name and places then too). Read from the registered projects
+  only, read only (docs/security-architecture.md). The app's `project_tasks` and `atm task list --derived` answer the
+  same. The ETag follows this project's data only: another project's change shows here once this project changes too.
+
 - **A malformed task file is shown, not refused** (T-377): the route reads it tolerantly, as far as it can be read,
   where every `atm` command refuses it (`atm task list --derived --tolerant` prints the same). An entry that isn't a task
   is left out; a task with an ID atm doesn't allow is kept, one whose `dependencies` aren't a list of IDs with the IDs
@@ -320,7 +330,9 @@ change (the server combines their size/mtime stamps and the worktree lists). Pro
 
 Counted from `tasks.json` only (not the archive; `stats` excepted), by status **kind** (the project's vocabulary), with atm-cli's own
 logic (`query.py`). Task names in `working`, `next`, `last_done` and `needs_you_tasks` are capped at 80 characters
-(the 80th is "…"), so the response stays small with many projects.
+(the 80th is "…"), so the response stays small with many projects. In a project with task keys (ADR-007, T-549),
+every task the summary lists (`working`, `next`, `last_done`, `needs_you_tasks` and the board's cards) has its `key`
+and `key_final` too, as the task views give them; a project before task keys has neither.
 
 | Field | Meaning |
 |---|---|
@@ -354,7 +366,7 @@ many tasks follow the column's rule, `cards` the first of them (so the dashboard
 
 | Column | Rule | Order | At most |
 |---|---|---|---|
-| `todo` | every to-do task in the board's scope (T-349; `board_active_sprint` holds the active sprint's tasks, no more, no less, its `done` every finished one, not the last 24 hours'); a card done with the user has `with_user: true`, one waiting on dependencies `waiting_for` (their IDs) | the ready ones the loop takes, in its order; then the ready ones done with the user; then those waiting on dependencies (each by priority, then ID) | 10 |
+| `todo` | every to-do task in the board's scope (T-349; `board_active_sprint` holds the active sprint's tasks, no more, no less, its `done` every finished one, not the last 24 hours'); a card done with the user has `with_user: true`, one waiting on dependencies `waiting_for` (their IDs) and, with task keys, `waiting_for_labels` (the same as people read them: a key, `~` before a provisional one, another project's by its key there) | the ready ones the loop takes, in its order; then the ready ones done with the user; then those waiting on dependencies (each by priority, then ID) | 10 |
 | `active` | every active-kind task | longest running first (`started_at`) | 30 |
 | `review` | every review-kind task | longest waiting first | 30 |
 | `blocked` | every blocked-kind task | blocked on the user first, then longest waiting | 30 |

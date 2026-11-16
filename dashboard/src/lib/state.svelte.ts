@@ -75,6 +75,7 @@ import type { BurndownRange } from './burndown';
 import type { ActivityRange } from './insights';
 import type { ViewWindow } from './time-window';
 import type { Task } from './types';
+import type { ForeignTask } from '$generated/types';
 import { findTask, refView, taskLabel, type OtherProject, type RefView } from './keys';
 import type { ListGroupBy } from './list-groups';
 import { loadProjectSources, type ProjectSource } from './overview-data';
@@ -269,9 +270,22 @@ export class DashboardState {
     return findTask(ref, [this.taskMap, this.archiveMap], this.meta);
   }
 
+  /** The other projects' tasks this project's tasks name, as the server found them there (ADR-007 §7, T-549): each
+   * task view's `derived.foreign`, by reference */
+  foreignTasks = $derived<ReadonlyMap<string, ForeignTask>>(
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- made anew from the tasks, never changed
+    new Map(this.tasks.flatMap((t) => Object.entries(t.derived?.foreign ?? {}))),
+  );
+
   /** How a dependency or related task shows: by its key, another project's as far as it is known (lib/keys.ts) */
   refOf(ref: string): RefView {
-    return refView(ref, (id) => this.taskMap.get(id) ?? this.archiveMap.get(id), this.otherProjects);
+    return refView(
+      ref,
+      (id) => this.taskMap.get(id) ?? this.archiveMap.get(id),
+      this.otherProjects,
+      (r) => this.foreignTasks.get(r),
+      this.workspace,
+    );
   }
 
   filters = $state.raw<Filters>(emptyFilters());

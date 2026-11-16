@@ -22,9 +22,23 @@
   import StageChip from '../ui/StageChip.svelte';
   import Icon from '../ui/Icon.svelte';
   import TaskKey from '../ui/TaskKey.svelte';
-  import { parseRef, taskLabel } from '../keys';
+  import { parseRef, taskLabel, type RefView } from '../keys';
+  import { inApp } from '../api/http';
+  import { navigate } from '../navigation';
+  import { tabActions, wantsNewTab } from '../tab-actions';
   import type { IconName } from '../ui/Icon.svelte';
   import type { Task } from '../types';
+
+  // Another project's task opens in its project (T-549): in the app in a new tab, as the details stay here; in the
+  // browser in this tab, or another for ⌘-click, Ctrl-click or a middle click, as any link
+  const tabs = tabActions();
+  function openForeign(e: MouseEvent, address: string) {
+    if (!inApp && wantsNewTab(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (inApp) tabs.open(address);
+    else navigate(address);
+  }
 
   // An archived task opens too (listed with "Include archived")
   const task = $derived(
@@ -526,19 +540,49 @@
   {/if}
 {/snippet}
 
-<!-- Another project's task (ADR-007 §7): by its key when its project's tasks are loaded (the overview's), else in
-     short, saying so; it opens in its own project, not here -->
+<!-- Another project's task (ADR-007 §7): as the server found it there (T-549), by its key, with its status and a link
+     that opens it in its own project (in the app, in a new tab); one it can't find says why, without a link. From a
+     server without that, by its key when its project's tasks are loaded (the overview's), else in short, saying so -->
 {#snippet foreignItem(arrow: string, id: string)}
   {@const ref = dashboard.refOf(id)}
-  <div class="detail-dep-item foreign" data-foreign={id} title={ref.tip}>
-    <span class="detail-dep-arrow">{arrow}</span>
-    <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
-    {#if ref.task}
-      <span class="detail-dep-name">{ref.task.name}</span>
-    {:else}
-      <span style="color:var(--text-muted)">· another project's, not loaded here</span>
-    {/if}
-  </div>
+  {#if ref.found && ref.address}
+    <a
+      class="detail-dep-item foreign"
+      data-foreign={id}
+      href={ref.address}
+      title="{ref.tip} — opens in its project"
+      onclick={(e) => openForeign(e, ref.address!)}
+    >
+      <span class="detail-dep-arrow">{arrow}</span>
+      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      <span class="detail-dep-name">{ref.found.name}</span>
+      {@render foreignStatus(ref.found)}
+    </a>
+  {:else}
+    <div class="detail-dep-item foreign" data-foreign={id} title={ref.tip}>
+      <span class="detail-dep-arrow">{arrow}</span>
+      <strong><TaskKey label={ref.label} provisional={ref.provisional} /></strong>
+      {#if ref.found}
+        <span class="detail-dep-name">{ref.found.name}</span>
+        {@render foreignStatus(ref.found)}
+      {:else if ref.missing}
+        <span class="detail-foreign-missing" style="color:var(--text-muted)">· {ref.missing}</span>
+      {:else if ref.task}
+        <span class="detail-dep-name">{ref.task.name}</span>
+      {:else}
+        <span style="color:var(--text-muted)">· another project's, not loaded here</span>
+      {/if}
+    </div>
+  {/if}
+{/snippet}
+
+{#snippet foreignStatus(found: NonNullable<RefView['found']>)}
+  {#if found.status}
+    {@const ds = kindStyle(found.kind)}
+    <span class="badge" style="background:{ds.bg};color:{ds.color};margin-left:auto"
+      >{found.status.replace(/_/g, ' ')}</span
+    >
+  {/if}
 {/snippet}
 
 {#snippet depItem(arrow: string, id: string, name: string, status: string | undefined)}
