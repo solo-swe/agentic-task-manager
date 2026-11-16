@@ -3,9 +3,9 @@
 
 export const PREFS_KEY = 'atm-dashboard';
 
+// (`autoRefresh` and `autoRefreshSeconds`, the refresh settings, went with T-507: the page reacts to changes. A
+// browser may still hold them; nothing reads them.)
 export interface Prefs {
-  autoRefresh: boolean;
-  autoRefreshSeconds: number;
   /** Last dashboard version whose release notes were opened */
   lastSeenVersion: string;
   /** The server build whose update notice the user dismissed ("Not now"); only another build shows it again */

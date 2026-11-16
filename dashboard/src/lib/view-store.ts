@@ -1,6 +1,6 @@
 // The saved view of each project: filters, tab, panel and board options, remembered between visits (FR-5).
 // Per project, not per browser: dashboards of different projects served from the same origin (localhost:8000)
-// share localStorage, so each project's view lives under its own key. Theme, mode, auto-refresh and the last-seen
+// share localStorage, so each project's view lives under its own key. Theme, mode and the last-seen
 // version stay per browser (prefs.ts).
 import { BURNDOWN_RANGES, type BurndownRange } from './burndown';
 import { ACTIVE, FILTER_GROUPS, filterValues, type FilterGroup, type ListSort } from './filters';

@@ -392,6 +392,8 @@ test.describe('Kanban: group by sprint', () => {
     await expect(card(page, 'T-002').locator('.kanban-card-sprint')).toHaveText('Ada Lovelace');
     await expect(card(page, 'T-005').locator('.kanban-card-sprint')).toHaveText('Backlog');
 
+    // The Filters popup closed first: where it lies over the board depends on the title bar's width
+    await page.keyboard.press('Escape');
     await page.locator('#kanban-group-by-sprint').check();
     expect(await lanes(page).evaluateAll((all) => all.map((lane) => (lane as HTMLElement).dataset.sprint))).toEqual([
       'Foundations',

@@ -5,7 +5,6 @@ import path from 'node:path';
 import { test as base, expect, type Page, type Route } from '@playwright/test';
 import { compmdVersion } from '../../build/compmd';
 import type { FilterGroup } from '../../src/lib/filters';
-import { PREFS_KEY } from '../../src/lib/prefs';
 import type { ViewId } from '../../src/lib/tabs';
 
 export { expect };
@@ -293,6 +292,31 @@ export class TasksServer {
   }
 
   async install() {
+    // The change stream (T-507, docs/multi-project-api.md §2.9) is played in the page, as a route can't stream: the
+    // page's EventSource connects at once and stays open, and pushChange() sends on it
+    await this.page.addInitScript(() => {
+      const streams: { path: string; closed: boolean; dispatchEvent(e: Event): boolean }[] = [];
+      class PlayedEventSource extends EventTarget {
+        onopen: ((e: Event) => void) | null = null;
+        onerror: ((e: Event) => void) | null = null;
+        readonly path: string;
+        closed = false;
+        constructor(url: string) {
+          super();
+          this.path = new URL(url, location.href).pathname;
+          streams.push(this);
+          queueMicrotask(() => {
+            if (!this.closed) this.onopen?.(new Event('open'));
+          });
+        }
+        close() {
+          this.closed = true;
+        }
+      }
+      const w = window as unknown as Record<string, unknown>;
+      w.__atmStreams = streams;
+      w.EventSource = PlayedEventSource;
+    });
     await this.page.route(WORKSPACES, (route) =>
       route.fulfill({
         status: 200,
@@ -507,9 +531,31 @@ export class TasksServer {
   private nextSubscription = 0;
   private changeMessages = new Map<number, number>();
 
-  /** Something changed in what the page watches: a message on each subscription's channel that matches (the
-   * workspace's, or `project`'s), as the app's watcher sends it */
+  /** Whether it plays the app (asApp) */
+  private app = false;
+
+  /** Something changed in what the page watches. In the app: a message on each subscription's channel that matches
+   * (the workspace's, or `project`'s), as the app's watcher sends it. In the browser: a `changed` event on the
+   * workspace's open change stream, which is the one the page watches whatever changed (`project` names nothing) */
   async pushChange(project: string | null = null) {
+    if (!this.app) {
+      const sent = await this.page.evaluate(() => {
+        const streams = (
+          window as unknown as { __atmStreams: { path: string; closed: boolean; dispatchEvent(e: Event): boolean }[] }
+        ).__atmStreams;
+        let told = 0;
+        for (const s of streams) {
+          const workspace = /^\/api\/v2\/workspaces\/([^/]+)\/changes$/.exec(s.path)?.[1];
+          if (s.closed || !workspace) continue;
+          const data = JSON.stringify({ workspace: decodeURIComponent(workspace), project: null });
+          s.dispatchEvent(new MessageEvent('changed', { data }));
+          told++;
+        }
+        return told;
+      });
+      if (sent === 0) throw new Error('the page has no open change stream');
+      return;
+    }
     const targets = [...this.subscriptions.values()].filter((s) => s.project === project);
     if (targets.length === 0) throw new Error(`the page has not subscribed to ${project ?? 'its workspace'}`);
     for (const s of targets) {
@@ -581,6 +627,7 @@ export class TasksServer {
    * still makes to the server's routes are recorded in `httpRequests`: the app has none to answer them.
    */
   async asApp() {
+    this.app = true;
     this.page.on('request', (r) => {
       const { pathname } = new URL(r.url());
       if (/^\/(api|p)\//.test(pathname)) this.httpRequests.push(pathname);
@@ -898,35 +945,22 @@ export const test = base.extend<Fixtures>({
 });
 
 /**
- * Serve `data` as tasks.json and open the dashboard.
- * Auto-refresh is switched off (unless `autoRefresh: true`) so background reloads can't interfere with what a
- * test checks. It is only set when no preference is stored yet, so a test that changes it and reloads keeps its choice.
+ * Serve `data` as tasks.json and open the dashboard. Nothing reloads it in the background unless a test says so
+ * (pushChange, the page's change stream), so what a test checks stays put.
  */
 export async function openDashboard(
   page: Page,
   tasksServer: TasksServer,
   data: string | TasksData,
   {
-    autoRefresh = false,
     tab,
     graphAutoFit = true,
   }: {
-    autoRefresh?: boolean;
     tab?: ViewId;
     /** false: the project's view starts with the graph's auto-fit off (T-341), as before it existed */
     graphAutoFit?: boolean;
   } = {},
 ) {
-  if (!autoRefresh) {
-    await page.addInitScript((key) => {
-      try {
-        const prefs = JSON.parse(localStorage.getItem(key) || '{}');
-        if (!('autoRefresh' in prefs)) localStorage.setItem(key, JSON.stringify({ ...prefs, autoRefresh: false }));
-      } catch {
-        // storage unavailable: the dashboard falls back to its defaults
-      }
-    }, PREFS_KEY);
-  }
   tasksServer.use(data);
   if (!graphAutoFit) {
     // The project's saved view (view-store.ts projectKey: the server's project id)

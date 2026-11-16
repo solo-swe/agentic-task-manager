@@ -42,6 +42,11 @@ impl Projects {
             workspaces: Workspaces::at(home),
         }
     }
+
+    /// Its workspaces.
+    pub(crate) fn workspaces(&self) -> &Workspaces {
+        &self.workspaces
+    }
 }
 
 /// A strong `ETag` from what a response depends on.

@@ -14,6 +14,9 @@ atm-vcs.workspace = true
 serde_json.workspace = true
 # The actor's host name (`user@host`, when nothing else names who works)
 sysinfo.workspace = true
+# Live changes (T-456; here since T-507, approved by Hakan): the watcher the app and atm serve's change streams share
+notify.workspace = true
+notify-debouncer-full.workspace = true
 
 [lints]
 workspace = true

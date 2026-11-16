@@ -195,13 +195,12 @@ test.describe('detail panel scroll', () => {
     expect(await scrollTop(page)).toBe(0);
   });
 
-  test('the same task re-rendered by auto-refresh keeps its position', async ({ page, tasksServer }) => {
-    await page.clock.install();
-    await openDashboard(page, tasksServer, data(), { tab: 'list', autoRefresh: true });
+  test('the same task re-rendered by a change (T-507) keeps its position', async ({ page, tasksServer }) => {
+    await openDashboard(page, tasksServer, data(), { tab: 'list' });
     await openScrolled(page);
     const before = await scrollTop(page);
     tasksServer.use(data('Long one, renamed'));
-    await page.clock.runFor(5_000);
+    await tasksServer.pushChange();
     await expect(panel(page).locator('h3')).toHaveText('T-1 Long one, renamed');
     expect(await scrollTop(page)).toBe(before);
   });

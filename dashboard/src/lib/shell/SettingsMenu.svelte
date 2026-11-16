@@ -10,12 +10,8 @@
 </script>
 
 {#snippet trigger(props: Record<string, unknown>)}
-  <button
-    {...props}
-    class="menu-trigger settings-btn"
-    id="settings-btn"
-    aria-label="Settings"
-    title={dashboard.live ? 'Mode and theme' : 'Auto-refresh, mode and theme'}><Icon name="ellipsis-vertical" /></button
+  <button {...props} class="menu-trigger settings-btn" id="settings-btn" aria-label="Settings" title="Mode and theme"
+    ><Icon name="ellipsis-vertical" /></button
   >
 {/snippet}
 

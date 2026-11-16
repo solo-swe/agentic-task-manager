@@ -5,9 +5,10 @@
   import { dashboard } from '../state.svelte';
   import Icon from '../ui/Icon.svelte';
 
-  // The settings (T-323): auto-refresh, mode and theme, the document style, and on a project's page, resetting its
-  // saved view; in the atm app also the icon's badge. The browser shows them in the ⋯ popup (SettingsMenu), the app
-  // in a sheet (SettingsSheet, T-517): the same controls, once
+  // The settings (T-323): mode and theme, the document style, and on a project's page, resetting its saved view; in
+  // the atm app also the icon's badge. The browser shows them in the ⋯ popup (SettingsMenu), the app in a sheet
+  // (SettingsSheet, T-517): the same controls, once. Nothing to set for reloading: the page reacts to changes
+  // (T-506, T-507)
   const MODE_ICONS: Record<ModePref, IconName> = { system: 'monitor', light: 'sun', dark: 'moon' };
   const current = $derived(THEMES.find((t) => t.id === dashboard.theme) ?? THEMES[0]);
   const lastLoaded = $derived(
@@ -17,42 +18,9 @@
       second: '2-digit',
     }),
   );
-  // Like the legacy dashboard, the interval only applies on "change" (blur/enter), not on every keystroke
-  function onIntervalChange(e: Event) {
-    dashboard.setAutoRefreshSeconds(parseInt((e.currentTarget as HTMLInputElement).value) || 5);
-  }
 </script>
 
-<!-- In the atm app the page reacts to changes (T-506): nothing to set -->
-{#if !dashboard.live}
-  <div class="menu-label">Auto-refresh</div>
-  <div class="settings-row">
-    <label class="auto-refresh-toggle" title="Auto-refresh tasks.json"
-      ><input
-        type="checkbox"
-        id="auto-refresh-check"
-        checked={dashboard.autoRefresh}
-        onchange={(e) => dashboard.setAutoRefresh(e.currentTarget.checked)}
-      /><span class="toggle-track"></span> On</label
-    >
-    <label class="refresh-interval"
-      >every <input
-        type="number"
-        class="auto-refresh-interval"
-        id="auto-refresh-interval"
-        value={dashboard.autoRefreshSeconds}
-        min="1"
-        max="300"
-        title="Interval in seconds"
-        onchange={onIntervalChange}
-      /> s</label
-    >
-  </div>
-{/if}
-<div class="menu-note" id="last-loaded">
-  {#if dashboard.live}Updates as tasks change ·
-  {/if}Last loaded {lastLoaded}
-</div>
+<div class="menu-note" id="last-loaded">Updates as tasks change · Last loaded {lastLoaded}</div>
 <div class="menu-label">Mode</div>
 <div class="mode-switch" role="group" aria-label="Color mode" id="mode-control">
   {#each MODE_PREFS as pref (pref)}

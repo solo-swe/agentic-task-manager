@@ -36,8 +36,6 @@ tauri-plugin-notification.workspace = true
 specta.workspace = true
 tauri-specta.workspace = true
 specta-typescript.workspace = true
-notify.workspace = true
-notify-debouncer-full.workspace = true
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }

@@ -5,7 +5,13 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-2", "name": "Two", "type": "feature", "status": "todo", "dependencies": ["T-1"] },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "type": "feature",
+              "status": "todo",
+              "dependencies": ["T-1"]
+            },
             {
               "id": "T-3",
               "name": "Three",
@@ -25,7 +31,13 @@
     "expect": {
       "json": [
         {
-          "task": { "id": "T-2", "name": "Two", "type": "feature", "status": "todo", "dependencies": ["T-1"] },
+          "task": {
+            "id": "T-2",
+            "name": "Two",
+            "type": "feature",
+            "status": "todo",
+            "dependencies": ["T-1"]
+          },
           "derived": {
             "kind": "todo",
             "ready": true,
@@ -77,7 +89,14 @@
               "completed_by": "alice",
               "commit": "abc1234",
               "files": ["src/a.ts"],
-              "notes": [{ "at": "2026-05-01T08:30:00Z", "by": "alice", "kind": "outcome", "text": "Shipped" }]
+              "notes": [
+                {
+                  "at": "2026-05-01T08:30:00Z",
+                  "by": "alice",
+                  "kind": "outcome",
+                  "text": "Shipped"
+                }
+              ]
             },
             {
               "id": "T-2",
@@ -112,7 +131,9 @@
   },
   {
     "name": "show of an unknown task",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } } },
+    "setup": {
+      "files": { ".agentic-task-manager/tasks.json": { "tasks": [] } }
+    },
     "args": ["task", "details", "T-9"],
     "expect": { "exit": 1, "stderrIncludes": ["atm: no task T-9"] }
   },
@@ -122,14 +143,23 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "name": "One", "phase": 0, "status": "done", "priority": "P1", "labels": ["api"] },
+            {
+              "id": "T-1",
+              "name": "One",
+              "phase": 0,
+              "status": "done",
+              "priority": "P1",
+              "labels": ["api"]
+            },
             { "id": "T-5", "name": "Five", "phase": 1, "status": "in_progress" }
           ]
         }
       }
     },
     "args": ["task", "list"],
-    "expect": { "stdout": "T-1  done         P1  One   api\nT-5  in_progress  P2  Five\n2 tasks: 1 done, 1 in progress\n" }
+    "expect": {
+      "stdout": "T-1  done         P1  One   api\nT-5  in_progress  P2  Five\n2 tasks: 1 done, 1 in progress\n"
+    }
   },
   {
     "name": "list --ready: to-do tasks whose dependencies are done",
@@ -147,8 +177,20 @@
               "labels": ["api", "ux"],
               "dependencies": ["T-1"]
             },
-            { "id": "T-3", "name": "Three", "phase": 0, "status": "todo", "dependencies": ["T-2"] },
-            { "id": "T-4", "name": "Four", "phase": 1, "status": "blocked", "waiting_on": "user" }
+            {
+              "id": "T-3",
+              "name": "Three",
+              "phase": 0,
+              "status": "todo",
+              "dependencies": ["T-2"]
+            },
+            {
+              "id": "T-4",
+              "name": "Four",
+              "phase": 1,
+              "status": "blocked",
+              "waiting_on": "user"
+            }
           ]
         }
       }
@@ -175,8 +217,20 @@
         ".agentic-task-manager/tasks.json": {
           "tasks": [
             { "id": "T-1", "name": "One", "phase": 0, "status": "done" },
-            { "id": "T-2", "name": "Two", "phase": 0, "status": "todo", "dependencies": ["T-1"] },
-            { "id": "T-3", "name": "Three", "phase": 0, "status": "todo", "dependencies": ["T-2"] },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "phase": 0,
+              "status": "todo",
+              "dependencies": ["T-1"]
+            },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "phase": 0,
+              "status": "todo",
+              "dependencies": ["T-2"]
+            },
             { "id": "T-4", "name": "Four", "phase": 1, "status": "blocked" }
           ]
         }
@@ -212,10 +266,36 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "name": "One", "type": "test", "status": "done", "labels": ["api"], "started_by": "alice" },
-            { "id": "T-2", "name": "Two", "type": "test", "status": "todo", "priority": "P0", "labels": ["api", "ux"] },
-            { "id": "T-3", "name": "Three", "type": "test", "status": "todo", "labels": ["api", "ux"] },
-            { "id": "T-4", "name": "Four", "type": "docs", "status": "todo", "labels": ["api", "ux"] }
+            {
+              "id": "T-1",
+              "name": "One",
+              "type": "test",
+              "status": "done",
+              "labels": ["api"],
+              "started_by": "alice"
+            },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "type": "test",
+              "status": "todo",
+              "priority": "P0",
+              "labels": ["api", "ux"]
+            },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "type": "test",
+              "status": "todo",
+              "labels": ["api", "ux"]
+            },
+            {
+              "id": "T-4",
+              "name": "Four",
+              "type": "docs",
+              "status": "todo",
+              "labels": ["api", "ux"]
+            }
           ]
         }
       }
@@ -255,19 +335,45 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "name": "One", "phase": 0, "status": "done", "started_by": "alice" },
-            { "id": "T-2", "name": "Two", "phase": 0, "status": "done", "agent": "alice" },
-            { "id": "T-3", "name": "Three", "phase": 0, "status": "done", "started_by": "bob" }
+            {
+              "id": "T-1",
+              "name": "One",
+              "phase": 0,
+              "status": "done",
+              "started_by": "alice"
+            },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "phase": 0,
+              "status": "done",
+              "agent": "alice"
+            },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "phase": 0,
+              "status": "done",
+              "started_by": "bob"
+            }
           ]
         }
       }
     },
     "args": ["task", "list", "--agent", "alice"],
-    "expect": { "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n2 tasks: 2 done\n" }
+    "expect": {
+      "stdout": "T-1  done  P2  One\nT-2  done  P2  Two\n2 tasks: 2 done\n"
+    }
   },
   {
     "name": "list with nothing matching",
-    "setup": { "files": { ".agentic-task-manager/tasks.json": { "tasks": [{ "id": "T-1", "status": "done" }] } } },
+    "setup": {
+      "files": {
+        ".agentic-task-manager/tasks.json": {
+          "tasks": [{ "id": "T-1", "status": "done" }]
+        }
+      }
+    },
     "args": ["task", "list", "--ready"],
     "expect": { "stdout": "No tasks match.\n" }
   },
@@ -285,7 +391,9 @@
       }
     },
     "args": ["task", "deps", "T-2"],
-    "expect": { "stdout": "T-2 waits for: T-1 (done), T-9 (missing)\nT-2 is waited on by: T-3 (todo)\n" }
+    "expect": {
+      "stdout": "T-2 waits for: T-1 (done), T-9 (missing)\nT-2 is waited on by: T-3 (todo)\n"
+    }
   },
   {
     "name": "deps --json",
@@ -294,14 +402,23 @@
         ".agentic-task-manager/tasks.json": {
           "tasks": [
             { "id": "T-1", "name": "One", "status": "done" },
-            { "id": "T-2", "name": "Two", "status": "todo", "dependencies": ["T-1"] }
+            {
+              "id": "T-2",
+              "name": "Two",
+              "status": "todo",
+              "dependencies": ["T-1"]
+            }
           ]
         }
       }
     },
     "args": ["task", "deps", "T-1", "--json"],
     "expect": {
-      "json": { "id": "T-1", "waits_for": [], "waited_on_by": [{ "id": "T-2", "status": "todo", "name": "Two" }] }
+      "json": {
+        "id": "T-1",
+        "waits_for": [],
+        "waited_on_by": [{ "id": "T-2", "status": "todo", "name": "Two" }]
+      }
     }
   },
   {
@@ -310,10 +427,38 @@
       "files": {
         ".agentic-task-manager/tasks.json": {
           "tasks": [
-            { "id": "T-1", "name": "One", "phase": 0, "type": "feature", "status": "done", "labels": ["api"] },
-            { "id": "T-2", "name": "Two", "phase": 0, "type": "feature", "status": "todo", "dependencies": ["T-1"] },
-            { "id": "T-3", "name": "Three", "phase": 0, "type": "test", "status": "todo", "dependencies": ["T-2"] },
-            { "id": "T-4", "name": "Four", "phase": 1, "type": "docs", "status": "blocked", "waiting_on": "user" },
+            {
+              "id": "T-1",
+              "name": "One",
+              "phase": 0,
+              "type": "feature",
+              "status": "done",
+              "labels": ["api"]
+            },
+            {
+              "id": "T-2",
+              "name": "Two",
+              "phase": 0,
+              "type": "feature",
+              "status": "todo",
+              "dependencies": ["T-1"]
+            },
+            {
+              "id": "T-3",
+              "name": "Three",
+              "phase": 0,
+              "type": "test",
+              "status": "todo",
+              "dependencies": ["T-2"]
+            },
+            {
+              "id": "T-4",
+              "name": "Four",
+              "phase": 1,
+              "type": "docs",
+              "status": "blocked",
+              "waiting_on": "user"
+            },
             {
               "id": "T-5",
               "name": "Five",

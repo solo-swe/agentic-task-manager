@@ -202,16 +202,18 @@ test.describe('the document viewer', () => {
     expect(tasksServer.documentRequests).toEqual([]);
   });
 
-  test('kept current on the dashboard’s refresh: unchanged is a 304, a change shows', async ({ page, tasksServer }) => {
-    await page.clock.install();
+  test('kept current on the dashboard’s reloads (T-507): unchanged is a 304, a change shows', async ({
+    page,
+    tasksServer,
+  }) => {
     tasksServer.setDocument(projectDocument('docs/design.md', DESIGN));
-    await openDashboard(page, tasksServer, PROJECT, { tab: 'list', autoRefresh: true });
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     await follow(page, '/projects/fixture/list?doc=docs/design.md');
     await expect(page.locator('#doc-title')).toHaveText('The design');
-    await page.clock.runFor(5_000);
+    await tasksServer.pushChange();
     await expect.poll(() => tasksServer.documentsNotModified).toBe(1);
     tasksServer.setDocument(projectDocument('docs/design.md', '# The new design\n'));
-    await page.clock.runFor(5_000);
+    await tasksServer.pushChange();
     await expect(page.locator('#doc-title')).toHaveText('The new design');
   });
 
@@ -247,7 +249,7 @@ test.describe('the document viewer', () => {
 
   test('the Hand-drawn theme writes the document on a ruled notebook page', async ({ page, tasksServer }) => {
     await page.addInitScript(() =>
-      localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', mode: 'light', autoRefresh: false })),
+      localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', mode: 'light' })),
     );
     await openWithDocument(page, tasksServer);
     const page_ = viewer(page).locator('.doc-page');
@@ -262,7 +264,7 @@ test.describe('the document viewer', () => {
     await page.addInitScript(() => {
       if (!sessionStorage.getItem('seeded')) {
         sessionStorage.setItem('seeded', '1');
-        localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn', autoRefresh: false }));
+        localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'hand-drawn' }));
       }
     });
     await openWithDocument(page, tasksServer);
@@ -476,15 +478,14 @@ test.describe('the document viewer: lines, images, refreshing', () => {
   });
 
   test('a changed file re-renders where the reader is, not at the top', async ({ page, tasksServer }) => {
-    await page.clock.install();
     tasksServer.setDocument(codeDoc());
-    await openDashboard(page, tasksServer, PROJECT, { tab: 'list', autoRefresh: true });
+    await openDashboard(page, tasksServer, PROJECT, { tab: 'list' });
     await follow(page, '/projects/fixture/list?doc=src/app.ts');
     await expect(page.locator('#doc-gutter div')).toHaveCount(120);
     await page.locator('#doc-body').evaluate((el) => el.scrollTo({ top: 600 }));
     const before = await page.locator('#doc-body').evaluate((el) => el.scrollTop);
     tasksServer.setDocument(codeDoc(CODE.replace('const line50 = 50;', 'const line50 = 5000;')));
-    await page.clock.runFor(5_000);
+    await tasksServer.pushChange();
     await expect(page.locator('#doc-viewer .compmd-page code')).toContainText('5000');
     expect(await page.locator('#doc-body').evaluate((el) => el.scrollTop)).toBe(before);
   });

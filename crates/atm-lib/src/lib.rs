@@ -25,6 +25,7 @@ pub mod state;
 pub mod status;
 pub mod summary;
 pub mod tasks;
+pub mod watch;
 pub mod workspaces;
 pub mod worktrees;
 

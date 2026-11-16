@@ -116,6 +116,36 @@ const homeId = (dir) =>
     .digest('hex')
     .slice(0, 16);
 
+/** A change stream (T-507), read as it comes: `until(pattern)` waits for text matching it past what was matched
+ * already, `close()` hangs up. */
+async function openStream(port, urlPath) {
+  const controller = new AbortController();
+  const response = await fetch(`http://localhost:${port}${urlPath}`, { signal: controller.signal });
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let from = 0;
+  const until = async (pattern, ms = 15_000) => {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      const found = pattern.exec(text.slice(from));
+      if (found) {
+        from += found.index + found[0].length;
+        return found;
+      }
+      const left = deadline - Date.now();
+      assert.ok(left > 0, `${urlPath}: no ${pattern} in ${JSON.stringify(text)}`);
+      let timer;
+      const timeout = new Promise((resolve) => (timer = setTimeout(() => resolve({ timedOut: true }), left)));
+      const chunk = await Promise.race([reader.read(), timeout]);
+      clearTimeout(timer);
+      assert.ok(!chunk.done, `${urlPath}: the stream ended`);
+      if (!chunk.timedOut) text += decoder.decode(chunk.value, { stream: true });
+    }
+  };
+  return { response, until, close: () => controller.abort() };
+}
+
 describe('serve', () => {
   test('start, reuse, status, stop', async () => {
     const atmHome = home();
@@ -1097,6 +1127,70 @@ describe('serve', () => {
     assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/tasks.json'), [404, 'not found']);
     assert.deepEqual(await error('/api/v2/workspaces/work/projects/abcd1234/logo'), [404, 'no logo']);
     assert.deepEqual(await error('/api/v2/workspaces/work'), [404, 'not found']);
+    atm(['service', 'stop'], root);
+  });
+
+  test('change streams (T-507): an event naming what changed, never its data; 16 at most; unknown ones 404', async () => {
+    const atm = atmIn(home());
+    const root = project(TASKS);
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], root).code, 0);
+    const base = '/api/v2/workspaces/default';
+    const workspace = await openStream(port, `${base}/changes`);
+    const own = await openStream(port, `${base}/projects/abcd1234/changes`);
+    for (const stream of [workspace, own]) {
+      const { headers, status } = stream.response;
+      assert.equal(status, 200);
+      assert.match(headers.get('content-type'), /^text\/event-stream/);
+      assert.equal(headers.get('cache-control'), 'no-store');
+      assert.equal(headers.get('x-content-type-options'), 'nosniff');
+      assert.equal(headers.get('cross-origin-resource-policy'), 'same-origin');
+      await stream.until(/^: ?watching\n\n/);
+    }
+
+    // The project's task file changes: each stream says so, with the workspace and (the project's own) the project
+    fs.writeFileSync(
+      path.join(root, '.agentic-task-manager', 'tasks.json'),
+      JSON.stringify({ ...TASKS, tasks: [] }, null, 4),
+    );
+    await own.until(/event: changed\ndata: \{"workspace":"default","project":"abcd1234"\}\n\n/);
+    await workspace.until(/event: changed\ndata: \{"workspace":"default","project":null\}\n\n/);
+
+    // No such workspace or project: a 404, as the other routes answer it; another Host: refused
+    const error = async (p) => {
+      const r = await fetch(`http://localhost:${port}${p}`);
+      return [r.status, (await r.json()).error];
+    };
+    assert.deepEqual(await error('/api/v2/workspaces/nope/changes'), [404, 'unknown workspace']);
+    assert.deepEqual(await error(`${base}/projects/ffff0000/changes`), [404, 'unknown project']);
+    assert.equal((await rawGet(port, `${base}/changes`, `evil.example:${port}`)).status, 403);
+
+    // 16 at most, all clients together: the 17th is refused until one closes
+    const more = [];
+    for (let i = 2; i < 16; i++) {
+      const stream = await openStream(port, `${base}/changes`);
+      assert.equal(stream.response.status, 200, `stream ${i + 1}`);
+      more.push(stream);
+    }
+    const refused = await fetch(`http://localhost:${port}${base}/changes`);
+    assert.equal(refused.status, 503);
+    assert.equal(refused.headers.get('retry-after'), '30');
+    assert.deepEqual(await refused.json(), { error: 'too many change streams' });
+    own.close();
+    // Its place comes back once the server sees it gone
+    let reopened;
+    for (const deadline = Date.now() + 20_000; Date.now() < deadline;) {
+      const r = await fetch(`http://localhost:${port}${base}/changes`);
+      if (r.status === 200) {
+        reopened = r;
+        break;
+      }
+      await r.body?.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    assert.ok(reopened, 'a closed stream makes room');
+    await reopened.body.cancel();
+    for (const stream of [workspace, ...more]) stream.close();
     atm(['service', 'stop'], root);
   });
 

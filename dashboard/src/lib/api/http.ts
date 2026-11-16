@@ -66,6 +66,12 @@ export function searchUrl(): string {
 /** The workspaces, and the one opened last (docs/multi-project-api.md §2.8) */
 export const WORKSPACES_URL = '/api/v2/workspaces';
 
+/** Workspace `workspace`'s change stream (T-507, docs/multi-project-api.md §2.9): an event each time its list or one
+ * of its projects changes */
+export function changesUrl(workspace: string): string {
+  return `${WORKSPACES_URL}/${encodeURIComponent(workspace)}/changes`;
+}
+
 /** What the server said identifies this version of a file, sent back to ask "has it changed?" */
 export interface Validators {
   etag?: string;

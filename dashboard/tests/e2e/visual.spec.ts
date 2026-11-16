@@ -28,8 +28,6 @@ async function sectionScreenshot(page: Page, name: string) {
 // The version chip and the footer's version are masked: they show the version (and a "new" marker) and would
 // otherwise change every page baseline on each release; whats-new.spec and footer.spec cover them. They also get a
 // fixed width for the screenshot, so a longer version number (0.9.0 -> 0.10.0) doesn't move the mask's edge.
-// The auto-refresh interval box is masked too (when its menu is open): headless Chromium places the text inside a
-// number input at a slightly different sub-pixel position from run to run. refresh.spec covers its value.
 // Baselines are Linux only (T-345): made and checked in the pinned Playwright container, the same as CI's, so there
 // is one set and no round trip through CI. With Docker running:
 //   pnpm run test:e2e:visual           compare
@@ -50,11 +48,7 @@ for (const fixture of ['standard', 'large-90', 'empty', 'edge-cases']) {
       test('full page', async ({ page }) => {
         await expect(page).toHaveScreenshot(`${fixture}-page.png`, {
           fullPage: true,
-          mask: [
-            page.locator('#version-chip'),
-            page.locator('#footer-version'),
-            page.locator('#auto-refresh-interval'),
-          ],
+          mask: [page.locator('#version-chip'), page.locator('#footer-version')],
           stylePath: path.join(import.meta.dirname, 'screenshot.css'),
         });
       });
@@ -150,7 +144,7 @@ test.describe('visual: light mode', () => {
     await expect(page.locator('html')).toHaveAttribute('data-mode', 'light');
     await expect(page).toHaveScreenshot('light-standard-page.png', {
       fullPage: true,
-      mask: [page.locator('#version-chip'), page.locator('#footer-version'), page.locator('#auto-refresh-interval')],
+      mask: [page.locator('#version-chip'), page.locator('#footer-version')],
       stylePath: path.join(import.meta.dirname, 'screenshot.css'),
     });
   });
@@ -265,12 +259,12 @@ for (const mode of ['dark', 'light'] as const) {
   });
 }
 
-// The ⋯ settings menu (T-323): auto-refresh, the mode switch, the theme combo box with the current theme's swatch,
+// The ⋯ settings menu (T-323): the mode switch, the theme combo box with the current theme's swatch,
 // and resetting the project's view
 for (const mode of ['dark', 'light'] as const) {
   test(`visual: settings menu (${mode})`, async ({ page, tasksServer }) => {
     await page.addInitScript(
-      (m) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'gruvbox', mode: m, autoRefresh: false })),
+      (m) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: 'gruvbox', mode: m })),
       mode,
     );
     await openDashboard(page, tasksServer, 'standard');
@@ -484,7 +478,7 @@ for (const theme of [
   for (const mode of ['dark', 'light']) {
     test(`visual: theme ${theme} (${mode})`, async ({ page, tasksServer }) => {
       await page.addInitScript(
-        ([t, m]) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: t, mode: m, autoRefresh: false })),
+        ([t, m]) => localStorage.setItem('atm-dashboard', JSON.stringify({ theme: t, mode: m })),
         [theme, mode],
       );
       await openDashboard(page, tasksServer.withAtmSummary(), 'kanban');
