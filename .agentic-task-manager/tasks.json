@@ -13074,7 +13074,7 @@
       "description": "In the atm app, clicking a link in the About dialog does nothing (Hakan, 2026-11-16). The page's external links are plain `<a href target=\"_blank\" rel=\"noopener noreferrer\">` anchors, which the app's webview doesn't open, and the app has no command or plugin that opens a link in the user's browser. So most likely **every** external link in the app is dead, not only the About dialog's: check each place first and list them in the outcome.\n\n## Where the links are\n`dialogs/AboutDialog.svelte` (source, CompMD), `ui/RepoRef.svelte` (commits, PRs), `overview/ProjectCard.svelte`, `kanban/KanbanColumns.svelte`, `progress/ReleaseView.svelte`, `shell/Footer.svelte`, `shell/ProjectTab.svelte`, `dialogs/WhatsNew.svelte`, `documents/DocumentViewer.svelte`, Help's links (rendered by CompMD: `docs/help.md`), and the Help ▸ CompMD menu item (`menu-actions.ts`, `page.open`).\n\n## Change\n- **One way to open an external link in the app**: the page hands `https:` (and `mailto:`) links to the app, which opens them in the system's browser; in the browser nothing changes. Prefer one place that catches every such link (a click handler on the document for external anchors, and `page.open`) over editing each component.\n- **How the app opens them** is a choice to make first: Tauri's opener plugin (`tauri-plugin-opener`) is a **new dependency and needs Hakan's yes** before it is added (docs/guides/tauri.md, Platform features); the alternative is a small command of the app's own. Propose, don't add.\n- **Only web addresses**: the app checks the URL itself (scheme `https`/`http`/`mailto` only, no `file:`, no custom schemes, no `atm:`), never trusts the page's; the capability allows only that command. Links inside rendered task text arrive from CompMD's sandbox as `link` events (compmd-rendering-design.md): they go through the same check.\n- `docs/security-architecture.md`: opening a URL from the page is a new entry point (what is allowed, who checks it). `docs/guides/tauri.md` says how links open.\n\n## Tests\nUnit: the page sends external links to the app and keeps internal ones (`/projects/…`, `#…`) in the page; the app's check refuses other schemes (Rust test). e2e under `asApp()`: clicking the About dialog's source link and a commit link calls the app's command with the URL; in the browser the anchor stays `target=\"_blank\"`. Then check by hand in a window (`cargo run -p atm-app`): About, Help ▸ CompMD, a PR link.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "dashboard/src/lib/dialogs/AboutDialog.svelte",
@@ -13087,7 +13087,7 @@
         "dashboard/tests/"
       ],
       "created_at": "2026-11-16T17:30:21Z",
-      "updated_at": "2026-11-16T18:16:55Z",
+      "updated_at": "2026-11-16T19:37:48Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13107,10 +13107,19 @@
           "kind": "note",
           "text": "Decided (Hakan, 2026-11-16): use Tauri’s opener plugin (`tauri-plugin-opener`), approved as a new dependency; pin it to a release at least two weeks old, as the other Tauri plugins are",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T19:37:48Z",
+          "kind": "outcome",
+          "text": "External links in the app go through one command, `open_url` (app/src-tauri/src/external.rs): https/http with a host or mailto only, else refused; opened with `tauri-plugin-opener` =2.7.2 from Rust, the page has no opener permission. One capture handler in the layout catches every anchor; `page.open` too. Not checked in a real window: try About, Help ▸ CompMD and a PR link",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T18:16:55Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "deab2d1dbd22b9f3ba1eb0eba36f7c63c5eeba62",
+      "completed_at": "2026-11-16T19:37:48Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-552",
@@ -13275,7 +13284,7 @@
       "description": "[The freshness design](docs/cross-project-freshness-design.md) §3 and §5.5, option **L** (P6): watching for changes is the store's job, behind the abstraction, so a store that isn't files (a `JiraStore`) works the same.\n\n## Change\n- **atm-db's `Store` trait:** `subscribe(on_change) -> Subscription` (dropping it ends it), replacing `watch_folders()`. Its documentation says `on_change` runs on the store's own thread, and that every store must push or poll.\n- **`JsonGitStore`:** watches its own folders (the task folder, the claims store, the working copies' task files) with `notify` and its debouncer, settled 300 ms, the code now in the app (`app/src-tauri/src/commands.rs`, `AppState::watch`). `notify` and `notify-debouncer-full` move from the app to atm-db (same versions, already approved; no new dependency).\n- **`MemoryStore`:** told by its own writes.\n- **`poll_stamp(store, interval, on_change)`** in atm-db: a helper an implementation may use when it can't push (none needs it yet: test it on its own). No polling default in the trait (Hakan, round 1).\n- **The registry** (`workspaces/<w>.json`): a subscription for \"the list changed\".\n- **atm-lib:** a workspace's changes are its members' subscriptions merged, plus the registry's; the app's `subscribe_workspace` and `subscribe_project` use that. Nothing above atm-db names a folder to watch.\n- Behaviour unchanged for the user: the app is told of the same changes as now (the open workspace's own projects); the browser polls.\n- `docs/layered-architecture.md` and `docs/guides/tauri.md` (Streams) say where watching lives.\n\n## Tests\natm-db: the JSON store's subscription tells a change in its task file and its claims and stops when dropped; `poll_stamp` tells a stamp change; the memory store tells its writes. atm-lib: a workspace subscription merges its members' and the registry's. The app's existing subscription tests (`a_subscription_says_when_a_watched_folder_changes…`, `a_window_loading_again…`) pass unchanged.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-db/src/interface.rs",
@@ -13289,7 +13298,7 @@
         "docs/guides/tauri.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:07:19Z",
+      "updated_at": "2026-11-16T19:38:11Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13301,7 +13310,9 @@
       "sprint": "Keys and reach",
       "components": [
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-16T19:38:11Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

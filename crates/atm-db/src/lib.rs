@@ -8,6 +8,7 @@ pub mod jsongit;
 pub mod memory;
 pub mod open;
 pub mod registry;
+pub mod subscription;
 pub mod working;
 
 #[cfg(test)]
@@ -17,3 +18,4 @@ pub use interface::Store;
 pub use jsongit::JsonGitStore;
 pub use memory::MemoryStore;
 pub use open::{Opened, ProjectSettings, open};
+pub use subscription::{OnChange, Subscription, poll_stamp};

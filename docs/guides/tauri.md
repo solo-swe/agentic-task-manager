@@ -26,8 +26,9 @@ atm's own rules for the atm app, the desktop distribution proposed in
 ## Streams
 
 - **One `tauri::ipc::Channel` per subscription** for live data, delivering messages in order, and an `unsubscribe`
-  command to end it. A subscription watches the folders the store reports (`Store::watch_folders`, not their
-  subfolders) with `notify`, debounced, and says only what changed (a workspace, a project); the page reads it again.
+  command to end it. A subscription is atm-lib's (`Workspace::subscribe`, `Member::subscribe`: the stores' own,
+  `Store::subscribe`, T-555), held until it ends; the app watches no folder itself and doesn't know whether a store
+  pushes or polls. It says only what changed (a workspace, a project); the page reads it again.
 - No global events for data changes.
 - **The page reacts, it doesn't poll** (T-506): in the app (`dashboard.live`) the root layout subscribes to the
   workspace and the open project (`lib/api/changes.ts`'s `watchChanges`), reloads on a message, and ends the

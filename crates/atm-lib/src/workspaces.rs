@@ -11,6 +11,7 @@ use atm_common::home::state_dir;
 use atm_common::time::{format_iso, now};
 use atm_common::{Error, Result};
 use atm_db::registry::{DEFAULT_WORKSPACE, FileRegistry, read_recent, workspace_ids, write_recent};
+use atm_db::{OnChange, Subscription};
 use serde_json::{Map, Value, json};
 
 use crate::Project;
@@ -50,12 +51,6 @@ impl Workspaces {
             home: home.to_path_buf(),
             opened: Mutex::new(HashMap::new()),
         }
-    }
-
-    /// The folder their files are in: it changes when one is made, removed or its list changes.
-    #[must_use]
-    pub fn folder(&self) -> PathBuf {
-        self.home.join(atm_db::registry::WORKSPACES_DIR)
     }
 
     /// Their IDs, `default` first.
@@ -373,12 +368,13 @@ impl Member {
         read_image(self.project()?.vcs().as_ref(), path)
     }
 
-    /// The folders to watch for its data to change.
-    #[must_use]
-    pub fn watch_folders(&self) -> Vec<PathBuf> {
-        self.project()
-            .map(|p| p.store().watch_folders())
-            .unwrap_or_default()
+    /// Be told when its data changes (its store's subscription), until the subscription is dropped. `on_change` runs
+    /// on the store's thread.
+    ///
+    /// # Errors
+    /// As [`Project::open`]; a store that can't be watched.
+    pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        self.project()?.store().subscribe(on_change)
     }
 }
 
@@ -510,24 +506,21 @@ impl Workspace {
         Ok(Member { entry, stamp })
     }
 
-    /// The folders to watch for its list to change: its file's, and each listed project's.
-    #[must_use]
-    pub fn watch_folders(&self) -> Vec<PathBuf> {
-        let mut folders: Vec<PathBuf> = self
-            .registry
-            .file()
-            .parent()
-            .map(Path::to_path_buf)
-            .into_iter()
-            .collect();
+    /// Be told when it changes, until the subscription is dropped: its list (and the list of workspaces), and the data
+    /// of each project it lists now that can be opened, their subscriptions merged. `on_change` runs on the stores'
+    /// threads, and atm-lib holds no lock while it runs.
+    ///
+    /// # Errors
+    /// Its list or a project's store can't be watched.
+    pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        let mut parts = Vec::new();
         for entry in self.entries() {
             if let Ok(project) = Self::project(&entry) {
-                folders.extend(project.store().watch_folders());
+                parts.push(project.store().subscribe(Arc::clone(&on_change))?);
             }
         }
-        folders.sort();
-        folders.dedup();
-        folders
+        parts.push(self.registry.subscribe(on_change)?);
+        Ok(Subscription::merged(parts))
     }
 
     fn summary(&self, entry: &Value, stamp: &Value) -> Value {
@@ -787,6 +780,53 @@ mod tests {
         assert_eq!(projects[0]["worktrees"], json!([]));
         assert!(workspace.search("anything").is_empty());
         assert!(workspace.find("gone").is_some() && workspace.find("x").is_none());
+        std::fs::remove_dir_all(&home).unwrap();
+    }
+
+    /// T-555: a workspace's subscription is its members' stores' and its list's, merged: a change in a member's task
+    /// file and in the workspace's file are both told, and nothing once it is dropped
+    #[test]
+    fn a_workspace_subscription_tells_its_members_changes_and_its_lists() {
+        use std::sync::mpsc::{Receiver, channel};
+        use std::time::Duration;
+        /// Whether nothing more is told for a second, what was told so far dropped first
+        fn quiet(received: &Receiver<()>) -> bool {
+            while received.try_recv().is_ok() {}
+            received.recv_timeout(Duration::from_secs(1)).is_err()
+        }
+        let home = state("subscribe");
+        let project = home.join("project");
+        let tasks = project.join(atm_common::TASK_DIR).join("tasks.json");
+        std::fs::create_dir_all(tasks.parent().unwrap()).unwrap();
+        std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
+        let workspaces = Workspaces::at(&home);
+        let workspace = workspaces.default_workspace();
+        workspace
+            .add_project(Some(&project.to_string_lossy()), &home)
+            .unwrap();
+        let (sent, received) = channel();
+        let on_change: OnChange = Arc::new(move || {
+            let _ = sent.send(());
+        });
+        let subscription = workspace.subscribe(on_change).unwrap();
+        std::thread::sleep(Duration::from_millis(200));
+        std::fs::write(
+            &tasks,
+            r#"{"meta": {"id": "one"}, "tasks": [{"id": "T-1"}]}"#,
+        )
+        .unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the member's change");
+        let _ = quiet(&received);
+        workspace.remove_project("one", &home).unwrap();
+        received
+            .recv_timeout(Duration::from_secs(10))
+            .expect("told of the list's change");
+        drop(subscription);
+        std::thread::sleep(Duration::from_millis(100));
+        std::fs::write(&tasks, r#"{"meta": {"id": "one"}, "tasks": []}"#).unwrap();
+        assert!(quiet(&received), "nothing once dropped");
         std::fs::remove_dir_all(&home).unwrap();
     }
 }

@@ -722,9 +722,10 @@ commands, which mirror them: `list_workspaces`, `list_projects`, `search`, `proj
   capability lists exactly these commands, refused to any other page (`the_main_windows_capability_lets_it_call_the_commands`).
 - **One write, a choice of view:** `list_projects` (like its route) records the workspace as the last opened, in
   `recent.json`, only when it changes.
-- **Subscriptions watch only what the store reports** (`Store::watch_folders`: the task folder, the claims store's
-  folder, the worktrees' task folders; for a workspace, also the state folder's `workspaces/`), not their subfolders,
-  with notify 8.2.1 and its debouncer 0.7.0 (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
+- **Subscriptions watch only the store's own data** (`Store::subscribe`, T-555: the JSON store watches its task
+  folder, the claims store's folder and the worktrees' task folders; for a workspace, the registry also watches the
+  state folder's `workspaces/`), not their subfolders, in atm-db, with notify 8.2.1 and its debouncer 0.7.0
+  (approved, CC0-1.0 in `deny.toml`). A change sends only which workspace
   or project changed, on that subscription's channel; the page reads again through the commands.
 
 **The `atm workspace` commands (T-493, ADR-003 §3).** `atm project list|add|remove|prune` are replaced by

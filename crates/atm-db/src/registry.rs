@@ -19,6 +19,7 @@ use serde_json::{Map, Value, json};
 use crate::jsongit::files::read_json;
 use crate::jsongit::lock::lock;
 use crate::jsongit::paths::{Paths, find_paths, main_worktree};
+use crate::subscription::{OnChange, Subscription};
 
 /// The registry's file, the `default` workspace, in the state folder.
 pub const REGISTRY_FILE: &str = "workspaces/default.json";
@@ -526,6 +527,16 @@ impl FileRegistry {
         json!([meta.len(), mtime.to_string()])
     }
 
+    /// Be told when its list changes, until the subscription is dropped (see [`subscribe`]: as the workspaces' files
+    /// share a folder, also when another workspace's does, or one is made, renamed or removed, which the list of
+    /// workspaces shows).
+    ///
+    /// # Errors
+    /// Its folder can't be watched.
+    pub fn subscribe(&self, on_change: OnChange) -> Result<Subscription> {
+        subscribe(&self.home, on_change)
+    }
+
     fn locked(&self) -> Result<crate::jsongit::lock::Lock> {
         ensure_home(&self.home)
             .map_err(|e| Error::failed(format!("{}: {e}", self.home.shown())))?;
@@ -722,6 +733,16 @@ impl FileRegistry {
             self.workspace
         ))
     }
+}
+
+/// Be told when the workspaces of the state folder `home` change: one's list of projects, or one made, renamed or
+/// removed (their files, in one folder), until the subscription is dropped. `on_change` runs on the watcher's thread.
+/// Before any workspace's file is written there is nothing to watch, and nothing is told.
+///
+/// # Errors
+/// The folder can't be watched.
+pub fn subscribe(home: &Path, on_change: OnChange) -> Result<Subscription> {
+    crate::subscription::watch(&[home.join(WORKSPACES_DIR)], on_change)
 }
 
 /// The IDs of the workspaces in the state folder `home`, sorted, `default` first and always there.

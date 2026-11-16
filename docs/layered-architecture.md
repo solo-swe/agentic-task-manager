@@ -273,7 +273,17 @@ together. The reads are per entity where atm-lib needs only one kind (`get_setti
 `read_claims`), and the whole document (`document()`) where a rule takes it whole (§11.3). Besides: `sizes`,
 `problems` and `raw` (`atm doctor`, tolerant reads), `files_for_commit`, `working_copy`, `exists` and `create`
 (`atm db init`), `stamp` (the REST API's ETags), `logo` and `check_logo`, `working_copies` and `copy_tasks` (the worktrees'
-copies). Only atm-lib reaches a project's store (in the Rust port, the front ends don't depend on atm-db at all).
+copies), `subscribe` (live changes, below). Only atm-lib reaches a project's store (in the Rust port, the front ends
+don't depend on atm-db at all).
+
+**Live changes are the store's (T-555, ADR-008 §5):** `Store::subscribe(on_change)` hands out a `Subscription` that
+calls `on_change` (on the store's own thread) when the project's data changes, until it is dropped. How the store
+hears of a change is its own: the JSON-in-git store watches its folders (the task folder, the claims store, the
+working copies' task folders) with `notify`, debounced; the memory store is told by its own writes; a store that
+can't push polls its stamp (atm-db's `poll_stamp`). The registry has the same for its workspaces' files
+(`registry::subscribe`). atm-lib merges them: a workspace's subscription is its list's and its projects' stores'
+(`Workspace::subscribe`), a project's its store's (`Member::subscribe`). Nothing above atm-db names a folder to watch;
+the app subscribes through atm-lib.
 
 `TaskFilter` names only stored fields (IDs, status, sprint or backlog, type, priority, label, component, release,
 `with`); what is derived (ready, waiting, effective review) is atm-lib's. The JSON-in-git store filters in memory.

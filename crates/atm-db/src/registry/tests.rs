@@ -120,3 +120,33 @@ fn projects_an_older_atm_listed_after_the_move_join_default() {
     );
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// T-555: a workspace's subscription tells when its list changes, and when a workspace is made; nothing once dropped
+#[test]
+fn a_registry_subscription_tells_when_the_list_or_the_workspaces_change() {
+    use crate::subscription::{quiet, told};
+    use std::time::Duration;
+    let dir = scratch("subscribe");
+    let home = dir.join("state");
+    let registry = FileRegistry::at(&home);
+    write_registry(&registry.file(), &empty_registry()).unwrap();
+    let (on_change, received) = told();
+    let subscription = registry.subscribe(on_change).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
+    registry
+        .add_project(Some(&a_project(&dir, "one")), &dir)
+        .unwrap();
+    received
+        .recv_timeout(Duration::from_secs(10))
+        .expect("told of the list's change");
+    let _ = quiet(&received);
+    assert!(FileRegistry::workspace(&home, "work").create().unwrap());
+    received
+        .recv_timeout(Duration::from_secs(10))
+        .expect("told of a workspace made");
+    drop(subscription);
+    std::thread::sleep(Duration::from_millis(100));
+    registry.remove_project("one", &dir).unwrap();
+    assert!(quiet(&received), "nothing once dropped");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

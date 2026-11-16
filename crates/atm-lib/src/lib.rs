@@ -28,5 +28,7 @@ pub mod tasks;
 pub mod workspaces;
 pub mod worktrees;
 
+/// Being told of changes (a workspace's, a project's): the store's subscriptions, how it hears of them its own.
+pub use atm_db::subscription::{OnChange, Subscription};
 pub use project::Project;
 pub use workspaces::{Workspace, Workspaces};

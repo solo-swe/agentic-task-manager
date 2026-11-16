@@ -80,7 +80,8 @@ tauri-plugin-opener = "=2.7.2"
 specta ={ version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "=0.0.13"
-# The app's live changes (T-456, approved): a watcher on the folders the store reports, its events debounced
+# The store's live changes (T-456, approved; atm-db's since T-555): the JSON store's watcher on its folders, its
+# events debounced
 notify = "8.2.1"
 notify-debouncer-full = "0.7.0"
 

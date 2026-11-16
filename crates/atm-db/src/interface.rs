@@ -6,6 +6,7 @@ use std::path::Path;
 use atm_common::{Error, Result, Task, Vocabulary};
 use serde_json::{Map, Value};
 
+use crate::subscription::{OnChange, Subscription};
 use crate::working::Working;
 
 /// A project's task data, as atm-lib reads it. One store is one snapshot: the data is read once, on first use.
@@ -107,11 +108,15 @@ pub trait Store {
         Value::Null
     }
 
-    /// The folders whose files change when the project's data does (its task files, its claims, its working copies'
-    /// task files), for a front end that watches them; none for a store that keeps nothing on disk.
-    fn watch_folders(&self) -> Vec<std::path::PathBuf> {
-        Vec::new()
-    }
+    /// Be told when the project's data changes (its tasks, claims or working copies), until the [`Subscription`] is
+    /// dropped. How is the store's own business, and every store must do one or the other: push (the JSON store
+    /// watches its files; the memory store is told by its own writes) or poll (a store that can't push, with its own
+    /// interval; [`crate::poll_stamp`] helps). What subscribes can't tell which. `on_change` runs on the store's own
+    /// thread (a watcher's, a poller's, or the writer's), and may be called for a burst of changes once or more.
+    ///
+    /// # Errors
+    /// When the store can't be watched (or polled).
+    fn subscribe(&self, on_change: OnChange) -> Result<Subscription>;
 
     /// The project's working copies, main first: `[{path, branch, main}]`; none for a store without them.
     fn working_copies(&self) -> Vec<Value> {
