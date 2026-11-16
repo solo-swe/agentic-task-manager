@@ -1027,6 +1027,33 @@ which sets the clipboard in many terminals, a window title, an OSC 8 link, a scr
 carriage return printing over the line. Fixed in the same release: I30. Agents were never at risk (they read the
 bytes as text; the sequences showed as text to them), and the dashboard renders task text with CompMD (I14).
 
+**Release 0.38.0 (the sprint Keys and reach, T-413, T-436, T-488, T-534, T-538 to T-556; T-507 skipped).** The
+checklist:
+- **Skills and `docs/agent/` changed** (T-547). No API key is used for the agent sandbox, so this written review takes
+  the live run's place: every skill's version check asks for 0.38.0 (a keyed task file is format 2, which older atm
+  doesn't check; T-540's note); the create-tasks skill gives a new project a `key`, confirmed with the user, and names
+  a dependency by key, another project's too; the do-task skill takes a task's key. `atm docs commands` and
+  `atm docs tasks` describe keys, provisional keys, `atm project key show|set` ("only with the user's say: it
+  rewrites every task's ID") and dependencies across projects, and say a pipe gets plain text. None reads a path, a
+  URL or outside text, or runs anything; no skill's pre-approvals change (`skills/claude-code.json`). The skills
+  are installed into more harnesses' folders (T-413, recorded above), with the portable core only.
+- **Entry points, fields, CI permissions:** reading another registered project's task folder (T-544, recorded above
+  with its checks; kept fresh by T-553 to T-555, which read nothing more: stamps, then the same reads); `open_url`
+  and the opener plugin (T-551, recorded above, in I25); `atm agents`' folders (T-413); the CLI's output (T-488,
+  T-556, I30). New fields agents and the dashboard act on: `key`, `key_final`, `aliases`, `number`, `meta.key`,
+  `key_history`, `meta.format` (atm's own, checked on load: T-538), and `<project id>:<UUID>` references (resolved
+  only among the user's registered projects). New dependencies, each approved by Hakan: `uuid`, `anstyle`,
+  `anstream`, `terminal_size`, `tauri-plugin-opener` 2.7.2; CompMD 0.7.1 (`tauri-plugin-compmd`, `compmd-host`, the
+  sandbox and the Mermaid pack); `notify` moved from the app into atm-db (T-555). `package.json`'s `devEngines` makes
+  pnpm download the pinned Node.js (T-436), recorded in the lockfile. No CI permission changes.
+- **What ships is what is described:** the dashboard shows keys (T-546, T-549; the fixtures keep legacy IDs, so only
+  the Help screenshots changed, for compmd.dev's link); the CLI's output for people is styled on a terminal and
+  plain in a pipe; the app opens external links in the browser. Upgrading every clone before `atm project key set`
+  is in the release notes (CHANGELOG.md, WHATS-NEW.md); T-413's support table records which harnesses ran a task.
+- **Checks run:** `cargo test` (317), clippy, fmt and deny; the unit tests with coverage (1361, 95.4% of lines);
+  `pnpm run check`; the CLI suite (646); the functional e2e suite (451); the Linux screenshots in Docker (84; Help's
+  two regenerated).
+
 ## 4. Keeping it current
 
 This document changes **in the same PR** as a change that:

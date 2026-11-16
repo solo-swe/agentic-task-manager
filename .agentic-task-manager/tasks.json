@@ -13356,7 +13356,7 @@
       "description": "Found in 0.38.0's security review of T-488's styled output: task text (a name, a note, a description, anyone's who can change `tasks.json`) reached the terminal as written, so an escape sequence in it could set the clipboard (OSC 52), the window title or a link, clear the screen or hide text, and a carriage return could print over a line.\n\n## Change\n- `output::clean` in `crates/atm-cli/src/output.rs`: drops every control character but the line end and the tab; with styling on, keeps SGR sequences of atm's own styles only.\n- The crate's own `println!`, `print!`, `eprintln!` and `eprint!` (in `main.rs`) shadow std's, so everything printed for people goes through it; `--json` prints exactly.\n- [security-architecture.md](docs/security-architecture.md): invariant I30, and the review entry.\n\n## Tests\n`tests/scripts/output.test.mjs` \"task text can’t drive the terminal\".",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "crates/atm-cli/src/output.rs",
@@ -13366,7 +13366,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-16T23:36:48Z",
-      "updated_at": "2026-11-16T23:36:59Z",
+      "updated_at": "2026-11-16T23:37:55Z",
       "created_by": "claude:0f56a916",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13377,7 +13377,18 @@
       ],
       "sprint": "Keys and reach",
       "started_at": "2026-11-16T23:36:59Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "b442d6b7d6cf1dfb8e79313888c25d2bf4991271",
+      "completed_at": "2026-11-16T23:37:55Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T23:37:55Z",
+          "kind": "outcome",
+          "text": "output::clean drops task text’s control characters before the terminal (I30); --json exact. Found in 0.38.0’s security review of T-488; the CLI suite (647) passes.",
+          "by": "claude:0f56a916"
+        }
+      ]
     }
   ]
 }

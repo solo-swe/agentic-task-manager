@@ -4,6 +4,63 @@ All notable changes to atm and its task dashboard. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 The dashboard comes with atm: upgrading atm updates it everywhere (until 0.32.0, with the Claude Code plugin).
 
+## [0.38.0] - 2026-11-17
+
+Keys and reach: tasks keyed like ATM-123 with dependencies across projects, atm's skills in Codex, Copilot, Cursor,
+OpenCode and Antigravity, readable CLI output, and other projects' tasks kept fresh.
+
+**Upgrade every clone of a project to 0.38.0 before running `atm project key set` in it.** A keyed task file is
+format 2: atm 0.37.0 and older don't check the format, read it as valid and would give new tasks `T-` IDs. The skills
+require 0.38.0.
+
+### Added
+- **Task keys** (T-534, [ADR-007](docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md)): every task
+  has a UUID (v7, its `id`, the `uuid` crate) and a number, shown with the project's key as `ATM-123`.
+  - The format (T-538): `meta.format` 2, `meta.key` (3 to 6 letters and digits), `key_history`, `next_number`;
+    tasks' `number`, `key_final` and `aliases`; references are UUIDs. A file of a newer format is refused: upgrade
+    atm.
+  - `atm project key show|set <KEY>` (T-540, T-543): the first `set` keys a project with `T-` IDs (numbers kept, an
+    ID that doesn't fit becomes an alias, references, sprint reports and claims rewritten, the same in every clone);
+    a later one changes the prefix, the old one kept in `key_history` so old keys still find their tasks. It warns
+    when another registered project uses the key. `atm db init` starts new projects with keys.
+  - Every command takes a key, an earlier prefix, an alias or a UUID (T-539, T-543); lists, details, errors and
+    printed lines show keys, a provisional one as `~ATM-12`; `--json` has `id` (the UUID), `key` and `key_final`. The
+    commit template's `{id}` is the key; `{uuid}` is new.
+  - Provisional numbers (T-541, T-542): the merge driver matches tasks by UUID and renumbers only provisional ones;
+    a key becomes final once its task is on the base branch.
+  - The dashboard and the app (T-546, T-549): keys on cards, rows, details, the graph, search, the overview and the
+    All projects board, a provisional one lighter with a DRAFT tag; `?task=` and `atm://…?task=` take any of the
+    names and show the current key.
+- **Dependencies and related tasks across projects** (T-544, T-545, ADR-008): written by key
+  (`atm task edit LFB-5 --add-dep ATM-978`), stored as `<project id>:<UUID>`, found among the user's registered
+  projects and read only; an unfinished one blocks `atm loop next`, `atm doctor` names a missing one. Two projects
+  with one key: naming the other's task by key is refused, by UUID works, and doctor and status warn. The dashboard
+  shows another project's task by key with its status and a link.
+- **atm's skills in more harnesses** (T-413): `atm agents install` writes `~/.agents/skills/` (Codex, Copilot CLI,
+  Cursor, OpenCode, Gemini CLI) and, when Antigravity CLI is installed, `~/.gemini/config/skills/`, besides Claude
+  Code's; `--harness` takes a folder (`claude`, `agents`, `antigravity`) or a tool (`codex`, `cursor`, …).
+  `atm agents status` and the app's Connect dialog name the tools found for each folder and those that list the
+  skills twice. The support table is in `docs/better-way-to-distribute-atm.md` §5.
+
+### Changed
+- **The CLI's output** (T-488, `docs/cli-output-design.md`): aligned columns, grouped sections, and styles on a
+  terminal (`--color auto|always|never`, `NO_COLOR`); lines cut to the terminal's width there; a pipe and `--json`
+  get plain text as before. `atm project status --all` shows every section.
+- **Other projects' tasks stay fresh** (T-552 to T-555, `docs/cross-project-freshness-design.md`): one cache keyed
+  by each project's stamp, read again after 5 seconds; the tasks route's ETag covers the projects a project's tasks
+  reference, so the browser's polling sees their changes; the app is told of them (`Store::subscribe` in atm-db, the
+  app's file watcher behind it).
+- **CompMD 0.7.1** and `@comp-markdown/mermaid` 0.1.2 (T-550); CompMD's site is compmd.dev (T-548).
+- The dashboard's `package.json` pins pnpm 12.14.0 and Node 24 with `devEngines` (T-436).
+
+### Fixed
+- **Task text can't drive the terminal** (T-556, found in this release's security review): the CLI drops control
+  characters from what it prints for people, so an escape sequence in a task's name, note or description (a
+  clipboard write, a window title, a screen clear) prints as plain text. `--json` is unchanged.
+- **The app's external links** (T-551): About, Help, the repository and PR links open in the browser (`open_url`,
+  `tauri-plugin-opener` 2.7.2); before, they did nothing.
+- The dev server (`pnpm run dev`) answers revalidated page loads and keeps Node's response methods (T-436).
+
 ## [0.37.0] - 2026-11-13
 
 Updates and renames: the app's update shows its progress and restarts by itself, CompMD 0.7.0 used as its Tauri
