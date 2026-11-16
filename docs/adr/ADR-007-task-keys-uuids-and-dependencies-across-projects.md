@@ -1,6 +1,8 @@
 # ADR-007: Tasks stored by UUID, shown by a project key (ATM-527), with dependencies across projects
 
-- **Status:** accepted, 2026-11-15 (T-534)
+- **Status:** accepted, 2026-11-15 (T-534); §7's lookup and freshness replaced by
+  [ADR-008](ADR-008-other-projects-tasks-referenced-anywhere-loaded-when-needed.md) (2026-11-16, from
+  [cross-project-freshness-design.md](../cross-project-freshness-design.md))
 - **Decided by:** Hakan Serce (T-534: "stored as UUID, displayed as human-readable", the number permanently tied to the
   UUID, the prefix a project's short name of 3 to 6 letters and digits, a migration that changes it any time, a
   clash shown by UUID with a warning; provisional keys until merged, with a marker)
@@ -98,6 +100,10 @@ alias resolves to the task it moved to.
   before the migration still merges.
 
 ### 7. Dependencies across projects
+
+> [!NOTE]
+> Where a key is looked up (every registered project), and how another project stays up to date (loaded when needed,
+> never watched), are [ADR-008](ADR-008-other-projects-tasks-referenced-anywhere-loaded-when-needed.md)'s.
 
 - **A reference to another project's task** is `<project id>:<UUID>` (the project's `meta.id`, 8 hex digits, which
   never changes), so atm knows where to look and can say what is missing. It is written by key

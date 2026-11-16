@@ -13124,14 +13124,14 @@
       "description": "Write `docs/adr/ADR-008-…md` from [the freshness design](docs/cross-project-freshness-design.md) §4.1 (K4) and §9, as AGENTS.md asks for a decision that changes an ADR.\n\n## What it decides\n- **Any registered project** can be referenced, written by key or UUID; a key is looked up among every registered project, not only those of the workspaces the referring project is in (ADR-007 §7 said the latter; the code, `foreign::registered`, already does the former).\n- **Loaded when needed, never watched:** another project is read when something needs it (readiness, display), through the stamp-keyed cache (design §5.1 B); only the open workspace's own projects are watched, for the app.\n- **Worktree branches** (design §4.2): another project counts as its main working copy (V1).\n- **The browser polls; the app is pushed** (design 1), and the store owns how it hears of changes (design §3).\n\n## Also\nADR-007 gets a line under its status: \"§7's lookup and freshness replaced by ADR-008\". Link the design from both.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "docs/adr/",
         "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:07:14Z",
+      "updated_at": "2026-11-16T18:18:15Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13143,7 +13143,9 @@
       "sprint": "Keys and reach",
       "components": [
         "docs"
-      ]
+      ],
+      "started_at": "2026-11-16T18:18:15Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-553",
@@ -13157,7 +13159,7 @@
       "description": "[The freshness design](docs/cross-project-freshness-design.md) §5.1, option **B**: fixes P1, P4 and P5.\n\n## The bug\n`foreign::status` (the `ForeignStatus` hook the rules use: `waiting_for`, `ready`, unmet dependencies, the summary's `next` and board cards) remembers each answer for the whole process (`static SEEN`), so in `atm serve` and the app a task keeps reading \"waiting on ATM-1\" after ATM-1 is done, until a restart, while `derived.foreign` (T-549) shows it done and `atm loop next` takes it.\n\n## Change (`crates/atm-lib/src/foreign.rs`)\n- **One cache for the rules and the display**, keyed by the other project's `meta.id`: the project, its document and archive as read, and its store's `stamp()` (`tasks`, `archive`).\n- **On each use**, compare the store's current stamp: unchanged → use the entry; changed → read the project again. Entries also **expire after a few seconds** (a constant, e.g. 5 s), against coarse file timestamps.\n- `status`, `label`, `Lookup::view`, `find_uuid` and `resolve_in_other_project` all read through it; `registered()` is no longer opened per reference.\n- The registry (which projects are registered, and where) is part of the key: a project removed from the workspaces, or its folder gone, is seen on the next use.\n- Thread-safe (the server's threads): a `Mutex`, never held while reading a project.\n\n## Tests\n- **atm-lib:** in one process (no restart), after the other project's task is marked done, `status` and `Lookup::view` both say done, and a task depending on it is ready; an unchanged stamp doesn't re-read (count the reads); the entry expires; a removed project is `unregistered`.\n- **The CLI suite (`serve.test.mjs`):** with a running `atm serve`, two registered projects: the other's task done → A's tasks route (without validators) gives `ready` true and no `waiting_for`; the overview's `next` follows.\n- **The app (Rust command tests):** `project_tasks` within one `AppState` follows the other project's change.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "crates/atm-lib/src/foreign.rs",
@@ -13166,7 +13168,7 @@
         "app/src-tauri/src/commands.rs"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:07:15Z",
+      "updated_at": "2026-11-16T18:17:21Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13179,7 +13181,9 @@
       "components": [
         "cli",
         "api"
-      ]
+      ],
+      "started_at": "2026-11-16T18:17:21Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-554",

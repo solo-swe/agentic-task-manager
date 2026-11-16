@@ -1,6 +1,7 @@
 # Other projects' tasks: keeping them fresh in the app, the browser and the CLI
 
-- **Status:** accepted, 2026-11-16 (Hakan, in Crit, three rounds). Round 1 decided:
+- **Status:** accepted, 2026-11-16 (Hakan, in Crit, three rounds); its decisions are
+  [ADR-008](adr/ADR-008-other-projects-tasks-referenced-anywhere-loaded-when-needed.md). Round 1 decided:
   - design 1: the browser polls with its refresh settings, as before T-507, and T-507 is reverted;
   - the store owns how it hears of changes (§3);
   - B's expiry is acceptable.
