@@ -1611,6 +1611,50 @@ describe('serve', () => {
     atm(['service', 'stop'], root);
   });
 
+  test('another project’s task done: ready here, in the tasks and the overview, without a restart (T-553)', async () => {
+    const atm = atmIn(home());
+    const keyed = (id, name, key, taskName) => {
+      const root = project({
+        meta: { id, project: name },
+        tasks: [{ id: 'T-1', name: taskName, type: 'feature', status: 'todo' }],
+      });
+      assert.equal(atm(['db', 'migrate'], root).code, 0);
+      assert.equal(atm(['project', 'key', 'set', key], root).code, 0);
+      assert.equal(atm(['workspace', 'add-project'], root).code, 0);
+      return root;
+    };
+    const b = keyed('bbbb5530', 'Tool', 'ATM', 'the API');
+    const a = keyed('aaaa5530', 'Blog', 'LFB', 'a post about it');
+    const edit = atm(['task', 'edit', 'LFB-1', '--add-dep', 'ATM-1'], a);
+    assert.equal(edit.code, 0, edit.stderr);
+    const ref = JSON.parse(fs.readFileSync(path.join(a, '.agentic-task-manager/tasks.json'), 'utf8')).tasks[0]
+      .dependencies[0];
+    const port = ports();
+    assert.equal(atm(['service', '--port', String(port)], a).code, 0);
+    const post = async () =>
+      (await (await fetch(`http://localhost:${port}/api/v1/projects/aaaa5530/tasks`)).json()).tasks[0].derived;
+    const next = async () =>
+      (await (await fetch(`http://localhost:${port}/api/projects`)).json()).projects
+        .find((p) => p.id === 'aaaa5530')
+        .summary.next.map((t) => t.key);
+
+    // Read once while ATM-1 is open: LFB-1 waits for it
+    let derived = await post();
+    assert.equal(derived.ready, false);
+    assert.deepEqual(derived.waiting_for, [ref]);
+    assert.deepEqual(await next(), []);
+
+    // Done in its own project: the same server says LFB-1 is ready, in its tasks and on the overview
+    assert.equal(atm(['task', 'state', 'ATM-1', 'in_progress'], b).code, 0);
+    assert.equal(atm(['task', 'state', 'ATM-1', 'done'], b).code, 0);
+    derived = await post();
+    assert.equal(derived.ready, true, JSON.stringify(derived));
+    assert.deepEqual(derived.waiting_for, []);
+    assert.equal(derived.foreign[ref].kind, 'done');
+    assert.deepEqual(await next(), ['LFB-1']);
+    atm(['service', 'stop'], a);
+  });
+
   test('api/v1/projects/<id>/tasks reads a malformed task file as far as it can, and says what is wrong (T-377)', async () => {
     const atm = atmIn(home());
     const task = (id, extra = {}) => ({

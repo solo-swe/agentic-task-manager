@@ -16,6 +16,7 @@ use serde_json::{Map, Value, json};
 use crate::Project;
 use crate::archive::{project_stamp, task_snapshot};
 use crate::documents::{read_document, read_image};
+use crate::foreign;
 use crate::query::{Filters, list_claims};
 use crate::settings::get_logo;
 use crate::summary::project_summary;
@@ -236,10 +237,19 @@ impl Workspaces {
 }
 
 /// One workspace: its list of projects, and each one's summary, computed again only when its task data or claims
-/// changed, or the day did (the completions count by day).
+/// changed, or the day did (the completions count by day), or a project its tasks depend on did (T-553).
 pub struct Workspace {
     registry: FileRegistry,
-    summaries: Mutex<HashMap<String, (Value, Value)>>,
+    summaries: Mutex<HashMap<String, Summarized>>,
+}
+
+/// A project's summary, and what it was worked out from: the project's stamp, and the other projects its tasks
+/// depend on, by ID, with their [`foreign::version`].
+struct Summarized {
+    stamp: Value,
+    others: Vec<String>,
+    version: Value,
+    summary: Value,
 }
 
 /// A workspace's projects as the dashboard lists them, read once: what the list depends on (`stamp`, for an `ETag`)
@@ -518,16 +528,32 @@ impl Workspace {
             .summaries
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some((cached, summary)) = cache.get(&key)
-            && cached == stamp
+        if let Some(cached) = cache.get(&key)
+            && cached.stamp == *stamp
+            && foreign::version(&cached.others) == cached.version
         {
-            return summary.clone();
+            return cached.summary.clone();
         }
         // An unreadable tasks.json or an unusable vocabulary: listed as missing
-        let summary = Self::project(entry)
+        let project = Self::project(entry);
+        let others = project
+            .as_ref()
+            .map(foreign::referenced)
+            .unwrap_or_default();
+        // Before the summary, so a change in another project meanwhile is seen on the next use
+        let version = foreign::version(&others);
+        let summary = project
             .and_then(|p| project_summary(&p))
             .unwrap_or(Value::Null);
-        cache.insert(key, (stamp.clone(), summary.clone()));
+        cache.insert(
+            key,
+            Summarized {
+                stamp: stamp.clone(),
+                others,
+                version,
+                summary: summary.clone(),
+            },
+        );
         summary
     }
 

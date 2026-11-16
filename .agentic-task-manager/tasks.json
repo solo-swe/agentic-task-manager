@@ -13124,14 +13124,14 @@
       "description": "Write `docs/adr/ADR-008-…md` from [the freshness design](docs/cross-project-freshness-design.md) §4.1 (K4) and §9, as AGENTS.md asks for a decision that changes an ADR.\n\n## What it decides\n- **Any registered project** can be referenced, written by key or UUID; a key is looked up among every registered project, not only those of the workspaces the referring project is in (ADR-007 §7 said the latter; the code, `foreign::registered`, already does the former).\n- **Loaded when needed, never watched:** another project is read when something needs it (readiness, display), through the stamp-keyed cache (design §5.1 B); only the open workspace's own projects are watched, for the app.\n- **Worktree branches** (design §4.2): another project counts as its main working copy (V1).\n- **The browser polls; the app is pushed** (design 1), and the store owns how it hears of changes (design §3).\n\n## Also\nADR-007 gets a line under its status: \"§7's lookup and freshness replaced by ADR-008\". Link the design from both.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [],
       "files": [
         "docs/adr/",
         "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
       ],
       "created_at": "2026-11-16T18:07:04Z",
-      "updated_at": "2026-11-16T18:18:15Z",
+      "updated_at": "2026-11-16T18:18:58Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -13145,7 +13145,18 @@
         "docs"
       ],
       "started_at": "2026-11-16T18:18:15Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "8bcee3324c2eb582589b20ec49112193682029bd",
+      "completed_at": "2026-11-16T18:18:58Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T18:18:58Z",
+          "kind": "outcome",
+          "text": "ADR-008 written (any registered project referable, loaded when needed, never watched; the browser polls, the app is pushed; the store owns how it hears of changes; another project as its main copy). ADR-007 and the design point to it",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-553",
