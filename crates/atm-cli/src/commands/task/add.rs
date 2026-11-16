@@ -233,7 +233,8 @@ pub fn note(args: &NoteArgs, ctx: Context, cwd: &Path) -> Result<()> {
     }
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let task = add_task_note(&mut project, &args.task_id, &args.text)?;
+    let stored = project.resolve_task(&args.task_id)?;
+    let task = add_task_note(&mut project, &stored, &args.text)?;
     let notes = task
         .get("notes")
         .and_then(Value::as_array)

@@ -84,6 +84,85 @@ test('migrate --keys: UUIDs, numbers, references and claims; the same in every c
   }
 });
 
+test('commands take a key, an earlier prefix or a UUID, and show keys, provisional ones with a ~', () => {
+  const root = makeProject({
+    files: {
+      [FILE]: {
+        meta: { id: '3f2a9c1e', project: 'Agentic Task Manager' },
+        tasks: [
+          { id: 'T-001', name: 'one', type: 'feature', status: 'done' },
+          { id: 'T-002', name: 'two', type: 'feature', status: 'todo', dependencies: ['T-001'] },
+        ],
+      },
+    },
+    git: true,
+    commit: true,
+  });
+  const ok = (args) => {
+    const r = runAtm(args, root);
+    assert.equal(r.code, 0, `${args.join(' ')}: ${r.stderr}`);
+    return r.stdout;
+  };
+  try {
+    ok(['db', 'migrate', '--keys']);
+    const two = read(root, FILE).tasks[1];
+    // A new task: a UUID, the next number, provisional
+    const dir = path.join(root, '..', `${path.basename(root)}-new`);
+    fs.mkdirSync(dir);
+    fs.writeFileSync(
+      path.join(dir, 'new.json'),
+      JSON.stringify([{ name: 'three', type: 'feature', dependencies: ['ATM-2'] }]),
+    );
+    ok(['task', 'add', '--json-file', path.join(dir, 'new.json')]);
+    removeDir(dir);
+    const three = read(root, FILE).tasks[2];
+    assert.equal(three.number, 3);
+    assert.equal(three.key_final, false);
+    assert.deepEqual(three.dependencies, [two.id], 'stored by UUID');
+
+    // The list shows keys, the provisional one marked
+    const list = ok(['task', 'list']);
+    assert.match(list, /^ATM-1 +done/m);
+    assert.match(list, /^~ATM-3 +todo/m);
+    const rows = JSON.parse(ok(['task', 'list', '--json']));
+    assert.deepEqual(
+      rows.map((r) => [r.key, r.key_final, r.label]),
+      [
+        ['ATM-1', true, 'ATM-1'],
+        ['ATM-2', true, 'ATM-2'],
+        ['ATM-3', false, '~ATM-3'],
+      ],
+    );
+    assert.equal(rows[1].id, two.id, 'the UUID too');
+
+    // Details by key, by the old prefix, by UUID: the same task, its dependency by key
+    for (const ref of ['ATM-2', 'atm-2', 'T-002', two.id]) {
+      const details = ok(['task', 'details', ref]);
+      assert.match(details, /^ATM-2  two$/m, ref);
+      assert.match(details, /depends on: ATM-1 \(done\)/, ref);
+    }
+    assert.equal(JSON.parse(ok(['task', 'details', 'ATM-2', '--json']))[0].key, 'ATM-2');
+
+    // A refusal names tasks by key: ATM-3 waits for ATM-2
+    const waiting = runAtm(['task', 'state', 'ATM-3', 'in_progress'], root);
+    assert.match(waiting.stderr, /can't start ~ATM-3: waiting on ATM-2 \(todo\)/);
+    // A state change and an edit by key
+    ok(['task', 'state', 'ATM-2', 'in_progress']);
+    assert.equal(read(root, FILE).tasks[1].status, 'in_progress');
+    ok(['task', 'edit', 'T-002', '--add-related', 'ATM-1']);
+    assert.deepEqual(read(root, FILE).tasks[1].related, [read(root, FILE).tasks[0].id]);
+
+    // An unknown key says why
+    const missing = runAtm(['task', 'details', 'ATM-99'], root);
+    assert.notEqual(missing.code, 0);
+    assert.match(missing.stderr, /no task 'ATM-99' in this project/);
+    const other = runAtm(['task', 'details', 'LFB-1'], root);
+    assert.match(other.stderr, /LFB isn't this project's key \(ATM\)/);
+  } finally {
+    removeDir(root);
+  }
+});
+
 test('migrate --keys on a copy of this repository’s own task files loses nothing', () => {
   const own = JSON.parse(fs.readFileSync(path.join(REPO, FILE), 'utf8'));
   const ownArchive = JSON.parse(fs.readFileSync(path.join(REPO, ARCHIVE), 'utf8'));

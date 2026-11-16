@@ -144,7 +144,29 @@ pub fn show_tasks(project: &Project, ids: &[TaskId]) -> Result<Vec<TaskView>> {
                 None => return Err(Error::NotFound(format!("no task {id}"))),
             },
         };
-        views.push(view_task(task, is_archived, &tasks, &archived, vocab)?);
+        let mut view = view_task(task, is_archived, &tasks, &archived, vocab)?;
+        // With task keys (ADR-007 §1): its key beside its UUID, and the tasks it names by their labels
+        let document = store.document()?;
+        if atm_common::keys::keys_format(document) {
+            let archive: Vec<Task> = store.list_archived()?.into_iter().cloned().collect();
+            let label = |id: &str| {
+                atm_common::keys::resolve(document, &archive, id).map_or_else(
+                    |_| id.to_string(),
+                    |f| {
+                        atm_common::keys::label_of(&Value::Object(atm_common::keys::with_key(
+                            document, f.task,
+                        )))
+                    },
+                )
+            };
+            for d in &mut view.dependencies {
+                d.id = label(&d.id);
+            }
+            view.related = view.related.iter().map(|r| label(r)).collect();
+            view.duplicated_by = view.duplicated_by.iter().map(|r| label(r)).collect();
+            view.task = atm_common::keys::with_key(document, &view.task);
+        }
+        views.push(view);
     }
     Ok(views)
 }

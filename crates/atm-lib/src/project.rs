@@ -88,6 +88,56 @@ impl Project {
         self.store.as_mut()
     }
 
+    /// The stored ID of the task a reference names (ADR-007 §5): in a keys-format file, a key, a key with an earlier
+    /// prefix, an alias or a UUID becomes the task's UUID (archived tasks too); in a file from before task keys the
+    /// reference is the ID, given back as it is (the command then says what it says of an unknown one).
+    ///
+    /// # Errors
+    /// In a keys-format file, a reference that names no task (saying why), or several; task data that can't be read.
+    pub fn resolve_task(&self, reference: &str) -> Result<String> {
+        let document = self.store.document()?;
+        if !atm_common::keys::keys_format(document) {
+            return Ok(reference.to_string());
+        }
+        let archive: Vec<atm_common::Task> =
+            self.store.list_archived()?.into_iter().cloned().collect();
+        let found = atm_common::keys::resolve(document, &archive, reference)?;
+        Ok(found
+            .task
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(reference)
+            .to_string())
+    }
+
+    /// [`Project::resolve_task`] for several.
+    ///
+    /// # Errors
+    /// As [`Project::resolve_task`].
+    pub fn resolve_tasks(&self, references: &[String]) -> Result<Vec<String>> {
+        references.iter().map(|r| self.resolve_task(r)).collect()
+    }
+
+    /// How a task is shown to people (ADR-007 §1, §3): its key, `~` before a provisional one (`~ATM-538`), in a
+    /// keys-format file; its ID before task keys.
+    #[must_use]
+    pub fn task_label(&self, task: &atm_common::Task) -> String {
+        let id = || {
+            task.get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
+        let Ok(document) = self.store.document() else {
+            return id();
+        };
+        match atm_common::keys::key_of(document, task) {
+            Some(key) if atm_common::keys::key_final(task) => key,
+            Some(key) => format!("~{key}"),
+            None => id(),
+        }
+    }
+
     /// Its root folder, when it was opened from one.
     #[must_use]
     pub fn root(&self) -> Option<&Path> {

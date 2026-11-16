@@ -102,7 +102,7 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
             None => args.description,
         };
     let added_files = !args.add_file.is_empty();
-    let change = TaskEdit {
+    let mut change = TaskEdit {
         name: args.name,
         description,
         sprint: args.sprint,
@@ -130,7 +130,19 @@ pub fn edit(args: EditArgs, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let edited = edit_existing_task(&mut project, &args.task_id, &change)?;
+    let stored = project.resolve_task(&args.task_id)?;
+    // Tasks named by key, alias or UUID are stored by UUID (ADR-007 §5); a reference to take away that names no task
+    // (a dangling one) is taken away as written
+    change.add_dependencies = project.resolve_tasks(&change.add_dependencies)?;
+    change.add_related = project.resolve_tasks(&change.add_related)?;
+    let loose = |refs: &[String]| -> Vec<String> {
+        refs.iter()
+            .map(|r| project.resolve_task(r).unwrap_or_else(|_| r.clone()))
+            .collect()
+    };
+    change.remove_dependencies = loose(&change.remove_dependencies);
+    change.remove_related = loose(&change.remove_related);
+    let edited = edit_existing_task(&mut project, &stored, &change)?;
     if ctx.json {
         print_json(&Value::Object(edited.task));
         return Ok(());

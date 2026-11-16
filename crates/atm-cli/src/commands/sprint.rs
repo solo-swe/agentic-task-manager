@@ -433,7 +433,9 @@ pub fn run(command: SprintCommand, ctx: Context, cwd: &Path) -> Result<()> {
             if dry(ctx, &format!("move {} to {to}", ids.join(", "))) {
                 return Ok(());
             }
-            let moved = move_tasks(&mut actor_project(agent.as_deref(), cwd)?, &ids, &to)?;
+            let mut project = actor_project(agent.as_deref(), cwd)?;
+            let ids = project.resolve_tasks(&ids)?;
+            let moved = move_tasks(&mut project, &ids, &to)?;
             if ctx.json {
                 print_json(&Value::Array(moved));
                 return Ok(());

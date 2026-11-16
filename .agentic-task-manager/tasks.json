@@ -20550,7 +20550,7 @@
       "description": "ADR-007 §4, in `crates/atm-db/src/jsongit/merge.rs`.\n\n## Change\n- Tasks matched by `id` (UUID); two branches adding tasks keep both.\n- Same `number` on two tasks: the provisional one takes the next free number (above both sides and `meta.next_number`), of two provisional ones the incoming side's; its old key goes into `aliases`. Two final ones: a conflict, never a guess.\n- No reference rewriting (they are UUIDs); `meta.next_number` merges as the larger.\n- A side still in the old format is migrated first (as phases became sprints), so a branch from before the migration merges.\n- `next_free_id` goes.\n\n## Tests\nReal git merges in `tests/scripts/merge.test.mjs`: both add a task; provisional vs final; two final (conflict); an old-format side.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-540"
       ],
@@ -20559,7 +20559,7 @@
         "tests/scripts/merge.test.mjs"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:33:44Z",
+      "updated_at": "2026-11-16T03:38:09Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20573,7 +20573,18 @@
         "cli"
       ],
       "started_at": "2026-11-16T03:33:44Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "e4940eb09eb3e0b5835c07170c12f3c27e2bd245",
+      "completed_at": "2026-11-16T03:38:09Z",
+      "completed_by": "claude:0f56a916",
+      "notes": [
+        {
+          "at": "2026-11-16T03:38:09Z",
+          "kind": "outcome",
+          "text": "Merge driver: an old-format side (base too) is migrated first when another is keyed, so pre-migration branches merge task by task; keyed: one UUID added differently on both is a conflict; number clashes: final keeps it, of two provisional ours does, the mover takes the next free number with its old key as alias; two final: conflict, both kept; next_number the larger. next_free_id stays for legacy files until T-543. Unit tests and two real git merges.",
+          "by": "claude:0f56a916"
+        }
+      ]
     },
     {
       "id": "T-542",
@@ -20622,7 +20633,7 @@
       "description": "ADR-007 §1, §5, §9.\n\n## Change\n- Every command naming a task (`task …`, `loop`, `claim`, `vcs commit`, `vcs pr`, `sprint move`, dependencies in `task add`/`edit`) resolves it with the resolver; output shows the key, a provisional one as `~ATM-538`; a moved alias says where it went.\n- `--json`: `id` (UUID), `key`, `key_final`.\n- The commit template's `{id}` is the key; `{uuid}` added. `vcs commit --record`'s check accepts the key or an alias.\n- The API's task views carry `key` and `key_final` for the dashboard; search returns keys.\n\n## Tests\nThe scenarios' expectations move to keys; new rows for `~`, aliases, UUID input and `--json`.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [
         "T-539",
         "T-540"
@@ -20634,7 +20645,7 @@
         "tests/scripts/scenarios/"
       ],
       "created_at": "2026-11-15T11:20:19Z",
-      "updated_at": "2026-11-16T03:32:45Z",
+      "updated_at": "2026-11-16T03:38:10Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -20654,7 +20665,9 @@
           "text": "From T-540: the migration is opt-in (`atm db migrate --keys`) until commands take keys; this task makes it part of plain `atm db migrate`, and makes `atm db init` create new projects in format 2 with meta.key (a --meta-file key, else the name’s initials via `suggested_key`). The CLI suite then runs on migrated files: scenarios naming T-… keep working through key_history.",
           "by": "claude:0f56a916"
         }
-      ]
+      ],
+      "started_at": "2026-11-16T03:38:10Z",
+      "started_by": "claude:0f56a916"
     },
     {
       "id": "T-544",

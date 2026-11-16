@@ -162,7 +162,9 @@ fn unarchive(ctx: Context, cwd: &Path, ids: &[String]) -> Result<()> {
         println!("[dry-run] would unarchive {}", ids.join(", "));
         return Ok(());
     }
-    let result = unarchive_tasks(&mut Project::open(cwd)?, ids)?;
+    let mut project = Project::open(cwd)?;
+    let stored = project.resolve_tasks(ids)?;
+    let result = unarchive_tasks(&mut project, &stored)?;
     if ctx.json {
         print_json(&json!({"restored": result.restored, "moves_back": result.moves_back}));
         return Ok(());

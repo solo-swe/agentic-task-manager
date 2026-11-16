@@ -42,6 +42,39 @@ pub fn key_of(document: &Value, task: &Task) -> Option<String> {
     Some(task_key(project_key(document)?, number_of(task)?))
 }
 
+/// A copy of a task to show (ADR-007 §1): in a keys-format document, its `key` right after its `id` (worked out, never
+/// stored); before task keys, the task as it is.
+#[must_use]
+pub fn with_key(document: &Value, task: &Task) -> Task {
+    let Some(key) = key_of(document, task) else {
+        return task.clone();
+    };
+    let mut out = Task::new();
+    for (k, v) in task {
+        if k == "key" {
+            continue;
+        }
+        out.insert(k.clone(), v.clone());
+        if k == "id" {
+            out.insert("key".into(), Value::String(key.clone()));
+        }
+    }
+    out
+}
+
+/// How a task reads to people: its key, `~` before a provisional one (`~ATM-538`), or its `id` when it has no key (a
+/// task as [`with_key`] gives it, or as stored before task keys).
+#[must_use]
+pub fn label_of(task: &Value) -> String {
+    match task.get("key").and_then(Value::as_str) {
+        Some(key) if task.get("key_final").and_then(Value::as_bool) == Some(true) => {
+            key.to_string()
+        }
+        Some(key) => format!("~{key}"),
+        None => crate::py::py_str_opt(task.get("id")),
+    }
+}
+
 /// Whether a task's number is final (ADR-007 §3): it never changes once it is.
 #[must_use]
 pub fn key_final(task: &Task) -> bool {

@@ -92,8 +92,18 @@ pub fn run(command: ClaimCommand, ctx: Context, cwd: &Path) -> Result<()> {
             task_id,
             auto,
             agent,
-        } => heartbeat(task_id.as_deref(), auto, agent.as_deref(), ctx, cwd),
-        ClaimCommand::Hold(args) => hold(&args, ctx, cwd),
+        } => {
+            // A key, an earlier prefix, an alias or a UUID (ADR-007 §5)
+            let task_id = match task_id.filter(|t| !t.is_empty()) {
+                Some(t) => Some(super::resolved_one(cwd, &t)?),
+                None => None,
+            };
+            heartbeat(task_id.as_deref(), auto, agent.as_deref(), ctx, cwd)
+        }
+        ClaimCommand::Hold(mut args) => {
+            args.task_id = super::resolved_one(cwd, &args.task_id)?;
+            hold(&args, ctx, cwd)
+        }
     }
 }
 

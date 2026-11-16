@@ -125,8 +125,8 @@ pub enum TaskCommand {
 pub fn run(command: TaskCommand, ctx: Context, cwd: &Path) -> Result<()> {
     match command {
         TaskCommand::List(args) => list(args, ctx, cwd),
-        TaskCommand::Details { task_ids } => details(&task_ids, ctx, cwd),
-        TaskCommand::Deps { task_id } => deps(&task_id, ctx, cwd),
+        TaskCommand::Details { task_ids } => details(&super::resolved(cwd, &task_ids)?, ctx, cwd),
+        TaskCommand::Deps { task_id } => deps(&super::resolved_one(cwd, &task_id)?, ctx, cwd),
         TaskCommand::Add(args) => add::add(args, ctx, cwd),
         TaskCommand::Note(args) => add::note(&args, ctx, cwd),
         TaskCommand::Edit(args) => edit::edit(args, ctx, cwd),
@@ -199,6 +199,7 @@ pub fn view_row(view: &Value) -> Value {
     let derived = &view["derived"];
     let mut row = json!({
         "id": task.get("id").cloned().unwrap_or(Value::Null),
+        "label": atm_common::keys::label_of(task),
         "status": task.get("status").cloned().unwrap_or(Value::Null),
         "kind": derived.get("kind").cloned().unwrap_or(Value::Null),
         "sprint": task.get("sprint").cloned().unwrap_or(Value::Null),
@@ -209,6 +210,19 @@ pub fn view_row(view: &Value) -> Value {
     if let Some(pr) = task.get("pr").filter(|p| p.is_object()) {
         row["pr"] = pr.clone();
         row["merged_at"] = task.get("merged_at").cloned().unwrap_or(Value::Null);
+    }
+    // With task keys (ADR-007 §1): the key and whether it is final; before them, the ID is all there is
+    if let (Some(key), Some(map)) = (task.get("key"), row.as_object_mut()) {
+        map.insert("key".into(), key.clone());
+        map.insert(
+            "key_final".into(),
+            task.get("key_final").cloned().unwrap_or(Value::Bool(false)),
+        );
+    }
+    if let Some(map) = row.as_object_mut()
+        && !map.contains_key("key")
+    {
+        map.shift_remove("label");
     }
     row
 }
@@ -223,7 +237,14 @@ pub fn list_lines(rows: &[Value]) -> Vec<String> {
             .max()
             .unwrap_or(0)
     };
-    let (id_width, status_width) = (width("id"), width("status"));
+    // A task's label (its key, `~` while provisional) where it has one, else its ID
+    let shown = |r: &Value| r.get("label").map_or_else(|| py_str(&r["id"]), py_str);
+    let id_width = rows
+        .iter()
+        .map(|r| shown(r).chars().count())
+        .max()
+        .unwrap_or(0);
+    let status_width = width("status");
     rows.iter()
         .map(|t| {
             let labels = t
@@ -232,7 +253,7 @@ pub fn list_lines(rows: &[Value]) -> Vec<String> {
                 .map_or_else(String::new, |l| format!("[{}] ", join(l)));
             format!(
                 "{:<id_width$}  {:<status_width$}  {}  {labels}{}",
-                py_str(&t["id"]),
+                shown(t),
                 py_str(&t["status"]),
                 py_str(&t["priority"]),
                 py_str(&t["name"])
@@ -352,7 +373,8 @@ fn heading(view: &TaskView) -> Vec<String> {
     vec![
         format!(
             "{}  {}",
-            py_str_opt(task.get("id")),
+            // Its key (`~` while provisional) with task keys, else its ID (ADR-007 §1)
+            atm_common::keys::label_of(&Value::Object(task.clone())),
             task.get("name").map_or_else(String::new, py_str)
         ),
         format!("  {}", header.join(" · ")),

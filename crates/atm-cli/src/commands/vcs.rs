@@ -124,6 +124,8 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+            // A key, an earlier prefix, an alias or a UUID (ADR-007 §5)
+            let task_id = project.resolve_task(&task_id)?;
             let vcs = project.vcs();
             let vcs = vcs.as_ref();
             if let Some(rev) = record {
@@ -205,6 +207,7 @@ pub fn run(command: VcsCommand, ctx: Context, cwd: &Path) -> Result<()> {
             }
             let mut project =
                 Project::open(cwd)?.with_actor(Some(agent_identity(agent.as_deref(), cwd)));
+            let ids = project.resolve_tasks(&ids)?;
             let recorded = record_pr(&mut project, &ids, number, &url)?;
             if ctx.json {
                 print_json(&json!({"tasks": recorded, "pr": {"number": number, "url": url}}));

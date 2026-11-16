@@ -133,7 +133,9 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
     };
     let actor = agent_identity(args.agent.as_deref(), cwd);
     let mut project = Project::open(cwd)?.with_actor(Some(actor));
-    let task_id = args.task_id.as_str();
+    // A key, an earlier prefix, an alias or a UUID in a keys-format project (ADR-007 §5)
+    let stored = project.resolve_task(&args.task_id)?;
+    let task_id = stored.as_str();
     if state == "todo" {
         // Back to to do is a different command for each kind the task is in (a failure says why: --reason)
         command = todo_command(&project, task_id, args.reason.is_some())?;
@@ -169,7 +171,11 @@ pub fn run(args: &StateArgs, ctx: Context, cwd: &Path) -> Result<()> {
         println!("[dry-run] would {} {task_id}", command.name());
         return Ok(());
     }
-    let result = change_task_status(&mut project, command, task_id, &options(command, args))?;
+    let mut opts = options(command, args);
+    if let Some(duplicate) = &opts.duplicate_of {
+        opts.duplicate_of = Some(project.resolve_task(duplicate)?);
+    }
+    let result = change_task_status(&mut project, command, task_id, &opts)?;
     report(command, &result, ctx);
     Ok(())
 }

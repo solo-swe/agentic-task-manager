@@ -34,3 +34,24 @@ pub struct Context {
 pub fn print_json(value: &Value) {
     println!("{}", to_json(value));
 }
+
+/// The stored IDs of the tasks these references name (ADR-007 §5, `Project::resolve_task`): in a keys-format project a
+/// key (`ATM-527`), an earlier prefix (`T-527`), an alias or a UUID; before task keys, the IDs as given. A project that
+/// can't be opened gives them back as given, for the command to report.
+///
+/// # Errors
+/// A reference that names no task, or several, in a keys-format project.
+pub fn resolved(cwd: &std::path::Path, references: &[String]) -> atm_common::Result<Vec<String>> {
+    match atm_lib::Project::open(cwd) {
+        Ok(project) => project.resolve_tasks(references),
+        Err(_) => Ok(references.to_vec()),
+    }
+}
+
+/// [`resolved`] for one.
+///
+/// # Errors
+/// As [`resolved`].
+pub fn resolved_one(cwd: &std::path::Path, reference: &str) -> atm_common::Result<String> {
+    Ok(resolved(cwd, &[reference.to_string()])?.remove(0))
+}

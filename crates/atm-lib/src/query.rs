@@ -304,7 +304,9 @@ pub fn task_views(project: &Project, filters: &Filters) -> Result<Vec<Value>> {
             derived.insert("stage".into(), json!(stage));
         }
         derived.insert("archived".into(), json!(filters.archived));
-        views.push(json!({"task": t, "derived": derived}));
+        // Its key beside its UUID, with task keys (ADR-007 §1)
+        let shown = atm_common::keys::with_key(store.document()?, t);
+        views.push(json!({"task": shown, "derived": derived}));
     }
     Ok(views)
 }

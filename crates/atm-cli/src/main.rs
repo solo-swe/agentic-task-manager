@@ -376,10 +376,53 @@ fn run(args: &[OsString]) -> u8 {
     match result {
         Ok(code) => code,
         Err(error) => {
-            report(&error.to_string(), error.code(), as_json);
+            report(&labelled(&error.to_string(), &cwd), error.code(), as_json);
             error.code()
         }
     }
+}
+
+/// A message with every task UUID in it replaced by the task's label (its key, `~` while provisional: ADR-007 §1), as
+/// people know the task; text without one, or a project without task keys, unchanged.
+fn labelled(message: &str, cwd: &Path) -> String {
+    let is_uuid = |s: &str| atm_common::ids::valid_task_uuid(s);
+    if !message
+        .as_bytes()
+        .windows(36)
+        .any(|w| std::str::from_utf8(w).is_ok_and(is_uuid))
+    {
+        return message.to_string();
+    }
+    let Ok(project) = atm_lib::Project::open(cwd) else {
+        return message.to_string();
+    };
+    let Ok(document) = project.store().document() else {
+        return message.to_string();
+    };
+    let archive: Vec<atm_common::Task> = project
+        .store()
+        .list_archived()
+        .map(|a| a.into_iter().cloned().collect())
+        .unwrap_or_default();
+    let mut out = String::new();
+    let mut rest = message;
+    while rest.len() >= 36 {
+        let found = (0..=rest.len() - 36)
+            .filter(|&i| rest.is_char_boundary(i) && rest.is_char_boundary(i + 36))
+            .find(|&i| is_uuid(&rest[i..i + 36]));
+        let Some(i) = found else {
+            break;
+        };
+        out.push_str(&rest[..i]);
+        let uuid = &rest[i..i + 36];
+        match atm_common::keys::resolve(document, &archive, uuid) {
+            Ok(f) => out.push_str(&project.task_label(f.task)),
+            Err(_) => out.push_str(uuid),
+        }
+        rest = &rest[i + 36..];
+    }
+    out.push_str(rest);
+    out
 }
 
 fn main() -> ExitCode {

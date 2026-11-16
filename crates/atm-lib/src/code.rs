@@ -194,10 +194,16 @@ pub fn commit_task(
         .and_then(|w| w.get("commit_template"))
         .map_or_else(|| "feat({id}): {name}".to_string(), py_str);
     let mut text = message.map_or(template, String::from);
-    for key in ["id", "name", "phase", "type"] {
-        let value = task.get(key).map(py_str).unwrap_or_default();
-        text = text.replace(&format!("{{{key}}}"), &value);
+    // `{id}` is how people know the task: its key with task keys (ADR-007 §9), `{uuid}` its stored ID
+    let key = atm_common::keys::key_of(store.document()?, &task);
+    for key_name in ["id", "name", "phase", "type"] {
+        let value = match (key_name, &key) {
+            ("id", Some(k)) => k.clone(),
+            _ => task.get(key_name).map(py_str).unwrap_or_default(),
+        };
+        text = text.replace(&format!("{{{key_name}}}"), &value);
     }
+    text = text.replace("{uuid}", &task.get("id").map(py_str).unwrap_or_default());
     let text = commit_message(&text, workflow.as_ref().and_then(|w| w.get("trailers")));
     if strip(&text).is_empty() {
         return Err(Error::Invalid("the commit message is empty".into()));
@@ -252,8 +258,35 @@ pub fn record_commit(
     let text = vcs.message(&sha)?;
     let task = record_on_task(project, task_id, &sha)?;
     let id = task.get("id").map(py_str).unwrap_or_default();
-    let hint = (!mentions(&text, &id))
-        .then(|| format!("its message doesn't mention {id}: is it the task's commit?"));
+    // With task keys (ADR-007 §9) the message names its key, an alias or a key with an earlier prefix
+    let document = project.store().document()?;
+    let mut names: Vec<String> = vec![id.clone()];
+    if let (Some(key), Some(n)) = (
+        atm_common::keys::key_of(document, &task),
+        atm_common::keys::number_of(&task),
+    ) {
+        names.push(key);
+        names.extend(
+            document["meta"]
+                .get("key_history")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(|p| atm_common::ids::task_key(p, n)),
+        );
+        names.extend(
+            task.get("aliases")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(String::from),
+        );
+    }
+    let shown = names.get(1).unwrap_or(&id).clone();
+    let hint = (!names.iter().any(|n| mentions(&text, n)))
+        .then(|| format!("its message doesn't mention {shown}: is it the task's commit?"));
     let summary = text.lines().next().unwrap_or_default();
     Ok(json!({"task": id, "commit": sha, "recorded": true, "summary": summary, "hint": hint}))
 }
