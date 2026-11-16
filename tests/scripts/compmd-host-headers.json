@@ -41,7 +41,7 @@
       "cache-control": "max-age=31536000, immutable",
       "content-security-policy": "sandbox allow-scripts"
     },
-    "compmd/packs/@comp-markdown/mermaid@0.1.1/dist/mermaid.js": {
+    "compmd/packs/@comp-markdown/mermaid@0.1.2/dist/mermaid.js": {
       "content-type": "text/javascript; charset=utf-8",
       "access-control-allow-origin": "*",
       "access-control-expose-headers": "*",

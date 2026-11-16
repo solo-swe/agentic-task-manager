@@ -18676,7 +18676,7 @@
       "description": "After the app reacts to changes (the task before), the browser dashboard is the only one polling. `atm serve` could push the same change notices the app's subscriptions send, from the same watcher (`Store::watch_folders`, `notify`), so the refresh settings can go everywhere.\n\n## To decide first\nThe transport: server-sent events (one route per workspace, `text/event-stream`) are the simplest fit for one-way notices. The route is a new entry point: `docs/security-architecture.md` (who may open it, how many at once, what it says) and `docs/multi-project-api.md`.\n\n## Change\nThe route; the page uses it in the browser as it uses the subscriptions in the app; the Refresh menu's interval and the auto-refresh setting removed; a manual reload stays. Tests: `tests/scripts/serve.test.mjs` (the stream says when a project's file changes), unit and e2e for the page.",
       "requirements": [],
       "use_cases": [],
-      "status": "in_progress",
+      "status": "done",
       "dependencies": [
         "T-506"
       ],
@@ -18688,7 +18688,7 @@
         "docs/security-architecture.md"
       ],
       "created_at": "2026-11-09T02:17:51Z",
-      "updated_at": "2026-11-16T06:05:52Z",
+      "updated_at": "2026-11-16T06:46:39Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "components": [
@@ -18716,10 +18716,19 @@
           "kind": "answer",
           "text": "axum’s SSE needs a `Stream` type, and atm-api has none. Approve `futures-core` 0.3 as a direct dependency of atm-api (already in Cargo.lock through axum, nothing new downloaded) plus `notify` and `notify-debouncer-full` in atm-lib (the app’s watcher moves there, so the CLI links them too)? Or use a long-poll `GET …/changes` route instead (no new dependency, but not `EventSource`)? → Approved: futures-core 0.3 in atm-api, and notify and notify-debouncer-full in atm-lib (Hakan, 2026-11-16)",
           "by": "claude:0f56a916"
+        },
+        {
+          "at": "2026-11-16T06:46:39Z",
+          "kind": "outcome",
+          "text": "SSE change streams in `atm serve` (`atm-api/src/changes.rs`, 16 at most, keep-alive 15 s), the watcher moved to `atm_lib::watch`; the browser reloads on a change with backoff and a slow-poll fallback; the refresh interval and auto-refresh gone. Release task: regenerate the settings menu and title bar screenshots",
+          "by": "claude:0f56a916"
         }
       ],
       "started_at": "2026-11-16T06:05:52Z",
-      "started_by": "claude:0f56a916"
+      "started_by": "claude:0f56a916",
+      "commit": "1347c30e0ef1c8ca6af2217265032bd2b08821aa",
+      "completed_at": "2026-11-16T06:46:39Z",
+      "completed_by": "claude:0f56a916"
     },
     {
       "id": "T-508",
@@ -21091,7 +21100,7 @@
       "description": "Upgrade CompMD from 0.7.0 to 0.7.1, everywhere it is pinned together ([ADR-006](docs/adr/ADR-006-compmd-0-7-bundle-one-build-for-both-hosts.md)), and the mermaid pack from 0.1.1 to 0.1.2. Approved by Hakan.\n\n## Change\n- `dashboard/package.json`: `@compmd/processor`, `@compmd/render`, `@compmd/sandbox` and `@compmd/vite` to `0.7.1`, `@comp-markdown/mermaid` to `0.1.2`; `pnpm install` (not `--frozen-lockfile`) updates `pnpm-lock.yaml`.\n- `Cargo.toml`: `tauri-plugin-compmd` and `compmd-host` to `=0.7.1` (the comments say they move with the packages); `Cargo.lock` follows.\n- Read CompMD 0.7.1's changelog (in its packages, as installed) for anything atm must change; the serving contract's headers (`tests/scripts/compmd-host-headers.json`) if they changed.\n- `CHANGELOG.md` mentions it in the release task.\n\n## Tests\n`pnpm run build` (the mermaid pack's `integrity` is a `sha512-…` in `compmd.js`), `pnpm run check`, unit tests and the functional e2e suite (diagrams draw), `cargo build`, `cargo test`, the CLI suite (`serve.test.mjs` checks the bundle's headers), `cargo deny check`; the app in a window (`cargo run -p atm-app`) shows a diagram.",
       "requirements": [],
       "use_cases": [],
-      "status": "todo",
+      "status": "in_progress",
       "dependencies": [],
       "files": [
         "dashboard/package.json",
@@ -21101,7 +21110,7 @@
         "tests/scripts/compmd-host-headers.json"
       ],
       "created_at": "2026-11-16T06:38:45Z",
-      "updated_at": "2026-11-16T06:38:51Z",
+      "updated_at": "2026-11-16T06:46:45Z",
       "created_by": "Hakan Serce",
       "updated_by": "claude:0f56a916",
       "sprint_history": [
@@ -21114,7 +21123,9 @@
       "components": [
         "dashboard",
         "cli"
-      ]
+      ],
+      "started_at": "2026-11-16T06:46:45Z",
+      "started_by": "claude:0f56a916"
     }
   ]
 }

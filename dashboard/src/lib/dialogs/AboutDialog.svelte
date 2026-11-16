@@ -1,6 +1,7 @@
 <script lang="ts">
   import { license as compmdLicense, version as compmdVersion } from 'virtual:atm-compmd';
-  // CompMD's site (compmd.dev, T-548): atm's own address, as CompMD 0.7.0's package still names its old one
+  // CompMD's site (compmd.dev, T-548): atm's own address, the one the Help menu opens too (0.7.0's package named the
+  // old one; 0.7.1's names this)
   import { COMPMD_URL as compmdHomepage } from '../menu-actions';
   import { pluginInfo } from '../plugin-info';
   import { dashboard } from '../state.svelte';

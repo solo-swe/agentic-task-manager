@@ -25,6 +25,10 @@ import {
   type GutterRow,
 } from '../../src/lib/compmd';
 import type { Task } from '../../src/lib/types';
+import compmdConfig from '../../compmd.config.json';
+
+// The Mermaid pack's version, as the build configuration pins it
+const MERMAID = compmdConfig.packs['@comp-markdown/mermaid'].version;
 
 const task: Task = {
   id: 'T-7',
@@ -93,10 +97,10 @@ describe('the pack modules', () => {
   it('the Mermaid pack’s module is pinned by the hash of the file it ships (@compmd/vite, T-285)', () => {
     const found = (sandbox.modules as (place: object) => { path?: string; url?: string; integrity: string })({
       pack: '@comp-markdown/mermaid',
-      version: '0.1.1',
+      version: MERMAID,
       path: 'dist/mermaid.js',
     });
-    expect(found.path ?? found.url).toMatch(/packs\/@comp-markdown\/mermaid@0\.1\.1\/dist\/mermaid\.js$/);
+    expect(found.path ?? found.url).toMatch(new RegExp(`packs/@comp-markdown/mermaid@${MERMAID}/dist/mermaid\\.js$`));
     const shipped = readFileSync(
       join(dirname(fileURLToPath(import.meta.url)), '../../node_modules/@comp-markdown/mermaid/dist/mermaid.js'),
     );
