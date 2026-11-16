@@ -8,7 +8,7 @@
       "type": "pull-request",
       "base": "main"
     },
-    "next_id": 552,
+    "next_id": 556,
     "labels": [
       {
         "id": "architecture",
@@ -21213,6 +21213,158 @@
       "sprint": "Keys and reach",
       "components": [
         "dashboard",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-552",
+      "name": "ADR-008: other projects' tasks, referenced from any registered project and loaded when needed (replaces ADR-007 §7's wording)",
+      "type": "docs",
+      "priority": "P2",
+      "labels": [
+        "task-keys",
+        "freshness"
+      ],
+      "description": "Write `docs/adr/ADR-008-…md` from [the freshness design](docs/cross-project-freshness-design.md) §4.1 (K4) and §9, as AGENTS.md asks for a decision that changes an ADR.\n\n## What it decides\n- **Any registered project** can be referenced, written by key or UUID; a key is looked up among every registered project, not only those of the workspaces the referring project is in (ADR-007 §7 said the latter; the code, `foreign::registered`, already does the former).\n- **Loaded when needed, never watched:** another project is read when something needs it (readiness, display), through the stamp-keyed cache (design §5.1 B); only the open workspace's own projects are watched, for the app.\n- **Worktree branches** (design §4.2): another project counts as its main working copy (V1).\n- **The browser polls; the app is pushed** (design 1), and the store owns how it hears of changes (design §3).\n\n## Also\nADR-007 gets a line under its status: \"§7's lookup and freshness replaced by ADR-008\". Link the design from both.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "docs/adr/",
+        "docs/adr/ADR-007-task-keys-uuids-and-dependencies-across-projects.md"
+      ],
+      "created_at": "2026-11-16T18:07:04Z",
+      "updated_at": "2026-11-16T18:07:14Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T18:07:04Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
+        "docs"
+      ]
+    },
+    {
+      "id": "T-553",
+      "name": "Other projects' tasks: one stamp-keyed cache for the rules and the display",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "task-keys",
+        "freshness"
+      ],
+      "description": "[The freshness design](docs/cross-project-freshness-design.md) §5.1, option **B**: fixes P1, P4 and P5.\n\n## The bug\n`foreign::status` (the `ForeignStatus` hook the rules use: `waiting_for`, `ready`, unmet dependencies, the summary's `next` and board cards) remembers each answer for the whole process (`static SEEN`), so in `atm serve` and the app a task keeps reading \"waiting on ATM-1\" after ATM-1 is done, until a restart, while `derived.foreign` (T-549) shows it done and `atm loop next` takes it.\n\n## Change (`crates/atm-lib/src/foreign.rs`)\n- **One cache for the rules and the display**, keyed by the other project's `meta.id`: the project, its document and archive as read, and its store's `stamp()` (`tasks`, `archive`).\n- **On each use**, compare the store's current stamp: unchanged → use the entry; changed → read the project again. Entries also **expire after a few seconds** (a constant, e.g. 5 s), against coarse file timestamps.\n- `status`, `label`, `Lookup::view`, `find_uuid` and `resolve_in_other_project` all read through it; `registered()` is no longer opened per reference.\n- The registry (which projects are registered, and where) is part of the key: a project removed from the workspaces, or its folder gone, is seen on the next use.\n- Thread-safe (the server's threads): a `Mutex`, never held while reading a project.\n\n## Tests\n- **atm-lib:** in one process (no restart), after the other project's task is marked done, `status` and `Lookup::view` both say done, and a task depending on it is ready; an unchanged stamp doesn't re-read (count the reads); the entry expires; a removed project is `unregistered`.\n- **The CLI suite (`serve.test.mjs`):** with a running `atm serve`, two registered projects: the other's task done → A's tasks route (without validators) gives `ready` true and no `waiting_for`; the overview's `next` follows.\n- **The app (Rust command tests):** `project_tasks` within one `AppState` follows the other project's change.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-lib/src/foreign.rs",
+        "crates/atm-lib/src/query.rs",
+        "tests/scripts/serve.test.mjs",
+        "app/src-tauri/src/commands.rs"
+      ],
+      "created_at": "2026-11-16T18:07:04Z",
+      "updated_at": "2026-11-16T18:07:15Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T18:07:04Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
+        "cli",
+        "api"
+      ]
+    },
+    {
+      "id": "T-554",
+      "name": "The tasks route's ETag also covers the projects a project's tasks reference",
+      "type": "bugfix",
+      "priority": "P1",
+      "labels": [
+        "task-keys",
+        "freshness",
+        "api"
+      ],
+      "description": "[The freshness design](docs/cross-project-freshness-design.md) §5.3, option **D**: fixes P2 (the browser's stale 304).\n\n## The bug\n`api_tasks` (`crates/atm-api/src/routes.rs`) builds its ETag from the project's own `tasks` and `archive` stamps and the query. When only a referenced project changes, the browser's poll gets a 304 and keeps the old status, `ready` and `waiting_for`.\n\n## Change\n- **Which projects A references** (the `meta.id`s in its tasks' `dependencies`, `related` and `duplicate_of`, the archive too) is worked out on a full read and remembered by the server **keyed by A's stamp, never by time** (a new reference changes A's stamp, so it is never missed). atm-lib gives it (e.g. `Member::referenced_projects()`), atm-api only uses it.\n- **The ETag** becomes A's stamp, the query, and the referenced projects' `tasks` and `archive` stamps (a project not found counts as null, so it appearing or going changes the tag too).\n- A project with no references costs nothing extra; one with some costs a stamp per referenced project per poll.\n- `docs/multi-project-api.md`: the tasks route's ETag; drop the note T-549 added that another project's change shows only once this one changes.\n\n## Tests\nThe CLI suite (`serve.test.mjs`): A references B; a conditional GET of A's tasks after B's task changes is a **200** with the new values; after a change in an unrelated project C, still a **304**; with nothing changed, a 304; a new reference added to A then B changing: a 200. e2e (`keys.spec.ts`, the real binary's views): the browser's poll (`page.clock`) shows the other project's task done.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [
+        "T-553"
+      ],
+      "files": [
+        "crates/atm-api/src/routes.rs",
+        "crates/atm-lib/src/workspaces.rs",
+        "tests/scripts/serve.test.mjs",
+        "docs/multi-project-api.md",
+        "dashboard/tests/e2e/keys.spec.ts"
+      ],
+      "created_at": "2026-11-16T18:07:04Z",
+      "updated_at": "2026-11-16T18:07:17Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T18:07:04Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
+        "dashboard",
+        "cli",
+        "api",
+        "docs"
+      ]
+    },
+    {
+      "id": "T-555",
+      "name": "Store::subscribe in atm-db: how a store hears of changes is the store's; the app's file watcher moves behind it",
+      "type": "refactor",
+      "priority": "P2",
+      "labels": [
+        "freshness",
+        "architecture",
+        "app"
+      ],
+      "description": "[The freshness design](docs/cross-project-freshness-design.md) §3 and §5.5, option **L** (P6): watching for changes is the store's job, behind the abstraction, so a store that isn't files (a `JiraStore`) works the same.\n\n## Change\n- **atm-db's `Store` trait:** `subscribe(on_change) -> Subscription` (dropping it ends it), replacing `watch_folders()`. Its documentation says `on_change` runs on the store's own thread, and that every store must push or poll.\n- **`JsonGitStore`:** watches its own folders (the task folder, the claims store, the working copies' task files) with `notify` and its debouncer, settled 300 ms, the code now in the app (`app/src-tauri/src/commands.rs`, `AppState::watch`). `notify` and `notify-debouncer-full` move from the app to atm-db (same versions, already approved; no new dependency).\n- **`MemoryStore`:** told by its own writes.\n- **`poll_stamp(store, interval, on_change)`** in atm-db: a helper an implementation may use when it can't push (none needs it yet: test it on its own). No polling default in the trait (Hakan, round 1).\n- **The registry** (`workspaces/<w>.json`): a subscription for \"the list changed\".\n- **atm-lib:** a workspace's changes are its members' subscriptions merged, plus the registry's; the app's `subscribe_workspace` and `subscribe_project` use that. Nothing above atm-db names a folder to watch.\n- Behaviour unchanged for the user: the app is told of the same changes as now (the open workspace's own projects); the browser polls.\n- `docs/layered-architecture.md` and `docs/guides/tauri.md` (Streams) say where watching lives.\n\n## Tests\natm-db: the JSON store's subscription tells a change in its task file and its claims and stops when dropped; `poll_stamp` tells a stamp change; the memory store tells its writes. atm-lib: a workspace subscription merges its members' and the registry's. The app's existing subscription tests (`a_subscription_says_when_a_watched_folder_changes…`, `a_window_loading_again…`) pass unchanged.",
+      "requirements": [],
+      "use_cases": [],
+      "status": "todo",
+      "dependencies": [],
+      "files": [
+        "crates/atm-db/src/interface.rs",
+        "crates/atm-db/src/jsongit.rs",
+        "crates/atm-db/src/memory.rs",
+        "crates/atm-db/Cargo.toml",
+        "crates/atm-lib/src/workspaces.rs",
+        "app/src-tauri/src/commands.rs",
+        "app/src-tauri/Cargo.toml",
+        "docs/layered-architecture.md",
+        "docs/guides/tauri.md"
+      ],
+      "created_at": "2026-11-16T18:07:04Z",
+      "updated_at": "2026-11-16T18:07:19Z",
+      "created_by": "Hakan Serce",
+      "updated_by": "claude:0f56a916",
+      "sprint_history": [
+        {
+          "sprint": "Keys and reach",
+          "from": "2026-11-16T18:07:04Z"
+        }
+      ],
+      "sprint": "Keys and reach",
+      "components": [
         "docs"
       ]
     }
